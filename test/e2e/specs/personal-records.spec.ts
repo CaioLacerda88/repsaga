@@ -106,6 +106,17 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
   test('should complete second workout with higher weight successfully', async ({
     page,
   }) => {
+    // Two full workouts in sequence — same accumulated-state risk as the
+    // sibling test below at line 331 ("should trigger NEW PR celebration on
+    // second workout with higher weight"). The smokePR user accumulates
+    // pre-seeded workout history (global-setup) + the prior smoke test in
+    // this describe block, so by the time we run the two workouts here the
+    // overlay chain (rank-up → level-up → title-unlock for new PRs) plus
+    // two saveWorkout RPCs sits within a few hundred ms of the 60s default.
+    // Triple the budget for headroom — same fix the line-331 test already
+    // adopted for the same pattern.
+    test.slow();
+
     // Workout A — 60 kg x 8 (establishes baseline).
     await startEmptyWorkout(page);
     await addExercise(page, SEED_EXERCISES.benchPress);
