@@ -5,7 +5,11 @@
 // Triggered once per UTC day at 03:00 by `cron.schedule('vitality_nightly_03utc', ...)`
 // (see migration 00042). Service-role-only — anonymous and end-user JWTs are
 // rejected at the Authorization gate. The cron job sets the Authorization
-// header to `Bearer <service_role_key>` sourced from Vault.
+// header to `Bearer <service_role_key>` sourced from Vault. The role check
+// decodes the JWT payload claim (see `isServiceRoleJwt`); it does NOT
+// string-compare against `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`, which
+// is unreliable under Supabase's new API key system (see comment block on
+// `isServiceRoleJwt` below for the rationale).
 //
 // Behavior per user (spec §8.1, §12.2):
 //   1. INSERT INTO vitality_runs (user_id, run_date) FIRST.
@@ -301,26 +305,56 @@ function isUniqueViolation(err: { code?: string; message?: string }): boolean {
 // --- Service-role auth gate -----------------------------------------------
 
 /**
- * Verifies the bearer token is the project's service-role key. We compare
- * the raw token rather than verifying the JWT signature because the cron
- * call uses our own service-role JWT directly — no third-party signing.
- * String equality is sufficient and avoids pulling in a JWT library at
- * the Edge boundary.
+ * Returns true if the JWT payload's `role` claim is `service_role`.
+ *
+ * The Supabase Edge Function runtime has ALREADY cryptographically verified
+ * the JWT signature by the time we see it (verify_jwt is on for this
+ * function — there is no `[functions.vitality-nightly] verify_jwt = false`
+ * in `supabase/config.toml`), so decoding without re-verifying is safe
+ * here: we are only reading a claim the runtime already authenticated.
+ *
+ * We deliberately do NOT compare the raw token against
+ * `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')` as a bearer secret. That
+ * pattern conflates a project secret with an auth token and silently
+ * breaks under Supabase's new API key system: `SUPABASE_SERVICE_ROLE_KEY`
+ * is now a platform-managed compatibility shim whose runtime value can
+ * differ from the legacy JWT a caller (cron, operator) presents in the
+ * Authorization header — even when both are valid service-role
+ * credentials. String equality 401s in that drift; role-claim decoding
+ * accepts every JWT the gateway already accepted.
+ *
+ * Mirrors the `isServiceRoleJwt` pattern in `validate-purchase/index.ts`
+ * (see the comment block there for the original explanation). Keep the
+ * two implementations in sync — they are intentionally identical and
+ * could be hoisted to `_shared/` if a third caller appears.
+ */
+export function isServiceRoleJwt(jwt: string): boolean {
+  const parts = jwt.split('.');
+  if (parts.length < 2) return false;
+  const payloadB64 = parts[1];
+  if (!payloadB64) return false;
+  try {
+    // JWT uses base64url without padding. atob wants standard base64
+    // with correct padding, so translate `-/_` and re-pad.
+    const b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+    const payload = JSON.parse(atob(b64 + pad)) as { role?: unknown };
+    return payload?.role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Authorization gate. The cron job and operator-driven curl both supply a
+ * service-role JWT in `Authorization: Bearer <jwt>`. The gateway verified
+ * the signature; we just need to confirm the role claim.
  */
 export function authorizeServiceRole(req: Request): boolean {
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
   if (!token) return false;
-  const expected = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!expected) return false;
-  // Constant-time equality is overkill (token is project-private and
-  // attacker has no oracle), but harmless.
-  if (token.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++) {
-    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
+  return isServiceRoleJwt(token);
 }
 
 // --- HTTP boundary --------------------------------------------------------
