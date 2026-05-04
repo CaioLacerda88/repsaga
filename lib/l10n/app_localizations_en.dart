@@ -72,6 +72,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLabel => 'Settings';
 
   @override
+  String get vitalityCopyUntested => 'Uncharted — log a set to begin.';
+
+  @override
   String get vitalityCopyDormant => 'Awaits your first stride.';
 
   @override

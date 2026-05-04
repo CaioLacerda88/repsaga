@@ -91,16 +91,30 @@ class SyncService extends Notifier<SyncState> {
       // count, only "did at least one save commit".
       var drainedSaveWorkouts = 0;
 
-      // Snapshot the live (non-terminal) IDs for dependency gating.
-      // This shrinks as actions drain successfully (`dequeue` removes them
-      // from the queue, and we mirror that here on success). Terminal items
-      // are NOT considered live — a perma-stuck parent shouldn't block its
-      // children from at least attempting; the child will then fail and
-      // surface its own error to the user.
-      final liveIds = <String>{
-        for (final a in actions)
-          if (a.retryCount < kMaxSyncRetries) a.id,
-      };
+      // Snapshot the live IDs for dependency gating. ALL queued actions
+      // count as live regardless of retry count; the set shrinks only when
+      // an action is actually dequeued (success here, or `dismissItem` /
+      // `dismissTerminalItems` in another flow).
+      //
+      // BUG (production crash on Galaxy S25 Ultra): previously this set was
+      // built as `{ a.id : a.retryCount < kMaxSyncRetries }` so an exhausted
+      // parent (e.g. a `PendingSaveWorkout` that hit a structural error like
+      // BUG-A's exercise_peak_loads CHECK violation) would silently leave
+      // `liveIds`. The dependency gate below would then see an "open" parent,
+      // attempt the child `PendingUpsertRecords`, and crash with
+      // `personal_records_set_id_fkey` because the parent's sets were never
+      // persisted server-side. Net effect: a fixable upstream bug took down
+      // every dependent action with an unrelated FK error, multiplying the
+      // failure surface.
+      //
+      // The correct semantic is: a child stays gated until its parent has
+      // either (a) committed (success → liveIds.remove(action.id) below) or
+      // (b) been explicitly dismissed by the user via the pending-sync sheet
+      // (which calls `dequeue` → next drain pass rebuilds liveIds without
+      // that ID). A permanently-failed-but-still-queued parent must keep
+      // blocking its children; otherwise the child runs against a server
+      // that has no record of the parent's writes.
+      final liveIds = <String>{for (final a in actions) a.id};
 
       for (final action in actions) {
         // Stop if connectivity dropped mid-drain.

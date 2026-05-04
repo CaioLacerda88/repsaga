@@ -73,6 +73,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsLabel => 'Configurações';
 
   @override
+  String get vitalityCopyUntested =>
+      'Inexplorado — registre uma série para começar.';
+
+  @override
   String get vitalityCopyDormant => 'Aguarda seu primeiro passo.';
 
   @override

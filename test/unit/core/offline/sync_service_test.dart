@@ -932,6 +932,140 @@ void main() {
       },
     );
 
+    // ------------------------------------------------------------------
+    // Production bug (Galaxy S25 Ultra) regression: a terminal parent
+    // (retryCount >= kMaxSyncRetries, structural failure that won't
+    // self-resolve — e.g. the BUG-A exercise_peak_loads CHECK violation
+    // before its DB fix shipped) MUST continue to gate its dependent
+    // children. Pre-fix, `liveIds` was built as
+    //     {a.id : a.retryCount < kMaxSyncRetries}
+    // so an exhausted parent silently fell out of the gate, the child
+    // drained, and the child crashed with `personal_records_set_id_fkey`
+    // because the parent's sets were never persisted server-side. The fix
+    // widens `liveIds` to include all queued IDs regardless of retry
+    // count: the child stays gated until the parent is dequeued (success)
+    // or dismissed (user action via the pending-sync sheet).
+    // ------------------------------------------------------------------
+    test(
+      'child upsertRecords stays gated when parent saveWorkout is terminal (retry exhausted)',
+      () async {
+        final container = createContainer(initialOnline: false);
+
+        final notifier = container.read(pendingSyncProvider.notifier);
+
+        // Parent is already terminal (exhausted retries) — this is the
+        // post-failure steady state where the user has a "Dispensar" CTA in
+        // the pending-sync sheet but hasn't tapped it yet.
+        await notifier.enqueue(
+          _makeSaveWorkoutAction(
+            id: 'w-terminal-parent',
+            queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 0),
+            retryCount: kMaxSyncRetries,
+            lastError: 'previous structural failure',
+          ),
+        );
+        await notifier.enqueue(
+          PendingAction.upsertRecords(
+            id: 'pr-orphan-child',
+            recordsJson: [recordJson()],
+            userId: 'user-1',
+            queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 1),
+            dependsOn: const ['w-terminal-parent'],
+          ),
+        );
+
+        // Both repos would succeed if invoked — but the gate must hold the
+        // child so neither saveWorkout (terminal-skipped) nor upsertRecords
+        // (parent still live in queue) is attempted.
+        stubSaveWorkoutSuccess(id: 'w-terminal-parent');
+        when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
+
+        connectivityController.add(true);
+        await _pumpAsync(300);
+
+        // Parent: terminal-skip. saveWorkout must NOT be called (the drain
+        // skips items with retryCount >= kMaxSyncRetries before invoking).
+        verifyNever(
+          () => mockWorkoutRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        );
+
+        // Child: gated by liveIds containing the terminal parent's ID.
+        // upsertRecords must NEVER be invoked — its parent's data is not on
+        // the server, so running the child would FK-crash.
+        verifyNever(() => mockPRRepo.upsertRecords(any()));
+
+        // Both items remain in the queue with their counts unchanged.
+        final remaining = queueService.getAll();
+        expect(remaining, hasLength(2));
+        final byId = {for (final a in remaining) a.id: a};
+        expect(byId['w-terminal-parent']!.retryCount, kMaxSyncRetries);
+        expect(byId['pr-orphan-child']!.retryCount, 0);
+        // The orphan child's lastError must remain null — the gate is not a
+        // failure path; the child was never attempted.
+        expect(byId['pr-orphan-child']!.lastError, isNull);
+      },
+    );
+
+    // Counterpart: once the user dismisses the terminal parent via the
+    // pending-sync sheet (dequeue → next drain rebuilds liveIds without
+    // that ID), the child becomes drainable. We simulate this by removing
+    // the parent from the queue between drains and observing that the
+    // child runs on the next online transition.
+    test(
+      'child upsertRecords becomes drainable after terminal parent is dismissed',
+      () async {
+        final container = createContainer(initialOnline: false);
+
+        final notifier = container.read(pendingSyncProvider.notifier);
+
+        await notifier.enqueue(
+          _makeSaveWorkoutAction(
+            id: 'w-to-dismiss',
+            queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 0),
+            retryCount: kMaxSyncRetries,
+            lastError: 'previous structural failure',
+          ),
+        );
+        await notifier.enqueue(
+          PendingAction.upsertRecords(
+            id: 'pr-was-orphan',
+            recordsJson: [recordJson()],
+            userId: 'user-1',
+            queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 1),
+            dependsOn: const ['w-to-dismiss'],
+          ),
+        );
+
+        when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
+
+        // First drain: child stays gated because parent (terminal) is still
+        // in the queue. We don't assert here — the prior test already pins
+        // that. We just need the queue to settle.
+        connectivityController.add(true);
+        await _pumpAsync(200);
+
+        verifyNever(() => mockPRRepo.upsertRecords(any()));
+
+        // User dismisses the terminal parent via the pending-sync sheet.
+        await notifier.dismissItem('w-to-dismiss');
+
+        // Trigger a second drain (offline → online).
+        connectivityController.add(false);
+        await _pumpAsync(50);
+        connectivityController.add(true);
+        await _pumpAsync(300);
+
+        // Child must now have been invoked — its dependency is no longer
+        // in the queue, so the gate opens.
+        verify(() => mockPRRepo.upsertRecords(any())).called(1);
+        expect(container.read(pendingSyncProvider), 0);
+      },
+    );
+
     test(
       'BUG-002: child upsertRecords drains in the same pass when parent commits first (FIFO order)',
       () async {

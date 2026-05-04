@@ -13,23 +13,28 @@ import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
 /// body_part_rank_row test factory) keep working.
 void main() {
   group('VitalityStateX.fromVitality (shim)', () {
-    test('peak == 0 collapses to dormant regardless of EWMA', () {
+    test('peak == 0 collapses to untested regardless of EWMA', () {
+      // 2026-05-04 untested patch: peak == 0 is the never-trained branch
+      // (ratio undefined). The shim must route through to the mapper which
+      // returns the new dedicated state.
       expect(
         VitalityStateX.fromVitality(vitalityEwma: 0, vitalityPeak: 0),
-        VitalityState.dormant,
+        VitalityState.untested,
       );
       expect(
         VitalityStateX.fromVitality(vitalityEwma: 50, vitalityPeak: 0),
-        VitalityState.dormant,
+        VitalityState.untested,
       );
       expect(
         VitalityStateX.fromVitality(vitalityEwma: 100, vitalityPeak: 0),
-        VitalityState.dormant,
+        VitalityState.untested,
       );
     });
 
     test('ewma == 0 with peak > 0 collapses to dormant', () {
       // pct = 0/peak = 0 → dormant per spec §8.4 boundary inclusivity.
+      // Regression pin for the untested patch — the peak > 0 case must
+      // remain dormant (genuinely decayed), not bleed into untested.
       expect(
         VitalityStateX.fromVitality(vitalityEwma: 0, vitalityPeak: 100),
         VitalityState.dormant,
@@ -97,6 +102,9 @@ void main() {
     );
 
     test('borderColor maps to the canonical AppColors palette per state', () {
+      // Untested intentionally shares the dormant dim/grey token —
+      // reward-scarcity contract preserves heroGold for radiant only.
+      expect(VitalityState.untested.borderColor, AppColors.textDim);
       expect(VitalityState.dormant.borderColor, AppColors.textDim);
       expect(VitalityState.fading.borderColor, AppColors.primaryViolet);
       expect(VitalityState.active.borderColor, AppColors.hotViolet);

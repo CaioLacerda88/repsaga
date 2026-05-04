@@ -224,7 +224,13 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsLabel;
 
-  /// Marginalia copy for a body-part rune in the Dormant state (peak == 0; never trained). Shown only on the Stats deep-dive screen — the character sheet stays number-free and copy-free.
+  /// Empty-state copy for a body part the user has never trained (peak == 0; the ewma/peak ratio is undefined and the percentage renders as an em-dash). Distinct from vitalityCopyDormant which describes formerly-trained body parts whose conditioning has fully decayed (ratio is genuinely 0%).
+  ///
+  /// In en, this message translates to:
+  /// **'Uncharted — log a set to begin.'**
+  String get vitalityCopyUntested;
+
+  /// Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch.
   ///
   /// In en, this message translates to:
   /// **'Awaits your first stride.'**

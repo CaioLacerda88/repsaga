@@ -7,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../models/body_part.dart';
 import '../../models/stats_deep_dive_state.dart';
+import '../../models/vitality_state.dart';
 import '../utils/vitality_state_styles.dart';
 import 'body_part_localization.dart';
 
@@ -89,7 +90,14 @@ class _VitalityTableRow extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final stateColor = VitalityStateStyles.borderColorFor(row.state);
-    final pctText = '${(row.pct * 100).round()}%';
+    // Untested = peak == 0 (never trained). The ewma/peak ratio is
+    // mathematically undefined, so we render an em-dash instead of the
+    // misleading "0%" that a brand-new account would otherwise see across
+    // all six body parts on the stats screen. Dormant (peak > 0, ewma ~ 0)
+    // continues to render "0%" — that's a genuine zero ratio.
+    final pctText = row.state == VitalityState.untested
+        ? '—'
+        : '${(row.pct * 100).round()}%';
     final localizedName = localizedBodyPartName(row.bodyPart, l10n);
     final stateCopy = VitalityStateStyles.localizedCopy(row.state, l10n);
 
