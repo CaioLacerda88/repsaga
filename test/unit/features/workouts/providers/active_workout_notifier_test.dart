@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/data/base_repository.dart';
+import 'package:repsaga/core/exceptions/app_exception.dart' as app;
 import 'package:repsaga/core/local_storage/cache_service.dart';
 import 'package:repsaga/core/observability/sentry_report.dart';
 import 'package:repsaga/core/offline/offline_queue_service.dart';
@@ -3057,7 +3058,7 @@ void main() {
     );
 
     test(
-      'finishWorkout always enqueues PendingUpsertRecords (never direct write)',
+      'finishWorkout fires upsertRecords (detached) when parent saved online',
       () async {
         final initial = stateWithCompletedSets();
         final container = makePRContainer(initial);
@@ -3082,19 +3083,88 @@ void main() {
           ),
         ).thenReturn(<String, List<PersonalRecord>>{});
 
+        // Stub the direct upsert so the new "online → detached upsert"
+        // path succeeds without falling back to the queue.
+        when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
+
         await container.read(activeWorkoutProvider.future);
         await container.read(activeWorkoutProvider.notifier).finishWorkout();
 
-        // upsertRecords must NOT be called directly.
-        verifyNever(() => mockPRRepo.upsertRecords(any()));
+        // Detached upsert is kicked off inside an unawaited async closure
+        // — let microtasks drain so the inner `await prRepo.upsertRecords`
+        // registers on the mock.
+        await Future<void>.delayed(Duration.zero);
 
-        // At least one PendingUpsertRecords must be enqueued.
+        // Online + parent committed: direct upsert is preferred. PRs must
+        // NOT sit in the offline queue waiting for a connectivity blip.
+        verify(() => mockPRRepo.upsertRecords(any())).called(1);
+
+        // No PendingUpsertRecords should have been enqueued.
+        expect(
+          capturedNotifier.enqueued.whereType<PendingUpsertRecords>(),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'finishWorkout falls back to PendingUpsertRecords when direct upsert '
+      'throws (online but server rejects / network drops mid-call)',
+      () async {
+        final initial = stateWithCompletedSets();
+        final container = makePRContainer(initial);
+        addTearDown(container.dispose);
+
+        when(
+          () => mockRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        ).thenAnswer(
+          (_) async => Workout.fromJson(TestWorkoutFactory.create()),
+        );
+        when(
+          () => mockCache.read<Map<String, List<PersonalRecord>>>(
+            any(),
+            any(),
+            any(),
+          ),
+        ).thenReturn(<String, List<PersonalRecord>>{});
+
+        // Direct upsert returns a failed Future → finishWorkout's detached
+        // closure must fall back to queue. We use `thenAnswer((_) async =>
+        // throw …)` rather than `thenThrow` so the failure surfaces as an
+        // async-completed Future, matching what `mapException` emits in
+        // production (mapException always returns Future.error, never a
+        // synchronous throw — but the detached closure handles both via
+        // try/catch around `await`).
+        when(() => mockPRRepo.upsertRecords(any())).thenAnswer(
+          (_) async => throw const app.DatabaseException(
+            'connection lost mid-upsert',
+            code: 'network_error',
+          ),
+        );
+
+        await container.read(activeWorkoutProvider.future);
+        await container.read(activeWorkoutProvider.notifier).finishWorkout();
+
+        // Detached closure: upsertRecords + the fallback enqueue both run
+        // as microtasks. Drain twice — once for the upsertRecords await,
+        // once for the enqueue await.
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        // Direct attempt fired …
+        verify(() => mockPRRepo.upsertRecords(any())).called(1);
+
+        // … and on its failure we fell back to the queue with empty
+        // dependsOn (parent saveWorkout already committed).
         final upsertActions = capturedNotifier.enqueued
             .whereType<PendingUpsertRecords>()
             .toList();
-        expect(upsertActions, isNotEmpty);
-
-        // The enqueued action must carry the userId.
+        expect(upsertActions, hasLength(1));
+        expect(upsertActions.first.dependsOn, isEmpty);
         expect(upsertActions.first.userId, 'user-test-001');
       },
     );

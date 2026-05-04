@@ -905,30 +905,96 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         );
 
         if (prResult!.hasNewRecords) {
-          // Always enqueue — all PR writes go through the offline queue.
+          // PR upsert path:
+          //   - parent saved OFFLINE → enqueue with `dependsOn=[workout.id]`
+          //     so the drain holds this upsert until the parent commits
+          //     server-side (BUG-002 — without the dependency, the FK on
+          //     `personal_records.set_id → sets.id` fires before the parent
+          //     ever inserts the rows).
+          //   - parent saved ONLINE → try a direct upsert. The sets are
+          //     already durable server-side, so the FK resolves immediately
+          //     and the user sees their PRs reflected without waiting for a
+          //     connectivity transition to drain the queue. Fall back to the
+          //     queue on any failure (network drop between save and PR
+          //     upsert, server rejection, etc.) so the data is never lost.
           //
-          // BUG-002 fix: when the parent workout was saved offline, the new
-          // PR rows reference set IDs the server hasn't seen yet
-          // (`personal_records.set_id` FK -> `sets.id`). Tag this action with
-          // the parent workout ID so the drain holds the upsert until the
-          // parent commits. When the parent saved online, the sets are
-          // already durable server-side, so no `dependsOn` is needed.
-          final dependsOn = savedOffline
-              ? <String>[workout.id]
-              : const <String>[];
-          await ref
-              .read(pendingSyncProvider.notifier)
-              .enqueue(
-                PendingAction.upsertRecords(
-                  id: _uuid.v4(),
-                  recordsJson: prResult!.newRecords
-                      .map((r) => r.toJson())
-                      .toList(),
-                  userId: _userId,
-                  queuedAt: now,
-                  dependsOn: dependsOn,
-                ),
-              );
+          // Why direct-on-online is the right behavior: SyncService only
+          // drains on offline→online transitions, so an enqueued action on
+          // a steady-online device sits forever waiting for either a manual
+          // retry tap or a connectivity blip. That left users staring at a
+          // "Pending Sync (1)" badge for PRs they had clearly earned and
+          // could see no reason for.
+          if (savedOffline) {
+            await ref
+                .read(pendingSyncProvider.notifier)
+                .enqueue(
+                  PendingAction.upsertRecords(
+                    id: _uuid.v4(),
+                    recordsJson: prResult!.newRecords
+                        .map((r) => r.toJson())
+                        .toList(),
+                    userId: _userId,
+                    queuedAt: now,
+                    dependsOn: <String>[workout.id],
+                  ),
+                );
+          } else {
+            // Online: detached upsert. UI navigation must NOT block on what
+            // is purely a server-persistence concern — the user has already
+            // seen the PR detected on the client (cache write below + the
+            // celebration screen). On any failure (network drop, server
+            // rejection), fall through to the queue so the data is never
+            // lost.
+            //
+            // Why detached: awaiting here gates `finishWorkout()`'s return
+            // on a network roundtrip and on CI we saw the second-workout
+            // PR test push past its 60s budget when two upserts happened
+            // back-to-back. Persistence is not a UX concern here.
+            //
+            // Try/catch in an immediately-invoked async block (rather than
+            // `.catchError`) so we catch both synchronous throws from the
+            // call site and asynchronous failures from the returned Future.
+            final prRepo = ref.read(prRepositoryProvider);
+            final pendingNotifier = ref.read(pendingSyncProvider.notifier);
+            final newRecordsForUpsert = prResult!.newRecords;
+            unawaited(() async {
+              try {
+                await prRepo.upsertRecords(newRecordsForUpsert);
+              } catch (e, st) {
+                log(
+                  'Direct PR upsert failed, falling back to queue: $e',
+                  name: 'ActiveWorkoutNotifier',
+                  level: 900,
+                  error: e,
+                  stackTrace: st,
+                );
+                try {
+                  await pendingNotifier.enqueue(
+                    PendingAction.upsertRecords(
+                      id: _uuid.v4(),
+                      recordsJson: newRecordsForUpsert
+                          .map((r) => r.toJson())
+                          .toList(),
+                      userId: _userId,
+                      queuedAt: now,
+                      dependsOn: const <String>[],
+                    ),
+                  );
+                } catch (queueErr, queueSt) {
+                  // The queue itself failing is rare (Hive box write) but
+                  // we never want this background task to crash the
+                  // notifier. Log loud and move on.
+                  log(
+                    'Fallback enqueue also failed: $queueErr',
+                    name: 'ActiveWorkoutNotifier',
+                    level: 1000,
+                    error: queueErr,
+                    stackTrace: queueSt,
+                  );
+                }
+              }
+            }());
+          }
 
           // Optimistically update pr_cache so subsequent offline finishes
           // see the new records immediately.
