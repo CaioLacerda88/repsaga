@@ -17,7 +17,6 @@ import '../../models/exercise_set.dart';
 import '../../models/set_type.dart';
 import '../../models/weight_unit.dart';
 import '../../providers/workout_providers.dart';
-import '../../utils/pr_candidate.dart';
 import '../../utils/set_defaults.dart';
 import 'exercise_picker_sheet.dart';
 import 'set_row.dart';
@@ -257,9 +256,15 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     );
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      // Phase 20 commit 2: card chrome trimmed to give the SetRow data
+      // table breathing room on 360dp Brazilian-mid-market screens.
+      // Vertical padding stays at 16dp (rhythm above/below the set table);
+      // horizontal padding drops to 10dp so the flex-2 reps column has
+      // enough slack for two 40dp +/- buttons + a non-zero value zone
+      // without spawning a `RenderFlex overflowed` warning.
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -306,16 +311,12 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
       // Match by position: set 1 maps to lastSets[0], etc.
       final lastSet = index < lastSets.length ? lastSets[index] : null;
       final isNew = _newSetIds.contains(s.id);
-      // Phase 18c PR chip: parent owns candidacy because the detection
-      // needs the full set list for this exercise + the prior session's
-      // set list, neither of which the row itself can synthesize. The
-      // chip is presentational only; see [isPrCandidateAfterCommit] for
-      // the heuristic.
-      final isPrCandidate = isPrCandidateAfterCommit(
-        set: s,
-        allSetsThisExercise: activeExercise.sets,
-        lastWorkoutSets: lastSets,
-      );
+      // Phase 20 commit 2: the inline PR chip was removed from [SetRow] —
+      // PR signaling moves to the row's edges (gold left rune-stripe + gold
+      // right bracket on the done-col) in commit 4 once the standing-vs-
+      // superseded resolver lands. No PR-aware props are passed in the
+      // meantime so the row renders only the three baseline states
+      // (pending / pending-active / completed).
       return SetRow(
         key: ValueKey(s.id),
         set: s,
@@ -323,7 +324,6 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
         onCompleted: _onSetCompleted,
         lastSet: lastSet,
         isNew: isNew,
-        isPrCandidate: isPrCandidate,
       );
     });
   }
@@ -533,15 +533,22 @@ class _SetColumnHeaders extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
 
+    // Phase 20 commit 2: column widths mirror the new SetRow geometry —
+    //   set-num cell  : 48dp (BUG-018 tap-target floor; visual is 44dp but
+    //                   the Container constraint takes 48dp horizontal)
+    //   weight col    : flex 3
+    //   reps col      : flex 2
+    //   done-col      : 52dp
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
           SizedBox(
-            width: 40,
+            width: 48,
             child: Text(
               AppLocalizations.of(context).setColumnSet,
               style: style,
+              textAlign: TextAlign.center,
             ),
           ),
           Expanded(
@@ -560,7 +567,7 @@ class _SetColumnHeaders extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48),
+          const SizedBox(width: 52),
         ],
       ),
     );

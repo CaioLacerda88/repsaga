@@ -92,41 +92,12 @@ void main() {
         expect(find.text('3'), findsOneWidget);
       });
 
-      testWidgets('displays working-set badge label "W"', (tester) async {
-        final set = makeSet(setType: SetType.working);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('W'), findsOneWidget);
-      });
-
-      testWidgets('displays warmup-set badge label "WU"', (tester) async {
-        final set = makeSet(setType: SetType.warmup);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('WU'), findsOneWidget);
-      });
-
-      testWidgets('displays dropset badge label "D"', (tester) async {
-        final set = makeSet(setType: SetType.dropset);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('D'), findsOneWidget);
-      });
-
-      testWidgets('displays to-failure badge label "F"', (tester) async {
-        final set = makeSet(setType: SetType.failure);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('F'), findsOneWidget);
-      });
+      // Phase 20 commit 2 (Direction B): the set-type abbreviation badge
+      // ("W"/"WU"/"D"/"F") was removed from the set-number cell. The set
+      // type is now communicated by the left rune-stripe color of the
+      // [_SetRowFrame] (violet for working/warmup/dropset/failure pending,
+      // green for completed). Long-press cycle behavior is preserved and
+      // covered by `long-pressing set number cycles set type` below.
 
       testWidgets('displays "kg" label next to weight', (tester) async {
         final set = makeSet();

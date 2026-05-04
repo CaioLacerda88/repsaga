@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/format/number_format.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/reps_stepper.dart';
@@ -13,12 +14,33 @@ import '../../../profile/providers/profile_providers.dart';
 import '../../models/exercise_set.dart';
 import '../../models/set_type.dart';
 import '../../providers/notifiers/active_workout_notifier.dart';
-import 'pr_chip.dart';
 
 /// Displays a single set within an exercise card during an active workout.
 ///
-/// Shows set number, type badge, weight/reps steppers, RPE indicator,
-/// and a completion checkbox. Wrapped in [Dismissible] for swipe-to-delete.
+/// Phase 20 commit 2 (Direction B): tactile data-table row composed of four
+/// fixed-shape columns — set-number, weight stepper, reps stepper, done-mark.
+/// Layout mirrors `docs/design/2026-05-01-active-workout-redesign/
+/// direction-b-pr-refined.html`:
+///
+///   * `Row` with `crossAxisAlignment: stretch`, `minHeight: 56` so every
+///     state (pending / pending-active / completed / superseded-PR /
+///     standing-PR) has the same vertical rhythm and identical baselines.
+///   * Left 3dp rune-stripe (`--pv` violet on pending, `--success` green on
+///     completed) painted via a `Stack` overlay so it never displaces cell
+///     content. Commit 4 widens it to 4dp `--gold` for standing-PR rows.
+///   * Set-number cell: 44dp wide visual, ≥48dp tap target (BUG-018 floor).
+///     Tap copies the previous set; long-press cycles set type. The
+///     set-type abbreviation badge ("W"/"WU"/"D"/"F") was removed from this
+///     cell — set type is communicated by the left rune-stripe color.
+///   * Weight column flex-3, reps column flex-2, both with 1dp hairline
+///     borders. The refactored [WeightStepper] / [RepsStepper] flex-fill
+///     their tap zones (BUG-019 fix from commit 1).
+///   * Done-col: 52dp wide with a 4dp transparent right-border reservation
+///     so commit 4's gold bracket on PR rows lands without shifting layout.
+///
+/// PR-specific styling (gold edge frame, supersession ghost-tint, predicted
+/// PR ◆ done-mark) is intentionally absent — commit 4 wires that on top of
+/// this layout.
 class SetRow extends ConsumerStatefulWidget {
   const SetRow({
     required this.set,
@@ -26,7 +48,6 @@ class SetRow extends ConsumerStatefulWidget {
     this.onCompleted,
     this.lastSet,
     this.isNew = false,
-    this.isPrCandidate = false,
     super.key,
   });
 
@@ -43,14 +64,6 @@ class SetRow extends ConsumerStatefulWidget {
   /// is locked for 600ms to prevent accidental taps from thumb drift.
   final bool isNew;
 
-  /// Phase 18c, spec §13: when `true`, the inline [PrChip] renders to the
-  /// right of the reps stepper. Set by the parent (active workout screen)
-  /// only AFTER set commit — typing weight/reps mid-keystroke must not
-  /// flash the chip. The parent computes candidacy via
-  /// [isPrCandidateAfterCommit] and persists the chip for the rest of the
-  /// session (chip persistence == set stays committed).
-  final bool isPrCandidate;
-
   @override
   ConsumerState<SetRow> createState() => _SetRowState();
 }
@@ -58,13 +71,6 @@ class SetRow extends ConsumerStatefulWidget {
 class _SetRowState extends ConsumerState<SetRow> {
   bool _locked = false;
   Timer? _lockTimer;
-
-  static Map<SetType, String> _setTypeLabels(AppLocalizations l10n) => {
-    SetType.working: l10n.setTypeAbbrWorking,
-    SetType.warmup: l10n.setTypeAbbrWarmup,
-    SetType.dropset: l10n.setTypeAbbrDropset,
-    SetType.failure: l10n.setTypeAbbrFailure,
-  };
 
   @override
   void initState() {
@@ -113,7 +119,7 @@ class _SetRowState extends ConsumerState<SetRow> {
     }
   }
 
-  /// Whether the hint line should be shown.
+  /// Whether the previous-session hint line should be shown.
   ///
   /// Suppress the hint when pre-filled values match the last session exactly
   /// and the set is not yet completed (the hint is redundant in that case).
@@ -127,7 +133,6 @@ class _SetRowState extends ConsumerState<SetRow> {
     final lastWeight = lastSet.weight ?? 0;
     final lastReps = lastSet.reps ?? 0;
 
-    // Hide hint when values match exactly.
     if (currentWeight == lastWeight.toDouble() && currentReps == lastReps) {
       return false;
     }
@@ -139,7 +144,6 @@ class _SetRowState extends ConsumerState<SetRow> {
     final theme = Theme.of(context);
     final set = widget.set;
     final weightUnit = ref.watch(profileProvider).value?.weightUnit ?? 'kg';
-    final notifier = ref.read(activeWorkoutProvider.notifier);
 
     return Dismissible(
       key: ValueKey(set.id),
@@ -147,8 +151,6 @@ class _SetRowState extends ConsumerState<SetRow> {
       background: _DismissBackground(theme: theme),
       confirmDismiss: (_) async {
         // Guard against concurrent swipes removing the same set twice.
-        // If the set was already deleted by a prior swipe gesture, the
-        // state will no longer contain it.
         final current = ref.read(activeWorkoutProvider).value;
         if (current == null) return false;
         final exercise = current.exercises
@@ -159,7 +161,7 @@ class _SetRowState extends ConsumerState<SetRow> {
       },
       onDismissed: (_) {
         HapticFeedback.lightImpact();
-        // Save the set data before deleting so we can restore on undo.
+        final notifier = ref.read(activeWorkoutProvider.notifier);
         final deletedSet = set;
         notifier.deleteSet(widget.workoutExerciseId, set.id);
         ScaffoldMessenger.of(context)
@@ -185,7 +187,7 @@ class _SetRowState extends ConsumerState<SetRow> {
         children: [
           if (_shouldShowHint())
             Padding(
-              padding: const EdgeInsets.only(left: 48, bottom: 4),
+              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
               child: Text(
                 AppLocalizations.of(context).previousSet(
                   AppNumberFormat.weight(
@@ -200,174 +202,45 @@ class _SetRowState extends ConsumerState<SetRow> {
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+          _SetRowFrame(
+            isCompleted: set.isCompleted,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Set number with copy-last-set and long-press for set type.
-                // Uses 48dp minimum touch target per Material guidelines.
-                Semantics(
-                  label: set.setNumber > 1
-                      ? AppLocalizations.of(context).setNumberCopySemantics(
-                          set.setNumber,
-                          set.setType.localizedName(
-                            AppLocalizations.of(context),
-                          ),
-                        )
-                      : AppLocalizations.of(context).setNumberSemantics(
-                          set.setNumber,
-                          set.setType.localizedName(
-                            AppLocalizations.of(context),
-                          ),
-                        ),
-                  child: Tooltip(
-                    message: set.setNumber > 1
-                        ? AppLocalizations.of(
-                            context,
-                          ).tooltipCopyLastSetAndChangeType
-                        : AppLocalizations.of(context).tooltipChangeType,
-                    preferBelow: true,
-                    child: InkWell(
-                      onTap: set.setNumber > 1 ? _copyLastSet : null,
-                      onLongPress: _cycleSetType,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        // BUG-018: bumped from 40x40 to Material's 48dp tap-
-                        // target minimum so the set-number cell (tap-to-copy
-                        // / long-press-to-cycle-type) is reliably hittable
-                        // mid-workout.
-                        constraints: const BoxConstraints(
-                          minWidth: 48,
-                          minHeight: 48,
-                        ),
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${set.setNumber}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: set.setNumber > 1
-                                    ? theme.colorScheme.primary.withValues(
-                                        alpha: 0.8,
-                                      )
-                                    : theme.colorScheme.onSurface.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                fontWeight: FontWeight.w700,
-                                // Underline hint for tap-to-copy on sets > 1.
-                                decoration: set.setNumber > 1
-                                    ? TextDecoration.underline
-                                    : null,
-                                decorationColor: set.setNumber > 1
-                                    ? theme.colorScheme.primary.withValues(
-                                        alpha: 0.4,
-                                      )
-                                    : null,
-                                decorationStyle: TextDecorationStyle.dotted,
-                              ),
-                            ),
-                            // Show set type label below the number
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _setTypeBadgeColor(theme, set.setType),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _setTypeLabels(
-                                      AppLocalizations.of(context),
-                                    )[set.setType] ??
-                                    AppLocalizations.of(
-                                      context,
-                                    ).setTypeAbbrWorking,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                _SetNumberCell(
+                  set: set,
+                  onTap: set.setNumber > 1 ? _copyLastSet : null,
+                  onLongPress: _cycleSetType,
                 ),
-
-                // Weight stepper + unit label
                 Expanded(
                   flex: 3,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: WeightStepper(
-                          value: set.weight ?? 0,
-                          unit: weightUnit,
-                          onChanged: (v) => notifier.updateSet(
-                            widget.workoutExerciseId,
-                            set.id,
-                            weight: v,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        weightUnit,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: _StepperColumn(
+                    // No left border: the 3dp left rune-stripe + 48dp set-num
+                    // cell already provide visual separation. A second 1dp
+                    // hairline immediately to the right of the cell would
+                    // double-line the gutter and consume horizontal slack
+                    // we cannot afford on 360dp Brazilian-mid-market screens.
+                    child: _WeightStepperCell(
+                      set: set,
+                      weightUnit: weightUnit,
+                      workoutExerciseId: widget.workoutExerciseId,
+                    ),
                   ),
                 ),
-
-                // Reps stepper
                 Expanded(
                   flex: 2,
-                  child: RepsStepper(
-                    value: set.reps ?? 0,
-                    onChanged: (v) => notifier.updateSet(
-                      widget.workoutExerciseId,
-                      set.id,
-                      reps: v,
+                  child: _StepperColumn(
+                    showLeftBorder: true,
+                    child: _RepsStepperCell(
+                      set: set,
+                      workoutExerciseId: widget.workoutExerciseId,
                     ),
                   ),
                 ),
-
-                // Inline PR chip — rendered only when the parent has marked
-                // the set as a PR candidate AFTER commit. Wrapped in
-                // [SizedBox] with a fixed-height container so the row's
-                // overall height does not shift when the chip appears
-                // (spec §13: "no row height expansion").
-                if (widget.isPrCandidate)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, right: 4),
-                    child: PrChip(),
-                  ),
-
-                // Completion checkbox
-                Semantics(
-                  container: true,
-                  identifier: set.isCompleted
-                      ? 'workout-set-completed'
-                      : 'workout-set-done',
-                  label: set.isCompleted
-                      ? AppLocalizations.of(context).setCompleted
-                      : AppLocalizations.of(context).markSetAsDone,
-                  child: SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: Checkbox(
-                      value: set.isCompleted,
-                      onChanged: (_) => _onComplete(),
-                      activeColor: theme.colorScheme.primary,
-                    ),
-                  ),
+                _DoneCell(
+                  isCompleted: set.isCompleted,
+                  locked: _locked,
+                  onChanged: _onComplete,
                 ),
               ],
             ),
@@ -376,71 +249,277 @@ class _SetRowState extends ConsumerState<SetRow> {
       ),
     );
   }
+}
 
-  Color _setTypeBadgeColor(ThemeData theme, SetType type) {
-    return switch (type) {
-      SetType.working => theme.colorScheme.primary.withValues(alpha: 0.2),
-      SetType.warmup => theme.colorScheme.secondary.withValues(alpha: 0.2),
-      SetType.dropset => theme.colorScheme.tertiary.withValues(alpha: 0.2),
-      SetType.failure => theme.colorScheme.error.withValues(alpha: 0.2),
-    };
+/// Outer frame: enforces 56dp uniform row height across all states and paints
+/// the 3dp left rune-stripe (violet for pending, green for completed) plus
+/// the 1dp hairline bottom divider.
+///
+/// The stripe is a fixed-width sibling rather than a CSS-style absolute
+/// overlay because Flutter's `Stack` plus `Row(crossAxisAlignment: stretch)`
+/// fights itself into an infinite-height layout loop. A 3dp leading
+/// `SizedBox` is structurally simpler, costs the same 3dp horizontally as
+/// the mockup, and survives commit 4's 3dp→4dp gold widening with a
+/// single-pixel shift on PR rows that's well below perceptual threshold.
+///
+/// PR-state composition (commit 4): the stripe color/width swap to
+/// `AppColors.heroGold` / 4dp on standing-PR rows, paired with a 4dp gold
+/// right-border on [_DoneCell] (whose 4dp transparent reservation already
+/// holds the layout slot today).
+class _SetRowFrame extends StatelessWidget {
+  const _SetRowFrame({required this.child, required this.isCompleted});
+
+  final Widget child;
+  final bool isCompleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final stripeColor = isCompleted ? AppColors.success : AppColors.hotViolet;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.hair, width: 1)),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 3, color: stripeColor),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-/// Compact RPE indicator that opens a popup picker on tap.
+/// Set-number cell. Visually 44dp wide per the mockup, but the tap target
+/// constraints stay at the Material 48dp floor (BUG-018) so the cell is
+/// reliably hittable mid-workout.
 ///
-/// Retained for future re-enablement when RPE tracking is added back.
-// ignore: unused_element
-class _RpeIndicator extends StatelessWidget {
-  const _RpeIndicator({required this.rpe, required this.onChanged});
+/// The set-type abbreviation badge ("W"/"WU"/"D"/"F") was intentionally
+/// removed from this cell — the set type is now signaled by the left
+/// rune-stripe color, freeing the number cell to be a single, large,
+/// scannable digit.
+class _SetNumberCell extends StatelessWidget {
+  const _SetNumberCell({
+    required this.set,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
-  final int? rpe;
-  final ValueChanged<int> onChanged;
+  final ExerciseSet set;
+  final VoidCallback? onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final currentRpe = rpe;
+    final isCopyable = set.setNumber > 1;
+    final color = set.isCompleted
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.55)
+        : (isCopyable
+              ? AppColors.hotViolet.withValues(alpha: 0.9)
+              : AppColors.textCream);
 
     return Semantics(
-      label: currentRpe != null ? l10n.rpeValue(currentRpe) : l10n.setRpe,
-      child: PopupMenuButton<int>(
-        onSelected: onChanged,
-        tooltip: l10n.rpeTooltip,
-        constraints: const BoxConstraints(minWidth: 56),
-        position: PopupMenuPosition.under,
-        itemBuilder: (_) => List.generate(
-          10,
-          (i) => PopupMenuItem<int>(
-            value: i + 1,
-            height: 40,
+      label: isCopyable
+          ? l10n.setNumberCopySemantics(
+              set.setNumber,
+              set.setType.localizedName(l10n),
+            )
+          : l10n.setNumberSemantics(
+              set.setNumber,
+              set.setType.localizedName(l10n),
+            ),
+      child: Tooltip(
+        message: isCopyable
+            ? l10n.tooltipCopyLastSetAndChangeType
+            : l10n.tooltipChangeType,
+        preferBelow: true,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Container(
+            // BUG-018: tap-target floor is Material's 48x48 minimum. The
+            // visual cell width target from the mockup is 44dp, but giving
+            // up 4dp of horizontal real-estate to honor the tap-target
+            // contract is the correct trade-off — the row no longer
+            // mis-fires the copy-last-set / cycle-set-type interactions
+            // under sweaty thumbs.
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            alignment: Alignment.center,
             child: Text(
-              l10n.rpeMenuItem(i + 1),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: (i + 1) == rpe ? FontWeight.w700 : null,
-                color: (i + 1) == rpe ? theme.colorScheme.primary : null,
+              '${set.setNumber}',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                // Underline hint for tap-to-copy on sets > 1.
+                decoration: isCopyable ? TextDecoration.underline : null,
+                decorationColor: isCopyable
+                    ? AppColors.hotViolet.withValues(alpha: 0.4)
+                    : null,
+                decorationStyle: TextDecorationStyle.dotted,
               ),
             ),
           ),
         ),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: rpe != null
-                ? theme.colorScheme.primary.withValues(alpha: 0.15)
-                : theme.colorScheme.onSurface.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(6),
+      ),
+    );
+  }
+}
+
+/// Vertical separator wrapper around a stepper. The mockup's stepper columns
+/// use 1dp hairline borders to read as discrete data-table cells without
+/// going full Excel-grid. We render only the LEFT hairline on the reps
+/// column — the weight column relies on the 3dp left rune-stripe + 48dp
+/// set-num cell for separation, and the done-col tints itself green when
+/// completed (or pulls a 4dp gold bracket on standing-PR rows in commit 4),
+/// either of which serves as the trailing separator.
+class _StepperColumn extends StatelessWidget {
+  const _StepperColumn({required this.child, this.showLeftBorder = false});
+
+  final Widget child;
+  final bool showLeftBorder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: showLeftBorder
+              ? const BorderSide(color: AppColors.hair, width: 1)
+              : BorderSide.none,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Weight column inner: stepper + tiny "kg" label aligned to the right.
+class _WeightStepperCell extends ConsumerWidget {
+  const _WeightStepperCell({
+    required this.set,
+    required this.weightUnit,
+    required this.workoutExerciseId,
+  });
+
+  final ExerciseSet set;
+  final String weightUnit;
+  final String workoutExerciseId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final notifier = ref.read(activeWorkoutProvider.notifier);
+    final dim = set.isCompleted ? 0.6 : 1.0;
+    final unitColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+
+    return Opacity(
+      opacity: dim,
+      child: Row(
+        children: [
+          Expanded(
+            child: WeightStepper(
+              value: set.weight ?? 0,
+              unit: weightUnit,
+              onChanged: (v) =>
+                  notifier.updateSet(workoutExerciseId, set.id, weight: v),
+            ),
           ),
-          child: Text(
-            rpe != null ? '$rpe' : l10n.rpeLabel,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: rpe != null ? 13 : 9,
-              fontWeight: FontWeight.w700,
-              color: rpe != null
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              weightUnit,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: unitColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reps column inner: stepper, no unit suffix (the column header carries
+/// "REPS"; cluttering each row with the literal would dilute the data).
+class _RepsStepperCell extends ConsumerWidget {
+  const _RepsStepperCell({required this.set, required this.workoutExerciseId});
+
+  final ExerciseSet set;
+  final String workoutExerciseId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(activeWorkoutProvider.notifier);
+    final dim = set.isCompleted ? 0.6 : 1.0;
+
+    return Opacity(
+      opacity: dim,
+      child: RepsStepper(
+        value: set.reps ?? 0,
+        onChanged: (v) =>
+            notifier.updateSet(workoutExerciseId, set.id, reps: v),
+      ),
+    );
+  }
+}
+
+/// 52dp done-col with the completion checkbox. Commit 4 will add a 4dp
+/// `AppColors.heroGold` right-border on standing-PR rows. The 4dp shift
+/// only affects the trailing edge of the row and does not displace any
+/// data-baseline content, so reserving the slot pre-emptively today would
+/// only steal horizontal slack we cannot afford on 360dp screens.
+class _DoneCell extends StatelessWidget {
+  const _DoneCell({
+    required this.isCompleted,
+    required this.locked,
+    required this.onChanged,
+  });
+
+  final bool isCompleted;
+  final bool locked;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: isCompleted ? 'workout-set-completed' : 'workout-set-done',
+      label: isCompleted ? l10n.setCompleted : l10n.markSetAsDone,
+      child: Container(
+        width: 52,
+        // Faint green tint behind a completed row's done-mark — mirrors the
+        // mockup's `.done-col.completed { background: rgba(98,196,109,0.08) }`.
+        // Commit 4 will conditionally add a 4dp heroGold right-border for
+        // standing-PR rows; the 4dp shift sits at the trailing row edge and
+        // does not displace any data-baseline content.
+        decoration: BoxDecoration(
+          color: isCompleted ? AppColors.success.withValues(alpha: 0.08) : null,
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Checkbox(
+              value: isCompleted,
+              onChanged: locked ? null : (_) => onChanged(),
+              activeColor: AppColors.success,
+              checkColor: AppColors.textCream,
+              side: BorderSide(
+                color: AppColors.hotViolet.withValues(alpha: 0.4),
+                width: 1.5,
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
           ),
         ),

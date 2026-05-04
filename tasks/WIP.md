@@ -13,8 +13,8 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ### Commit plan (split for reviewability, single PR)
 
-- [ ] **Commit 1:** `refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)` — `lib/shared/widgets/weight_stepper.dart` only. Stepper geometry change in isolation.
-- [ ] **Commit 2:** `refactor(workouts): set-row layout + tap-target sizing (BUG-018)` — `set_row.dart` rewritten to Direction B layout (left rune-stripe, full-column stepper zones, ≥48dp set-num cell, 56dp uniform row height). No PR styling yet.
+- [x] **Commit 1:** `refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)` — landed as `a1344ff`.
+- [x] **Commit 2:** `refactor(workouts): set-row layout + tap-target sizing (BUG-018)` — set_row.dart fully rewritten to Direction B (Row(stretch) + IntrinsicHeight + 56dp minHeight; 3dp leading rune-stripe sibling; 48dp tap-target set-num; flex-3 weight + flex-2 reps with single hairline gutter; 52dp done-col, no right-border reservation). RepsStepper mirrored WeightStepper's commit-1 geometry. Card padding trimmed to 10dp horizontal so reps col fits on 360dp viewports. PrChip + set-type badge removed from row. Column header in exercise_card.dart updated. set_row_test badge expectations dropped. All 2300 tests pass.
 - [ ] **Commit 3:** `feat(rpg): pr detection — standing vs superseded resolver` — pure-domain extension to `pr_detection_service.dart` (or new resolver class). Fully unit-tested before UI consumes it.
 - [ ] **Commit 4:** `feat(workouts): set-row PR treatment — gold edge frame + supersession state` — wire resolver into `set_row.dart`, render the 5-state matrix per the locked spec.
 - [ ] **Commit 5:** `feat(workouts): finish button bottom anchor for one-handed reach (BUG-020)` — `active_workout_screen.dart`. Hevy-style sticky bottom bar.
