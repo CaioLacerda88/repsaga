@@ -14,12 +14,30 @@ class RepsStepper extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.increment = 1,
+    this.valueColor,
+    this.valueFontWeight,
     super.key,
   });
 
   final int value;
   final int increment;
   final ValueChanged<int> onChanged;
+
+  /// Optional override for the value-text color (Phase 20 commit 4).
+  ///
+  /// When `null` (the default), the value renders in
+  /// `theme.colorScheme.onSurface` — the standard cream text. SetRow uses
+  /// this hook to render the gold reps value on standing-PR / predicted-PR
+  /// rows whose accent set includes [RecordType.maxReps] or
+  /// [RecordType.maxVolume].
+  final Color? valueColor;
+
+  /// Optional override for the value-text font weight (Phase 20 commit 4).
+  ///
+  /// Defaults to [FontWeight.w700]. Mirrors [WeightStepper]'s param for
+  /// symmetry — present for callers that want to bump the weight to w800
+  /// on PR rows in line with the design's Rajdhani-800 spec.
+  final FontWeight? valueFontWeight;
 
   @override
   State<RepsStepper> createState() => _RepsStepperState();
@@ -145,8 +163,8 @@ class _RepsStepperState extends State<RepsStepper> {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
+                        fontWeight: widget.valueFontWeight ?? FontWeight.w700,
+                        color: widget.valueColor ?? theme.colorScheme.onSurface,
                       ),
                     ),
                   ),

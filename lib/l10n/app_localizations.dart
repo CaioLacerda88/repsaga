@@ -2588,6 +2588,12 @@ abstract class AppLocalizations {
   /// **'Mark set as done'**
   String get markSetAsDone;
 
+  /// Accessibility: set completion checkbox label when the row is in the predicted-PR state (current weight/reps would beat the standing record). Replaces the plain 'Mark set as done' so screen-reader users hear the achievement preview before tapping. Phase 20 commit 4.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark set as done — predicted record'**
+  String get markSetAsDonePredictedPr;
+
   /// Accessibility: RPE indicator with value
   ///
   /// In en, this message translates to:

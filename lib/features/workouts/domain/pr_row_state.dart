@@ -1,3 +1,5 @@
+import '../../personal_records/models/record_type.dart';
+
 /// Per-row PR display state for the active-workout set table (Phase 20).
 ///
 /// Each set row in the active workout screen maps to exactly one of these
@@ -54,4 +56,103 @@ enum PrRowState {
   /// the full gold treatment (4dp gold rune-stripe, 4% gold background tint,
   /// gold value text, 4dp gold right bracket).
   completedStandingPr,
+}
+
+/// Per-row PR display data — the [PrRowState] plus the set of [RecordType]s
+/// that drive the row's value-text accent (Phase 20 commit 4).
+///
+/// Two pieces of information the row widget needs to render correctly:
+///
+///   1. **state** — picks the chrome (left stripe color/width, background
+///      tint, done-mark, right bracket) per the 5-state matrix.
+///   2. **accentTypes** — picks WHICH value(s) on the row carry the accent
+///      (gold for predicted/standing, cream for superseded). A single set
+///      can simultaneously break heaviest-weight, max-reps and max-volume,
+///      so this is a [Set] not a single value.
+///
+/// **Per-state semantics of [accentTypes]:**
+///
+///   * [PrRowState.none] / [PrRowState.completedNonPr] → empty (no accent).
+///   * [PrRowState.pendingPredictedPr] → the record types the row's CURRENT
+///     values would break if the set were completed now. Both weight and
+///     reps Text widgets in the row check this set; if the corresponding
+///     [RecordType] is present, the value renders gold.
+///   * [PrRowState.completedStandingPr] → the record types the row broke
+///     at completion AND that are STILL the standing best within the
+///     workout. (E.g. row N broke weight + volume, a later set superseded
+///     volume but not weight; this set contains only [RecordType.maxWeight].)
+///   * [PrRowState.completedSupersededPr] → the record types the row broke
+///     at the moment of completion (all of which have since been
+///     superseded). The values render cream-700 (not dim, not gold) so the
+///     row reads as "you got there, but a later set went further" without
+///     stealing the standing-PR's gold.
+///
+/// **Mapping [RecordType] → on-screen value:**
+///
+///   * [RecordType.maxWeight] → the WEIGHT cell (kg/lb value).
+///   * [RecordType.maxReps]   → the REPS cell.
+///   * [RecordType.maxVolume] → BOTH cells together carry the accent. Volume
+///     is `weight × reps`, so the volume PR is visually attributable to the
+///     pair, not a single number. The widget folds maxVolume into BOTH the
+///     weight-accent and reps-accent checks so a volume-only PR still shows
+///     the achievement on the row.
+class PrRowDisplay {
+  const PrRowDisplay({required this.state, required this.accentTypes});
+
+  /// Convenience for the no-accent rows ([PrRowState.none] and
+  /// [PrRowState.completedNonPr]).
+  const PrRowDisplay.plain(this.state) : accentTypes = const <RecordType>{};
+
+  final PrRowState state;
+  final Set<RecordType> accentTypes;
+
+  /// Whether the WEIGHT value cell should carry the row's accent color.
+  ///
+  /// True when [accentTypes] contains [RecordType.maxWeight] OR
+  /// [RecordType.maxVolume] — volume is a (weight × reps) compound and the
+  /// row chooses to highlight BOTH operands so a volume-only PR doesn't
+  /// look unaccented.
+  bool get isWeightAccented =>
+      accentTypes.contains(RecordType.maxWeight) ||
+      accentTypes.contains(RecordType.maxVolume);
+
+  /// Whether the REPS value cell should carry the row's accent color.
+  ///
+  /// True when [accentTypes] contains [RecordType.maxReps] OR
+  /// [RecordType.maxVolume] — see [isWeightAccented] for the volume-folding
+  /// rationale.
+  bool get isRepsAccented =>
+      accentTypes.contains(RecordType.maxReps) ||
+      accentTypes.contains(RecordType.maxVolume);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PrRowDisplay &&
+          state == other.state &&
+          _setEquals(accentTypes, other.accentTypes));
+
+  @override
+  int get hashCode => Object.hash(state, _setHash(accentTypes));
+
+  @override
+  String toString() => 'PrRowDisplay($state, $accentTypes)';
+}
+
+bool _setEquals<T>(Set<T> a, Set<T> b) {
+  if (a.length != b.length) return false;
+  for (final e in a) {
+    if (!b.contains(e)) return false;
+  }
+  return true;
+}
+
+int _setHash<T>(Set<T> s) {
+  // Order-independent hash: XOR of element hashes. Acceptable for a small
+  // domain set (3 record types).
+  var h = 0;
+  for (final e in s) {
+    h ^= e.hashCode;
+  }
+  return h;
 }

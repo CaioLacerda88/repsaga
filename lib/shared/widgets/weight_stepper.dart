@@ -16,6 +16,9 @@ class WeightStepper extends StatefulWidget {
     required this.onChanged,
     this.increment = 2.5,
     this.unit = 'kg',
+    this.valueColor,
+    this.valueFontWeight,
+    this.valueShadow,
     super.key,
   });
 
@@ -25,6 +28,32 @@ class WeightStepper extends StatefulWidget {
 
   /// The weight unit label displayed in the input dialog and semantics.
   final String unit;
+
+  /// Optional override for the value-text color (Phase 20 commit 4).
+  ///
+  /// When `null` (the default), the value renders in
+  /// `theme.colorScheme.primary` with a 30% primary halo — the standard
+  /// daily-violet treatment. When provided, the value renders in this color
+  /// instead AND the violet halo is suppressed (passing a fresh shadow via
+  /// [valueShadow] is the caller's call). The active-workout SetRow uses
+  /// this hook to render the gold value(s) on standing-PR / predicted-PR
+  /// rows without creating a one-off stepper subclass.
+  final Color? valueColor;
+
+  /// Optional override for the value-text font weight (Phase 20 commit 4).
+  ///
+  /// Defaults to [FontWeight.w800]. The set-row PR treatment uses this to
+  /// keep the value at w800 (Rajdhani's bundled bold) while the dim/normal
+  /// states use a lighter weight in the future. Currently every state ships
+  /// w800; the param exists for symmetry with [valueColor].
+  final FontWeight? valueFontWeight;
+
+  /// Optional override for the value-text shadow (Phase 20 commit 4).
+  ///
+  /// Defaults to a 30% primary-violet halo. PR rows pass `null` to suppress
+  /// the violet halo on a gold value (a violet halo behind a gold number
+  /// reads muddy on the Arcane-Ascent palette).
+  final Shadow? valueShadow;
 
   @override
   State<WeightStepper> createState() => _WeightStepperState();
@@ -170,16 +199,24 @@ class _WeightStepperState extends State<WeightStepper> {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.primary,
-                        shadows: [
-                          Shadow(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.3,
-                            ),
-                            blurRadius: 8,
-                          ),
-                        ],
+                        fontWeight: widget.valueFontWeight ?? FontWeight.w800,
+                        color: widget.valueColor ?? theme.colorScheme.primary,
+                        // Halo only on the default (violet) state. PR rows
+                        // pass an explicit `valueColor` and want a clean
+                        // value — the gold reads cleanly without a halo on
+                        // top of the gold tint background.
+                        shadows: widget.valueColor != null
+                            ? (widget.valueShadow != null
+                                  ? [widget.valueShadow!]
+                                  : null)
+                            : [
+                                Shadow(
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  blurRadius: 8,
+                                ),
+                              ],
                       ),
                     ),
                   ),

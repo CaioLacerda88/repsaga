@@ -64,7 +64,39 @@ List<PrRowState> resolveRowStates({
   required List<PersonalRecord> existingRecords,
   required EquipmentType equipmentType,
 }) {
-  if (sets.isEmpty) return const <PrRowState>[];
+  // Thin wrapper over [resolveRowDisplays] preserved as the canonical
+  // signature for tests and callers that only need the chrome state. Both
+  // walk the same logic; collapsing them avoids drift between the binary
+  // state output and the richer per-row accent-type output.
+  final displays = resolveRowDisplays(
+    sets: sets,
+    existingRecords: existingRecords,
+    equipmentType: equipmentType,
+  );
+  return displays.map((d) => d.state).toList(growable: false);
+}
+
+/// Richer counterpart to [resolveRowStates] that ALSO returns, for each
+/// accent-eligible row, the [RecordType] set the row should color (Phase 20
+/// commit 4).
+///
+/// Same contract as [resolveRowStates] — pure function, idempotent, no I/O.
+/// Returns a list aligned 1:1 with [sets].
+///
+/// **Why this exists separately from [resolveRowStates]:** the SetRow widget
+/// needs to know not only the row's display state but also WHICH value(s) on
+/// the row to color (gold for predicted/standing, cream for superseded). A
+/// single set can simultaneously break heaviest-weight, max-reps and
+/// max-volume; the widget composes the per-cell text color from the
+/// [PrRowDisplay.accentTypes] set. Per-cell `[isWeightAccented]` /
+/// `[isRepsAccented]` getters fold maxVolume into BOTH so a volume-only PR
+/// is visible on the row.
+List<PrRowDisplay> resolveRowDisplays({
+  required List<ExerciseSet> sets,
+  required List<PersonalRecord> existingRecords,
+  required EquipmentType equipmentType,
+}) {
+  if (sets.isEmpty) return const <PrRowDisplay>[];
 
   // Determine bodyweight-only mode using the same rule as PRDetectionService:
   // bodyweight equipment AND every completed working set has non-positive
@@ -95,8 +127,13 @@ List<PrRowState> resolveRowStates({
   // First pass: classify each row in order, recording for each completed PR
   // row WHICH record types it broke. Pending rows project against the
   // current `runningBest` snapshot (which reflects all earlier sets).
-  final result = List<PrRowState>.filled(sets.length, PrRowState.none);
+  final result = List<PrRowDisplay>.filled(
+    sets.length,
+    const PrRowDisplay.plain(PrRowState.none),
+  );
   // Maps row index -> set of record types that row broke at completion.
+  // Used in pass 2 to decide superseded vs standing AND to derive the
+  // per-row accent set the SetRow widget colours.
   final brokenTypesByIndex = <int, Set<RecordType>>{};
 
   for (var i = 0; i < sets.length; i++) {
@@ -105,12 +142,16 @@ List<PrRowState> resolveRowStates({
     // Non-working sets: never PR-eligible. completedNonPr if completed (with
     // positive reps), none if pending. They also don't update runningBest.
     if (s.setType != SetType.working) {
-      result[i] = s.isCompleted ? PrRowState.completedNonPr : PrRowState.none;
+      result[i] = PrRowDisplay.plain(
+        s.isCompleted ? PrRowState.completedNonPr : PrRowState.none,
+      );
       continue;
     }
 
     if (!s.isCompleted) {
-      // Pending: project against current runningBest snapshot.
+      // Pending: project against current runningBest snapshot. The same set
+      // of would-break types becomes the row's accent set, so the widget
+      // gold-ifies the value(s) the projection identifies.
       final wouldBreak = _typesBrokenByValues(
         weight: s.weight ?? 0,
         reps: s.reps ?? 0,
@@ -118,8 +159,11 @@ List<PrRowState> resolveRowStates({
         isBodyweightOnly: isBodyweightOnly,
       );
       result[i] = wouldBreak.isEmpty
-          ? PrRowState.none
-          : PrRowState.pendingPredictedPr;
+          ? const PrRowDisplay.plain(PrRowState.none)
+          : PrRowDisplay(
+              state: PrRowState.pendingPredictedPr,
+              accentTypes: wouldBreak,
+            );
       continue;
     }
 
@@ -128,7 +172,7 @@ List<PrRowState> resolveRowStates({
     // and is excluded from comparisons (zero-rep is noise).
     final reps = s.reps ?? 0;
     if (reps <= 0) {
-      result[i] = PrRowState.completedNonPr;
+      result[i] = const PrRowDisplay.plain(PrRowState.completedNonPr);
       continue;
     }
 
@@ -140,11 +184,16 @@ List<PrRowState> resolveRowStates({
     );
 
     if (brokenTypes.isEmpty) {
-      result[i] = PrRowState.completedNonPr;
+      result[i] = const PrRowDisplay.plain(PrRowState.completedNonPr);
     } else {
-      // Tentatively mark as standing — second pass will demote to
-      // superseded if a later set beat every type.
-      result[i] = PrRowState.completedStandingPr;
+      // Tentatively mark as standing with the broken set as accent — pass 2
+      // will demote to superseded (with the same broken set as cream-accent)
+      // if every type was later beaten, OR shrink the accent set to only the
+      // still-standing types if some were superseded but not all.
+      result[i] = PrRowDisplay(
+        state: PrRowState.completedStandingPr,
+        accentTypes: brokenTypes,
+      );
       brokenTypesByIndex[i] = brokenTypes;
       for (final rt in brokenTypes) {
         runningBest[rt] = _valueFor(rt, weight: s.weight ?? 0, reps: reps);
@@ -152,10 +201,15 @@ List<PrRowState> resolveRowStates({
     }
   }
 
-  // Second pass: walk the broken rows again and demote any whose every
-  // broken type was later beaten by a strictly-greater value at a later
-  // completed working set. Per the binary visual rule, a row stays
-  // [completedStandingPr] if ANY of its broken types is still standing.
+  // Second pass: walk the broken rows again. For each broken record type,
+  // determine whether ANY later completed working set beat the value. The
+  // row's display is determined by:
+  //   - If NO broken type is still standing → demote to
+  //     [PrRowState.completedSupersededPr]; accent = the FULL original
+  //     broken set (cream-700 on every value the row broke at completion).
+  //   - If SOME broken types are still standing → keep
+  //     [PrRowState.completedStandingPr]; accent = ONLY the still-standing
+  //     types so the gold visually tracks "what's currently the best".
   for (final entry in brokenTypesByIndex.entries) {
     final i = entry.key;
     final brokenTypes = entry.value;
@@ -164,7 +218,7 @@ List<PrRowState> resolveRowStates({
         rt: _valueFor(rt, weight: sets[i].weight ?? 0, reps: sets[i].reps ?? 0),
     };
 
-    var anyStillStanding = false;
+    final stillStanding = <RecordType>{};
     for (final rt in brokenTypes) {
       final brokenValue = valuesAtBreak[rt]!;
       var supersededByLater = false;
@@ -184,15 +238,31 @@ List<PrRowState> resolveRowStates({
           break;
         }
       }
-      if (!supersededByLater) {
-        anyStillStanding = true;
-        break;
-      }
+      if (!supersededByLater) stillStanding.add(rt);
     }
 
-    if (!anyStillStanding) {
-      result[i] = PrRowState.completedSupersededPr;
+    if (stillStanding.isEmpty) {
+      // All broken types were superseded. Demote to superseded, but keep the
+      // ORIGINAL broken set as the accent — those are the values the row
+      // surpassed at completion and the cream-700 visual marks them as
+      // "you got there, but a later set went further".
+      result[i] = PrRowDisplay(
+        state: PrRowState.completedSupersededPr,
+        accentTypes: brokenTypes,
+      );
+    } else if (stillStanding.length != brokenTypes.length) {
+      // Partial supersession: some types still standing. Stay
+      // [completedStandingPr] (the row currently holds at least one
+      // standing record), but narrow the gold accent to ONLY the
+      // still-standing types so the visual is honest about what's still
+      // the best.
+      result[i] = PrRowDisplay(
+        state: PrRowState.completedStandingPr,
+        accentTypes: stillStanding,
+      );
     }
+    // else: every broken type still standing — already correctly set in
+    // pass 1 with the full broken set as accent.
   }
 
   return result;

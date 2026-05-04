@@ -1163,6 +1163,8 @@
   "@setCompleted": { "description": "Accessibility: set completion checkbox label (completed)" },
   "markSetAsDone": "Mark set as done",
   "@markSetAsDone": { "description": "Accessibility: set completion checkbox label (not completed)" },
+  "markSetAsDonePredictedPr": "Mark set as done — predicted record",
+  "@markSetAsDonePredictedPr": { "description": "Accessibility: set completion checkbox label when the row is in the predicted-PR state (current weight/reps would beat the standing record). Replaces the plain 'Mark set as done' so screen-reader users hear the achievement preview before tapping. Phase 20 commit 4." },
   "rpeValue": "RPE {value}. Tap to change.",
   "@rpeValue": {
     "description": "Accessibility: RPE indicator with value",

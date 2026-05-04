@@ -522,4 +522,169 @@ void main() {
       expect(result, [PrRowState.none, PrRowState.none]);
     });
   });
+
+  group('resolveRowDisplays', () {
+    // [resolveRowDisplays] returns the same per-row state classification as
+    // [resolveRowStates] PLUS a per-row [Set] of [RecordType]s that drive the
+    // SetRow widget's per-cell value accent (gold for predicted/standing,
+    // cream-700 for superseded). These tests pin the [accentTypes] semantic
+    // so commit 4's SetRow widget can rely on it without re-deriving the set
+    // from raw set data.
+    test(
+      'predicted-PR row exposes the projected broken types as accentTypes',
+      () {
+        // Standing 60kg / 8reps / 480 volume. Pending 65x5 beats only the
+        // weight axis (65>60); 5 reps and 325 volume both stay below.
+        final sets = [
+          _set(id: 's1', setNumber: 1, weight: 65, reps: 5, isCompleted: false),
+        ];
+        final existing = [
+          _record(type: RecordType.maxWeight, value: 60, reps: 8),
+          _record(type: RecordType.maxReps, value: 8),
+          _record(type: RecordType.maxVolume, value: 480),
+        ];
+
+        final result = resolveRowDisplays(
+          sets: sets,
+          existingRecords: existing,
+          equipmentType: EquipmentType.barbell,
+        );
+
+        expect(result, hasLength(1));
+        final d = result.single;
+        expect(d.state, PrRowState.pendingPredictedPr);
+        expect(d.accentTypes, {RecordType.maxWeight});
+        expect(d.isWeightAccented, isTrue);
+        expect(d.isRepsAccented, isFalse);
+      },
+    );
+
+    test('standing-PR row with partial supersession narrows accentTypes to '
+        'still-standing types only', () {
+      // Standing 60kg / 8reps / 480 volume, then row 1 = 65x9 (breaks all
+      // three: weight 65>60, reps 9>8, volume 585>480), then row 2 = 65x10
+      // (no new weight PR — 65 not > 65 — but reps 10>9 supersedes the
+      // reps and 650>585 supersedes the volume). Row 1 keeps its weight
+      // PR, the others were superseded.
+      final sets = [
+        _set(id: 's1', setNumber: 1, weight: 65, reps: 9),
+        _set(id: 's2', setNumber: 2, weight: 65, reps: 10),
+      ];
+      final existing = [
+        _record(type: RecordType.maxWeight, value: 60, reps: 8),
+        _record(type: RecordType.maxReps, value: 8),
+        _record(type: RecordType.maxVolume, value: 480),
+      ];
+
+      final result = resolveRowDisplays(
+        sets: sets,
+        existingRecords: existing,
+        equipmentType: EquipmentType.barbell,
+      );
+
+      expect(result, hasLength(2));
+      // Row 1 stays standing — weight is still the best at 65kg.
+      expect(result[0].state, PrRowState.completedStandingPr);
+      expect(
+        result[0].accentTypes,
+        {RecordType.maxWeight},
+        reason:
+            'still-standing types only — reps + volume were superseded by '
+            'the later 65x10 set, only the 65kg weight remains the best.',
+      );
+      // Row 2 is completedStandingPr with reps + volume as accent (it
+      // didn't break weight — 65 not > 65 — only reps and volume).
+      expect(result[1].state, PrRowState.completedStandingPr);
+      expect(result[1].accentTypes, {RecordType.maxReps, RecordType.maxVolume});
+    });
+
+    test(
+      'superseded-PR row keeps the FULL original broken set as accentTypes '
+      '(cream-700 visualizes "you got there, but a later set went further")',
+      () {
+        // Row 1 breaks weight (50>40); row 2 supersedes weight (60>50). Row 1
+        // becomes superseded with weight in its accent set so the SetRow's
+        // weight cell renders cream-700, not dim/grey.
+        final sets = [
+          _set(id: 's1', setNumber: 1, weight: 50, reps: 5),
+          _set(id: 's2', setNumber: 2, weight: 60, reps: 5),
+        ];
+        final existing = [
+          _record(type: RecordType.maxWeight, value: 40, reps: 5),
+          _record(type: RecordType.maxReps, value: 5),
+          _record(type: RecordType.maxVolume, value: 200),
+        ];
+
+        final result = resolveRowDisplays(
+          sets: sets,
+          existingRecords: existing,
+          equipmentType: EquipmentType.barbell,
+        );
+
+        expect(result[0].state, PrRowState.completedSupersededPr);
+        // Row 1 originally broke weight (50>40) AND volume (250>200); both
+        // were superseded by row 2 (60kg + 300 volume), so both stay in the
+        // accent set for the cream-700 visual.
+        expect(result[0].accentTypes, {
+          RecordType.maxWeight,
+          RecordType.maxVolume,
+        });
+        expect(result[1].state, PrRowState.completedStandingPr);
+      },
+    );
+
+    test('plain rows (none and completedNonPr) carry empty accentTypes', () {
+      final sets = [
+        _set(id: 's1', setNumber: 1, weight: 30, reps: 3, isCompleted: false),
+        _set(id: 's2', setNumber: 2, weight: 30, reps: 3),
+      ];
+      final existing = [
+        _record(type: RecordType.maxWeight, value: 100, reps: 10),
+        _record(type: RecordType.maxReps, value: 10),
+        _record(type: RecordType.maxVolume, value: 1000),
+      ];
+
+      final result = resolveRowDisplays(
+        sets: sets,
+        existingRecords: existing,
+        equipmentType: EquipmentType.barbell,
+      );
+
+      expect(result[0].state, PrRowState.none);
+      expect(result[0].accentTypes, isEmpty);
+      expect(result[1].state, PrRowState.completedNonPr);
+      expect(result[1].accentTypes, isEmpty);
+    });
+
+    test(
+      'maxVolume-only PR accents BOTH weight and reps cells (compound rule)',
+      () {
+        // No weight PR (50 = standing 50), no reps PR (5 = standing 5), but
+        // a NEW volume PR is impossible if both inputs match. Force a volume
+        // PR via an existing record that's lower than the row's volume but
+        // weight + reps individually match the standing best for those types.
+        // Concretely: standing 50kg / 5 reps / 200 volume. A new set 50x5 =
+        // 250 volume beats volume but ties weight + reps.
+        final sets = [_set(id: 's1', setNumber: 1, weight: 50, reps: 5)];
+        final existing = [
+          _record(type: RecordType.maxWeight, value: 50, reps: 5),
+          _record(type: RecordType.maxReps, value: 5),
+          _record(type: RecordType.maxVolume, value: 200),
+        ];
+
+        final result = resolveRowDisplays(
+          sets: sets,
+          existingRecords: existing,
+          equipmentType: EquipmentType.barbell,
+        );
+
+        expect(result.single.state, PrRowState.completedStandingPr);
+        expect(result.single.accentTypes, {RecordType.maxVolume});
+        // Volume folds into BOTH per-cell accents — this is the compound
+        // rule that lets a volume-only PR still light up the row visually.
+        expect(result.single.isWeightAccented, isTrue);
+        expect(result.single.isRepsAccented, isTrue);
+      },
+    );
+  });
 }

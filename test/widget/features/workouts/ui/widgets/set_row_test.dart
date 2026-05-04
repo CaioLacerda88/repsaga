@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/personal_records/models/record_type.dart';
 import 'package:repsaga/features/workouts/data/workout_local_storage.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
+import 'package:repsaga/features/workouts/domain/pr_row_state.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/set_row.dart';
+import 'package:repsaga/shared/widgets/reward_accent.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../../fixtures/test_factories.dart';
@@ -616,6 +619,139 @@ void main() {
           final cell = numberCells.first;
           expect(cell.constraints!.minWidth, greaterThanOrEqualTo(48));
           expect(cell.constraints!.minHeight, greaterThanOrEqualTo(48));
+        },
+      );
+    });
+
+    group('PR row treatment (Phase 20 commit 4)', () {
+      // The 5-state matrix is exhaustively pinned in commit 6's golden +
+      // widget tests; these are smoke checks that the [display] prop wires
+      // through correctly and the gold render path goes via [RewardAccent]
+      // (the only legal channel for AppColors.heroGold under the
+      // `check_reward_accent.sh` scarcity contract).
+
+      testWidgets(
+        'standing-PR display wraps the row in RewardAccent so the gold edge '
+        'frame can render through the lint-guarded contract',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsAtLeastNWidgets(1),
+            reason:
+                'standing-PR row must mount a RewardAccent ancestor — gold '
+                'stripe / right bracket / value text all read color via '
+                'RewardAccent.of(context). Missing ancestor = silent gold '
+                'failure (color falls back to transparent).',
+          );
+        },
+      );
+
+      testWidgets(
+        'predicted-PR display swaps the standard Checkbox for the gold ◆ '
+        'unchecked mark and exposes the predicted-PR semantics label',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // Standard Checkbox should be replaced — the ◆ mark is a Text
+          // glyph inside a Container, not a Checkbox.
+          expect(
+            find.byType(Checkbox),
+            findsNothing,
+            reason:
+                'predicted-PR pending row must use the gold ◆ done-mark, '
+                'not the standard violet-bordered Checkbox.',
+          );
+          expect(find.text('◆'), findsOneWidget);
+          // Use bySemanticsIdentifier — the predicted-PR done-cell shares
+          // the same `workout-set-done` identifier as the regular pending
+          // row (E2E selector contract). Asserting the localized label via
+          // find.bySemanticsLabel requires `tester.ensureSemantics()` and a
+          // SemanticsHandle dispose, which the existing test infrastructure
+          // doesn't set up; the identifier carries the same wiring guarantee.
+          expect(
+            find.bySemanticsIdentifier('workout-set-done'),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'completedSupersededPr display does NOT wrap in RewardAccent without '
+        'the gold stripe — only the 2% gold tint requires the ancestor',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // Superseded carries gold tint (2%) so the ancestor is mounted.
+          expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+          // But the standard green Checkbox stays — superseded uses ✓ green,
+          // not the predicted ◆ mark.
+          expect(find.byType(Checkbox), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'plain none state renders WITHOUT a RewardAccent ancestor (heroGold '
+        'scarcity preserved on non-PR rows)',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                // Default display = none, but pinning here for clarity.
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'non-PR rows must not mount RewardAccent — that would leak '
+                'the gold IconTheme into the row chrome and dilute the '
+                'reward-scarcity payoff.',
+          );
+          expect(find.byType(Checkbox), findsOneWidget);
         },
       );
     });

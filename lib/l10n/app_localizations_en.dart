@@ -1429,6 +1429,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get markSetAsDone => 'Mark set as done';
 
   @override
+  String get markSetAsDonePredictedPr => 'Mark set as done — predicted record';
+
+  @override
   String rpeValue(int value) {
     return 'RPE $value. Tap to change.';
   }

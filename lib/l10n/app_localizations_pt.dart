@@ -1440,6 +1440,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get markSetAsDone => 'Marcar série como concluída';
 
   @override
+  String get markSetAsDonePredictedPr =>
+      'Marcar série como concluída — recorde previsto';
+
+  @override
   String rpeValue(int value) {
     return 'RPE $value. Toque para alterar.';
   }

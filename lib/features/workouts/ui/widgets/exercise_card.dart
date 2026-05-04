@@ -12,6 +12,7 @@ import '../../../personal_records/models/record_type.dart';
 import '../../../personal_records/providers/pr_providers.dart';
 import '../../../personal_records/ui/widgets/pr_type_icon.dart';
 import '../../../profile/providers/profile_providers.dart';
+import '../../domain/pr_row_state.dart';
 import '../../models/active_workout_state.dart';
 import '../../models/exercise_set.dart';
 import '../../models/set_type.dart';
@@ -306,21 +307,35 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     List<ExerciseSet> lastSets,
   ) {
     final weId = activeExercise.workoutExercise.id;
+    final exerciseId = activeExercise.workoutExercise.exerciseId;
+    // Phase 20 commit 4: the per-row PR display state (5-state matrix +
+    // accent record types) comes from the pure resolver via
+    // [activeWorkoutRowDisplaysProvider]. The provider watches the active
+    // workout state AND the exercise's historical PRs; SetRow consumes the
+    // resolved display via constructor — it does not recompute. Unidirectional
+    // data flow: state in → display projection → row render.
+    final rowDisplays = ref.watch(
+      activeWorkoutRowDisplaysProvider((
+        workoutExerciseId: weId,
+        exerciseId: exerciseId,
+      )),
+    );
     return activeExercise.sets.indexed.map((entry) {
       final (index, s) = entry;
       // Match by position: set 1 maps to lastSets[0], etc.
       final lastSet = index < lastSets.length ? lastSets[index] : null;
       final isNew = _newSetIds.contains(s.id);
-      // Phase 20 commit 2: the inline PR chip was removed from [SetRow] —
-      // PR signaling moves to the row's edges (gold left rune-stripe + gold
-      // right bracket on the done-col) in commit 4 once the standing-vs-
-      // superseded resolver lands. No PR-aware props are passed in the
-      // meantime so the row renders only the three baseline states
-      // (pending / pending-active / completed).
+      // Resolve the matching display for this row. If the resolver has not
+      // yet produced an entry (race during a transient empty state) fall
+      // back to the no-accent default so the row still renders cleanly.
+      final display = index < rowDisplays.length
+          ? rowDisplays[index]
+          : const PrRowDisplay.plain(PrRowState.none);
       return SetRow(
         key: ValueKey(s.id),
         set: s,
         workoutExerciseId: weId,
+        display: display,
         onCompleted: _onSetCompleted,
         lastSet: lastSet,
         isNew: isNew,
