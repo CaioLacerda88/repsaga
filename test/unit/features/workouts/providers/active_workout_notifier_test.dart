@@ -3058,7 +3058,7 @@ void main() {
     );
 
     test(
-      'finishWorkout calls upsertRecords directly when parent saved online',
+      'finishWorkout fires upsertRecords (detached) when parent saved online',
       () async {
         final initial = stateWithCompletedSets();
         final container = makePRContainer(initial);
@@ -3083,12 +3083,17 @@ void main() {
           ),
         ).thenReturn(<String, List<PersonalRecord>>{});
 
-        // Stub the direct upsert so the new "online → direct" path
-        // succeeds without falling back to the queue.
+        // Stub the direct upsert so the new "online → detached upsert"
+        // path succeeds without falling back to the queue.
         when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
 
         await container.read(activeWorkoutProvider.future);
         await container.read(activeWorkoutProvider.notifier).finishWorkout();
+
+        // Detached upsert is kicked off inside an unawaited async closure
+        // — let microtasks drain so the inner `await prRepo.upsertRecords`
+        // registers on the mock.
+        await Future<void>.delayed(Duration.zero);
 
         // Online + parent committed: direct upsert is preferred. PRs must
         // NOT sit in the offline queue waiting for a connectivity blip.
@@ -3127,9 +3132,15 @@ void main() {
           ),
         ).thenReturn(<String, List<PersonalRecord>>{});
 
-        // Direct upsert throws → finishWorkout must fall back to queue.
-        when(() => mockPRRepo.upsertRecords(any())).thenThrow(
-          const app.DatabaseException(
+        // Direct upsert returns a failed Future → finishWorkout's detached
+        // closure must fall back to queue. We use `thenAnswer((_) async =>
+        // throw …)` rather than `thenThrow` so the failure surfaces as an
+        // async-completed Future, matching what `mapException` emits in
+        // production (mapException always returns Future.error, never a
+        // synchronous throw — but the detached closure handles both via
+        // try/catch around `await`).
+        when(() => mockPRRepo.upsertRecords(any())).thenAnswer(
+          (_) async => throw const app.DatabaseException(
             'connection lost mid-upsert',
             code: 'network_error',
           ),
@@ -3137,6 +3148,12 @@ void main() {
 
         await container.read(activeWorkoutProvider.future);
         await container.read(activeWorkoutProvider.notifier).finishWorkout();
+
+        // Detached closure: upsertRecords + the fallback enqueue both run
+        // as microtasks. Drain twice — once for the upsertRecords await,
+        // once for the enqueue await.
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         // Direct attempt fired …
         verify(() => mockPRRepo.upsertRecords(any())).called(1);

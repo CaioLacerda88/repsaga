@@ -939,23 +939,40 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                   ),
                 );
           } else {
-            try {
-              final prRepo = ref.read(prRepositoryProvider);
-              await prRepo.upsertRecords(prResult!.newRecords);
-            } catch (e, st) {
-              log(
-                'Direct PR upsert failed, falling back to queue: $e',
-                name: 'ActiveWorkoutNotifier',
-                level: 900,
-                error: e,
-                stackTrace: st,
-              );
-              await ref
-                  .read(pendingSyncProvider.notifier)
-                  .enqueue(
+            // Online: detached upsert. UI navigation must NOT block on what
+            // is purely a server-persistence concern — the user has already
+            // seen the PR detected on the client (cache write below + the
+            // celebration screen). On any failure (network drop, server
+            // rejection), fall through to the queue so the data is never
+            // lost.
+            //
+            // Why detached: awaiting here gates `finishWorkout()`'s return
+            // on a network roundtrip and on CI we saw the second-workout
+            // PR test push past its 60s budget when two upserts happened
+            // back-to-back. Persistence is not a UX concern here.
+            //
+            // Try/catch in an immediately-invoked async block (rather than
+            // `.catchError`) so we catch both synchronous throws from the
+            // call site and asynchronous failures from the returned Future.
+            final prRepo = ref.read(prRepositoryProvider);
+            final pendingNotifier = ref.read(pendingSyncProvider.notifier);
+            final newRecordsForUpsert = prResult!.newRecords;
+            unawaited(() async {
+              try {
+                await prRepo.upsertRecords(newRecordsForUpsert);
+              } catch (e, st) {
+                log(
+                  'Direct PR upsert failed, falling back to queue: $e',
+                  name: 'ActiveWorkoutNotifier',
+                  level: 900,
+                  error: e,
+                  stackTrace: st,
+                );
+                try {
+                  await pendingNotifier.enqueue(
                     PendingAction.upsertRecords(
                       id: _uuid.v4(),
-                      recordsJson: prResult!.newRecords
+                      recordsJson: newRecordsForUpsert
                           .map((r) => r.toJson())
                           .toList(),
                       userId: _userId,
@@ -963,7 +980,20 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                       dependsOn: const <String>[],
                     ),
                   );
-            }
+                } catch (queueErr, queueSt) {
+                  // The queue itself failing is rare (Hive box write) but
+                  // we never want this background task to crash the
+                  // notifier. Log loud and move on.
+                  log(
+                    'Fallback enqueue also failed: $queueErr',
+                    name: 'ActiveWorkoutNotifier',
+                    level: 1000,
+                    error: queueErr,
+                    stackTrace: queueSt,
+                  );
+                }
+              }
+            }());
           }
 
           // Optimistically update pr_cache so subsequent offline finishes

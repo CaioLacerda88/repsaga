@@ -131,3 +131,76 @@ branch — purely a coordination checklist.
 
 All checklist items above completed. Phase 16a external setup can proceed with `com.repsaga.app` everywhere.
 
+
+---
+
+## Resume context (2026-05-04, post-compact session)
+
+### Where we are right now
+
+**Branch:** `fix/pr-upsert-online-direct-and-launch-drain` — PR #150 open. First CI run failed on a single E2E (`personal-records.spec.ts:106` — second-workout-with-higher-weight). Root cause: the new direct-upsert was awaited inside `finishWorkout()`, gating UI navigation on a server roundtrip — on CI's slower local Supabase the second workout pushed the test past its 60s budget. Fix pushed: detached upsert via `unawaited(() async { try await upsert; catch fall back to queue })`. Persistence is no longer a UX concern.
+
+**Main:** `fd852d3` — has migrations 00050 + 00051 deployed to hosted (peak_loads CHECK violation fixed via trigger backstop).
+
+### Today's PR sequence
+
+| PR | Status | What it did |
+|---|---|---|
+| #147 | merged + on hosted | Hive resilience self-heal (splash-stuck fix) |
+| #148 | merged + 00050 on hosted | Bodyweight save + cascade gating + vitality untested state |
+| #149 | merged + 00051 on hosted | peak_loads multi-writer trigger backstop (the fix that actually worked on the device) |
+| **#150** | **open, CI re-running after detach fix** | Direct PR upsert when online (detached, fire-and-forget), fall back to queue on failure |
+| **next** | not yet open | `vitality-nightly` auth modernization — port `isServiceRoleJwt` from `validate-purchase`. Reason: current `SUPABASE_SERVICE_ROLE_KEY` string-equality breaks under new key system (the cause of today's vitality-cron 401) |
+
+### What's verified working on the live Galaxy S25 Ultra (RXCY500Z22M)
+
+- App launches cleanly (no splash-stuck)
+- New workout completed inline successfully (post-00050+00051)
+- Old 5 stuck queue items effectively gone (Hive's loader silently dropped invalid frames; raw file still has them but `box.length` reports 1)
+- `runBackfill` succeeded (no more code=23514 in logcat)
+
+### What still hasn't been verified on device
+
+- **Vitality cron has NOT run since the new workout** — vitality % will not update until 03:00 UTC tomorrow OR a manual cron trigger (user asked to trigger manually; blocked on service-role key — see below)
+- **PR upsert still pending** (`f86e78ac...` — orphan from the new workout). PR #150 fixes future workouts but doesn't touch this existing item; user can tap manual Retry to drain it
+- **Stats / character sheet rank progression** — user confirmed positive feel but no screenshots captured yet
+- **Validation walkthrough we promised** (before debugging consumed the session) — still pending. Steps:
+  1. Clear app data (or live test on existing account)
+  2. Walk through stock weighted routine + stock bodyweight routine
+  3. Capture screenshots at each transition
+  4. Hand to ui-ux-critic for review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging
+  5. Append `[redesign-input]` findings to `docs/design/2026-05-01-active-workout-redesign/critique.md`
+
+### Pending immediate ask from user (manual SQL bypass given)
+
+User asked: "meanwhile, manually run the cron to the vitality thing."
+Edge Function path is broken under the new Supabase key system (`SUPABASE_SERVICE_ROLE_KEY` is now a platform-managed compatibility shim — the explicit secret is reserved and dashboard masks it as a digest hash, not the value). Vault key + Edge env drift, so string-equality 401s.
+
+**Workaround given to user**: a one-shot SQL block (in chat) that re-implements `processUser` directly in PL/pgSQL using their email lookup. Bypasses the Edge Function entirely. Math is equivalent to the Edge Function's `stepEwma` (α_up ≈ 0.39346934, α_down ≈ 0.15351830).
+
+**Proper fix**: see "next" PR row above — port `isServiceRoleJwt` from `validate-purchase` (which already has the correct pattern; see comment at lines 90-103 of `validate-purchase/index.ts` explaining why string-equality is wrong).
+
+### After PR #150 lands
+
+1. Squash-merge (no migration; Dart-only change)
+2. Rebuild APK + `adb install -r` (preserves Hive)
+3. Manually retry the `f86e78ac` upsertRecords from pending sync sheet (one-time cleanup of yesterday's orphan)
+4. Trigger vitality-nightly manually (above)
+5. Resume the validation walkthrough → screenshots → ui-ux-critic review → redesign-doc updates
+
+### Architectural lessons captured today
+
+- `tasks/lessons.md` updated with the **CHECK constraint multi-writer audit rule** (after the partial 00050 fix was insufficient, 00051 added the trigger backstop)
+- User just caught me about to repeat the orphan-children-un-gating bug class by adding a poorly-validated trigger to `_drain` in PR #150's draft. Reverted that part. **Lesson:** any new trigger into `_drain` needs to revalidate the connectivity precondition — `isOnlineProvider` is optimistic-true before connectivity stream resolves.
+
+### Open architectural follow-ups (not in scope of #150)
+
+- **Cold-launch orphan drain** — still no auto-trigger when app boots online with pre-existing queue items. Future improvement could use `onlineStatusProvider`'s first real `AsyncData` emission as the trigger (not the optimistic default).
+- **Two unpatched legacy peak_loads writers** (`_rpg_backfill_chunk` line 263, `record_set_xp` line 1656) still emit unguarded INSERTs; trigger from 00051 silently absorbs them. Future cleanup migration could add explicit `IF weight > 0` guards for code-review explicitness, but trigger subsumes the bug entirely.
+
+### Critical not-to-redo list
+
+- 00050+00051 are deployed to hosted; do NOT re-push them
+- Hive resilience (PR #147) has the `@visibleForTesting allBoxNames` API; tests use that
+- `VitalityState.untested` is a real enum variant now (not "dormant"); switches must handle it
+- The PR-upsert direct-online change in #150 is gated on `savedOffline` — the offline path's `dependsOn = [workout.id]` MUST stay (BUG-002 FK guard)
