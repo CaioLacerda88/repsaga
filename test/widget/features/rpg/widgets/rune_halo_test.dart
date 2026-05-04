@@ -156,6 +156,11 @@ void main() {
         'does not fire when entering non-Radiant states (Active / Fading / Dormant)',
         (tester) async {
           for (final state in [
+            // 2026-05-04 untested patch — included so the haptic contract
+            // pin covers the new variant explicitly. Untested shares the
+            // dormant treatment (no controller for haptic, no glow) so it
+            // must remain silent.
+            VitalityState.untested,
             VitalityState.dormant,
             VitalityState.fading,
             VitalityState.active,

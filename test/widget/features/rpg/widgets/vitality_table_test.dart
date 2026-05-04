@@ -320,5 +320,71 @@ void main() {
       expect(find.text('Core'), findsOneWidget);
       expect(find.text('50%'), findsOneWidget);
     });
+
+    // -------------------------------------------------------------------------
+    // 2026-05-04 untested patch — render `—` for never-trained body parts
+    // -------------------------------------------------------------------------
+    //
+    // A brand-new account opens Stats and sees six body-part rows. Before the
+    // patch every row read `0% / "Awaits your first stride."` which was ambiguous
+    // (is this a failure grade?). After the patch:
+    //
+    //   * peak == 0  → state = untested → readout `—` + "Uncharted — log a set
+    //                  to begin." copy.
+    //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + "Awaits your
+    //                              first stride." copy unchanged. (Regression
+    //                              pin: peak > 0 must NOT route to untested.)
+    testWidgets('renders `—` (em-dash) and untested copy for an untested row', (
+      tester,
+    ) async {
+      const untestedRow = VitalityTableRow(
+        bodyPart: BodyPart.chest,
+        pct: 0,
+        state: VitalityState.untested,
+        rank: 1,
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          rows: const [untestedRow],
+          selected: BodyPart.chest,
+          onSelect: (_) {},
+        ),
+      );
+      await tester.pump();
+
+      // Untested readout: `—`, NOT `0%`.
+      expect(find.text('—'), findsOneWidget);
+      expect(find.text('0%'), findsNothing);
+      // Untested marginalia copy.
+      expect(find.text('Uncharted — log a set to begin.'), findsOneWidget);
+    });
+
+    testWidgets('still renders `0%` and dormant copy for a fully-decayed row '
+        '(regression pin)', (tester) async {
+      // peak > 0, pct == 0 → dormant. The 2026-05-04 patch must not bleed
+      // into this case — a body part the user trained once and has fully
+      // decayed on still reads as a genuine 0%, not as untested.
+      const dormantRow = VitalityTableRow(
+        bodyPart: BodyPart.legs,
+        pct: 0,
+        state: VitalityState.dormant,
+        rank: 2,
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          rows: const [dormantRow],
+          selected: BodyPart.legs,
+          onSelect: (_) {},
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('0%'), findsOneWidget);
+      expect(find.text('—'), findsNothing);
+      expect(find.text('Awaits your first stride.'), findsOneWidget);
+      expect(find.text('Uncharted — log a set to begin.'), findsNothing);
+    });
   });
 }

@@ -4,8 +4,11 @@ import 'package:repsaga/features/rpg/models/vitality_state.dart';
 
 /// Canonical mapper boundary tests.
 ///
-/// Pins the §8.4 contract:
-///   * `pct == 0`      → dormant
+/// Pins the §8.4 contract (with the 2026-05-04 untested patch):
+///   * `peak == 0`     → untested (via `fromVitality` only — `fromPercent`
+///                       never returns untested because the ratio is
+///                       already in hand)
+///   * `pct == 0`      → dormant  (peak > 0, fully decayed)
 ///   * `(0, 0.30]`     → fading
 ///   * `(0.30, 0.70]`  → active
 ///   * `(0.70, 1.00]`  → radiant
@@ -76,29 +79,52 @@ void main() {
   });
 
   group('VitalityStateMapper.fromVitality — ewma+peak normalisation', () {
-    test('peak == 0 collapses to dormant regardless of ewma', () {
-      // Even a non-zero EWMA against a zero peak is dormant — this guards
-      // a never-trained body part and prevents divide-by-zero in the
-      // percentage helper.
+    test('peak == 0 collapses to untested regardless of ewma', () {
+      // 2026-05-04 untested patch: peak == 0 is the "ratio undefined"
+      // branch — the body part has never been trained and the ewma/peak
+      // ratio is mathematically undefined. The dedicated
+      // [VitalityState.untested] state lets the UI render `—` instead of
+      // the misleading `0%` that reads as a failure grade. Even a non-zero
+      // EWMA against a zero peak (defensive case — should never happen in
+      // practice) collapses to untested.
       expect(
         VitalityStateMapper.fromVitality(ewma: 0, peak: 0),
-        VitalityState.dormant,
+        VitalityState.untested,
       );
       expect(
         VitalityStateMapper.fromVitality(ewma: 100, peak: 0),
-        VitalityState.dormant,
+        VitalityState.untested,
       );
     });
 
     test('ewma == 0 with peak > 0 → dormant (fully decayed)', () {
-      // pct = 0/peak = 0 → dormant boundary. Spec §8.4 puts a fully
-      // decayed body part at the same visual state as a never-trained
-      // one — the user has fallen completely off the path.
+      // pct = 0/peak = 0 → dormant boundary. Distinct from untested:
+      // peak > 0 means the user trained this body part at least once
+      // and has since fallen completely off the path. Genuine 0% ratio.
+      // This is a regression pin for the 2026-05-04 untested patch — the
+      // peak > 0 case must NOT collapse into untested.
       expect(
         VitalityStateMapper.fromVitality(ewma: 0, peak: 1000),
         VitalityState.dormant,
       );
+      expect(
+        VitalityStateMapper.fromVitality(ewma: 0, peak: 10),
+        VitalityState.dormant,
+      );
     });
+
+    test(
+      'ewma > 0 with peak > 0 still maps via fromPercent (regression pin)',
+      () {
+        // Existing math unchanged — adding the untested variant must not
+        // perturb the four-state mapping for any peak > 0 case. pct = 0.20
+        // sits inside the fading band (0, 0.30].
+        expect(
+          VitalityStateMapper.fromVitality(ewma: 2, peak: 10),
+          VitalityState.fading,
+        );
+      },
+    );
 
     test('half of peak → active (boundary mid-band)', () {
       expect(
@@ -118,5 +144,24 @@ void main() {
         VitalityState.radiant,
       );
     });
+  });
+
+  group('VitalityStateMapper.fromPercent — never returns untested', () {
+    test(
+      'every Vitality state EXCEPT untested is reachable via fromPercent',
+      () {
+        // Structural pin: fromPercent is the trend-chart / mean-vitality
+        // path where the ratio is already known to be defined (peak > 0).
+        // Adding the untested variant must not bleed into that path —
+        // untested is reachable only through fromVitality(peak: 0).
+        final reachable = <VitalityState>{
+          VitalityStateMapper.fromPercent(0),
+          VitalityStateMapper.fromPercent(0.15),
+          VitalityStateMapper.fromPercent(0.5),
+          VitalityStateMapper.fromPercent(0.9),
+        };
+        expect(reachable.contains(VitalityState.untested), isFalse);
+      },
+    );
   });
 }

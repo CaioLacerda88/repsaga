@@ -98,7 +98,10 @@ void main() {
   final now = DateTime.utc(2026, 4, 30);
 
   group('assembleStatsState — Vitality table', () {
-    test('day-0 user produces six dormant rows in canonical order', () {
+    test('day-0 user produces six untested rows in canonical order', () {
+      // 2026-05-04 untested patch: every body part with peak == 0 maps to
+      // VitalityState.untested. The vitality table renders `—` (not `0%`)
+      // for these rows; see vitality_table_test.dart for the readout pin.
       final state = assembleStatsState(
         now: now,
         snapshot: RpgProgressSnapshot.empty,
@@ -114,7 +117,7 @@ void main() {
       );
       for (final row in state.vitalityRows) {
         expect(row.pct, 0);
-        expect(row.state, VitalityState.dormant);
+        expect(row.state, VitalityState.untested);
         expect(row.rank, 1);
       }
     });
@@ -174,11 +177,13 @@ void main() {
       expect(legs.pct, closeTo(0.50, 1e-9));
       expect(legs.state, VitalityState.active);
 
-      // Untouched body parts still render as dormant rows.
+      // Untouched body parts (peak == 0) render as untested rows post the
+      // 2026-05-04 patch — distinct from dormant which is "trained then
+      // fully decayed" (peak > 0, ewma == 0).
       final shoulders = state.vitalityRows.firstWhere(
         (r) => r.bodyPart == BodyPart.shoulders,
       );
-      expect(shoulders.state, VitalityState.dormant);
+      expect(shoulders.state, VitalityState.untested);
       expect(shoulders.pct, 0);
     });
   });

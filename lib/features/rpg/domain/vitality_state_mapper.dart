@@ -27,13 +27,16 @@ import 'vitality_calculator.dart' show VitalityCalculator;
 /// into the styles file, any future domain rule (e.g. a fifth state, a
 /// new threshold) goes here.
 ///
-/// **Boundary semantics (spec §8.4):**
-///   * `peak == 0`           → `dormant` ("Awaits your first stride")
-///   * `0 < pct ≤ 0.30`      → `fading`  ("Conditioning lost — return…")
-///   * `0.30 < pct ≤ 0.70`   → `active`  ("On the path")
-///   * `0.70 < pct ≤ 1.0`    → `radiant` ("Path mastered")
+/// **Boundary semantics (spec §8.4 + 2026-05-04 untested patch):**
+///   * `peak == 0`              → `untested` ("Uncharted — log a set to begin")
+///   * `peak > 0 && pct == 0`   → `dormant`  ("Conditioning lost — return…")
+///   * `0 < pct ≤ 0.30`         → `fading`   (1-30% of peak)
+///   * `0.30 < pct ≤ 0.70`      → `active`   ("On the path")
+///   * `0.70 < pct ≤ 1.0`       → `radiant`  ("Path mastered")
 ///
 /// `pct` is `clamp(ewma / peak, 0, 1)` — see [VitalityCalculator.percentage].
+/// The `untested` branch is the only one where `pct` is mathematically
+/// undefined (division by zero); every other branch has a real ratio.
 ///
 /// Why this lives in `domain/` and not `models/`: the boundary logic is a
 /// state-derivation rule, not a data shape. The enum itself stays in
@@ -54,7 +57,7 @@ class VitalityStateMapper {
 
   /// Map a Vitality percentage (0..1) to the four-state §8.4 collapse.
   ///
-  /// `pct == 0` is the dormant boundary — peak hasn't been established or
+  /// `pct == 0` is the dormant boundary — peak HAS been established but
   /// EWMA fully decayed to zero. `pct > 1.0` is clamped to radiant (a guard
   /// against floating-point overshoot from numeric(14,4) round-trips).
   ///
@@ -63,6 +66,13 @@ class VitalityStateMapper {
   ///   * `pct = 0.30`  → fading  (right-edge inclusive)
   ///   * `pct = 0.70`  → active  (right-edge inclusive)
   ///   * `pct = 1.00`  → radiant
+  ///
+  /// **Why `fromPercent` never returns [VitalityState.untested]:** by the
+  /// time a caller has a `pct` to pass, peak has already been observed >0
+  /// — the percentage exists. Untested is the "ratio is undefined" branch
+  /// (peak == 0) and is reachable only through [fromVitality]. Trend-chart
+  /// reconstructions, mean-vitality halo derivation, and other paths that
+  /// already have a ratio in hand stay on the four-state mapping.
   static VitalityState fromPercent(double pct) {
     if (pct <= 0) return VitalityState.dormant;
     if (pct <= fadingMaxPct) return VitalityState.fading;
@@ -73,10 +83,13 @@ class VitalityStateMapper {
   /// Map raw EWMA + peak to a state, normalising via
   /// [VitalityCalculator.percentage] first.
   ///
-  /// `peak <= 0` always returns dormant — a body part with no recorded peak
-  /// has never been trained, regardless of its current EWMA. This handles
-  /// the day-1 user (peak == 0, ewma == 0) and protects against divide-by-
-  /// zero in the percentage helper.
+  /// `peak <= 0` returns [VitalityState.untested] — a body part with no
+  /// recorded peak has never been trained, the ewma/peak ratio is
+  /// mathematically undefined, and the UI renders `—` instead of `0%` to
+  /// avoid the "failure grade" misread. This handles the day-1 user
+  /// (peak == 0, ewma == 0) and protects against divide-by-zero in the
+  /// percentage helper. `peak > 0 && ewma == 0` (genuinely decayed) still
+  /// returns [VitalityState.dormant] via [fromPercent].
   ///
   /// Note: this replaces the latent bug in the original
   /// `VitalityStateX.fromVitality` which compared raw EWMA against literal
@@ -90,7 +103,7 @@ class VitalityStateMapper {
     required double ewma,
     required double peak,
   }) {
-    if (peak <= 0) return VitalityState.dormant;
+    if (peak <= 0) return VitalityState.untested;
     return fromPercent(VitalityCalculator.percentage(ewma: ewma, peak: peak));
   }
 }

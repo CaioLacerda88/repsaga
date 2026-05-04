@@ -54,9 +54,14 @@ abstract class StatsDeepDiveState with _$StatsDeepDiveState {
 
   const StatsDeepDiveState._();
 
-  /// Day-0 / loading-failed fallback. Six dormant rows, empty trend lines,
+  /// Day-0 / loading-failed fallback. Six untested rows, empty trend lines,
   /// empty peaks. Identity invariant: rendering this state must produce a
   /// laid-out screen with no overflow / no null-deref.
+  ///
+  /// 2026-05-04 untested patch: rows ship with [VitalityState.untested]
+  /// (peak == 0; ratio undefined) so the table renders `—` for the
+  /// percentage and "Uncharted — log a set to begin." for the marginalia
+  /// copy — distinct from a `0%` "fully decayed" read.
   factory StatsDeepDiveState.empty() {
     final now = DateTime.now();
     return StatsDeepDiveState(
@@ -65,7 +70,7 @@ abstract class StatsDeepDiveState with _$StatsDeepDiveState {
           VitalityTableRow(
             bodyPart: activeBodyParts[i],
             pct: 0,
-            state: VitalityState.dormant,
+            state: VitalityState.untested,
             rank: 1,
           ),
       ],

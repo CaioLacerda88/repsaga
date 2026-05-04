@@ -115,13 +115,22 @@ abstract class CharacterSheetState with _$CharacterSheetState {
   }
 
   /// Vitality state of the rune halo — derived from the mean Vitality
-  /// **percentage** across active body parts. Day-0 collapses to Dormant;
-  /// once any body part has a recorded peak, the halo state tracks the
-  /// average ratio across active body parts.
+  /// **percentage** across active body parts. Day-0 collapses to
+  /// [VitalityState.untested] (no body part has a recorded peak — the
+  /// ratio is undefined); once any body part has a recorded peak, the
+  /// halo state tracks the average ratio across active body parts via
+  /// [VitalityStateMapper.fromPercent] (which never returns
+  /// [VitalityState.untested] — that branch is reachable only through
+  /// `fromVitality` when peak == 0).
+  ///
+  /// Visually, the halo treats untested and dormant identically (slow
+  /// rotation, dim sigil, no glow ring) — see `RuneHalo` `_buildForState`.
+  /// The semantic separation lives in the stats deep-dive readout where
+  /// untested renders `—` and dormant renders `0%`.
   VitalityState get haloState {
-    if (isZeroHistory) return VitalityState.dormant;
+    if (isZeroHistory) return VitalityState.untested;
     final hasAnyPeak = bodyPartProgress.any((e) => e.vitalityPeak > 0);
-    if (!hasAnyPeak) return VitalityState.dormant;
+    if (!hasAnyPeak) return VitalityState.untested;
     return VitalityStateMapper.fromPercent(meanActiveVitalityPercent);
   }
 }

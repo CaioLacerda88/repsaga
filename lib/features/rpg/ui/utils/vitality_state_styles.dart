@@ -46,16 +46,31 @@ class VitalityStateStyles {
   /// vitality-radar vertex dots, and the §13.3 stats-table state chip.
   ///
   /// Choices (per AppTheme palette):
-  ///   * `dormant` → [AppColors.textDim] — cold, ash-gray; the rune is silent.
-  ///   * `fading`  → [AppColors.primaryViolet] — the "lost path" tone, present
-  ///                 but not loud.
-  ///   * `active`  → [AppColors.hotViolet] — the default brand-bright violet,
-  ///                 the rune at rest "on the path".
-  ///   * `radiant` → [AppColors.heroGold] — the reward-only token, peak
-  ///                 conditioning. Rendered through `RewardAccent` at the
-  ///                 widget-tree level (see `lib/core/theme/README.md`).
+  ///   * `untested` → [AppColors.textDim] — same dim/grey token as dormant;
+  ///                  the visual treatment is intentionally identical so
+  ///                  "never trained" and "fully decayed" share the rune-
+  ///                  silent palette. The differentiation lives in the
+  ///                  percentage readout (`—` vs `0%`) and the marginalia
+  ///                  copy line.
+  ///   * `dormant`  → [AppColors.textDim] — cold, ash-gray; the rune is silent.
+  ///   * `fading`   → [AppColors.primaryViolet] — the "lost path" tone, present
+  ///                  but not loud.
+  ///   * `active`   → [AppColors.hotViolet] — the default brand-bright violet,
+  ///                  the rune at rest "on the path".
+  ///   * `radiant`  → [AppColors.heroGold] — the reward-only token, peak
+  ///                  conditioning. Rendered through `RewardAccent` at the
+  ///                  widget-tree level (see `lib/core/theme/README.md`).
+  ///
+  /// **Reward-scarcity contract.** Only `radiant` resolves to `heroGold`.
+  /// `untested` reuses the dim/grey token so the new state cannot
+  /// accidentally widen the gold surface area.
   static Color borderColorFor(VitalityState s) {
     switch (s) {
+      case VitalityState.untested:
+        // Reuse the dormant dim/grey token: untested is rune-silent in the
+        // same way dormant is. The pct readout (`—`) + marginalia copy
+        // ("Uncharted — log a set to begin") carry the differentiation.
+        return AppColors.textDim;
       case VitalityState.dormant:
         return AppColors.textDim;
       case VitalityState.fading:
@@ -147,6 +162,8 @@ class VitalityStateStyles {
   /// the centralisation goal.
   static String localizedCopy(VitalityState state, AppLocalizations l10n) {
     switch (state) {
+      case VitalityState.untested:
+        return l10n.vitalityCopyUntested;
       case VitalityState.dormant:
         return l10n.vitalityCopyDormant;
       case VitalityState.fading:

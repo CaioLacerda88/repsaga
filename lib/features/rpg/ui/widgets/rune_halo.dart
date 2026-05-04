@@ -65,8 +65,13 @@ class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
     _controller = null;
 
     switch (widget.state) {
+      case VitalityState.untested:
       case VitalityState.dormant:
         // Slow 8s rotation — sigil at 12% opacity, no glow ring.
+        // Untested (peak == 0, never trained) shares the dormant treatment:
+        // the rune is silent in both cases. Differentiation between the two
+        // happens at the stats-table level (`—` vs `0%` percentage readout
+        // + distinct marginalia copy), not on the character-sheet halo.
         _controller = AnimationController(
           vsync: this,
           duration: const Duration(seconds: 8),
@@ -107,7 +112,11 @@ class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
 
   Widget _buildForState() {
     switch (widget.state) {
+      case VitalityState.untested:
       case VitalityState.dormant:
+        // Same _DormantHalo treatment for both: rune silent, slow rotation,
+        // 12% opacity. The differentiation between never-trained and
+        // fully-decayed is carried by the stats-table readout, not the halo.
         return _DormantHalo(controller: _controller!, size: widget.size);
       case VitalityState.fading:
         return _FadingHalo(controller: _controller!, size: widget.size);

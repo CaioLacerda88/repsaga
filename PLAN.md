@@ -1206,6 +1206,7 @@ Split into two PRs because the cron should populate real EWMA values before the 
 - **Latent bug fixed:** the prior `VitalityStateX.fromVitality` compared raw EWMA values (volume-derived, thousands) to literal `30/70`. Masked because `record_set_xp` doesn't update `vitality_ewma` yet — would have manifested as soon as the nightly job populates real values. Mapper now normalizes via `VitalityCalculator.percentage(ewma, peak)` first.
 - **L10n** added 4 keys (en + pt) for state copy: `vitalityCopyDormant` ("Awaits your first stride."), `vitalityCopyFading` ("Conditioning lost — return to the path."), `vitalityCopyActive` ("On the path."), `vitalityCopyRadiant` ("Path mastered."). Render only on stats deep-dive screen — character sheet stays number-free + copy-free per spec §8.4 + §13.3.
 - **Tests:** 2028/2028 unit+widget, 9/9 integration (4-week steady rebuild within 5% of closed-form per spec §18 acceptance #6, asymmetric α verified, idempotency × 2, end-user JWT 401 reject, UNION-pool decay pin). Mapper boundary tests at exact 0/0+ε/0.30/0.30+ε/0.70/0.70+ε/1.0 + defensive (>1.0, <0).
+- **2026-05-04 patch:** added `VitalityState.untested` variant for `peak == 0` body parts. Decouples "never trained" (display: `—`) from "conditioning decayed" (display: `0%`). New l10n key `vitalityCopyUntested`. Per PO + UI/UX consensus — no math/cron change.
 
 #### 18d.2: Stats deep-dive screen at `/saga/stats` — DONE (PR #119)
 

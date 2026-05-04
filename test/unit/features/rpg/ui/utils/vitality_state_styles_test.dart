@@ -19,6 +19,15 @@ import 'package:repsaga/l10n/app_localizations.dart';
 void main() {
   group('VitalityStateStyles — palette per state', () {
     test('borderColorFor pins to the canonical AppColors tokens', () {
+      // Untested + dormant both resolve to textDim by design — the
+      // 2026-05-04 untested patch reuses the dim/grey token so the new
+      // state cannot widen the heroGold reward surface. The visual
+      // differentiation between never-trained and decayed lives in the
+      // pct readout (`—` vs `0%`) + marginalia copy, not the border.
+      expect(
+        VitalityStateStyles.borderColorFor(VitalityState.untested),
+        AppColors.textDim,
+      );
       expect(
         VitalityStateStyles.borderColorFor(VitalityState.dormant),
         AppColors.textDim,
@@ -37,12 +46,26 @@ void main() {
       );
     });
 
-    test('borderColorFor returns distinct colors per state', () {
-      final colors = VitalityState.values
-          .map(VitalityStateStyles.borderColorFor)
-          .toSet();
-      expect(colors.length, VitalityState.values.length);
-    });
+    test(
+      'borderColorFor returns distinct colors except untested == dormant',
+      () {
+        // Reward-scarcity contract: heroGold is reserved for radiant alone.
+        // Untested deliberately reuses the dim/grey token used by dormant —
+        // see [borderColorFor] doc comment. The other four states remain
+        // pairwise distinct.
+        final allColors = VitalityState.values
+            .map(VitalityStateStyles.borderColorFor)
+            .toSet();
+        // Five distinct colors across five "non-untested" states; untested
+        // shares with dormant so the deduplicated set has exactly four.
+        // Total enum values is 5 (untested, dormant, fading, active, radiant).
+        expect(allColors.length, VitalityState.values.length - 1);
+        expect(
+          VitalityStateStyles.borderColorFor(VitalityState.untested),
+          VitalityStateStyles.borderColorFor(VitalityState.dormant),
+        );
+      },
+    );
 
     test('haloColorFor and progressBarColorFor align with borderColorFor', () {
       // Locked single-source-of-truth contract: halo, border, progress bar
@@ -168,6 +191,10 @@ void main() {
           home: Builder(
             builder: (ctx) {
               final l10n = AppLocalizations.of(ctx);
+              expect(
+                VitalityStateStyles.localizedCopy(VitalityState.untested, l10n),
+                'Uncharted — log a set to begin.',
+              );
               expect(
                 VitalityStateStyles.localizedCopy(VitalityState.dormant, l10n),
                 'Awaits your first stride.',

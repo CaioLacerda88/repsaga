@@ -4,6 +4,54 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
+## fix/save-workout-zero-weight-and-orphan-children — IN PROGRESS
+
+**Branch:** `fix/save-workout-zero-weight-and-orphan-children` off main at `2ecc735`
+
+**Source:** Production crash report on Galaxy S25 Ultra. Two queued workouts ("Full Body Beginner" and "5x5 Strength") fail `save_workout` with `exercise_peak_loads_peak_weight_check`, then dependent `PendingUpsertRecords` actions fail with `personal_records_set_id_fkey`.
+
+### Bug A — SQL — `record_session_xp_batch` zero-weight peak
+
+- [x] Read `00040_rpg_system_v1.sql` `record_session_xp_batch` body end-to-end
+- [x] Create `supabase/migrations/00050_save_workout_skip_zero_weight_peak.sql` with `CREATE OR REPLACE FUNCTION` — full body, only the `per_set` CTE filter changes (`AND s.weight > 0`)
+- [x] Verify the rest of the function body is byte-for-byte identical to the original
+
+### Bug B — Dart — orphan-children gating
+
+- [x] Modify `lib/core/offline/sync_service.dart` `_drain` `liveIds`: include ALL queued action IDs (drop `if (a.retryCount < kMaxSyncRetries)` filter)
+- [x] Add inline comment with bug-fix rationale
+- [x] Verify `liveIds.remove(action.id)` on success still works (only fires on actual dequeue; terminal parents are skipped before reaching that line)
+
+### Tests
+
+- [x] New `test/integration/save_workout_zero_weight_test.dart`:
+  - bodyweight-only workout (Plank ×3, weight=0) → save_workout success, no `exercise_peak_loads` row, 3 `xp_events` rows present with positive `total_xp`, `body_part_progress` advances
+  - mixed weighted + bodyweight (Squat 100×5 + Plank ×60) → Squat exercise has peak row at 100kg, Plank does not, both contribute one xp_events row
+- [x] Add unit tests in `test/unit/core/offline/sync_service_test.dart`:
+  - terminal parent + child `dependsOn=[parent.id]` → child NOT attempted, retryCount unchanged, `lastError` stays null
+  - terminal parent dismissed → next drain → child runs and dequeues
+- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
+- [x] `flutter test` full suite passes (2293 tests, was 2288)
+- [x] `npx supabase db reset` applied 00050; integration test 2/2 pass against fresh local DB
+- [ ] E2E: full run in progress (212 tests; non-overlapping with the changes — sync gating + SQL function only)
+
+### Bug C — Vitality "untested" display state (peak == 0)
+
+- [x] Add `VitalityState.untested` as new first variant in `lib/features/rpg/models/vitality_state.dart` (compiler-enforced exhaustiveness across consumers)
+- [x] `VitalityStateMapper.fromVitality` guard: `peak <= 0 → untested` (preserve `fromPercent` four-state contract — ratio is already in hand on that path)
+- [x] `VitalityStateStyles.borderColorFor` / `localizedCopy` switch: `untested → AppColors.textDim` (reuses dormant dim/grey token; heroGold stays radiant-only)
+- [x] `vitality_table.dart` ternary: `state == untested ? '—' : '${(pct*100).round()}%'`
+- [x] `rune_halo.dart` `_syncControllerToState` + `_buildForState`: untested shares `_DormantHalo` (rune-silent, slow rotation, 12% opacity)
+- [x] `character_sheet_state.dart` `haloState` getter: day-0 (no peak observed on any body part) collapses to `untested`
+- [x] `stats_deep_dive_state.empty()` factory: six untested rows for the loading-fallback fixture
+- [x] L10n: `vitalityCopyUntested` added to en + pt ARBs; gen-l10n regenerated
+- [x] PLAN.md §18d.1: appended 2026-05-04 patch line documenting the variant addition
+- [x] Tests: 9 new untested-coverage cases across mapper / shim / styles / table / radar / halo / providers; existing 0%-related tests preserved as regression pins
+- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
+- [x] `flutter test` full suite passes (2297 tests; +4 vs A+B baseline of 2293)
+
+---
+
 ## Phase 16 — Subscription Monetization — PARKED (2026-04-22)
 
 **Why parked:** Phase 16 keeps hitting external blockers (Brazilian merchant account, Play Console → upload signed AAB required before subscription product can be created, license-tester account setup). Phase 17 gamification is fully internal code work with no external gates and produces the retention moat that makes Phase 16's paywall pitch compelling. Decision: ship Phase 17 (Gamification) before resuming 16b/c/d.

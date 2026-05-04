@@ -26,8 +26,19 @@ import '../domain/vitality_state_mapper.dart';
 /// Existing call sites that wrote `state.borderColor` keep working — they
 /// just import the styles helper instead of this file for that property.
 enum VitalityState {
-  /// Vitality_peak == 0. Body part has never been trained; rune is silent
-  /// and waiting for the first attributed set to awaken it.
+  /// `vitality_peak == 0`. Body part has never been trained; the
+  /// `ewma / peak` ratio is mathematically undefined, so the percentage
+  /// readout collapses to `—` (em-dash) rather than the misleading `0%`
+  /// that reads as a failure grade. Distinct from [dormant], which means
+  /// "trained once, conditioning fully decayed" — a genuinely zero ratio
+  /// that DOES render as `0%`. Visual treatment matches dormant (dim/grey
+  /// palette, no animation budget) — the difference is the percentage
+  /// readout + the marginalia copy ("Uncharted — log a set to begin").
+  untested,
+
+  /// `vitality_peak > 0` and `ewma ~ 0` — body part trained at least once,
+  /// then fully fallen off the path. Conditioning lost.
+  /// Sigil renders at full opacity with a desaturated breathing-pulse halo.
   dormant,
 
   /// 1-30% of permanent peak. Conditioning lost — return to the path.
@@ -63,15 +74,17 @@ extension VitalityStateX on VitalityState {
   /// the percentage `clamp(ewma / peak, 0, 1)` first and then dispatches
   /// to the §8.4 boundary thresholds. Boundary semantics:
   ///
-  ///   * `peak == 0`              → Dormant ("Awaits your first stride")
+  ///   * `peak == 0`              → Untested ("Uncharted — log a set to begin")
+  ///   * `peak > 0 && pct == 0`   → Dormant ("Conditioning lost — return…")
   ///   * `0 < pct ≤ 0.30`         → Fading
   ///   * `0.30 < pct ≤ 0.70`      → Active
   ///   * `0.70 < pct ≤ 1.0`       → Radiant
   ///
-  /// `ewma == 0` with `peak > 0` (fully decayed) still computes
-  /// `pct = 0/peak = 0` and falls into Dormant — matches spec §8.4
-  /// "fully fallen off the path" case (a body part you trained once and
-  /// have completely lost conditioning on).
+  /// `ewma == 0` with `peak > 0` (fully decayed) computes
+  /// `pct = 0/peak = 0` and falls into Dormant — a body part you trained
+  /// once and have completely lost conditioning on. The dedicated
+  /// [VitalityState.untested] state is reserved for the peak == 0 case
+  /// where the ratio is undefined.
   static VitalityState fromVitality({
     required double vitalityEwma,
     required double vitalityPeak,
