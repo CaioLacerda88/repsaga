@@ -61,6 +61,111 @@ void main() {
       });
     });
 
+    group('openWithRecovery (corruption self-heal)', () {
+      // Pins the load-bearing invariant that a single-box corruption (e.g.
+      // stale typeId from a backup-restored Hive file) auto-heals instead
+      // of bricking the app on the splash screen. See HiveService.init()
+      // doc comment for the full rationale.
+
+      test('opens a clean box normally', () async {
+        await HiveService.openWithRecovery(HiveService.exerciseCache);
+        expect(Hive.isBoxOpen(HiveService.exerciseCache), isTrue);
+
+        // Box is usable.
+        final box = Hive.box<dynamic>(HiveService.exerciseCache);
+        await box.put('k', 'v');
+        expect(box.get('k'), 'v');
+      });
+
+      test(
+        'recovers a corrupt box by deleting from disk and reopening empty',
+        () async {
+          // Write a binary file at Hive's expected path that is not a valid
+          // Hive frame. `Hive.openBox` will throw `HiveError` on read
+          // (analogous to the production "unknown typeId" failure mode but
+          // triggered without needing a real adapter mismatch).
+          //
+          // Hive's on-disk filename convention is `<box-name>.hive` inside
+          // the directory passed to `Hive.init`.
+          final corruptFile = File(
+            '${tempDir.path}/${HiveService.workoutHistoryCache}.hive',
+          );
+          // 0xFF prefix bytes are not a valid Hive frame header — Hive
+          // bails out reading the binary stream.
+          await corruptFile.writeAsBytes([
+            0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF,
+            0x2D, // typeId 45 marker — same shape as the production failure
+            0x00, 0x01, 0x02, 0x03,
+          ]);
+          expect(corruptFile.existsSync(), isTrue);
+
+          // Recovery path: open succeeds (box is empty) instead of throwing.
+          await HiveService.openWithRecovery(HiveService.workoutHistoryCache);
+
+          expect(Hive.isBoxOpen(HiveService.workoutHistoryCache), isTrue);
+          final box = Hive.box<dynamic>(HiveService.workoutHistoryCache);
+          expect(
+            box.isEmpty,
+            isTrue,
+            reason:
+                'Recovered box must be empty — the corrupt file was deleted '
+                'and a fresh box was opened.',
+          );
+
+          // Box is fully usable post-recovery.
+          await box.put('k', 'v');
+          expect(box.get('k'), 'v');
+        },
+      );
+
+      test('init() opens all 8 boxes and recovers any corrupt one', () async {
+        // Plant corruption in two of the eight boxes; init must still
+        // bring all of them up. Iterate the canonical list so this test
+        // stays in sync if a ninth box is ever added.
+        for (final name in [HiveService.prCache, HiveService.routineCache]) {
+          await File(
+            '${tempDir.path}/$name.hive',
+          ).writeAsBytes([0xFF, 0xFF, 0x2D, 0x00]);
+        }
+
+        // Open each box through openWithRecovery (mirrors what init() does
+        // post-Hive.initFlutter; the unit-test harness already called
+        // Hive.init in setUp so we skip the Flutter-binding step).
+        await Future.wait(
+          HiveService.allBoxNames.map(HiveService.openWithRecovery),
+        );
+
+        for (final name in HiveService.allBoxNames) {
+          expect(
+            Hive.isBoxOpen(name),
+            isTrue,
+            reason: 'Box "$name" must be open after recovery',
+          );
+        }
+      });
+
+      test('recovers from RangeError (truncated file)', () async {
+        // The binary reader throws RangeError when the on-disk file is
+        // truncated mid-frame (killed-mid-write, disk-full at flush).
+        // Catch must be `on Error`, not `on HiveError`, to cover this —
+        // RangeError is an Error subclass, not an Exception.
+        //
+        // A 2-byte file is too short to hold even a frame header, which
+        // forces the binary reader's bounds check to fire.
+        final truncated = File(
+          '${tempDir.path}/${HiveService.lastSetsCache}.hive',
+        );
+        await truncated.writeAsBytes([0x01, 0x02]);
+
+        await HiveService.openWithRecovery(HiveService.lastSetsCache);
+
+        expect(Hive.isBoxOpen(HiveService.lastSetsCache), isTrue);
+        final box = Hive.box<dynamic>(HiveService.lastSetsCache);
+        expect(box.isEmpty, isTrue);
+      });
+    });
+
     group('clearAll', () {
       test('clears all 8 boxes', () async {
         // Open all boxes and put some data in each.
