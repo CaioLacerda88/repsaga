@@ -1,9 +1,24 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="RepSaga"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        tools:replace="android:allowBackup">
+        <!-- allowBackup=false: prevents Android auto-backup from restoring
+             stale Hive box files across uninstall→reinstall cycles. The on-disk
+             Hive binary embeds typeIds — if backup-restored data references
+             typeIds that the new APK's adapter set has dropped/renumbered,
+             the next launch's Hive.openBox throws HiveError and bricks the
+             app on the splash screen. RepSaga is fully cloud-backed
+             (auth/workouts/PRs in Supabase), so local data is replaceable;
+             losing it on uninstall is an acceptable trade.
+
+             tools:replace handles the merge with manifests from any plugin
+             (e.g. observability libs) that declares allowBackup=true. -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
