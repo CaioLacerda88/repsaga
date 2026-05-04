@@ -43,3 +43,20 @@ Patterns and mistakes to avoid. Reviewed at session start.
 **Root cause:** PostgreSQL does not allow using a newly added enum value in the same transaction where it was created. The value must be committed first.
 
 **Lesson:** Always put `ALTER TYPE ... ADD VALUE` in its own migration file, separate from any DML that references the new value. This ensures the enum change commits before it's used.
+
+## 2026-05-04: CHECK violations need a writer audit, not a single-site patch
+
+**Mistake:** Migration 00050 patched ONE of three functions writing to `exercise_peak_loads` (the one in the immediate stack trace — `record_session_xp_batch`). Shipped, deployed to hosted, immediately re-hit `code=23514` on the user's phone because `_rpg_backfill_chunk` (called from `RpgRepository.runBackfill()` on app launch) ALSO writes peak_loads with no `weight > 0` guard. A second migration (00051) was needed to install a BEFORE-INSERT trigger on the table.
+
+**Root cause:** Reviewer + tech-lead + orchestrator all focused on the function in the failure's stack trace and missed that the SAME constraint had three writers. The architectural smell ("guard duplicated at every writer") was visible in the code but not flagged because the audit scope was set by the failing function, not by the violated constraint.
+
+**Lesson:** When patching a CHECK constraint failure, the workflow is:
+
+1. Identify the failing constraint name from the error.
+2. Run `npx supabase db dump --linked --schema public > /tmp/hosted.sql` and grep `INSERT INTO <table>|UPDATE <table>` to find every function writing to the constrained table.
+3. For each writer, classify the (constraint, writer) pair as confirmed-bug / latent-bug / safe.
+4. Patch every confirmed-bug pair in the same migration.
+5. **If 3+ writers exist for one constraint, install a BEFORE-INSERT trigger backstop** so a future fourth writer cannot reintroduce the bug. Trigger overhead is negligible for low-frequency tables; the architectural guarantee is worth it.
+6. Cross-reference Dart RPC callers + grants to `authenticated` role for diagnostic functions that could be hit externally even if not on the production hot path.
+
+The trap is "the failure must be in the function the trace points at." Stack traces show the firing site, not the design flaw — and a constraint with 3+ writers is the design flaw, not any individual writer.
