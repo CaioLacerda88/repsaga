@@ -128,8 +128,14 @@ class _WeightStepperState extends State<WeightStepper> {
     final locale = Localizations.localeOf(context).languageCode;
     final formatted = _formatWeight(widget.value, locale);
 
+    // Phase 20 commit 1 (BUG-019): mirror the locked Direction B mockup CSS:
+    //   .step-btn       { width: 40px; flex-shrink: 0; }
+    //   .step-value-zone { flex: 1; }
+    // Fixed-width +/- buttons + flex-filled center value zone makes the
+    // stepper occupy its parent's full horizontal width, so the value tap
+    // surface scales with the row column instead of the old 32dp pill that
+    // missed sweaty-thumb hits on 360dp Brazilian-mid-market screens.
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onLongPressStart: (_) => _startRepeating(_decrement),
@@ -138,40 +144,43 @@ class _WeightStepperState extends State<WeightStepper> {
           child: IconButton(
             onPressed: widget.value >= widget.increment ? _decrement : null,
             icon: const Icon(Icons.remove, size: 18),
-            // BUG-019: 32x44 compresses below Material's 48dp tap minimum on
-            // 360dp viewports (Moto G / Samsung A widths). Bumped to 40x48
-            // so sweaty-thumb hits land on the right button mid-workout.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
+            // a 40dp horizontal cap so the value zone owns the slack. The
+            // BUG-019 widget test asserts both floors on a 360dp viewport.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),
         ),
-        Flexible(
+        Expanded(
           child: Semantics(
             label:
                 'Weight value: $formatted ${widget.unit}. Tap to enter weight.',
             button: true,
             child: GestureDetector(
               onTap: _showNumberInput,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 32),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    formatted,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.primary,
-                      shadows: [
-                        Shadow(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.3,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                height: 48,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      formatted,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.primary,
+                        shadows: [
+                          Shadow(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.3,
+                            ),
+                            blurRadius: 8,
                           ),
-                          blurRadius: 8,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -186,10 +195,10 @@ class _WeightStepperState extends State<WeightStepper> {
           child: IconButton(
             onPressed: _increment,
             icon: const Icon(Icons.add, size: 18),
-            // BUG-019: 32x44 compresses below Material's 48dp tap minimum on
-            // 360dp viewports (Moto G / Samsung A widths). Bumped to 40x48
-            // so sweaty-thumb hits land on the right button mid-workout.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
+            // a 40dp horizontal cap so the value zone owns the slack. The
+            // BUG-019 widget test asserts both floors on a 360dp viewport.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),
