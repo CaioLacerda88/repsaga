@@ -4,51 +4,40 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
-## fix/save-workout-zero-weight-and-orphan-children — IN PROGRESS
+## Phase 20 — Active Workout Set-Row Redesign — STARTING
 
-**Branch:** `fix/save-workout-zero-weight-and-orphan-children` off main at `2ecc735`
+**Branch:** `feature/phase20-active-workout-redesign` (off main at `dc1886c`)
+**Status:** Spec locked + PLAN.md entry drafted. Awaiting orchestrator sign-off before commit 1.
 
-**Source:** Production crash report on Galaxy S25 Ultra. Two queued workouts ("Full Body Beginner" and "5x5 Strength") fail `save_workout` with `exercise_peak_loads_peak_weight_check`, then dependent `PendingUpsertRecords` actions fail with `personal_records_set_id_fkey`.
+**Per PLAN.md Phase 20:** Direction B (Tactile Data Table) chosen, with the gold-edge-frame PR treatment + standing/superseded/predicted PR semantic locked. Source brief in `docs/design/2026-05-01-active-workout-redesign/`. Reference mockup: `direction-b-pr-refined.html` (v3 post-critique). Closes BUG-018 / BUG-019 / BUG-020.
 
-### Bug A — SQL — `record_session_xp_batch` zero-weight peak
+### Commit plan (split for reviewability, single PR)
 
-- [x] Read `00040_rpg_system_v1.sql` `record_session_xp_batch` body end-to-end
-- [x] Create `supabase/migrations/00050_save_workout_skip_zero_weight_peak.sql` with `CREATE OR REPLACE FUNCTION` — full body, only the `per_set` CTE filter changes (`AND s.weight > 0`)
-- [x] Verify the rest of the function body is byte-for-byte identical to the original
+- [ ] **Commit 1:** `refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)` — `lib/shared/widgets/weight_stepper.dart` only. Stepper geometry change in isolation.
+- [ ] **Commit 2:** `refactor(workouts): set-row layout + tap-target sizing (BUG-018)` — `set_row.dart` rewritten to Direction B layout (left rune-stripe, full-column stepper zones, ≥48dp set-num cell, 56dp uniform row height). No PR styling yet.
+- [ ] **Commit 3:** `feat(rpg): pr detection — standing vs superseded resolver` — pure-domain extension to `pr_detection_service.dart` (or new resolver class). Fully unit-tested before UI consumes it.
+- [ ] **Commit 4:** `feat(workouts): set-row PR treatment — gold edge frame + supersession state` — wire resolver into `set_row.dart`, render the 5-state matrix per the locked spec.
+- [ ] **Commit 5:** `feat(workouts): finish button bottom anchor for one-handed reach (BUG-020)` — `active_workout_screen.dart`. Hevy-style sticky bottom bar.
+- [ ] **Commit 6:** `test(workouts): widget + unit coverage for 5-state row matrix + supersession transitions` — golden tests for row alignment, widget tests per state, unit tests for the resolver.
+- [ ] **Commit 7:** `test(e2e): selectors + smoke cases for gold edge frame` — `selectors.ts` + `personal-records.spec.ts` additions.
 
-### Bug B — Dart — orphan-children gating
+### Files to touch (per file plan in PLAN.md Phase 20)
 
-- [x] Modify `lib/core/offline/sync_service.dart` `_drain` `liveIds`: include ALL queued action IDs (drop `if (a.retryCount < kMaxSyncRetries)` filter)
-- [x] Add inline comment with bug-fix rationale
-- [x] Verify `liveIds.remove(action.id)` on success still works (only fires on actual dequeue; terminal parents are skipped before reaching that line)
+- `lib/features/workouts/ui/widgets/set_row.dart` (rewrite)
+- `lib/shared/widgets/weight_stepper.dart` (geometry refactor)
+- `lib/features/workouts/ui/active_workout_screen.dart` (finish button anchor)
+- `lib/features/personal_records/domain/pr_detection_service.dart` (standing/superseded resolver)
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` (wire resolver)
+- `lib/l10n/app_en.arb` + `app_pt.arb` (a11y labels for new states)
+- `test/widget/features/workouts/widgets/set_row_test.dart` (5-state matrix)
+- `test/unit/features/personal_records/domain/pr_detection_service_test.dart` (resolver)
+- `test/e2e/specs/personal-records.spec.ts` + `test/e2e/helpers/selectors.ts`
+- (possibly new) `lib/features/workouts/domain/pr_row_state.dart` enum/sealed class
 
-### Tests
+### Post-merge
 
-- [x] New `test/integration/save_workout_zero_weight_test.dart`:
-  - bodyweight-only workout (Plank ×3, weight=0) → save_workout success, no `exercise_peak_loads` row, 3 `xp_events` rows present with positive `total_xp`, `body_part_progress` advances
-  - mixed weighted + bodyweight (Squat 100×5 + Plank ×60) → Squat exercise has peak row at 100kg, Plank does not, both contribute one xp_events row
-- [x] Add unit tests in `test/unit/core/offline/sync_service_test.dart`:
-  - terminal parent + child `dependsOn=[parent.id]` → child NOT attempted, retryCount unchanged, `lastError` stays null
-  - terminal parent dismissed → next drain → child runs and dequeues
-- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
-- [x] `flutter test` full suite passes (2293 tests, was 2288)
-- [x] `npx supabase db reset` applied 00050; integration test 2/2 pass against fresh local DB
-- [ ] E2E: full run in progress (212 tests; non-overlapping with the changes — sync gating + SQL function only)
-
-### Bug C — Vitality "untested" display state (peak == 0)
-
-- [x] Add `VitalityState.untested` as new first variant in `lib/features/rpg/models/vitality_state.dart` (compiler-enforced exhaustiveness across consumers)
-- [x] `VitalityStateMapper.fromVitality` guard: `peak <= 0 → untested` (preserve `fromPercent` four-state contract — ratio is already in hand on that path)
-- [x] `VitalityStateStyles.borderColorFor` / `localizedCopy` switch: `untested → AppColors.textDim` (reuses dormant dim/grey token; heroGold stays radiant-only)
-- [x] `vitality_table.dart` ternary: `state == untested ? '—' : '${(pct*100).round()}%'`
-- [x] `rune_halo.dart` `_syncControllerToState` + `_buildForState`: untested shares `_DormantHalo` (rune-silent, slow rotation, 12% opacity)
-- [x] `character_sheet_state.dart` `haloState` getter: day-0 (no peak observed on any body part) collapses to `untested`
-- [x] `stats_deep_dive_state.empty()` factory: six untested rows for the loading-fallback fixture
-- [x] L10n: `vitalityCopyUntested` added to en + pt ARBs; gen-l10n regenerated
-- [x] PLAN.md §18d.1: appended 2026-05-04 patch line documenting the variant addition
-- [x] Tests: 9 new untested-coverage cases across mapper / shim / styles / table / radar / halo / providers; existing 0%-related tests preserved as regression pins
-- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
-- [x] `flutter test` full suite passes (2297 tests; +4 vs A+B baseline of 2293)
+- [ ] Validation walkthrough on the redesigned screen — stock weighted + bodyweight workouts, screenshots, ui-ux-critic review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging. Append `[redesign-input]` findings to `docs/design/2026-05-01-active-workout-redesign/critique.md` for follow-up phases.
+- [ ] Condense Phase 20 entry in PLAN.md per lifecycle rule (3-5 bullet summary, full spec moves to git history).
 
 ---
 
@@ -131,76 +120,8 @@ branch — purely a coordination checklist.
 
 All checklist items above completed. Phase 16a external setup can proceed with `com.repsaga.app` everywhere.
 
+### Architectural follow-ups (parked, not blocking Phase 20)
 
----
-
-## Resume context (2026-05-04, post-compact session)
-
-### Where we are right now
-
-**Branch:** `fix/pr-upsert-online-direct-and-launch-drain` — PR #150 open. First CI run failed on a single E2E (`personal-records.spec.ts:106` — second-workout-with-higher-weight). Root cause: the new direct-upsert was awaited inside `finishWorkout()`, gating UI navigation on a server roundtrip — on CI's slower local Supabase the second workout pushed the test past its 60s budget. Fix pushed: detached upsert via `unawaited(() async { try await upsert; catch fall back to queue })`. Persistence is no longer a UX concern.
-
-**Main:** `fd852d3` — has migrations 00050 + 00051 deployed to hosted (peak_loads CHECK violation fixed via trigger backstop).
-
-### Today's PR sequence
-
-| PR | Status | What it did |
-|---|---|---|
-| #147 | merged + on hosted | Hive resilience self-heal (splash-stuck fix) |
-| #148 | merged + 00050 on hosted | Bodyweight save + cascade gating + vitality untested state |
-| #149 | merged + 00051 on hosted | peak_loads multi-writer trigger backstop (the fix that actually worked on the device) |
-| **#150** | **open, CI re-running after detach fix** | Direct PR upsert when online (detached, fire-and-forget), fall back to queue on failure |
-| **next** | not yet open | `vitality-nightly` auth modernization — port `isServiceRoleJwt` from `validate-purchase`. Reason: current `SUPABASE_SERVICE_ROLE_KEY` string-equality breaks under new key system (the cause of today's vitality-cron 401) |
-
-### What's verified working on the live Galaxy S25 Ultra (RXCY500Z22M)
-
-- App launches cleanly (no splash-stuck)
-- New workout completed inline successfully (post-00050+00051)
-- Old 5 stuck queue items effectively gone (Hive's loader silently dropped invalid frames; raw file still has them but `box.length` reports 1)
-- `runBackfill` succeeded (no more code=23514 in logcat)
-
-### What still hasn't been verified on device
-
-- **Vitality cron has NOT run since the new workout** — vitality % will not update until 03:00 UTC tomorrow OR a manual cron trigger (user asked to trigger manually; blocked on service-role key — see below)
-- **PR upsert still pending** (`f86e78ac...` — orphan from the new workout). PR #150 fixes future workouts but doesn't touch this existing item; user can tap manual Retry to drain it
-- **Stats / character sheet rank progression** — user confirmed positive feel but no screenshots captured yet
-- **Validation walkthrough we promised** (before debugging consumed the session) — still pending. Steps:
-  1. Clear app data (or live test on existing account)
-  2. Walk through stock weighted routine + stock bodyweight routine
-  3. Capture screenshots at each transition
-  4. Hand to ui-ux-critic for review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging
-  5. Append `[redesign-input]` findings to `docs/design/2026-05-01-active-workout-redesign/critique.md`
-
-### Pending immediate ask from user (manual SQL bypass given)
-
-User asked: "meanwhile, manually run the cron to the vitality thing."
-Edge Function path is broken under the new Supabase key system (`SUPABASE_SERVICE_ROLE_KEY` is now a platform-managed compatibility shim — the explicit secret is reserved and dashboard masks it as a digest hash, not the value). Vault key + Edge env drift, so string-equality 401s.
-
-**Workaround given to user**: a one-shot SQL block (in chat) that re-implements `processUser` directly in PL/pgSQL using their email lookup. Bypasses the Edge Function entirely. Math is equivalent to the Edge Function's `stepEwma` (α_up ≈ 0.39346934, α_down ≈ 0.15351830).
-
-**Proper fix**: see "next" PR row above — port `isServiceRoleJwt` from `validate-purchase` (which already has the correct pattern; see comment at lines 90-103 of `validate-purchase/index.ts` explaining why string-equality is wrong).
-
-### After PR #150 lands
-
-1. Squash-merge (no migration; Dart-only change)
-2. Rebuild APK + `adb install -r` (preserves Hive)
-3. Manually retry the `f86e78ac` upsertRecords from pending sync sheet (one-time cleanup of yesterday's orphan)
-4. Trigger vitality-nightly manually (above)
-5. Resume the validation walkthrough → screenshots → ui-ux-critic review → redesign-doc updates
-
-### Architectural lessons captured today
-
-- `tasks/lessons.md` updated with the **CHECK constraint multi-writer audit rule** (after the partial 00050 fix was insufficient, 00051 added the trigger backstop)
-- User just caught me about to repeat the orphan-children-un-gating bug class by adding a poorly-validated trigger to `_drain` in PR #150's draft. Reverted that part. **Lesson:** any new trigger into `_drain` needs to revalidate the connectivity precondition — `isOnlineProvider` is optimistic-true before connectivity stream resolves.
-
-### Open architectural follow-ups (not in scope of #150)
-
-- **Cold-launch orphan drain** — still no auto-trigger when app boots online with pre-existing queue items. Future improvement could use `onlineStatusProvider`'s first real `AsyncData` emission as the trigger (not the optimistic default).
-- **Two unpatched legacy peak_loads writers** (`_rpg_backfill_chunk` line 263, `record_set_xp` line 1656) still emit unguarded INSERTs; trigger from 00051 silently absorbs them. Future cleanup migration could add explicit `IF weight > 0` guards for code-review explicitness, but trigger subsumes the bug entirely.
-
-### Critical not-to-redo list
-
-- 00050+00051 are deployed to hosted; do NOT re-push them
-- Hive resilience (PR #147) has the `@visibleForTesting allBoxNames` API; tests use that
-- `VitalityState.untested` is a real enum variant now (not "dormant"); switches must handle it
-- The PR-upsert direct-online change in #150 is gated on `savedOffline` — the offline path's `dependsOn = [workout.id]` MUST stay (BUG-002 FK guard)
+- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain pre-existing queue items when the app boots already-online. Improvement: gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission (not the optimistic-default true). Worth fixing when a user reports a stuck queue badge after fresh launch.
+- **Two unpatched legacy `exercise_peak_loads` writers** (`_rpg_backfill_chunk` line 263, `record_set_xp` line 1656) still emit unguarded INSERTs. Migration 00051's BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration could add explicit `IF weight > 0` guards at the writer site for code-review explicitness.
+- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no workflow runs them. A small CI step would catch Edge Function regressions.

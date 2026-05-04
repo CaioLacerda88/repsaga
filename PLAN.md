@@ -77,6 +77,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18e | RPG v1: Class system + cross-build titles + final QA pass | DONE | #120 |
 | 18 | RPG System v1 (per `docs/superpowers/specs/2026-04-25-rpg-system-v1-design.md`) | DONE | #112–#120 |
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
+| 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | ACTIVE | - |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
 ### Section Index
@@ -1312,6 +1313,106 @@ Both showed in the home-screen "Sincronização Pendente" sheet with retry count
 **Deferred:** BUG-017 (vitality stale on workout finish) — explicitly deferred by the audit, cron architecture is a deliberate spec choice. Revisit if user complaints materialize via a "last updated" timestamp on the vitality widget or an Edge Function recompute on workout finish.
 
 **File hygiene:** `BUGS.md` deleted post-cycle; resolution narratives + PR refs preserved in this PLAN.md section and in each PR's commit message.
+
+---
+
+## Phase 20: Active Workout Set-Row Redesign — ACTIVE
+
+**Source design brief:** `docs/design/2026-05-01-active-workout-redesign/`
+- `critique.md` — six design failures + five JTBD problems + emotional brief + three product pillars
+- `direction-b-pr-refined.html` — locked layout + PR treatment spec (gold edge frame + standing/superseded/predicted PR states)
+
+### Why now
+
+The active workout screen is the single most-used surface in RepSaga. Lifters spend more time here than anywhere else. Today's set-row block is a generic data table indistinguishable from Hevy or Google Fit when stripped of color. ui-ux-critic and product-owner converged on Direction B (Tactile Data Table) — preserves the all-sets-visible density intermediate-to-advanced lifters depend on, while structurally fixing three open bugs and giving the screen the iron-and-precise RPG codex feel that the rest of the product already has.
+
+### Locked design decisions (signed off 2026-05-04)
+
+1. **Direction B (Tactile Data Table).** Full-column tap zones for stepper, all-sets-visible row layout, PR treatment via row edges (not inline badges or annotations).
+2. **PR semantic = standing record only.** Gold = current best for this exercise across all history. Sets that briefly held a PR but were superseded mid-workout drop to a "ghost-tinted" state — 3dp green stripe + cream value (Rajdhani 700, not gold, not dim) + 2% gold tint. Distinct from plain completed without claiming parity with the standing PR.
+3. **PR multi-types stay binary.** A set that simultaneously breaks weight + reps + volume PRs gets one gold treatment, no count badge. Multi-PR celebration belongs in post-workout summary.
+4. **Across-workout temporal context ignored at row level.** A PR is a PR whether it beats yesterday or 2024. Temporal callouts ("you beat an 8-month-old record") belong in overlays, not row chrome.
+5. **heroGold scarcity preserved.** Gold appears in exactly three places on a standing-PR row: 4dp left rune-stripe, the PR'd value text (Rajdhani 800), 4dp right bracket on done-col. Buttons (+/-), set-number, unit labels never get gold — gold = achievement, never affordance.
+
+### 5-state row matrix (the spec)
+
+| State | Class composition | Left stripe | Background | PR value color | Done-mark | Right bracket |
+|---|---|---|---|---|---|---|
+| Pending (non-PR) | `.type-working` | 3dp `--pv` | none | `--cream` 700 | ○ violet-bordered | none |
+| Pending predicted-PR | `.type-working.pr-row` | 4dp `--gold` | gold 4% | `--gold` 800 | ◆ gold-bordered (`.pr-pending`) | 4dp `--gold` |
+| Completed non-PR | `.completed` | 3dp `--success` | none | n/a (no `.pr-val`) | ✓ green | none (transparent reservation) |
+| Completed superseded-PR | `.completed.pr-superseded` | 3dp `--success` | gold 2% | `--cream` 700 | ✓ green | none |
+| Completed standing-PR | `.completed.pr-row` | 4dp `--gold` | gold 4% | `--gold` 800 | ✓ green | 4dp `--gold` |
+
+Composition rule: at most ONE row per exercise card may render in the standing-PR state at any moment.
+
+### Acceptance criteria
+
+A. **Layout & tap targets**
+- Stepper +/- zones flex-filled (not 32dp min-width). Closes BUG-019 structurally on 360dp screens.
+- Set-number cell ≥48dp tap target. Closes BUG-018.
+- Finish button reachable in bottom thumb zone. Closes BUG-020.
+- All set rows have identical `min-height: 56px` and identical baselines for value text regardless of state — verified via widget golden test.
+
+B. **5-state matrix renders correctly** — see table above. Each state covered by a widget test.
+
+C. **Standing vs superseded resolution** — pure-domain function (or new resolver class) takes the workout's set list + the canonical `personal_records` row, returns per-row PR state. Idempotent, fully unit-tested before any UI wires it.
+
+D. **Multi-PR-types per row stay binary** — visually one gold row regardless of how many record types fired.
+
+E. **State transitions** — set N starts as standing-PR, set N+1 supersedes → set N transitions to superseded state. Verified via widget test.
+
+F. **No regressions** — all existing unit/widget/e2e tests still pass; PR celebration screen logic untouched.
+
+### File plan
+
+**Modified:**
+- `lib/features/workouts/ui/widgets/set_row.dart` — full rewrite to Direction B layout with the 5-state class composition.
+- `lib/shared/widgets/weight_stepper.dart` — flex-filled +/- zones, drop 32dp min-width.
+- `lib/features/workouts/ui/active_workout_screen.dart` — Finish button moved/duplicated to bottom thumb zone (or floating action button).
+- `lib/features/personal_records/domain/pr_detection_service.dart` — extend to expose per-row PR state (standing/superseded/none) given the workout's current set list.
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` — wire the row-state resolver into the active workout state.
+- `lib/l10n/app_en.arb` + `app_pt.arb` — any new copy strings (e.g., a11y labels for the gold ◆ pr-pending mark).
+- `test/widget/features/workouts/widgets/set_row_test.dart` — new state matrix coverage.
+- `test/unit/features/personal_records/domain/pr_detection_service_test.dart` — supersession resolver tests.
+- `test/e2e/specs/personal-records.spec.ts` — selectors for new gold edge frame state.
+- `test/e2e/helpers/selectors.ts` — new SET_ROW selectors for `.pr-row`, `.pr-superseded`, `.pr-pending`.
+
+**New (possibly):**
+- `lib/features/workouts/domain/pr_row_state.dart` — small enum/sealed class if the resolver pattern wants typed output (none / pending-predicted-pr / standing-pr / superseded-pr / completed-non-pr).
+
+### Commit plan (split commits, one PR)
+
+User requested split commits so each step is reviewable. Branch: `feature/phase20-active-workout-redesign`.
+
+1. **`refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)`** — `weight_stepper.dart` only. Stepper is reusable; isolating this commit makes the geometry change reviewable in isolation.
+2. **`refactor(workouts): set-row layout + tap-target sizing (BUG-018)`** — new `set_row.dart` skeleton in Direction B layout (left rune-stripe, full-column stepper zones via stepper from commit 1, ≥48dp set-number cell, identical 56dp row height across states). No PR-specific styling yet.
+3. **`feat(rpg): pr detection — standing vs superseded resolver`** — pure-domain extension to `pr_detection_service.dart` (or a new resolver class). Fully unit-tested before any UI consumes it.
+4. **`feat(workouts): set-row PR treatment — gold edge frame + supersession state`** — wire the resolver into `set_row.dart`, render the 5-state matrix per the locked spec. Includes ◆ pr-pending done-mark for predicted-PR.
+5. **`feat(workouts): finish button bottom anchor for one-handed reach (BUG-020)`** — `active_workout_screen.dart`. Bottom-anchored CTA mirroring competitor norms (Hevy, Strong).
+6. **`test(workouts): widget + unit coverage for 5-state row matrix + supersession transitions`** — golden tests for row alignment, widget tests for each state, unit tests for the resolver.
+7. **`test(e2e): selectors + smoke cases for gold edge frame`** — minimal e2e additions; assert standing-PR row is recognizable and superseded state is visually distinct from plain completed.
+
+### Out of scope (future PRs)
+
+- **`Rotinas → Treinos` rename** — touches 18+ ARB keys; clean PR by itself per `docs/design/2026-05-01-active-workout-redesign/naming-treinos-vs-rotinas.md`.
+- **Pillar 1 (target-state-first pre-fill)** — last-session ghost values displayed as edit-then-complete defaults. Worth its own design pass before implementing.
+- **Set-type long-press menu redesign** (warmup / dropset / failure selector — Problem 2 from critique).
+- **Tap-to-numpad direct input** on weight/reps for fast large-delta adjustments (Problem 5).
+- **Post-redesign validation walkthrough** — stock-routine + bodyweight walkthrough on the new screen, screenshots → ui-ux-critic for `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging. Findings tagged `[redesign-input]` get appended to `critique.md` for follow-up phases. Decision: do this AFTER redesign ships, not before — gives a regression baseline rather than pre-design noise.
+
+### Bugs closed
+
+- **BUG-018** — set-number cell 40dp tap target (below 48dp Material minimum). Structurally fixed by commit 2.
+- **BUG-019** — stepper compresses to 32dp on 360dp Brazilian-mid-market screens. Structurally fixed by commit 1.
+- **BUG-020** — Finish button anchored AppBar-only, breaks one-handed reach. Fixed by commit 5.
+
+### Risks
+
+1. **Standing-PR resolution is more state than the screen has today.** The notifier currently has per-row PR detection (was-this-set-a-PR-when-completed); we now need same-workout supersession tracking. **Mitigation:** pure-domain resolver in commit 3 fully unit-tested before UI wires it.
+2. **E2E selector churn.** PR-state selectors will change. **Mitigation:** minimal new e2e cases (commit 7), existing tests largely unaffected since they don't probe PR-specific styling.
+3. **Animation polish for state transitions** (set 1 was standing-PR → set 2 supersedes it → set 1 should animate from gold-frame to ghost-tinted). **Mitigation:** baseline ships with the existing `transition: width 0.18s, background 0.18s` on the row's `::before` from the mockup; further polish (cross-fade) is a follow-up if telemetry/feedback says it's needed.
+4. **Finish button bottom anchor placement** isn't in the HTML mockups (the mockups show only the AppBar Finish). **Mitigation:** match Hevy's pattern (full-width sticky bottom bar above the bottom nav) so this isn't novel UX; brief UI/UX consult before commit 5.
 
 ---
 
