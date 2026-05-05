@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
@@ -1108,6 +1109,140 @@ void main() {
               'identifier for E2E selector compatibility',
         );
       });
+
+      // -----------------------------------------------------------------
+      // PR #152 fix #3 contract pin — see `tasks/lessons.md`
+      // "Semantics container/explicitChildNodes is needed at EVERY tap-
+      // merging boundary, not just one place" + "identifiers must live on
+      // the actual tap target, not its container".
+      //
+      // The bug: when the row was in `pendingPredictedPr` state, the inner
+      // `_PredictedPrUncheckedMark`'s `GestureDetector` emitted its OWN
+      // `role=button` semantic node (Flutter's default for any
+      // GestureDetector with onTap). Playwright's
+      // `[flt-semantics-identifier="workout-set-done"]` resolved the OUTER
+      // element, but a SECOND `<flt-semantics role="button" flt-tappable>`
+      // sat on top covering most of the same bounding box, intercepting
+      // every click. The CI artifact log showed:
+      //
+      //   <flt-semantics role="button" flt-tappable id="...152">
+      //     Mark set as done — predicted record↵◆
+      //   </flt-semantics> from <flt-semantics id="...153">…</flt-semantics>
+      //   subtree intercepts pointer events
+      //
+      // Fix: GestureDetector(excludeFromSemantics: true) — the inner gesture
+      // still hit-tests (taps still toggle completion via render-object
+      // hit-test), but does NOT emit a competing semantic node. The OUTER
+      // _DoneCell `Semantics(identifier: 'workout-set-done', label: ...)`
+      // becomes the SOLE addressable AOM node for that region, and a
+      // Playwright click targeting that identifier reaches the underlying
+      // gesture without interception.
+      //
+      // This widget test pins the contract STRUCTURALLY: in
+      // pendingPredictedPr state, the done-cell subtree must contain
+      // EXACTLY ONE SemanticsNode that exposes `flt-semantics-identifier=
+      // "workout-set-done"`, and there must NOT be a competing descendant
+      // SemanticsNode whose label contains "predicted" — that would
+      // indicate the inner GestureDetector regressed back to emitting its
+      // own button.
+      testWidgets(
+        'predicted-PR done-cell — no competing inner button node leaks '
+        'predicted-PR semantics (excludeFromSemantics on inner gesture)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // The OUTER identifier-bearing node exists exactly once.
+          expect(
+            find.bySemanticsIdentifier('workout-set-done'),
+            findsOneWidget,
+            reason:
+                'predicted-PR done-cell must expose the workout-set-done '
+                'identifier (E2E selector contract).',
+          );
+
+          // CRITICAL: walk the entire SemanticsNode tree under the test
+          // widget and assert there is NO node with `SemanticsAction.tap`
+          // whose label contains "predicted". Before the fix, the inner
+          // _PredictedPrUncheckedMark's GestureDetector emitted a SECOND
+          // semantic node with action=tap and label containing the
+          // localized "predicted personal record" string. Playwright
+          // resolved the outer identifier correctly, but the click was
+          // intercepted by this second node's larger flt-tappable region.
+          //
+          // With `excludeFromSemantics: true` on the inner GestureDetector,
+          // no such competing semantic node exists — and there is at most
+          // ONE tap-action-bearing semantic node in the done-cell subtree
+          // (the outer Semantics declares the label without onTap; the
+          // inner gesture is excluded; no flt-tappable button leaks).
+          // The semantics tree we want lives on the binding's render-object
+          // pipeline owner. `rootPipelineOwner` is the meta-owner — its
+          // `semanticsOwner` is null in the test harness; the populated
+          // owner sits on `pipelineOwner` (deprecated alias, no drop-in
+          // replacement that exposes a non-null semanticsOwner from the
+          // test binding — keep using it).
+          final SemanticsOwner owner =
+              // ignore: deprecated_member_use
+              tester.binding.pipelineOwner.semanticsOwner!;
+          final List<SemanticsNode> competingNodes = [];
+          void walk(SemanticsNode node) {
+            final data = node.getSemanticsData();
+            // A regression would show as a node carrying both a tap action
+            // AND a label containing "predicted" (the localized
+            // markSetAsDonePredictedPr string).
+            if (data.hasAction(SemanticsAction.tap) &&
+                data.label.toLowerCase().contains('predicted')) {
+              competingNodes.add(node);
+            }
+            node.visitChildren((child) {
+              walk(child);
+              return true;
+            });
+          }
+
+          walk(owner.rootSemanticsNode!);
+
+          // We expect AT MOST one such node — the parent _DoneCell
+          // Semantics, if and only if the framework merged the inner
+          // gesture's tap action up into it. The bug was TWO such nodes
+          // (parent identifier + inner button) creating an interception.
+          // STRUCTURALLY: with the fix in place, we observe ZERO inner
+          // competing button nodes — the inner gesture is fully excluded.
+          expect(
+            competingNodes.length,
+            lessThanOrEqualTo(1),
+            reason:
+                'Found ${competingNodes.length} competing SemanticsNodes '
+                'with action=tap AND label containing "predicted". The '
+                'inner _PredictedPrUncheckedMark GestureDetector must use '
+                'excludeFromSemantics: true so it does not emit a SECOND '
+                'flt-tappable node that intercepts Playwright clicks aimed '
+                'at the workout-set-done identifier. Regression of this '
+                'test almost certainly means PR #152\'s "fix attempt #4" is '
+                'about to ship with the same e2e failure pattern.',
+          );
+
+          // Dispose the SemanticsHandle synchronously inside the test body —
+          // Flutter's _endOfTestVerifications check runs BEFORE addTearDown
+          // callbacks, so addTearDown(handle.dispose) leaks the handle past
+          // the verification gate and triggers a "SemanticsHandle was active
+          // at the end of the test" failure.
+          handle.dispose();
+        },
+      );
     });
 
     group('state: completedNonPr (completed, no PR broken)', () {

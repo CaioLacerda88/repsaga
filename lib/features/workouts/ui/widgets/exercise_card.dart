@@ -379,7 +379,22 @@ class _ExerciseCardHeader extends ConsumerWidget {
     return Row(
       children: [
         Expanded(
+          // `container: true` + `explicitChildNodes: true` is load-bearing:
+          // without them the InkWell's tap action + the inner Text + every
+          // sibling Semantics in the surrounding Column (column headers
+          // SET/WEIGHT/REPS, set-row identifiers, stepper buttons) collapse
+          // into ONE merged `flt-tappable role="group"` that intercepts every
+          // pointer event on the card. PR #152's third fix attempt traced this
+          // back to the header InkWell — a tap meant for "open detail sheet"
+          // would land on the weight value zone and open the "Enter weight"
+          // dialog instead. The two flags create a hard semantic boundary so
+          // the header is its OWN tappable region, distinct from siblings.
+          //
+          // See `tasks/lessons.md` "Semantics container/explicitChildNodes is
+          // needed at EVERY tap-merging boundary".
           child: Semantics(
+            container: true,
+            explicitChildNodes: true,
             label: l10n.exerciseSemanticsLabel(
               exercise?.name ?? l10n.exerciseGeneric,
             ),
@@ -393,24 +408,32 @@ class _ExerciseCardHeader extends ConsumerWidget {
                 constraints: const BoxConstraints(minHeight: 48),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          exercise?.name ?? l10n.exerciseGeneric,
-                          style: theme.textTheme.titleMedium,
+                  // Inner visual content is decorative — the parent Semantics
+                  // label already describes the affordance ("Exercise: …. Tap
+                  // for details. Long press to swap."). ExcludeSemantics here
+                  // prevents the inner Text + Icon from emitting their own
+                  // semantic nodes that the AOM would merge upward into a
+                  // sibling group, which is exactly the bug we just fixed.
+                  child: ExcludeSemantics(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            exercise?.name ?? l10n.exerciseGeneric,
+                            style: theme.textTheme.titleMedium,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.info_outline,
-                        size: 14,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.35,
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.35,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -486,8 +509,15 @@ class _AddSetButton extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // `explicitChildNodes: true` keeps the OutlinedButton's own Semantics
+      // (button role + tap action) addressable as the canonical tap target
+      // under this identifier — without it descendants can be merged up and
+      // siblings can be merged in, which is the failure mode PR #152 hit on
+      // the row-level Semantics. Pair-rule: every Semantics(identifier:) we
+      // expose to e2e MUST set BOTH container AND explicitChildNodes.
       child: Semantics(
         container: true,
+        explicitChildNodes: true,
         identifier: 'workout-add-set',
         child: OutlinedButton.icon(
           onPressed: onPressed,
@@ -518,7 +548,13 @@ class _FillRemainingButton extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Center(
+      // container + explicitChildNodes establishes the boundary so the
+      // TextButton stays its own discrete tappable node — see the same
+      // rule applied to _AddSetButton above and the lessons.md entry on
+      // Semantics(identifier:) flag pairing.
       child: Semantics(
+        container: true,
+        explicitChildNodes: true,
         label: l10n.fillRemainingSetsSemantics,
         child: TextButton(
           onPressed: onPressed,
@@ -554,36 +590,45 @@ class _SetColumnHeaders extends StatelessWidget {
     //   weight col    : flex 3
     //   reps col      : flex 2
     //   done-col      : 52dp
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Text(
-              AppLocalizations.of(context).setColumnSet,
-              style: style,
-              textAlign: TextAlign.center,
+    //
+    // ExcludeSemantics wraps the entire table header: the SET/WEIGHT/REPS
+    // letters are PURELY visual (each set row already exposes per-cell labels
+    // like "Weight value: 20 kg"). Without this exclusion the Text widgets
+    // emitted free-floating semantic nodes that the AOM merged UP into the
+    // exercise card header's `flt-tappable` region — producing the giant
+    // merged group that intercepted every tap. See PR #152 fix #3.
+    return ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 48,
+              child: Text(
+                AppLocalizations.of(context).setColumnSet,
+                style: style,
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              AppLocalizations.of(context).setColumnWeight,
-              style: style,
-              textAlign: TextAlign.center,
+            Expanded(
+              flex: 3,
+              child: Text(
+                AppLocalizations.of(context).setColumnWeight,
+                style: style,
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              AppLocalizations.of(context).setColumnReps,
-              style: style,
-              textAlign: TextAlign.center,
+            Expanded(
+              flex: 2,
+              child: Text(
+                AppLocalizations.of(context).setColumnReps,
+                style: style,
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          const SizedBox(width: 52),
-        ],
+            const SizedBox(width: 52),
+          ],
+        ),
       ),
     );
   }

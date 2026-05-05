@@ -58,8 +58,15 @@ class FinishBottomBar extends StatelessWidget {
             border: Border(top: BorderSide(color: AppColors.hair, width: 1)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Pair-rule: every Semantics(identifier:) we expose for e2e MUST
+          // set BOTH container AND explicitChildNodes (PR #152 lessons.md
+          // entry). Without explicitChildNodes the FilledButton's own
+          // semantics + the Text label can be merged with sibling Semantics
+          // in the surrounding Column / Material tree, which is what caused
+          // the PR #152 e2e regressions on row-level identifiers.
           child: Semantics(
             container: true,
+            explicitChildNodes: true,
             identifier: 'workout-finish-btn',
             child: SizedBox(
               width: double.infinity,

@@ -203,9 +203,17 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
   /// AppBar leading "discard workout" button. Wrapped in
   /// `Semantics(identifier: 'workout-discard-btn')` — E2E selector contract.
+  ///
+  /// `container: true` + `explicitChildNodes: true` is the pair-rule for
+  /// every Semantics(identifier:) we expose for e2e: the first creates the
+  /// boundary so the identifier is addressable in isolation, the second
+  /// keeps the IconButton's own role=button semantics from being absorbed
+  /// up or merging with sibling AppBar action Semantics (see PR #152
+  /// lessons.md entry).
   Widget _buildDiscardLeading(AppLocalizations l10n) {
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: 'workout-discard-btn',
       label: l10n.discardWorkout,
       child: IconButton(

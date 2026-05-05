@@ -743,8 +743,22 @@ class _DoneCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // `explicitChildNodes: true` is load-bearing — without it, when the row
+    // is in `pendingPredictedPr` state the inner _PredictedPrUncheckedMark's
+    // GestureDetector produces a SECOND `flt-tappable` semantics node that
+    // sits INSIDE this identifier scope but exposes its OWN role=button
+    // (label "Mark set as done — predicted record"). Playwright resolves
+    // `[flt-semantics-identifier="workout-set-done"]` to the OUTER element,
+    // attempts to click, and the inner button intercepts pointer events —
+    // exactly the failure pattern in PR #152's third fix attempt.
+    //
+    // With `explicitChildNodes: true` the outer node owns the identifier
+    // boundary; combined with the inner GestureDetector setting
+    // `excludeFromSemantics: true`, the parent identifier IS the tap target
+    // and there is no competing inner button.
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: isCompleted ? 'workout-set-completed' : 'workout-set-done',
       label: isCompleted
           ? l10n.setCompleted
@@ -836,9 +850,23 @@ class _PredictedPrUncheckedMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gold = RewardAccent.of(context)?.color ?? Colors.transparent;
+    // `excludeFromSemantics: true` is the second half of the predicted-PR
+    // fix from PR #152: paired with the parent _DoneCell's
+    // `Semantics(container: true, explicitChildNodes: true, identifier:
+    // 'workout-set-done', label: ...)`, this stops the GestureDetector from
+    // emitting its OWN `role=button` semantic node that would intercept
+    // taps targeted at the parent identifier. The identifier rides on the
+    // actual tap target (this gesture catches the tap because it's the
+    // hit-test owner of the 32dp box) without a competing inner node.
+    //
+    // Screen-reader UX is preserved by the parent Semantics' label
+    // (markSetAsDonePredictedPr → "Mark set as done — predicted personal
+    // record") — that label is exactly what an a11y user heard before this
+    // change, with no inner button noise.
     return GestureDetector(
       onTap: locked ? null : onTap,
       behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
       child: Container(
         width: 32,
         height: 32,

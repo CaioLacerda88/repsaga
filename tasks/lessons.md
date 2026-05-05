@@ -110,3 +110,36 @@ A `git grep` on the selector name takes 5 seconds. Skipping it costs an entire C
 - Add a new dedicated test user in `fixtures/test-users.ts` + `global-setup.ts` with the seed YOU want.
 
 Don't assume an "untouched" baseline. Every smokePR/smoke-* user has at least some seed data per the project's parallel-test isolation rule.
+
+
+---
+
+## 2026-05-04: Semantics(container/explicitChildNodes) is needed at EVERY tap-merging boundary, not just one place
+
+**Mistake:** PR #152 fix attempt #2 (commit `cd8c079`) added `container: true, explicitChildNodes: true` to `_SetRowFrame`'s identifier Semantics after CI surfaced 13 e2e failures. CI passed widget/unit/format/analyze locally; pushed. Run #3 still showed 12 e2e failures — same family of "click intercepted by merged tappable group" but now manifesting in DIFFERENT widgets: the exercise card header InkWell merged with the column-header Text widgets (SET/WEIGHT/REPS), AND the predicted-PR `_PredictedPrUncheckedMark`'s `GestureDetector` emitted its own `role=button` inside the `_DoneCell`'s `workout-set-done` identifier scope. Two more semantic-merge boundaries needed the same treatment that the row frame got.
+
+**Root cause:** The fix-#2 mental model was "the row identifier needs the boundary." The deeper truth: EVERY interactive widget that emits a `Semantics(identifier:)` for e2e — and EVERY widget whose descendants include a tap-handling gesture — is a potential merge boundary. A single fix at the row-frame level handles the row-vs-row merge, but does nothing for header-vs-column-header merging or for inner-gesture-vs-outer-identifier merging. Each is a distinct boundary needing its own pair of flags.
+
+**Lesson:** When you find a Semantics-merge bug, do not stop at "the immediate site." Audit:
+
+1. EVERY `Semantics(identifier: ...)` in the PR's diff. Each MUST have BOTH `container: true` AND `explicitChildNodes: true`. The pair is non-negotiable for e2e-addressable identifiers.
+2. EVERY widget with a `Semantics(label: ...)` whose descendants include `InkWell.onTap`, `GestureDetector.onTap`, `Checkbox`, or any other implicitly-tappable widget. The label-bearing node either needs the same pair of flags OR the inner gesture needs `excludeFromSemantics: true` (or `excludeSemantics: true` on a wrapping `Semantics`).
+3. EVERY `Text` widget whose VISUAL purpose is decorative table-header / grid-label and that has no role in the accessibility narrative. Wrap in `ExcludeSemantics` to prevent it from being absorbed into ancestor tappable groups via Flutter's implicit upward semantic merging.
+
+**Rule:** When a `Semantics(identifier:)` test passes locally but fails in e2e click flows, the merging is happening at a boundary you did not patch. Search the SAME PR diff for OTHER candidate boundaries — header InkWells, column-header rows, decorative Text — and apply the same boundary discipline before pushing again.
+
+---
+
+## 2026-05-04: Identifiers must live on the actual tap target, not its container
+
+**Mistake:** PR #152 wrapped `_DoneCell` in `Semantics(container: true, identifier: 'workout-set-done', label: ...)`. For the `Checkbox` case this worked — Flutter's Checkbox merges its tap action into the parent identifier node correctly. But the predicted-PR variant uses a custom `GestureDetector(onTap: ..., child: Container(...))` for the gold ◆ glyph. Without `excludeFromSemantics: true` on the gesture, Flutter exposed it as a separate `role=button flt-tappable` semantic node SITTING ON TOP of the parent identifier's bounding box, intercepting Playwright's clicks targeted at `[flt-semantics-identifier="workout-set-done"]`.
+
+**Lesson:** A `Semantics(identifier:)` is queryable by Playwright but is NOT automatically a tap target — it is a labeled wrapper. The ACTUAL tap target is whatever descendant has the gesture handler. If that descendant emits its own AOM button node, Playwright clicks resolve to the parent identifier's bounding box and then hit the descendant button instead — which intercepts because it has its own `flt-tappable` listener. The identifier scope is broken.
+
+**Rule:** When you wrap a custom interactive widget in `Semantics(identifier:)` for e2e:
+
+- If the inner widget has its own gesture (GestureDetector, InkWell with onTap, Checkbox, etc.), set `excludeFromSemantics: true` on the gesture so it does NOT emit a competing button node. Hit-testing keeps working — `excludeFromSemantics` only affects the AOM, not pointer-event routing.
+- The parent `Semantics(identifier:, label:, container: true, explicitChildNodes: true)` becomes the SOLE addressable AOM node and Playwright clicks land in its bounding box without interception.
+- Add a widget test that walks the semantics tree and asserts NO competing `SemanticsAction.tap`-bearing descendant node carries the same accessibility label as the identifier scope. This catches the regression before CI burns an e2e cycle.
+
+**Rule:** Identifier ⊃ tap target, not the other way around. The identifier is the addressable handle; the tap target is the structural element underneath. They must coincide spatially (same bounding box), and there must be NO separate AOM node mediating between them.
