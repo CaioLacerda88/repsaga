@@ -381,6 +381,26 @@ class _SetRowFrame extends StatelessWidget {
       ),
     );
 
+    // E2E selector hook — expose the row's PR state as a discriminating
+    // Semantics identifier so Playwright can distinguish the 5 row states.
+    // One identifier per row; the mapping is 1-to-1 with PrRowState.
+    // This is purely a test-plumbing node (no label, no exclusiveActions) —
+    // it does not affect screen-reader UX. The frame is already semantically
+    // described by its children (_SetNumberCell + _DoneCell).
+    final String rowStateId;
+    switch (display.state) {
+      case PrRowState.pendingPredictedPr:
+        rowStateId = 'set-row-state-pending-pr';
+      case PrRowState.completedStandingPr:
+        rowStateId = 'set-row-state-standing-pr';
+      case PrRowState.completedSupersededPr:
+        rowStateId = 'set-row-state-superseded-pr';
+      case PrRowState.completedNonPr:
+        rowStateId = 'set-row-state-completed';
+      case PrRowState.none:
+        rowStateId = 'set-row-state-none';
+    }
+
     // Wrap PR rows (gold stripe / tint / right bracket / value text) in a
     // single RewardAccent so every internal `RewardAccent.of(ctx)` resolves.
     // IconButton's IconTheme override prevents the stepper +/- icons from
@@ -388,10 +408,11 @@ class _SetRowFrame extends StatelessWidget {
     // so they too are unaffected — the gold only lands on the targets that
     // explicitly opt in via Builder + RewardAccent.of, or via the explicit
     // valueColor params on the steppers.
-    if (_isGoldStripe || _isGoldTint) {
-      return RewardAccent(child: frameContent);
-    }
-    return frameContent;
+    final Widget decorated = (_isGoldStripe || _isGoldTint)
+        ? RewardAccent(child: frameContent)
+        : frameContent;
+
+    return Semantics(identifier: rowStateId, child: decorated);
   }
 }
 
