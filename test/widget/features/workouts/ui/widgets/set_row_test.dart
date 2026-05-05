@@ -11,7 +11,9 @@ import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/set_row.dart';
+import 'package:repsaga/shared/widgets/reps_stepper.dart';
 import 'package:repsaga/shared/widgets/reward_accent.dart';
+import 'package:repsaga/shared/widgets/weight_stepper.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../../fixtures/test_factories.dart';
@@ -262,6 +264,68 @@ void main() {
             8,
             reason:
                 'BUG-018 tap-to-copy: set#2 reps must be copied from set#1.',
+          );
+        },
+      );
+
+      testWidgets(
+        'tapping set number on set#1 is a no-op — there is no previous set '
+        'to copy from (inverse pin to BUG-018 tap-to-copy)',
+        (tester) async {
+          // _SetNumberCell wires onTap only when setNumber > 1; on set #1
+          // the InkWell.onTap is null and the tap must NOT mutate state.
+          // Without this pin, a future "always allow tap" refactor could
+          // silently call notifier.copyLastSet on set #1, which would either
+          // crash or copy from itself.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 1,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set1 = workoutState.exercises.first.sets.first;
+          expect(set1.setNumber, 1, reason: 'sanity check: this is set #1');
+
+          // Seed set#1 with known values so we can verify they are untouched.
+          final seededState = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: [set1.copyWith(weight: 42.5, reps: 7)],
+              ),
+            ],
+          );
+          final seededSet1 = seededState.exercises.first.sets.first;
+
+          final container = makeContainer(seededState);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: seededSet1, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+
+          // Tap the set-number cell on set #1. Should be a no-op.
+          await tester.tap(find.text('${seededSet1.setNumber}'));
+          await tester.pump();
+
+          final after = container.read(activeWorkoutProvider).value;
+          final afterSet1 = after?.exercises.first.sets.first;
+          expect(
+            afterSet1?.weight,
+            42.5,
+            reason:
+                'set #1 has no previous set — tapping the number cell must '
+                'not mutate weight (no copy-from-self semantics)',
+          );
+          expect(
+            afterSet1?.reps,
+            7,
+            reason:
+                'set #1 has no previous set — tapping the number cell must '
+                'not mutate reps',
           );
         },
       );
@@ -752,6 +816,56 @@ void main() {
                 'reward-scarcity payoff.',
           );
           expect(find.byType(Checkbox), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'completedStandingPr with maxVolume-only accent colors BOTH the '
+        'weight stepper AND the reps stepper (compound rule, widget level)',
+        (tester) async {
+          // The unit-level resolver test pins that a maxVolume-only PR sets
+          // both isWeightAccented + isRepsAccented (volume folds into both
+          // operands). This widget-level test pins the downstream wiring:
+          // SetRow must propagate that compound accent through to BOTH
+          // stepper cells' valueColor params, not just one. Regressing this
+          // (e.g. accidentally using `accentTypes.contains(maxWeight)` as
+          // the stepper-cell guard instead of the `isWeightAccented` getter)
+          // would leave a volume-only PR with NO visible accent on the row.
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+            ),
+          );
+
+          final weightStepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          final repsStepper = tester.widget<RepsStepper>(
+            find.byType(RepsStepper),
+          );
+
+          expect(
+            weightStepper.valueColor,
+            isNotNull,
+            reason:
+                'maxVolume-only PR must color the WEIGHT stepper (isWeightAccented '
+                'folds maxVolume into the weight cell)',
+          );
+          expect(
+            repsStepper.valueColor,
+            isNotNull,
+            reason:
+                'maxVolume-only PR must color the REPS stepper (isRepsAccented '
+                'folds maxVolume into the reps cell)',
+          );
         },
       );
     });

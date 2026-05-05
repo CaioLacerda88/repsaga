@@ -1036,6 +1036,97 @@ void main() {
       );
     });
 
+    test('bodyweight equipment with at least one weighted set flips '
+        'isBodyweightOnly to false and tracks all three record types '
+        '(weighted pull-ups / dip-belt scenario)', () {
+      // The resolver's isBodyweightOnly check requires that EVERY completed
+      // working set on a bodyweight exercise carry weight ≤ 0. As soon as
+      // ONE completed set has weight > 0 (e.g. a dip belt or weighted-vest
+      // pull-up), the mode flips to weighted and all three record types
+      // (maxWeight, maxReps, maxVolume) become trackable for every set —
+      // including earlier zero-weight sets retroactively.
+      //
+      // Set 1: bodyweight × 8 reps (weight=0). With isBodyweightOnly=false,
+      //   _typesBrokenByValues short-circuits on `weight <= 0` →
+      //   completedNonPr. runningBest unchanged.
+      // Set 2: bodyweight + 5kg × 6 reps. weight=5>0 / reps=6>0 / vol=30>0
+      //   beat all three running bests (still 0/0/0). Tentatively
+      //   completedStandingPr with all three. runningBest = {5, 6, 30}.
+      // Set 3: bodyweight + 10kg × 5 reps. weight=10>5 (PR), reps=5 not > 6
+      //   (no PR), volume=50>30 (PR). Broken {maxWeight, maxVolume}.
+      //   Tentatively completedStandingPr with {maxWeight, maxVolume}.
+      //
+      // Pass 2:
+      //   Set 2: broke {maxWeight=5, maxReps=6, maxVolume=30}.
+      //     - maxWeight: set 3's 10>5 → superseded.
+      //     - maxReps: set 3's 5 not > 6 → still standing.
+      //     - maxVolume: set 3's 50>30 → superseded.
+      //   stillStanding = {maxReps}, partial supersession → keep
+      //   completedStandingPr but narrow accent to {maxReps} only.
+      //   Set 3: broke {maxWeight=10, maxVolume=50}. No later set → both
+      //   still standing → already completedStandingPr with full broken set
+      //   from pass 1.
+      //
+      // Expected:
+      //   set 1 = completedNonPr (zero weight on a now-weighted exercise)
+      //   set 2 = completedStandingPr, accent {maxReps}
+      //   set 3 = completedStandingPr, accent {maxWeight, maxVolume}
+      final sets = [
+        _set(id: 's1', setNumber: 1, weight: 0, reps: 8),
+        _set(id: 's2', setNumber: 2, weight: 5, reps: 6),
+        _set(id: 's3', setNumber: 3, weight: 10, reps: 5),
+      ];
+
+      final result = resolveRowDisplays(
+        sets: sets,
+        existingRecords: const <PersonalRecord>[],
+        equipmentType: EquipmentType.bodyweight,
+      );
+
+      expect(result, hasLength(3));
+      expect(
+        result[0].state,
+        PrRowState.completedNonPr,
+        reason:
+            'set 1 (weight=0) on a now-weighted bodyweight exercise: '
+            '_typesBrokenByValues short-circuits on weight≤0 because '
+            'isBodyweightOnly=false (set 2 + set 3 carry positive weight)',
+      );
+      expect(
+        result[0].accentTypes,
+        isEmpty,
+        reason: 'completedNonPr carries no accent',
+      );
+
+      expect(
+        result[1].state,
+        PrRowState.completedStandingPr,
+        reason:
+            'set 2 broke all three records initially; reps still standing '
+            'after set 3 (5 not > 6) — binary rule keeps it standing',
+      );
+      expect(
+        result[1].accentTypes,
+        {RecordType.maxReps},
+        reason:
+            'partial supersession: maxWeight + maxVolume superseded by '
+            'set 3, only maxReps remains standing → accent narrows to it',
+      );
+
+      expect(
+        result[2].state,
+        PrRowState.completedStandingPr,
+        reason: 'set 3 holds maxWeight=10 and maxVolume=50; no later sets',
+      );
+      expect(
+        result[2].accentTypes,
+        {RecordType.maxWeight, RecordType.maxVolume},
+        reason:
+            'set 3 broke weight + volume, not reps (5<6); both still '
+            'standing because no later sets exist',
+      );
+    });
+
     test('multi-exercise non-interference: resolver is called per exercise and '
         'each call is independent — exercise B records do not contaminate '
         'exercise A resolution', () {

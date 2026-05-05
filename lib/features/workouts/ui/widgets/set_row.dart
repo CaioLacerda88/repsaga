@@ -297,14 +297,28 @@ class _SetRowState extends ConsumerState<SetRow> {
 /// content by 1dp horizontally — well below perceptual threshold and
 /// absorbed by the flex columns.
 ///
-/// **Gold render path:** PR rows wrap the entire frame in [RewardAccent].
-/// IconButton's internal `IconTheme` override means the stepper +/- icons
-/// keep their M3-resolved color (not gold), and the stepper value Text
-/// widgets set explicit `color:` so they are never affected by
-/// [RewardAccent]'s `DefaultTextStyle.merge`. The gold render targets are
-/// the small [Builder] widgets inside this frame (left stripe, right
-/// bracket, ◆ done-mark) and the value-color overrides passed down to the
-/// steppers via constructor params.
+/// **Gold render path (heroGold scarcity, structurally enforced).**
+///
+/// We deliberately scope [RewardAccent] as narrowly as the row state allows:
+///
+///   * **Predicted / standing PR rows** wrap the WHOLE frame in
+///     [RewardAccent] — the gold stripe Builder, the right-bracket Builder
+///     (in [_DoneCell]), the ◆ done-mark and the steppers' explicit
+///     value-color params all need to resolve gold via `RewardAccent.of`.
+///     The stepper +/- IconButtons override the inherited gold IconTheme
+///     with their own theme color so they do not leak gold; the stepper
+///     value Text widgets set explicit `color:` so they too ignore the
+///     ancestor `DefaultTextStyle`.
+///
+///   * **Superseded-only rows** (`completedSupersededPr`) wrap [RewardAccent]
+///     ONLY around the 2% tint Builder — the stripe is green (no
+///     RewardAccent needed), there is no right bracket, and the value text
+///     is cream-700 (set explicitly by the stepper cells, not via
+///     RewardAccent). Scoping the wrap tightly means a future contributor
+///     adding a bare `Icon()` or `Text()` inside a stepper cell on a
+///     superseded row CANNOT silently render gold — there is no
+///     RewardAccent ancestor to inherit from. Structural guarantee, not a
+///     "be careful" rule.
 class _SetRowFrame extends StatelessWidget {
   const _SetRowFrame({
     required this.child,
@@ -332,6 +346,41 @@ class _SetRowFrame extends StatelessWidget {
         : (isCompleted ? AppColors.success : AppColors.hotViolet);
     final stripeWidth = _isGoldStripe ? 4.0 : 3.0;
 
+    // Superseded rows ONLY need RewardAccent for the 2% gold tint Builder —
+    // not for the stripe (green, not gold), not for the right bracket
+    // (absent), not for the value text (cream-700, set explicitly by the
+    // stepper cells). To preserve the heroGold scarcity guarantee
+    // STRUCTURALLY rather than relying on IconButton's IconTheme precedence
+    // happening to override the inherited gold IconTheme on every stepper
+    // child, we narrow the RewardAccent ancestor on superseded rows to wrap
+    // ONLY the tint widget. PR rows (predicted / standing) keep the full-
+    // frame wrap because their stripe + bracket Builders also need to read
+    // `RewardAccent.of(ctx)`.
+    //
+    // This means: a future contributor adding a bare `Icon()` or `Text()`
+    // (without an explicit color) inside a stepper cell of a superseded row
+    // CANNOT silently render gold — there is simply no RewardAccent ancestor
+    // covering that subtree. The structural guarantee replaces the previous
+    // implicit reliance on IconButton internals.
+    final bool isSupersededOnly = _isGoldTint && !_isGoldStripe;
+
+    final tintWidget = _isGoldTint
+        // 4% gold for predicted/standing, 2% for superseded — see the
+        // PrRowState matrix in PLAN.md Phase 20.
+        ? Positioned.fill(
+            child: Builder(
+              builder: (ctx) {
+                final gold = RewardAccent.of(ctx)?.color;
+                if (gold == null) return const SizedBox.shrink();
+                final alpha = display.state == PrRowState.completedSupersededPr
+                    ? 0.02
+                    : 0.04;
+                return ColoredBox(color: gold.withValues(alpha: alpha));
+              },
+            ),
+          )
+        : null;
+
     final frameContent = Container(
       constraints: const BoxConstraints(minHeight: 56),
       decoration: const BoxDecoration(
@@ -339,22 +388,13 @@ class _SetRowFrame extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (_isGoldTint)
-            // 4% gold for predicted/standing, 2% for superseded — see the
-            // PrRowState matrix in PLAN.md Phase 20.
-            Positioned.fill(
-              child: Builder(
-                builder: (ctx) {
-                  final gold = RewardAccent.of(ctx)?.color;
-                  if (gold == null) return const SizedBox.shrink();
-                  final alpha =
-                      display.state == PrRowState.completedSupersededPr
-                      ? 0.02
-                      : 0.04;
-                  return ColoredBox(color: gold.withValues(alpha: alpha));
-                },
-              ),
-            ),
+          if (tintWidget != null)
+            // On superseded-only rows, scope the RewardAccent ancestor
+            // tightly to the tint Builder so no descendant of the row frame
+            // (steppers, set-num cell, done-cell) can ever inherit the gold
+            // IconTheme / DefaultTextStyle. PR rows wrap the whole frame
+            // below — their stripe + bracket Builders need the ancestor too.
+            isSupersededOnly ? RewardAccent(child: tintWidget) : tintWidget,
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -401,14 +441,11 @@ class _SetRowFrame extends StatelessWidget {
         rowStateId = 'set-row-state-none';
     }
 
-    // Wrap PR rows (gold stripe / tint / right bracket / value text) in a
-    // single RewardAccent so every internal `RewardAccent.of(ctx)` resolves.
-    // IconButton's IconTheme override prevents the stepper +/- icons from
-    // inheriting gold; the steppers' value Text widgets set explicit colors
-    // so they too are unaffected — the gold only lands on the targets that
-    // explicitly opt in via Builder + RewardAccent.of, or via the explicit
-    // valueColor params on the steppers.
-    final Widget decorated = (_isGoldStripe || _isGoldTint)
+    // PR rows (predicted / standing) wrap the entire frame in RewardAccent
+    // because BOTH the gold stripe (`_isGoldStripe`) Builder AND the right-
+    // bracket Builder inside _DoneCell need the ancestor to resolve gold.
+    // Superseded-only rows handled above with a narrower wrap.
+    final Widget decorated = _isGoldStripe
         ? RewardAccent(child: frameContent)
         : frameContent;
 
