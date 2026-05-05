@@ -912,6 +912,219 @@ void main() {
     });
 
     // -------------------------------------------------------------------------
+    // Predicted-PR semantics contract (Flutter Web role-swap workaround).
+    //
+    // Pins the asymmetric fix in `_DoneCell.build()`: when the row is in
+    // [PrRowState.pendingPredictedPr], the Semantics widget that carries
+    // the `workout-set-done` identifier MUST also carry both the button
+    // role flag (`SemanticsFlag.isButton`) AND the tap action
+    // (`SemanticsAction.tap`) on the SAME first-frame semantics update.
+    //
+    // **Why this matters:** Flutter Web's semantics engine has a bug
+    // where a SemanticsNode role transitioning from `GenericRole` →
+    // `SemanticButton` on a subsequent frame (because the tap action
+    // arrives via merge from a descendant on frame 2) creates a fresh
+    // DOM element that does NOT receive the `flt-semantics-identifier`
+    // attribute. See engine source `lib/web_ui/lib/src/engine/semantics/
+    // semantics.dart` lines 1763-1771 (identifier dirty marker only fires
+    // on value change) and 2282-2312 (role swap creates a new DOM element
+    // and only re-applies dirty attributes).
+    //
+    // Putting `button: true` and `onTap: ...` on the SAME `Semantics`
+    // widget as the identifier+label means the button role is established
+    // on the FIRST semantics frame, before the dirty marker is cleared —
+    // no role swap, identifier persists, Playwright can resolve
+    // `[flt-semantics-identifier="workout-set-done"]`.
+    //
+    // If the upstream engine bug is ever fixed, this test still passes —
+    // it asserts a positive contract, not a workaround. If a future
+    // refactor moves the tap action back into `_PredictedPrUncheckedMark`
+    // alone, this test fires before CI burns an e2e cycle.
+    // -------------------------------------------------------------------------
+
+    group('predicted-PR done-cell semantics contract', () {
+      testWidgets(
+        'workout-set-done node carries isButton flag AND tap action on the '
+        'identifier-bearing Semantics node (predicted-PR path)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Use Flutter's built-in `find.bySemanticsIdentifier` finder,
+          // which walks the live SemanticsNode tree maintained by the
+          // binding. The matching node carries the merged data of all
+          // Semantics widgets that contributed to it (identifier, label,
+          // flags, actions) so `tester.getSemantics(...).getSemanticsData()`
+          // gives us the full SemanticsData record we need to inspect.
+          final finder = find.bySemanticsIdentifier('workout-set-done');
+          expect(
+            finder,
+            findsOneWidget,
+            reason:
+                'A SemanticsNode with identifier `workout-set-done` MUST '
+                'exist in the predicted-PR row. Without it, Playwright '
+                'cannot resolve the done-cell selector in e2e tests.',
+          );
+
+          final SemanticsData data = tester
+              .getSemantics(finder)
+              .getSemanticsData();
+
+          // **Contract part 1:** the identifier-bearing node has the button
+          // role flag. This is what tells the Flutter Web engine to render
+          // the DOM element with role=button from the first frame, so the
+          // role-swap engine bug never fires.
+          expect(
+            data.flagsCollection.isButton,
+            isTrue,
+            reason:
+                'The Semantics node carrying `workout-set-done` must carry '
+                'SemanticsFlag.isButton on the SAME node — otherwise Flutter '
+                'Web swaps the role from GenericRole to SemanticButton on a '
+                'later frame and drops the identifier attribute. See '
+                'engine source semantics.dart lines 1763-1771 (identifier '
+                'dirty marker) and 2282-2312 (role swap re-creates DOM '
+                'element).',
+          );
+
+          // **Contract part 2:** the identifier-bearing node has the tap
+          // action. This is what makes the AOM element flt-tappable, so
+          // Playwright's click(...) actually reaches Flutter's gesture
+          // pipeline.
+          expect(
+            data.hasAction(SemanticsAction.tap),
+            isTrue,
+            reason:
+                'The Semantics node carrying `workout-set-done` must carry '
+                'SemanticsAction.tap on the SAME node so Playwright clicks '
+                'land on a flt-tappable element. The asymmetric fix puts '
+                '`onTap:` on the outer Semantics widget (predicted-PR path) '
+                'instead of relying on the inner GestureDetector to merge '
+                'its tap action upward, which would trigger the role-swap '
+                'bug.',
+          );
+
+          // Sanity: the node also carries the user-facing label.
+          expect(
+            data.label,
+            contains('predicted'),
+            reason:
+                'Sanity check: the contract pin must be looking at the '
+                'predicted-PR variant of the done-cell label, not a stray '
+                'node with the same identifier elsewhere.',
+          );
+
+          handle.dispose();
+        },
+      );
+
+      testWidgets(
+        'tapping the predicted-PR done-cell via its semantics action toggles '
+        'completion (proves the AOM-level tap path is wired)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          // Force `is_completed: false` — the test factory defaults to true,
+          // but the predicted-PR path only renders when the row is BOTH
+          // pendingPredictedPr AND not completed. A completed row would
+          // route to the Checkbox path with identifier `workout-set-completed`
+          // and the `workout-set-done` finder would correctly find nothing.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 0,
+          );
+          final workoutData = stateJson['workout'] as Map<String, dynamic>;
+          final exercise = TestWorkoutExerciseFactory.create(
+            id: 'we-001',
+            exerciseId: 'exercise-1',
+            order: 1,
+          );
+          final pendingSet = TestSetFactory.create(
+            id: 'set-pending-001',
+            workoutExerciseId: 'we-001',
+            setNumber: 1,
+            isCompleted: false,
+          );
+          final fullStateJson = {
+            'workout': workoutData,
+            'exercises': [
+              {
+                'workout_exercise': exercise,
+                'sets': [pendingSet],
+              },
+            ],
+          };
+          final workoutState = ActiveWorkoutState.fromJson(fullStateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set = workoutState.exercises.first.sets.first;
+
+          final container = makeContainer(workoutState);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: weId,
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+              container: container,
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Locate the identifier-bearing semantics node and dispatch a tap
+          // through the AOM (NOT the gesture detector). This mirrors what
+          // Playwright does when it clicks the flt-tappable DOM element
+          // resolved via `[flt-semantics-identifier="workout-set-done"]`.
+          final finder = find.bySemanticsIdentifier('workout-set-done');
+          expect(finder, findsOneWidget);
+          final SemanticsNode node = tester.getSemantics(finder);
+
+          // The semantics owner sits on the deprecated `pipelineOwner` alias
+          // in the test binding; `rootPipelineOwner.semanticsOwner` returns
+          // null because the meta-owner does not host the semantics tree.
+          final SemanticsOwner owner =
+              // ignore: deprecated_member_use
+              tester.binding.pipelineOwner.semanticsOwner!;
+          owner.performAction(node.id, SemanticsAction.tap);
+          await tester.pump();
+
+          final updatedState = container.read(activeWorkoutProvider).value;
+          expect(
+            updatedState?.exercises.first.sets.first.isCompleted,
+            isTrue,
+            reason:
+                'Dispatching SemanticsAction.tap on the identifier-bearing '
+                'node must toggle completion. If it does not, the outer '
+                'Semantics widget owns the role+label but not the action — '
+                'the asymmetric fix is broken.',
+          );
+
+          handle.dispose();
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------------
     // Commit 6: 5-state visual matrix
     //
     // One block per state. Each block verifies:

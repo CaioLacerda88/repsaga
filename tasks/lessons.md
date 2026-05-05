@@ -143,3 +143,68 @@ Don't assume an "untouched" baseline. Every smokePR/smoke-* user has at least so
 - Add a widget test that walks the semantics tree and asserts NO competing `SemanticsAction.tap`-bearing descendant node carries the same accessibility label as the identifier scope. This catches the regression before CI burns an e2e cycle.
 
 **Rule:** Identifier ⊃ tap target, not the other way around. The identifier is the addressable handle; the tap target is the structural element underneath. They must coincide spatially (same bounding box), and there must be NO separate AOM node mediating between them.
+
+---
+
+## 2026-05-04: Flutter Web Semantics role-swap loses `flt-semantics-identifier` attribute
+
+**Bug pattern (engine-level):** When a Flutter Web `SemanticsNode`'s role transitions from `GenericRole` → `SemanticButton` on a SUBSEQUENT semantic update — because the tap action arrives via merge from a descendant on the second frame — the new role's freshly-created DOM element does NOT receive the `flt-semantics-identifier` attribute. The identifier was set on the initial frame, the dirty bit was cleared, the role swap creates a fresh element, and the engine never re-marks the identifier as dirty.
+
+**Engine source citations** (Flutter SDK, `lib/web_ui/lib/src/engine/semantics/semantics.dart`):
+
+- Lines **1763-1771** — the identifier dirty marker only fires when `_identifier != value`. Once written, the dirty bit is cleared and won't re-fire on a role change.
+- Lines **2282-2312** — `_updateRole()` creates a brand-new DOM element when the role transitions, and re-applies only the attributes whose dirty bits are currently set. The identifier's dirty bit is already cleared, so the new element launches without it.
+
+**When it triggers:** A custom widget hosting a `GestureDetector` (or any non-Material tap source) inside a `Semantics(identifier:, label:)` wrapper. The detector's tap action arrives via Flutter's merge cycle on the SECOND frame — by which point the parent identifier was already serialized with `GenericRole`. On frame 2, the merge produces `hasAction(SemanticsAction.tap)` and the engine swaps the role to `SemanticButton`, dropping the identifier attribute.
+
+The bug does NOT trigger for `Checkbox` because Checkbox emits `SemanticsFlag.isCheckable` directly on its first semantics frame, settling the role BEFORE the identifier-bearing parent merges with the rest of the tree. There is no role transition.
+
+**Symptom:** Playwright cannot resolve `[flt-semantics-identifier="..."]` for the affected node. `find.bySemanticsIdentifier(...)` in widget tests still works (the widget tree carries the identifier; only the AOM serialization drops it).
+
+**Workaround (asymmetric fix):** Move the button role + tap action UP to the SAME `Semantics` widget that carries the identifier+label. The engine sees `isButton=true` and the tap action on the SAME first-frame update as the identifier, assigns `SemanticButton` immediately, and the identifier persists on the role's DOM element from frame 1. The inner `GestureDetector` keeps `excludeFromSemantics: true` and continues to receive real-touch events via the hit-test path (only the AOM is suppressed; pointer routing is unchanged).
+
+```dart
+// PROBLEM — predicted-PR path: GestureDetector inside Semantics causes
+// frame-2 role swap → identifier drops from DOM.
+Semantics(
+  identifier: 'workout-set-done',
+  label: '...',
+  child: GestureDetector(onTap: ..., child: ...),
+)
+
+// FIX — outer Semantics owns the button role + tap action; inner
+// gesture is excluded from semantics so it cannot emit its own role.
+Semantics(
+  identifier: 'workout-set-done',
+  label: '...',
+  button: true,
+  onTap: ...,
+  child: GestureDetector(
+    onTap: ...,            // still receives real touch events
+    excludeFromSemantics: true,
+    child: ...,
+  ),
+)
+```
+
+The Checkbox path stays unchanged — its native semantics merge does not trigger the bug.
+
+**Widget-test contract pin** (catches regression before CI burns an e2e cycle):
+
+```dart
+final finder = find.bySemanticsIdentifier('workout-set-done');
+expect(finder, findsOneWidget);
+final SemanticsData data = tester.getSemantics(finder).getSemanticsData();
+
+// The identifier-bearing node MUST carry isButton on the same node so
+// the engine assigns SemanticButton on the first frame (no role swap).
+expect(data.flagsCollection.isButton, isTrue);
+
+// AND it must carry the tap action so Playwright clicks land on a
+// flt-tappable element resolved via the identifier selector.
+expect(data.hasAction(SemanticsAction.tap), isTrue);
+```
+
+If the upstream engine bug is ever fixed (re-marking the identifier dirty on role transition would do it), this test still passes — it asserts a positive contract, not a workaround. If a future refactor moves the tap action back into the inner gesture detector alone, the test fires immediately.
+
+**Rule:** When a `Semantics(identifier:)` test passes locally (`find.bySemanticsIdentifier` works) but Playwright can't see the identifier in the rendered DOM, suspect the role-swap bug. Audit every custom-gesture descendant whose tap action would merge into the identifier scope. Move the role + action UP to the identifier widget; mark the inner gesture `excludeFromSemantics: true`. Verify with `tester.getSemantics(...).getSemanticsData()` that `isButton` AND `SemanticsAction.tap` both live on the identifier node, on the same frame.

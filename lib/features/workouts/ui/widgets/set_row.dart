@@ -743,83 +743,101 @@ class _DoneCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // `explicitChildNodes: true` is load-bearing — without it, when the row
-    // is in `pendingPredictedPr` state the inner _PredictedPrUncheckedMark's
-    // GestureDetector produces a SECOND `flt-tappable` semantics node that
-    // sits INSIDE this identifier scope but exposes its OWN role=button
-    // (label "Mark set as done — predicted record"). Playwright resolves
-    // `[flt-semantics-identifier="workout-set-done"]` to the OUTER element,
-    // attempts to click, and the inner button intercepts pointer events —
-    // exactly the failure pattern in PR #152's third fix attempt.
+    // **Flutter Web Semantics role-swap workaround** — see lessons.md and
+    // engine source `lib/web_ui/lib/src/engine/semantics/semantics.dart`
+    // lines 1763-1771 (identifier dirty marker only fires on value change)
+    // and 2282-2312 (role swap creates a new DOM element that only re-
+    // applies the dirty attributes).
     //
-    // With `explicitChildNodes: true` the outer node owns the identifier
-    // boundary; combined with the inner GestureDetector setting
-    // `excludeFromSemantics: true`, the parent identifier IS the tap target
-    // and there is no competing inner button.
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      identifier: isCompleted ? 'workout-set-completed' : 'workout-set-done',
-      label: isCompleted
-          ? l10n.setCompleted
-          : (_isPredictedPending
-                ? l10n.markSetAsDonePredictedPr
-                : l10n.markSetAsDone),
-      child: SizedBox(
-        width: 52,
-        // Stack the gold right-bracket overlay ABOVE the green tint and
-        // checkbox so the bracket reads as a structural row edge rather
-        // than a chip badge.
-        child: Stack(
-          children: [
-            // Faint green tint behind a completed row's done-mark — mirrors the
-            // mockup's `.done-col.completed { background: rgba(98,196,109,0.08) }`.
-            Container(
-              decoration: BoxDecoration(
-                color: isCompleted
-                    ? AppColors.success.withValues(alpha: 0.08)
-                    : null,
+    // The bug: when a SemanticsNode's role transitions on a SUBSEQUENT
+    // semantic update from `GenericRole` → `SemanticButton` — because the
+    // tap action arrives via merge from a descendant on the second frame —
+    // the new role's freshly-created DOM element does NOT receive the
+    // `flt-semantics-identifier` attribute. The identifier was set on the
+    // initial frame, the dirty bit was cleared, the role swap creates a
+    // fresh element, and the engine never re-marks the identifier dirty.
+    // Playwright then can't resolve `[flt-semantics-identifier=...]`.
+    //
+    // The bug only fires for the predicted-PR path because that path uses
+    // `_PredictedPrUncheckedMark` whose `GestureDetector` provides the tap
+    // action via SECOND-frame merge (a custom widget's gesture is wired
+    // into the AOM after layout). The Checkbox path works correctly
+    // because Checkbox emits `isCheckable: true` flag DIRECTLY on the
+    // first semantics frame, so its role is established as the identifier
+    // is being set — no transition.
+    //
+    // **The asymmetric fix:**
+    //
+    //   * Predicted-PR path: the outer Semantics owns the identifier AND
+    //     the button role + tap action. The engine sees `isButton=true`
+    //     and the tap action on the SAME frame as the identifier+label,
+    //     so it assigns `SemanticButton` immediately. No role swap. The
+    //     identifier persists on the role's DOM element from frame 1.
+    //   * Checkbox path: unchanged. The native Checkbox merge produces
+    //     `isCheckable=true` on the first frame, so the role is settled
+    //     before the merge cycle that wires up the identifier. No role
+    //     transition occurs and the identifier survives.
+    //
+    // The widget test in `set_row_test.dart` group `predicted-PR
+    // semantics contract` pins this contract: it asserts that the
+    // identifier-bearing node has both `SemanticsFlag.isButton` AND
+    // `SemanticsAction.tap` available. If the engine bug is fixed
+    // upstream, that test still passes; if someone refactors the
+    // predicted-PR path back to a non-asymmetric design, the test fires.
+    final identifier = isCompleted
+        ? 'workout-set-completed'
+        : 'workout-set-done';
+    final label = isCompleted
+        ? l10n.setCompleted
+        : (_isPredictedPending
+              ? l10n.markSetAsDonePredictedPr
+              : l10n.markSetAsDone);
+
+    // Resolve the gold from the RewardAccent ancestor so the right-bracket
+    // inherits the heroGold scarcity contract (gold is mounted by
+    // [_SetRowFrame] for PR-bearing rows only).
+    final gold = _hasGoldBracket
+        ? (RewardAccent.of(context)?.color ?? Colors.transparent)
+        : null;
+
+    final Widget tapTarget = _isPredictedPending
+        ? Semantics(
+            identifier: identifier,
+            label: label,
+            button: true,
+            // Tap action on the SAME Semantics widget as the identifier so
+            // the button role is established on the first frame — bypasses
+            // the engine role-swap bug. The inner GestureDetector still
+            // receives real pointer events (its semantics are excluded).
+            onTap: locked ? null : onChanged,
+            child: _PredictedPrUncheckedMark(locked: locked, onTap: onChanged),
+          )
+        : Semantics(
+            identifier: identifier,
+            label: label,
+            child: Checkbox(
+              value: isCompleted,
+              onChanged: locked ? null : (_) => onChanged(),
+              activeColor: AppColors.success,
+              checkColor: AppColors.textCream,
+              side: BorderSide(
+                color: AppColors.hotViolet.withValues(alpha: 0.4),
+                width: 1.5,
               ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
-            Center(
-              child: SizedBox(
-                width: 32,
-                height: 32,
-                child: _isPredictedPending
-                    ? _PredictedPrUncheckedMark(
-                        locked: locked,
-                        onTap: onChanged,
-                      )
-                    : Checkbox(
-                        value: isCompleted,
-                        onChanged: locked ? null : (_) => onChanged(),
-                        activeColor: AppColors.success,
-                        checkColor: AppColors.textCream,
-                        side: BorderSide(
-                          color: AppColors.hotViolet.withValues(alpha: 0.4),
-                          width: 1.5,
-                        ),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-              ),
-            ),
-            if (_hasGoldBracket)
-              Positioned(
-                top: 0,
-                bottom: 0,
-                right: 0,
-                width: 4,
-                child: Builder(
-                  builder: (ctx) {
-                    final gold = RewardAccent.of(ctx)?.color;
-                    return ColoredBox(color: gold ?? Colors.transparent);
-                  },
-                ),
-              ),
-          ],
-        ),
+          );
+
+    return Container(
+      width: 52,
+      decoration: BoxDecoration(
+        color: isCompleted ? AppColors.success.withValues(alpha: 0.08) : null,
+        border: gold != null
+            ? Border(right: BorderSide(color: gold, width: 4))
+            : null,
       ),
+      child: Center(child: SizedBox(width: 32, height: 32, child: tapTarget)),
     );
   }
 }
@@ -850,19 +868,20 @@ class _PredictedPrUncheckedMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gold = RewardAccent.of(context)?.color ?? Colors.transparent;
-    // `excludeFromSemantics: true` is the second half of the predicted-PR
-    // fix from PR #152: paired with the parent _DoneCell's
-    // `Semantics(container: true, explicitChildNodes: true, identifier:
-    // 'workout-set-done', label: ...)`, this stops the GestureDetector from
-    // emitting its OWN `role=button` semantic node that would intercept
-    // taps targeted at the parent identifier. The identifier rides on the
-    // actual tap target (this gesture catches the tap because it's the
-    // hit-test owner of the 32dp box) without a competing inner node.
+    // `excludeFromSemantics: true` is structurally required: the parent
+    // [_DoneCell] now owns the button role + tap action on the SAME
+    // Semantics widget that carries the `workout-set-done` identifier. If
+    // this GestureDetector emitted its own `role=button` semantics on top
+    // of that, Flutter's merge would re-create a child SemanticsNode whose
+    // role-swap on subsequent frames drops the parent's identifier (engine
+    // bug). The detector still receives real touch events via the
+    // hit-test path — `excludeFromSemantics` only suppresses the AOM,
+    // not pointer routing.
     //
     // Screen-reader UX is preserved by the parent Semantics' label
-    // (markSetAsDonePredictedPr → "Mark set as done — predicted personal
-    // record") — that label is exactly what an a11y user heard before this
-    // change, with no inner button noise.
+    // (`markSetAsDonePredictedPr` → "Mark set as done — predicted personal
+    // record") and `button: true` flag. SR users hear "button: Mark set
+    // as done — predicted personal record" and can activate it.
     return GestureDetector(
       onTap: locked ? null : onTap,
       behavior: HitTestBehavior.opaque,
