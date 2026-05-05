@@ -60,3 +60,53 @@ Patterns and mistakes to avoid. Reviewed at session start.
 6. Cross-reference Dart RPC callers + grants to `authenticated` role for diagnostic functions that could be hit externally even if not on the production hot path.
 
 The trap is "the failure must be in the function the trace points at." Stack traces show the firing site, not the design flaw — and a constraint with 3+ writers is the design flaw, not any individual writer.
+
+---
+
+## 2026-05-04: Adding `Semantics(identifier: ...)` for e2e requires `container: true` + `explicitChildNodes: true`
+
+**Mistake:** PR #152 commit 7 added `Semantics(identifier: 'set-row-state-...')` around the `_SetRowFrame` to expose row state to Playwright. CI passed all unit/widget/build/analyze gates locally and on first push. On the second CI push the e2e job blew up with 13 failures — all variants of "click landed on the wrong widget." The page snapshot showed every interactive element inside an exercise card had collapsed into ONE giant `flt-tappable role="group"` — the header InkWell, the icon buttons, the column headers, and every set row's stepper buttons + checkboxes — all with one merged `aria-label` listing every text label in the card. Tapping the header opened the "Enter weight" dialog instead of the detail sheet.
+
+**Root cause:** A bare `Semantics(identifier: ...)` in Flutter does NOT create a new semantic boundary — it merges its info into whatever ancestor Semantics it finds. Without `container: true`, the new node has no boundary; without `explicitChildNodes: true`, descendant Semantics nodes also fold into the merged group. The result is all descendants AND siblings of the wrapper become one tappable region in the AOM, intercepting clicks on every nested interactive widget.
+
+**Why CI on the FIRST push didn't catch it:** Bisecting CI runs revealed the merge was already happening in commit 7 (211e34d). The first push had a flake-prone test failure that masked this — the e2e job timed out on a different test before reaching most of the affected ones. Push #2 (after the reviewer-fix commit `995a3a6` shipped) gave the e2e suite a clean run that exposed all 13 failures at once.
+
+**Lesson:** Whenever you add a `Semantics(identifier: ...)` to a widget for e2e selector exposure (the project's `flt-semantics-identifier=` selector pattern), ALWAYS pair it with `container: true, explicitChildNodes: true`. Both flags are load-bearing. The first creates the semantic boundary so the identifier can be addressed in isolation; the second prevents descendant Semantics from being silently absorbed.
+
+**Rule:** For any new `Semantics(identifier: ...)` in `lib/`:
+```dart
+return Semantics(
+  identifier: 'my-test-id',
+  container: true,           // REQUIRED — creates a hard boundary
+  explicitChildNodes: true,  // REQUIRED — keeps descendant Semantics distinct
+  child: ...,
+);
+```
+
+Existing widgets that wrap interactive descendants and DO NOT need to be addressable in isolation should also consider these flags if e2e tests start interacting with their descendants. A widget test that asserts `find.bySemantics(...)` will not catch this — only an e2e click flow against the rendered DOM tree will.
+
+---
+
+## 2026-05-04: When deleting a UI widget that has e2e selectors, audit ALL spec files for the selector — not just the file you "expect" to be affected
+
+**Mistake:** PR #152 commit 2 deleted `_PrChip` (the inline PR badge inside the reps cell) when rewriting `set_row.dart`. I correctly removed `pr_chip.dart`'s widget reference and updated `set_row_test.dart`. I did NOT grep for `CELEBRATION.prChip` (the e2e selector) across ALL `.spec.ts` files. Result: `rank-up-celebration.spec.ts:816` was still asserting that selector. The e2e suite caught it, but only because someone (commit 7's qa-engineer) added another e2e change that triggered a fresh full e2e run. If we had skipped commit 7's e2e additions, the stale assertion would have shipped to main and broken the next person's PR.
+
+**Lesson:** When deleting OR renaming a UI widget that exposes a Semantics identifier to e2e:
+1. Grep ALL of `test/e2e/specs/**/*.ts` for the selector name (the `XXX.yyyChip` style key from `selectors.ts`) BEFORE deleting.
+2. Grep the selector's underlying string (`flt-semantics-identifier="..."` value) too — defensive, in case any test inlines it.
+3. Update or remove every test that depended on the selector. If the widget is replaced (not just deleted), retarget the assertion to the new selector — don't just delete the test (the assertion may still cover meaningful behavior).
+4. Remove the dead key from `helpers/selectors.ts`.
+
+A `git grep` on the selector name takes 5 seconds. Skipping it costs an entire CI cycle.
+
+---
+
+## 2026-05-04: New e2e tests must verify their PR seed assumptions against `global-setup.ts`
+
+**Mistake:** PR #152 commit 7 added a new e2e test at `personal-records.spec.ts:264` (`should show standing-PR row identifier after completing a PR-breaking set`) using a smokePR user with a 40 kg baseline + 80 kg PR-breaker workout pattern. CI failed because the smokePR user's `global-setup.ts` seeds a 100 kg × 5 max-weight PR. 80 kg never beat the seed, so the row resolved as `completedNonPr` (no gold chrome) and the new `set-row-state-standing-pr` selector was never emitted.
+
+**Lesson:** Whenever a new e2e test asserts on PR-related behavior using an existing test user, FIRST read `test/e2e/global-setup.ts` and find the user's `seedPRData()` (or equivalent seed) call. Pick weights/reps that genuinely BEAT the seed, not just beat each other. If the seed values are inconvenient for the test scenario, either:
+- Use a different user that has no seed (e.g., `e2e-rpg-fresh`), OR
+- Add a new dedicated test user in `fixtures/test-users.ts` + `global-setup.ts` with the seed YOU want.
+
+Don't assume an "untouched" baseline. Every smokePR/smoke-* user has at least some seed data per the project's parallel-test isolation rule.
