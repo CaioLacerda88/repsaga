@@ -4,10 +4,39 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
-## Phase 20 — Active Workout Set-Row Redesign — STARTING
+## Phase 20 — Active Workout Set-Row Redesign — IN PR #152 REVIEW
 
 **Branch:** `feature/phase20-active-workout-redesign` (off main at `dc1886c`)
-**Status:** Spec locked + PLAN.md entry drafted. Awaiting orchestrator sign-off before commit 1.
+**PR:** #152 (open) — https://github.com/CaioLacerda88/repsaga/pull/152
+**HEAD:** `49db444` (test.slow on rank-up-celebration; about to land Tier 1 e2e cleanup)
+
+### Resume context — where the redesign track is RIGHT NOW (2026-05-05)
+
+**What's done:**
+- Design brief locked (`docs/design/2026-05-01-active-workout-redesign/critique.md` + `direction-b-pr-refined.html` v3)
+- Direction B (Tactile Data Table) + standing-PR-only semantic + heroGold-scarcity 3-place rule LOCKED with user sign-off
+- 7 implementation commits (1: stepper, 2: set-row layout, 3: PR resolver domain, 4: PR treatment wiring, 5: finish-button bottom anchor, 6: widget+unit tests for 5-state matrix, 7: e2e selectors+smoke)
+- 1 reviewer-fix commit (`995a3a6`) — RewardAccent scope tightening + 3 missing test pins
+- 5 e2e debug commits (`cd8c079` → `fa56ccd` → `eb217b0` → `49db444`) — Flutter web Semantics merge bugs; final root cause was the Flutter Web engine's role-swap bug (lines 1763-1771, 2282-2312 of engine semantics.dart)
+- BUG-018 / BUG-019 / BUG-020 all closed structurally
+- 2367 widget+unit tests pass; CI gates `dart format`, `dart analyze --fatal-infos`, `check_reward_accent.sh`, `check_hardcoded_colors.sh`, `flutter build apk --debug` all clean
+
+**What's left to land #152:**
+- ONE remaining e2e failure: `rank-up-celebration.spec.ts:825` (CONFIRMED test-data pollution from `personal-records.spec.ts:309`'s 999kg PR for smokePR). Tier 1 fix dispatching now per audit at `tasks/e2e-pollution-audit.md`.
+- Once Tier 1 lands and CI green → squash-merge → post-merge cleanup (PLAN.md Phase 20 condense per lifecycle rule).
+
+**Critical not-to-redo list (so a future session doesn't repeat dead ends from this debug cycle):**
+- `Semantics(identifier: ...)` in `lib/` MUST pair with `container: true, explicitChildNodes: true`. Enforced everywhere now.
+- `_DoneCell`'s predicted-PR path: outer Semantics OWNS `button: true, onTap` directly (engine role-swap bug workaround). The Checkbox path is asymmetric — it leaves Semantics natural because Checkbox emits `isCheckable: true` on first frame. **Do not "consistency-fix" the Checkbox path; it's correct as-is.** Widget test in `set_row_test.dart` pins this contract.
+- `_PredictedPrUncheckedMark` GestureDetector: `excludeFromSemantics: true` (paired with the outer `button: true`).
+- heroGold scarcity: gold ONLY in three places — left rune-stripe, PR'd value text, right bracket on done-col. Plus the predicted-PR ◆ done-mark. `scripts/check_reward_accent.sh` enforces.
+- E2E spec files run alphabetically. Tests sharing a Supabase user across files can pollute each other. Tier 1 cleanup helper closes the CONFIRMED + HIGH cases (audit doc lists all).
+
+**Post-#152 follow-ups:**
+- **Validation walkthrough** on the redesigned screen (stock weighted + bodyweight workouts → screenshots → ui-ux-critic with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging). Was deferred per the original Phase 20 spec to give a regression baseline rather than pre-design noise.
+- **PLAN.md Phase 20 condensation** per lifecycle rule (3-5 bullets, full spec moves to git history).
+- **Phase 21** (now in PLAN.md): e2e per-worker user isolation + parallelism bump (`workers: 2 → 4`, ~45% CI speedup). Self-contained 3-5 day refactor; supersedes Tier 2 cleanup as a side effect.
+- **Tier 2 e2e cleanup (locale bleed + offline-sync badges)** — DEFERRED. Will be subsumed by Phase 21's per-worker isolation. Don't ship Tier 2 in a separate PR; bundle into Phase 21.
 
 **Per PLAN.md Phase 20:** Direction B (Tactile Data Table) chosen, with the gold-edge-frame PR treatment + standing/superseded/predicted PR semantic locked. Source brief in `docs/design/2026-05-01-active-workout-redesign/`. Reference mockup: `direction-b-pr-refined.html` (v3 post-critique). Closes BUG-018 / BUG-019 / BUG-020.
 

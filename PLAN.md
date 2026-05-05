@@ -77,7 +77,8 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18e | RPG v1: Class system + cross-build titles + final QA pass | DONE | #120 |
 | 18 | RPG System v1 (per `docs/superpowers/specs/2026-04-25-rpg-system-v1-design.md`) | DONE | #112–#120 |
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
-| 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | ACTIVE | - |
+| 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | ACTIVE | #152 |
+| 21 | E2E per-worker user isolation + parallelism bump (CI 30-37min → ~17-20min, workers 2→4) | BACKLOG | - |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
 ### Section Index
@@ -1413,6 +1414,58 @@ User requested split commits so each step is reviewable. Branch: `feature/phase2
 2. **E2E selector churn.** PR-state selectors will change. **Mitigation:** minimal new e2e cases (commit 7), existing tests largely unaffected since they don't probe PR-specific styling.
 3. **Animation polish for state transitions** (set 1 was standing-PR → set 2 supersedes it → set 1 should animate from gold-frame to ghost-tinted). **Mitigation:** baseline ships with the existing `transition: width 0.18s, background 0.18s` on the row's `::before` from the mockup; further polish (cross-fade) is a follow-up if telemetry/feedback says it's needed.
 4. **Finish button bottom anchor placement** isn't in the HTML mockups (the mockups show only the AppBar Finish). **Mitigation:** match Hevy's pattern (full-width sticky bottom bar above the bottom nav) so this isn't novel UX; brief UI/UX consult before commit 5.
+
+---
+
+## Phase 21: E2E Per-Worker User Isolation + Parallelism Bump — BACKLOG
+
+**Source:** Phase 20 e2e debug cycle surfaced systemic test-data pollution between describe blocks sharing Supabase users. Audit at `tasks/e2e-pollution-audit.md` enumerates 2 CONFIRMED + 5 HIGH-risk pairs across 8 describe blocks. Tier 1 cleanup (per-test `beforeEach` reset for the CONFIRMED + HIGH cases) shipped in PR #152 to unblock the CI gate. **This phase is the architectural follow-up that unlocks higher CI parallelism.**
+
+### Why now (justification)
+
+Tier 1 cleanup stops *cross-file ordering* pollution but not *concurrent* races on the same user. With `workers: 2` today, two workers can both claim tests using the same shared user (e.g., `smokePR`), and one worker's `beforeEach` reset can wipe state mid-execution of the other worker's test. CI sometimes wins the race (passes); sometimes loses (flakes).
+
+The fix at scale: **per-worker-unique users**. Each Playwright worker spawns its own pool of test users via a worker-scoped `beforeAll` fixture. No two workers ever touch the same user → races eliminated → safe to bump `workers` from 2 to 4 → CI runtime ~30-37 min → ~17-20 min (~45% faster).
+
+### Acceptance criteria
+
+- E2E suite runs at `workers: 4` on CI without per-suite flakes (3 consecutive green runs).
+- All test users are spawned per-worker via Playwright `worker fixtures` — no shared `TEST_USERS.smokePR` references in spec files.
+- Each spec file uses a `getUser('smokePR')` (or similar) helper that resolves to that worker's instance of the user.
+- `global-setup.ts` shrinks dramatically — most user creation moves into per-worker fixtures.
+- Supabase Auth rate limits respected — user creation throttled / batched per worker startup.
+- No regressions in test count (~213 tests stay green).
+
+### Implementation outline (high-level — full design TBD)
+
+- New `test/e2e/fixtures/worker-users.ts`: factory that creates per-worker users with unique emails (`{user_role}_{worker_index}_{run_id}@test.local`) + applies the same seed data global-setup currently applies.
+- Refactor `global-setup.ts`: keep cross-worker setup (e.g., exercise seed validation) but move per-user setup into worker fixtures.
+- Refactor every spec's `beforeEach` from `await login(page, TEST_USERS.smokePR.email, ...)` to `await login(page, workerUsers.smokePR.email, ...)`.
+- Update teardown: `global-teardown.ts` deletes all worker-scoped users by email pattern.
+- Bump `playwright.config.ts` `workers: 2` → `workers: 4` AND `fullyParallel: true` (consider pros/cons of intra-file parallelism — likely keep within-file serial for stability).
+- Validate against Supabase connection pool limits — each worker's supabase-js client opens connections; 4 workers × N tests may stress the pool. Test before locking workers=4.
+
+### Out of scope
+
+- Hive (IndexedDB) state isolation — already per-browser-context, no change needed.
+- Tests using `createThrowawayUser` — already isolated, no change needed.
+- Application-side performance tuning — separate concern.
+
+### Estimated cost
+
+- 3-5 days of e2e infrastructure work (one engineer)
+- Risk: medium (touching 30+ spec files; auth rate-limit unknowns)
+- Payoff: ~45% faster CI on every PR forever after; ~13-17 min/PR saved × ~10 PRs/week = 2-3 hours of saved CI compute per week
+
+### Dependencies
+
+- PR #152 (Phase 20) merged with Tier 1 e2e cleanup landed.
+- No code dependencies on Phase 20 internals.
+
+### Notes
+
+- Audit doc `tasks/e2e-pollution-audit.md` lists the MEDIUM risks (locale bleed in `localization.spec.ts:220` → `exercises-localization.spec.ts:159`, `workouts-localization.spec.ts:105`; offline-sync badge accumulation) that this phase will resolve as a side effect of per-worker isolation.
+- LOW-risk items in the audit (smokeWorkout accumulating workouts in rank-up-celebration:887, rpgFoundation incremental XP) become non-issues with per-worker users.
 
 ---
 
