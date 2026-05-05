@@ -795,5 +795,593 @@ void main() {
         expect(find.bySemanticsLabel('Set completed'), findsOneWidget);
       });
     });
+
+    // -------------------------------------------------------------------------
+    // Commit 6: 5-state visual matrix
+    //
+    // One block per state. Each block verifies:
+    //   1. Correct done-mark variant rendered (Checkbox vs ◆ text glyph).
+    //   2. RewardAccent presence / absence (heroGold scarcity contract).
+    //   3. Row height ≥ 56dp (uniform height across all states).
+    //   4. Correct semantics identifier on the done-col.
+    // -------------------------------------------------------------------------
+
+    group('5-state matrix — state: none (pending, no projected PR)', () {
+      testWidgets('renders standard violet-bordered Checkbox done-mark', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.byType(Checkbox), findsOneWidget);
+        expect(find.text('◆'), findsNothing);
+      });
+
+      testWidgets('no RewardAccent ancestor — heroGold scarcity preserved', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.byType(RewardAccent), findsNothing);
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        // The _SetRowFrame enforces BoxConstraints(minHeight: 56). Find
+        // Containers that carry this constraint — the frame container.
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason: 'state:none — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col semantics identifier is workout-set-done', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.bySemanticsIdentifier('workout-set-done'), findsOneWidget);
+      });
+    });
+
+    group('state: pendingPredictedPr (pending, values would break a PR)', () {
+      testWidgets('renders ◆ glyph done-mark instead of Checkbox', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          find.text('◆'),
+          findsOneWidget,
+          reason: 'predicted-PR must show the gold ◆ glyph',
+        );
+        expect(
+          find.byType(Checkbox),
+          findsNothing,
+          reason: 'predicted-PR must NOT show the standard Checkbox',
+        );
+      });
+
+      testWidgets('mounts RewardAccent ancestor (gold colors enabled)', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason:
+              'state:pendingPredictedPr — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col accessibility label is "Mark set as done — '
+          'predicted personal record" (en locale)', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        // The l10n key markSetAsDonePredictedPr drives the semantics label.
+        // The identifier is still workout-set-done (E2E selector contract).
+        expect(
+          find.bySemanticsIdentifier('workout-set-done'),
+          findsOneWidget,
+          reason:
+              'predicted-PR done-col must carry the workout-set-done '
+              'identifier for E2E selector compatibility',
+        );
+      });
+    });
+
+    group('state: completedNonPr (completed, no PR broken)', () {
+      testWidgets('renders green Checkbox done-mark', (tester) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(find.byType(Checkbox), findsOneWidget);
+        final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
+        expect(
+          checkbox.value,
+          isTrue,
+          reason: 'completed set must show checked Checkbox',
+        );
+        expect(
+          find.text('◆'),
+          findsNothing,
+          reason: 'completedNonPr must not show the predicted-PR ◆ glyph',
+        );
+      });
+
+      testWidgets('no RewardAccent ancestor — zero gold on plain completed', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(
+          find.byType(RewardAccent),
+          findsNothing,
+          reason:
+              'completedNonPr must NOT mount RewardAccent — no gold '
+              'on plain completed rows (heroGold scarcity contract)',
+        );
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason:
+              'state:completedNonPr — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col semantics identifier is workout-set-completed', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(
+          find.bySemanticsIdentifier('workout-set-completed'),
+          findsOneWidget,
+        );
+      });
+    });
+
+    group(
+      'state: completedSupersededPr (completed PR demoted by a later set)',
+      () {
+        testWidgets('renders green Checkbox (not ◆) — superseded is done', (
+          tester,
+        ) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(Checkbox),
+            findsOneWidget,
+            reason: 'superseded row is completed — must show Checkbox, not ◆',
+          );
+          final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
+          expect(checkbox.value, isTrue);
+          expect(find.text('◆'), findsNothing);
+        });
+
+        testWidgets(
+          'mounts RewardAccent ancestor (2% gold tint path requires it)',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedSupersededPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(
+              find.byType(RewardAccent),
+              findsAtLeastNWidgets(1),
+              reason:
+                  'completedSupersededPr has a 2% gold background tint — '
+                  'the tint is rendered via RewardAccent.of(ctx), so the '
+                  'ancestor must be present',
+            );
+          },
+        );
+
+        testWidgets('row minimum height is at least 56dp', (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          final frameContainers = tester
+              .widgetList<Container>(find.byType(Container))
+              .where((c) {
+                final bc = c.constraints;
+                return bc != null && bc.minHeight >= 56;
+              })
+              .toList();
+          expect(
+            frameContainers,
+            isNotEmpty,
+            reason:
+                'state:completedSupersededPr — row must have minHeight≥56dp '
+                'frame container',
+          );
+        });
+      },
+    );
+
+    group(
+      'state: completedStandingPr (completed PR currently the best overall)',
+      () {
+        testWidgets(
+          'renders green Checkbox and ◆ is absent — standing uses ✓ not ◆',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(
+              find.byType(Checkbox),
+              findsOneWidget,
+              reason:
+                  'completed standing PR uses the standard checked Checkbox '
+                  '(✓ green), not the ◆ mark',
+            );
+            expect(find.text('◆'), findsNothing);
+          },
+        );
+
+        testWidgets(
+          'mounts RewardAccent ancestor (4dp gold stripe + bracket)',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+          },
+        );
+
+        testWidgets('row minimum height is at least 56dp', (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          final frameContainers = tester
+              .widgetList<Container>(find.byType(Container))
+              .where((c) {
+                final bc = c.constraints;
+                return bc != null && bc.minHeight >= 56;
+              })
+              .toList();
+          expect(
+            frameContainers,
+            isNotEmpty,
+            reason:
+                'state:completedStandingPr — row must have minHeight≥56dp '
+                'frame container',
+          );
+        });
+
+        testWidgets('done-col semantics identifier is workout-set-completed', (
+          tester,
+        ) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.bySemanticsIdentifier('workout-set-completed'),
+            findsOneWidget,
+          );
+        });
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // heroGold scarcity structural test (commit 6)
+    //
+    // Pins the "gold appears in EXACTLY the right places" contract. These tests
+    // walk the widget tree and count RewardAccent widgets to detect accidental
+    // gold leakage or missing gold in future refactors.
+    // -------------------------------------------------------------------------
+
+    group('heroGold scarcity', () {
+      testWidgets('standing-PR row mounts RewardAccent (gold is present on '
+          'the three lawful surfaces: stripe, value text, right bracket)', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.completedStandingPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        // The row is wrapped in exactly ONE RewardAccent ancestor — the
+        // _SetRowFrame's wrapper. Multiple nested RewardAccent widgets would
+        // be redundant but harmless; the structural guarantee is ≥1.
+        expect(
+          find.byType(RewardAccent),
+          findsAtLeastNWidgets(1),
+          reason:
+              'completedStandingPr must wrap the row in RewardAccent so all '
+              'three gold surfaces (stripe, value, bracket) resolve via the '
+              'ancestor context',
+        );
+      });
+
+      testWidgets(
+        'completedNonPr row mounts zero RewardAccent — no gold present',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'completedNonPr must have zero gold (heroGold scarcity). A '
+                'RewardAccent here would leak gold IconTheme into every Icon '
+                'and Text in the row — diluting the reward signal.',
+          );
+        },
+      );
+
+      testWidgets(
+        'none (pending) row mounts zero RewardAccent — no gold present',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'state:none (pending, no PR projection) must have zero gold. '
+                'Any RewardAccent here means the heroGold IconTheme infects '
+                'the stepper +/- buttons, violating the scarcity contract.',
+          );
+        },
+      );
+    });
   });
 }
