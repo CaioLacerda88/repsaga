@@ -825,6 +825,16 @@ test.describe('PR signal inline display', { tag: '@smoke' }, () => {
   test('should show standing-PR signal in set row after committing a heavier set than prior PR', async ({
     page,
   }) => {
+    // Two-set sequence on a heavily-Semantics-driven row state machine. The
+    // setup chain (login → startEmptyWorkout → addExercise → setWeight ×2
+    // → setReps ×2 → completeSet ×2) on CI's parallel-load Docker environment
+    // can run 50-55s before the standing-PR assertion fires. Default 60s
+    // test budget leaves no headroom — same accumulated-state class as the
+    // similar two-set patterns in `personal-records.spec.ts` and the v1
+    // S5 test that already use `test.slow()`. Triple the budget for
+    // structural resilience to CI worker load.
+    test.slow();
+
     // smokePR user has a prior bench press PR of 100 kg × 5 reps.
     // Log 105 kg × 5 to beat it.
     await startEmptyWorkout(page);
@@ -843,9 +853,12 @@ test.describe('PR signal inline display', { tag: '@smoke' }, () => {
     // identifier when `display.state == PrRowState.completedStandingPr`.
     await completeSet(page, 0);
 
-    // The standing-PR row identifier should now be visible inline.
+    // The standing-PR row identifier should now be visible inline. 15s
+    // budget — the Semantics tree update that exposes the state-* identifier
+    // can run several frames behind the completeSet checkbox click on CI's
+    // slow workers. Locally this assertion resolves in ~200ms.
     await expect(page.locator(SET_ROW.stateStandingPr).first()).toBeVisible({
-      timeout: 8_000,
+      timeout: 15_000,
     });
 
     // Add a second set without a PR — set 1's standing-PR signal must PERSIST.
@@ -862,7 +875,7 @@ test.describe('PR signal inline display', { tag: '@smoke' }, () => {
     // stateless: set 1's 105×5 still beats every other completed working set
     // including the freshly-completed 80×5, so it stays standing).
     await expect(page.locator(SET_ROW.stateStandingPr).first()).toBeVisible({
-      timeout: 5_000,
+      timeout: 10_000,
     });
   });
 });
