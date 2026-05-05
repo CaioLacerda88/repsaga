@@ -37,6 +37,12 @@ import {
 import { WORKOUT, SAGA, HOME, CELEBRATION, SET_ROW } from '../helpers/selectors';
 import { TEST_USERS } from '../fixtures/test-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
+import {
+  getAdminClient,
+  getUserIdByEmail,
+  resetExerciseHistoryForUser,
+  seedPrForUser,
+} from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // Admin Supabase client — used to reseed RPG state before each test repeat.
@@ -813,8 +819,53 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
 // =============================================================================
 
 test.describe('PR signal inline display', { tag: '@smoke' }, () => {
+  // Cache the admin client + smokePR user ID once per describe block so the
+  // per-test beforeEach pays only the reset/seed cost, not another auth admin
+  // round-trip. See `tasks/e2e-pollution-audit.md` Section 3 for the
+  // CONFIRMED pollution path closed here:
+  // `personal-records.spec.ts:309` writes a 999 kg max_weight PR for
+  // `smokePR`/`barbell_bench_press`; alphabetical spec ordering then runs
+  // `rank-up-celebration.spec.ts:825` against the same user, which expects
+  // 105 kg × 5 to be a NEW standing PR. Without this reset, the resolver
+  // sees 999 kg as the running best and the row resolves as completedNonPr.
+  let cachedSmokePrUserId: string | null = null;
+
+  test.beforeAll(async () => {
+    const admin = getAdminClient();
+    cachedSmokePrUserId = await getUserIdByEmail(
+      admin,
+      TEST_USERS.smokePR.email,
+    );
+  });
+
   test.beforeEach(async ({ page }) => {
-    // smokePR user has a prior PR of 100 kg bench press seeded in global-setup.
+    if (cachedSmokePrUserId) {
+      const admin = getAdminClient();
+      // Surgical: only barbell_bench_press history. Other smokePR exercises
+      // (none today, but defensive) are left intact. Removes accumulated
+      // PRs/peak_loads/sets/workout_exercises and any orphan workout that
+      // only contained bench press — including global-setup's
+      // 'E2E Seed Workout' chain and any prior 'E2E Reset Seed' chain.
+      await resetExerciseHistoryForUser(
+        admin,
+        cachedSmokePrUserId,
+        'barbell_bench_press',
+      );
+      // Re-seed the canonical 100 kg × 5 baseline that the smokePR user
+      // contract assumes (matches `seedPRData` in global-setup.ts so any
+      // sibling describe block also using smokePR sees the expected PR).
+      // The test then beats it with 105 kg × 5.
+      await seedPrForUser(
+        admin,
+        cachedSmokePrUserId,
+        'barbell_bench_press',
+        100,
+        5,
+      );
+    }
+
+    // smokePR user has a prior PR of 100 kg bench press (re-seeded above
+    // for resilience against cross-spec pollution).
     await login(
       page,
       TEST_USERS.smokePR.email,

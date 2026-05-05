@@ -208,3 +208,28 @@ expect(data.hasAction(SemanticsAction.tap), isTrue);
 If the upstream engine bug is ever fixed (re-marking the identifier dirty on role transition would do it), this test still passes — it asserts a positive contract, not a workaround. If a future refactor moves the tap action back into the inner gesture detector alone, the test fires immediately.
 
 **Rule:** When a `Semantics(identifier:)` test passes locally (`find.bySemanticsIdentifier` works) but Playwright can't see the identifier in the rendered DOM, suspect the role-swap bug. Audit every custom-gesture descendant whose tap action would merge into the identifier scope. Move the role + action UP to the identifier widget; mark the inner gesture `excludeFromSemantics: true`. Verify with `tester.getSemantics(...).getSemanticsData()` that `isButton` AND `SemanticsAction.tap` both live on the identifier node, on the same frame.
+
+---
+
+## 2026-05-04: E2E test-data pollution between describe blocks sharing a Supabase user
+
+**Bug pattern:** Two e2e tests in DIFFERENT spec files share the same Supabase user. Test A's mutation (a workout, a PR row, a profile change) outlives the test and silently invalidates test B's "clean baseline" assumption when Playwright runs them in alphabetical spec-file order. PR #152 hit this twice:
+
+1. `personal-records.spec.ts:309` writes a 999 kg max_weight PR for `smokePR`/`barbell_bench_press`. Alphabetical order then runs `rank-up-celebration.spec.ts:825`, which expects `105 kg × 5` to be a NEW standing PR. The PR resolver sees 999 kg as the running best, the row resolves as `completedNonPr`, the standing-PR identifier is never emitted. Test fails with a structural-not-flaky error.
+2. `rpg-foundation.spec.ts:259` (E2) saves a workout for `rpgFreshUser`. Alphabetical order runs `saga.spec.ts:63` next, whose inline `beforeEach` deleted `xp_events`/`body_part_progress`/`exercise_peak_loads`/`backfill_progress` but NOT the surviving `workouts` row. On next login, `backfill_rpg_v1` re-ran (because `backfill_progress` was cleared) and re-wrote XP from the surviving workout into `body_part_progress` BEFORE the saga screen rendered. Result: `firstSetAwakensBanner` absent, S1 fails.
+
+**Why it's hard to catch locally:** With `--workers=2` (the project default), the parallel race often wins and either the source or the sink test executes BEFORE its sibling commits its state — the polluted state never crystallises locally. CI runs serially within each worker but with a different alphabetical-vs-parallel interleaving than your laptop, surfacing the bug only there. Multiple PR cycles get burned thinking it's a flaky e2e.
+
+**Fix pattern (Tier 1, before architectural per-worker isolation):** Centralise reset+seed helpers in `test/e2e/helpers/test-data-reset.ts` and call them from the affected describe block's `beforeEach`. Three helpers cover the cases:
+
+- `resetExerciseHistoryForUser(admin, userId, slug)` — surgical, removes PRs + peak_loads + sets + workout_exercises and any orphan workout that only contained that exercise.
+- `seedPrForUser(admin, userId, slug, weight, reps)` — re-establishes the canonical baseline so the test's PR-breaker has something to beat.
+- `resetRpgStateForUser(admin, userId)` — full RPG reset (workouts + xp_events + body_part_progress + backfill_progress + exercise_peak_loads + personal_records + earned_titles + weekly_plans), then upserts a completed `backfill_progress` row so next login does NOT trigger re-backfill.
+
+**FK note (load-bearing):** `personal_records.set_id` is `ON DELETE SET NULL` (migration `00008_fix_personal_records_set_id_fk.sql:43-45`), NOT cascade. Deleting sets does NOT remove the linked PR rows — it only nulls `set_id`. To clear PRs as part of a reset, delete `personal_records` BEFORE deleting `sets`/`workout_exercises`/`workouts`. Forgetting this leaves stale PRs that still drive the resolver.
+
+**Architectural follow-up (Phase 21, PLAN.md):** Tier 1 closes specific CONFIRMED + HIGH-risk pollution paths. The fundamental fix — a per-worker `userId` namespace so no two tests EVER share a Supabase user — is a self-contained 3-5 day refactor that also unlocks `workers: 4` (~45% CI speedup). Tier 2 cleanup (locale bleed in `exercises-localization.spec.ts`, accumulating offline-sync workouts) will be subsumed by it. Don't ship Tier 2 as a one-off PR.
+
+**Audit reference:** `tasks/e2e-pollution-audit.md` enumerates the 2 CONFIRMED + 5 HIGH-risk + 3 MEDIUM-risk pairs across all 23 spec files plus the user-to-describe-block matrix. Read it BEFORE adding a new e2e test that uses an existing test user — the matrix tells you who else is mutating that user's state.
+
+**Rule:** Whenever you write a new e2e test against a user that already appears in another describe block, either (1) use a brand-new dedicated user (preferred), or (2) add a reset+seed `beforeEach` using the helpers above. Never assume "global-setup ran 5 minutes ago therefore the user is in baseline state" — every prior test that touched the user is a potential mutation source.
