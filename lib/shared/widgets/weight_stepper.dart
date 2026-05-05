@@ -16,6 +16,9 @@ class WeightStepper extends StatefulWidget {
     required this.onChanged,
     this.increment = 2.5,
     this.unit = 'kg',
+    this.valueColor,
+    this.valueFontWeight,
+    this.valueShadow,
     super.key,
   });
 
@@ -25,6 +28,32 @@ class WeightStepper extends StatefulWidget {
 
   /// The weight unit label displayed in the input dialog and semantics.
   final String unit;
+
+  /// Optional override for the value-text color (Phase 20 commit 4).
+  ///
+  /// When `null` (the default), the value renders in
+  /// `theme.colorScheme.primary` with a 30% primary halo — the standard
+  /// daily-violet treatment. When provided, the value renders in this color
+  /// instead AND the violet halo is suppressed (passing a fresh shadow via
+  /// [valueShadow] is the caller's call). The active-workout SetRow uses
+  /// this hook to render the gold value(s) on standing-PR / predicted-PR
+  /// rows without creating a one-off stepper subclass.
+  final Color? valueColor;
+
+  /// Optional override for the value-text font weight (Phase 20 commit 4).
+  ///
+  /// Defaults to [FontWeight.w800]. The set-row PR treatment uses this to
+  /// keep the value at w800 (Rajdhani's bundled bold) while the dim/normal
+  /// states use a lighter weight in the future. Currently every state ships
+  /// w800; the param exists for symmetry with [valueColor].
+  final FontWeight? valueFontWeight;
+
+  /// Optional override for the value-text shadow (Phase 20 commit 4).
+  ///
+  /// Defaults to a 30% primary-violet halo. PR rows pass `null` to suppress
+  /// the violet halo on a gold value (a violet halo behind a gold number
+  /// reads muddy on the Arcane-Ascent palette).
+  final Shadow? valueShadow;
 
   @override
   State<WeightStepper> createState() => _WeightStepperState();
@@ -128,8 +157,14 @@ class _WeightStepperState extends State<WeightStepper> {
     final locale = Localizations.localeOf(context).languageCode;
     final formatted = _formatWeight(widget.value, locale);
 
+    // Phase 20 commit 1 (BUG-019): mirror the locked Direction B mockup CSS:
+    //   .step-btn       { width: 40px; flex-shrink: 0; }
+    //   .step-value-zone { flex: 1; }
+    // Fixed-width +/- buttons + flex-filled center value zone makes the
+    // stepper occupy its parent's full horizontal width, so the value tap
+    // surface scales with the row column instead of the old 32dp pill that
+    // missed sweaty-thumb hits on 360dp Brazilian-mid-market screens.
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onLongPressStart: (_) => _startRepeating(_decrement),
@@ -138,40 +173,51 @@ class _WeightStepperState extends State<WeightStepper> {
           child: IconButton(
             onPressed: widget.value >= widget.increment ? _decrement : null,
             icon: const Icon(Icons.remove, size: 18),
-            // BUG-019: 32x44 compresses below Material's 48dp tap minimum on
-            // 360dp viewports (Moto G / Samsung A widths). Bumped to 40x48
-            // so sweaty-thumb hits land on the right button mid-workout.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
+            // a 40dp horizontal cap so the value zone owns the slack. The
+            // BUG-019 widget test asserts both floors on a 360dp viewport.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),
         ),
-        Flexible(
+        Expanded(
           child: Semantics(
             label:
                 'Weight value: $formatted ${widget.unit}. Tap to enter weight.',
             button: true,
             child: GestureDetector(
               onTap: _showNumberInput,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 32),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    formatted,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.primary,
-                      shadows: [
-                        Shadow(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.3,
-                          ),
-                          blurRadius: 8,
-                        ),
-                      ],
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                height: 48,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      formatted,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: 26,
+                        fontWeight: widget.valueFontWeight ?? FontWeight.w800,
+                        color: widget.valueColor ?? theme.colorScheme.primary,
+                        // Halo only on the default (violet) state. PR rows
+                        // pass an explicit `valueColor` and want a clean
+                        // value — the gold reads cleanly without a halo on
+                        // top of the gold tint background.
+                        shadows: widget.valueColor != null
+                            ? (widget.valueShadow != null
+                                  ? [widget.valueShadow!]
+                                  : null)
+                            : [
+                                Shadow(
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                      ),
                     ),
                   ),
                 ),
@@ -186,10 +232,10 @@ class _WeightStepperState extends State<WeightStepper> {
           child: IconButton(
             onPressed: _increment,
             icon: const Icon(Icons.add, size: 18),
-            // BUG-019: 32x44 compresses below Material's 48dp tap minimum on
-            // 360dp viewports (Moto G / Samsung A widths). Bumped to 40x48
-            // so sweaty-thumb hits land on the right button mid-workout.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
+            // a 40dp horizontal cap so the value zone owns the slack. The
+            // BUG-019 widget test asserts both floors on a 360dp viewport.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),

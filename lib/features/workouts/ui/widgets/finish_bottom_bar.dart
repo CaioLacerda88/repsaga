@@ -10,10 +10,20 @@ import '../../../../l10n/app_localizations.dart';
 /// to first-time users. The [FinishWorkoutDialog] (gated by [onPressed]) is
 /// the safety net — placement is no longer the gate.
 ///
+/// **Decision: REPLACE, not AUGMENT.** The AppBar Finish was removed entirely
+/// when this bar landed. Two CTAs for the same action would be UI noise and
+/// would split the loading/disabled state machine across two surfaces — single
+/// source of truth (this widget's [enabled] gate + [onPressed] backed by
+/// [FinishWorkoutCoordinator]) is cleaner. AppBar now hosts only the discard
+/// leading + reorder action — see `active_workout_screen.dart`. Phase 20
+/// commit 5 ratifies this decision.
+///
 /// Styling: filled primaryViolet button (Cluster 4 review — was OutlinedButton,
-/// which read as a secondary action despite being THE next-step CTA). 44dp min
-/// height, full-width minus 16dp horizontal padding. Top divider uses the
-/// canonical [AppColors.hair] token (Cluster 4 review — was
+/// which read as a secondary action despite being THE next-step CTA). 56dp min
+/// height — Phase 20 spec requires ≥56dp to match Hevy/Strong's chunky
+/// bottom-bar CTAs and give a generous one-handed thumb target. Full-width
+/// minus 16dp horizontal padding. Top divider uses the canonical
+/// [AppColors.hair] token (Cluster 4 review — was
 /// `outline.withValues(alpha: 0.2)`, which composited to ~2.8% effective alpha
 /// on top of the already 14%-alpha hair token, making the line invisible).
 /// SafeArea handles gesture insets on iOS / Android-with-bottom-bar.
@@ -48,8 +58,15 @@ class FinishBottomBar extends StatelessWidget {
             border: Border(top: BorderSide(color: AppColors.hair, width: 1)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Pair-rule: every Semantics(identifier:) we expose for e2e MUST
+          // set BOTH container AND explicitChildNodes (PR #152 lessons.md
+          // entry). Without explicitChildNodes the FilledButton's own
+          // semantics + the Text label can be merged with sibling Semantics
+          // in the surrounding Column / Material tree, which is what caused
+          // the PR #152 e2e regressions on row-level identifiers.
           child: Semantics(
             container: true,
+            explicitChildNodes: true,
             identifier: 'workout-finish-btn',
             child: SizedBox(
               width: double.infinity,
@@ -65,7 +82,7 @@ class FinishBottomBar extends StatelessWidget {
                     alpha: 0.3,
                   ),
                   disabledForegroundColor: AppColors.textDim,
-                  minimumSize: const Size(0, 44),
+                  minimumSize: const Size(0, 56),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

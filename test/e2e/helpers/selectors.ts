@@ -329,6 +329,30 @@ export const HOME = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Set-row state — Phase 20 5-state gold-edge-frame matrix
+//
+// Each set row in the active workout screen wraps its _SetRowFrame in a
+// Semantics(identifier: ...) node that reflects the current PrRowState.
+// These selectors let E2E tests discriminate among the five row states
+// without relying on color (invisible to the AOM) or locale-dependent labels.
+//
+// Identifiers are emitted by _SetRowFrame.build in set_row.dart.
+// One identifier per row — states are mutually exclusive.
+// ---------------------------------------------------------------------------
+export const SET_ROW = {
+  /** Pending set with no projected PR — 3dp violet stripe, ○ violet done-mark */
+  stateNone: '[flt-semantics-identifier="set-row-state-none"]',
+  /** Pending set whose current values WOULD produce a PR if completed now — 4dp gold stripe, ◆ gold done-mark */
+  statePendingPr: '[flt-semantics-identifier="set-row-state-pending-pr"]',
+  /** Completed set that did not produce any new PR — 3dp green stripe */
+  stateCompleted: '[flt-semantics-identifier="set-row-state-completed"]',
+  /** Completed PR superseded by a later set in the same workout — 3dp green stripe + 2% gold tint, no right bracket */
+  stateSupersededPr: '[flt-semantics-identifier="set-row-state-superseded-pr"]',
+  /** Completed PR currently the best across all history — 4dp gold stripe + 4% tint + 4dp gold right bracket */
+  stateStandingPr: '[flt-semantics-identifier="set-row-state-standing-pr"]',
+} as const;
+
+// ---------------------------------------------------------------------------
 // Personal Records — celebration screen and records list
 // ---------------------------------------------------------------------------
 export const PR = {

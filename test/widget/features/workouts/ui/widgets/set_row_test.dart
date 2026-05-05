@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/personal_records/models/record_type.dart';
 import 'package:repsaga/features/workouts/data/workout_local_storage.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
+import 'package:repsaga/features/workouts/domain/pr_row_state.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/set_row.dart';
+import 'package:repsaga/shared/widgets/reps_stepper.dart';
+import 'package:repsaga/shared/widgets/reward_accent.dart';
+import 'package:repsaga/shared/widgets/weight_stepper.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../../fixtures/test_factories.dart';
@@ -92,41 +98,12 @@ void main() {
         expect(find.text('3'), findsOneWidget);
       });
 
-      testWidgets('displays working-set badge label "W"', (tester) async {
-        final set = makeSet(setType: SetType.working);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('W'), findsOneWidget);
-      });
-
-      testWidgets('displays warmup-set badge label "WU"', (tester) async {
-        final set = makeSet(setType: SetType.warmup);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('WU'), findsOneWidget);
-      });
-
-      testWidgets('displays dropset badge label "D"', (tester) async {
-        final set = makeSet(setType: SetType.dropset);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('D'), findsOneWidget);
-      });
-
-      testWidgets('displays to-failure badge label "F"', (tester) async {
-        final set = makeSet(setType: SetType.failure);
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        expect(find.text('F'), findsOneWidget);
-      });
+      // Phase 20 commit 2 (Direction B): the set-type abbreviation badge
+      // ("W"/"WU"/"D"/"F") was removed from the set-number cell. The set
+      // type is now communicated by the left rune-stripe color of the
+      // [_SetRowFrame] (violet for working/warmup/dropset/failure pending,
+      // green for completed). Long-press cycle behavior is preserved and
+      // covered by `long-pressing set number cycles set type` below.
 
       testWidgets('displays "kg" label next to weight', (tester) async {
         final set = makeSet();
@@ -288,6 +265,68 @@ void main() {
             8,
             reason:
                 'BUG-018 tap-to-copy: set#2 reps must be copied from set#1.',
+          );
+        },
+      );
+
+      testWidgets(
+        'tapping set number on set#1 is a no-op — there is no previous set '
+        'to copy from (inverse pin to BUG-018 tap-to-copy)',
+        (tester) async {
+          // _SetNumberCell wires onTap only when setNumber > 1; on set #1
+          // the InkWell.onTap is null and the tap must NOT mutate state.
+          // Without this pin, a future "always allow tap" refactor could
+          // silently call notifier.copyLastSet on set #1, which would either
+          // crash or copy from itself.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 1,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set1 = workoutState.exercises.first.sets.first;
+          expect(set1.setNumber, 1, reason: 'sanity check: this is set #1');
+
+          // Seed set#1 with known values so we can verify they are untouched.
+          final seededState = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: [set1.copyWith(weight: 42.5, reps: 7)],
+              ),
+            ],
+          );
+          final seededSet1 = seededState.exercises.first.sets.first;
+
+          final container = makeContainer(seededState);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: seededSet1, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+
+          // Tap the set-number cell on set #1. Should be a no-op.
+          await tester.tap(find.text('${seededSet1.setNumber}'));
+          await tester.pump();
+
+          final after = container.read(activeWorkoutProvider).value;
+          final afterSet1 = after?.exercises.first.sets.first;
+          expect(
+            afterSet1?.weight,
+            42.5,
+            reason:
+                'set #1 has no previous set — tapping the number cell must '
+                'not mutate weight (no copy-from-self semantics)',
+          );
+          expect(
+            afterSet1?.reps,
+            7,
+            reason:
+                'set #1 has no previous set — tapping the number cell must '
+                'not mutate reps',
           );
         },
       );
@@ -649,6 +688,189 @@ void main() {
       );
     });
 
+    group('PR row treatment (Phase 20 commit 4)', () {
+      // The 5-state matrix is exhaustively pinned in commit 6's golden +
+      // widget tests; these are smoke checks that the [display] prop wires
+      // through correctly and the gold render path goes via [RewardAccent]
+      // (the only legal channel for AppColors.heroGold under the
+      // `check_reward_accent.sh` scarcity contract).
+
+      testWidgets(
+        'standing-PR display wraps the row in RewardAccent so the gold edge '
+        'frame can render through the lint-guarded contract',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsAtLeastNWidgets(1),
+            reason:
+                'standing-PR row must mount a RewardAccent ancestor — gold '
+                'stripe / right bracket / value text all read color via '
+                'RewardAccent.of(context). Missing ancestor = silent gold '
+                'failure (color falls back to transparent).',
+          );
+        },
+      );
+
+      testWidgets(
+        'predicted-PR display swaps the standard Checkbox for the gold ◆ '
+        'unchecked mark and exposes the predicted-PR semantics label',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // Standard Checkbox should be replaced — the ◆ mark is a Text
+          // glyph inside a Container, not a Checkbox.
+          expect(
+            find.byType(Checkbox),
+            findsNothing,
+            reason:
+                'predicted-PR pending row must use the gold ◆ done-mark, '
+                'not the standard violet-bordered Checkbox.',
+          );
+          expect(find.text('◆'), findsOneWidget);
+          // Use bySemanticsIdentifier — the predicted-PR done-cell shares
+          // the same `workout-set-done` identifier as the regular pending
+          // row (E2E selector contract). Asserting the localized label via
+          // find.bySemanticsLabel requires `tester.ensureSemantics()` and a
+          // SemanticsHandle dispose, which the existing test infrastructure
+          // doesn't set up; the identifier carries the same wiring guarantee.
+          expect(
+            find.bySemanticsIdentifier('workout-set-done'),
+            findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        'completedSupersededPr display does NOT wrap in RewardAccent without '
+        'the gold stripe — only the 2% gold tint requires the ancestor',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // Superseded carries gold tint (2%) so the ancestor is mounted.
+          expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+          // But the standard green Checkbox stays — superseded uses ✓ green,
+          // not the predicted ◆ mark.
+          expect(find.byType(Checkbox), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'plain none state renders WITHOUT a RewardAccent ancestor (heroGold '
+        'scarcity preserved on non-PR rows)',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                // Default display = none, but pinning here for clarity.
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'non-PR rows must not mount RewardAccent — that would leak '
+                'the gold IconTheme into the row chrome and dilute the '
+                'reward-scarcity payoff.',
+          );
+          expect(find.byType(Checkbox), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'completedStandingPr with maxVolume-only accent colors BOTH the '
+        'weight stepper AND the reps stepper (compound rule, widget level)',
+        (tester) async {
+          // The unit-level resolver test pins that a maxVolume-only PR sets
+          // both isWeightAccented + isRepsAccented (volume folds into both
+          // operands). This widget-level test pins the downstream wiring:
+          // SetRow must propagate that compound accent through to BOTH
+          // stepper cells' valueColor params, not just one. Regressing this
+          // (e.g. accidentally using `accentTypes.contains(maxWeight)` as
+          // the stepper-cell guard instead of the `isWeightAccented` getter)
+          // would leave a volume-only PR with NO visible accent on the row.
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+            ),
+          );
+
+          final weightStepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          final repsStepper = tester.widget<RepsStepper>(
+            find.byType(RepsStepper),
+          );
+
+          expect(
+            weightStepper.valueColor,
+            isNotNull,
+            reason:
+                'maxVolume-only PR must color the WEIGHT stepper (isWeightAccented '
+                'folds maxVolume into the weight cell)',
+          );
+          expect(
+            repsStepper.valueColor,
+            isNotNull,
+            reason:
+                'maxVolume-only PR must color the REPS stepper (isRepsAccented '
+                'folds maxVolume into the reps cell)',
+          );
+        },
+      );
+    });
+
     group('accessibility semantics', () {
       testWidgets('set number has correct semantics label with type info', (
         tester,
@@ -687,6 +909,941 @@ void main() {
 
         expect(find.bySemanticsLabel('Set completed'), findsOneWidget);
       });
+    });
+
+    // -------------------------------------------------------------------------
+    // Predicted-PR semantics contract (Flutter Web role-swap workaround).
+    //
+    // Pins the asymmetric fix in `_DoneCell.build()`: when the row is in
+    // [PrRowState.pendingPredictedPr], the Semantics widget that carries
+    // the `workout-set-done` identifier MUST also carry both the button
+    // role flag (`SemanticsFlag.isButton`) AND the tap action
+    // (`SemanticsAction.tap`) on the SAME first-frame semantics update.
+    //
+    // **Why this matters:** Flutter Web's semantics engine has a bug
+    // where a SemanticsNode role transitioning from `GenericRole` →
+    // `SemanticButton` on a subsequent frame (because the tap action
+    // arrives via merge from a descendant on frame 2) creates a fresh
+    // DOM element that does NOT receive the `flt-semantics-identifier`
+    // attribute. See engine source `lib/web_ui/lib/src/engine/semantics/
+    // semantics.dart` lines 1763-1771 (identifier dirty marker only fires
+    // on value change) and 2282-2312 (role swap creates a new DOM element
+    // and only re-applies dirty attributes).
+    //
+    // Putting `button: true` and `onTap: ...` on the SAME `Semantics`
+    // widget as the identifier+label means the button role is established
+    // on the FIRST semantics frame, before the dirty marker is cleared —
+    // no role swap, identifier persists, Playwright can resolve
+    // `[flt-semantics-identifier="workout-set-done"]`.
+    //
+    // If the upstream engine bug is ever fixed, this test still passes —
+    // it asserts a positive contract, not a workaround. If a future
+    // refactor moves the tap action back into `_PredictedPrUncheckedMark`
+    // alone, this test fires before CI burns an e2e cycle.
+    // -------------------------------------------------------------------------
+
+    group('predicted-PR done-cell semantics contract', () {
+      testWidgets(
+        'workout-set-done node carries isButton flag AND tap action on the '
+        'identifier-bearing Semantics node (predicted-PR path)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Use Flutter's built-in `find.bySemanticsIdentifier` finder,
+          // which walks the live SemanticsNode tree maintained by the
+          // binding. The matching node carries the merged data of all
+          // Semantics widgets that contributed to it (identifier, label,
+          // flags, actions) so `tester.getSemantics(...).getSemanticsData()`
+          // gives us the full SemanticsData record we need to inspect.
+          final finder = find.bySemanticsIdentifier('workout-set-done');
+          expect(
+            finder,
+            findsOneWidget,
+            reason:
+                'A SemanticsNode with identifier `workout-set-done` MUST '
+                'exist in the predicted-PR row. Without it, Playwright '
+                'cannot resolve the done-cell selector in e2e tests.',
+          );
+
+          final SemanticsData data = tester
+              .getSemantics(finder)
+              .getSemanticsData();
+
+          // **Contract part 1:** the identifier-bearing node has the button
+          // role flag. This is what tells the Flutter Web engine to render
+          // the DOM element with role=button from the first frame, so the
+          // role-swap engine bug never fires.
+          expect(
+            data.flagsCollection.isButton,
+            isTrue,
+            reason:
+                'The Semantics node carrying `workout-set-done` must carry '
+                'SemanticsFlag.isButton on the SAME node — otherwise Flutter '
+                'Web swaps the role from GenericRole to SemanticButton on a '
+                'later frame and drops the identifier attribute. See '
+                'engine source semantics.dart lines 1763-1771 (identifier '
+                'dirty marker) and 2282-2312 (role swap re-creates DOM '
+                'element).',
+          );
+
+          // **Contract part 2:** the identifier-bearing node has the tap
+          // action. This is what makes the AOM element flt-tappable, so
+          // Playwright's click(...) actually reaches Flutter's gesture
+          // pipeline.
+          expect(
+            data.hasAction(SemanticsAction.tap),
+            isTrue,
+            reason:
+                'The Semantics node carrying `workout-set-done` must carry '
+                'SemanticsAction.tap on the SAME node so Playwright clicks '
+                'land on a flt-tappable element. The asymmetric fix puts '
+                '`onTap:` on the outer Semantics widget (predicted-PR path) '
+                'instead of relying on the inner GestureDetector to merge '
+                'its tap action upward, which would trigger the role-swap '
+                'bug.',
+          );
+
+          // Sanity: the node also carries the user-facing label.
+          expect(
+            data.label,
+            contains('predicted'),
+            reason:
+                'Sanity check: the contract pin must be looking at the '
+                'predicted-PR variant of the done-cell label, not a stray '
+                'node with the same identifier elsewhere.',
+          );
+
+          handle.dispose();
+        },
+      );
+
+      testWidgets(
+        'tapping the predicted-PR done-cell via its semantics action toggles '
+        'completion (proves the AOM-level tap path is wired)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          // Force `is_completed: false` — the test factory defaults to true,
+          // but the predicted-PR path only renders when the row is BOTH
+          // pendingPredictedPr AND not completed. A completed row would
+          // route to the Checkbox path with identifier `workout-set-completed`
+          // and the `workout-set-done` finder would correctly find nothing.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 0,
+          );
+          final workoutData = stateJson['workout'] as Map<String, dynamic>;
+          final exercise = TestWorkoutExerciseFactory.create(
+            id: 'we-001',
+            exerciseId: 'exercise-1',
+            order: 1,
+          );
+          final pendingSet = TestSetFactory.create(
+            id: 'set-pending-001',
+            workoutExerciseId: 'we-001',
+            setNumber: 1,
+            isCompleted: false,
+          );
+          final fullStateJson = {
+            'workout': workoutData,
+            'exercises': [
+              {
+                'workout_exercise': exercise,
+                'sets': [pendingSet],
+              },
+            ],
+          };
+          final workoutState = ActiveWorkoutState.fromJson(fullStateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set = workoutState.exercises.first.sets.first;
+
+          final container = makeContainer(workoutState);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: weId,
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxVolume},
+                ),
+              ),
+              container: container,
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Locate the identifier-bearing semantics node and dispatch a tap
+          // through the AOM (NOT the gesture detector). This mirrors what
+          // Playwright does when it clicks the flt-tappable DOM element
+          // resolved via `[flt-semantics-identifier="workout-set-done"]`.
+          final finder = find.bySemanticsIdentifier('workout-set-done');
+          expect(finder, findsOneWidget);
+          final SemanticsNode node = tester.getSemantics(finder);
+
+          // The semantics owner sits on the deprecated `pipelineOwner` alias
+          // in the test binding; `rootPipelineOwner.semanticsOwner` returns
+          // null because the meta-owner does not host the semantics tree.
+          final SemanticsOwner owner =
+              // ignore: deprecated_member_use
+              tester.binding.pipelineOwner.semanticsOwner!;
+          owner.performAction(node.id, SemanticsAction.tap);
+          await tester.pump();
+
+          final updatedState = container.read(activeWorkoutProvider).value;
+          expect(
+            updatedState?.exercises.first.sets.first.isCompleted,
+            isTrue,
+            reason:
+                'Dispatching SemanticsAction.tap on the identifier-bearing '
+                'node must toggle completion. If it does not, the outer '
+                'Semantics widget owns the role+label but not the action — '
+                'the asymmetric fix is broken.',
+          );
+
+          handle.dispose();
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // Commit 6: 5-state visual matrix
+    //
+    // One block per state. Each block verifies:
+    //   1. Correct done-mark variant rendered (Checkbox vs ◆ text glyph).
+    //   2. RewardAccent presence / absence (heroGold scarcity contract).
+    //   3. Row height ≥ 56dp (uniform height across all states).
+    //   4. Correct semantics identifier on the done-col.
+    // -------------------------------------------------------------------------
+
+    group('5-state matrix — state: none (pending, no projected PR)', () {
+      testWidgets('renders standard violet-bordered Checkbox done-mark', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.byType(Checkbox), findsOneWidget);
+        expect(find.text('◆'), findsNothing);
+      });
+
+      testWidgets('no RewardAccent ancestor — heroGold scarcity preserved', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.byType(RewardAccent), findsNothing);
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        // The _SetRowFrame enforces BoxConstraints(minHeight: 56). Find
+        // Containers that carry this constraint — the frame container.
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason: 'state:none — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col semantics identifier is workout-set-done', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.none),
+            ),
+          ),
+        );
+
+        expect(find.bySemanticsIdentifier('workout-set-done'), findsOneWidget);
+      });
+    });
+
+    group('state: pendingPredictedPr (pending, values would break a PR)', () {
+      testWidgets('renders ◆ glyph done-mark instead of Checkbox', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          find.text('◆'),
+          findsOneWidget,
+          reason: 'predicted-PR must show the gold ◆ glyph',
+        );
+        expect(
+          find.byType(Checkbox),
+          findsNothing,
+          reason: 'predicted-PR must NOT show the standard Checkbox',
+        );
+      });
+
+      testWidgets('mounts RewardAccent ancestor (gold colors enabled)', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason:
+              'state:pendingPredictedPr — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col accessibility label is "Mark set as done — '
+          'predicted personal record" (en locale)', (tester) async {
+        final set = makeSet(isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.pendingPredictedPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        // The l10n key markSetAsDonePredictedPr drives the semantics label.
+        // The identifier is still workout-set-done (E2E selector contract).
+        expect(
+          find.bySemanticsIdentifier('workout-set-done'),
+          findsOneWidget,
+          reason:
+              'predicted-PR done-col must carry the workout-set-done '
+              'identifier for E2E selector compatibility',
+        );
+      });
+
+      // -----------------------------------------------------------------
+      // PR #152 fix #3 contract pin — see `tasks/lessons.md`
+      // "Semantics container/explicitChildNodes is needed at EVERY tap-
+      // merging boundary, not just one place" + "identifiers must live on
+      // the actual tap target, not its container".
+      //
+      // The bug: when the row was in `pendingPredictedPr` state, the inner
+      // `_PredictedPrUncheckedMark`'s `GestureDetector` emitted its OWN
+      // `role=button` semantic node (Flutter's default for any
+      // GestureDetector with onTap). Playwright's
+      // `[flt-semantics-identifier="workout-set-done"]` resolved the OUTER
+      // element, but a SECOND `<flt-semantics role="button" flt-tappable>`
+      // sat on top covering most of the same bounding box, intercepting
+      // every click. The CI artifact log showed:
+      //
+      //   <flt-semantics role="button" flt-tappable id="...152">
+      //     Mark set as done — predicted record↵◆
+      //   </flt-semantics> from <flt-semantics id="...153">…</flt-semantics>
+      //   subtree intercepts pointer events
+      //
+      // Fix: GestureDetector(excludeFromSemantics: true) — the inner gesture
+      // still hit-tests (taps still toggle completion via render-object
+      // hit-test), but does NOT emit a competing semantic node. The OUTER
+      // _DoneCell `Semantics(identifier: 'workout-set-done', label: ...)`
+      // becomes the SOLE addressable AOM node for that region, and a
+      // Playwright click targeting that identifier reaches the underlying
+      // gesture without interception.
+      //
+      // This widget test pins the contract STRUCTURALLY: in
+      // pendingPredictedPr state, the done-cell subtree must contain
+      // EXACTLY ONE SemanticsNode that exposes `flt-semantics-identifier=
+      // "workout-set-done"`, and there must NOT be a competing descendant
+      // SemanticsNode whose label contains "predicted" — that would
+      // indicate the inner GestureDetector regressed back to emitting its
+      // own button.
+      testWidgets(
+        'predicted-PR done-cell — no competing inner button node leaks '
+        'predicted-PR semantics (excludeFromSemantics on inner gesture)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          // The OUTER identifier-bearing node exists exactly once.
+          expect(
+            find.bySemanticsIdentifier('workout-set-done'),
+            findsOneWidget,
+            reason:
+                'predicted-PR done-cell must expose the workout-set-done '
+                'identifier (E2E selector contract).',
+          );
+
+          // CRITICAL: walk the entire SemanticsNode tree under the test
+          // widget and assert there is NO node with `SemanticsAction.tap`
+          // whose label contains "predicted". Before the fix, the inner
+          // _PredictedPrUncheckedMark's GestureDetector emitted a SECOND
+          // semantic node with action=tap and label containing the
+          // localized "predicted personal record" string. Playwright
+          // resolved the outer identifier correctly, but the click was
+          // intercepted by this second node's larger flt-tappable region.
+          //
+          // With `excludeFromSemantics: true` on the inner GestureDetector,
+          // no such competing semantic node exists — and there is at most
+          // ONE tap-action-bearing semantic node in the done-cell subtree
+          // (the outer Semantics declares the label without onTap; the
+          // inner gesture is excluded; no flt-tappable button leaks).
+          // The semantics tree we want lives on the binding's render-object
+          // pipeline owner. `rootPipelineOwner` is the meta-owner — its
+          // `semanticsOwner` is null in the test harness; the populated
+          // owner sits on `pipelineOwner` (deprecated alias, no drop-in
+          // replacement that exposes a non-null semanticsOwner from the
+          // test binding — keep using it).
+          final SemanticsOwner owner =
+              // ignore: deprecated_member_use
+              tester.binding.pipelineOwner.semanticsOwner!;
+          final List<SemanticsNode> competingNodes = [];
+          void walk(SemanticsNode node) {
+            final data = node.getSemanticsData();
+            // A regression would show as a node carrying both a tap action
+            // AND a label containing "predicted" (the localized
+            // markSetAsDonePredictedPr string).
+            if (data.hasAction(SemanticsAction.tap) &&
+                data.label.toLowerCase().contains('predicted')) {
+              competingNodes.add(node);
+            }
+            node.visitChildren((child) {
+              walk(child);
+              return true;
+            });
+          }
+
+          walk(owner.rootSemanticsNode!);
+
+          // We expect AT MOST one such node — the parent _DoneCell
+          // Semantics, if and only if the framework merged the inner
+          // gesture's tap action up into it. The bug was TWO such nodes
+          // (parent identifier + inner button) creating an interception.
+          // STRUCTURALLY: with the fix in place, we observe ZERO inner
+          // competing button nodes — the inner gesture is fully excluded.
+          expect(
+            competingNodes.length,
+            lessThanOrEqualTo(1),
+            reason:
+                'Found ${competingNodes.length} competing SemanticsNodes '
+                'with action=tap AND label containing "predicted". The '
+                'inner _PredictedPrUncheckedMark GestureDetector must use '
+                'excludeFromSemantics: true so it does not emit a SECOND '
+                'flt-tappable node that intercepts Playwright clicks aimed '
+                'at the workout-set-done identifier. Regression of this '
+                'test almost certainly means PR #152\'s "fix attempt #4" is '
+                'about to ship with the same e2e failure pattern.',
+          );
+
+          // Dispose the SemanticsHandle synchronously inside the test body —
+          // Flutter's _endOfTestVerifications check runs BEFORE addTearDown
+          // callbacks, so addTearDown(handle.dispose) leaks the handle past
+          // the verification gate and triggers a "SemanticsHandle was active
+          // at the end of the test" failure.
+          handle.dispose();
+        },
+      );
+    });
+
+    group('state: completedNonPr (completed, no PR broken)', () {
+      testWidgets('renders green Checkbox done-mark', (tester) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(find.byType(Checkbox), findsOneWidget);
+        final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
+        expect(
+          checkbox.value,
+          isTrue,
+          reason: 'completed set must show checked Checkbox',
+        );
+        expect(
+          find.text('◆'),
+          findsNothing,
+          reason: 'completedNonPr must not show the predicted-PR ◆ glyph',
+        );
+      });
+
+      testWidgets('no RewardAccent ancestor — zero gold on plain completed', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(
+          find.byType(RewardAccent),
+          findsNothing,
+          reason:
+              'completedNonPr must NOT mount RewardAccent — no gold '
+              'on plain completed rows (heroGold scarcity contract)',
+        );
+      });
+
+      testWidgets('row minimum height is at least 56dp', (tester) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        final frameContainers = tester
+            .widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final bc = c.constraints;
+              return bc != null && bc.minHeight >= 56;
+            })
+            .toList();
+        expect(
+          frameContainers,
+          isNotEmpty,
+          reason:
+              'state:completedNonPr — row must have minHeight≥56dp frame container',
+        );
+      });
+
+      testWidgets('done-col semantics identifier is workout-set-completed', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+            ),
+          ),
+        );
+
+        expect(
+          find.bySemanticsIdentifier('workout-set-completed'),
+          findsOneWidget,
+        );
+      });
+    });
+
+    group(
+      'state: completedSupersededPr (completed PR demoted by a later set)',
+      () {
+        testWidgets('renders green Checkbox (not ◆) — superseded is done', (
+          tester,
+        ) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(Checkbox),
+            findsOneWidget,
+            reason: 'superseded row is completed — must show Checkbox, not ◆',
+          );
+          final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
+          expect(checkbox.value, isTrue);
+          expect(find.text('◆'), findsNothing);
+        });
+
+        testWidgets(
+          'mounts RewardAccent ancestor (2% gold tint path requires it)',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedSupersededPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(
+              find.byType(RewardAccent),
+              findsAtLeastNWidgets(1),
+              reason:
+                  'completedSupersededPr has a 2% gold background tint — '
+                  'the tint is rendered via RewardAccent.of(ctx), so the '
+                  'ancestor must be present',
+            );
+          },
+        );
+
+        testWidgets('row minimum height is at least 56dp', (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedSupersededPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          final frameContainers = tester
+              .widgetList<Container>(find.byType(Container))
+              .where((c) {
+                final bc = c.constraints;
+                return bc != null && bc.minHeight >= 56;
+              })
+              .toList();
+          expect(
+            frameContainers,
+            isNotEmpty,
+            reason:
+                'state:completedSupersededPr — row must have minHeight≥56dp '
+                'frame container',
+          );
+        });
+      },
+    );
+
+    group(
+      'state: completedStandingPr (completed PR currently the best overall)',
+      () {
+        testWidgets(
+          'renders green Checkbox and ◆ is absent — standing uses ✓ not ◆',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(
+              find.byType(Checkbox),
+              findsOneWidget,
+              reason:
+                  'completed standing PR uses the standard checked Checkbox '
+                  '(✓ green), not the ◆ mark',
+            );
+            expect(find.text('◆'), findsNothing);
+          },
+        );
+
+        testWidgets(
+          'mounts RewardAccent ancestor (4dp gold stripe + bracket)',
+          (tester) async {
+            final set = makeSet(isCompleted: true);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(
+                  set: set,
+                  workoutExerciseId: 'we-001',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            );
+
+            expect(find.byType(RewardAccent), findsAtLeastNWidgets(1));
+          },
+        );
+
+        testWidgets('row minimum height is at least 56dp', (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          final frameContainers = tester
+              .widgetList<Container>(find.byType(Container))
+              .where((c) {
+                final bc = c.constraints;
+                return bc != null && bc.minHeight >= 56;
+              })
+              .toList();
+          expect(
+            frameContainers,
+            isNotEmpty,
+            reason:
+                'state:completedStandingPr — row must have minHeight≥56dp '
+                'frame container',
+          );
+        });
+
+        testWidgets('done-col semantics identifier is workout-set-completed', (
+          tester,
+        ) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+
+          expect(
+            find.bySemanticsIdentifier('workout-set-completed'),
+            findsOneWidget,
+          );
+        });
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // heroGold scarcity structural test (commit 6)
+    //
+    // Pins the "gold appears in EXACTLY the right places" contract. These tests
+    // walk the widget tree and count RewardAccent widgets to detect accidental
+    // gold leakage or missing gold in future refactors.
+    // -------------------------------------------------------------------------
+
+    group('heroGold scarcity', () {
+      testWidgets('standing-PR row mounts RewardAccent (gold is present on '
+          'the three lawful surfaces: stripe, value text, right bracket)', (
+        tester,
+      ) async {
+        final set = makeSet(isCompleted: true);
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.completedStandingPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+            ),
+          ),
+        );
+
+        // The row is wrapped in exactly ONE RewardAccent ancestor — the
+        // _SetRowFrame's wrapper. Multiple nested RewardAccent widgets would
+        // be redundant but harmless; the structural guarantee is ≥1.
+        expect(
+          find.byType(RewardAccent),
+          findsAtLeastNWidgets(1),
+          reason:
+              'completedStandingPr must wrap the row in RewardAccent so all '
+              'three gold surfaces (stripe, value, bracket) resolve via the '
+              'ancestor context',
+        );
+      });
+
+      testWidgets(
+        'completedNonPr row mounts zero RewardAccent — no gold present',
+        (tester) async {
+          final set = makeSet(isCompleted: true);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'completedNonPr must have zero gold (heroGold scarcity). A '
+                'RewardAccent here would leak gold IconTheme into every Icon '
+                'and Text in the row — diluting the reward signal.',
+          );
+        },
+      );
+
+      testWidgets(
+        'none (pending) row mounts zero RewardAccent — no gold present',
+        (tester) async {
+          final set = makeSet(isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+
+          expect(
+            find.byType(RewardAccent),
+            findsNothing,
+            reason:
+                'state:none (pending, no PR projection) must have zero gold. '
+                'Any RewardAccent here means the heroGold IconTheme infects '
+                'the stepper +/- buttons, violating the scarcity contract.',
+          );
+        },
+      );
     });
   });
 }

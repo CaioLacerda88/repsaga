@@ -464,6 +464,7 @@
   "tooltipChangeType": "Segure: mudar tipo",
   "setCompleted": "Série concluída",
   "markSetAsDone": "Marcar série como concluída",
+  "markSetAsDonePredictedPr": "Marcar série como concluída — recorde previsto",
   "rpeValue": "RPE {value}. Toque para alterar.",
   "setRpe": "Definir RPE",
   "rpeLabel": "RPE",

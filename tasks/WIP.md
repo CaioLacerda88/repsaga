@@ -4,51 +4,82 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
-## fix/save-workout-zero-weight-and-orphan-children — IN PROGRESS
+## Phase 20 — Active Workout Set-Row Redesign — IN PR #152 REVIEW
 
-**Branch:** `fix/save-workout-zero-weight-and-orphan-children` off main at `2ecc735`
+**Branch:** `feature/phase20-active-workout-redesign` (off main at `dc1886c`)
+**PR:** #152 (open) — https://github.com/CaioLacerda88/repsaga/pull/152
+**HEAD:** `49db444` (test.slow on rank-up-celebration; about to land Tier 1 e2e cleanup)
 
-**Source:** Production crash report on Galaxy S25 Ultra. Two queued workouts ("Full Body Beginner" and "5x5 Strength") fail `save_workout` with `exercise_peak_loads_peak_weight_check`, then dependent `PendingUpsertRecords` actions fail with `personal_records_set_id_fkey`.
+### Resume context — where the redesign track is RIGHT NOW (2026-05-05)
 
-### Bug A — SQL — `record_session_xp_batch` zero-weight peak
+**What's done:**
+- Design brief locked (`docs/design/2026-05-01-active-workout-redesign/critique.md` + `direction-b-pr-refined.html` v3)
+- Direction B (Tactile Data Table) + standing-PR-only semantic + heroGold-scarcity 3-place rule LOCKED with user sign-off
+- 7 implementation commits (1: stepper, 2: set-row layout, 3: PR resolver domain, 4: PR treatment wiring, 5: finish-button bottom anchor, 6: widget+unit tests for 5-state matrix, 7: e2e selectors+smoke)
+- 1 reviewer-fix commit (`995a3a6`) — RewardAccent scope tightening + 3 missing test pins
+- 5 e2e debug commits (`cd8c079` → `fa56ccd` → `eb217b0` → `49db444`) — Flutter web Semantics merge bugs; final root cause was the Flutter Web engine's role-swap bug (lines 1763-1771, 2282-2312 of engine semantics.dart)
+- BUG-018 / BUG-019 / BUG-020 all closed structurally
+- 2367 widget+unit tests pass; CI gates `dart format`, `dart analyze --fatal-infos`, `check_reward_accent.sh`, `check_hardcoded_colors.sh`, `flutter build apk --debug` all clean
 
-- [x] Read `00040_rpg_system_v1.sql` `record_session_xp_batch` body end-to-end
-- [x] Create `supabase/migrations/00050_save_workout_skip_zero_weight_peak.sql` with `CREATE OR REPLACE FUNCTION` — full body, only the `per_set` CTE filter changes (`AND s.weight > 0`)
-- [x] Verify the rest of the function body is byte-for-byte identical to the original
+**What's left to land #152:**
+- ONE remaining e2e failure: `rank-up-celebration.spec.ts:825` (CONFIRMED test-data pollution from `personal-records.spec.ts:309`'s 999kg PR for smokePR). Tier 1 fix dispatching now per audit at `tasks/e2e-pollution-audit.md`.
+- Once Tier 1 lands and CI green → squash-merge → post-merge cleanup (PLAN.md Phase 20 condense per lifecycle rule).
 
-### Bug B — Dart — orphan-children gating
+**Critical not-to-redo list (so a future session doesn't repeat dead ends from this debug cycle):**
+- `Semantics(identifier: ...)` in `lib/` MUST pair with `container: true, explicitChildNodes: true`. Enforced everywhere now.
+- `_DoneCell`'s predicted-PR path: outer Semantics OWNS `button: true, onTap` directly (engine role-swap bug workaround). The Checkbox path is asymmetric — it leaves Semantics natural because Checkbox emits `isCheckable: true` on first frame. **Do not "consistency-fix" the Checkbox path; it's correct as-is.** Widget test in `set_row_test.dart` pins this contract.
+- `_PredictedPrUncheckedMark` GestureDetector: `excludeFromSemantics: true` (paired with the outer `button: true`).
+- heroGold scarcity: gold ONLY in three places — left rune-stripe, PR'd value text, right bracket on done-col. Plus the predicted-PR ◆ done-mark. `scripts/check_reward_accent.sh` enforces.
+- E2E spec files run alphabetically. Tests sharing a Supabase user across files can pollute each other. Tier 1 cleanup helper closes the CONFIRMED + HIGH cases (audit doc lists all).
 
-- [x] Modify `lib/core/offline/sync_service.dart` `_drain` `liveIds`: include ALL queued action IDs (drop `if (a.retryCount < kMaxSyncRetries)` filter)
-- [x] Add inline comment with bug-fix rationale
-- [x] Verify `liveIds.remove(action.id)` on success still works (only fires on actual dequeue; terminal parents are skipped before reaching that line)
+**Post-#152 follow-ups:**
+- **Validation walkthrough** on the redesigned screen (stock weighted + bodyweight workouts → screenshots → ui-ux-critic with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging). Was deferred per the original Phase 20 spec to give a regression baseline rather than pre-design noise.
+- **PLAN.md Phase 20 condensation** per lifecycle rule (3-5 bullets, full spec moves to git history).
+- **Phase 21** (now in PLAN.md): e2e per-worker user isolation + parallelism bump (`workers: 2 → 4`, ~45% CI speedup). Self-contained 3-5 day refactor; supersedes Tier 2 cleanup as a side effect.
+- **Tier 2 e2e cleanup (locale bleed + offline-sync badges)** — DEFERRED. Will be subsumed by Phase 21's per-worker isolation. Don't ship Tier 2 in a separate PR; bundle into Phase 21.
 
-### Tests
+**Per PLAN.md Phase 20:** Direction B (Tactile Data Table) chosen, with the gold-edge-frame PR treatment + standing/superseded/predicted PR semantic locked. Source brief in `docs/design/2026-05-01-active-workout-redesign/`. Reference mockup: `direction-b-pr-refined.html` (v3 post-critique). Closes BUG-018 / BUG-019 / BUG-020.
 
-- [x] New `test/integration/save_workout_zero_weight_test.dart`:
-  - bodyweight-only workout (Plank ×3, weight=0) → save_workout success, no `exercise_peak_loads` row, 3 `xp_events` rows present with positive `total_xp`, `body_part_progress` advances
-  - mixed weighted + bodyweight (Squat 100×5 + Plank ×60) → Squat exercise has peak row at 100kg, Plank does not, both contribute one xp_events row
-- [x] Add unit tests in `test/unit/core/offline/sync_service_test.dart`:
-  - terminal parent + child `dependsOn=[parent.id]` → child NOT attempted, retryCount unchanged, `lastError` stays null
-  - terminal parent dismissed → next drain → child runs and dequeues
-- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
-- [x] `flutter test` full suite passes (2293 tests, was 2288)
-- [x] `npx supabase db reset` applied 00050; integration test 2/2 pass against fresh local DB
-- [ ] E2E: full run in progress (212 tests; non-overlapping with the changes — sync gating + SQL function only)
+### Commit plan (split for reviewability, single PR)
 
-### Bug C — Vitality "untested" display state (peak == 0)
+- [x] **Commit 1:** `refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)` — landed as `a1344ff`.
+- [x] **Commit 2:** `refactor(workouts): set-row layout + tap-target sizing (BUG-018)` — set_row.dart fully rewritten to Direction B (Row(stretch) + IntrinsicHeight + 56dp minHeight; 3dp leading rune-stripe sibling; 48dp tap-target set-num; flex-3 weight + flex-2 reps with single hairline gutter; 52dp done-col, no right-border reservation). RepsStepper mirrored WeightStepper's commit-1 geometry. Card padding trimmed to 10dp horizontal so reps col fits on 360dp viewports. PrChip + set-type badge removed from row. Column header in exercise_card.dart updated. set_row_test badge expectations dropped. All 2300 tests pass.
+- [x] **Commit 3:** `feat(rpg): pr detection — standing vs superseded resolver` — new pure-domain `lib/features/workouts/domain/{pr_row_state.dart, pr_row_state_resolver.dart}` (kept separate from `PRDetectionService` — record-scoped vs workout-scoped concerns). 5-state enum + two-pass resolver (first pass: per-row broken-types via running-best per recordType; second pass: demote to superseded only when EVERY broken type is later beaten — binary visual rule). 15 new unit tests covering all 10 brief cases + bonus corners (warmup exclusion, bodyweight-only, zero-rep guard, blank pending). Orphan `pr_candidate.dart` + its test DELETED (Option A) — new resolver supersedes the moment-of-completion heuristic with full historical+intra-workout awareness.
+- [x] **Commit 4:** `feat(workouts): set-row PR treatment — gold edge frame + supersession state` — added `PrRowDisplay` (state + per-cell accent record-types) + `resolveRowDisplays()` sibling resolver. New `activeWorkoutRowDisplaysProvider` family in `workout_providers.dart` reactively computes per-set displays from (active workout state, exercisePRsProvider). `ExerciseCard` watches the family and passes `display` to `SetRow`. `SetRow` rewritten to render the 5-state matrix: 4dp gold left stripe + 4% gold tint + gold value(s) + 4dp gold right bracket + ◆ gold done-mark for predicted-PR; same minus the ◆ for standing-PR; 3dp green stripe + 2% gold tint + cream-700 value(s) for superseded-PR; 3dp green stripe for completedNonPr; 3dp violet stripe for none. Steppers extended with optional `valueColor` / `valueFontWeight` so the gold value override happens via a param threaded from `RewardAccent.of(ctx)` (no `heroGold` ref leaks). l10n keys `markSetAsDonePredictedPr` added en+pt. 9 new tests (5 unit for the new accent-types contract + 4 widget for the render paths); 2316 tests pass total. heroGold scarcity guard clean.
+- [x] **Commit 5:** `feat(workouts): finish button bottom anchor for one-handed reach (BUG-020)` — REPLACE (not augment): `FinishBottomBar` (already shipped in PR #138 as part of Cluster 8 PR B's screen decomposition) is now the single Finish entry point; AppBar holds only the discard leading + reorder action, no duplicate CTA. Phase-20 ratifies the choice — bumped CTA `minimumSize` 44→56dp to match the spec's one-handed thumb-target requirement, documented the REPLACE-not-AUGMENT decision on `FinishBottomBar`'s class doc, and added `test/widget/features/workouts/ui/widgets/finish_bottom_bar_test.dart` (6 isolated pins: render, ≥56dp height, tap fires onPressed, disabled blocks taps, E2E selector contract, SafeArea wiring). All 2322 tests pass (was 2316). E2E selector contract unchanged (`workout-finish-btn`) so Playwright suite needs no edit; the helper at `test/e2e/helpers/workout.ts` was already BUG-020-aware.
+- [x] **Commit 6:** `test(workouts): widget + unit coverage for 5-state row matrix + supersession transitions` — landed as `8535c22`. 39 new tests: 9 resolver transition tests (standing→superseded, predicted→standing, predicted→none, bench-press cascade + 5th-set mutation, single-axis cascade, pre-fill edge cases, multi-exercise non-interference); 22 widget 5-state matrix tests (one group per state: done-mark variant, RewardAccent presence/absence, ≥56dp height, semantics identifier) + heroGold scarcity group (0 gold on none/completedNonPr); 3 alignment tests (non-golden, 360dp RenderBox measurements); 5 provider integration tests (4-set cascade, 5th-set demote mutation, empty state guards, first-ever workout fallback). Full suite: 2361 tests, all pass.
+- [x] **Commit 7:** `test(e2e): selectors + smoke cases for gold edge frame` — added `SET_ROW` selector group (5 state identifiers) to `selectors.ts`; added Semantics identifier hook to `_SetRowFrame` in `set_row.dart` (1 identifier per row, mapped to `PrRowState`); added 2 new smoke cases to `personal-records.spec.ts` (`should show standing-PR row identifier after completing a PR-breaking set`, `should show superseded-PR or standing-PR row after two PR-breaking sets in same workout`). 2361 flutter tests pass. TypeScript compile: no tsconfig present (Playwright's built-in TS compilation); import/selector correctness verified via node syntax checks. Local E2E deferred to CI (requires `flutter build web` + local Supabase).
+- [x] **Commit 9 (e2e fixup):** `fix(workouts): scope row Semantics + adapt stale e2e tests` — addresses 13 e2e failures from CI run 25352140552. Three root causes:
+  1. **`_SetRowFrame`'s `Semantics(identifier: rowStateId)` lacked `container: true` + `explicitChildNodes: true`** → the row's identifier merged with sibling/parent semantics, producing a single `<flt-semantics role="group" flt-tappable="">` covering the entire card section. From the click trace in `463f3` failure: a `role=group` with `aria-label="Exercise: ... Tap for details. … SET WEIGHT REPS"` (header InkWell + column headers + set rows ALL collapsed into one merged group) was intercepting clicks meant for the header InkWell or for individual set buttons. Fixed by tightening the row-frame Semantics with `container: true, explicitChildNodes: true` so the row owns its identifier node without absorbing/being absorbed by neighbours. Resolves 7 of the 13 failures (`text=ABOUT` × 5, `workout-set-done` interception × 2, multi-set count × 1).
+  2. **Stale `rank-up-celebration.spec.ts:816` test still asserted `CELEBRATION.prChip` (`workout-pr-chip`)** — that widget was deleted in commit 2 of this PR (replaced by the 5-state gold edge frame). Migrated assertion to `SET_ROW.stateStandingPr`. Fixes 1 failure.
+  3. **`personal-records.spec.ts:264` (commit-7 standing-PR test) used 40 kg baseline + 80 kg PR-breaker, but `smokePR` user has a seeded 100 kg × 5 max-weight PR from `seedPRData()`** — neither workout beat the seed. Bumped weights to 110 kg (baseline beat seed) + 130 kg (clear PR over the 110 baseline). Fixes 1 failure.
+  Total: 9 of 13 failures addressed; the remaining 4 are sub-identifications of the same Semantics merge bug (different parameter rendering of the same root cause). Verified locally: `make analyze`, `flutter test test/widget/features/workouts/`. CI run on push will validate remaining 4.
+- [x] **Commit 10 (e2e fixup #3 — final):** `fix(workouts): isolate exercise card header + predicted-PR done-mark Semantics` — addresses the remaining 12 e2e failures that survived commit 9. Two root causes confirmed against downloaded artifacts at `/tmp/pr152-e2e-run3/test-results/`:
+  1. **Exercise card header merge.** `_ExerciseCardHeader`'s outer `Semantics(label: 'Exercise: ...', child: InkWell(...))` had no `container: true` / `explicitChildNodes: true` flags. Combined with `_SetColumnHeaders`' bare Text widgets (no Semantics wrapper), the header InkWell label, the column-header letters (SET/WEIGHT/REPS), and surrounding nodes merged into ONE giant `flt-tappable role="group"`. Playwright artifact label: `"Exercise: Barbell Bench Press. Tap for details. Long press to swap.\nBarbell Bench Press\nSwap exercise\nRemove exercise\nSET\nWEIGHT\nREPS"`. The merged group intercepted taps meant for steppers (the "Enter weight" dialog opened on a tap that should have opened the detail sheet). Fix: `container: true, explicitChildNodes: true` on the InkWell-wrapping Semantics; `ExcludeSemantics` on the inner title Row AND on the entire `_SetColumnHeaders` (column-header letters are decorative — every set row already exposes per-cell labels like "Weight value: 20 kg").
+  2. **Predicted-PR done-mark identifier loss.** `_PredictedPrUncheckedMark`'s `GestureDetector(onTap: ...)` emitted its OWN `role=button flt-tappable` semantic node carrying the localized "Mark set as done — predicted record" label, sitting INSIDE the `_DoneCell`'s `Semantics(identifier: 'workout-set-done')` boundary. Playwright resolved the outer identifier element but the inner button's bounding box intercepted the click. Fix: `excludeFromSemantics: true` on the inner `GestureDetector` (hit-testing still works — the gesture catches taps via the render-object path) AND `explicitChildNodes: true` on the outer `_DoneCell` Semantics so descendants cannot leak competing tap-action nodes.
+  3. **Audit pass:** added `explicitChildNodes: true` to every `Semantics(identifier:)` site in PR #152 that lacked it — `_AddSetButton` (`workout-add-set`), `_FillRemainingButton`, `FinishBottomBar` (`workout-finish-btn`), `_buildDiscardLeading` (`workout-discard-btn`). All identifier-bearing Semantics in PR #152 now follow the pair-rule from the lessons.md entry: BOTH `container: true` AND `explicitChildNodes: true`.
+  4. **Two new widget tests pin the contracts** so CI catches a regression without needing a full e2e cycle:
+     - `test/widget/features/workouts/ui/widgets/set_row_test.dart` — predicted-PR done-cell test walks the SemanticsNode tree and asserts no competing tap-action node carries a "predicted" label inside the `workout-set-done` boundary.
+     - `test/widget/features/workouts/ui/widgets/exercise_card_test.dart` (NEW) — two tests pinning that (a) the header SemanticsNode label does NOT contain SET/WEIGHT/REPS letters, and (b) no SemanticsNode in the card subtree merges the "Exercise:" prefix with the column headers into a single label.
+  All 2367 widget/unit tests pass (was 2364; +3). `dart analyze --fatal-infos` clean. `bash scripts/check_reward_accent.sh` clean. `dart format --set-exit-if-changed` clean.
 
-- [x] Add `VitalityState.untested` as new first variant in `lib/features/rpg/models/vitality_state.dart` (compiler-enforced exhaustiveness across consumers)
-- [x] `VitalityStateMapper.fromVitality` guard: `peak <= 0 → untested` (preserve `fromPercent` four-state contract — ratio is already in hand on that path)
-- [x] `VitalityStateStyles.borderColorFor` / `localizedCopy` switch: `untested → AppColors.textDim` (reuses dormant dim/grey token; heroGold stays radiant-only)
-- [x] `vitality_table.dart` ternary: `state == untested ? '—' : '${(pct*100).round()}%'`
-- [x] `rune_halo.dart` `_syncControllerToState` + `_buildForState`: untested shares `_DormantHalo` (rune-silent, slow rotation, 12% opacity)
-- [x] `character_sheet_state.dart` `haloState` getter: day-0 (no peak observed on any body part) collapses to `untested`
-- [x] `stats_deep_dive_state.empty()` factory: six untested rows for the loading-fallback fixture
-- [x] L10n: `vitalityCopyUntested` added to en + pt ARBs; gen-l10n regenerated
-- [x] PLAN.md §18d.1: appended 2026-05-04 patch line documenting the variant addition
-- [x] Tests: 9 new untested-coverage cases across mapper / shim / styles / table / radar / halo / providers; existing 0%-related tests preserved as regression pins
-- [x] `dart format` + `dart analyze --fatal-infos` clean (0 issues)
-- [x] `flutter test` full suite passes (2297 tests; +4 vs A+B baseline of 2293)
+### Files to touch (per file plan in PLAN.md Phase 20)
+
+- `lib/features/workouts/ui/widgets/set_row.dart` (rewrite)
+- `lib/shared/widgets/weight_stepper.dart` (geometry refactor)
+- `lib/features/workouts/ui/active_workout_screen.dart` (finish button anchor)
+- `lib/features/personal_records/domain/pr_detection_service.dart` (standing/superseded resolver)
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` (wire resolver)
+- `lib/l10n/app_en.arb` + `app_pt.arb` (a11y labels for new states)
+- `test/widget/features/workouts/widgets/set_row_test.dart` (5-state matrix)
+- `test/unit/features/personal_records/domain/pr_detection_service_test.dart` (resolver)
+- `test/e2e/specs/personal-records.spec.ts` + `test/e2e/helpers/selectors.ts`
+- (possibly new) `lib/features/workouts/domain/pr_row_state.dart` enum/sealed class
+
+### Post-merge
+
+- [ ] Validation walkthrough on the redesigned screen — stock weighted + bodyweight workouts, screenshots, ui-ux-critic review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging. Append `[redesign-input]` findings to `docs/design/2026-05-01-active-workout-redesign/critique.md` for follow-up phases.
+- [ ] Condense Phase 20 entry in PLAN.md per lifecycle rule (3-5 bullet summary, full spec moves to git history).
 
 ---
 
@@ -131,76 +162,8 @@ branch — purely a coordination checklist.
 
 All checklist items above completed. Phase 16a external setup can proceed with `com.repsaga.app` everywhere.
 
+### Architectural follow-ups (parked, not blocking Phase 20)
 
----
-
-## Resume context (2026-05-04, post-compact session)
-
-### Where we are right now
-
-**Branch:** `fix/pr-upsert-online-direct-and-launch-drain` — PR #150 open. First CI run failed on a single E2E (`personal-records.spec.ts:106` — second-workout-with-higher-weight). Root cause: the new direct-upsert was awaited inside `finishWorkout()`, gating UI navigation on a server roundtrip — on CI's slower local Supabase the second workout pushed the test past its 60s budget. Fix pushed: detached upsert via `unawaited(() async { try await upsert; catch fall back to queue })`. Persistence is no longer a UX concern.
-
-**Main:** `fd852d3` — has migrations 00050 + 00051 deployed to hosted (peak_loads CHECK violation fixed via trigger backstop).
-
-### Today's PR sequence
-
-| PR | Status | What it did |
-|---|---|---|
-| #147 | merged + on hosted | Hive resilience self-heal (splash-stuck fix) |
-| #148 | merged + 00050 on hosted | Bodyweight save + cascade gating + vitality untested state |
-| #149 | merged + 00051 on hosted | peak_loads multi-writer trigger backstop (the fix that actually worked on the device) |
-| **#150** | **open, CI re-running after detach fix** | Direct PR upsert when online (detached, fire-and-forget), fall back to queue on failure |
-| **next** | not yet open | `vitality-nightly` auth modernization — port `isServiceRoleJwt` from `validate-purchase`. Reason: current `SUPABASE_SERVICE_ROLE_KEY` string-equality breaks under new key system (the cause of today's vitality-cron 401) |
-
-### What's verified working on the live Galaxy S25 Ultra (RXCY500Z22M)
-
-- App launches cleanly (no splash-stuck)
-- New workout completed inline successfully (post-00050+00051)
-- Old 5 stuck queue items effectively gone (Hive's loader silently dropped invalid frames; raw file still has them but `box.length` reports 1)
-- `runBackfill` succeeded (no more code=23514 in logcat)
-
-### What still hasn't been verified on device
-
-- **Vitality cron has NOT run since the new workout** — vitality % will not update until 03:00 UTC tomorrow OR a manual cron trigger (user asked to trigger manually; blocked on service-role key — see below)
-- **PR upsert still pending** (`f86e78ac...` — orphan from the new workout). PR #150 fixes future workouts but doesn't touch this existing item; user can tap manual Retry to drain it
-- **Stats / character sheet rank progression** — user confirmed positive feel but no screenshots captured yet
-- **Validation walkthrough we promised** (before debugging consumed the session) — still pending. Steps:
-  1. Clear app data (or live test on existing account)
-  2. Walk through stock weighted routine + stock bodyweight routine
-  3. Capture screenshots at each transition
-  4. Hand to ui-ux-critic for review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging
-  5. Append `[redesign-input]` findings to `docs/design/2026-05-01-active-workout-redesign/critique.md`
-
-### Pending immediate ask from user (manual SQL bypass given)
-
-User asked: "meanwhile, manually run the cron to the vitality thing."
-Edge Function path is broken under the new Supabase key system (`SUPABASE_SERVICE_ROLE_KEY` is now a platform-managed compatibility shim — the explicit secret is reserved and dashboard masks it as a digest hash, not the value). Vault key + Edge env drift, so string-equality 401s.
-
-**Workaround given to user**: a one-shot SQL block (in chat) that re-implements `processUser` directly in PL/pgSQL using their email lookup. Bypasses the Edge Function entirely. Math is equivalent to the Edge Function's `stepEwma` (α_up ≈ 0.39346934, α_down ≈ 0.15351830).
-
-**Proper fix**: see "next" PR row above — port `isServiceRoleJwt` from `validate-purchase` (which already has the correct pattern; see comment at lines 90-103 of `validate-purchase/index.ts` explaining why string-equality is wrong).
-
-### After PR #150 lands
-
-1. Squash-merge (no migration; Dart-only change)
-2. Rebuild APK + `adb install -r` (preserves Hive)
-3. Manually retry the `f86e78ac` upsertRecords from pending sync sheet (one-time cleanup of yesterday's orphan)
-4. Trigger vitality-nightly manually (above)
-5. Resume the validation walkthrough → screenshots → ui-ux-critic review → redesign-doc updates
-
-### Architectural lessons captured today
-
-- `tasks/lessons.md` updated with the **CHECK constraint multi-writer audit rule** (after the partial 00050 fix was insufficient, 00051 added the trigger backstop)
-- User just caught me about to repeat the orphan-children-un-gating bug class by adding a poorly-validated trigger to `_drain` in PR #150's draft. Reverted that part. **Lesson:** any new trigger into `_drain` needs to revalidate the connectivity precondition — `isOnlineProvider` is optimistic-true before connectivity stream resolves.
-
-### Open architectural follow-ups (not in scope of #150)
-
-- **Cold-launch orphan drain** — still no auto-trigger when app boots online with pre-existing queue items. Future improvement could use `onlineStatusProvider`'s first real `AsyncData` emission as the trigger (not the optimistic default).
-- **Two unpatched legacy peak_loads writers** (`_rpg_backfill_chunk` line 263, `record_set_xp` line 1656) still emit unguarded INSERTs; trigger from 00051 silently absorbs them. Future cleanup migration could add explicit `IF weight > 0` guards for code-review explicitness, but trigger subsumes the bug entirely.
-
-### Critical not-to-redo list
-
-- 00050+00051 are deployed to hosted; do NOT re-push them
-- Hive resilience (PR #147) has the `@visibleForTesting allBoxNames` API; tests use that
-- `VitalityState.untested` is a real enum variant now (not "dormant"); switches must handle it
-- The PR-upsert direct-online change in #150 is gated on `savedOffline` — the offline path's `dependsOn = [workout.id]` MUST stay (BUG-002 FK guard)
+- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain pre-existing queue items when the app boots already-online. Improvement: gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission (not the optimistic-default true). Worth fixing when a user reports a stuck queue badge after fresh launch.
+- **Two unpatched legacy `exercise_peak_loads` writers** (`_rpg_backfill_chunk` line 263, `record_set_xp` line 1656) still emit unguarded INSERTs. Migration 00051's BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration could add explicit `IF weight > 0` guards at the writer site for code-review explicitness.
+- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no workflow runs them. A small CI step would catch Edge Function regressions.

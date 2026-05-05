@@ -20,7 +20,6 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { login } from '../helpers/auth';
 import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
 import { SAGA, NAV, HISTORY, CELEBRATION } from '../helpers/selectors';
@@ -33,27 +32,11 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-
-function makeAdminClient() {
-  const url = process.env['SUPABASE_URL'] ?? 'http://127.0.0.1:54321';
-  const serviceKey =
-    process.env['SUPABASE_SERVICE_ROLE_KEY'] ??
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-    '.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0' +
-    '.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-async function getRpgFreshUserId(): Promise<string | null> {
-  const admin = makeAdminClient();
-  const { data } = await admin.auth.admin.listUsers();
-  const user = data?.users?.find(
-    (u) => u.email === TEST_USERS.rpgFreshUser.email,
-  );
-  return user?.id ?? null;
-}
+import {
+  getAdminClient,
+  getUserIdByEmail,
+  resetRpgStateForUser,
+} from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // S1–S2: Character sheet renders (smoke)
@@ -62,26 +45,23 @@ async function getRpgFreshUserId(): Promise<string | null> {
 
 test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    // E2 (rpg-foundation.spec.ts) also uses rpgFreshUser and may run before S1
-    // in the full suite, leaving XP rows in body_part_progress from the workout
-    // it completes. Reset RPG state here so S1 always starts from a true
-    // zero-history baseline regardless of test-file ordering.
-    const userId = await getRpgFreshUserId();
+    // CONFIRMED pollution path (per `tasks/e2e-pollution-audit.md`):
+    // `rpg-foundation.spec.ts` E2/E3/E6 each save a workout for rpgFreshUser
+    // and run alphabetically BEFORE `saga.spec.ts`. The original inline
+    // cleanup here deleted xp/body_part_progress/exercise_peak_loads/
+    // backfill_progress but NOT the surviving `workouts` rows. On next
+    // login, `backfill_rpg_v1` re-ran (because backfill_progress had been
+    // cleared) and re-wrote XP into body_part_progress from those workouts
+    // BEFORE this assertion fired — making firstSetAwakensBanner absent.
+    //
+    // The centralised helper deletes workouts + personal_records +
+    // earned_titles + weekly_plans alongside the previous tables, then
+    // upserts a completed backfill_progress row (same final state as the
+    // prior inline reset).
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
     if (userId) {
-      const admin = makeAdminClient();
-      await admin.from('xp_events').delete().eq('user_id', userId);
-      await admin.from('body_part_progress').delete().eq('user_id', userId);
-      await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
-      await admin.from('backfill_progress').delete().eq('user_id', userId);
-      // Re-seed backfill_progress as completed so the SagaIntroGate's
-      // runRetroBackfill is a no-op (no workouts → nothing to backfill).
-      await admin.from('backfill_progress').insert({
-        user_id: userId,
-        sets_processed: 0,
-        started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
-      });
+      await resetRpgStateForUser(admin, userId);
     }
 
     await login(page, TEST_USERS.rpgFreshUser.email, TEST_USERS.rpgFreshUser.password);
@@ -387,21 +367,13 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
 test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     // Reset the fresh user's RPG state so we land on a true zero-history
-    // baseline (mirrors the S1 reset).
-    const userId = await getRpgFreshUserId();
+    // baseline (mirrors the S1 reset). Same pollution mechanism: prior
+    // rpg-foundation.spec.ts workouts on rpgFreshUser would re-trigger
+    // backfill on next login if `workouts` rows were not removed.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
     if (userId) {
-      const admin = makeAdminClient();
-      await admin.from('xp_events').delete().eq('user_id', userId);
-      await admin.from('body_part_progress').delete().eq('user_id', userId);
-      await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
-      await admin.from('backfill_progress').delete().eq('user_id', userId);
-      await admin.from('backfill_progress').insert({
-        user_id: userId,
-        sets_processed: 0,
-        started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
-      });
+      await resetRpgStateForUser(admin, userId);
     }
 
     await login(

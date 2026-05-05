@@ -77,6 +77,8 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18e | RPG v1: Class system + cross-build titles + final QA pass | DONE | #120 |
 | 18 | RPG System v1 (per `docs/superpowers/specs/2026-04-25-rpg-system-v1-design.md`) | DONE | #112–#120 |
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
+| 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | ACTIVE | #152 |
+| 21 | E2E per-worker user isolation + parallelism bump (CI 30-37min → ~17-20min, workers 2→4) | BACKLOG | - |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
 ### Section Index
@@ -1312,6 +1314,158 @@ Both showed in the home-screen "Sincronização Pendente" sheet with retry count
 **Deferred:** BUG-017 (vitality stale on workout finish) — explicitly deferred by the audit, cron architecture is a deliberate spec choice. Revisit if user complaints materialize via a "last updated" timestamp on the vitality widget or an Edge Function recompute on workout finish.
 
 **File hygiene:** `BUGS.md` deleted post-cycle; resolution narratives + PR refs preserved in this PLAN.md section and in each PR's commit message.
+
+---
+
+## Phase 20: Active Workout Set-Row Redesign — ACTIVE
+
+**Source design brief:** `docs/design/2026-05-01-active-workout-redesign/`
+- `critique.md` — six design failures + five JTBD problems + emotional brief + three product pillars
+- `direction-b-pr-refined.html` — locked layout + PR treatment spec (gold edge frame + standing/superseded/predicted PR states)
+
+### Why now
+
+The active workout screen is the single most-used surface in RepSaga. Lifters spend more time here than anywhere else. Today's set-row block is a generic data table indistinguishable from Hevy or Google Fit when stripped of color. ui-ux-critic and product-owner converged on Direction B (Tactile Data Table) — preserves the all-sets-visible density intermediate-to-advanced lifters depend on, while structurally fixing three open bugs and giving the screen the iron-and-precise RPG codex feel that the rest of the product already has.
+
+### Locked design decisions (signed off 2026-05-04)
+
+1. **Direction B (Tactile Data Table).** Full-column tap zones for stepper, all-sets-visible row layout, PR treatment via row edges (not inline badges or annotations).
+2. **PR semantic = standing record only.** Gold = current best for this exercise across all history. Sets that briefly held a PR but were superseded mid-workout drop to a "ghost-tinted" state — 3dp green stripe + cream value (Rajdhani 700, not gold, not dim) + 2% gold tint. Distinct from plain completed without claiming parity with the standing PR.
+3. **PR multi-types stay binary.** A set that simultaneously breaks weight + reps + volume PRs gets one gold treatment, no count badge. Multi-PR celebration belongs in post-workout summary.
+4. **Across-workout temporal context ignored at row level.** A PR is a PR whether it beats yesterday or 2024. Temporal callouts ("you beat an 8-month-old record") belong in overlays, not row chrome.
+5. **heroGold scarcity preserved.** Gold appears in exactly three places on a standing-PR row: 4dp left rune-stripe, the PR'd value text (Rajdhani 800), 4dp right bracket on done-col. Buttons (+/-), set-number, unit labels never get gold — gold = achievement, never affordance.
+
+### 5-state row matrix (the spec)
+
+| State | Class composition | Left stripe | Background | PR value color | Done-mark | Right bracket |
+|---|---|---|---|---|---|---|
+| Pending (non-PR) | `.type-working` | 3dp `--pv` | none | `--cream` 700 | ○ violet-bordered | none |
+| Pending predicted-PR | `.type-working.pr-row` | 4dp `--gold` | gold 4% | `--gold` 800 | ◆ gold-bordered (`.pr-pending`) | 4dp `--gold` |
+| Completed non-PR | `.completed` | 3dp `--success` | none | n/a (no `.pr-val`) | ✓ green | none (transparent reservation) |
+| Completed superseded-PR | `.completed.pr-superseded` | 3dp `--success` | gold 2% | `--cream` 700 | ✓ green | none |
+| Completed standing-PR | `.completed.pr-row` | 4dp `--gold` | gold 4% | `--gold` 800 | ✓ green | 4dp `--gold` |
+
+Composition rule: at most ONE row per exercise card may render in the standing-PR state at any moment.
+
+### Acceptance criteria
+
+A. **Layout & tap targets**
+- Stepper +/- zones flex-filled (not 32dp min-width). Closes BUG-019 structurally on 360dp screens.
+- Set-number cell ≥48dp tap target. Closes BUG-018.
+- Finish button reachable in bottom thumb zone. Closes BUG-020.
+- All set rows have identical `min-height: 56px` and identical baselines for value text regardless of state — verified via widget golden test.
+
+B. **5-state matrix renders correctly** — see table above. Each state covered by a widget test.
+
+C. **Standing vs superseded resolution** — pure-domain function (or new resolver class) takes the workout's set list + the canonical `personal_records` row, returns per-row PR state. Idempotent, fully unit-tested before any UI wires it.
+
+D. **Multi-PR-types per row stay binary** — visually one gold row regardless of how many record types fired.
+
+E. **State transitions** — set N starts as standing-PR, set N+1 supersedes → set N transitions to superseded state. Verified via widget test.
+
+F. **No regressions** — all existing unit/widget/e2e tests still pass; PR celebration screen logic untouched.
+
+### File plan
+
+**Modified:**
+- `lib/features/workouts/ui/widgets/set_row.dart` — full rewrite to Direction B layout with the 5-state class composition.
+- `lib/shared/widgets/weight_stepper.dart` — flex-filled +/- zones, drop 32dp min-width.
+- `lib/features/workouts/ui/active_workout_screen.dart` — Finish button moved/duplicated to bottom thumb zone (or floating action button).
+- `lib/features/personal_records/domain/pr_detection_service.dart` — extend to expose per-row PR state (standing/superseded/none) given the workout's current set list.
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` — wire the row-state resolver into the active workout state.
+- `lib/l10n/app_en.arb` + `app_pt.arb` — any new copy strings (e.g., a11y labels for the gold ◆ pr-pending mark).
+- `test/widget/features/workouts/widgets/set_row_test.dart` — new state matrix coverage.
+- `test/unit/features/personal_records/domain/pr_detection_service_test.dart` — supersession resolver tests.
+- `test/e2e/specs/personal-records.spec.ts` — selectors for new gold edge frame state.
+- `test/e2e/helpers/selectors.ts` — new SET_ROW selectors for `.pr-row`, `.pr-superseded`, `.pr-pending`.
+
+**New (possibly):**
+- `lib/features/workouts/domain/pr_row_state.dart` — small enum/sealed class if the resolver pattern wants typed output (none / pending-predicted-pr / standing-pr / superseded-pr / completed-non-pr).
+
+### Commit plan (split commits, one PR)
+
+User requested split commits so each step is reviewable. Branch: `feature/phase20-active-workout-redesign`.
+
+1. **`refactor(stepper): full-column tap zones, drop 32dp min-width (BUG-019)`** — `weight_stepper.dart` only. Stepper is reusable; isolating this commit makes the geometry change reviewable in isolation.
+2. **`refactor(workouts): set-row layout + tap-target sizing (BUG-018)`** — new `set_row.dart` skeleton in Direction B layout (left rune-stripe, full-column stepper zones via stepper from commit 1, ≥48dp set-number cell, identical 56dp row height across states). No PR-specific styling yet.
+3. **`feat(rpg): pr detection — standing vs superseded resolver`** — pure-domain extension to `pr_detection_service.dart` (or a new resolver class). Fully unit-tested before any UI consumes it.
+4. **`feat(workouts): set-row PR treatment — gold edge frame + supersession state`** — wire the resolver into `set_row.dart`, render the 5-state matrix per the locked spec. Includes ◆ pr-pending done-mark for predicted-PR.
+5. **`feat(workouts): finish button bottom anchor for one-handed reach (BUG-020)`** — `active_workout_screen.dart`. Bottom-anchored CTA mirroring competitor norms (Hevy, Strong).
+6. **`test(workouts): widget + unit coverage for 5-state row matrix + supersession transitions`** — golden tests for row alignment, widget tests for each state, unit tests for the resolver.
+7. **`test(e2e): selectors + smoke cases for gold edge frame`** — minimal e2e additions; assert standing-PR row is recognizable and superseded state is visually distinct from plain completed.
+
+### Out of scope (future PRs)
+
+- **`Rotinas → Treinos` rename** — touches 18+ ARB keys; clean PR by itself per `docs/design/2026-05-01-active-workout-redesign/naming-treinos-vs-rotinas.md`.
+- **Pillar 1 (target-state-first pre-fill)** — last-session ghost values displayed as edit-then-complete defaults. Worth its own design pass before implementing.
+- **Set-type long-press menu redesign** (warmup / dropset / failure selector — Problem 2 from critique).
+- **Tap-to-numpad direct input** on weight/reps for fast large-delta adjustments (Problem 5).
+- **Post-redesign validation walkthrough** — stock-routine + bodyweight walkthrough on the new screen, screenshots → ui-ux-critic for `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging. Findings tagged `[redesign-input]` get appended to `critique.md` for follow-up phases. Decision: do this AFTER redesign ships, not before — gives a regression baseline rather than pre-design noise.
+
+### Bugs closed
+
+- **BUG-018** — set-number cell 40dp tap target (below 48dp Material minimum). Structurally fixed by commit 2.
+- **BUG-019** — stepper compresses to 32dp on 360dp Brazilian-mid-market screens. Structurally fixed by commit 1.
+- **BUG-020** — Finish button anchored AppBar-only, breaks one-handed reach. Fixed by commit 5.
+
+### Risks
+
+1. **Standing-PR resolution is more state than the screen has today.** The notifier currently has per-row PR detection (was-this-set-a-PR-when-completed); we now need same-workout supersession tracking. **Mitigation:** pure-domain resolver in commit 3 fully unit-tested before UI wires it.
+2. **E2E selector churn.** PR-state selectors will change. **Mitigation:** minimal new e2e cases (commit 7), existing tests largely unaffected since they don't probe PR-specific styling.
+3. **Animation polish for state transitions** (set 1 was standing-PR → set 2 supersedes it → set 1 should animate from gold-frame to ghost-tinted). **Mitigation:** baseline ships with the existing `transition: width 0.18s, background 0.18s` on the row's `::before` from the mockup; further polish (cross-fade) is a follow-up if telemetry/feedback says it's needed.
+4. **Finish button bottom anchor placement** isn't in the HTML mockups (the mockups show only the AppBar Finish). **Mitigation:** match Hevy's pattern (full-width sticky bottom bar above the bottom nav) so this isn't novel UX; brief UI/UX consult before commit 5.
+
+---
+
+## Phase 21: E2E Per-Worker User Isolation + Parallelism Bump — BACKLOG
+
+**Source:** Phase 20 e2e debug cycle surfaced systemic test-data pollution between describe blocks sharing Supabase users. Audit at `tasks/e2e-pollution-audit.md` enumerates 2 CONFIRMED + 5 HIGH-risk pairs across 8 describe blocks. Tier 1 cleanup (per-test `beforeEach` reset for the CONFIRMED + HIGH cases) shipped in PR #152 to unblock the CI gate. **This phase is the architectural follow-up that unlocks higher CI parallelism.**
+
+### Why now (justification)
+
+Tier 1 cleanup stops *cross-file ordering* pollution but not *concurrent* races on the same user. With `workers: 2` today, two workers can both claim tests using the same shared user (e.g., `smokePR`), and one worker's `beforeEach` reset can wipe state mid-execution of the other worker's test. CI sometimes wins the race (passes); sometimes loses (flakes).
+
+The fix at scale: **per-worker-unique users**. Each Playwright worker spawns its own pool of test users via a worker-scoped `beforeAll` fixture. No two workers ever touch the same user → races eliminated → safe to bump `workers` from 2 to 4 → CI runtime ~30-37 min → ~17-20 min (~45% faster).
+
+### Acceptance criteria
+
+- E2E suite runs at `workers: 4` on CI without per-suite flakes (3 consecutive green runs).
+- All test users are spawned per-worker via Playwright `worker fixtures` — no shared `TEST_USERS.smokePR` references in spec files.
+- Each spec file uses a `getUser('smokePR')` (or similar) helper that resolves to that worker's instance of the user.
+- `global-setup.ts` shrinks dramatically — most user creation moves into per-worker fixtures.
+- Supabase Auth rate limits respected — user creation throttled / batched per worker startup.
+- No regressions in test count (~213 tests stay green).
+
+### Implementation outline (high-level — full design TBD)
+
+- New `test/e2e/fixtures/worker-users.ts`: factory that creates per-worker users with unique emails (`{user_role}_{worker_index}_{run_id}@test.local`) + applies the same seed data global-setup currently applies.
+- Refactor `global-setup.ts`: keep cross-worker setup (e.g., exercise seed validation) but move per-user setup into worker fixtures.
+- Refactor every spec's `beforeEach` from `await login(page, TEST_USERS.smokePR.email, ...)` to `await login(page, workerUsers.smokePR.email, ...)`.
+- Update teardown: `global-teardown.ts` deletes all worker-scoped users by email pattern.
+- Bump `playwright.config.ts` `workers: 2` → `workers: 4` AND `fullyParallel: true` (consider pros/cons of intra-file parallelism — likely keep within-file serial for stability).
+- Validate against Supabase connection pool limits — each worker's supabase-js client opens connections; 4 workers × N tests may stress the pool. Test before locking workers=4.
+
+### Out of scope
+
+- Hive (IndexedDB) state isolation — already per-browser-context, no change needed.
+- Tests using `createThrowawayUser` — already isolated, no change needed.
+- Application-side performance tuning — separate concern.
+
+### Estimated cost
+
+- 3-5 days of e2e infrastructure work (one engineer)
+- Risk: medium (touching 30+ spec files; auth rate-limit unknowns)
+- Payoff: ~45% faster CI on every PR forever after; ~13-17 min/PR saved × ~10 PRs/week = 2-3 hours of saved CI compute per week
+
+### Dependencies
+
+- PR #152 (Phase 20) merged with Tier 1 e2e cleanup landed.
+- No code dependencies on Phase 20 internals.
+
+### Notes
+
+- Audit doc `tasks/e2e-pollution-audit.md` lists the MEDIUM risks (locale bleed in `localization.spec.ts:220` → `exercises-localization.spec.ts:159`, `workouts-localization.spec.ts:105`; offline-sync badge accumulation) that this phase will resolve as a side effect of per-worker isolation.
+- LOW-risk items in the audit (smokeWorkout accumulating workouts in rank-up-celebration:887, rpgFoundation incremental XP) become non-issues with per-worker users.
 
 ---
 

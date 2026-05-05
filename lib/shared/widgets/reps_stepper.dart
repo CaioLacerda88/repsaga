@@ -14,12 +14,30 @@ class RepsStepper extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.increment = 1,
+    this.valueColor,
+    this.valueFontWeight,
     super.key,
   });
 
   final int value;
   final int increment;
   final ValueChanged<int> onChanged;
+
+  /// Optional override for the value-text color (Phase 20 commit 4).
+  ///
+  /// When `null` (the default), the value renders in
+  /// `theme.colorScheme.onSurface` — the standard cream text. SetRow uses
+  /// this hook to render the gold reps value on standing-PR / predicted-PR
+  /// rows whose accent set includes [RecordType.maxReps] or
+  /// [RecordType.maxVolume].
+  final Color? valueColor;
+
+  /// Optional override for the value-text font weight (Phase 20 commit 4).
+  ///
+  /// Defaults to [FontWeight.w700]. Mirrors [WeightStepper]'s param for
+  /// symmetry — present for callers that want to bump the weight to w800
+  /// on PR rows in line with the design's Rajdhani-800 spec.
+  final FontWeight? valueFontWeight;
 
   @override
   State<RepsStepper> createState() => _RepsStepperState();
@@ -104,8 +122,15 @@ class _RepsStepperState extends State<RepsStepper> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Phase 20 commit 2 (BUG-019 mirror): structural twin of [WeightStepper]
+    // post-commit-1.  Fixed-width 40x48 +/- buttons via
+    // `BoxConstraints.tightFor`, flex-filled center value zone via
+    // `Expanded`, no `MainAxisSize.min` on the outer Row so this stepper
+    // composes safely inside a flex-2 column on a 360dp viewport. The old
+    // (`MainAxisSize.min` + `Flexible`) shape grew the inner Row to its
+    // children's natural width and overflowed the parent column when paired
+    // with the new Direction B SetRow chrome.
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onLongPressStart: (_) => _startRepeating(_decrement),
@@ -114,31 +139,33 @@ class _RepsStepperState extends State<RepsStepper> {
           child: IconButton(
             onPressed: widget.value >= widget.increment ? _decrement : null,
             icon: const Icon(Icons.remove, size: 18),
-            // BUG-019: structural sibling of WeightStepper — same 32x44
-            // compression on 360dp viewports. Bumped to 40x48 to match its
-            // logging-row neighbour and stay above Material's 48dp tap min.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+            // plus a 40dp horizontal cap so the value zone owns the slack.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),
         ),
-        Flexible(
+        Expanded(
           child: Semantics(
             label: 'Reps value: ${widget.value}. Tap to enter reps.',
             button: true,
             child: GestureDetector(
               onTap: _showNumberInput,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 28),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    widget.value.toString(),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                height: 48,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      widget.value.toString(),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 18,
+                        fontWeight: widget.valueFontWeight ?? FontWeight.w700,
+                        color: widget.valueColor ?? theme.colorScheme.onSurface,
+                      ),
                     ),
                   ),
                 ),
@@ -153,10 +180,9 @@ class _RepsStepperState extends State<RepsStepper> {
           child: IconButton(
             onPressed: _increment,
             icon: const Icon(Icons.add, size: 18),
-            // BUG-019: structural sibling of WeightStepper — same 32x44
-            // compression on 360dp viewports. Bumped to 40x48 to match its
-            // logging-row neighbour and stay above Material's 48dp tap min.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
+            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+            // plus a 40dp horizontal cap so the value zone owns the slack.
+            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.compact,
           ),
