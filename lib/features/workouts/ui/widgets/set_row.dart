@@ -449,7 +449,26 @@ class _SetRowFrame extends StatelessWidget {
         ? RewardAccent(child: frameContent)
         : frameContent;
 
-    return Semantics(identifier: rowStateId, child: decorated);
+    // `container: true` + `explicitChildNodes: true` is load-bearing — without
+    // it, this identifier-only node merges with sibling Semantics in the
+    // surrounding tree (header InkWell, column headers, neighbouring set rows),
+    // producing a single giant `<flt-semantics role="group" flt-tappable="">`
+    // overlay that intercepts pointer events meant for individual buttons.
+    // The CI run that surfaced this regression (PR #152, 13 e2e failures)
+    // showed the merged group covering "Exercise: … Tap for details. … SET
+    // WEIGHT REPS" — i.e. the header InkWell, the column headers, AND the
+    // set rows had collapsed into one tappable group. With `container: true`
+    // the row owns its own SemanticsNode (the identifier is queryable as
+    // `[flt-semantics-identifier="set-row-state-X"]`) and `explicitChildNodes`
+    // keeps each descendant's Checkbox / GestureDetector / button semantics
+    // independently addressable so per-button identifiers (`workout-set-done`,
+    // `workout-set-completed`) keep emitting their own DOM nodes.
+    return Semantics(
+      identifier: rowStateId,
+      container: true,
+      explicitChildNodes: true,
+      child: decorated,
+    );
   }
 }
 

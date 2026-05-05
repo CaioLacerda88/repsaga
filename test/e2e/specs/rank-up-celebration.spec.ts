@@ -34,7 +34,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, SAGA, HOME, CELEBRATION } from '../helpers/selectors';
+import { WORKOUT, SAGA, HOME, CELEBRATION, SET_ROW } from '../helpers/selectors';
 import { TEST_USERS } from '../fixtures/test-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
 
@@ -800,10 +800,19 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
 });
 
 // =============================================================================
-// S5 — PR chip appears inline after set commit, persists for session
+// S5 — Inline PR signal appears in set row after committing a PR-beating set,
+//      persists for the rest of the workout.
+//
+// Phase 20 (PR #152) replaced the dedicated `_PrChip` widget with the gold
+// edge-frame treatment on the set row itself: a PR-beating completed set
+// transitions to `PrRowState.completedStandingPr`, which surfaces as the
+// `[flt-semantics-identifier="set-row-state-standing-pr"]` selector
+// (`SET_ROW.stateStandingPr`). The previous chip-targeted assertion
+// (`CELEBRATION.prChip` / `workout-pr-chip`) targeted a widget that no longer
+// exists; this test was migrated together with the row redesign.
 // =============================================================================
 
-test.describe('PR chip inline display', { tag: '@smoke' }, () => {
+test.describe('PR signal inline display', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     // smokePR user has a prior PR of 100 kg bench press seeded in global-setup.
     await login(
@@ -813,7 +822,7 @@ test.describe('PR chip inline display', { tag: '@smoke' }, () => {
     );
   });
 
-  test('should show PR chip inline in set row after committing a heavier set than prior PR', async ({
+  test('should show standing-PR signal in set row after committing a heavier set than prior PR', async ({
     page,
   }) => {
     // smokePR user has a prior bench press PR of 100 kg × 5 reps.
@@ -829,15 +838,19 @@ test.describe('PR chip inline display', { tag: '@smoke' }, () => {
     await setWeight(page, '105');
     await setReps(page, '5');
 
-    // Commit the set — PR chip must appear after commit, NOT during typing.
+    // Commit the set — the row must transition to standing-PR after commit,
+    // NOT while typing. Phase 20's `_SetRowFrame` emits the standing-PR
+    // identifier when `display.state == PrRowState.completedStandingPr`.
     await completeSet(page, 0);
 
-    // The PR chip should now be visible inline in the set row.
-    await expect(page.locator(CELEBRATION.prChip).first()).toBeVisible({
+    // The standing-PR row identifier should now be visible inline.
+    await expect(page.locator(SET_ROW.stateStandingPr).first()).toBeVisible({
       timeout: 8_000,
     });
 
-    // Add a second set without a PR — chip on first set must PERSIST.
+    // Add a second set without a PR — set 1's standing-PR signal must PERSIST.
+    // The new set 2 (80 kg < 100 kg seed) is non-PR, so it will not get the
+    // standing-PR identifier; only set 1's identifier should remain reachable.
     await page.locator(WORKOUT.addSetButton).last().click();
     await setWeight(page, '80');
     await setReps(page, '5');
@@ -845,8 +858,10 @@ test.describe('PR chip inline display', { tag: '@smoke' }, () => {
     // uncompleted checkbox — always at index 0 of WORKOUT.markSetDone.
     await completeSet(page, 0);
 
-    // First set's PR chip must still be visible (persists for the session).
-    await expect(page.locator(CELEBRATION.prChip).first()).toBeVisible({
+    // First set's standing-PR signal must still be visible (the resolver is
+    // stateless: set 1's 105×5 still beats every other completed working set
+    // including the freshly-completed 80×5, so it stays standing).
+    await expect(page.locator(SET_ROW.stateStandingPr).first()).toBeVisible({
       timeout: 5_000,
     });
   });

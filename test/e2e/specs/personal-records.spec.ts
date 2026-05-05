@@ -264,25 +264,34 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
   test('should show standing-PR row identifier after completing a PR-breaking set', async ({
     page,
   }) => {
-    // Two workouts: A establishes a baseline (40 kg × 5), B beats it (80 kg × 5).
-    // After set completion in workout B the set transitions to completedStandingPr
-    // and the Semantics identifier 'set-row-state-standing-pr' must appear.
+    // Two workouts: A establishes a baseline ABOVE the seeded PR (110 kg × 5),
+    // B beats it (130 kg × 5). After set completion in workout B the set
+    // transitions to completedStandingPr and the Semantics identifier
+    // 'set-row-state-standing-pr' must appear.
     //
-    // Workout A — baseline.
+    // CRITICAL — `smokePR` is seeded with a 100 kg × 5 max-weight PR for
+    // Barbell Bench Press in `seedPRData()` (global-setup.ts). The earlier
+    // version of this test used 40 kg / 80 kg, but neither beat the 100 kg
+    // seed; workout B's set then resolved as `completedNonPr` (purple weight
+    // value, green checkbox — no gold chrome) and the `set-row-state-standing-pr`
+    // identifier was never emitted. Pick weights that clear the seed AND
+    // clear workout A's baseline by a safe margin.
+    //
+    // Workout A — establishes a 110 kg baseline (already > 100 kg seed).
     test.slow(); // Two workouts in sequence; allow extra time.
     await startEmptyWorkout(page);
     await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '40');
+    await setWeight(page, '110');
     await setReps(page, '5');
     await completeSet(page, 0);
     await finishWorkout(page);
     await dismissCelebrationIfPresent(page);
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
 
-    // Workout B — PR-breaking set (80 kg > 40 kg baseline).
+    // Workout B — PR-breaking set (130 kg > 110 kg baseline AND > 100 kg seed).
     await startEmptyWorkout(page);
     await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '80');
+    await setWeight(page, '130');
     await setReps(page, '5');
     await completeSet(page, 0);
 
