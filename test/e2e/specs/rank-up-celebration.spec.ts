@@ -612,6 +612,14 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
   test('should cap celebration queue at 3 overlays and show overflow card for remaining rank-ups', async ({
     page,
   }) => {
+    // The 4-set workout below + queue drain + overflow-card mount comfortably
+    // fits the default 60s budget on a 6+ vCPU dev machine, but on CI's
+    // 4-vCPU runner with workers=4 the JS event loop is starved enough that
+    // Flutter's 1.1s overlay holds and 0.2s gaps stretch unpredictably. Triple
+    // the budget so the queue has room to drain even under worst-case timer
+    // delivery latency. Same reasoning as the standing-PR test below at line ~841.
+    test.slow();
+
     // rpgOverflowQueue is seeded with all 6 body parts at rank 3 (196 XP each,
     // 2.6 XP below the rank-4 threshold of ~198.6 XP). We log 4 compound lifts
     // (bench, squat, row, OHP) which spread XP across all body parts via primary
@@ -682,8 +690,12 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     });
 
     // Hold the handle ONCE so re-resolutions can't lose to the auto-dismiss.
+    // The 45s timeout (vs the queue's nominal ~3.7s drain time) absorbs CI's
+    // 4-vCPU starvation: under load, each 1.1s overlay hold can stretch to
+    // 5–8s, so the cumulative drain can take 25–35s before the overflow card
+    // mounts. Still well inside the test.slow() 180s overall budget.
     const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
-    await expect(overflowCard).toBeVisible({ timeout: 20_000 });
+    await expect(overflowCard).toBeVisible({ timeout: 45_000 });
 
     // The accessible label is `"{N} more rank-ups — open Saga"`. With this
     // seeding (5 rank-ups − 2 in the queue = 3 overflowed), the label MUST
@@ -722,6 +734,11 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
   test('should route to /profile when the user taps the overflow card', async ({
     page,
   }) => {
+    // CI 4-vCPU starvation slows the celebration queue's Timer.delayed
+    // sequence — same reasoning as S4 above. test.slow() + a 45s overflow-
+    // card visibility budget absorbs the worst-case timer delivery latency.
+    test.slow();
+
     // Same seeding contract as the auto-dismiss test (4 compound lifts produce
     // 4+ rank-ups, exceeds cap-at-3, triggers the overflow card). The new
     // assertion: when the user explicitly taps the card, the post-finish
@@ -762,7 +779,7 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
     // a single Locator instance keeps Playwright's actionability poll
     // pointed at the same element through the click.
     const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
-    await expect(overflowCard).toBeVisible({ timeout: 20_000 });
+    await expect(overflowCard).toBeVisible({ timeout: 45_000 });
 
     // Tap the card. The completer resolves to true and the post-finish
     // navigation routes to /profile (Saga) instead of /home.
