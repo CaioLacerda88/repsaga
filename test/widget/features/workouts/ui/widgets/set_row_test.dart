@@ -567,10 +567,8 @@ void main() {
             buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
           );
 
-          final digitText =
-              tester.widget<Text>(find.text('2'));
-          final labelText =
-              tester.widget<Text>(find.text('WU'));
+          final digitText = tester.widget<Text>(find.text('2'));
+          final labelText = tester.widget<Text>(find.text('WU'));
 
           expect(
             digitText.style?.decoration,
