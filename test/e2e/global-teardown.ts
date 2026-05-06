@@ -1,8 +1,9 @@
 /**
  * Playwright global teardown — deletes E2E test users via Supabase Admin Auth API.
  *
- * Runs once after all tests complete. Identifies test users by the "e2e-"
- * prefix in their email addresses and deletes them.
+ * Runs once after all tests complete. Phase 21: identifies test users by
+ * the worker-scoped email pattern '{role}_w{N}@test.local' (regex from
+ * fixtures/worker-users.ts) and deletes them in parallel.
  *
  * Before deleting each user from auth, all user-owned data is deleted from
  * dependent tables in the correct FK order to avoid constraint violations.
@@ -14,6 +15,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { getEmailPattern } from './fixtures/worker-users';
 
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 
@@ -112,7 +114,10 @@ async function globalTeardown(): Promise<void> {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  console.log('[global-teardown] Listing users to find E2E test accounts...');
+  const pattern = getEmailPattern();
+  console.log(
+    `[global-teardown] Listing users matching ${pattern} ...`,
+  );
 
   // List all users — local Supabase typically has few users so one page is enough.
   const { data: listData, error: listError } =
@@ -125,36 +130,46 @@ async function globalTeardown(): Promise<void> {
     return;
   }
 
-  const testUsers = listData.users.filter((u) =>
-    u.email?.startsWith('e2e-'),
+  const testUsers = listData.users.filter(
+    (u) => typeof u.email === 'string' && pattern.test(u.email),
   );
 
   if (testUsers.length === 0) {
-    console.log('[global-teardown] No E2E test users found — nothing to clean up.');
+    console.log(
+      '[global-teardown] No worker-scoped E2E test users found — nothing to clean up.',
+    );
     return;
   }
 
   console.log(
-    `[global-teardown] Deleting ${testUsers.length} E2E test user(s)...`,
+    `[global-teardown] Deleting ${testUsers.length} worker-scoped user(s) in parallel...`,
   );
 
-  for (const user of testUsers) {
-    // Delete all user-owned data first to avoid FK constraint violations.
-    await deleteUserData(supabase, user.id);
+  // Per-user deletion: clean owned rows first (FK-ordered), then auth user.
+  // Errors are caught per-user so one failure doesn't block the rest.
+  const results = await Promise.allSettled(
+    testUsers.map(async (user) => {
+      await deleteUserData(supabase, user.id);
+      const { error } = await supabase.auth.admin.deleteUser(user.id);
+      if (error) {
+        throw new Error(
+          `Failed to delete ${user.email} (${user.id}): ${error.message}`,
+        );
+      }
+      return user.email ?? user.id;
+    }),
+  );
 
-    const { error } = await supabase.auth.admin.deleteUser(user.id);
-
-    if (error) {
-      // Log but do not throw — attempt to clean up remaining users.
-      console.error(
-        `[global-teardown] Failed to delete user ${user.email} (${user.id}): ${error.message}`,
-      );
-    } else {
-      console.log(`[global-teardown] Deleted user: ${user.email}`);
-    }
+  const successes = results.filter((r) => r.status === 'fulfilled').length;
+  const failures = results.filter((r) => r.status === 'rejected');
+  for (const failure of failures) {
+    console.error(`[global-teardown] ${(failure as PromiseRejectedResult).reason}`);
   }
 
-  console.log('[global-teardown] Done.');
+  console.log(
+    `[global-teardown] Deleted ${successes}/${testUsers.length} users matching ${pattern}` +
+      (failures.length > 0 ? ` (${failures.length} failed)` : ''),
+  );
 }
 
 export default globalTeardown;
