@@ -351,8 +351,11 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
     // After completing set 2, at least one standing-PR row must be visible
     // (set 2 is standing-PR). Optionally set 1 may be superseded-PR or
     // standing-PR depending on whether the resolver has seen prior history.
+    // 15s timeout — under Phase 21's `workers: 4` parallelism, the local
+    // Supabase + AOM-tree update path runs slower than serial baseline;
+    // observed locally as a structural failure at 10s that passes at 15s.
     await expect(page.locator(SET_ROW.stateStandingPr).first()).toBeVisible({
-      timeout: 10_000,
+      timeout: 15_000,
     });
 
     // If the superseded state is visible (set 1 demoted), assert it too.
