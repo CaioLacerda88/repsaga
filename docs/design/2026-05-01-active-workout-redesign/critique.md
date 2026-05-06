@@ -285,3 +285,82 @@ devices.
 - `lib/l10n/app_pt.arb` — all "Rotina/rotina" keys to rename per
   `naming-treinos-vs-rotinas.md` (lines 6, 175–178, 287–295, 300–303,
   366–383, 493–511)
+
+---
+
+## Post-Phase-20 validation audit — 2026-05-06
+
+Phase 20 (PR #152) + three polish PRs (#158 pt-BR rename, #159 match
+indicator, #160 set-type micro-label) were audited against this critique
+and the five problems and three pillars from the original brief. The
+audit was code-state only; the visual on-device pass is deferred to the
+user's manual walkthrough.
+
+### Status by original finding
+
+| Problem / Pillar | Status | Resolution |
+|---|---|---|
+| Problem 1 — stepper/done spatial conflict | Resolved | `_DoneCell` 52dp fixed column, steppers in separate flex columns; structurally cannot compress into each other |
+| Problem 2 — set-type badge undiscoverable | Partial | Persistent `tinyAbbr` micro-label (PR #160) signals type exists; long-press affordance still requires accidental discovery or tooltip |
+| Problem 3 — hint vanishes after completion | Deferred | Suppressed on completed rows pending layout-stable fixed-height placeholder; root cause documented in `set_row.dart` `_shouldShowHint` doc comment |
+| Problem 4 — no row-level state hierarchy | Resolved | 5-state stripe + done-col tint + value dim gives scannable at-a-glance differentiation |
+| Problem 5 — no direct numpad path | Resolved | Value-zone tap opens `AlertDialog` with autofocus `TextField` on both steppers |
+| Pillar 1 — target-state first | Resolved | Pre-fill from previous session + match indicator |
+| Pillar 2 — row-level state diff | Resolved | 5-state matrix fully implemented |
+| Pillar 3 — spatial separation | Resolved | Structurally enforced via column geometry |
+
+### Net-new findings requiring follow-up
+
+**Finding A — Bodyweight row renders a meaningless weight column [redesign-input]**
+
+For `EquipmentType.bodyweight` exercises, the `_WeightStepperCell` renders
+unconditionally, showing `0` in a 26sp primary-violet numeral occupying
+flex-3 (60% of the input width). The resolver correctly excludes weight from
+PR detection in bodyweight mode (`pr_row_state_resolver.dart` `isBodyweightOnly`
+branch), but the row layout does not reflect this. The weight stepper is
+noise the user must actively ignore; the reps column — the only meaningful
+input — gets 40% of the space.
+
+Recommended fix: pass an `isBodyweight` flag into `SetRow` (derivable from
+the `equipmentType` on the parent exercise). When true, hide the
+`_WeightStepperCell` and the weight column header, and expand the reps
+column to `Expanded(flex: 1)`. The set-num cell and done-cell stay
+unchanged.
+
+**Finding B — Pending failure (FL) set label color reads as error state [redesign-input]**
+
+`_setTypeLabelColor(SetType.failure)` returns
+`AppColors.error.withValues(alpha: 0.55)` — the same error-red token used
+for destructive actions. On a pending to-failure set the `FL` micro-label
+renders in faded red, which conflicts with the gym-floor emotional register:
+red = something wrong, not "this is a to-failure set." The effective color
+clears on completion (dimmed to `onSurface.withValues(alpha: 0.45)`) so
+the issue is pending-state only.
+
+Recommended fix: use `AppColors.warning.withValues(alpha: 0.6)` for
+`SetType.failure` on pending rows. Warning amber (`#FFB84D`) is tonally
+distinct from heroGold (scarcity unaffected), distinct from the
+success-green used for dropsets, and distinct from the error-red used for
+destructive actions. It reads as "intense/max-effort" without signaling
+breakage.
+
+### Parked
+
+**[v2-park] "Add set" OutlinedButton reads as secondary.** The button uses
+`theme.colorScheme.primary.withValues(alpha: 0.3)` for the border (30%
+violet), which is even quieter than the pre-Phase-20 design. Structurally
+correct (full-width, 48dp tap floor, `isNew` lock prevents misfire) but the
+visual weight says "optional" rather than "expected next step." Tolerable
+for v1; revisit post-launch with telemetry on `sets per exercise` vs
+`add-set taps`.
+
+### Out of scope (deferred to user's manual on-device walkthrough)
+
+- Pixel-perfect spacing on a real Brazilian-mid-market 360dp screen
+  (Samsung A-series, Moto G).
+- Haptic feedback timing on completion / set-type cycle.
+- Animation curves on the celebration sequence.
+- Real-thumb misfire rates between adjacent buttons under sweat.
+
+These are the kinds of issues this code-state audit can't catch and need
+human eyes on a real device.
