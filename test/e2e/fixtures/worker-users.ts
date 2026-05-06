@@ -71,12 +71,26 @@ const DEFAULT_WORKER_INDEX = '0';
  * fails at login with an unhelpful "user not found" error rather than a clear
  * misconfiguration message.
  *
+ * # Sizing rationale (3, not 4)
+ *
+ * GitHub Actions Linux runners have 4 vCPU. We initially set this to 4
+ * (workers = vCPU), but CI saturated under that load: each worker hosts
+ * Chromium + Flutter web + a Playwright runner, and they all contend with
+ * the same local Supabase Postgres + the OS. Tests that depend on
+ * sub-second UI timing (Flutter celebration overlays: 1.1 s holds, 4 s
+ * auto-dismiss — see `rank-up-celebration.spec.ts` S4/S4b) became flaky
+ * because Flutter's animation timers and Playwright's polling cadence both
+ * stalled when the JS event loop blocked.
+ *
+ * Dropping to 3 leaves 1 vCPU of headroom for the OS, Postgres, and the
+ * Flutter web server, which keeps celebration timings deterministic. Local
+ * runs on machines with > 4 cores can safely raise this — CI cannot.
+ *
  * Bumping this value without updating the Supabase Auth rate-limit budget
  * (currently 100ms throttle × N×42 users) may push setup duration past the
- * CI job timeout. Verify locally before raising. CI runners have 4 vCPU; 4
- * is the practical ceiling without intra-file parallelism.
+ * CI job timeout. Verify locally before raising.
  */
-export const WORKERS_COUNT = 4;
+export const WORKERS_COUNT = 3;
 
 /**
  * The shared password used by every E2E test user. Sourced from

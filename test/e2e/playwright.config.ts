@@ -19,10 +19,10 @@ export default defineConfig({
   retries: 1,
   // Phase 21: per-worker user pool (see fixtures/worker-users.ts) eliminates
   // concurrent races on shared user state, so we can run more workers safely.
-  // 4 chosen because CI runners have 4 vCPU — going higher hurts wall time
-  // as workers compete for compute and Supabase connections. The same
-  // constant drives `global-setup.ts`'s per-worker user creation loop, so
-  // both stay in sync automatically.
+  // Sized to 3 (not vCPU = 4) so the OS/Postgres/Flutter web server keep one
+  // vCPU of headroom — see WORKERS_COUNT doc for the contention story. The
+  // same constant drives `global-setup.ts`'s per-worker user creation loop,
+  // so both stay in sync automatically.
   workers: WORKERS_COUNT,
   // fullyParallel intentionally left at the Playwright default (false).
   // Tests within the same spec file still run sequentially. Within-file

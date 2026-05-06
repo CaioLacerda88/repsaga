@@ -695,33 +695,34 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     //   queue          = [rank-up₁, rank-up₂, level-up]
     //   overflow       = 3 (the remaining rank-ups not in the queue)
     //
-    // The overlays are short-lived (1.1s hold + 0.2s inter-event gap) and
-    // share selectors (both rank-ups use the same flt-semantics-identifier),
-    // so per-overlay toBeVisible/not.toBeVisible assertions race against
-    // Playwright's polling cadence. To stay robust we anchor on the two
-    // *stable* signals that prove cap-at-3 worked end-to-end:
+    // What this test asserts at the e2e layer (intent, post-Phase-21 trim):
     //   1. The first rank-up overlay appears (queue began playing).
-    //   2. The overflow card appears once the queue drains (proves the
-    //      remaining rank-ups beyond the cap were folded into overflow).
-    // The intervening rank-up→level-up transition is exhaustively covered
-    // by the multi-celebration test (S3) above.
+    //   2. The overflow card appears with the correct "+N ranks" label
+    //      — that label is the cap-at-3 receipt. If cap-at-3 misfires, the
+    //      card never mounts (no overflow folding) OR mounts with the wrong
+    //      count.
+    //
+    // What we DO NOT assert here any more:
+    //   * The 4 s auto-dismiss → covered by the widget test
+    //     `celebration_overflow_card_test.dart` ("auto-dismisses after 4
+    //     seconds"). e2e is the wrong layer to measure animation timers
+    //     against real wall-clock — under any CPU pressure the timer fires
+    //     late and the test races itself. The widget test pins the same
+    //     property using `tester.pump(Duration)` with a fake clock.
+    //   * Per-overlay sequencing of rank-up₁ → rank-up₂ → level-up →
+    //     overflow → that's covered by the multi-celebration test (S3).
     await expect(page.locator(CELEBRATION.rankUpOverlay).first()).toBeVisible({
       timeout: 15_000,
     });
 
-    // The 3-slot queue plays for ~3.5 s (3 × 1.1 s hold + 2 × 0.2 s gap)
-    // before the overflow card appears. Allow 20 s of slack: on repeat-each
-    // runs the first rank-up overlay may only become visible near the 15 s
-    // limit, so the overflow card window starts late. The card itself has a
-    // 4 s auto-dismiss, so 20 s from the rank-up assert covers the worst case.
-    await expect(
-      page.locator(CELEBRATION.celebrationOverflowCard).first(),
-    ).toBeVisible({ timeout: 20_000 });
+    // Hold the handle ONCE so re-resolutions can't lose to the auto-dismiss.
+    const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
+    await expect(overflowCard).toBeVisible({ timeout: 20_000 });
 
-    // The overflow card auto-dismisses within 4 s of appearing.
-    await expect(
-      page.locator(CELEBRATION.celebrationOverflowCard).first(),
-    ).not.toBeVisible({ timeout: 6_000 });
+    // The accessible label is `"{N} more rank-ups — open Saga"`. With this
+    // seeding (5 rank-ups − 2 in the queue = 3 overflowed), the label MUST
+    // read `3 more rank-ups` for cap-at-3 to be working end-to-end.
+    await expect(overflowCard).toHaveAccessibleName(/3 more rank-ups/);
   });
 
 });
@@ -788,22 +789,27 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
 
     await finishWorkout(page);
 
-    // Wait for the overflow card to mount.
-    await expect(
-      page.locator(CELEBRATION.celebrationOverflowCard).first(),
-    ).toBeVisible({ timeout: 20_000 });
+    // Capture the locator handle ONCE up-front. Re-resolving (i.e., calling
+    // `page.locator(...)` again) on the click line opens a race window: the
+    // 4 s auto-dismiss timer can fire between `toBeVisible` returning and
+    // the click resolution, and the second locator finds nothing. Holding
+    // a single Locator instance keeps Playwright's actionability poll
+    // pointed at the same element through the click.
+    const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
+    await expect(overflowCard).toBeVisible({ timeout: 20_000 });
 
     // Tap the card. The completer resolves to true and the post-finish
     // navigation routes to /profile (Saga) instead of /home.
-    // { force: true } is required: Flutter CanvasKit's flutter-view element
-    // intercepts all DOM pointer events and Playwright's normal click would
-    // fail the "element is interactable" check. Force bypasses that check
-    // and dispatches the event directly to the flt-semantics node via AOM,
-    // which Flutter CanvasKit picks up correctly. The same pattern is used in
-    // manage-data.spec.ts for GradientButton clicks (see line 597/605).
-    await page.locator(CELEBRATION.celebrationOverflowCard).first().click({
-      force: true,
-    });
+    //
+    // `{ force: true }` is required for two independent reasons:
+    //   1. Flutter CanvasKit's flutter-view element intercepts all DOM
+    //      pointer events; Playwright's normal click would fail the
+    //      actionability check (same pattern as manage-data.spec.ts line
+    //      597/605 for GradientButton clicks).
+    //   2. force-mode skips Playwright's pre-click visibility re-check, so
+    //      we don't open ANOTHER race window between toBeVisible above and
+    //      the click dispatch below — the AOM event fires immediately.
+    await overflowCard.click({ force: true });
 
     await page.waitForURL(/\/profile/, { timeout: 10_000 });
   });
