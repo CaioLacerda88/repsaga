@@ -18,11 +18,12 @@ export default defineConfig({
   timeout: 60_000,
   retries: 1,
   // Phase 21: per-worker user pool (see fixtures/worker-users.ts) eliminates
-  // concurrent races on shared user state, so we can run more workers safely.
-  // Sized to 3 (not vCPU = 4) so the OS/Postgres/Flutter web server keep one
-  // vCPU of headroom — see WORKERS_COUNT doc for the contention story. The
-  // same constant drives `global-setup.ts`'s per-worker user creation loop,
-  // so both stay in sync automatically.
+  // concurrent races on shared user state, so we can run workers = vCPU on
+  // CI (4 on GitHub Actions Linux runners). PR #156 also raised the local
+  // Supabase `sign_in_sign_ups` rate limit so 4 concurrent workers don't
+  // saturate the per-IP auth bucket. The same constant drives
+  // `global-setup.ts`'s per-worker user creation loop, so both stay in sync
+  // automatically.
   workers: WORKERS_COUNT,
   // fullyParallel intentionally left at the Playwright default (false).
   // Tests within the same spec file still run sequentially. Within-file

@@ -71,26 +71,28 @@ const DEFAULT_WORKER_INDEX = '0';
  * fails at login with an unhelpful "user not found" error rather than a clear
  * misconfiguration message.
  *
- * # Sizing rationale (3, not 4)
+ * # Sizing rationale (4 = vCPU on CI)
  *
- * GitHub Actions Linux runners have 4 vCPU. We initially set this to 4
- * (workers = vCPU), but CI saturated under that load: each worker hosts
- * Chromium + Flutter web + a Playwright runner, and they all contend with
- * the same local Supabase Postgres + the OS. Tests that depend on
- * sub-second UI timing (Flutter celebration overlays: 1.1 s holds, 4 s
- * auto-dismiss — see `rank-up-celebration.spec.ts` S4/S4b) became flaky
- * because Flutter's animation timers and Playwright's polling cadence both
- * stalled when the JS event loop blocked.
+ * GitHub Actions Linux runners have 4 vCPU. PR #154 hit two issues at
+ * workers=4 and we briefly stepped down to 3:
+ *   1. CPU contention starving Flutter `Timer.delayed` animation timers in
+ *      `rank-up-celebration.spec.ts` S4/S4b. Fixed in the same PR by trimming
+ *      those e2e assertions to durable signals (the auto-dismiss timing now
+ *      lives in `celebration_overflow_card_test.dart` against a fake clock).
+ *   2. Supabase local `sign_in_sign_ups` rate limit (default 30 / 5 min /
+ *      IP) saturated by 4 concurrent workers, surfacing as `"Wrong email or
+ *      password"` failures in `exercises.spec.ts`. Fixed in PR #156 by
+ *      raising the local limit to 1000 in `supabase/config.toml`.
  *
- * Dropping to 3 leaves 1 vCPU of headroom for the OS, Postgres, and the
- * Flutter web server, which keeps celebration timings deterministic. Local
- * runs on machines with > 4 cores can safely raise this — CI cannot.
+ * With both root causes addressed, workers=4 (vCPU = workers) is the
+ * intended Phase 21 target. Going higher (5+) on a 4-vCPU runner regresses
+ * — the OS, Postgres, and Flutter web server need to share the runner
+ * with the workers, so any value > vCPU starves them.
  *
- * Bumping this value without updating the Supabase Auth rate-limit budget
- * (currently 100ms throttle × N×42 users) may push setup duration past the
- * CI job timeout. Verify locally before raising.
+ * Bumping this value also requires the local Supabase auth rate limit to
+ * absorb the additional logins per IP — see `supabase/config.toml`.
  */
-export const WORKERS_COUNT = 3;
+export const WORKERS_COUNT = 4;
 
 /**
  * The shared password used by every E2E test user. Sourced from
