@@ -24,7 +24,7 @@ import {
   EXERCISE_LOC,
   CREATE_EXERCISE,
 } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -36,8 +36,8 @@ test.describe('Exercise list localization', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalization.email,
-      TEST_USERS.smokeLocalization.password,
+      getUser('smokeLocalization').email,
+      getUser('smokeLocalization').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -160,8 +160,8 @@ test.describe('Exercise detail en locale', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalizationEn.email,
-      TEST_USERS.smokeLocalizationEn.password,
+      getUser('smokeLocalizationEn').email,
+      getUser('smokeLocalizationEn').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -216,8 +216,8 @@ test.describe('Exercise list en locale', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullExercises.email,
-      TEST_USERS.fullExercises.password,
+      getUser('fullExercises').email,
+      getUser('fullExercises').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -248,8 +248,8 @@ test.describe('Exercise list pt locale filters and search', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalization.email,
-      TEST_USERS.smokeLocalization.password,
+      getUser('smokeLocalization').email,
+      getUser('smokeLocalization').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -380,8 +380,8 @@ test.describe('User-created exercise pt locale', () => {
     try {
       await login(
         creatorPage,
-        TEST_USERS.smokeLocalization.email,
-        TEST_USERS.smokeLocalization.password,
+        getUser('smokeLocalization').email,
+        getUser('smokeLocalization').password,
       );
       await navigateToTab(creatorPage, 'Exercises');
 
@@ -434,8 +434,8 @@ test.describe('User-created exercise pt locale', () => {
     try {
       await login(
         enPage,
-        TEST_USERS.fullExercises.email,
-        TEST_USERS.fullExercises.password,
+        getUser('fullExercises').email,
+        getUser('fullExercises').password,
       );
       await navigateToTab(enPage, 'Exercises');
 
@@ -474,8 +474,8 @@ test.describe('User-created exercise pt locale', () => {
 
     await login(
       page,
-      TEST_USERS.smokeLocalization.email,
-      TEST_USERS.smokeLocalization.password,
+      getUser('smokeLocalization').email,
+      getUser('smokeLocalization').password,
     );
     await navigateToTab(page, 'Exercises');
 

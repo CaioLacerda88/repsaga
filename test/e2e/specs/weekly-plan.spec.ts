@@ -13,7 +13,7 @@ import { Page } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
 import { HOME, WEEKLY_PLAN } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 /**
  * Flutter's ListView.builder uses viewport culling — items outside the visible
@@ -74,8 +74,8 @@ test.describe('Weekly Plan', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeWeeklyPlan.email,
-      TEST_USERS.smokeWeeklyPlan.password,
+      getUser('smokeWeeklyPlan').email,
+      getUser('smokeWeeklyPlan').password,
     );
     // Start on the Home tab where the THIS WEEK section lives.
     await navigateToTab(page, 'Home');
@@ -336,8 +336,8 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeWeeklyPlanReview.email,
-      TEST_USERS.smokeWeeklyPlanReview.password,
+      getUser('smokeWeeklyPlanReview').email,
+      getUser('smokeWeeklyPlanReview').password,
     );
     await navigateToTab(page, 'Home');
   });

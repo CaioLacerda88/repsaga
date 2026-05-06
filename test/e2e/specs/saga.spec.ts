@@ -23,7 +23,7 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
 import { SAGA, NAV, HISTORY, CELEBRATION } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import {
   startEmptyWorkout,
   addExercise,
@@ -59,12 +59,12 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
     // upserts a completed backfill_progress row (same final state as the
     // prior inline reset).
     const admin = getAdminClient();
-    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
     if (userId) {
       await resetRpgStateForUser(admin, userId);
     }
 
-    await login(page, TEST_USERS.rpgFreshUser.email, TEST_USERS.rpgFreshUser.password);
+    await login(page, getUser('rpgFreshUser').email, getUser('rpgFreshUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -102,7 +102,7 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
 
 test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.rpgFoundationUser.email, TEST_USERS.rpgFoundationUser.password);
+    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -155,7 +155,7 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
 
 test.describe('Saga — navigation', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.rpgFoundationUser.email, TEST_USERS.rpgFoundationUser.password);
+    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -272,8 +272,8 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.rpgFoundationUser.email,
-      TEST_USERS.rpgFoundationUser.password,
+      getUser('rpgFoundationUser').email,
+      getUser('rpgFoundationUser').password,
     );
     await navigateToTab(page, 'Profile');
     await page
@@ -371,15 +371,15 @@ test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => 
     // rpg-foundation.spec.ts workouts on rpgFreshUser would re-trigger
     // backfill on next login if `workouts` rows were not removed.
     const admin = getAdminClient();
-    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
     if (userId) {
       await resetRpgStateForUser(admin, userId);
     }
 
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
     );
     await navigateToTab(page, 'Profile');
     await page
@@ -430,8 +430,8 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.rpgClassCrossUser.email,
-      TEST_USERS.rpgClassCrossUser.password,
+      getUser('rpgClassCrossUser').email,
+      getUser('rpgClassCrossUser').password,
     );
     await navigateToTab(page, 'Home');
   });

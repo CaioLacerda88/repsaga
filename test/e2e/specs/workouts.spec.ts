@@ -20,7 +20,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -31,8 +31,8 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeWorkout.email,
-      TEST_USERS.smokeWorkout.password,
+      getUser('smokeWorkout').email,
+      getUser('smokeWorkout').password,
     );
   });
 
@@ -219,8 +219,8 @@ test.describe('Workout restore', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeWorkoutRestore.email,
-      TEST_USERS.smokeWorkoutRestore.password,
+      getUser('smokeWorkoutRestore').email,
+      getUser('smokeWorkoutRestore').password,
     );
   });
 
@@ -380,8 +380,8 @@ test.describe('Workout logging', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullWorkout.email,
-      TEST_USERS.fullWorkout.password,
+      getUser('fullWorkout').email,
+      getUser('fullWorkout').password,
     );
   });
 
@@ -860,8 +860,8 @@ test.describe('Workout history', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullHistory.email,
-      TEST_USERS.fullHistory.password,
+      getUser('fullHistory').email,
+      getUser('fullHistory').password,
     );
   });
 

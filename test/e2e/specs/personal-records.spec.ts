@@ -23,7 +23,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // The weight x reps pattern: "100 kg x 5" or "20 kg x 3".
@@ -70,8 +70,8 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokePR.email,
-      TEST_USERS.smokePR.password,
+      getUser('smokePR').email,
+      getUser('smokePR').password,
     );
   });
 
@@ -442,8 +442,8 @@ test.describe('Personal records', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullPR.email,
-      TEST_USERS.fullPR.password,
+      getUser('fullPR').email,
+      getUser('fullPR').password,
     );
   });
 

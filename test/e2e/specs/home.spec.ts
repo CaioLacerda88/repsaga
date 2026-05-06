@@ -41,7 +41,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ import { SEED_EXERCISES } from '../fixtures/test-exercises';
 // ---------------------------------------------------------------------------
 test.describe('Home screen and navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.fullHome.email, TEST_USERS.fullHome.password);
+    await login(page, getUser('fullHome').email, getUser('fullHome').password);
   });
 
   test('should show all four bottom nav tabs after login', async ({ page }) => {
@@ -241,7 +241,7 @@ test.describe('Home screen and navigation', () => {
     await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
 
     // The user's email is shown in the identity card.
-    await expect(page.locator(`text=${TEST_USERS.fullHome.email}`)).toBeVisible({
+    await expect(page.locator(`text=${getUser('fullHome').email}`)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -281,8 +281,8 @@ test.describe('First workout CTA (P8)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeFirstWorkout.email,
-      TEST_USERS.smokeFirstWorkout.password,
+      getUser('smokeFirstWorkout').email,
+      getUser('smokeFirstWorkout').password,
     );
     await navigateToTab(page, 'Home');
   });

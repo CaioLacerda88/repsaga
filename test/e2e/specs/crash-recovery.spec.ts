@@ -37,7 +37,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ import { SEED_EXERCISES } from '../fixtures/test-exercises';
 test.describe('Crash and session recovery', () => {
 
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.fullCrash.email, TEST_USERS.fullCrash.password);
+    await login(page, getUser('fullCrash').email, getUser('fullCrash').password);
   });
 
   test('should persist active workout across a full page reload and show resume banner', async ({

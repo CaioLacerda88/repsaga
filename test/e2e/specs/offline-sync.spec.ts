@@ -45,7 +45,7 @@ import {
   completeSet,
 } from '../helpers/workout';
 import { NAV, OFFLINE, WORKOUT } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // ---------------------------------------------------------------------------
@@ -83,8 +83,8 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeOfflineSync.email,
-      TEST_USERS.smokeOfflineSync.password,
+      getUser('smokeOfflineSync').email,
+      getUser('smokeOfflineSync').password,
     );
   });
 
@@ -274,8 +274,8 @@ test.describe('Offline sync — badge interaction', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeOfflineSync.email,
-      TEST_USERS.smokeOfflineSync.password,
+      getUser('smokeOfflineSync').email,
+      getUser('smokeOfflineSync').password,
     );
   });
 

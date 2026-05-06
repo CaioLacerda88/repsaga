@@ -35,7 +35,7 @@ import {
   finishWorkout,
 } from '../helpers/workout';
 import { WORKOUT, SAGA, HOME, CELEBRATION, SET_ROW } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
 // NOTE: rank-up-celebration's "PR signal inline display" describe block
 // previously used `test/e2e/helpers/test-data-reset.ts` to neutralise
@@ -74,7 +74,7 @@ async function getUserId(email: string): Promise<string | null> {
 // Called in beforeEach so the test is repeatable with --repeat-each.
 async function reseedRankUpThresholdUser(): Promise<void> {
   const admin = makeAdminClient();
-  const userId = await getUserId(TEST_USERS.rpgRankUpThreshold.email);
+  const userId = await getUserId(getUser('rpgRankUpThreshold').email);
   if (!userId) return;
 
   // Delete all workouts (cascade removes workout_exercises → sets → nulls PR set_id).
@@ -131,7 +131,7 @@ async function reseedRankUpThresholdUser(): Promise<void> {
 // derivation (BUG-017, Cluster 3).
 async function reseedMultiCelebrationUser(): Promise<void> {
   const admin = makeAdminClient();
-  const userId = await getUserId(TEST_USERS.rpgMultiCelebration.email);
+  const userId = await getUserId(getUser('rpgMultiCelebration').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -195,7 +195,7 @@ async function reseedMultiCelebrationUser(): Promise<void> {
 // conflicting parallel runs on the same user (serial mode + reseed = isolation).
 async function reseedRpgFreshUser(): Promise<void> {
   const admin = makeAdminClient();
-  const userId = await getUserId(TEST_USERS.rpgFreshUser.email);
+  const userId = await getUserId(getUser('rpgFreshUser').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -247,7 +247,7 @@ async function reseedRpgFreshUser(): Promise<void> {
 // occasionally insufficient when XP attribution changed slightly between runs.
 async function reseedOverflowQueueUser(): Promise<void> {
   const admin = makeAdminClient();
-  const userId = await getUserId(TEST_USERS.rpgOverflowQueue.email);
+  const userId = await getUserId(getUser('rpgOverflowQueue').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -314,7 +314,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
 // causing XP state races that prevented the overflow card from appearing.
 async function reseedOverflowTapCardUser(): Promise<void> {
   const admin = makeAdminClient();
-  const userId = await getUserId(TEST_USERS.rpgOverflowTapCard.email);
+  const userId = await getUserId(getUser('rpgOverflowTapCard').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -390,8 +390,8 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
     await reseedRankUpThresholdUser();
     await login(
       page,
-      TEST_USERS.rpgRankUpThreshold.email,
-      TEST_USERS.rpgRankUpThreshold.password,
+      getUser('rpgRankUpThreshold').email,
+      getUser('rpgRankUpThreshold').password,
     );
   });
 
@@ -447,8 +447,8 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     await reseedMultiCelebrationUser();
     await login(
       page,
-      TEST_USERS.rpgMultiCelebration.email,
-      TEST_USERS.rpgMultiCelebration.password,
+      getUser('rpgMultiCelebration').email,
+      getUser('rpgMultiCelebration').password,
     );
   });
 
@@ -549,8 +549,8 @@ test.describe('First awakening overlay', { tag: '@smoke' }, () => {
     await reseedRpgFreshUser();
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
     );
   });
 
@@ -636,8 +636,8 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     await reseedOverflowQueueUser();
     await login(
       page,
-      TEST_USERS.rpgOverflowQueue.email,
-      TEST_USERS.rpgOverflowQueue.password,
+      getUser('rpgOverflowQueue').email,
+      getUser('rpgOverflowQueue').password,
     );
   });
 
@@ -745,8 +745,8 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
     await reseedOverflowTapCardUser();
     await login(
       page,
-      TEST_USERS.rpgOverflowTapCard.email,
-      TEST_USERS.rpgOverflowTapCard.password,
+      getUser('rpgOverflowTapCard').email,
+      getUser('rpgOverflowTapCard').password,
     );
   });
 
@@ -848,8 +848,8 @@ test.describe('PR signal inline display', { tag: '@smoke' }, () => {
     // unconditionally beats any of them.
     await login(
       page,
-      TEST_USERS.smokePR.email,
-      TEST_USERS.smokePR.password,
+      getUser('smokePR').email,
+      getUser('smokePR').password,
     );
   });
 
@@ -920,8 +920,8 @@ test.describe('Active workout chrome (Phase 18c)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeWorkout.email,
-      TEST_USERS.smokeWorkout.password,
+      getUser('smokeWorkout').email,
+      getUser('smokeWorkout').password,
     );
   });
 

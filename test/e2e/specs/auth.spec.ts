@@ -15,7 +15,7 @@ import { test, expect } from '@playwright/test';
 import { waitForAppReady, flutterFill } from '../helpers/app';
 import { login, logout } from '../helpers/auth';
 import { AUTH, NAV, SAGA } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
 // Smoke — critical login/logout journey
@@ -41,7 +41,7 @@ test.describe('Auth', { tag: '@smoke' }, () => {
   test('should land on home screen with bottom nav after valid login', async ({
     page,
   }) => {
-    await login(page, TEST_USERS.smokeAuth.email, TEST_USERS.smokeAuth.password);
+    await login(page, getUser('smokeAuth').email, getUser('smokeAuth').password);
 
     // The shell scaffold renders the bottom NavigationBar on all main routes.
     await expect(page.locator(NAV.homeTab)).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('Auth', { tag: '@smoke' }, () => {
   });
 
   test('should return to login screen after logout', async ({ page }) => {
-    await login(page, TEST_USERS.smokeAuth.email, TEST_USERS.smokeAuth.password);
+    await login(page, getUser('smokeAuth').email, getUser('smokeAuth').password);
     await logout(page);
 
     // After logout the router redirects to /login.
@@ -82,7 +82,7 @@ test.describe('Auth', { tag: '@smoke' }, () => {
     await waitForAppReady(page);
 
     // Fill in a valid email address.
-    await flutterFill(page, AUTH.emailInput, TEST_USERS.smokeAuth.email);
+    await flutterFill(page, AUTH.emailInput, getUser('smokeAuth').email);
 
     // Click the forgot password button — opens a confirmation dialog.
     await page.click(AUTH.forgotPasswordButton);
@@ -148,7 +148,7 @@ test.describe('Auth — edge cases', () => {
   });
 
   test('should show error message for wrong password', async ({ page }) => {
-    await flutterFill(page, AUTH.emailInput, TEST_USERS.fullAuth.email);
+    await flutterFill(page, AUTH.emailInput, getUser('fullAuth').email);
     await flutterFill(page, AUTH.passwordInput, 'definitely-wrong-password');
     await page.click(AUTH.loginButton);
 
@@ -262,8 +262,8 @@ test.describe('Auth — edge cases', () => {
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Attempt to create an account with an email that already exists.
-    await flutterFill(page, AUTH.emailInput, TEST_USERS.fullAuth.email);
-    await flutterFill(page, AUTH.passwordInput, TEST_USERS.fullAuth.password);
+    await flutterFill(page, AUTH.emailInput, getUser('fullAuth').email);
+    await flutterFill(page, AUTH.passwordInput, getUser('fullAuth').password);
     await page.click(AUTH.signUpButton);
 
     // Supabase returns a "User already registered" error that surfaces as an
@@ -276,7 +276,7 @@ test.describe('Auth — edge cases', () => {
   test('should complete full journey: login, navigate all tabs, logout, back on login', async ({
     page,
   }) => {
-    await login(page, TEST_USERS.fullAuth.email, TEST_USERS.fullAuth.password);
+    await login(page, getUser('fullAuth').email, getUser('fullAuth').password);
 
     // All four bottom nav tabs must be visible after login.
     await expect(page.locator(NAV.homeTab)).toBeVisible();

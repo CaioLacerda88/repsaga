@@ -41,7 +41,7 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab, setLocale, waitForAppReady } from '../helpers/app';
 import { NAV, PROFILE, EXERCISE_LIST, LOCALIZATION, SAGA } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
 // Describe block 1: smokeLocalization user — boots in pt-BR via server seed
@@ -50,8 +50,8 @@ test.describe('Localization — pt-BR server-seeded boot', { tag: '@smoke' }, ()
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalization.email,
-      TEST_USERS.smokeLocalization.password,
+      getUser('smokeLocalization').email,
+      getUser('smokeLocalization').password,
     );
   });
 
@@ -221,8 +221,8 @@ test.describe('Localization — en-default language picker switch', { tag: '@smo
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalizationEn.email,
-      TEST_USERS.smokeLocalizationEn.password,
+      getUser('smokeLocalizationEn').email,
+      getUser('smokeLocalizationEn').password,
     );
   });
 
@@ -288,8 +288,8 @@ test.describe('Localization — en-default language picker switch', { tag: '@smo
     if (currentUrl.includes('/login')) {
       await login(
         page,
-        TEST_USERS.smokeLocalizationEn.email,
-        TEST_USERS.smokeLocalizationEn.password,
+        getUser('smokeLocalizationEn').email,
+        getUser('smokeLocalizationEn').password,
       );
     }
 
@@ -315,8 +315,8 @@ test.describe('Localization — bottom nav no overflow at narrow viewport', { ta
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalization.email,
-      TEST_USERS.smokeLocalization.password,
+      getUser('smokeLocalization').email,
+      getUser('smokeLocalization').password,
     );
   });
 

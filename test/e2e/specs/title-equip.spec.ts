@@ -27,14 +27,14 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
 import { SAGA, CELEBRATION } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 test.describe('Title equip', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.rpgTitleEquipUser.email,
-      TEST_USERS.rpgTitleEquipUser.password,
+      getUser('rpgTitleEquipUser').email,
+      getUser('rpgTitleEquipUser').password,
     );
     await navigateToTab(page, 'Profile');
     await page

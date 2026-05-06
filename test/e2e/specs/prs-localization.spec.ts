@@ -9,7 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { PR_DISPLAY } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -22,8 +22,8 @@ test.describe('Personal records pt locale', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullPRPt.email,
-      TEST_USERS.fullPRPt.password,
+      getUser('fullPRPt').email,
+      getUser('fullPRPt').password,
     );
   });
 

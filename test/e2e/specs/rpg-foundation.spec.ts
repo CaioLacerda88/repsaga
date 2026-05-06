@@ -38,7 +38,7 @@ import {
   finishWorkout,
 } from '../helpers/workout';
 import { GAMIFICATION, NAV, SAGA } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
 // Admin Supabase client — used by E3/E6 to read body_part_progress directly.
@@ -157,8 +157,8 @@ test.describe('RPG foundation — backfill on first login', { tag: '@smoke' }, (
     // try/catch so the badge assertion is unblocked regardless.
     await login(
       page,
-      TEST_USERS.rpgFoundationUser.email,
-      TEST_USERS.rpgFoundationUser.password,
+      getUser('rpgFoundationUser').email,
+      getUser('rpgFoundationUser').password,
       { dismissSagaIntro: false },
     );
 
@@ -183,7 +183,7 @@ test.describe('RPG foundation — backfill on first login', { tag: '@smoke' }, (
     const admin = makeAdminClient();
     const { data: userList } = await admin.auth.admin.listUsers();
     const foundUser = userList?.users?.find(
-      (u) => u.email === TEST_USERS.rpgFoundationUser.email,
+      (u) => u.email === getUser('rpgFoundationUser').email,
     );
     if (!foundUser) throw new Error('rpgFoundationUser not found in Supabase auth');
     const userId = foundUser.id;
@@ -264,7 +264,7 @@ test.describe('RPG foundation — first-workout XP applied', { tag: '@smoke' }, 
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers();
     const freshUser = userList?.users?.find(
-      (u) => u.email === TEST_USERS.rpgFreshUser.email,
+      (u) => u.email === getUser('rpgFreshUser').email,
     );
     if (!freshUser) throw new Error('rpgFreshUser not found in Supabase auth');
     const userId = freshUser.id;
@@ -279,8 +279,8 @@ test.describe('RPG foundation — first-workout XP applied', { tag: '@smoke' }, 
     // racing with xpProvider re-renders; dismiss manually below.
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
       { dismissSagaIntro: false },
     );
 
@@ -359,7 +359,7 @@ test.describe('RPG foundation — re-save no double XP (BUG-RPG-001)', { tag: '@
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers();
     const freshUser = userList?.users?.find(
-      (u) => u.email === TEST_USERS.rpgFreshUser.email,
+      (u) => u.email === getUser('rpgFreshUser').email,
     );
     if (!freshUser) throw new Error('rpgFreshUser not found in Supabase auth');
     const userId = freshUser.id;
@@ -444,8 +444,8 @@ test.describe('RPG foundation — re-save no double XP (BUG-RPG-001)', { tag: '@
     // with "workout user_id does not match authenticated user". Sign in as the
     // actual user so auth.uid() returns userId.
     const userClient = await makeUserClient(
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
     );
 
     const { error: rpc1Err } = await userClient.rpc('save_workout', {
@@ -494,8 +494,8 @@ test.describe('RPG foundation — re-save no double XP (BUG-RPG-001)', { tag: '@
     // racing with xpProvider re-renders; dismiss manually below.
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
       { dismissSagaIntro: false },
     );
     try {
@@ -531,8 +531,8 @@ test.describe('RPG foundation — XP accumulates across workouts', () => {
     // short timeouts and a catch.
     await login(
       page,
-      TEST_USERS.rpgFoundationUser.email,
-      TEST_USERS.rpgFoundationUser.password,
+      getUser('rpgFoundationUser').email,
+      getUser('rpgFoundationUser').password,
       { dismissSagaIntro: false },
     );
 
@@ -597,7 +597,7 @@ test.describe('RPG foundation — saga intro gate regression (18a-E5)', () => {
     // sagaIntroUser is the user from gamification-intro.spec.ts.
     // We re-use it here as a sentinel: if the shim regresses, the character
     // sheet will fail to load or show an error state.
-    const sagaUser = TEST_USERS.sagaIntroUser;
+    const sagaUser = getUser('sagaIntroUser');
 
     // Use dismissSagaIntro: false and dismiss manually to avoid the login
     // helper's click() racing with xpProvider re-renders.
@@ -641,7 +641,7 @@ test.describe('RPG foundation — compound body-part attribution (18a-E6)', () =
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers();
     const freshUser = userList?.users?.find(
-      (u) => u.email === TEST_USERS.rpgFreshUser.email,
+      (u) => u.email === getUser('rpgFreshUser').email,
     );
     if (!freshUser) throw new Error('rpgFreshUser not found');
     const userId = freshUser.id;
@@ -716,8 +716,8 @@ test.describe('RPG foundation — compound body-part attribution (18a-E6)', () =
 
     // save_workout checks auth.uid() — must call with user JWT, not service role.
     const userClient = await makeUserClient(
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
     );
 
     const { error: rpcErr } = await userClient.rpc('save_workout', {
@@ -790,8 +790,8 @@ test.describe('RPG foundation — compound body-part attribution (18a-E6)', () =
     // racing with xpProvider re-renders; dismiss manually below.
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
       { dismissSagaIntro: false },
     );
     try {
