@@ -32,6 +32,11 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
+import {
+  getAdminClient,
+  getUserIdByEmail,
+  resetRpgStateForUser,
+} from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // S1–S2: Character sheet renders (smoke)
@@ -40,13 +45,23 @@ import {
 
 test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 21: per-worker rpgFreshUser_w{N}@test.local instances eliminate
-    // the cross-spec pollution path that previously required a Tier 1 reset
-    // here. Each Playwright worker has its own rpgFreshUser, so no other
-    // spec can mutate this user's workouts/XP between runs. The Tier 1
-    // helper (resetRpgStateForUser) is no longer applied — global-setup's
-    // seed_rpg_fresh_user already produces the deterministic zero-history
-    // baseline this test asserts.
+    // Phase 21 isolates rpgFreshUser ACROSS workers, but tests on the same
+    // worker still share that user. With `fullyParallel: false`, Playwright
+    // schedules entire spec files on a single worker — meaning rpg-
+    // foundation.spec.ts (E2/E3/E6 each save a workout for rpgFreshUser)
+    // can run on the same worker as saga.spec.ts. After E2 saves a workout,
+    // body_part_progress has XP and the firstSetAwakensBanner is hidden.
+    //
+    // The Tier 1 helper deletes workouts + xp_events + body_part_progress
+    // + earned_titles + weekly_plans, then upserts a completed
+    // backfill_progress so SagaIntroGate doesn't re-run backfill on next
+    // login.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
+    if (userId) {
+      await resetRpgStateForUser(admin, userId);
+    }
+
     await login(page, getUser('rpgFreshUser').email, getUser('rpgFreshUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
@@ -349,10 +364,16 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
 
 test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 21: per-worker rpgFreshUser eliminates the cross-spec pollution
-    // that previously required a Tier 1 reset here. See the matching
-    // beforeEach above (Saga — fresh user character sheet) for the full
-    // rationale. The reset call has been removed.
+    // Reset the fresh user's RPG state so we land on a true zero-history
+    // baseline. See the matching beforeEach above for the full rationale —
+    // intra-worker pollution from rpg-foundation.spec.ts still requires
+    // this reset even after Phase 21 per-worker isolation.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
+    if (userId) {
+      await resetRpgStateForUser(admin, userId);
+    }
+
     await login(
       page,
       getUser('rpgFreshUser').email,
