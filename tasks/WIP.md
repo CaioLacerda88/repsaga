@@ -4,6 +4,38 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
+## Phase 21 — E2E Per-Worker User Isolation + Parallelism Bump — IN PROGRESS
+
+**Branch:** `feature/phase21-e2e-per-worker-isolation`
+**Source:** PLAN.md Phase 21 (~50 lines spec)
+**Goal:** Refactor e2e suite so each Playwright worker uses its own pool of test users (no cross-worker collisions), enabling `workers: 4` for ~45% CI speedup while structurally eliminating concurrent test-data races.
+
+### Commits (6, single PR)
+
+- [ ] **C1** `feat(e2e): worker-scoped user factory` — new `test/e2e/fixtures/worker-users.ts` exporting `getUser(role)`, `getAllUserKeys()`, `getEmailPattern()`. Email pattern `{role}_w{index}@test.local`.
+- [ ] **C2** `refactor(e2e): global-setup creates per-worker users` — N workers × ~30 users, throttled 10/sec, with 429 backoff retry. All seed helpers receive per-worker user IDs.
+- [ ] **C3** `refactor(e2e): global-teardown by email pattern` — pattern-scan delete via `Promise.allSettled`.
+- [ ] **C4** `refactor(e2e): migrate spec files to getUser()` — mechanical edit across 23 spec files (~149 occurrences).
+- [ ] **C5** `chore(e2e): bump workers to 4` — `playwright.config.ts: workers 2 → 4`. `fullyParallel: false` (default).
+- [ ] **C6** `refactor(e2e): drop Tier 1 helper application` — remove `resetRpgStateForUser` calls from `saga.spec.ts` (×2). Helper file kept.
+
+### Verification gates
+
+- After EACH commit: `dart format --set-exit-if-changed lib test`, `dart analyze --fatal-infos`, `flutter test --reporter=compact`.
+- After C4+: `cd test/e2e && npx playwright test --list` must produce a clean list with no TS errors.
+- AFTER all 6 commits land locally: 3 consecutive `--workers=4 --retries=0` runs of the full suite, all green.
+
+### DO NOT
+
+- Bump workers > 4 (CI runners have 4 CPU)
+- Enable `fullyParallel: true`
+- Skip throttling in global-setup
+- Skip the local 3-run verification
+- Refactor existing seed functions
+- Touch lib/ code
+
+---
+
 ## Phase 16 — Subscription Monetization — PARKED (2026-04-22)
 
 **Why parked:** Phase 16 keeps hitting external blockers (Brazilian merchant account, Play Console → upload signed AAB required before subscription product can be created, license-tester account setup). Phase 17 gamification is fully internal code work with no external gates and produces the retention moat that makes Phase 16's paywall pitch compelling. Decision: ship Phase 17 (Gamification) before resuming 16b/c/d.
