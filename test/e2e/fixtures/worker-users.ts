@@ -64,6 +64,21 @@ export type TestUserKey = keyof typeof TEST_USERS;
 const DEFAULT_WORKER_INDEX = '0';
 
 /**
+ * Total number of Playwright workers used by the e2e suite. Single source of
+ * truth for both `playwright.config.ts` (`workers:` field) and
+ * `global-setup.ts` (the per-worker user creation loop). If these drift,
+ * global-setup either over- or under-provisions users — a worker-N test then
+ * fails at login with an unhelpful "user not found" error rather than a clear
+ * misconfiguration message.
+ *
+ * Bumping this value without updating the Supabase Auth rate-limit budget
+ * (currently 100ms throttle × N×42 users) may push setup duration past the
+ * CI job timeout. Verify locally before raising. CI runners have 4 vCPU; 4
+ * is the practical ceiling without intra-file parallelism.
+ */
+export const WORKERS_COUNT = 4;
+
+/**
  * The shared password used by every E2E test user. Sourced from
  * `TEST_USER_PASSWORD` in `test/e2e/.env.local` (mirrored to the static
  * fixture object for backwards-compat). All worker-scoped users share the

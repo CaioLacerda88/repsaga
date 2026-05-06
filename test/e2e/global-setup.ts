@@ -19,18 +19,18 @@ import {
   buildEmailForWorker,
   getAllUserKeys,
   TestUserKey,
+  WORKERS_COUNT,
 } from './fixtures/worker-users';
 
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 
 /**
  * Number of Playwright workers to provision users for. Must match
- * `playwright.config.ts: workers`. Centralized here so global-setup creates
- * the exact pool the test runner will consume — no over- or under-provision.
- *
- * Phase 21 raises this from 2 → 4 to take advantage of CI 4-CPU runners.
+ * `playwright.config.ts: workers`. Centralized in `fixtures/worker-users.ts`
+ * so global-setup, the playwright config, and the runtime helpers all read
+ * from the same constant — no over- or under-provision risk if someone bumps
+ * one and forgets the others. See `WORKERS_COUNT` in `worker-users.ts`.
  */
-const WORKERS_COUNT = 4;
 
 /**
  * Throttle delay between sequential auth.admin.createUser calls. The local

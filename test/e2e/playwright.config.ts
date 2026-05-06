@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'path';
+import { WORKERS_COUNT } from './fixtures/worker-users';
 
 // Load .env.local so FLUTTER_APP_URL and Supabase credentials are available
 // to both the config and the global setup/teardown scripts.
@@ -16,13 +17,13 @@ export default defineConfig({
   testDir: '.',
   timeout: 60_000,
   retries: 1,
-  // Phase 21: bumped from 2 → 4 to take advantage of CI 4-CPU runners now
-  // that fixtures/worker-users.ts gives each worker its own pool of
-  // Supabase users. Concurrent races on shared user state are structurally
-  // impossible. Capped at 4 because CI runners have 4 vCPU — going higher
-  // hurts wall time as workers compete for compute and Supabase connections.
-  // Must match WORKERS_COUNT in global-setup.ts.
-  workers: 4,
+  // Phase 21: per-worker user pool (see fixtures/worker-users.ts) eliminates
+  // concurrent races on shared user state, so we can run more workers safely.
+  // 4 chosen because CI runners have 4 vCPU — going higher hurts wall time
+  // as workers compete for compute and Supabase connections. The same
+  // constant drives `global-setup.ts`'s per-worker user creation loop, so
+  // both stay in sync automatically.
+  workers: WORKERS_COUNT,
   // fullyParallel intentionally left at the Playwright default (false).
   // Tests within the same spec file still run sequentially. Within-file
   // parallelism is a separate optimization that requires per-test isolation

@@ -22,7 +22,8 @@ dotenv.config({ path: path.join(__dirname, '.env.local') });
 /**
  * Delete all user-owned data from dependent tables before deleting the auth user.
  *
- * The deletion order respects FK constraints:
+ * The deletion order respects FK constraints for tables that DO NOT cascade
+ * from `auth.users(id) ON DELETE CASCADE`:
  *   1. sets (via workout_exercises -> workouts)
  *   2. workout_exercises (via workouts)
  *   3. personal_records
@@ -30,7 +31,18 @@ dotenv.config({ path: path.join(__dirname, '.env.local') });
  *   5. weekly_plans
  *   6. workout_templates (user-created only)
  *   7. exercises (user-created only, is_default = false)
- *   8. profiles
+ *   8. xp_events / user_xp
+ *   9. profiles
+ *
+ * RPG progress tables are intentionally NOT in this list — they cascade
+ * automatically when the auth user is deleted at the end of the teardown:
+ *   - body_part_progress    (00040_rpg_system_v1.sql:165 — ON DELETE CASCADE)
+ *   - exercise_peak_loads   (00040_rpg_system_v1.sql:190 — ON DELETE CASCADE)
+ *   - backfill_progress     (00040_rpg_system_v1.sql:213 — ON DELETE CASCADE)
+ *   - earned_titles         (00040_rpg_system_v1.sql:234 — ON DELETE CASCADE)
+ *
+ * If a future migration adds a new RPG table without `ON DELETE CASCADE`,
+ * add an explicit delete here OR set up the cascade in the migration.
  *
  * Uses the service-role key which bypasses RLS.
  */
