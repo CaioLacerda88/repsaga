@@ -98,12 +98,19 @@ export function getUser(role: TestUserKey): {
  * Build the worker-scoped email for an arbitrary worker index. Used by
  * global-setup to create users for workers 0..N-1 from the controller
  * process (where `TEST_PARALLEL_INDEX` is unset).
+ *
+ * Always returns a fully-lowercase email. Supabase Auth (GoTrue) silently
+ * lowercases the email on storage, so any case-sensitive comparison
+ * (e.g., `userList.users.find(u => u.email === buildEmailForWorker(...))`)
+ * would mismatch when the role key contains uppercase letters
+ * (e.g., `rpgFoundationUser`). By lowercasing here, both sides of every
+ * comparison use the same canonical form.
  */
 export function buildEmailForWorker(
   role: TestUserKey,
   workerIndex: number,
 ): string {
-  return `${role}_w${workerIndex}@test.local`;
+  return `${role.toLowerCase()}_w${workerIndex}@test.local`;
 }
 
 /**
@@ -119,9 +126,14 @@ export function getAllUserKeys(): TestUserKey[] {
  * all roles). Used by global-teardown to scan-and-delete in one pass
  * without enumerating the exact role × worker matrix.
  *
- * Matches: `smokePR_w0@test.local`, `rpgFreshUser_w3@test.local`, etc.
+ * Matches lowercased forms: `smokepr_w0@test.local`, `rpgfreshuser_w3@test.local`.
  * Does NOT match: legacy static emails like `e2e-smoke-pr@test.local`.
+ *
+ * Stored emails are always lowercase (Supabase Auth lowercases on insert),
+ * so a lowercase regex is sufficient. The `[a-z]` anchor before `_w` keeps
+ * us from matching unrelated patterns like `:8080/test.local` if any
+ * non-test email contained `_wN@test.local`.
  */
 export function getEmailPattern(): RegExp {
-  return /_w\d+@test\.local$/;
+  return /[a-z]_w\d+@test\.local$/;
 }
