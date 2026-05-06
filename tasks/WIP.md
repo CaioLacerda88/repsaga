@@ -4,6 +4,47 @@ Active work being done by agents. Each section is removed once the branch is mer
 
 ---
 
+## Phase 20 polish follow-ups — IN PROGRESS
+
+Five deferred follow-ups from PR #152 (Phase 20 — Active Workout Set-Row Redesign). Per Phase 20 PLAN.md "Deferred follow-ups" line, plus the on-disk audit confirming three of the originally-listed items already shipped:
+
+| Code-state audit (already on `main`, despite the stale deferred-list) |
+|---|
+| ✅ Pillar 1 pre-fill from last session — `active_workout_notifier.dart:319` `addSet(defaultWeight, defaultReps)` |
+| ✅ Tap-to-numpad input — `weight_stepper.dart:109` / `reps_stepper.dart:87` `_showNumberInput` |
+| ✅ Set-type long-press cycle (function) — `set_row.dart:237` `onLongPress: _cycleSetType` |
+
+### Genuinely pending (this WIP)
+
+| # | Item | Scope | Files |
+|---|---|---|---|
+| 1 | **Match-indicator state** when current weight×reps match the last session | small | `lib/features/workouts/domain/pr_row_state.dart` (extend enum or add an `isMatchingLast` flag), `set_row.dart` (subtle non-gold visual), widget tests |
+| 2 | **Hint persistence** after completion (`_shouldShowHint` returns true even when `isCompleted`) | small | `set_row.dart:149-163`, widget tests |
+| 3 | **Set-type long-press discoverability** redesign (icon hint OR replace long-press with tap-to-cycle) | medium | Needs ui-ux-critic input on the affordance pattern BEFORE code |
+| 4 | **`Rotinas` → `Treinos` pt-BR rename** + `Sessão` for logged sessions | small | `lib/l10n/app_pt.arb`, e2e selector audit (any `name*="Rotinas"` etc.), Portuguese-localization e2e specs |
+| 5 | **Phase 20 validation walkthrough** — stock weighted + bodyweight workouts on the redesigned active workout screen → screenshots → ui-ux-critic with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging | medium | Running app + ui-ux-critic agent; `[redesign-input]` findings append to `docs/design/2026-05-01-active-workout-redesign/critique.md` |
+
+### Order of execution
+
+User direction is "go ahead with #4, then proceed through 1–5." Order:
+
+1. **#4 (rename)** — cleanest stand-alone change, well-researched (`docs/design/.../naming-treinos-vs-rotinas.md`).
+2. **#1 + #2** — bundle, tiny `set_row.dart` changes; same widget test file.
+3. **#3 (long-press redesign)** — dispatch ui-ux-critic FIRST for the affordance pattern, then code.
+4. **#5 (walkthrough)** — needs running app + screenshots → ui-ux-critic critique pass.
+
+Each item ships as its own PR for independent review/revert. PLAN.md Phase 20 "Deferred follow-ups" line gets trimmed as items land.
+
+### Currently active
+
+- [x] Plan written to WIP
+- [ ] **#4 — `Rotinas` → `Treinos` rename** (in progress)
+- [ ] #1 + #2 (queued)
+- [ ] #3 (queued, ui-ux-critic dispatch first)
+- [ ] #5 (queued)
+
+---
+
 ## Phase 16 — Subscription Monetization — PARKED (2026-04-22)
 
 **Why parked:** Phase 16 keeps hitting external blockers (Brazilian merchant account, Play Console → upload signed AAB required before subscription product can be created, license-tester account setup). Phase 17 gamification is fully internal code work with no external gates and produces the retention moat that makes Phase 16's paywall pitch compelling. Decision: ship Phase 17 (Gamification) before resuming 16b/c/d.

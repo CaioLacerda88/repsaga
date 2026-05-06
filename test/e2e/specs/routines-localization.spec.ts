@@ -38,7 +38,7 @@ test.describe('Routine localization pt locale', () => {
   test('should show pt exercise names in routine exercise picker for pt user (E1)', async ({
     page,
   }) => {
-    const routineName = `Rotina PT ${Date.now()}`;
+    const routineName = `Treino PT ${Date.now()}`;
     const ptBenchName = EXERCISE_NAMES.barbell_bench_press.pt;
 
     // Open the create routine screen.

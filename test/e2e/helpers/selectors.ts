@@ -928,8 +928,8 @@ export const LOCALIZATION = {
   ptNavHome: 'role=tab[name="Início"]',
   /** pt-BR nav tab — "Exercícios" (Exercises) */
   ptNavExercises: 'role=tab[name="Exercícios"]',
-  /** pt-BR nav tab — "Rotinas" (Routines) */
-  ptNavRoutines: 'role=tab[name="Rotinas"]',
+  /** pt-BR nav tab — "Treinos" (Routines) */
+  ptNavRoutines: 'role=tab[name="Treinos"]',
   /** pt-BR nav tab — "Saga" (same word in both en and pt-BR; Phase 18b renamed Profile → Saga) */
   ptNavProfile: 'role=tab[name="Saga"]',
 } as const;

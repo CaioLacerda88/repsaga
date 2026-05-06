@@ -1,7 +1,7 @@
 /// Overflow regression test for the bottom navigation bar at a 320dp wide
 /// viewport rendered in Portuguese (pt).
 ///
-/// The pt labels (`Início`, `Exercícios`, `Rotinas`, `Perfil`) are the longest
+/// The pt labels (`Início`, `Exercícios`, `Treinos`, `Perfil`) are the longest
 /// we currently ship. Phase 15e adds this as a safety net so future label
 /// changes or style tweaks cannot silently regress the critical bottom nav.
 ///
@@ -82,7 +82,7 @@ void main() {
       // All four localized labels are present and on-screen.
       expect(find.text('Início'), findsOneWidget);
       expect(find.text('Exercícios'), findsOneWidget);
-      expect(find.text('Rotinas'), findsOneWidget);
+      expect(find.text('Treinos'), findsOneWidget);
       expect(find.text('Perfil'), findsOneWidget);
     });
 
@@ -101,7 +101,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Início'), findsOneWidget);
       expect(find.text('Exercícios'), findsOneWidget);
-      expect(find.text('Rotinas'), findsOneWidget);
+      expect(find.text('Treinos'), findsOneWidget);
       expect(find.text('Perfil'), findsOneWidget);
     });
   });
