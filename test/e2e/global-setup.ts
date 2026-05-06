@@ -25,14 +25,6 @@ import {
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 
 /**
- * Number of Playwright workers to provision users for. Must match
- * `playwright.config.ts: workers`. Centralized in `fixtures/worker-users.ts`
- * so global-setup, the playwright config, and the runtime helpers all read
- * from the same constant — no over- or under-provision risk if someone bumps
- * one and forgets the others. See `WORKERS_COUNT` in `worker-users.ts`.
- */
-
-/**
  * Throttle delay between sequential auth.admin.createUser calls. The local
  * Supabase Auth (GoTrue) instance starts to rate-limit after ~10 rapid-fire
  * creates, so we pace at 10/sec. Total cost: ~30 roles × 4 workers × 100ms
