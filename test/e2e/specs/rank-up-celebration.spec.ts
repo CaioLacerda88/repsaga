@@ -65,7 +65,9 @@ function makeAdminClient() {
 
 async function getUserId(email: string): Promise<string | null> {
   const admin = makeAdminClient();
-  const { data } = await admin.auth.admin.listUsers();
+  // perPage: 1000 — Phase 21 creates ~168 users; the GoTrue default 50
+  // silently truncates and would miss users on page 2+.
+  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
   const user = data?.users?.find((u) => u.email === email);
   return user?.id ?? null;
 }

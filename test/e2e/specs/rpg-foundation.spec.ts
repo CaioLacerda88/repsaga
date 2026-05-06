@@ -181,7 +181,7 @@ test.describe('RPG foundation — backfill on first login', { tag: '@smoke' }, (
 
     // Look up rpgFoundationUser in the DB to verify backfill ran.
     const admin = makeAdminClient();
-    const { data: userList } = await admin.auth.admin.listUsers();
+    const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const foundUser = userList?.users?.find(
       (u) => u.email === getUser('rpgFoundationUser').email,
     );
@@ -262,7 +262,7 @@ test.describe('RPG foundation — first-workout XP applied', { tag: '@smoke' }, 
     const admin = makeAdminClient();
 
     // Look up rpgFreshUser ID.
-    const { data: userList } = await admin.auth.admin.listUsers();
+    const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const freshUser = userList?.users?.find(
       (u) => u.email === getUser('rpgFreshUser').email,
     );
@@ -357,7 +357,7 @@ test.describe('RPG foundation — re-save no double XP (BUG-RPG-001)', { tag: '@
     const admin = makeAdminClient();
 
     // Look up rpgFreshUser ID.
-    const { data: userList } = await admin.auth.admin.listUsers();
+    const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const freshUser = userList?.users?.find(
       (u) => u.email === getUser('rpgFreshUser').email,
     );
@@ -639,7 +639,7 @@ test.describe('RPG foundation — compound body-part attribution (18a-E6)', () =
     const admin = makeAdminClient();
 
     // Look up rpgFreshUser ID.
-    const { data: userList } = await admin.auth.admin.listUsers();
+    const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const freshUser = userList?.users?.find(
       (u) => u.email === getUser('rpgFreshUser').email,
     );

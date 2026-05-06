@@ -48,7 +48,14 @@ async function getUserId(
   supabase: SupabaseClient,
   email: string,
 ): Promise<string | null> {
-  const { data: listData } = await supabase.auth.admin.listUsers();
+  // perPage: 1000 — Phase 21 creates ~168 users; the GoTrue default 50
+  // silently truncates the result set and would miss any user on page 2+.
+  // This helper is only used by createUserWithThrottle's idempotent
+  // duplicate-lookup path, but correctness still matters when the suite
+  // is rerun against an already-populated Supabase.
+  const { data: listData } = await supabase.auth.admin.listUsers({
+    perPage: 1000,
+  });
   const user = listData?.users?.find((u) => u.email === email);
   return user?.id ?? null;
 }

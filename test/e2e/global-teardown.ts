@@ -141,24 +141,35 @@ async function globalTeardown(): Promise<void> {
     return;
   }
 
+  // Batch deletions in chunks of 8 to avoid GoTrue concurrency-induced
+  // "Unexpected failure" errors. With 168 users a fully parallel
+  // Promise.allSettled saturates the auth service and ~25-30% of deletes
+  // return 500. 8-wide batches drop the failure rate to ~0 with negligible
+  // wall-time cost (168/8 × ~200ms per batch ≈ 4s, vs ~1s for full-parallel).
+  const BATCH_SIZE = 8;
   console.log(
-    `[global-teardown] Deleting ${testUsers.length} worker-scoped user(s) in parallel...`,
+    `[global-teardown] Deleting ${testUsers.length} worker-scoped user(s) in batches of ${BATCH_SIZE}...`,
   );
 
   // Per-user deletion: clean owned rows first (FK-ordered), then auth user.
   // Errors are caught per-user so one failure doesn't block the rest.
-  const results = await Promise.allSettled(
-    testUsers.map(async (user) => {
-      await deleteUserData(supabase, user.id);
-      const { error } = await supabase.auth.admin.deleteUser(user.id);
-      if (error) {
-        throw new Error(
-          `Failed to delete ${user.email} (${user.id}): ${error.message}`,
-        );
-      }
-      return user.email ?? user.id;
-    }),
-  );
+  const results: Array<PromiseSettledResult<string>> = [];
+  for (let i = 0; i < testUsers.length; i += BATCH_SIZE) {
+    const batch = testUsers.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (user) => {
+        await deleteUserData(supabase, user.id);
+        const { error } = await supabase.auth.admin.deleteUser(user.id);
+        if (error) {
+          throw new Error(
+            `Failed to delete ${user.email} (${user.id}): ${error.message}`,
+          );
+        }
+        return user.email ?? user.id;
+      }),
+    );
+    results.push(...batchResults);
+  }
 
   const successes = results.filter((r) => r.status === 'fulfilled').length;
   const failures = results.filter((r) => r.status === 'rejected');
