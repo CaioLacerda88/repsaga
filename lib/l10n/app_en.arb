@@ -556,6 +556,10 @@
       "reps": { "type": "int", "example": "10" }
     }
   },
+  "matchedLastSet": "= last set",
+  "@matchedLastSet": {
+    "description": "Subtle match indicator: shown above a set row when its current weight and reps exactly equal the previous-session set. Not gold — that is reserved for PRs per the heroGold scarcity rule. Pillar 1 (target-state-first) makes the row's job 'confirm I matched or beat last session' before completion."
+  },
 
   "discardWorkoutTitle": "Discard Workout?",
   "@discardWorkoutTitle": { "description": "Discard workout dialog title" },

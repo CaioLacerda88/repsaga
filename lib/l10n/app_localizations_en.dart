@@ -742,6 +742,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get matchedLastSet => '= last set';
+
+  @override
   String get discardWorkoutTitle => 'Discard Workout?';
 
   @override
