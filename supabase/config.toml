@@ -197,7 +197,16 @@ anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
 token_refresh = 150
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
-sign_in_sign_ups = 30
+# Raised from the GoTrue default (30) to accommodate the e2e suite at workers=4:
+# 4 Playwright workers share a single IP (the CI runner / dev machine) and each
+# spec file runs ~10–15 logins in beforeEach, so the full suite issues ~150
+# logins per 5-minute window. The default 30 caused exercises.spec.ts to fail
+# with "Wrong email or password" once the bucket drained (PR #154 surfaced
+# this — see PR #156 for the lift). 1000 leaves comfortable headroom for
+# stress runs (--repeat-each) without removing the limit entirely. LOCAL-ONLY:
+# the hosted Supabase project's rate limit is configured separately in the
+# dashboard and is unaffected by this file.
+sign_in_sign_ups = 1000
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
 token_verifications = 30
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
