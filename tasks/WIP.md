@@ -40,9 +40,16 @@ Each item ships as its own PR for independent review/revert. PLAN.md Phase 20 "D
 - [x] Plan written to WIP
 - [x] **#4 — `Rotinas` → `Treinos` rename** (PR #158, merged `27dbdd5`)
 - [x] **#1 — match indicator** (PR #159, merged `346660e`)
-- [ ] **#2 — hint persistence after completion** — DEFERRED. First attempt re-triggered Phase 20's role-swap bug on standing-PR rows (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Needs a layout-stable redesign: fixed-height hint slot so adding/removing the Text doesn't reflow the parent Column. See `_shouldShowHint`'s doc + test note in `set_row.dart` / `set_row_test.dart`.
-- [ ] **#3 — set-type long-press discoverability redesign** (in progress — ui-ux-critic dispatch next)
-- [ ] #5 (queued — manual walkthrough)
+- [x] **#3 — set-type long-press discoverability redesign** (PR #160, merged `a723fb5`)
+- [x] **#5 — Phase 20 validation walkthrough** — code-state ui-ux-critic audit applied; appendix added to `critique.md` (this PR). Visual on-device pass deferred to user's manual walkthrough.
+
+### Carry-overs (queued for follow-up; not in flight)
+
+- **#2 — hint persistence after completion** (Phase 20 critique Problem 3). DEFERRED at PR #159. First attempt re-triggered Phase 20's role-swap bug on standing-PR rows (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Needs a layout-stable redesign: fixed-height hint slot so adding/removing the Text doesn't reflow the parent Column. See `_shouldShowHint`'s doc + test note in `set_row.dart` / `set_row_test.dart`.
+- **Audit Finding A — Bodyweight row renders meaningless weight column** ([redesign-input], surfaced by #5). Pass `isBodyweight` flag into `SetRow`; hide `_WeightStepperCell` + weight column header; expand reps column to flex: 1. See `critique.md` post-Phase-20 audit section for full spec.
+- **Audit Finding B — Pending FL micro-label red reads as error state** ([redesign-input], surfaced by #5). Switch `_setTypeLabelColor(SetType.failure)` from `AppColors.error α 0.55` to `AppColors.warning α 0.6` (#FFB84D amber). See `critique.md` post-Phase-20 audit section.
+- **Audit "Add set" button visual weight** ([v2-park], surfaced by #5). Tolerable for v1; revisit with post-launch telemetry on `sets per exercise` vs `add-set taps`.
+- **Visual on-device walkthrough** (manual, user-driven). Real Brazilian-mid-market 360dp device sweep — pixel-perfect spacing, haptic timing, celebration animation curves, real-thumb misfire rates under sweat. None of those are catchable from code.
 
 ---
 
