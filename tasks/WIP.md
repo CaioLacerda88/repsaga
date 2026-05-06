@@ -39,9 +39,10 @@ Each item ships as its own PR for independent review/revert. PLAN.md Phase 20 "D
 
 - [x] Plan written to WIP
 - [x] **#4 — `Rotinas` → `Treinos` rename** (PR #158, merged `27dbdd5`)
-- [ ] **#1 + #2 — match-indicator + hint persistence** (in progress)
-- [ ] #3 (queued, ui-ux-critic dispatch first)
-- [ ] #5 (queued)
+- [x] **#1 — match indicator** (PR #159, merged `346660e`)
+- [ ] **#2 — hint persistence after completion** — DEFERRED. First attempt re-triggered Phase 20's role-swap bug on standing-PR rows (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Needs a layout-stable redesign: fixed-height hint slot so adding/removing the Text doesn't reflow the parent Column. See `_shouldShowHint`'s doc + test note in `set_row.dart` / `set_row_test.dart`.
+- [ ] **#3 — set-type long-press discoverability redesign** (in progress — ui-ux-critic dispatch next)
+- [ ] #5 (queued — manual walkthrough)
 
 ---
 

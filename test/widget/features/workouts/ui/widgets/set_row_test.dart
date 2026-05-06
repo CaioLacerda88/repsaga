@@ -488,6 +488,102 @@ void main() {
       );
     });
 
+    group('set-type micro-label (Phase 20 polish #3)', () {
+      // The persistent "WK" / "WU" / "DR" / "FL" label below the set number
+      // is the visible affordance for the long-press cycle on the set-number
+      // cell. Without it the cycle interaction was structurally hidden — see
+      // the original Phase 20 critique Problem 2 ("set-type ... not
+      // discoverable as interactive"). The label is self-teaching: a user
+      // who long-presses and watches the abbr cycle learns the feature.
+
+      testWidgets('renders WK label for a Working set', (tester) async {
+        final set = makeSet(setType: SetType.working);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+        );
+        expect(find.text('WK'), findsOneWidget);
+      });
+
+      testWidgets('renders WU label for a Warmup set', (tester) async {
+        final set = makeSet(setType: SetType.warmup);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+        );
+        expect(find.text('WU'), findsOneWidget);
+      });
+
+      testWidgets('renders DR label for a Drop set', (tester) async {
+        final set = makeSet(setType: SetType.dropset);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+        );
+        expect(find.text('DR'), findsOneWidget);
+      });
+
+      testWidgets('renders FL label for a Failure set', (tester) async {
+        final set = makeSet(setType: SetType.failure);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+        );
+        expect(find.text('FL'), findsOneWidget);
+      });
+
+      testWidgets(
+        'set-number cell preserves its 48dp tap-target floor with the new label',
+        (tester) async {
+          // BUG-018 contract: the set-number cell must keep at least 48×48dp
+          // for the long-press cycle interaction to fire reliably under
+          // sweaty thumbs on 360dp Brazilian-mid-market screens. Adding the
+          // micro-label below the digit must not regress this floor.
+          final set = makeSet(setType: SetType.working);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          // The cell's Container has `BoxConstraints(minWidth: 48,
+          // minHeight: 48)` — verify the rendered size respects that.
+          final cellFinder = find.ancestor(
+            of: find.text('WK'),
+            matching: find.byType(Container),
+          );
+          // Multiple Container ancestors exist; the closest with the 48dp
+          // floor is what we care about. Take the first that has the
+          // expected min-height.
+          final size = tester.getSize(cellFinder.first);
+          expect(size.height, greaterThanOrEqualTo(48));
+          expect(size.width, greaterThanOrEqualTo(48));
+        },
+      );
+
+      testWidgets(
+        'tap-to-copy dotted underline still applies to the digit (set #2+), NOT the type label',
+        (tester) async {
+          // The underline is the affordance for tap-to-copy-last-set; it
+          // must NOT extend to the type label, which is the affordance for
+          // the long-press cycle. Conflating the two would teach the user
+          // that tapping cycles types — wrong interaction.
+          final set = makeSet(setNumber: 2, setType: SetType.warmup);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          final digitText = tester.widget<Text>(find.text('2'));
+          final labelText = tester.widget<Text>(find.text('WU'));
+
+          expect(
+            digitText.style?.decoration,
+            TextDecoration.underline,
+            reason: 'set-#2 digit should keep the dotted underline.',
+          );
+          expect(
+            labelText.style?.decoration,
+            anyOf(isNull, TextDecoration.none),
+            reason: 'set-type label must not carry the tap-to-copy underline.',
+          );
+        },
+      );
+    });
+
     group('isNew checkbox lock', () {
       testWidgets(
         'checkbox is non-interactive within 600ms when isNew is true',

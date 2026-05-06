@@ -570,6 +570,15 @@ class _SetNumberCell extends StatelessWidget {
               ? AppColors.hotViolet.withValues(alpha: 0.9)
               : AppColors.textCream);
 
+    // Set-type micro-label color (Phase 20 polish #3 — long-press
+    // discoverability). Mirrors the rune-stripe color family at ~50–60%
+    // alpha so the label reads as quiet metadata, not a competing badge.
+    // On a completed row everything dims together via the shared `color`
+    // variable above — the label inherits the same alpha falloff.
+    final typeLabelColor = set.isCompleted
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.45)
+        : _setTypeLabelColor(set.setType);
+
     return Semantics(
       label: isCopyable
           ? l10n.setNumberCopySemantics(
@@ -597,19 +606,42 @@ class _SetNumberCell extends StatelessWidget {
             // under sweaty thumbs.
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             alignment: Alignment.center,
-            child: Text(
-              '${set.setNumber}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                // Underline hint for tap-to-copy on sets > 1.
-                decoration: isCopyable ? TextDecoration.underline : null,
-                decorationColor: isCopyable
-                    ? AppColors.hotViolet.withValues(alpha: 0.4)
-                    : null,
-                decorationStyle: TextDecorationStyle.dotted,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${set.setNumber}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    // Underline hint for tap-to-copy on sets > 1. Note: the
+                    // underline lives on the digit, NOT on the type label —
+                    // tap-to-copy is a per-digit affordance and adding the
+                    // underline to the label would conflate the two
+                    // interactions.
+                    decoration: isCopyable ? TextDecoration.underline : null,
+                    decorationColor: isCopyable
+                        ? AppColors.hotViolet.withValues(alpha: 0.4)
+                        : null,
+                    decorationStyle: TextDecorationStyle.dotted,
+                  ),
+                ),
+                // Persistent set-type micro-label below the digit. The label
+                // is the affordance for the long-press cycle: a user who
+                // sees `WU` and wonders what it means, long-presses, and
+                // watches it cycle WU → DR → FL → WK has learned the feature
+                // without a tooltip. Self-teaching by design.
+                Text(
+                  set.setType.tinyAbbr,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                    color: typeLabelColor,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -617,6 +649,19 @@ class _SetNumberCell extends StatelessWidget {
     );
   }
 }
+
+/// Set-type micro-label color (pre-completion). Mirrors the rune-stripe
+/// color family at reduced alpha — Working tracks the default pending
+/// hotViolet, Warmup tracks textCream (the brightest neutral), Drop tracks
+/// success (green), Failure tracks error (red). The colors are the same
+/// state-conveying palette the rest of the row uses; the label is a textual
+/// echo of the stripe rather than a new color signal.
+Color _setTypeLabelColor(SetType type) => switch (type) {
+  SetType.working => AppColors.hotViolet.withValues(alpha: 0.55),
+  SetType.warmup => AppColors.textCream.withValues(alpha: 0.45),
+  SetType.dropset => AppColors.success.withValues(alpha: 0.55),
+  SetType.failure => AppColors.error.withValues(alpha: 0.55),
+};
 
 /// Vertical separator wrapper around a stepper. The mockup's stepper columns
 /// use 1dp hairline borders to read as discrete data-table cells without
