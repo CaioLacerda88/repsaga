@@ -39,21 +39,7 @@ import {
 } from '../helpers/workout';
 import { GAMIFICATION, NAV, SAGA } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
-
-// ---------------------------------------------------------------------------
-// Admin Supabase client — used by E3/E6 to read body_part_progress directly.
-// Credentials match test/e2e/.env.local (local Supabase defaults).
-// ---------------------------------------------------------------------------
-function makeAdminClient() {
-  const url = process.env['SUPABASE_URL'] ?? 'http://127.0.0.1:54321';
-  const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'] ??
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-    '.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0' +
-    '.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { getAdminClient } from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // User-authenticated Supabase client — required for save_workout which has
@@ -180,7 +166,7 @@ test.describe('RPG foundation — backfill on first login', { tag: '@smoke' }, (
     }
 
     // Look up rpgFoundationUser in the DB to verify backfill ran.
-    const admin = makeAdminClient();
+    const admin = getAdminClient();
     const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const foundUser = userList?.users?.find(
       (u) => u.email === getUser('rpgFoundationUser').email,
@@ -259,7 +245,7 @@ test.describe('RPG foundation — first-workout XP applied', { tag: '@smoke' }, 
   test('should record XP in body_part_progress after completing first workout (18a-E2)', async ({
     page,
   }) => {
-    const admin = makeAdminClient();
+    const admin = getAdminClient();
 
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -354,7 +340,7 @@ test.describe('RPG foundation — re-save no double XP (BUG-RPG-001)', { tag: '@
   test('should not double XP when save_workout is called twice with same IDs (18a-E3)', async ({
     page,
   }) => {
-    const admin = makeAdminClient();
+    const admin = getAdminClient();
 
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -636,7 +622,7 @@ test.describe('RPG foundation — compound body-part attribution (18a-E6)', () =
   test('should distribute XP across legs/core/back per squat attribution map (18a-E6)', async ({
     page,
   }) => {
-    const admin = makeAdminClient();
+    const admin = getAdminClient();
 
     // Look up rpgFreshUser ID.
     const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 });

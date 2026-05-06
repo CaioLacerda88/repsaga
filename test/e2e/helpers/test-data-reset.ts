@@ -28,24 +28,28 @@
  * (`00001_initial_schema.sql:84,94`), so deleting a `workouts` row removes
  * its descendants automatically.
  *
- * Tier 1 scope (this file)
- * ------------------------
+ * Scope (this file)
+ * -----------------
+ * - getAdminClient / getUserIdByEmail — primitives the spec files use to
+ *   reach Supabase as the service role. Single source of truth; spec files
+ *   import these instead of re-defining their own.
  * - resetExerciseHistoryForUser — surgical reset of one (user, exercise)
  *   pair (PRs + peak_loads + sets + workout_exercises + workouts that ONLY
- *   contained that exercise). Used by `rank-up-celebration.spec.ts:815`
- *   to neutralise `personal-records.spec.ts:309`'s 999 kg PR before
- *   asserting that 105 kg × 5 is a new PR.
- * - seedPrForUser — re-establishes a canonical PR after the reset, so the
- *   tested assertion ("beat the prior PR") has a known baseline to beat.
- *   Mirrors `seedPRData` in `global-setup.ts` but parameterised + uses
- *   a different sentinel name ('E2E Reset Seed') for idempotency.
+ *   contained that exercise). Retained for potential reuse; no longer
+ *   called from `rank-up-celebration.spec.ts` post-Phase-21 (the unbeatable-
+ *   weight tactic in that spec replaced the surgical reset, and Phase 21's
+ *   per-worker user isolation removes the cross-spec pollution this helper
+ *   was designed to neutralise).
+ * - seedPrForUser — re-establishes a canonical PR after a reset. Sibling to
+ *   `seedPRData` in `global-setup.ts` but parameterised + uses a different
+ *   sentinel name ('E2E Reset Seed') for idempotency. Retained for reuse.
  * - resetRpgStateForUser — clears workouts + xp + body_part_progress +
  *   backfill_progress + exercise_peak_loads + personal_records for a user.
- *   Used by `saga.spec.ts:63` and `:387` to fix the rpg-foundation→saga
- *   pollution path where surviving workout rows re-trigger backfill on
- *   next login.
+ *   Still in active use by `saga.spec.ts` to fix INTRA-worker
+ *   rpg-foundation→saga pollution (Phase 21 fixes cross-worker, not
+ *   intra-worker pollution between sequential spec files on one worker).
  *
- * Tier 2 (locale bleed, offline-sync) is DEFERRED — will be subsumed by
+ * Tier 2 (locale bleed, offline-sync) was DEFERRED and then subsumed by
  * Phase 21's per-worker isolation. Do NOT add Tier 2 helpers here.
  */
 

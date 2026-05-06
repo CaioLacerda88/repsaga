@@ -24,7 +24,6 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { login } from '../helpers/auth';
 import {
   startEmptyWorkout,
@@ -37,46 +36,13 @@ import {
 import { WORKOUT, SAGA, HOME, CELEBRATION, SET_ROW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
-// NOTE: rank-up-celebration's "PR signal inline display" describe block
-// previously used `test/e2e/helpers/test-data-reset.ts` to neutralise
-// cross-spec pollution from `personal-records.spec.ts:309`'s 999 kg PR
-// on smokePR. That approach traded ordering pollution for a concurrent
-// race (Worker B's reset wiped Worker A's mid-test data on smokePR).
-// Reverted to the simpler unbeatable-weight tactic until Phase 21
-// (per-worker user isolation) lands. See PLAN.md Phase 21 + the
-// describe-block comment near line 821 below.
-
-// ---------------------------------------------------------------------------
-// Admin Supabase client — used to reseed RPG state before each test repeat.
-// Seeding in beforeEach (rather than relying solely on global-setup) ensures
-// the test is repeatable with --repeat-each: each run starts with a clean
-// XP slate, preventing novelty-discount drift from prior workout history.
-// ---------------------------------------------------------------------------
-function makeAdminClient() {
-  const url = process.env['SUPABASE_URL'] ?? 'http://127.0.0.1:54321';
-  const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'] ??
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-    '.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0' +
-    '.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-async function getUserId(email: string): Promise<string | null> {
-  const admin = makeAdminClient();
-  // perPage: 1000 — Phase 21 creates ~168 users; the GoTrue default 50
-  // silently truncates and would miss users on page 2+.
-  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const user = data?.users?.find((u) => u.email === email);
-  return user?.id ?? null;
-}
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 // Reseed rpgRankUpThreshold: chest rank 2 @ 120 XP, all others rank 1 @ 0 XP.
 // Called in beforeEach so the test is repeatable with --repeat-each.
 async function reseedRankUpThresholdUser(): Promise<void> {
-  const admin = makeAdminClient();
-  const userId = await getUserId(getUser('rpgRankUpThreshold').email);
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('rpgRankUpThreshold').email);
   if (!userId) return;
 
   // Delete all workouts (cascade removes workout_exercises → sets → nulls PR set_id).
@@ -132,8 +98,8 @@ async function reseedRankUpThresholdUser(): Promise<void> {
 // See `seedRpgMultiCelebrationUser` in global-setup.ts for the full
 // derivation (BUG-017, Cluster 3).
 async function reseedMultiCelebrationUser(): Promise<void> {
-  const admin = makeAdminClient();
-  const userId = await getUserId(getUser('rpgMultiCelebration').email);
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('rpgMultiCelebration').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -196,8 +162,8 @@ async function reseedMultiCelebrationUser(): Promise<void> {
 // Called in beforeEach so the test is repeatable with --repeat-each without
 // conflicting parallel runs on the same user (serial mode + reseed = isolation).
 async function reseedRpgFreshUser(): Promise<void> {
-  const admin = makeAdminClient();
-  const userId = await getUserId(getUser('rpgFreshUser').email);
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -248,8 +214,8 @@ async function reseedRpgFreshUser(): Promise<void> {
 // after novelty discounting. The previous 190 XP seed (8.6 XP gap) was
 // occasionally insufficient when XP attribution changed slightly between runs.
 async function reseedOverflowQueueUser(): Promise<void> {
-  const admin = makeAdminClient();
-  const userId = await getUserId(getUser('rpgOverflowQueue').email);
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('rpgOverflowQueue').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
@@ -315,8 +281,8 @@ async function reseedOverflowQueueUser(): Promise<void> {
 // test on parallel workers — both workers shared rpgOverflowQueue previously,
 // causing XP state races that prevented the overflow card from appearing.
 async function reseedOverflowTapCardUser(): Promise<void> {
-  const admin = makeAdminClient();
-  const userId = await getUserId(getUser('rpgOverflowTapCard').email);
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('rpgOverflowTapCard').email);
   if (!userId) return;
 
   await admin.from('workouts').delete().eq('user_id', userId);
