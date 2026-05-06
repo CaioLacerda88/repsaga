@@ -349,26 +349,29 @@ void main() {
         },
       );
 
-      testWidgets(
-        'keeps ghost text visible after completion when current values differ from last (Pillar 1 hint persistence)',
-        (tester) async {
-          // Completed set @ 100 kg × 5; last session was 80 kg × 8 — distinct
-          // values, so the hint stays visible as a retrospective reference.
-          // Critique Problem 3: "the previous-session hint disappears the
-          // moment a set is completed... that reference is most useful, not
-          // least, between sets with music loud and a rest timer running."
-          final set = makeSet(weight: 100.0, reps: 5, isCompleted: true);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
+      testWidgets('hides ghost text when set is already completed', (
+        tester,
+      ) async {
+        // Critique Problem 3 wanted the hint to persist post-completion too,
+        // but the first persistence attempt (PR #159) re-triggered the
+        // Phase 20 Flutter Web semantics-engine role-swap bug on standing-PR
+        // rows: adding the hint Text widget on completion caused a subsequent
+        // SemanticsUpdate during GenericRole → SemanticButton, dropping the
+        // row frame's `flt-semantics-identifier` emission. Reverted to the
+        // pre-completion-only hint here; persistence needs a layout-stable
+        // redesign in a follow-up PR (e.g. fixed-height hint slot so the
+        // parent Column doesn't reflow when the Text appears/disappears).
+        final set = makeSet(isCompleted: true);
+        final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
 
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+          ),
+        );
 
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-        },
-      );
+        expect(find.text('Previous: 80kg × 8'), findsNothing);
+      });
 
       testWidgets('hides ghost text when lastSet is null', (tester) async {
         final set = makeSet(isCompleted: false);

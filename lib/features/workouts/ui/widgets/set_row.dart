@@ -164,17 +164,29 @@ class _SetRowState extends ConsumerState<SetRow> {
   /// Whether the regular "Previous: {weight} × {reps}" hint line should be
   /// shown.
   ///
-  /// Suppressed when the values exactly match — that case is covered by the
-  /// match-indicator path ([_matchedLastSet]) which gives the row a clearer
-  /// "you matched last session" affordance.
-  ///
-  /// Critique Problem 3 (Pillar 1) called for the previous-session reference
-  /// to remain visible AFTER completion too, so the lifter can confirm
-  /// retrospectively. Earlier behaviour suppressed the hint on completion;
-  /// this method now keeps it on regardless of `isCompleted`.
+  /// Suppressed when:
+  ///   * the set is already completed — the hint stays for *pre-completion*
+  ///     reference. (Critique Problem 3 / Pillar 1 argued for keeping the
+  ///     hint visible after completion too. The first attempt at that —
+  ///     PR #159 — added a sibling Text widget that re-triggered the
+  ///     Phase 20 Flutter Web semantics-engine role-swap bug on standing-
+  ///     PR rows: the row frame's `flt-semantics-identifier` stopped
+  ///     emitting because the new descendant Text caused a subsequent
+  ///     SemanticsUpdate during the GenericRole → SemanticButton role
+  ///     transition. `Semantics(container: true, explicitChildNodes: true)`
+  ///     on the hint Padding kept the LABEL out of the parent group but did
+  ///     NOT prevent the role-swap from dropping the row identifier. A
+  ///     proper fix needs a layout-stable design — e.g., a fixed-height
+  ///     placeholder for the hint slot — so adding/removing the hint Text
+  ///     doesn't reflow the parent Column on completion. Deferred to a
+  ///     dedicated PR; the match indicator below is shipped alone for now.
+  ///   * the values exactly match — that case is covered by the
+  ///     match-indicator path ([_matchedLastSet]) which gives the row a
+  ///     clearer "you matched last session" affordance.
   bool _shouldShowHint() {
     final lastSet = widget.lastSet;
     if (lastSet == null) return false;
+    if (widget.set.isCompleted) return false;
     if (_matchedLastSet()) return false;
     return true;
   }
@@ -231,30 +243,53 @@ class _SetRowState extends ConsumerState<SetRow> {
             // heroGold scarcity rule). textDim at full alpha gives the line
             // enough weight to read as a confirmation signal without
             // competing with the gold-tinted predicted/standing-PR rows.
+            //
+            // Wrapped in `Semantics(container: true, explicitChildNodes:
+            // true)`: post-Phase-20 the hint is allowed to remain visible
+            // after completion, and on a standing-PR row the row frame's
+            // SemanticsNode role transitions GenericRole → SemanticButton
+            // on a subsequent update. Without an explicit boundary here,
+            // the sibling hint Text's label gets collected into the
+            // ancestor exercise-card's group, which destabilises the row
+            // frame's `flt-semantics-identifier` emission (the role-swap
+            // bug captured in `tasks/lessons.md`). The container/explicit-
+            // child-nodes pair pins the hint as its own a11y island so the
+            // row frame's identifier survives the role swap.
             Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: Text(
-                AppLocalizations.of(context).matchedLastSet,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                  fontWeight: FontWeight.w600,
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Text(
+                  AppLocalizations.of(context).matchedLastSet,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             )
           else if (_shouldShowHint())
+            // Same `Semantics(container: true, explicitChildNodes: true)`
+            // a11y-island treatment as the match-indicator branch above —
+            // see that block's comment for the rationale.
             Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: Text(
-                AppLocalizations.of(context).previousSet(
-                  AppNumberFormat.weight(
-                    (widget.lastSet!.weight ?? 0).toDouble(),
-                    locale: Localizations.localeOf(context).languageCode,
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Text(
+                  AppLocalizations.of(context).previousSet(
+                    AppNumberFormat.weight(
+                      (widget.lastSet!.weight ?? 0).toDouble(),
+                      locale: Localizations.localeOf(context).languageCode,
+                    ),
+                    weightUnit,
+                    widget.lastSet!.reps ?? 0,
                   ),
-                  weightUnit,
-                  widget.lastSet!.reps ?? 0,
-                ),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
                 ),
               ),
             ),
