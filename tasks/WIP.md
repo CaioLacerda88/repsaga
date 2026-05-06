@@ -38,8 +38,8 @@ Each item ships as its own PR for independent review/revert. PLAN.md Phase 20 "D
 ### Currently active
 
 - [x] Plan written to WIP
-- [ ] **#4 — `Rotinas` → `Treinos` rename** (in progress)
-- [ ] #1 + #2 (queued)
+- [x] **#4 — `Rotinas` → `Treinos` rename** (PR #158, merged `27dbdd5`)
+- [ ] **#1 + #2 — match-indicator + hint persistence** (in progress)
 - [ ] #3 (queued, ui-ux-critic dispatch first)
 - [ ] #5 (queued)
 

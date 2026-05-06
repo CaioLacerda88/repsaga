@@ -349,20 +349,26 @@ void main() {
         },
       );
 
-      testWidgets('hides ghost text when set is already completed', (
-        tester,
-      ) async {
-        final set = makeSet(isCompleted: true);
-        final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
+      testWidgets(
+        'keeps ghost text visible after completion when current values differ from last (Pillar 1 hint persistence)',
+        (tester) async {
+          // Completed set @ 100 kg × 5; last session was 80 kg × 8 — distinct
+          // values, so the hint stays visible as a retrospective reference.
+          // Critique Problem 3: "the previous-session hint disappears the
+          // moment a set is completed... that reference is most useful, not
+          // least, between sets with music loud and a rest timer running."
+          final set = makeSet(weight: 100.0, reps: 5, isCompleted: true);
+          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
 
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+            ),
+          );
 
-        expect(find.text('Previous: 80kg × 8'), findsNothing);
-      });
+          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
+        },
+      );
 
       testWidgets('hides ghost text when lastSet is null', (tester) async {
         final set = makeSet(isCompleted: false);
@@ -390,6 +396,91 @@ void main() {
 
           // Whole-number weights should display without a decimal suffix.
           expect(find.text('Previous: 100kg × 5'), findsOneWidget);
+        },
+      );
+    });
+
+    group('match indicator (Pillar 1)', () {
+      testWidgets(
+        'shows "= last set" affordance when current values exactly equal last session',
+        (tester) async {
+          // Pending set + last session both at 80 kg × 8 → match. Pillar 1
+          // calls for a subtle (non-gold) confirmation signal so the user's
+          // action becomes "edit-then-complete" rather than "enter-then-
+          // complete." This affordance replaces the regular previous-session
+          // hint when matching.
+          final set = makeSet(weight: 80.0, reps: 8, isCompleted: false);
+          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+            ),
+          );
+
+          expect(find.text('= last set'), findsOneWidget);
+          // The regular hint should NOT also show — the match indicator
+          // is the deliberate replacement.
+          expect(find.textContaining('Previous:'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'still shows match indicator after the set is completed (matched-and-locked confirmation)',
+        (tester) async {
+          // Confirms the matched state is a legitimate end-state too — a set
+          // the user completed at exactly last session's values reads as
+          // "you matched last session" through the entire row lifecycle.
+          final set = makeSet(weight: 80.0, reps: 8, isCompleted: true);
+          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+            ),
+          );
+
+          expect(find.text('= last set'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'does NOT show match indicator on a freshly-added zero-valued set even if last set is also zero',
+        (tester) async {
+          // A new set defaults to weight=0/reps=0 before the user enters
+          // anything. Showing "= last set" in that case would be a lie — the
+          // user hasn't matched anything yet. Last set with weight=0 reps=0
+          // is also exotic but covered for symmetry.
+          final set = makeSet(weight: 0, reps: 0, isCompleted: false);
+          final lastSet = makeSet(id: 'last-set', weight: 0, reps: 0);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+            ),
+          );
+
+          expect(find.text('= last set'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'falls back to regular hint when one value matches but the other does not',
+        (tester) async {
+          // Same weight, different reps → not a match. The user is on track
+          // for a rep PR potentially; the regular hint is the right
+          // affordance.
+          final set = makeSet(weight: 80.0, reps: 9, isCompleted: false);
+          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+            ),
+          );
+
+          expect(find.text('= last set'), findsNothing);
+          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
         },
       );
     });

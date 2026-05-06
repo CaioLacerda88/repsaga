@@ -748,6 +748,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get matchedLastSet => '= série anterior';
+
+  @override
   String get discardWorkoutTitle => 'Descartar Sessão?';
 
   @override

@@ -142,23 +142,40 @@ class _SetRowState extends ConsumerState<SetRow> {
     }
   }
 
-  /// Whether the previous-session hint line should be shown.
+  /// Whether the row's current weight × reps exactly equal the previous-
+  /// session set. When true, the row renders a subtle "= last set" indicator
+  /// in place of the regular previous-session hint (Pillar 1, Phase 20
+  /// post-merge polish).
   ///
-  /// Suppress the hint when pre-filled values match the last session exactly
-  /// and the set is not yet completed (the hint is redundant in that case).
+  /// Treats null/zero current values as non-matching even if last is also
+  /// zero — a freshly-added set with weight=0/reps=0 shouldn't read as
+  /// "matching" before the user enters anything.
+  bool _matchedLastSet() {
+    final lastSet = widget.lastSet;
+    if (lastSet == null) return false;
+    final currentWeight = widget.set.weight ?? 0;
+    final currentReps = widget.set.reps ?? 0;
+    if (currentWeight == 0 && currentReps == 0) return false;
+    final lastWeight = lastSet.weight ?? 0;
+    final lastReps = lastSet.reps ?? 0;
+    return currentWeight == lastWeight.toDouble() && currentReps == lastReps;
+  }
+
+  /// Whether the regular "Previous: {weight} × {reps}" hint line should be
+  /// shown.
+  ///
+  /// Suppressed when the values exactly match — that case is covered by the
+  /// match-indicator path ([_matchedLastSet]) which gives the row a clearer
+  /// "you matched last session" affordance.
+  ///
+  /// Critique Problem 3 (Pillar 1) called for the previous-session reference
+  /// to remain visible AFTER completion too, so the lifter can confirm
+  /// retrospectively. Earlier behaviour suppressed the hint on completion;
+  /// this method now keeps it on regardless of `isCompleted`.
   bool _shouldShowHint() {
     final lastSet = widget.lastSet;
     if (lastSet == null) return false;
-    if (widget.set.isCompleted) return false;
-
-    final currentWeight = widget.set.weight ?? 0;
-    final currentReps = widget.set.reps ?? 0;
-    final lastWeight = lastSet.weight ?? 0;
-    final lastReps = lastSet.reps ?? 0;
-
-    if (currentWeight == lastWeight.toDouble() && currentReps == lastReps) {
-      return false;
-    }
+    if (_matchedLastSet()) return false;
     return true;
   }
 
@@ -208,7 +225,23 @@ class _SetRowState extends ConsumerState<SetRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_shouldShowHint())
+          if (_matchedLastSet())
+            // Subtle "= last set" affordance — Pillar 1's match indicator.
+            // Deliberately NOT gold (gold is reserved for PRs by the
+            // heroGold scarcity rule). textDim at full alpha gives the line
+            // enough weight to read as a confirmation signal without
+            // competing with the gold-tinted predicted/standing-PR rows.
+            Padding(
+              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
+              child: Text(
+                AppLocalizations.of(context).matchedLastSet,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else if (_shouldShowHint())
             Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
               child: Text(
