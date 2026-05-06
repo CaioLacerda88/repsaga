@@ -78,7 +78,8 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18 | RPG System v1 (per `docs/superpowers/specs/2026-04-25-rpg-system-v1-design.md`) | DONE | #112–#120 |
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
-| 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~25min, workers 2→3) | DONE | #154 |
+| 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
+| Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
 ### Section Index
@@ -1325,7 +1326,7 @@ Direction B (Tactile Data Table) shipped. Active workout screen now uses a 5-sta
 - **Test count:** 2369 unit/widget/integration, all green. New coverage: 5-state widget matrix, supersession transitions, alignment golden, provider integration, finish-bottom-bar contract pins.
 - **Notable architectural decisions:** (a) `RewardAccent` ancestor pattern enforces heroGold scarcity (`scripts/check_reward_accent.sh` gate). (b) `_DoneCell` predicted-PR path uses an asymmetric Semantics: outer `Semantics(button: true, onTap:)` + inner `excludeFromSemantics: true` to bypass a Flutter Web semantics-engine role-swap bug (engine `lib/web_ui/lib/src/engine/semantics/semantics.dart` lines 1763-1771 + 2282-2312). The Checkbox path stays natural — DO NOT "consistency-fix" it. Widget test pins the contract.
 - **E2E lessons captured** (see `tasks/lessons.md` + `tasks/e2e-pollution-audit.md`): every `Semantics(identifier:)` for e2e MUST pair with `container: true, explicitChildNodes: true`; deleting a UI widget with e2e selectors requires a cross-spec grep; new e2e PR tests must verify they actually beat global-setup seeds; cross-spec test-data pollution between describe blocks sharing a Supabase user is structural — Tier 1 cleanup helper at `test/e2e/helpers/test-data-reset.ts` lives there for Phase 21 to use.
-- **Deferred follow-ups:** `Rotinas → Treinos` rename (`docs/design/2026-05-01-active-workout-redesign/naming-treinos-vs-rotinas.md`); Pillar 1 target-state-first pre-fill; set-type long-press menu redesign; tap-to-numpad input. Plus the post-merge **validation walkthrough** (stock weighted + bodyweight workouts → screenshots → ui-ux-critic with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging; `[redesign-input]` findings append to `critique.md`).
+- **Deferred follow-ups (post-Phase-20 polish train, all DONE except where noted):** Rename pt-BR `Rotinas → Treinos` + `Sessão` (PR #158) · Match indicator "= last set" — Pillar 1 (PR #159) · Set-type long-press discoverability — persistent `WK/WU/DR/FL` micro-label (PR #160) · Validation audit appended to `critique.md` (PR #161). **Still deferred:** post-completion hint persistence (Phase 20 critique Problem 3 — first attempt re-triggered the role-swap bug; needs layout-stable redesign), bodyweight row weight-column noise + pending-FL label color (audit Findings A+B), and a manual on-device walkthrough — all in the **Active Backlog** section below.
 
 ---
 
@@ -1337,7 +1338,71 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 - **Test count:** 214/214 e2e green at workers=3 in 24.6 min (vs ~32 min baseline). 16 consecutive passes of the previously-fragile S4/S4b across stress configs (workers=3 + `--repeat-each=5` = 10/10; workers=4 + `--repeat-each=3` = 6/6). `@flaky` tag removed.
 - **Notable architectural decisions:** (a) `WORKERS_COUNT` is a single export consumed by both `playwright.config.ts` and `global-setup.ts` — drift would silently misprovision users with a confusing "user not found" failure. (b) `mode: serial` describe blocks + worker-scoped users + `fullyParallel: false` keep within-file order serial; only across-file parallelism is exploited (intra-file parallelism would need per-test isolation we don't yet have). (c) S4 + S4b refactored to drop e2e wall-clock animation assertions (`Timer.delayed` 1.1 s overlay holds, 4 s overflow auto-dismiss) — those properties live at the widget-test layer (`celebration_overflow_card_test.dart` with `tester.pump(Duration)` against a fake clock), where they're cheap and deterministic. e2e is the wrong layer to measure animation timers. (d) Tier 1 `resetRpgStateForUser` retained in `saga.spec.ts:63` and `:387` — Phase 21 fixes *cross-worker* pollution, not *intra-worker* pollution between sequential spec files within a single worker.
 - **Latent infra bugs fixed during implementation:** GoTrue `listUsers()` default `perPage: 50` silently truncating user lookups at 168+ users (fixed: `perPage: 1000`); full-parallel `Promise.allSettled` over 168 deletes saturating GoTrue with ~25% 500s (fixed: 8-wide batched delete); Supabase Auth canonicalizing emails to lowercase causing case-sensitive lookups to mismatch role keys with uppercase letters like `rpgFoundationUser` (fixed: lowercase inside `buildEmailForWorker`); intra-worker pollution between sequential spec files within a single worker (fixed: surgical Tier 1 reset retained in saga.spec.ts).
-- **Deferred follow-ups:** Raise `sign_in_sign_ups` in `supabase/config.toml` + mirror in CI's `npx supabase start` to enable workers=4 (would shave ~3 more min off CI; gated on rate-limit fix). 3 reviewer nits from PR #154 (cleanup pass). Phase 20 validation walkthrough still owed (stock weighted + bodyweight workouts on the redesigned active workout screen → screenshots → ui-ux-critic review with `[ship-now]` / `[redesign-input]` / `[v2-park]` tagging).
+- **Deferred follow-ups (all DONE post-merge):** Raised local `sign_in_sign_ups` 30 → 1000 + bumped `WORKERS_COUNT` 3 → 4 in PR #156 (~33% CI speedup vs the workers=2 baseline). Reviewer nits cleanup in PR #157 (consolidated duplicate admin-client + getUserId helpers, deleted stale doc references). Phase 20 validation walkthrough discharged in PR #161 (audit appendix in `critique.md`).
+
+---
+
+## Active Backlog
+
+Single source of truth for **deferred work that is not yet a phase but is on the backlog**. Items here are either:
+- (a) Real follow-ups identified during a shipped phase that didn't fit the phase's scope
+- (b) Architectural cleanups parked when their fix didn't have a clear blast-radius / urgency
+- (c) Manual / external-coordination tasks that can't run autonomously
+- (d) Post-launch decisions waiting on telemetry
+
+Items in (d) move to a "v2-park" sub-list and don't get worked on without new product input.
+
+### Phase 20 polish carry-overs (set-row redesign)
+
+| # | Item | Severity | Spec |
+|---|---|---|---|
+| 20-P-1 | **Post-completion hint persistence** (critique Problem 3 / Pillar 1) | medium | Keep `Previous: Xkg × Y` visible after the user completes a set so they can confirm retrospectively between sets. **Blocked on**: a layout-stable redesign — first attempt re-triggered Phase 20's Flutter Web semantics-engine role-swap bug (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Need a fixed-height hint slot so adding/removing the visible Text never reflows the parent Column. Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert note. |
+| 20-P-2 | **Bodyweight row hides meaningless weight column** (audit Finding A) | small | For `EquipmentType.bodyweight` exercises, `_WeightStepperCell` renders unconditionally with `0` taking 60% of input width while reps (the only meaningful input) gets 40%. Fix: pass `isBodyweight` flag into `SetRow`; hide weight stepper + column header; expand reps to `flex: 1`. Spec: `docs/design/2026-05-01-active-workout-redesign/critique.md` post-Phase-20 audit Finding A. |
+| 20-P-3 | **Pending FL micro-label color: error → warning** (audit Finding B) | trivial | One-line color swap. `_setTypeLabelColor(SetType.failure)` currently uses `AppColors.error α 0.55` (red) — reads as "something wrong" not "to-failure set." Change to `AppColors.warning α 0.6` (#FFB84D amber). Bundle with 20-P-2 for one set-row visual polish PR. |
+| 20-P-4 | **Manual on-device walkthrough** (Phase 20 #5 visual half) | medium | Real Brazilian-mid-market 360dp device sweep: pixel-perfect spacing, haptic timing, celebration animation curves, real-thumb misfire under sweat. Not catchable from code; needs human eyes on hardware. |
+
+### v2-park (post-launch telemetry decisions)
+
+- **"Add set" button visual weight** — `_AddSetButton` border at `colorScheme.primary α 0.3` reads as "optional" rather than "expected next step." Structurally correct (full-width, 48dp tap floor, isNew lock). Revisit when telemetry on `sets per exercise` vs `add-set taps` is available post-launch.
+- **Long-press discoverability — affordance still requires accidental discovery** despite the `WK/WU/DR/FL` micro-label (audit verdict on critique Problem 2: "partial"). If post-launch telemetry shows users never cycle set type, consider replacing long-press with tap-to-cycle (no modal layer) or a small icon hint adjacent to the abbr.
+
+### Architectural follow-ups (parked)
+
+- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain pre-existing queue items when the app boots already-online. Improvement: gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission (not the optimistic-default true). Worth fixing when a user reports a stuck queue badge after fresh launch.
+- **Two unpatched legacy `exercise_peak_loads` writers** (`_rpg_backfill_chunk` line ~263, `record_set_xp` line ~1656) still emit unguarded INSERTs. Migration `00051_peak_loads_multi_writer_guard.sql` BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration could add explicit `IF weight > 0` guards at the writer site for code-review explicitness. Not a correctness gap — purely a clean-code concern.
+- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no workflow runs them. A small CI step would catch Edge Function regressions.
+
+### Known flaky e2e tests
+
+See `test/e2e/FLAKY_TESTS.md` for the live register. Current entries are **methodology carryovers** (Supabase local rate limits + shared-user state under `--repeat-each`) — not bugs in production code or test code. Each one passes reliably in normal CI single-run mode.
+
+- `exercises.spec.ts:372` — "should filter exercises by name via search input" — pre-existing search-debounce flake. Passes on retry; investigation is its own line item.
+
+### Post-rebrand external services (manual coordination)
+
+External tasks remaining after the GymBuddy → RepSaga rename (PR #98). Codebase is 100% clean; these are out-of-repo:
+
+- **Supabase project display name** — Dashboard → Project Settings → General → rename to "RepSaga" (cosmetic; not blocking anything).
+- **Auth redirect URLs allowlist** — Dashboard → Authentication → URL Configuration → add `io.supabase.repsaga://login-callback/` **when Google Sign-In is enabled** (Phase 16b dep, not before).
+- **Brand assets** — register `repsaga.com` / `repsaga.app` / `repsaga.com.br`; lock `@repsaga` on Instagram, X/Twitter, TikTok.
+
+Phase 16-blocked external items (move to Phase 16's resume checklist when 16 unparks):
+- Play Console subscription product `repsaga_premium` — blocked on signed-AAB upload (keystore generation + Internal Testing release).
+
+### Phase 16 (Subscription Monetization) — PARKED status
+
+PR #93 (16a backend) + PR #99 (GCP migration to `repsaga-prod`) shipped. Status today:
+
+- **External infrastructure ready:** SA, Pub/Sub topic/push-sub, Supabase secrets rotated, Edge Functions redeployed. Test notification verified end-to-end (Play → Pub/Sub → `rtdn-webhook` 200).
+- **What's blocked:** Phase 16b (paywall UI + onboarding rewire), 16c (hard gate), 16d (analytics + launch gate). 16b is internal code work with no external blockers — **deferred by choice** to ship Phase 17 RPG first as the retention moat.
+- **Resume checklist** when Phase 16 unparks:
+  - Generate upload keystore: `keytool -genkey -keystore android/keystore/repsaga-release.jks -alias repsaga-release -keyalg RSA -keysize 2048 -validity 10000`
+  - Create `android/key.properties` (NOT committed) from `android/key.properties.example`
+  - Back up keystore + key.properties (1Password attachment, encrypted secondary)
+  - `flutter build appbundle --release`
+  - Upload AAB to Play Console → Internal testing draft. Enroll in Play App Signing (Google-managed)
+  - Create subscription product `repsaga_premium` (full pricing/trial spec under `## Phase 16 → Business Model` above)
+  - Resume Phase 16b dev per CLAUDE.md tech-lead pipeline
 
 ---
 
