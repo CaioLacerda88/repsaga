@@ -16,7 +16,19 @@ export default defineConfig({
   testDir: '.',
   timeout: 60_000,
   retries: 1,
-  workers: 2,
+  // Phase 21: bumped from 2 → 4 to take advantage of CI 4-CPU runners now
+  // that fixtures/worker-users.ts gives each worker its own pool of
+  // Supabase users. Concurrent races on shared user state are structurally
+  // impossible. Capped at 4 because CI runners have 4 vCPU — going higher
+  // hurts wall time as workers compete for compute and Supabase connections.
+  // Must match WORKERS_COUNT in global-setup.ts.
+  workers: 4,
+  // fullyParallel intentionally left at the Playwright default (false).
+  // Tests within the same spec file still run sequentially. Within-file
+  // parallelism is a separate optimization that requires per-test isolation
+  // we don't yet have (e.g., a single user finishing a workout invalidates
+  // shared XP state observed by the next test). Keeping this conservative
+  // until per-test isolation is proven across the suite.
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   use: {
