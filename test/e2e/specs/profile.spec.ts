@@ -20,14 +20,14 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
 import { PROFILE, PROFILE_WEEKLY_GOAL, SAGA } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
 // Smoke — profile weekly goal
 // ---------------------------------------------------------------------------
 test.describe('Profile — weekly goal', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.smokeProfileWeeklyGoal.email, TEST_USERS.smokeProfileWeeklyGoal.password);
+    await login(page, getUser('smokeProfileWeeklyGoal').email, getUser('smokeProfileWeeklyGoal').password);
     // Phase 18b: /profile now shows CharacterSheetScreen. The weekly goal row is
     // on /profile/settings (ProfileSettingsScreen). Navigate via the gear icon.
     await navigateToTab(page, 'Profile');

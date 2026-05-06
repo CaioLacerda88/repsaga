@@ -26,7 +26,7 @@ import {
   WORKOUT,
 } from '../helpers/selectors';
 import { startEmptyWorkout, addExercise } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // The custom exercise name used across tests in the smoke describe block.
@@ -42,8 +42,8 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeExercise.email,
-      TEST_USERS.smokeExercise.password,
+      getUser('smokeExercise').email,
+      getUser('smokeExercise').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -436,8 +436,8 @@ test.describe('Exercise form tips', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeFormTips.email,
-      TEST_USERS.smokeFormTips.password,
+      getUser('smokeFormTips').email,
+      getUser('smokeFormTips').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -575,8 +575,8 @@ test.describe('Exercise progress chart', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeExerciseProgress.email,
-      TEST_USERS.smokeExerciseProgress.password,
+      getUser('smokeExerciseProgress').email,
+      getUser('smokeExerciseProgress').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -628,8 +628,8 @@ test.describe('Exercise library', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullExercises.email,
-      TEST_USERS.fullExercises.password,
+      getUser('fullExercises').email,
+      getUser('fullExercises').password,
     );
     await navigateToTab(page, 'Exercises');
   });
@@ -1197,8 +1197,8 @@ test.describe('Exercise detail sheet', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullExDetailSheet.email,
-      TEST_USERS.fullExDetailSheet.password,
+      getUser('fullExDetailSheet').email,
+      getUser('fullExDetailSheet').password,
     );
     await startEmptyWorkout(page);
     await addExercise(page, SEED_EXERCISES.benchPress);

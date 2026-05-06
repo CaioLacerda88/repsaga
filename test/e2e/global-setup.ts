@@ -15,73 +15,30 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import {
+  buildEmailForWorker,
+  getAllUserKeys,
+  TestUserKey,
+  WORKERS_COUNT,
+} from './fixtures/worker-users';
 
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 
-const TEST_USERS = [
-  // Smoke suite users
-  'e2e-smoke-auth@test.local',
-  'e2e-smoke-workout@test.local',
-  'e2e-smoke-pr@test.local',
-  'e2e-smoke-exercise@test.local',
-  // Regression smoke users (BUG-001 through BUG-005)
-  'e2e-smoke-routine-start@test.local',
-  'e2e-smoke-form-tips@test.local',
-  // BUG-001 manual workout restore path
-  'e2e-smoke-workout-restore@test.local',
-  // BUG-003 negative path smoke
-  'e2e-smoke-routine-error@test.local',
-  // New smoke suite users (weekly plan, onboarding, routine management, etc.)
-  'e2e-smoke-weekly-plan@test.local',
-  'e2e-smoke-onboarding@test.local',
-  'e2e-smoke-routine-mgmt@test.local',
-  'e2e-smoke-weekly-plan-review@test.local',
-  'e2e-smoke-profile-goal@test.local',
-  // First-workout beginner CTA (P8) — fresh user with zero workouts
-  'e2e-smoke-first-workout@test.local',
-  // Full suite users (one per spec file)
-  'e2e-full-auth@test.local',
-  'e2e-full-exercises@test.local',
-  'e2e-full-workout@test.local',
-  'e2e-full-routines@test.local',
-  'e2e-full-pr@test.local',
-  'e2e-full-home@test.local',
-  'e2e-full-crash@test.local',
-  'e2e-full-history@test.local',
-  'e2e-full-manage-data@test.local',
-  // Regression full suite user (BUG-003/BUG-004/BUG-005)
-  'e2e-full-routine-regression@test.local',
-  // Exercise detail bottom sheet full spec (BUG-002 in-workout path)
-  'e2e-full-ex-detail-sheet@test.local',
-  // Exercise progress chart smoke (P1) — needs a seeded completed working set
-  'e2e-smoke-exercise-progress@test.local',
-  // Offline sync smoke (Phase 14) — offline-sync.spec.ts
-  'e2e-smoke-offline-sync@test.local',
-  // Localization smoke (Phase 15e) — localization.spec.ts
-  'e2e-smoke-localization@test.local',
-  // Localization en-default (Phase 15e) — en→pt picker + persistence tests
-  'e2e-smoke-localization-en@test.local',
-  // Phase 17b gamification intro — fresh user, saga intro never dismissed
-  'e2e-saga-intro@test.local',
-  // Phase 15f localization — pt-BR content tests
-  'e2e-smoke-loc-workout@test.local',
-  'e2e-full-history-pt@test.local',
-  'e2e-smoke-loc-routines@test.local',
-  'e2e-full-pr-pt@test.local',
-  // Phase 18a — RPG foundation e2e tests
-  'e2e-rpg-foundation@test.local',
-  'e2e-rpg-fresh@test.local',
-  // Phase 18c — celebration overlay e2e tests
-  'e2e-rpg-rank-up-threshold@test.local',
-  'e2e-rpg-multi-celebration@test.local',
-  'e2e-rpg-overflow-queue@test.local',
-  // Dedicated user for overflow card tap-to-/profile test (isolated from
-  // rpgOverflowQueue to prevent cross-worker XP races under --repeat-each).
-  'e2e-rpg-overflow-tap@test.local',
-  // Phase 18e — class-cross and title-equip E2E tests
-  'e2e-rpg-class-cross@test.local',
-  'e2e-rpg-title-equip@test.local',
-];
+/**
+ * Number of Playwright workers to provision users for. Must match
+ * `playwright.config.ts: workers`. Centralized in `fixtures/worker-users.ts`
+ * so global-setup, the playwright config, and the runtime helpers all read
+ * from the same constant — no over- or under-provision risk if someone bumps
+ * one and forgets the others. See `WORKERS_COUNT` in `worker-users.ts`.
+ */
+
+/**
+ * Throttle delay between sequential auth.admin.createUser calls. The local
+ * Supabase Auth (GoTrue) instance starts to rate-limit after ~10 rapid-fire
+ * creates, so we pace at 10/sec. Total cost: ~30 roles × 4 workers × 100ms
+ * ≈ 12s for user creation, which is fine for a one-time globalSetup.
+ */
+const CREATE_USER_THROTTLE_MS = 100;
 
 /**
  * Look up a user ID by email from the Supabase auth admin API.
@@ -91,7 +48,14 @@ async function getUserId(
   supabase: SupabaseClient,
   email: string,
 ): Promise<string | null> {
-  const { data: listData } = await supabase.auth.admin.listUsers();
+  // perPage: 1000 — Phase 21 creates ~168 users; the GoTrue default 50
+  // silently truncates the result set and would miss any user on page 2+.
+  // This helper is only used by createUserWithThrottle's idempotent
+  // duplicate-lookup path, but correctness still matters when the suite
+  // is rerun against an already-populated Supabase.
+  const { data: listData } = await supabase.auth.admin.listUsers({
+    perPage: 1000,
+  });
   const user = listData?.users?.find((u) => u.email === email);
   return user?.id ?? null;
 }
@@ -579,10 +543,10 @@ async function seedExerciseProgressData(
  *
  * Idempotent: checks for 'E2E RPG Foundation Workout 1' before seeding.
  */
-async function seedRpgFoundationUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-foundation@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgFoundationUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Ensure profile row exists so the router lands on /home.
   await supabase.from('profiles').upsert(
@@ -714,10 +678,10 @@ async function seedRpgFoundationUser(supabase: SupabaseClient): Promise<void> {
  *
  * Clean on every run: deletes all workouts + XP data so state is deterministic.
  */
-async function seedRpgFreshUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-fresh@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgFreshUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Clean all workout data + RPG XP state every run (fresh user must start clean).
   const { data: existingWorkouts } = await supabase
@@ -809,10 +773,10 @@ async function seedRpgFreshUser(supabase: SupabaseClient): Promise<void> {
  *
  * Idempotent: skips if body_part_progress row for chest already exists.
  */
-async function seedRpgRankUpThresholdUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-rank-up-threshold@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgRankUpThresholdUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Delete workouts first so record_session_xp_batch sees zero historical sets
   // on every run. The cascade chain (workouts → workout_exercises → sets) removes
@@ -915,10 +879,10 @@ async function seedRpgRankUpThresholdUser(supabase: SupabaseClient): Promise<voi
  * Final queue: [rankUp(chest, 10), levelUp(4), titleUnlock(chest_r10)]
  * Exactly fits cap-at-3 — no overflow, no silent drops.
  */
-async function seedRpgMultiCelebrationUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-multi-celebration@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgMultiCelebrationUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Delete workouts first so record_session_xp_batch sees zero historical sets
   // on every run. The cascade (workouts → workout_exercises → sets) removes all
@@ -1007,10 +971,10 @@ async function seedRpgMultiCelebrationUser(supabase: SupabaseClient): Promise<vo
  * body parts for simplicity. Each body part needs a different exercise so
  * XP attribution hits the right body part.
  */
-async function seedRpgOverflowQueueUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-overflow-queue@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgOverflowQueueUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Delete workouts first so record_session_xp_batch sees zero historical sets
   // on every run (fixes seed-depletion bug: novelty discount from prior-run sets
@@ -1113,10 +1077,10 @@ async function seedRpgOverflowQueueUser(supabase: SupabaseClient): Promise<void>
  * --repeat-each=2 runs the auto-dismiss test (S4) and the tap-card test (S4b)
  * on parallel workers: each test now operates on its own user.
  */
-async function seedRpgOverflowTapCardUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-overflow-tap@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgOverflowTapCardUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   await supabase.from('workouts').delete().eq('user_id', userId);
   await supabase.from('xp_events').delete().eq('user_id', userId);
@@ -1183,6 +1147,431 @@ async function seedRpgOverflowTapCardUser(supabase: SupabaseClient): Promise<voi
   console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 3, 196 XP — rank 4 boundary, no titles)');
 }
 
+// ---------------------------------------------------------------------------
+// Per-role seed helpers extracted for the per-worker orchestration loop.
+// Each helper takes a `supabase` admin client + a `userId` and applies the
+// fixture data that role's tests require. They never look up users by email
+// because the same role lives at multiple worker-scoped emails.
+// ---------------------------------------------------------------------------
+
+/**
+ * Generic clean-then-seed for the freshState role family. Removes prior
+ * workouts/sets/PRs/weekly_plans/XP rows so each E2E run starts deterministic.
+ */
+async function cleanFreshStateUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { data: workouts } = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', userId);
+
+  if (workouts && workouts.length > 0) {
+    const workoutIds = workouts.map((w: { id: string }) => w.id);
+
+    const { data: wxs } = await supabase
+      .from('workout_exercises')
+      .select('id')
+      .in('workout_id', workoutIds);
+
+    if (wxs && wxs.length > 0) {
+      const wxIds = wxs.map((wx: { id: string }) => wx.id);
+      await supabase.from('sets').delete().in('workout_exercise_id', wxIds);
+    }
+
+    await supabase
+      .from('workout_exercises')
+      .delete()
+      .in('workout_id', workoutIds);
+    await supabase.from('workouts').delete().in('id', workoutIds);
+  }
+
+  await supabase.from('personal_records').delete().eq('user_id', userId);
+  await supabase.from('weekly_plans').delete().eq('user_id', userId);
+  await supabase.from('xp_events').delete().eq('user_id', userId);
+  await supabase.from('user_xp').delete().eq('user_id', userId);
+}
+
+/** Upsert a profile row with arbitrary defaults. */
+async function ensureProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  fields: {
+    display_name?: string;
+    fitness_level?: string;
+    locale?: string;
+    training_frequency_per_week?: number;
+  } = {},
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    id: userId,
+    display_name: fields.display_name ?? 'Gym User',
+    fitness_level: fields.fitness_level ?? 'intermediate',
+  };
+  if (fields.locale !== undefined) payload['locale'] = fields.locale;
+  if (fields.training_frequency_per_week !== undefined) {
+    payload['training_frequency_per_week'] = fields.training_frequency_per_week;
+  }
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.log(
+      `[global-setup] Warning: could not upsert profile for ${userId}: ${error.message}`,
+    );
+  }
+}
+
+/** Delete the profile row (used by onboarding-fresh users). */
+async function deleteProfile(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  await supabase.from('profiles').delete().eq('id', userId);
+}
+
+/**
+ * Seed 5 workouts for the fullHistoryPt role. The most recent workout has
+ * a barbell_bench_press exercise + completed set so the history screen
+ * renders the pt-localized name on the workout card.
+ */
+async function seedFullHistoryPtData(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  // Idempotent guard: only seed if the well-known workout name doesn't yet exist.
+  const existing = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'E2E PT History Workout 1')
+    .maybeSingle();
+  if (existing.data) return;
+
+  const { data: ptBenchExercises } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('slug', 'barbell_bench_press')
+    .eq('is_default', true)
+    .limit(1);
+  const ptBenchExercise = ptBenchExercises?.[0] ?? null;
+
+  const now = new Date();
+  for (let i = 0; i < 5; i++) {
+    const startedAt = new Date(now.getTime() - (i + 1) * 24 * 60 * 60 * 1000);
+    const finishedAt = new Date(startedAt.getTime() + 60 * 60 * 1000);
+    const { data: workout, error: wError } = await supabase
+      .from('workouts')
+      .insert({
+        user_id: userId,
+        name: `E2E PT History Workout ${i + 1}`,
+        started_at: startedAt.toISOString(),
+        finished_at: finishedAt.toISOString(),
+        duration_seconds: 3600,
+      })
+      .select('id')
+      .single();
+
+    if (i === 0 && workout && !wError && ptBenchExercise) {
+      const { data: wx } = await supabase
+        .from('workout_exercises')
+        .insert({
+          workout_id: workout.id,
+          exercise_id: ptBenchExercise.id,
+          order: 0,
+        })
+        .select('id')
+        .single();
+
+      if (wx) {
+        await supabase.from('sets').insert({
+          workout_exercise_id: wx.id,
+          set_number: 1,
+          reps: 5,
+          weight: 80,
+          set_type: 'working',
+          is_completed: true,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Per-role seed orchestration. Maps a TestUserKey to a function that
+ * applies the role's fixture data given a freshly-created auth user.
+ *
+ * Roles not in this map get a no-op — the auth user exists but no
+ * additional rows are seeded (correct for tests that drive their own
+ * profile creation, e.g., onboarding flows).
+ *
+ * The order of operations within each runner mirrors the legacy
+ * globalSetup() flow exactly so semantics are preserved.
+ */
+function buildRoleSeedRunners(): Record<
+  string,
+  (supabase: SupabaseClient, userId: string) => Promise<void>
+> {
+  return {
+    // ── Smoke users that need a profile but no other seed ────────────────
+    smokeExercise: async (supabase, userId) => {
+      await ensureProfile(supabase, userId);
+    },
+    smokeProfileWeeklyGoal: async (supabase, userId) => {
+      await ensureProfile(supabase, userId);
+    },
+
+    // ── Onboarding (fresh state, no profile) ─────────────────────────────
+    smokeOnboarding: async (supabase, userId) => {
+      await deleteProfile(supabase, userId);
+    },
+
+    // ── PR seed user (smoke) ─────────────────────────────────────────────
+    smokePR: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, { display_name: 'PR Test User' });
+      await seedPRData(supabase, userId);
+    },
+
+    // ── First-workout beginner CTA — zero workouts + profile ─────────────
+    smokeFirstWorkout: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId);
+    },
+
+    // ── Saga intro (fresh + profile, no workouts) ────────────────────────
+    sagaIntroUser: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId);
+    },
+
+    // ── Lapsed-state freshState users — clean then seed minimal workout ──
+    smokeWorkout: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    smokeOfflineSync: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullWorkout: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullHome: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullManageData: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullPR: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullCrash: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullExDetailSheet: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+
+    // ── Weekly plan smoke (clean weekly_plans + minimal workout) ─────────
+    smokeWeeklyPlan: async (supabase, userId) => {
+      await supabase.from('weekly_plans').delete().eq('user_id', userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+
+    // ── Weekly plan review (completed weekly plan) ──────────────────────
+    smokeWeeklyPlanReview: async (supabase, userId) => {
+      await seedWeeklyPlanReviewData(supabase, userId);
+    },
+
+    // ── Exercise progress chart (P1) ─────────────────────────────────────
+    smokeExerciseProgress: async (supabase, userId) => {
+      await ensureProfile(supabase, userId, {
+        display_name: 'Progress Chart User',
+      });
+      await seedExerciseProgressData(supabase, userId);
+    },
+
+    // ── Localization (pt) ────────────────────────────────────────────────
+    smokeLocalization: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Localization User',
+        locale: 'pt',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    smokeLocalizationEn: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Localization En User',
+        locale: 'en',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    smokeLocalizationWorkout: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'PT Workout User',
+        locale: 'pt',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    smokeLocalizationRoutines: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'PT Routines User',
+        locale: 'pt',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    fullHistoryPt: async (supabase, userId) => {
+      await ensureProfile(supabase, userId, {
+        display_name: 'PT History User',
+        locale: 'pt',
+      });
+      await seedFullHistoryPtData(supabase, userId);
+    },
+    fullPRPt: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'PT PR User',
+        locale: 'pt',
+      });
+      await seedPRData(supabase, userId);
+    },
+
+    // ── Phase 18a RPG ────────────────────────────────────────────────────
+    // rpgFoundationUser is NOT pre-cleaned: seedRpgFoundationUser is
+    // idempotent on its own marker workout name, and the legacy code path
+    // never included it in the freshStateUsers cleanup loop either. Wiping
+    // the foundation seed every run would break tests that rely on
+    // 12-workout XP backfill.
+    rpgFoundationUser: async (supabase, userId) => {
+      await seedRpgFoundationUser(supabase, userId);
+    },
+    // rpgFreshUser is also not pre-cleaned at this layer — seedRpgFreshUser
+    // does its own deterministic clean (mirrors legacy behavior).
+    rpgFreshUser: async (supabase, userId) => {
+      await seedRpgFreshUser(supabase, userId);
+    },
+
+    // ── Phase 18c celebration overlays ───────────────────────────────────
+    rpgRankUpThreshold: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgRankUpThresholdUser(supabase, userId);
+    },
+    rpgMultiCelebration: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgMultiCelebrationUser(supabase, userId);
+    },
+    rpgOverflowQueue: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgOverflowQueueUser(supabase, userId);
+    },
+    rpgOverflowTapCard: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgOverflowTapCardUser(supabase, userId);
+    },
+
+    // ── Phase 18e class-cross + title-equip ──────────────────────────────
+    rpgClassCrossUser: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgClassCrossUser(supabase, userId);
+    },
+    rpgTitleEquipUser: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await seedRpgTitleEquipUser(supabase, userId);
+    },
+  };
+}
+
+/**
+ * Throttled auth.admin.createUser with exponential-backoff retry on rate-limit
+ * (429-class) errors. Returns the userId on success, or `null` if the user
+ * already exists (idempotent — duplicates are not an error).
+ */
+async function createUserWithThrottle(
+  supabase: SupabaseClient,
+  email: string,
+  password: string,
+): Promise<string | null> {
+  const maxAttempts = 4;
+  let attempt = 0;
+  let backoffMs = 500;
+  while (attempt < maxAttempts) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (!error) return data.user?.id ?? null;
+
+    const msg = error.message.toLowerCase();
+    // Idempotent: user already exists. Look up the existing id so seed
+    // helpers can still run against it.
+    if (
+      msg.includes('already') ||
+      msg.includes('registered') ||
+      msg.includes('exists')
+    ) {
+      const existingId = await getUserId(supabase, email);
+      return existingId;
+    }
+    // Rate-limit / transient — retry with backoff.
+    if (msg.includes('rate') || msg.includes('429') || msg.includes('limit')) {
+      attempt++;
+      console.log(
+        `[global-setup] Rate-limited creating ${email}, retrying in ${backoffMs}ms (attempt ${attempt}/${maxAttempts})`,
+      );
+      await new Promise((r) => setTimeout(r, backoffMs));
+      backoffMs *= 2;
+      continue;
+    }
+    // Any other error — fail.
+    throw new Error(
+      `[global-setup] Failed to create user ${email}: ${error.message}`,
+    );
+  }
+  throw new Error(
+    `[global-setup] Exhausted retries creating user ${email} (rate-limited)`,
+  );
+}
+
 async function globalSetup(): Promise<void> {
   const supabaseUrl = process.env['SUPABASE_URL'];
   const supabaseAnonKey = process.env['SUPABASE_ANON_KEY'];
@@ -1221,601 +1610,60 @@ async function globalSetup(): Promise<void> {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  console.log('[global-setup] Creating E2E test users...');
+  // ── Phase 21: per-worker user pool ────────────────────────────────────
+  // Create N workers × M roles unique auth users, then run each role's
+  // seed runner per (worker, role) pair. Concurrent workers can never
+  // collide on a Supabase auth row because emails are worker-scoped.
+  const roleKeys = getAllUserKeys();
+  const totalUsers = WORKERS_COUNT * roleKeys.length;
+  console.log(
+    `[global-setup] Creating ${WORKERS_COUNT} workers × ${roleKeys.length} roles = ${totalUsers} users (throttled 10/sec)...`,
+  );
 
-  for (const email of TEST_USERS) {
-    const { data, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
+  const seedRunners = buildRoleSeedRunners();
 
-    if (error) {
-      // 422 "User already registered" — idempotent, skip.
-      // Different Supabase versions return slightly different status codes and
-      // messages for duplicate users, so we match on message content.
-      if (
-        error.message.toLowerCase().includes('already') ||
-        error.message.toLowerCase().includes('registered') ||
-        error.message.toLowerCase().includes('exists')
-      ) {
-        console.log(`[global-setup] User already exists, skipping: ${email}`);
-        continue;
+  let createdCount = 0;
+  // Per-worker user-id map indexed by role for the subsequent seed phase.
+  const userIdsByWorker: Array<Partial<Record<TestUserKey, string>>> = [];
+  for (let w = 0; w < WORKERS_COUNT; w++) {
+    userIdsByWorker.push({});
+  }
+
+  for (let workerIndex = 0; workerIndex < WORKERS_COUNT; workerIndex++) {
+    for (const role of roleKeys) {
+      const email = buildEmailForWorker(role, workerIndex);
+      const userId = await createUserWithThrottle(supabase, email, password);
+      if (userId) {
+        userIdsByWorker[workerIndex]![role] = userId;
       }
 
-      // Any other error is unexpected — fail setup.
-      throw new Error(
-        `[global-setup] Failed to create user ${email}: ${error.message}`,
-      );
-    }
-
-    console.log(
-      `[global-setup] Created user: ${email} (id: ${data.user?.id})`,
-    );
-  }
-
-  // ── Clean workout data for users that depend on fresh state ───────────
-  // Some test suites (personal-records, manage-data, crash-recovery, etc.)
-  // depend on the user starting with no prior workouts. If the user already
-  // exists from a prior run, accumulated workout data causes test failures.
-  // Delete workouts, workout_exercises, sets, and personal_records for these
-  // users so each test run starts clean.
-  const freshStateUsers = [
-    'e2e-full-pr@test.local',
-    'e2e-full-manage-data@test.local',
-    'e2e-full-crash@test.local',
-    'e2e-full-home@test.local',
-    'e2e-full-workout@test.local',
-    'e2e-full-ex-detail-sheet@test.local',
-    'e2e-smoke-workout@test.local',
-    'e2e-smoke-pr@test.local',
-    // P8 beginner CTA requires zero workouts for the CTA to render
-    'e2e-smoke-first-workout@test.local',
-    // Offline sync — clean Hive queue state on each run
-    'e2e-smoke-offline-sync@test.local',
-    // Localization — must start with a clean slate each run because tests
-    // may mutate the locale; the profile row is re-upserted with locale:'pt'
-    // below so the app boots in Portuguese.
-    'e2e-smoke-localization@test.local',
-    // Localization en-default — tests mutate the locale (en→pt and back),
-    // so we clean and re-seed each run to guarantee an en-default start.
-    'e2e-smoke-localization-en@test.local',
-    // Phase 17b gamification intro — must start fresh so the SagaIntroGate
-    // logic sees a clean Hive state (no retro flag, no intro-seen flag) and
-    // the overlay appears on first login. Also cleans xp_events / user_xp
-    // so retro_backfill_xp has a deterministic outcome.
-    'e2e-saga-intro@test.local',
-    // Phase 18c celebration overlay users — XP state is re-seeded by
-    // dedicated seed functions below, but we clean workouts/PRs here first.
-    'e2e-rpg-rank-up-threshold@test.local',
-    'e2e-rpg-multi-celebration@test.local',
-    'e2e-rpg-overflow-queue@test.local',
-    'e2e-rpg-overflow-tap@test.local',
-    // Phase 18e class-cross + title-equip users — XP/title state is re-seeded
-    // by dedicated seed functions below.
-    'e2e-rpg-class-cross@test.local',
-    'e2e-rpg-title-equip@test.local',
-  ];
-
-  for (const email of freshStateUsers) {
-    const userId = await getUserId(supabase, email);
-    if (!userId) continue;
-
-    // Delete in dependency order: sets → workout_exercises → personal_records → workouts
-    const { data: workouts } = await supabase
-      .from('workouts')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (workouts && workouts.length > 0) {
-      const workoutIds = workouts.map((w: { id: string }) => w.id);
-
-      // Delete sets via workout_exercises
-      const { data: wxs } = await supabase
-        .from('workout_exercises')
-        .select('id')
-        .in('workout_id', workoutIds);
-
-      if (wxs && wxs.length > 0) {
-        const wxIds = wxs.map((wx: { id: string }) => wx.id);
-        await supabase.from('sets').delete().in('workout_exercise_id', wxIds);
+      createdCount++;
+      if (createdCount % 20 === 0 || createdCount === totalUsers) {
+        console.log(
+          `[global-setup]   …created ${createdCount}/${totalUsers} users`,
+        );
       }
 
-      await supabase.from('workout_exercises').delete().in('workout_id', workoutIds);
-      await supabase.from('workouts').delete().in('id', workoutIds);
-    }
-
-    // Delete personal records
-    await supabase.from('personal_records').delete().eq('user_id', userId);
-
-    // Delete weekly plans (P8 CTA requires plan == null || plan.routines.isEmpty)
-    await supabase.from('weekly_plans').delete().eq('user_id', userId);
-
-    // Delete XP data (Phase 17b) so retro_backfill_xp starts from a clean
-    // slate on each run. Only relevant for users whose tests rely on XP state.
-    await supabase.from('xp_events').delete().eq('user_id', userId);
-    await supabase.from('user_xp').delete().eq('user_id', userId);
-
-    console.log(`[global-setup] Cleaned workout data for ${email}`);
-  }
-
-  // ── Ensure profile rows exist for tests that need them ────────────────
-  // Some tests (e.g., profile-weekly-goal) require an existing profile row
-  // in the `profiles` table. Users created via auth.admin.createUser do NOT
-  // automatically get a profile row — that happens during onboarding.
-  // We upsert minimal profile rows for users that need them.
-  const profileUsers = [
-    'e2e-smoke-profile-goal@test.local',
-    'e2e-smoke-exercise@test.local',
-    // P8 first-workout user needs a profile row (otherwise router redirects
-    // to /onboarding, not /home where the beginner CTA is shown).
-    'e2e-smoke-first-workout@test.local',
-    // Phase 17b: sagaIntroUser needs a profile row so the router lands on
-    // /home (not /onboarding), where the SagaIntroGate wraps the shell.
-    // Zero workout history is intentional — retro yields 0 XP, user gets LVL 1.
-    'e2e-saga-intro@test.local',
-  ];
-
-  // Delete profile rows for users that need to test onboarding (fresh state).
-  const onboardingUsers = ['e2e-smoke-onboarding@test.local'];
-  for (const email of onboardingUsers) {
-    const obUserId = await getUserId(supabase, email);
-    if (obUserId) {
-      await supabase.from('profiles').delete().eq('id', obUserId);
-      console.log(`[global-setup] Deleted profile row for ${email} (onboarding)`);
+      // Throttle between every create call to avoid GoTrue rate limits.
+      await new Promise((r) => setTimeout(r, CREATE_USER_THROTTLE_MS));
     }
   }
 
-  for (const email of profileUsers) {
-    const userId = await getUserId(supabase, email);
-    if (!userId) continue;
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: userId,
-          display_name: 'Gym User',
-          fitness_level: 'intermediate',
-        },
-        { onConflict: 'id' },
-      );
-
-    if (profileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert profile for ${email}: ${profileError.message}`,
-      );
-    } else {
-      console.log(`[global-setup] Ensured profile row for ${email}`);
+  // ── Per-worker seed phase ─────────────────────────────────────────────
+  // Roles without a runner are no-ops (auth user only — sufficient for tests
+  // that drive their own profile creation, e.g., onboarding / auth tests).
+  console.log(`[global-setup] Applying per-role seed data across ${WORKERS_COUNT} workers...`);
+  for (let workerIndex = 0; workerIndex < WORKERS_COUNT; workerIndex++) {
+    const userIds = userIdsByWorker[workerIndex]!;
+    for (const role of roleKeys) {
+      const userId = userIds[role];
+      if (!userId) continue;
+      const runner = seedRunners[role];
+      if (!runner) continue;
+      await runner(supabase, userId);
     }
+    console.log(`[global-setup]   …seeded worker ${workerIndex}`);
   }
-
-  // ── Seed test data for specific users ─────────────────────────────────
-
-  // Seed PR data for smokePR user
-  const prUserId = await getUserId(supabase, 'e2e-smoke-pr@test.local');
-  if (prUserId) {
-    // Ensure profile exists (required for FK constraints in some tables)
-    await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: prUserId,
-          display_name: 'PR Test User',
-          fitness_level: 'intermediate',
-        },
-        { onConflict: 'id' },
-      );
-    await seedPRData(supabase, prUserId);
-  }
-
-  // Seed completed weekly plan for smokeWeeklyPlanReview user
-  const weeklyPlanUserId = await getUserId(
-    supabase,
-    'e2e-smoke-weekly-plan-review@test.local',
-  );
-  if (weeklyPlanUserId) {
-    await seedWeeklyPlanReviewData(supabase, weeklyPlanUserId);
-  }
-
-  // Seed exercise history for smokeExerciseProgress user (P1 progress chart)
-  const exerciseProgressUserId = await getUserId(
-    supabase,
-    'e2e-smoke-exercise-progress@test.local',
-  );
-  if (exerciseProgressUserId) {
-    await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: exerciseProgressUserId,
-          display_name: 'Progress Chart User',
-          fitness_level: 'intermediate',
-        },
-        { onConflict: 'id' },
-      );
-    await seedExerciseProgressData(supabase, exerciseProgressUserId);
-  }
-
-  // Clear weekly plans for users whose tests add/clear plans during the test
-  // run, so each run starts with a clean slate and the plan picker shows all
-  // available routines (not filtered by "already in plan").
-  const usersNeedingWeeklyPlanClean = [
-    'e2e-smoke-weekly-plan@test.local',
-  ];
-  for (const email of usersNeedingWeeklyPlanClean) {
-    const uid = await getUserId(supabase, email);
-    if (!uid) continue;
-    await supabase.from('weekly_plans').delete().eq('user_id', uid);
-    console.log(`[global-setup] Cleared weekly plan for ${email}`);
-  }
-
-  // Seed a minimal workout for users whose tests rely on the "Plan your week"
-  // empty state or need "Quick workout" (lapsed state). W8 replaced the
-  // "Start Empty Workout" button with state-dependent entry points: brand-new
-  // users (workoutCount == 0) see "YOUR FIRST WORKOUT" CTA (starts a routine,
-  // not an empty workout), while lapsed users see "Quick workout" (empty workout).
-  //
-  // Tests that call startEmptyWorkout() and then manipulate individual sets /
-  // exercises expect an empty workout (no pre-filled exercises). These users must
-  // start in lapsed state. The clean step above resets them to zero workouts, so
-  // we re-seed one minimal completed workout to push them into lapsed state.
-  const usersNeedingSeededWorkoutForP8 = [
-    'e2e-smoke-weekly-plan@test.local',
-    // All freshStateUsers that call startEmptyWorkout() in their tests must
-    // start in lapsed state (Quick workout → empty workout) rather than
-    // brand-new state (YOUR FIRST WORKOUT CTA → Full Body routine with
-    // pre-filled exercises). The clean step resets them to zero workouts, so
-    // we re-seed one minimal completed workout here.
-    'e2e-smoke-workout@test.local',
-    'e2e-full-workout@test.local',
-    'e2e-full-home@test.local',
-    'e2e-full-manage-data@test.local',
-    'e2e-full-pr@test.local',
-    'e2e-full-crash@test.local',
-    'e2e-full-ex-detail-sheet@test.local',
-    // Offline sync — needs lapsed state so startEmptyWorkout() finds Quick workout
-    'e2e-smoke-offline-sync@test.local',
-  ];
-  for (const email of usersNeedingSeededWorkoutForP8) {
-    const uid = await getUserId(supabase, email);
-    if (!uid) continue;
-    // Ensure a profile row exists so the router doesn't bounce to onboarding.
-    await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: uid,
-          display_name: 'Weekly Plan Tester',
-          fitness_level: 'intermediate',
-        },
-        { onConflict: 'id' },
-      );
-    await seedMinimalWorkout(supabase, uid);
-  }
-
-  // ── Seed Portuguese locale for smokeLocalization user ─────────────────
-  // The Flutter app reads `profiles.locale` on login and seeds the local Hive
-  // box, which MaterialApp.locale reads at render time. By upserting
-  // locale: 'pt' here we guarantee the app boots in Portuguese without any
-  // test-side setup dance. Also seed one minimal workout so the app lands in
-  // lapsed state (not the brand-new CTA state).
-  const localizationUserId = await getUserId(
-    supabase,
-    'e2e-smoke-localization@test.local',
-  );
-  if (localizationUserId) {
-    const { error: localeProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: localizationUserId,
-          display_name: 'Localization User',
-          fitness_level: 'intermediate',
-          locale: 'pt',
-        },
-        { onConflict: 'id' },
-      );
-    if (localeProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert pt-locale profile: ${localeProfileError.message}`,
-      );
-    } else {
-      console.log(
-        '[global-setup] Seeded pt locale profile for smokeLocalization user',
-      );
-    }
-    await seedMinimalWorkout(supabase, localizationUserId);
-  }
-
-  // ── Seed en-default profile for smokeLocalizationEn user ──────────────
-  // locale is explicitly set to 'en' (the column is NOT NULL DEFAULT 'en').
-  // Omitting the field would leave stale values if a prior run wrote 'pt' — an
-  // upsert only overwrites columns that are present in the payload.
-  // One minimal workout is seeded so the app lands in lapsed state.
-  const localizationEnUserId = await getUserId(
-    supabase,
-    'e2e-smoke-localization-en@test.local',
-  );
-  if (localizationEnUserId) {
-    const { error: localeEnProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: localizationEnUserId,
-          display_name: 'Localization En User',
-          fitness_level: 'intermediate',
-          locale: 'en',
-        },
-        { onConflict: 'id' },
-      );
-    if (localeEnProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert en-default profile: ${localeEnProfileError.message}`,
-      );
-    } else {
-      console.log(
-        '[global-setup] Seeded en-default profile for smokeLocalizationEn user',
-      );
-    }
-    await seedMinimalWorkout(supabase, localizationEnUserId);
-  }
-
-  // ── Phase 15f: seed 4 pt-BR locale users ─────────────────────────────
-  // smokeLocalizationWorkout — pt locale, one prior workout (lapsed state)
-  // for active-workout pt name smoke tests (scenario C1).
-  const smokeLocWorkoutUserId = await getUserId(
-    supabase,
-    'e2e-smoke-loc-workout@test.local',
-  );
-  if (smokeLocWorkoutUserId) {
-    // Clean workout data on each run so the state is deterministic.
-    const { data: existingWorkouts } = await supabase
-      .from('workouts')
-      .select('id')
-      .eq('user_id', smokeLocWorkoutUserId);
-    if (existingWorkouts && existingWorkouts.length > 0) {
-      const ids = existingWorkouts.map((w: { id: string }) => w.id);
-      const { data: wxs } = await supabase
-        .from('workout_exercises')
-        .select('id')
-        .in('workout_id', ids);
-      if (wxs && wxs.length > 0) {
-        await supabase
-          .from('sets')
-          .delete()
-          .in('workout_exercise_id', wxs.map((wx: { id: string }) => wx.id));
-      }
-      await supabase.from('workout_exercises').delete().in('workout_id', ids);
-      await supabase.from('workouts').delete().in('id', ids);
-    }
-    await supabase.from('personal_records').delete().eq('user_id', smokeLocWorkoutUserId);
-
-    const { error: ptWorkoutProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: smokeLocWorkoutUserId,
-          display_name: 'PT Workout User',
-          fitness_level: 'intermediate',
-          locale: 'pt',
-        },
-        { onConflict: 'id' },
-      );
-    if (ptWorkoutProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert pt profile for smokeLocalizationWorkout: ${ptWorkoutProfileError.message}`,
-      );
-    } else {
-      console.log('[global-setup] Seeded pt profile for smokeLocalizationWorkout');
-    }
-    await seedMinimalWorkout(supabase, smokeLocWorkoutUserId);
-  }
-
-  // fullHistoryPt — pt locale, 5 prior workouts so history renders entries.
-  const fullHistoryPtUserId = await getUserId(
-    supabase,
-    'e2e-full-history-pt@test.local',
-  );
-  if (fullHistoryPtUserId) {
-    const { error: ptHistoryProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: fullHistoryPtUserId,
-          display_name: 'PT History User',
-          fitness_level: 'intermediate',
-          locale: 'pt',
-        },
-        { onConflict: 'id' },
-      );
-    if (ptHistoryProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert pt profile for fullHistoryPt: ${ptHistoryProfileError.message}`,
-      );
-    } else {
-      console.log('[global-setup] Seeded pt profile for fullHistoryPt');
-    }
-    // Seed 5 workouts so the history screen renders multiple entries.
-    // Workout #1 (the most recent) gets a workout_exercise + set pointing at
-    // barbell_bench_press so its exerciseSummary renders the pt-localized
-    // name ("Supino Reto com Barra"). D1 asserts that name on the card.
-    const existingHistoryWorkout = await supabase
-      .from('workouts')
-      .select('id')
-      .eq('user_id', fullHistoryPtUserId)
-      .eq('name', 'E2E PT History Workout 1')
-      .maybeSingle();
-    if (!existingHistoryWorkout.data) {
-      // Look up barbell_bench_press by slug (slug is stable; name column was
-      // dropped from exercises in Phase 15f migration 00034).
-      const { data: ptBenchExercises } = await supabase
-        .from('exercises')
-        .select('id')
-        .eq('slug', 'barbell_bench_press')
-        .eq('is_default', true)
-        .limit(1);
-      const ptBenchExercise = ptBenchExercises?.[0] ?? null;
-
-      const now = new Date();
-      for (let i = 0; i < 5; i++) {
-        const startedAt = new Date(now.getTime() - (i + 1) * 24 * 60 * 60 * 1000);
-        const finishedAt = new Date(startedAt.getTime() + 60 * 60 * 1000);
-        const { data: workout, error: wError } = await supabase
-          .from('workouts')
-          .insert({
-            user_id: fullHistoryPtUserId,
-            name: `E2E PT History Workout ${i + 1}`,
-            started_at: startedAt.toISOString(),
-            finished_at: finishedAt.toISOString(),
-            duration_seconds: 3600,
-          })
-          .select('id')
-          .single();
-
-        // Attach a barbell_bench_press exercise + completed set on the most
-        // recent workout (i === 0). The history screen renders this as the
-        // pt exercise name in the workout summary line.
-        if (i === 0 && workout && !wError && ptBenchExercise) {
-          const { data: wx } = await supabase
-            .from('workout_exercises')
-            .insert({
-              workout_id: workout.id,
-              exercise_id: ptBenchExercise.id,
-              order: 0,
-            })
-            .select('id')
-            .single();
-
-          if (wx) {
-            await supabase.from('sets').insert({
-              workout_exercise_id: wx.id,
-              set_number: 1,
-              reps: 5,
-              weight: 80,
-              set_type: 'working',
-              is_completed: true,
-            });
-          }
-        }
-      }
-      console.log(
-        '[global-setup] Seeded 5 workouts for fullHistoryPt (most recent has barbell_bench_press)',
-      );
-    }
-  }
-
-  // smokeLocalizationRoutines — pt locale, one prior workout (lapsed state)
-  // for routine create/edit pt exercise picker smoke tests (scenario E1).
-  const smokeLocRoutinesUserId = await getUserId(
-    supabase,
-    'e2e-smoke-loc-routines@test.local',
-  );
-  if (smokeLocRoutinesUserId) {
-    // Clean workout data on each run.
-    const { data: existingRRoutineWorkouts } = await supabase
-      .from('workouts')
-      .select('id')
-      .eq('user_id', smokeLocRoutinesUserId);
-    if (existingRRoutineWorkouts && existingRRoutineWorkouts.length > 0) {
-      const ids = existingRRoutineWorkouts.map((w: { id: string }) => w.id);
-      const { data: wxs } = await supabase
-        .from('workout_exercises')
-        .select('id')
-        .in('workout_id', ids);
-      if (wxs && wxs.length > 0) {
-        await supabase
-          .from('sets')
-          .delete()
-          .in('workout_exercise_id', wxs.map((wx: { id: string }) => wx.id));
-      }
-      await supabase.from('workout_exercises').delete().in('workout_id', ids);
-      await supabase.from('workouts').delete().in('id', ids);
-    }
-
-    const { error: ptRoutinesProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: smokeLocRoutinesUserId,
-          display_name: 'PT Routines User',
-          fitness_level: 'intermediate',
-          locale: 'pt',
-        },
-        { onConflict: 'id' },
-      );
-    if (ptRoutinesProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert pt profile for smokeLocalizationRoutines: ${ptRoutinesProfileError.message}`,
-      );
-    } else {
-      console.log('[global-setup] Seeded pt profile for smokeLocalizationRoutines');
-    }
-    await seedMinimalWorkout(supabase, smokeLocRoutinesUserId);
-  }
-
-  // fullPRPt — pt locale, prior PRs seeded via seedPRData.
-  const fullPRPtUserId = await getUserId(
-    supabase,
-    'e2e-full-pr-pt@test.local',
-  );
-  if (fullPRPtUserId) {
-    // Clean workout/PR data on each run.
-    const { data: existingPRWorkouts } = await supabase
-      .from('workouts')
-      .select('id')
-      .eq('user_id', fullPRPtUserId);
-    if (existingPRWorkouts && existingPRWorkouts.length > 0) {
-      const ids = existingPRWorkouts.map((w: { id: string }) => w.id);
-      const { data: wxs } = await supabase
-        .from('workout_exercises')
-        .select('id')
-        .in('workout_id', ids);
-      if (wxs && wxs.length > 0) {
-        await supabase
-          .from('sets')
-          .delete()
-          .in('workout_exercise_id', wxs.map((wx: { id: string }) => wx.id));
-      }
-      await supabase.from('workout_exercises').delete().in('workout_id', ids);
-      await supabase.from('workouts').delete().in('id', ids);
-    }
-    await supabase.from('personal_records').delete().eq('user_id', fullPRPtUserId);
-
-    const { error: ptPRProfileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: fullPRPtUserId,
-          display_name: 'PT PR User',
-          fitness_level: 'intermediate',
-          locale: 'pt',
-        },
-        { onConflict: 'id' },
-      );
-    if (ptPRProfileError) {
-      console.log(
-        `[global-setup] Warning: could not upsert pt profile for fullPRPt: ${ptPRProfileError.message}`,
-      );
-    } else {
-      console.log('[global-setup] Seeded pt profile for fullPRPt');
-    }
-    await seedPRData(supabase, fullPRPtUserId);
-  }
-
-  // ── Phase 18a: seed RPG foundation + fresh users ─────────────────────
-  await seedRpgFoundationUser(supabase);
-  await seedRpgFreshUser(supabase);
-
-  // ── Phase 18c: seed celebration overlay test users ────────────────────
-  await seedRpgRankUpThresholdUser(supabase);
-  await seedRpgMultiCelebrationUser(supabase);
-  await seedRpgOverflowQueueUser(supabase);
-  await seedRpgOverflowTapCardUser(supabase);
-
-  // ── Phase 18e: seed class-cross + title-equip test users ─────────────
-  await seedRpgClassCrossUser(supabase);
-  await seedRpgTitleEquipUser(supabase);
 
   console.log('[global-setup] Done.');
 }
@@ -1831,10 +1679,10 @@ async function globalSetup(): Promise<void> {
  * The class badge before the workout reads "Initiate" (max rank 4 < 5).
  * After the workout finish + provider refresh it reads "Bulwark".
  */
-async function seedRpgClassCrossUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-class-cross@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgClassCrossUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Full clean on every run so XP state is deterministic.
   await supabase.from('workouts').delete().eq('user_id', userId);
@@ -1909,10 +1757,10 @@ async function seedRpgClassCrossUser(supabase: SupabaseClient): Promise<void> {
  *
  * Idempotent: skips if body_part_progress row for chest already exists.
  */
-async function seedRpgTitleEquipUser(supabase: SupabaseClient): Promise<void> {
-  const email = 'e2e-rpg-title-equip@test.local';
-  const userId = await getUserId(supabase, email);
-  if (!userId) return;
+async function seedRpgTitleEquipUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
 
   // Full clean on every run.
   await supabase.from('workouts').delete().eq('user_id', userId);

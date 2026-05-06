@@ -4,6 +4,8 @@ This is a **debt register**, not a permanent home. The goal is to converge to ze
 
 **State as of 2026-04-28 (post PR #116):** All 5 flake families (entries #1–#13, #15, #16, #17, #20, #21) discharged via PR #116. Only test-methodology carryovers remain — these are not bugs in production code or test code; they're artifacts of `--repeat-each=N` itself (Supabase local rate limits + shared-user state accumulation). They pass reliably in normal CI single-run mode and in independent runs.
 
+**State as of 2026-05-06 (Phase 21):** S4 + S4b (`rank-up-celebration.spec.ts` overflow card) were briefly tagged `@flaky` after CI hit 4 vCPU saturation at workers=4. Root cause was e2e assertions on Flutter `Timer.delayed` animation timing (1.1 s overlay holds, 4 s overflow auto-dismiss) that race against real wall-clock under any CPU contention. Discharged in the same PR by trimming the e2e assertions to the integration property the test exists to verify (cap-at-3 produces a visible overflow card with the correct `+N ranks` label; tap routes to /profile) and leaving the auto-dismiss timing to its widget test (`celebration_overflow_card_test.dart` — `tester.pump(Duration)` against a fake clock). Tag removed; verified 16 consecutive passes across workers=3 / workers=4 with `--repeat-each=5`.
+
 ## How this doc is used
 
 - `qa-engineer` excludes anything tagged `@flaky` from Stage 2 of the staged-run strategy and routes it through Stage 3 with `--retries=2` instead.

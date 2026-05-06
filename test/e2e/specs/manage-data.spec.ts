@@ -21,7 +21,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
@@ -404,8 +404,8 @@ test.describe('Manage Data', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullManageData.email,
-      TEST_USERS.fullManageData.password,
+      getUser('fullManageData').email,
+      getUser('fullManageData').password,
     );
   });
 

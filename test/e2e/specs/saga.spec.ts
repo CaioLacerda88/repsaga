@@ -23,7 +23,7 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
 import { SAGA, NAV, HISTORY, CELEBRATION } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import {
   startEmptyWorkout,
   addExercise,
@@ -45,26 +45,24 @@ import {
 
 test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    // CONFIRMED pollution path (per `tasks/e2e-pollution-audit.md`):
-    // `rpg-foundation.spec.ts` E2/E3/E6 each save a workout for rpgFreshUser
-    // and run alphabetically BEFORE `saga.spec.ts`. The original inline
-    // cleanup here deleted xp/body_part_progress/exercise_peak_loads/
-    // backfill_progress but NOT the surviving `workouts` rows. On next
-    // login, `backfill_rpg_v1` re-ran (because backfill_progress had been
-    // cleared) and re-wrote XP into body_part_progress from those workouts
-    // BEFORE this assertion fired — making firstSetAwakensBanner absent.
+    // Phase 21 isolates rpgFreshUser ACROSS workers, but tests on the same
+    // worker still share that user. With `fullyParallel: false`, Playwright
+    // schedules entire spec files on a single worker — meaning rpg-
+    // foundation.spec.ts (E2/E3/E6 each save a workout for rpgFreshUser)
+    // can run on the same worker as saga.spec.ts. After E2 saves a workout,
+    // body_part_progress has XP and the firstSetAwakensBanner is hidden.
     //
-    // The centralised helper deletes workouts + personal_records +
-    // earned_titles + weekly_plans alongside the previous tables, then
-    // upserts a completed backfill_progress row (same final state as the
-    // prior inline reset).
+    // The Tier 1 helper deletes workouts + xp_events + body_part_progress
+    // + earned_titles + weekly_plans, then upserts a completed
+    // backfill_progress so SagaIntroGate doesn't re-run backfill on next
+    // login.
     const admin = getAdminClient();
-    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
     if (userId) {
       await resetRpgStateForUser(admin, userId);
     }
 
-    await login(page, TEST_USERS.rpgFreshUser.email, TEST_USERS.rpgFreshUser.password);
+    await login(page, getUser('rpgFreshUser').email, getUser('rpgFreshUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -102,7 +100,7 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
 
 test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.rpgFoundationUser.email, TEST_USERS.rpgFoundationUser.password);
+    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -155,7 +153,7 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
 
 test.describe('Saga — navigation', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, TEST_USERS.rpgFoundationUser.email, TEST_USERS.rpgFoundationUser.password);
+    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
     await navigateToTab(page, 'Profile');
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
   });
@@ -272,8 +270,8 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.rpgFoundationUser.email,
-      TEST_USERS.rpgFoundationUser.password,
+      getUser('rpgFoundationUser').email,
+      getUser('rpgFoundationUser').password,
     );
     await navigateToTab(page, 'Profile');
     await page
@@ -367,19 +365,19 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
 test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     // Reset the fresh user's RPG state so we land on a true zero-history
-    // baseline (mirrors the S1 reset). Same pollution mechanism: prior
-    // rpg-foundation.spec.ts workouts on rpgFreshUser would re-trigger
-    // backfill on next login if `workouts` rows were not removed.
+    // baseline. See the matching beforeEach above for the full rationale —
+    // intra-worker pollution from rpg-foundation.spec.ts still requires
+    // this reset even after Phase 21 per-worker isolation.
     const admin = getAdminClient();
-    const userId = await getUserIdByEmail(admin, TEST_USERS.rpgFreshUser.email);
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
     if (userId) {
       await resetRpgStateForUser(admin, userId);
     }
 
     await login(
       page,
-      TEST_USERS.rpgFreshUser.email,
-      TEST_USERS.rpgFreshUser.password,
+      getUser('rpgFreshUser').email,
+      getUser('rpgFreshUser').password,
     );
     await navigateToTab(page, 'Profile');
     await page
@@ -430,8 +428,8 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.rpgClassCrossUser.email,
-      TEST_USERS.rpgClassCrossUser.password,
+      getUser('rpgClassCrossUser').email,
+      getUser('rpgClassCrossUser').password,
     );
     await navigateToTab(page, 'Home');
   });

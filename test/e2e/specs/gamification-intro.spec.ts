@@ -23,7 +23,7 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { dismissSagaIntroOverlay, waitForAppReady } from '../helpers/app';
 import { NAV, GAMIFICATION } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
 // Smoke — gamification intro flow (Phase 17b)
@@ -43,8 +43,8 @@ test.describe('Gamification intro', { tag: '@smoke' }, () => {
   }) => {
     await login(
       page,
-      TEST_USERS.sagaIntroUser.email,
-      TEST_USERS.sagaIntroUser.password,
+      getUser('sagaIntroUser').email,
+      getUser('sagaIntroUser').password,
       { dismissSagaIntro: false },
     );
 
@@ -106,8 +106,8 @@ test.describe('Gamification intro', { tag: '@smoke' }, () => {
   }) => {
     await login(
       page,
-      TEST_USERS.sagaIntroUser.email,
-      TEST_USERS.sagaIntroUser.password,
+      getUser('sagaIntroUser').email,
+      getUser('sagaIntroUser').password,
       { dismissSagaIntro: false },
     );
 
@@ -146,8 +146,8 @@ test.describe('Gamification intro', { tag: '@smoke' }, () => {
   }) => {
     await login(
       page,
-      TEST_USERS.sagaIntroUser.email,
-      TEST_USERS.sagaIntroUser.password,
+      getUser('sagaIntroUser').email,
+      getUser('sagaIntroUser').password,
       { dismissSagaIntro: false },
     );
 

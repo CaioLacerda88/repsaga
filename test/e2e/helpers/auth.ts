@@ -4,13 +4,15 @@
  * Test users are created by global-setup.ts using the Supabase Admin Auth API
  * and credentials in test/e2e/.env.local. No manual setup is required.
  *
- * Import specific user credentials from fixtures/test-users.ts rather than
- * using getTestCredentials() for new tests.
+ * Import specific user credentials via getUser('roleName') from
+ * fixtures/worker-users.ts (Phase 21+) rather than using
+ * getTestCredentials() for new tests.
  */
 
 import { Page, expect } from '@playwright/test';
 import { AUTH, GAMIFICATION, NAV, SAGA } from './selectors';
 import { dismissSagaIntroOverlay, waitForAppReady, flutterFill } from './app';
+import { getUser } from '../fixtures/worker-users';
 
 /**
  * Log in with email and password.
@@ -102,8 +104,9 @@ export async function logout(page: Page): Promise<void> {
  * backward compatibility. Falls back to the smokeAuth user from fixtures if
  * the env vars are not set.
  *
- * For new tests, import TEST_USERS from fixtures/test-users.ts directly
- * instead of calling this function.
+ * For new tests, call getUser('roleName') from fixtures/worker-users.ts
+ * (Phase 21+) instead of calling this function. getUser returns a
+ * worker-scoped email so concurrent Playwright workers never collide.
  */
 export function getTestCredentials(): { email: string; password: string } {
   const email = process.env['TEST_USER_EMAIL'];
@@ -114,10 +117,9 @@ export function getTestCredentials(): { email: string; password: string } {
     return { email, password };
   }
 
-  // Fall back to the smoke auth test user so older tests remain runnable
-  // after the fixture-based setup is in place.
+  // Fall back to the smokeAuth role (worker-scoped under Phase 21).
   return {
-    email: 'e2e-smoke-auth@test.local',
+    email: getUser('smokeAuth').email,
     password,
   };
 }

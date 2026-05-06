@@ -31,7 +31,7 @@ import {
   EXERCISE_DETAIL,
   CREATE_EXERCISE,
 } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // The Push Day starter routine is seeded by seed.sql and always present.
@@ -57,8 +57,8 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeRoutineManagement.email,
-      TEST_USERS.smokeRoutineManagement.password,
+      getUser('smokeRoutineManagement').email,
+      getUser('smokeRoutineManagement').password,
     );
     await navigateToTab(page, 'Routines');
   });
@@ -237,8 +237,8 @@ test.describe('Routine start', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeRoutineStart.email,
-      TEST_USERS.smokeRoutineStart.password,
+      getUser('smokeRoutineStart').email,
+      getUser('smokeRoutineStart').password,
     );
     await navigateToTab(page, 'Routines');
   });
@@ -463,8 +463,8 @@ test.describe('Routine error handling', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeRoutineError.email,
-      TEST_USERS.smokeRoutineError.password,
+      getUser('smokeRoutineError').email,
+      getUser('smokeRoutineError').password,
     );
   });
 
@@ -580,8 +580,8 @@ test.describe('Routines', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullRoutines.email,
-      TEST_USERS.fullRoutines.password,
+      getUser('fullRoutines').email,
+      getUser('fullRoutines').password,
     );
     await navigateToTab(page, 'Routines');
   });
@@ -719,8 +719,8 @@ test.describe('Routine regressions', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullRoutineRegression.email,
-      TEST_USERS.fullRoutineRegression.password,
+      getUser('fullRoutineRegression').email,
+      getUser('fullRoutineRegression').password,
     );
     await navigateToTab(page, 'Routines');
     await expect(page.locator(ROUTINE.starterRoutinesSection)).toBeVisible({

@@ -18,7 +18,7 @@ import {
   SAGA,
 } from '../helpers/selectors';
 import { startEmptyWorkout } from '../helpers/workout';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -30,8 +30,8 @@ test.describe('Active workout pt locale', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalizationWorkout.email,
-      TEST_USERS.smokeLocalizationWorkout.password,
+      getUser('smokeLocalizationWorkout').email,
+      getUser('smokeLocalizationWorkout').password,
     );
   });
 
@@ -106,8 +106,8 @@ test.describe('Locale switch during workout', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalizationEn.email,
-      TEST_USERS.smokeLocalizationEn.password,
+      getUser('smokeLocalizationEn').email,
+      getUser('smokeLocalizationEn').password,
     );
   });
 

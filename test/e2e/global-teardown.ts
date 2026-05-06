@@ -1,8 +1,9 @@
 /**
  * Playwright global teardown — deletes E2E test users via Supabase Admin Auth API.
  *
- * Runs once after all tests complete. Identifies test users by the "e2e-"
- * prefix in their email addresses and deletes them.
+ * Runs once after all tests complete. Phase 21: identifies test users by
+ * the worker-scoped email pattern '{role}_w{N}@test.local' (regex from
+ * fixtures/worker-users.ts) and deletes them in parallel.
  *
  * Before deleting each user from auth, all user-owned data is deleted from
  * dependent tables in the correct FK order to avoid constraint violations.
@@ -14,13 +15,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { getEmailPattern } from './fixtures/worker-users';
 
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 
 /**
  * Delete all user-owned data from dependent tables before deleting the auth user.
  *
- * The deletion order respects FK constraints:
+ * The deletion order respects FK constraints for tables that DO NOT cascade
+ * from `auth.users(id) ON DELETE CASCADE`:
  *   1. sets (via workout_exercises -> workouts)
  *   2. workout_exercises (via workouts)
  *   3. personal_records
@@ -28,7 +31,18 @@ dotenv.config({ path: path.join(__dirname, '.env.local') });
  *   5. weekly_plans
  *   6. workout_templates (user-created only)
  *   7. exercises (user-created only, is_default = false)
- *   8. profiles
+ *   8. xp_events / user_xp
+ *   9. profiles
+ *
+ * RPG progress tables are intentionally NOT in this list — they cascade
+ * automatically when the auth user is deleted at the end of the teardown:
+ *   - body_part_progress    (00040_rpg_system_v1.sql:165 — ON DELETE CASCADE)
+ *   - exercise_peak_loads   (00040_rpg_system_v1.sql:190 — ON DELETE CASCADE)
+ *   - backfill_progress     (00040_rpg_system_v1.sql:213 — ON DELETE CASCADE)
+ *   - earned_titles         (00040_rpg_system_v1.sql:234 — ON DELETE CASCADE)
+ *
+ * If a future migration adds a new RPG table without `ON DELETE CASCADE`,
+ * add an explicit delete here OR set up the cascade in the migration.
  *
  * Uses the service-role key which bypasses RLS.
  */
@@ -112,7 +126,10 @@ async function globalTeardown(): Promise<void> {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  console.log('[global-teardown] Listing users to find E2E test accounts...');
+  const pattern = getEmailPattern();
+  console.log(
+    `[global-teardown] Listing users matching ${pattern} ...`,
+  );
 
   // List all users — local Supabase typically has few users so one page is enough.
   const { data: listData, error: listError } =
@@ -125,36 +142,57 @@ async function globalTeardown(): Promise<void> {
     return;
   }
 
-  const testUsers = listData.users.filter((u) =>
-    u.email?.startsWith('e2e-'),
+  const testUsers = listData.users.filter(
+    (u) => typeof u.email === 'string' && pattern.test(u.email),
   );
 
   if (testUsers.length === 0) {
-    console.log('[global-teardown] No E2E test users found — nothing to clean up.');
+    console.log(
+      '[global-teardown] No worker-scoped E2E test users found — nothing to clean up.',
+    );
     return;
   }
 
+  // Batch deletions in chunks of 8 to avoid GoTrue concurrency-induced
+  // "Unexpected failure" errors. With 168 users a fully parallel
+  // Promise.allSettled saturates the auth service and ~25-30% of deletes
+  // return 500. 8-wide batches drop the failure rate to ~0 with negligible
+  // wall-time cost (168/8 × ~200ms per batch ≈ 4s, vs ~1s for full-parallel).
+  const BATCH_SIZE = 8;
   console.log(
-    `[global-teardown] Deleting ${testUsers.length} E2E test user(s)...`,
+    `[global-teardown] Deleting ${testUsers.length} worker-scoped user(s) in batches of ${BATCH_SIZE}...`,
   );
 
-  for (const user of testUsers) {
-    // Delete all user-owned data first to avoid FK constraint violations.
-    await deleteUserData(supabase, user.id);
-
-    const { error } = await supabase.auth.admin.deleteUser(user.id);
-
-    if (error) {
-      // Log but do not throw — attempt to clean up remaining users.
-      console.error(
-        `[global-teardown] Failed to delete user ${user.email} (${user.id}): ${error.message}`,
-      );
-    } else {
-      console.log(`[global-teardown] Deleted user: ${user.email}`);
-    }
+  // Per-user deletion: clean owned rows first (FK-ordered), then auth user.
+  // Errors are caught per-user so one failure doesn't block the rest.
+  const results: Array<PromiseSettledResult<string>> = [];
+  for (let i = 0; i < testUsers.length; i += BATCH_SIZE) {
+    const batch = testUsers.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (user) => {
+        await deleteUserData(supabase, user.id);
+        const { error } = await supabase.auth.admin.deleteUser(user.id);
+        if (error) {
+          throw new Error(
+            `Failed to delete ${user.email} (${user.id}): ${error.message}`,
+          );
+        }
+        return user.email ?? user.id;
+      }),
+    );
+    results.push(...batchResults);
   }
 
-  console.log('[global-teardown] Done.');
+  const successes = results.filter((r) => r.status === 'fulfilled').length;
+  const failures = results.filter((r) => r.status === 'rejected');
+  for (const failure of failures) {
+    console.error(`[global-teardown] ${(failure as PromiseRejectedResult).reason}`);
+  }
+
+  console.log(
+    `[global-teardown] Deleted ${successes}/${testUsers.length} users matching ${pattern}` +
+      (failures.length > 0 ? ` (${failures.length} failed)` : ''),
+  );
 }
 
 export default globalTeardown;

@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 import { navigateToTab } from '../helpers/app';
 import { login } from '../helpers/auth';
 import { HISTORY, HOME } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -24,8 +24,8 @@ test.describe('Workout history pt locale', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.fullHistoryPt.email,
-      TEST_USERS.fullHistoryPt.password,
+      getUser('fullHistoryPt').email,
+      getUser('fullHistoryPt').password,
     );
   });
 

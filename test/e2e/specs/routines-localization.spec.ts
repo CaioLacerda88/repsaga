@@ -16,7 +16,7 @@ import {
   EXERCISE_PICKER,
   EXERCISE_LOC,
 } from '../helpers/selectors';
-import { TEST_USERS } from '../fixtures/test-users';
+import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
 
 // =============================================================================
@@ -28,8 +28,8 @@ test.describe('Routine localization pt locale', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
-      TEST_USERS.smokeLocalizationRoutines.email,
-      TEST_USERS.smokeLocalizationRoutines.password,
+      getUser('smokeLocalizationRoutines').email,
+      getUser('smokeLocalizationRoutines').password,
     );
     await navigateToTab(page, 'Routines');
   });

@@ -80,7 +80,10 @@ export async function getUserIdByEmail(
   admin: SupabaseClient,
   email: string,
 ): Promise<string | null> {
-  const { data } = await admin.auth.admin.listUsers();
+  // perPage: 1000 — Phase 21 creates ~168 users (workers × roles), and the
+  // GoTrue default of 50 silently truncates the result set. Without
+  // explicit perPage, .find() misses any user on page 2+.
+  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
   const user = data?.users?.find((u) => u.email === email);
   return user?.id ?? null;
 }

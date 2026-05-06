@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'path';
+import { WORKERS_COUNT } from './fixtures/worker-users';
 
 // Load .env.local so FLUTTER_APP_URL and Supabase credentials are available
 // to both the config and the global setup/teardown scripts.
@@ -16,7 +17,19 @@ export default defineConfig({
   testDir: '.',
   timeout: 60_000,
   retries: 1,
-  workers: 2,
+  // Phase 21: per-worker user pool (see fixtures/worker-users.ts) eliminates
+  // concurrent races on shared user state, so we can run more workers safely.
+  // Sized to 3 (not vCPU = 4) so the OS/Postgres/Flutter web server keep one
+  // vCPU of headroom — see WORKERS_COUNT doc for the contention story. The
+  // same constant drives `global-setup.ts`'s per-worker user creation loop,
+  // so both stay in sync automatically.
+  workers: WORKERS_COUNT,
+  // fullyParallel intentionally left at the Playwright default (false).
+  // Tests within the same spec file still run sequentially. Within-file
+  // parallelism is a separate optimization that requires per-test isolation
+  // we don't yet have (e.g., a single user finishing a workout invalidates
+  // shared XP state observed by the next test). Keeping this conservative
+  // until per-test isolation is proven across the suite.
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   use: {
