@@ -15,7 +15,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get navExercises => 'Exercícios';
 
   @override
-  String get navRoutines => 'Rotinas';
+  String get navRoutines => 'Treinos';
 
   @override
   String get navProfile => 'Perfil';
@@ -520,13 +520,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get samePlanThisWeek => 'Mesmo plano esta semana?';
 
   @override
-  String get myRoutines => 'MINHAS ROTINAS';
+  String get myRoutines => 'MINHAS TREINOS';
 
   @override
   String get seeAll => 'Ver tudo';
 
   @override
-  String get createYourFirstRoutine => 'Crie Sua Primeira Rotina';
+  String get createYourFirstRoutine => 'Crie Seu Primeiro Treino';
 
   @override
   String get heroUpNext => 'PRÓXIMO';
@@ -544,7 +544,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planYourWeek => 'Planeje sua semana';
 
   @override
-  String get pickRoutinesForWeek => 'Escolha rotinas para a semana';
+  String get pickRoutinesForWeek => 'Escolha treinos para a semana';
 
   @override
   String get quickWorkout => 'Treino rápido';
@@ -683,7 +683,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get formTipsSection => 'DICAS DE FORMA';
 
   @override
-  String get finishWorkout => 'Finalizar Treino';
+  String get finishWorkout => 'Finalizar Sessão';
 
   @override
   String get completeOneSet => 'Complete pelo menos uma série para finalizar';
@@ -716,7 +716,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get failedToDiscardWorkout =>
-      'Falha ao descartar treino. Tente novamente.';
+      'Falha ao descartar sessão. Tente novamente.';
 
   @override
   String get failedToSaveWorkout => 'Falha ao salvar treino. Tente novamente.';
@@ -748,7 +748,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get discardWorkoutTitle => 'Descartar Treino?';
+  String get discardWorkoutTitle => 'Descartar Sessão?';
 
   @override
   String discardWorkoutContent(String duration) {
@@ -756,7 +756,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get finishWorkoutTitle => 'Finalizar Treino?';
+  String get finishWorkoutTitle => 'Finalizar Sessão?';
 
   @override
   String incompleteSetsWarning(int count) {
@@ -779,7 +779,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get saveAndFinish => 'Salvar e Finalizar';
 
   @override
-  String get resumeWorkoutTitle => 'Retomar treino?';
+  String get resumeWorkoutTitle => 'Retomar sessão?';
 
   @override
   String get resumeWorkoutStaleTitle => 'Continuar de onde parou?';
@@ -848,11 +848,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get failedToLoadHistory => 'Falha ao carregar histórico';
 
   @override
-  String get noWorkoutsYet => 'Nenhum treino ainda';
+  String get noWorkoutsYet => 'Nenhuma sessão ainda';
 
   @override
   String get completedWorkoutsAppear =>
-      'Seus treinos concluídos aparecerão aqui';
+      'Suas sessões concluídas aparecerão aqui';
 
   @override
   String get startFirstWorkout => 'Comece seu primeiro treino';
@@ -875,38 +875,38 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get routines => 'Rotinas';
+  String get routines => 'Treinos';
 
   @override
-  String get failedToLoadRoutines => 'Falha ao carregar rotinas';
+  String get failedToLoadRoutines => 'Falha ao carregar treinos';
 
   @override
-  String get myRoutinesSection => 'MINHAS ROTINAS';
+  String get myRoutinesSection => 'MINHAS TREINOS';
 
   @override
-  String get starterRoutinesSection => 'ROTINAS INICIAIS';
+  String get starterRoutinesSection => 'TREINOS INICIAIS';
 
   @override
-  String get routinesEmptyTitle => 'Nenhuma rotina ainda';
+  String get routinesEmptyTitle => 'Nenhum treino ainda';
 
   @override
   String get routinesEmptyBody =>
       'Planeje uma sequência de exercícios uma vez e reutilize a cada treino.';
 
   @override
-  String get routinesEmptyCta => 'Criar rotina';
+  String get routinesEmptyCta => 'Criar treino';
 
   @override
-  String get createRoutine => 'Criar Rotina';
+  String get createRoutine => 'Criar Treino';
 
   @override
-  String get editRoutine => 'Editar Rotina';
+  String get editRoutine => 'Editar Treino';
 
   @override
-  String get routineName => 'Nome da rotina';
+  String get routineName => 'Nome do treino';
 
   @override
-  String get failedToSaveRoutine => 'Falha ao salvar rotina. Tente novamente.';
+  String get failedToSaveRoutine => 'Falha ao salvar treino. Tente novamente.';
 
   @override
   String get setsLabel => 'Séries';
@@ -918,7 +918,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get duplicateAndEdit => 'Duplicar e Editar';
 
   @override
-  String get deleteRoutine => 'Excluir Rotina';
+  String get deleteRoutine => 'Excluir Treino';
 
   @override
   String deleteRoutineConfirm(String name) {
@@ -983,11 +983,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get manageDataTitle => 'Gerenciar Dados';
 
   @override
-  String get deleteWorkoutHistory => 'Excluir Histórico de Treinos';
+  String get deleteWorkoutHistory => 'Excluir Histórico de Sessões';
 
   @override
   String workoutsWillBeRemoved(String count) {
-    return '$count treinos serão removidos';
+    return '$count sessões serão removidas';
   }
 
   @override
@@ -1004,11 +1004,11 @@ class AppLocalizationsPt extends AppLocalizations {
       'Excluir permanentemente sua conta e todos os dados';
 
   @override
-  String get deleteAllHistoryTitle => 'Excluir todo o histórico de treinos?';
+  String get deleteAllHistoryTitle => 'Excluir todo o histórico de sessões?';
 
   @override
   String deleteAllHistoryContent(int count) {
-    return 'Isso excluirá permanentemente todos os $count treinos e não pode ser desfeito.';
+    return 'Isso excluirá permanentemente todas as $count sessões e não pode ser desfeito.';
   }
 
   @override
@@ -1021,7 +1021,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get yesDelete => 'Sim, Excluir';
 
   @override
-  String get historyCleared => 'Histórico de treinos limpo';
+  String get historyCleared => 'Histórico de sessões limpo';
 
   @override
   String failedToClearHistory(String message) {
@@ -1033,7 +1033,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get resetAccountWarning =>
-      'Isso excluirá permanentemente todos os treinos e recordes pessoais. Suas rotinas e exercícios personalizados serão mantidos. Não há como desfazer.';
+      'Isso excluirá permanentemente todas as sessões e recordes pessoais. Seus treinos e exercícios personalizados serão mantidos. Não há como desfazer.';
 
   @override
   String get typeResetToConfirm => 'Digite RESET para confirmar';
@@ -1051,7 +1051,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deleteAccountWarning =>
-      'Isso excluirá permanentemente sua conta, todos os seus treinos, recordes pessoais, rotinas e exercícios personalizados. Esta ação não pode ser desfeita.';
+      'Isso excluirá permanentemente sua conta, todas as suas sessões, recordes pessoais, treinos e exercícios personalizados. Esta ação não pode ser desfeita.';
 
   @override
   String get typeDeleteToConfirm => 'Digite DELETE para confirmar';
@@ -1066,10 +1066,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prsRoutinesKept =>
-      'Seus recordes pessoais e rotinas serão mantidos.';
+      'Seus recordes pessoais e treinos serão mantidos.';
 
   @override
-  String get workoutHistorySection => 'HISTÓRICO DE TREINOS';
+  String get workoutHistorySection => 'HISTÓRICO DE SESSÕES';
 
   @override
   String get dangerSection => 'PERIGO';
@@ -1132,7 +1132,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clearWeek => 'Limpar Semana';
 
   @override
-  String get addRoutine => 'Adicionar Rotina';
+  String get addRoutine => 'Adicionar Treino';
 
   @override
   String plannedReadyToGo(int count, int total) {
@@ -1145,17 +1145,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get noRoutinesPlanned => 'Nenhuma rotina planejada esta semana';
+  String get noRoutinesPlanned => 'Nenhum treino planejado esta semana';
 
   @override
-  String get addRoutines => 'Adicionar Rotinas';
+  String get addRoutines => 'Adicionar Treinos';
 
   @override
   String get replacePlanTitle => 'Substituir plano atual?';
 
   @override
   String get replacePlanContent =>
-      'O preenchimento automático substituirá seu plano atual pelas rotinas mais usadas.';
+      'O preenchimento automático substituirá seu plano atual pelos treinos mais usados.';
 
   @override
   String get clearWeekTitle => 'Limpar Semana';
@@ -1164,27 +1164,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clearWeekContent => 'Começar do zero esta semana?';
 
   @override
-  String get routineRemoved => 'Rotina removida';
+  String get routineRemoved => 'Treino removido';
 
   @override
-  String get unknownRoutine => 'Rotina Desconhecida';
+  String get unknownRoutine => 'Treino Desconhecido';
 
   @override
-  String get addRoutinesSheet => 'Adicionar Rotinas';
+  String get addRoutinesSheet => 'Adicionar Treinos';
 
   @override
-  String get allRoutinesInPlan => 'Todas as rotinas estão no plano';
+  String get allRoutinesInPlan => 'Todos os treinos estão no plano';
 
   @override
-  String get createMoreRoutines => 'Crie mais rotinas para adicioná-las aqui.';
+  String get createMoreRoutines => 'Crie mais treinos para adicioná-los aqui.';
 
   @override
   String addCountRoutines(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'ADICIONAR $count ROTINAS',
-      one: 'ADICIONAR 1 ROTINA',
+      other: 'ADICIONAR $count TREINOS',
+      one: 'ADICIONAR 1 TREINO',
     );
     return '$_temp0';
   }
@@ -1256,7 +1256,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get pendingActionUpdateRecords => 'Atualizar recordes';
 
   @override
-  String get pendingActionMarkComplete => 'Marcar rotina como concluída';
+  String get pendingActionMarkComplete => 'Marcar treino como concluído';
 
   @override
   String get pendingActionCreateExercise => 'Criar exercício';
@@ -1334,7 +1334,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get failedToLoadDocument => 'Falha ao carregar documento';
 
   @override
-  String get discardWorkout => 'Descartar treino';
+  String get discardWorkout => 'Descartar sessão';
 
   @override
   String get moveUp => 'Mover para cima';

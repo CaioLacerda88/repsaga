@@ -329,7 +329,7 @@ test.describe('Localization — bottom nav no overflow at narrow viewport', { ta
   //
   // 375px is a common small-phone width (iPhone SE / Android compact). The
   // Portuguese labels are longer than English ("Exercícios" vs "Exercises",
-  // "Rotinas" vs "Routines") so this specifically catches overflow regressions
+  // "Treinos" vs "Routines") so this specifically catches overflow regressions
   // introduced by longer translations.
   //
   // Identifier-based selectors are used (not text= selectors) because:
