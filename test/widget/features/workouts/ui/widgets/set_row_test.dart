@@ -592,26 +592,21 @@ void main() {
       // that contract: hide the weight stepper entirely and let the reps
       // column take the freed space.
 
-      testWidgets(
-        'omits the weight stepper when isBodyweight is true',
-        (tester) async {
-          final set = makeSet();
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(
-                set: set,
-                workoutExerciseId: 'we-001',
-                isBodyweight: true,
-              ),
-            ),
-          );
+      testWidgets('omits the weight stepper when isBodyweight is true', (
+        tester,
+      ) async {
+        final set = makeSet();
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', isBodyweight: true),
+          ),
+        );
 
-          // The weight column is gone; the reps column is the only stepper
-          // in the row.
-          expect(find.byType(WeightStepper), findsNothing);
-          expect(find.byType(RepsStepper), findsOneWidget);
-        },
-      );
+        // The weight column is gone; the reps column is the only stepper
+        // in the row.
+        expect(find.byType(WeightStepper), findsNothing);
+        expect(find.byType(RepsStepper), findsOneWidget);
+      });
 
       testWidgets(
         'still renders the weight stepper for non-bodyweight exercises (default)',
@@ -620,9 +615,7 @@ void main() {
           // every existing equipment type — barbell, dumbbell, machine, etc.
           final set = makeSet();
           await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001'),
-            ),
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
           );
 
           expect(find.byType(WeightStepper), findsOneWidget);
@@ -639,11 +632,7 @@ void main() {
           final set = makeSet(setType: SetType.working);
           await tester.pumpWidget(
             buildTestWidget(
-              SetRow(
-                set: set,
-                workoutExerciseId: 'we-001',
-                isBodyweight: true,
-              ),
+              SetRow(set: set, workoutExerciseId: 'we-001', isBodyweight: true),
             ),
           );
 

@@ -313,8 +313,7 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
   ) {
     final weId = activeExercise.workoutExercise.id;
     final exerciseId = activeExercise.workoutExercise.exerciseId;
-    final isBodyweight =
-        exercise?.equipmentType == EquipmentType.bodyweight;
+    final isBodyweight = exercise?.equipmentType == EquipmentType.bodyweight;
     // Phase 20 commit 4: the per-row PR display state (5-state matrix +
     // accent record types) comes from the pure resolver via
     // [activeWorkoutRowDisplaysProvider]. The provider watches the active
