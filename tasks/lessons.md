@@ -4,7 +4,57 @@ Patterns and mistakes to avoid. Reviewed at session start.
 
 ---
 
-## 2026-04-10: Placeholder cleanup needs a whole-repo grep, not per-file surgery
+## 2026-05-07: Run the reviewer agent before merging — it's CLAUDE.md step 8 for a reason
+
+**Mistake:** Across 8 PRs in one session (#154, #155, #156, #157, #158,
+#159, #160, #161, #162, #163) I went local-verify → PR → CI → merge
+without dispatching the reviewer agent. The user caught it on PR #163
+("did you have reviewer check the code?"). The reviewer pass on #163
+surfaced 2 [Important] findings (a duplicated predicate + a missing
+test for the intersection of two changed axes) — neither caught by
+analyze, tests, or e2e, both worth fixing before merge.
+
+**Root cause:** when local verification is green I treat the PR as
+ready, forgetting that CLAUDE.md step 8 is "Code review — `reviewer`
+flags issues → `tech-lead` fixes → `qa-engineer` re-validates." The
+reviewer agent catches design-quality issues (drift risk, coverage gaps,
+leaky abstractions) that no automated gate can.
+
+**Rule:** Before declaring a PR mergeable, dispatch `reviewer` against
+the diff. The reviewer's output is part of the PR's preparation, not an
+optional post-script. Findings are: Blocker → fix; Important → fix unless
+truly post-merge; Nit → judgement call. **No "post-merge follow-up" for
+non-trivial findings** (this conflicts with the existing memory
+"feedback_no_deferring_review_findings" — same lesson, different angle).
+
+The orchestrator's full pipeline gate before "ready to merge" is:
+1. local `dart format` + `analyze` + `flutter test` + targeted e2e
+2. `reviewer` agent on the branch diff
+3. fix every finding before merging
+4. CI green
+
+I was running 1 + 4 only and skipping 2 + 3.
+
+---
+
+## 2026-05-07: Run `dart format` before pushing any Dart-touching PR
+
+**Mistake:** PRs #160 and #163 both shipped a `dart format` violation that
+the analyze CI step caught at ~30s — `Check formatting` runs
+`dart format --set-exit-if-changed .` and fails fast. Each violation
+required a follow-up "chore(format): apply dart format" commit + a CI
+re-poll round, costing 30+ minutes per PR.
+
+**Root cause:** my edit pipeline produces well-formatted Dart most of the
+time, but multi-line constructor calls / nested widget trees occasionally
+land with line breaks the Dart formatter doesn't agree with. Local
+`dart analyze` passes (it doesn't enforce formatting), so the violation
+slips through to CI.
+
+**Rule:** For any PR that touches `.dart` files, run
+`dart format <changed-files>` (or the full `make format`) BEFORE the
+pre-push verification gate. Cheaper than a CI round-trip. The format
+command is idempotent — running it on already-formatted code is a no-op.
 
 **Mistake:** Round 1 QA flagged one `(placeholder)` instance in `assets/legal/privacy_policy.md` section 1 and the orchestrator briefed tech-lead to fix exactly that one line (plus the `docs/` mirror). Tech-lead did exactly what was asked. Round 2 QA (against live Supabase) then found FIVE more instances the first pass had missed: privacy_policy section 11, terms_of_service sections 11+12, docs/index.md, and both docs/ ToS mirrors — plus a `[JURISDICTION]` template token in the ToS governing-law clause. A cleanup pass that should have been one PR became a two-commit amend cycle.
 

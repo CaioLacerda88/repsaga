@@ -584,6 +584,134 @@ void main() {
       );
     });
 
+    group('bodyweight chrome (PLAN.md backlog 20-P-2)', () {
+      // Bodyweight exercises (push-ups, pull-ups, planks) have no meaningful
+      // weight axis. The resolver in `pr_row_state_resolver.dart` already
+      // excludes weight from PR detection in this mode (only RecordType.maxReps
+      // is considered). The `isBodyweight` flag aligns the row chrome with
+      // that contract: hide the weight stepper entirely and let the reps
+      // column take the freed space.
+
+      testWidgets('omits the weight stepper when isBodyweight is true', (
+        tester,
+      ) async {
+        final set = makeSet();
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', isBodyweight: true),
+          ),
+        );
+
+        // The weight column is gone; the reps column is the only stepper
+        // in the row.
+        expect(find.byType(WeightStepper), findsNothing);
+        expect(find.byType(RepsStepper), findsOneWidget);
+      });
+
+      testWidgets(
+        'still renders the weight stepper for non-bodyweight exercises (default)',
+        (tester) async {
+          // Default: `isBodyweight: false`. Standard layout retained for
+          // every existing equipment type — barbell, dumbbell, machine, etc.
+          final set = makeSet();
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          expect(find.byType(WeightStepper), findsOneWidget);
+          expect(find.byType(RepsStepper), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'still renders the set-num cell, type label, and done-cell when bodyweight',
+        (tester) async {
+          // Hiding the weight column must not regress the surrounding chrome
+          // — the digit, the WK type label, and the completion checkbox stay
+          // exactly where they are.
+          final set = makeSet(setType: SetType.working);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001', isBodyweight: true),
+            ),
+          );
+
+          expect(find.text('1'), findsOneWidget); // set number
+          expect(find.text('WK'), findsOneWidget); // type micro-label
+          expect(find.byType(Checkbox), findsOneWidget); // done-cell
+        },
+      );
+
+      testWidgets(
+        'bodyweight + completed-standing-PR (maxReps accent) renders the gold treatment without the weight column',
+        (tester) async {
+          // Bodyweight exercises CAN still produce reps PRs — the resolver
+          // checks `RecordType.maxReps` only in bodyweight mode. The row
+          // chrome path that draws the gold treatment must continue to flow
+          // when the weight stepper is hidden: this is the single
+          // intersection of the two changes (`isBodyweight` and PR-state)
+          // and the most likely place a future change could regress one
+          // without noticing the other.
+          final set = makeSet(isCompleted: true);
+          const display = PrRowDisplay(
+            state: PrRowState.completedStandingPr,
+            accentTypes: {RecordType.maxReps},
+          );
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: display,
+                isBodyweight: true,
+              ),
+            ),
+          );
+
+          // Gold treatment present (RewardAccent ancestor mounts on
+          // standing-PR / predicted-PR row states).
+          expect(find.byType(RewardAccent), findsOneWidget);
+          // Weight column hidden; reps column still present and accented.
+          expect(find.byType(WeightStepper), findsNothing);
+          expect(find.byType(RepsStepper), findsOneWidget);
+        },
+      );
+    });
+
+    group('FL micro-label color (PLAN.md backlog 20-P-3)', () {
+      // Audit Finding B: pending failure-set label should be amber (warning),
+      // not red (error). Red conflicts with the gym-floor emotional register
+      // — "FL" in red on a pending set reads as "something is wrong" rather
+      // than "this is a max-effort set."
+
+      testWidgets(
+        'uses AppColors.warning (not error) for a pending Failure set label',
+        (tester) async {
+          final set = makeSet(setType: SetType.failure, isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          final labelText = tester.widget<Text>(find.text('FL'));
+          final color = labelText.style?.color;
+          expect(color, isNotNull);
+
+          // The rendered color is `AppColors.warning.withValues(alpha: 0.6)`
+          // — same RGB channels as the constant, alpha intentionally
+          // dimmed. Normalise both sides to alpha=1.0 and assert RGB
+          // equality. `withValues(alpha: 1.0)` is stable across Flutter
+          // SDK versions (vs the deprecated int `Color.red/green/blue`
+          // accessors that the analyzer flags on Flutter 3.27+).
+          expect(
+            color!.withValues(alpha: 1.0),
+            AppColors.warning,
+            reason: 'FL pending should track AppColors.warning, not error.',
+          );
+        },
+      );
+    });
+
     group('isNew checkbox lock', () {
       testWidgets(
         'checkbox is non-interactive within 600ms when isNew is true',
