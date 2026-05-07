@@ -661,15 +661,17 @@ void main() {
           final color = labelText.style?.color;
           expect(color, isNotNull);
 
-          // Compare RGB channels (alpha differs by design — opacity 0.6).
-          // Warning amber is #FFB84D — distinct from error red #FF6B6B.
+          // The rendered color is `AppColors.warning.withValues(alpha: 0.6)`
+          // — same RGB channels as the constant, alpha intentionally
+          // dimmed. Normalise both sides to alpha=1.0 and assert RGB
+          // equality. `withValues(alpha: 1.0)` is stable across Flutter
+          // SDK versions (vs the deprecated int `Color.red/green/blue`
+          // accessors that the analyzer flags on Flutter 3.27+).
           expect(
-            color!.red,
-            AppColors.warning.red,
+            color!.withValues(alpha: 1.0),
+            AppColors.warning,
             reason: 'FL pending should track AppColors.warning, not error.',
           );
-          expect(color.green, AppColors.warning.green);
-          expect(color.blue, AppColors.warning.blue);
         },
       );
     });
