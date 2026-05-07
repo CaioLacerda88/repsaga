@@ -23,8 +23,9 @@ import 'sync_error_classifier.dart';
 /// Maximum number of retries before a queued action is considered terminal.
 const kMaxSyncRetries = 6;
 
-/// Watches connectivity and drains the offline queue FIFO when the device
-/// transitions from offline to online.
+/// Watches connectivity and drains the offline queue FIFO on connectivity
+/// transitions AND on cold launch when already-online with pre-existing
+/// queue items.
 ///
 /// The drain is transparent to the user. [PendingSyncNotifier]'s badge count
 /// decrements as items are dequeued. Only terminal failures (items that
@@ -32,17 +33,28 @@ const kMaxSyncRetries = 6;
 class SyncService extends Notifier<SyncState> {
   /// Tracks the last-known online status to detect offline-to-online
   /// transitions. Defaults to `true` so the initial `true` emission from
-  /// [onlineStatusProvider] does NOT trigger a drain.
+  /// [onlineStatusProvider] does NOT trigger a drain via the listener path —
+  /// the cold-launch-online case is handled by [_coldLaunchDrain] below
+  /// instead, which awaits the StreamProvider's first REAL emission directly
+  /// (independent of [isOnlineProvider]'s synthetic optimistic default).
   bool _lastOnline = true;
 
   /// Guards against concurrent drain invocations.
   bool _draining = false;
+
+  /// Flips to `true` once the Notifier is disposed so the unawaited
+  /// [_coldLaunchDrain] future doesn't call into a destroyed [ref].
+  bool _disposed = false;
 
   @override
   SyncState build() {
     // Synchronize _lastOnline with the current connectivity state so that
     // the first listener callback can correctly detect a transition.
     _lastOnline = ref.read(isOnlineProvider);
+
+    ref.onDispose(() {
+      _disposed = true;
+    });
 
     ref.listen<bool>(isOnlineProvider, (previous, next) {
       final wasOffline = !_lastOnline;
@@ -51,7 +63,40 @@ class SyncService extends Notifier<SyncState> {
         _drain();
       }
     });
+
+    // Cold-launch drain. The listener above does NOT fire on cold launch
+    // when the app boots already-online: [isOnlineProvider]'s optimistic
+    // default is `true`, the StreamProvider's first real emission is also
+    // `true`, and Riverpod's listener path skips the no-change callback.
+    // Pre-existing queue items from a previous offline session would
+    // therefore sit forever until a connectivity flap (or app relaunch
+    // following one) triggered the listener.
+    //
+    // [onlineStatusProvider.future] resolves with the StreamProvider's
+    // FIRST data emission — independent of [isOnlineProvider]'s synthetic
+    // optimistic value — so awaiting it gives us the real cold-launch
+    // online status. If it's `true`, kick off the drain. The [_draining]
+    // reentrancy guard inside [_drain] keeps this path mutually exclusive
+    // with the listener path on subsequent online→offline→online flaps.
+    unawaited(_coldLaunchDrain());
+
     return const SyncState();
+  }
+
+  /// Awaits the StreamProvider's first real emission and drains the queue
+  /// when online. Errors are swallowed — the listener path will still
+  /// catch subsequent connectivity changes, so a stream error here is
+  /// recoverable rather than fatal.
+  Future<void> _coldLaunchDrain() async {
+    try {
+      final firstReal = await ref.read(onlineStatusProvider.future);
+      if (_disposed) return;
+      if (firstReal) {
+        await _drain();
+      }
+    } catch (_) {
+      // Stream errored — the listener path picks up subsequent emissions.
+    }
   }
 
   /// Drain the offline queue in FIFO order.
