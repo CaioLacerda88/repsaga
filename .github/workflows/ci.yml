@@ -205,9 +205,19 @@ jobs:
         # spins up locally + the `verifyPubSubJwt` code path's `fetch`
         # call (Deno checks the permission flag at call time even when
         # the actual URL is intercepted by a fetch stub). `--allow-env`
-        # is required only by `google_play.test.ts`'s
-        # `Deno.env.get('SERVICE_ACCOUNT_JSON')` reads; harmless on
-        # `auth.test.ts` (Deno doesn't error on unused permissions).
+        # is required by both tests (`google_play.test.ts` reads
+        # `SERVICE_ACCOUNT_JSON`; `auth.test.ts` indirectly triggers
+        # `index.ts`'s `SUPABASE_URL` read on module load).
+        env:
+          # `vitality-nightly/index.ts` fails loud at module load when
+          # `SUPABASE_URL` is unset — that's intentional production
+          # behavior (a deployment without this env is broken and we
+          # want a boot error, not a silent blank Allow-Origin). The
+          # auth tests import from `./index.ts`, so the import alone
+          # triggers the check. Provide a dummy URL — the test JWT
+          # payload is not making real HTTP calls; only the module-load
+          # `new URL(...)` / string parse needs to succeed.
+          SUPABASE_URL: http://localhost:54321
         run: deno test --allow-net --allow-env "supabase/functions/**/*.test.ts"
 
   ci:
