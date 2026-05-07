@@ -255,6 +255,13 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     final weightUnit = WeightUnit.fromString(
       ref.watch(profileProvider).value?.weightUnit ?? 'kg',
     );
+    // Bodyweight chrome predicate (PLAN.md backlog 20-P-2). Computed once
+    // at build-time so the column header and the per-row build both read
+    // from the same source of truth — no risk of drift if the underlying
+    // rule ever grows (e.g. a future equipment type that also hides
+    // weight).
+    final bool isBodyweight =
+        exercise?.equipmentType == EquipmentType.bodyweight;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -283,11 +290,10 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
               const SizedBox(height: 8),
               _SetColumnHeaders(
                 theme: Theme.of(context),
-                isBodyweight:
-                    exercise?.equipmentType == EquipmentType.bodyweight,
+                isBodyweight: isBodyweight,
               ),
               const Divider(height: 1),
-              ..._buildSetRows(activeExercise, lastSets, exercise),
+              ..._buildSetRows(activeExercise, lastSets, isBodyweight),
             ],
             const SizedBox(height: 8),
             _AddSetButton(
@@ -309,11 +315,10 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
   Iterable<Widget> _buildSetRows(
     ActiveWorkoutExercise activeExercise,
     List<ExerciseSet> lastSets,
-    Exercise? exercise,
+    bool isBodyweight,
   ) {
     final weId = activeExercise.workoutExercise.id;
     final exerciseId = activeExercise.workoutExercise.exerciseId;
-    final isBodyweight = exercise?.equipmentType == EquipmentType.bodyweight;
     // Phase 20 commit 4: the per-row PR display state (5-state matrix +
     // accent record types) comes from the pure resolver via
     // [activeWorkoutRowDisplaysProvider]. The provider watches the active

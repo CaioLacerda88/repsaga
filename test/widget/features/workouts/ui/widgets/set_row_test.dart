@@ -641,6 +641,42 @@ void main() {
           expect(find.byType(Checkbox), findsOneWidget); // done-cell
         },
       );
+
+      testWidgets(
+        'bodyweight + completed-standing-PR (maxReps accent) renders the gold treatment without the weight column',
+        (tester) async {
+          // Bodyweight exercises CAN still produce reps PRs — the resolver
+          // checks `RecordType.maxReps` only in bodyweight mode. The row
+          // chrome path that draws the gold treatment must continue to flow
+          // when the weight stepper is hidden: this is the single
+          // intersection of the two changes (`isBodyweight` and PR-state)
+          // and the most likely place a future change could regress one
+          // without noticing the other.
+          final set = makeSet(isCompleted: true);
+          const display = PrRowDisplay(
+            state: PrRowState.completedStandingPr,
+            accentTypes: {RecordType.maxReps},
+          );
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: display,
+                isBodyweight: true,
+              ),
+            ),
+          );
+
+          // Gold treatment present (RewardAccent ancestor mounts on
+          // standing-PR / predicted-PR row states).
+          expect(find.byType(RewardAccent), findsOneWidget);
+          // Weight column hidden; reps column still present and accented.
+          expect(find.byType(WeightStepper), findsNothing);
+          expect(find.byType(RepsStepper), findsOneWidget);
+        },
+      );
     });
 
     group('FL micro-label color (PLAN.md backlog 20-P-3)', () {
