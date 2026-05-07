@@ -23,8 +23,7 @@ import '../../providers/notifiers/active_workout_notifier.dart';
 /// row composed of four fixed-shape columns — set-number, weight stepper,
 /// reps stepper, done-mark — overlaid with the PR-state chrome (left
 /// rune-stripe, background tint, value text accent, done-mark variant,
-/// right bracket). Layout mirrors `docs/design/2026-05-01-active-workout-
-/// redesign/direction-b-pr-refined.html`.
+/// right bracket). See PR #152 for the shipped Direction B layout.
 ///
 /// **5-state matrix** (driven by [display]):
 ///
@@ -688,13 +687,12 @@ class _SetNumberCell extends StatelessWidget {
 /// (green), Failure tracks **warning amber** (#FFB84D).
 ///
 /// Failure deliberately does NOT use `AppColors.error` (the destructive-
-/// action red) — see the post-Phase-20 audit Finding B in
-/// `docs/design/2026-05-01-active-workout-redesign/critique.md`. Red on a
-/// pending to-failure set reads as "something is wrong" rather than "this is
-/// a max-effort set." Warning amber is tonally distinct from heroGold (PR
-/// scarcity unaffected), distinct from the success green used for dropsets,
-/// and distinct from the error red reserved for destructive actions; it
-/// reads as "intense / push to limit" without signaling breakage.
+/// action red). Red on a pending to-failure set reads as "something is
+/// wrong" rather than "this is a max-effort set." Warning amber is tonally
+/// distinct from heroGold (PR scarcity unaffected), distinct from the
+/// success green used for dropsets, and distinct from the error red
+/// reserved for destructive actions; it reads as "intense / push to limit"
+/// without signaling breakage. See PR #163 for the audit + decision trail.
 Color _setTypeLabelColor(SetType type) => switch (type) {
   SetType.working => AppColors.hotViolet.withValues(alpha: 0.55),
   SetType.warmup => AppColors.textCream.withValues(alpha: 0.45),
