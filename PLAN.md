@@ -1372,12 +1372,6 @@ Items in (d) move to a "v2-park" sub-list and don't get worked on without new pr
   Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert
   note. Picks up when someone has appetite for the layout-stable redesign or
   the Flutter engine bug is fixed upstream.
-- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain
-  pre-existing queue items when the app boots already-online. Improvement:
-  gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission
-  (not the optimistic-default true). Worth fixing when a user reports a
-  stuck queue badge after fresh launch.
-
 ### v2-park (post-launch telemetry decisions)
 
 - **"Add set" button visual weight** — `_AddSetButton` border at
@@ -1419,7 +1413,7 @@ coordination.
 
 See `test/e2e/FLAKY_TESTS.md` for the live register. Current entries are **methodology carryovers** (Supabase local rate limits + shared-user state under `--repeat-each`) — not bugs in production code or test code. Each one passes reliably in normal CI single-run mode.
 
-- `exercises.spec.ts:372` — "should filter exercises by name via search input" — pre-existing search-debounce flake. Passes on retry; investigation is its own line item.
+- `routines.spec.ts:172` — "should delete a routine and remove it from the list" — surfaced 2026-05-07 across multiple unrelated PR runs (failed twice, passed twice in 4 consecutive observations on different branches). Root cause unknown; investigation deferred. Add to `test/e2e/FLAKY_TESTS.md` if it persists past one more cycle.
 
 ### Phase 16 (Subscription Monetization) — PARKED status
 
