@@ -1352,42 +1352,85 @@ Single source of truth for **deferred work that is not yet a phase but is on the
 
 Items in (d) move to a "v2-park" sub-list and don't get worked on without new product input.
 
-### Phase 20 polish carry-overs (set-row redesign)
+> **Phase 20 (set-row redesign) shipped 2026-04-29 in PR #152.** All five
+> originally-deferred polish items landed across PRs #158/#159/#160/#161/#163.
+> The two items below (20-P-1 and 20-P-4) are NOT incomplete redesign work —
+> 20-P-1 is a "would be nice" enhancement blocked on a Flutter Web engine
+> bug, 20-P-4 is a manual hardware QA pass. Both are filed under the
+> appropriate sections below (architectural / manual) rather than as
+> "redesign in progress."
 
-| # | Item | Severity | Spec |
-|---|---|---|---|
-| 20-P-1 | **Post-completion hint persistence** (critique Problem 3 / Pillar 1) | medium | Keep `Previous: Xkg × Y` visible after the user completes a set so they can confirm retrospectively between sets. **Blocked on**: a layout-stable redesign — first attempt re-triggered Phase 20's Flutter Web semantics-engine role-swap bug (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Need a fixed-height hint slot so adding/removing the visible Text never reflows the parent Column. Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert note. |
-| 20-P-4 | **Manual on-device walkthrough** (Phase 20 #5 visual half) | medium | Real Brazilian-mid-market 360dp device sweep: pixel-perfect spacing, haptic timing, celebration animation curves, real-thumb misfire under sweat. Not catchable from code; needs human eyes on hardware. |
+### Architectural follow-ups (parked, no urgency)
 
-> **Shipped post-audit:** 20-P-2 (bodyweight row hides weight column) + 20-P-3 (pending FL micro-label `error` red → `warning` amber) — bundled in the same PR as the audit findings landed. See git history for the change.
+- **20-P-1 — post-completion hint persistence** (Phase 20 critique Problem 3).
+  Goal: keep the `Previous: Xkg × Y` line visible after the user completes a
+  set so they can confirm retrospectively. **Blocked on a layout-stable
+  redesign** — the first attempt (PR #159) re-triggered Phase 20's Flutter
+  Web semantics-engine role-swap bug (a sibling Text appearing on completion
+  drops the row's `flt-semantics-identifier`). Fix needs a fixed-height hint
+  slot so adding/removing the visible Text never reflows the parent Column.
+  Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert
+  note. Picks up when someone has appetite for the layout-stable redesign or
+  the Flutter engine bug is fixed upstream.
+- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain
+  pre-existing queue items when the app boots already-online. Improvement:
+  gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission
+  (not the optimistic-default true). Worth fixing when a user reports a
+  stuck queue badge after fresh launch.
+- **Two unpatched legacy `exercise_peak_loads` writers**
+  (`_rpg_backfill_chunk` line ~263, `record_set_xp` line ~1656) still emit
+  unguarded INSERTs. Migration `00051_peak_loads_multi_writer_guard.sql`
+  BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration
+  could add explicit `IF weight > 0` guards at the writer site for
+  code-review explicitness. Not a correctness gap — purely a clean-code
+  concern.
+- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files
+  exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no
+  workflow runs them. A small CI step would catch Edge Function
+  regressions.
 
 ### v2-park (post-launch telemetry decisions)
 
-- **"Add set" button visual weight** — `_AddSetButton` border at `colorScheme.primary α 0.3` reads as "optional" rather than "expected next step." Structurally correct (full-width, 48dp tap floor, isNew lock). Revisit when telemetry on `sets per exercise` vs `add-set taps` is available post-launch.
-- **Long-press discoverability — affordance still requires accidental discovery** despite the `WK/WU/DR/FL` micro-label (audit verdict on critique Problem 2: "partial"). If post-launch telemetry shows users never cycle set type, consider replacing long-press with tap-to-cycle (no modal layer) or a small icon hint adjacent to the abbr.
+- **"Add set" button visual weight** — `_AddSetButton` border at
+  `colorScheme.primary α 0.3` reads as "optional" rather than "expected next
+  step." Structurally correct (full-width, 48dp tap floor, isNew lock).
+  Revisit when telemetry on `sets per exercise` vs `add-set taps` is
+  available post-launch.
+- **Long-press discoverability** — the `WK/WU/DR/FL` micro-label improves
+  set-type affordance but the long-press cycle itself still requires
+  accidental discovery (audit verdict on critique Problem 2: "partial"). If
+  post-launch telemetry shows users never cycle set type, consider replacing
+  long-press with tap-to-cycle (no modal layer) or a small icon hint
+  adjacent to the abbr.
 
-### Architectural follow-ups (parked)
+### Manual / external — needs the user (not autonomous)
 
-- **Cold-launch orphan drain** — `SyncService` doesn't auto-drain pre-existing queue items when the app boots already-online. Improvement: gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission (not the optimistic-default true). Worth fixing when a user reports a stuck queue badge after fresh launch.
-- **Two unpatched legacy `exercise_peak_loads` writers** (`_rpg_backfill_chunk` line ~263, `record_set_xp` line ~1656) still emit unguarded INSERTs. Migration `00051_peak_loads_multi_writer_guard.sql` BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration could add explicit `IF weight > 0` guards at the writer site for code-review explicitness. Not a correctness gap — purely a clean-code concern.
-- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no workflow runs them. A small CI step would catch Edge Function regressions.
+These items can't be driven by Claude on the codebase — they need human
+eyes on a device, manual dashboard configuration, or external
+coordination.
+
+- **20-P-4 — Phase 20 on-device walkthrough.** Real Brazilian-mid-market
+  360dp hardware sweep: pixel-perfect spacing, haptic timing, celebration
+  animation curves, real-thumb misfire under sweat. The autonomous code-state
+  half landed in PR #161. The remaining visual half needs human eyes on a
+  device — not catchable from code review or Playwright headless.
+- **Supabase project display name** — Dashboard → Project Settings →
+  General → rename to "RepSaga" (cosmetic; not blocking anything).
+- **Auth redirect URLs allowlist** — Dashboard → Authentication → URL
+  Configuration → add `io.supabase.repsaga://login-callback/` **when
+  Google Sign-In is enabled** (Phase 16b dep, not before).
+- **Brand assets** — register `repsaga.com` / `repsaga.app` /
+  `repsaga.com.br`; lock `@repsaga` on Instagram, X/Twitter, TikTok.
+- **(Phase 16 dep) Play Console subscription product `repsaga_premium`**
+  — blocked on signed-AAB upload (keystore generation + Internal Testing
+  release). Full handling on the Phase 16 resume checklist below; do NOT
+  act on this independently.
 
 ### Known flaky e2e tests
 
 See `test/e2e/FLAKY_TESTS.md` for the live register. Current entries are **methodology carryovers** (Supabase local rate limits + shared-user state under `--repeat-each`) — not bugs in production code or test code. Each one passes reliably in normal CI single-run mode.
 
 - `exercises.spec.ts:372` — "should filter exercises by name via search input" — pre-existing search-debounce flake. Passes on retry; investigation is its own line item.
-
-### Post-rebrand external services (manual coordination)
-
-External tasks remaining after the GymBuddy → RepSaga rename (PR #98). Codebase is 100% clean; these are out-of-repo:
-
-- **Supabase project display name** — Dashboard → Project Settings → General → rename to "RepSaga" (cosmetic; not blocking anything).
-- **Auth redirect URLs allowlist** — Dashboard → Authentication → URL Configuration → add `io.supabase.repsaga://login-callback/` **when Google Sign-In is enabled** (Phase 16b dep, not before).
-- **Brand assets** — register `repsaga.com` / `repsaga.app` / `repsaga.com.br`; lock `@repsaga` on Instagram, X/Twitter, TikTok.
-
-Phase 16-blocked external items (move to Phase 16's resume checklist when 16 unparks):
-- Play Console subscription product `repsaga_premium` — blocked on signed-AAB upload (keystore generation + Internal Testing release).
 
 ### Phase 16 (Subscription Monetization) — PARKED status
 
