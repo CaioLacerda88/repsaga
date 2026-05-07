@@ -1377,13 +1377,6 @@ Items in (d) move to a "v2-park" sub-list and don't get worked on without new pr
   gate the drain on `onlineStatusProvider`'s first real `AsyncData` emission
   (not the optimistic-default true). Worth fixing when a user reports a
   stuck queue badge after fresh launch.
-- **Two unpatched legacy `exercise_peak_loads` writers**
-  (`_rpg_backfill_chunk` line ~263, `record_set_xp` line ~1656) still emit
-  unguarded INSERTs. Migration `00051_peak_loads_multi_writer_guard.sql`
-  BEFORE-INSERT trigger silently absorbs them. Optional cleanup migration
-  could add explicit `IF weight > 0` guards at the writer site for
-  code-review explicitness. Not a correctness gap — purely a clean-code
-  concern.
 
 ### v2-park (post-launch telemetry decisions)
 
