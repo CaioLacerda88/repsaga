@@ -1421,9 +1421,10 @@ coordination.
   Google Sign-In is enabled** (Phase 16b dep, not before).
 - **Brand assets** — register `repsaga.com` / `repsaga.app` /
   `repsaga.com.br`; lock `@repsaga` on Instagram, X/Twitter, TikTok.
-- **Play Console subscription product `repsaga_premium`** — blocked on
-  signed-AAB upload (keystore generation + Internal Testing release). On
-  the Phase 16 resume checklist below.
+- **(Phase 16 dep) Play Console subscription product `repsaga_premium`**
+  — blocked on signed-AAB upload (keystore generation + Internal Testing
+  release). Full handling on the Phase 16 resume checklist below; do NOT
+  act on this independently.
 
 ### Known flaky e2e tests
 
