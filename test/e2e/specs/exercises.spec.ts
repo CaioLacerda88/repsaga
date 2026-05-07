@@ -377,20 +377,29 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
     // Type a partial name. "bench" matches multiple seed exercises.
     await flutterFill(page, EXERCISE_LIST.searchInput, 'bench');
 
-    // Wait for the 300 ms debounce in _onSearchChanged.
-    await page.waitForTimeout(500);
-
-    const count = await cards.count();
-
-    // Either results appear or the filtered empty state is shown — either is
-    // acceptable. We just verify the app does not crash.
-    if (count === 0) {
-      await expect(
-        page.locator(EXERCISE_LIST.emptyStateFiltered),
-      ).toBeVisible();
-    } else {
-      await expect(cards.first()).toBeVisible();
-    }
+    // Wait for the post-debounce SETTLED state — EITHER filtered results
+    // appear OR the filtered-empty placeholder mounts. We deliberately
+    // accept either branch: this test is a smoke check on "typing in the
+    // search box doesn't crash", not on "search returns N results."
+    //
+    // Why this isn't a fixed `waitForTimeout(500)`: the previous version
+    // waited 500 ms (300 ms debounce + 200 ms slack), then asserted
+    // count-then-emptyState. Under CI 4-vCPU contention or any latency
+    // that pushed the search RPC past ~200 ms, the 500 ms expired during
+    // the legitimate loading transition (debounce fired → provider
+    // invalidated old result → new result hadn't landed). At that moment
+    // `cards.count() == 0` AND `emptyStateFiltered` was NOT visible —
+    // the AsyncValueBuilder was showing a CircularProgressIndicator. Both
+    // assertion branches failed. Reproducible at workers=4 + repeat-each=10
+    // (3/10 flake before this fix).
+    //
+    // `Locator.or()` polls until ONE of the two conditions holds — bypassing
+    // the loading transition entirely. 5 s budget covers worst-case
+    // CI 4-vCPU + network latency.
+    const settled = cards
+      .first()
+      .or(page.locator(EXERCISE_LIST.emptyStateFiltered));
+    await expect(settled).toBeVisible({ timeout: 5_000 });
   });
 
   test('should open detail screen when tapping an exercise card', async ({ page }) => {
