@@ -63,6 +63,7 @@ class SetRow extends ConsumerStatefulWidget {
     this.onCompleted,
     this.lastSet,
     this.isNew = false,
+    this.isBodyweight = false,
     super.key,
   });
 
@@ -86,6 +87,21 @@ class SetRow extends ConsumerStatefulWidget {
   /// Whether this set was just added. When true, the completion checkbox
   /// is locked for 600ms to prevent accidental taps from thumb drift.
   final bool isNew;
+
+  /// True for `EquipmentType.bodyweight` exercises (push-ups, pull-ups,
+  /// planks). When true, the row hides the entire weight stepper column —
+  /// weight is meaningless for bodyweight movements and a user should not
+  /// have to ignore a `0 kg` field that occupies 60% of the input width.
+  /// The reps column expands to take the freed space.
+  ///
+  /// The PR-state resolver in `pr_row_state_resolver.dart` already handles
+  /// the corresponding bookkeeping (only `RecordType.maxReps` is checked in
+  /// bodyweight mode); this flag aligns the row chrome with that contract.
+  ///
+  /// Default `false` keeps backwards-compatibility: callers that don't pass
+  /// the flag (tests pre-dating this property) get the standard weight +
+  /// reps layout.
+  final bool isBodyweight;
 
   @override
   ConsumerState<SetRow> createState() => _SetRowState();
@@ -304,29 +320,45 @@ class _SetRowState extends ConsumerState<SetRow> {
                   onTap: set.setNumber > 1 ? _copyLastSet : null,
                   onLongPress: _cycleSetType,
                 ),
-                Expanded(
-                  flex: 3,
-                  child: _StepperColumn(
-                    // No left border: the 3dp left rune-stripe + 48dp set-num
-                    // cell already provide visual separation. A second 1dp
-                    // hairline immediately to the right of the cell would
-                    // double-line the gutter and consume horizontal slack
-                    // we cannot afford on 360dp Brazilian-mid-market screens.
-                    child: _WeightStepperCell(
-                      set: set,
-                      weightUnit: weightUnit,
-                      workoutExerciseId: widget.workoutExerciseId,
-                      isAccented: widget.display.isWeightAccented,
-                      isSuperseded:
-                          widget.display.state ==
-                          PrRowState.completedSupersededPr,
+                // Weight column hidden in bodyweight mode (push-ups, pull-ups,
+                // planks). Weight is meaningless for bodyweight movements
+                // and `pr_row_state_resolver.dart` already disregards it for
+                // PR detection in this mode (only `RecordType.maxReps` is
+                // checked). Hiding the column aligns the chrome with the
+                // resolver contract; the reps column below absorbs the
+                // freed space via `flex: 1` instead of `flex: 2` so it
+                // expands to fill the input area between the set-num cell
+                // and the done-cell.
+                if (!widget.isBodyweight)
+                  Expanded(
+                    flex: 3,
+                    child: _StepperColumn(
+                      // No left border: the 3dp left rune-stripe + 48dp
+                      // set-num cell already provide visual separation. A
+                      // second 1dp hairline immediately to the right of the
+                      // cell would double-line the gutter and consume
+                      // horizontal slack we cannot afford on 360dp
+                      // Brazilian-mid-market screens.
+                      child: _WeightStepperCell(
+                        set: set,
+                        weightUnit: weightUnit,
+                        workoutExerciseId: widget.workoutExerciseId,
+                        isAccented: widget.display.isWeightAccented,
+                        isSuperseded:
+                            widget.display.state ==
+                            PrRowState.completedSupersededPr,
+                      ),
                     ),
                   ),
-                ),
                 Expanded(
-                  flex: 2,
+                  flex: widget.isBodyweight ? 1 : 2,
                   child: _StepperColumn(
-                    showLeftBorder: true,
+                    // The left hairline border is the visual separator
+                    // between weight and reps in the standard layout. In
+                    // bodyweight mode the set-num cell is the immediate
+                    // left neighbour so the hairline is redundant; drop it
+                    // to keep the gutter clean.
+                    showLeftBorder: !widget.isBodyweight,
                     child: _RepsStepperCell(
                       set: set,
                       workoutExerciseId: widget.workoutExerciseId,
@@ -650,17 +682,24 @@ class _SetNumberCell extends StatelessWidget {
   }
 }
 
-/// Set-type micro-label color (pre-completion). Mirrors the rune-stripe
-/// color family at reduced alpha — Working tracks the default pending
-/// hotViolet, Warmup tracks textCream (the brightest neutral), Drop tracks
-/// success (green), Failure tracks error (red). The colors are the same
-/// state-conveying palette the rest of the row uses; the label is a textual
-/// echo of the stripe rather than a new color signal.
+/// Set-type micro-label color (pre-completion). Mirrors the gym-floor state
+/// palette at reduced alpha — Working tracks the default pending hotViolet,
+/// Warmup tracks textCream (the brightest neutral), Drop tracks success
+/// (green), Failure tracks **warning amber** (#FFB84D).
+///
+/// Failure deliberately does NOT use `AppColors.error` (the destructive-
+/// action red) — see the post-Phase-20 audit Finding B in
+/// `docs/design/2026-05-01-active-workout-redesign/critique.md`. Red on a
+/// pending to-failure set reads as "something is wrong" rather than "this is
+/// a max-effort set." Warning amber is tonally distinct from heroGold (PR
+/// scarcity unaffected), distinct from the success green used for dropsets,
+/// and distinct from the error red reserved for destructive actions; it
+/// reads as "intense / push to limit" without signaling breakage.
 Color _setTypeLabelColor(SetType type) => switch (type) {
   SetType.working => AppColors.hotViolet.withValues(alpha: 0.55),
   SetType.warmup => AppColors.textCream.withValues(alpha: 0.45),
   SetType.dropset => AppColors.success.withValues(alpha: 0.55),
-  SetType.failure => AppColors.error.withValues(alpha: 0.55),
+  SetType.failure => AppColors.warning.withValues(alpha: 0.60),
 };
 
 /// Vertical separator wrapper around a stepper. The mockup's stepper columns

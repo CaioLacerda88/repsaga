@@ -281,9 +281,13 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
             ),
             if (activeExercise.sets.isNotEmpty) ...[
               const SizedBox(height: 8),
-              _SetColumnHeaders(theme: Theme.of(context)),
+              _SetColumnHeaders(
+                theme: Theme.of(context),
+                isBodyweight:
+                    exercise?.equipmentType == EquipmentType.bodyweight,
+              ),
               const Divider(height: 1),
-              ..._buildSetRows(activeExercise, lastSets),
+              ..._buildSetRows(activeExercise, lastSets, exercise),
             ],
             const SizedBox(height: 8),
             _AddSetButton(
@@ -305,9 +309,12 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
   Iterable<Widget> _buildSetRows(
     ActiveWorkoutExercise activeExercise,
     List<ExerciseSet> lastSets,
+    Exercise? exercise,
   ) {
     final weId = activeExercise.workoutExercise.id;
     final exerciseId = activeExercise.workoutExercise.exerciseId;
+    final isBodyweight =
+        exercise?.equipmentType == EquipmentType.bodyweight;
     // Phase 20 commit 4: the per-row PR display state (5-state matrix +
     // accent record types) comes from the pure resolver via
     // [activeWorkoutRowDisplaysProvider]. The provider watches the active
@@ -339,6 +346,7 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
         onCompleted: _onSetCompleted,
         lastSet: lastSet,
         isNew: isNew,
+        isBodyweight: isBodyweight,
       );
     });
   }
@@ -572,9 +580,13 @@ class _FillRemainingButton extends StatelessWidget {
 }
 
 class _SetColumnHeaders extends StatelessWidget {
-  const _SetColumnHeaders({required this.theme});
+  const _SetColumnHeaders({required this.theme, this.isBodyweight = false});
 
   final ThemeData theme;
+
+  /// Hide the WEIGHT column header for bodyweight exercises. Mirrors the
+  /// `SetRow.isBodyweight` chrome change (PLAN.md backlog 20-P-2).
+  final bool isBodyweight;
 
   @override
   Widget build(BuildContext context) {
@@ -610,16 +622,20 @@ class _SetColumnHeaders extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                AppLocalizations.of(context).setColumnWeight,
-                style: style,
-                textAlign: TextAlign.center,
+            // Bodyweight mode hides the WEIGHT column; reps absorbs the
+            // freed space via `flex: 1` instead of `flex: 2` (mirroring the
+            // SetRow geometry change in `set_row.dart`).
+            if (!isBodyweight)
+              Expanded(
+                flex: 3,
+                child: Text(
+                  AppLocalizations.of(context).setColumnWeight,
+                  style: style,
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
             Expanded(
-              flex: 2,
+              flex: isBodyweight ? 1 : 2,
               child: Text(
                 AppLocalizations.of(context).setColumnReps,
                 style: style,

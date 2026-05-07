@@ -1357,9 +1357,9 @@ Items in (d) move to a "v2-park" sub-list and don't get worked on without new pr
 | # | Item | Severity | Spec |
 |---|---|---|---|
 | 20-P-1 | **Post-completion hint persistence** (critique Problem 3 / Pillar 1) | medium | Keep `Previous: Xkg × Y` visible after the user completes a set so they can confirm retrospectively between sets. **Blocked on**: a layout-stable redesign — first attempt re-triggered Phase 20's Flutter Web semantics-engine role-swap bug (sibling Text appearing on completion drops the row's `flt-semantics-identifier`). Need a fixed-height hint slot so adding/removing the visible Text never reflows the parent Column. Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert note. |
-| 20-P-2 | **Bodyweight row hides meaningless weight column** (audit Finding A) | small | For `EquipmentType.bodyweight` exercises, `_WeightStepperCell` renders unconditionally with `0` taking 60% of input width while reps (the only meaningful input) gets 40%. Fix: pass `isBodyweight` flag into `SetRow`; hide weight stepper + column header; expand reps to `flex: 1`. Spec: `docs/design/2026-05-01-active-workout-redesign/critique.md` post-Phase-20 audit Finding A. |
-| 20-P-3 | **Pending FL micro-label color: error → warning** (audit Finding B) | trivial | One-line color swap. `_setTypeLabelColor(SetType.failure)` currently uses `AppColors.error α 0.55` (red) — reads as "something wrong" not "to-failure set." Change to `AppColors.warning α 0.6` (#FFB84D amber). Bundle with 20-P-2 for one set-row visual polish PR. |
 | 20-P-4 | **Manual on-device walkthrough** (Phase 20 #5 visual half) | medium | Real Brazilian-mid-market 360dp device sweep: pixel-perfect spacing, haptic timing, celebration animation curves, real-thumb misfire under sweat. Not catchable from code; needs human eyes on hardware. |
+
+> **Shipped post-audit:** 20-P-2 (bodyweight row hides weight column) + 20-P-3 (pending FL micro-label `error` red → `warning` amber) — bundled in the same PR as the audit findings landed. See git history for the change.
 
 ### v2-park (post-launch telemetry decisions)
 

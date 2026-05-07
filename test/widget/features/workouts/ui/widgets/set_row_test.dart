@@ -584,6 +584,107 @@ void main() {
       );
     });
 
+    group('bodyweight chrome (PLAN.md backlog 20-P-2)', () {
+      // Bodyweight exercises (push-ups, pull-ups, planks) have no meaningful
+      // weight axis. The resolver in `pr_row_state_resolver.dart` already
+      // excludes weight from PR detection in this mode (only RecordType.maxReps
+      // is considered). The `isBodyweight` flag aligns the row chrome with
+      // that contract: hide the weight stepper entirely and let the reps
+      // column take the freed space.
+
+      testWidgets(
+        'omits the weight stepper when isBodyweight is true',
+        (tester) async {
+          final set = makeSet();
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                isBodyweight: true,
+              ),
+            ),
+          );
+
+          // The weight column is gone; the reps column is the only stepper
+          // in the row.
+          expect(find.byType(WeightStepper), findsNothing);
+          expect(find.byType(RepsStepper), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'still renders the weight stepper for non-bodyweight exercises (default)',
+        (tester) async {
+          // Default: `isBodyweight: false`. Standard layout retained for
+          // every existing equipment type — barbell, dumbbell, machine, etc.
+          final set = makeSet();
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001'),
+            ),
+          );
+
+          expect(find.byType(WeightStepper), findsOneWidget);
+          expect(find.byType(RepsStepper), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'still renders the set-num cell, type label, and done-cell when bodyweight',
+        (tester) async {
+          // Hiding the weight column must not regress the surrounding chrome
+          // — the digit, the WK type label, and the completion checkbox stay
+          // exactly where they are.
+          final set = makeSet(setType: SetType.working);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                isBodyweight: true,
+              ),
+            ),
+          );
+
+          expect(find.text('1'), findsOneWidget); // set number
+          expect(find.text('WK'), findsOneWidget); // type micro-label
+          expect(find.byType(Checkbox), findsOneWidget); // done-cell
+        },
+      );
+    });
+
+    group('FL micro-label color (PLAN.md backlog 20-P-3)', () {
+      // Audit Finding B: pending failure-set label should be amber (warning),
+      // not red (error). Red conflicts with the gym-floor emotional register
+      // — "FL" in red on a pending set reads as "something is wrong" rather
+      // than "this is a max-effort set."
+
+      testWidgets(
+        'uses AppColors.warning (not error) for a pending Failure set label',
+        (tester) async {
+          final set = makeSet(setType: SetType.failure, isCompleted: false);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          final labelText = tester.widget<Text>(find.text('FL'));
+          final color = labelText.style?.color;
+          expect(color, isNotNull);
+
+          // Compare RGB channels (alpha differs by design — opacity 0.6).
+          // Warning amber is #FFB84D — distinct from error red #FF6B6B.
+          expect(
+            color!.red,
+            AppColors.warning.red,
+            reason: 'FL pending should track AppColors.warning, not error.',
+          );
+          expect(color.green, AppColors.warning.green);
+          expect(color.blue, AppColors.warning.blue);
+        },
+      );
+    });
+
     group('isNew checkbox lock', () {
       testWidgets(
         'checkbox is non-interactive within 600ms when isNew is true',
