@@ -247,31 +247,146 @@ void main() {
     });
 
     // ------------------------------------------------------------------
-    // Test: Does NOT drain on initial online emission
+    // Test: Cold-launch drain fires when app boots already-online with
+    // pre-existing queue items (PLAN.md backlog item — was previously
+    // pinned as buggy "does NOT drain on initial online emission").
+    //
+    // The bug: `isOnlineProvider` defaults to `true` (optimistic) before
+    // the StreamProvider emits. The first real emission `true` matches
+    // the optimistic value, so `ref.listen<bool>(isOnlineProvider, ...)`
+    // never fires (Riverpod skips no-change callbacks). Pre-existing
+    // queue items from a previous offline session would sit forever
+    // until a connectivity flap.
+    //
+    // The fix (sync_service.dart): a separate `_coldLaunchDrain` awaits
+    // `onlineStatusProvider.future` directly — independent of the
+    // optimistic `isOnlineProvider` value — and triggers a drain on
+    // the first real emission when online.
     // ------------------------------------------------------------------
-    test('does NOT drain on initial online emission', () async {
-      final container = createContainer(initialOnline: true);
+    test(
+      'drains on cold launch when online with pre-existing queue items',
+      () async {
+        final container = createContainer(initialOnline: true);
 
-      // Enqueue an item.
-      final notifier = container.read(pendingSyncProvider.notifier);
-      await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-skip'));
+        // Enqueue an item BEFORE the connectivity stream emits — simulates
+        // a queue persisted from a previous offline session that survives
+        // app relaunch.
+        final notifier = container.read(pendingSyncProvider.notifier);
+        await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-cold-launch'));
 
-      stubSaveWorkoutSuccess(id: 'w-skip');
+        stubSaveWorkoutSuccess(id: 'w-cold-launch');
 
-      // Emit true — _lastOnline is already true, so no transition.
-      connectivityController.add(true);
-      await _pumpAsync(200);
+        // First real emission from the connectivity stream — same value as
+        // the optimistic default. Pre-fix: drain would skip. Post-fix:
+        // _coldLaunchDrain's await on onlineStatusProvider.future resolves
+        // and triggers _drain.
+        connectivityController.add(true);
+        await _pumpAsync(200);
 
-      // Item should still be in the queue — no drain occurred.
-      expect(container.read(pendingSyncProvider), 1);
-      verifyNever(
-        () => mockWorkoutRepo.saveWorkout(
-          workout: any(named: 'workout'),
-          exercises: any(named: 'exercises'),
-          sets: any(named: 'sets'),
-        ),
-      );
-    });
+        // The queue is drained — w-cold-launch dequeued and saveWorkout
+        // called exactly once.
+        expect(container.read(pendingSyncProvider), 0);
+        verify(
+          () => mockWorkoutRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        ).called(1);
+      },
+    );
+
+    // ------------------------------------------------------------------
+    // Test: Cold launch when offline does NOT trigger drain — drain only
+    // fires when the first real emission is `true`. Subsequent
+    // offline→online transition then drains via the listener path.
+    // Guards against the `_coldLaunchDrain` over-firing on a launch that
+    // legitimately starts offline.
+    // ------------------------------------------------------------------
+    test(
+      'does NOT drain on cold launch when first emission is offline',
+      () async {
+        final container = createContainer(initialOnline: false);
+
+        final notifier = container.read(pendingSyncProvider.notifier);
+        await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-still-offline'));
+
+        stubSaveWorkoutSuccess(id: 'w-still-offline');
+
+        // First real emission — offline.
+        connectivityController.add(false);
+        await _pumpAsync(200);
+
+        // Queue still has the item; no drain occurred.
+        expect(container.read(pendingSyncProvider), 1);
+        verifyNever(
+          () => mockWorkoutRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        );
+
+        // Now transition offline → online — listener path drains.
+        connectivityController.add(true);
+        await _pumpAsync(200);
+
+        expect(container.read(pendingSyncProvider), 0);
+        verify(
+          () => mockWorkoutRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        ).called(1);
+      },
+    );
+
+    // ------------------------------------------------------------------
+    // Test: Stream-error on the first emission is caught silently and
+    // does NOT prevent the listener path from draining on a subsequent
+    // connectivity flap. Pins the documented "catch and recover" contract
+    // in `_coldLaunchDrain` (sync_service.dart).
+    // ------------------------------------------------------------------
+    test(
+      'cold-launch stream-error is recoverable — subsequent flap drains',
+      () async {
+        final container = createContainer(initialOnline: true);
+
+        final notifier = container.read(pendingSyncProvider.notifier);
+        await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-after-error'));
+
+        stubSaveWorkoutSuccess(id: 'w-after-error');
+
+        // First emission is an error — `_coldLaunchDrain`'s await on
+        // `.future` rejects, the catch block swallows it. No drain fires.
+        connectivityController.addError(
+          StateError('connectivity check failed'),
+        );
+        await _pumpAsync(200);
+
+        // Queue still has the item; the stream-error path didn't drain.
+        expect(container.read(pendingSyncProvider), 1);
+
+        // Now a real connectivity flap (false → true) — the listener path
+        // is independent of the cold-launch path, so this still drains
+        // normally even though the cold-launch await never resolved
+        // successfully.
+        connectivityController.add(false);
+        await _pumpAsync(200);
+        connectivityController.add(true);
+        await _pumpAsync(200);
+
+        expect(container.read(pendingSyncProvider), 0);
+        verify(
+          () => mockWorkoutRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        ).called(1);
+      },
+    );
 
     // ------------------------------------------------------------------
     // Test: Drains multiple items in FIFO order
