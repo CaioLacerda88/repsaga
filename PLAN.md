@@ -1384,10 +1384,6 @@ Items in (d) move to a "v2-park" sub-list and don't get worked on without new pr
   could add explicit `IF weight > 0` guards at the writer site for
   code-review explicitness. Not a correctness gap — purely a clean-code
   concern.
-- **Wire Deno tests into CI** — `supabase/functions/**/*.test.ts` files
-  exist (notably `vitality-nightly/auth.test.ts` from PR #151) but no
-  workflow runs them. A small CI step would catch Edge Function
-  regressions.
 
 ### v2-park (post-launch telemetry decisions)
 
