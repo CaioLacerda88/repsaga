@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart';
@@ -5,6 +8,8 @@ import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/auth/providers/notifiers/auth_notifier.dart';
+import 'package:repsaga/features/auth/utils/auth_error_messages.dart';
+import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -15,6 +20,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockHiveService extends Mock implements HiveService {}
+
+class MockGoTrueClient extends Mock implements supabase.GoTrueClient {}
+
+class MockFunctionsClient extends Mock implements supabase.FunctionsClient {}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,5 +217,160 @@ void main() {
         );
       },
     );
+  });
+
+  group('AuthNotifier timeout — public methods', () {
+    // Guards the fix from `fix/auth-timeout`. Without `.timeout()` on the
+    // AuthRepository network calls, a silent network black hole (captive
+    // portal dropping packets, dead Wi-Fi handoff) leaves the notifier in
+    // `AsyncLoading()` forever. With the fix, a never-completing future
+    // resolves to `AsyncError(TimeoutException)` and
+    // `AuthErrorMessages.fromError` surfaces the localized timeout copy.
+    //
+    // Pinned across every public AuthNotifier method that wraps an
+    // AuthRepository call in `AsyncValue.guard`, so a future regression on
+    // any individual method is caught.
+
+    /// Builds a real [AuthRepository] (with a 50ms auth timeout and a 50ms
+    /// signOut timeout) wired to a fresh mocked [supabase.GoTrueClient] /
+    /// [supabase.FunctionsClient]. Returns the constructed pieces so the
+    /// caller can stub specific methods on the GoTrue/Functions mocks.
+    ({
+      ProviderContainer container,
+      MockGoTrueClient mockGoTrue,
+      MockFunctionsClient mockFunctions,
+    })
+    buildContainerWithRealRepo() {
+      final mockGoTrue = MockGoTrueClient();
+      when(() => mockGoTrue.currentSession).thenReturn(null);
+      final mockFunctions = MockFunctionsClient();
+
+      final realRepo = AuthRepository(
+        mockGoTrue,
+        functions: mockFunctions,
+        authTimeout: const Duration(milliseconds: 50),
+        signOutTimeout: const Duration(milliseconds: 50),
+      );
+      final mockHive = MockHiveService();
+      when(() => mockHive.clearAll()).thenAnswer((_) async {});
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(realRepo),
+          hiveServiceProvider.overrideWithValue(mockHive),
+        ],
+      );
+      // Force the notifier to build.
+      container.read(authNotifierProvider);
+
+      return (
+        container: container,
+        mockGoTrue: mockGoTrue,
+        mockFunctions: mockFunctions,
+      );
+    }
+
+    /// Asserts the post-action state is `AsyncError(TimeoutException)` and
+    /// that `AuthErrorMessages.fromError` resolves to the localized timeout
+    /// copy.
+    void expectTimedOut(ProviderContainer container) {
+      final state = container.read(authNotifierProvider);
+      expect(
+        state,
+        isA<AsyncError<dynamic>>(),
+        reason: 'Notifier must not stay in AsyncLoading on a hung network',
+      );
+      final error = (state as AsyncError).error;
+      expect(
+        error,
+        isA<TimeoutException>(),
+        reason:
+            'ErrorMapper must surface a domain TimeoutException so '
+            'AuthErrorMessages can dispatch by type, not by substring',
+      );
+
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      expect(AuthErrorMessages.fromError(error, l10n), l10n.authErrorTimeout);
+    }
+
+    test('signInWithEmail — never-completing call resolves to AsyncError('
+        'TimeoutException)', () async {
+      final pieces = buildContainerWithRealRepo();
+      addTearDown(pieces.container.dispose);
+      when(
+        () => pieces.mockGoTrue.signInWithPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) => Completer<supabase.AuthResponse>().future);
+
+      await pieces.container
+          .read(authNotifierProvider.notifier)
+          .signInWithEmail(email: 'a@b.com', password: 'pw');
+
+      expectTimedOut(pieces.container);
+    });
+
+    test('signUpWithEmail — never-completing call resolves to AsyncError('
+        'TimeoutException)', () async {
+      final pieces = buildContainerWithRealRepo();
+      addTearDown(pieces.container.dispose);
+      when(
+        () => pieces.mockGoTrue.signUp(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) => Completer<supabase.AuthResponse>().future);
+
+      await pieces.container
+          .read(authNotifierProvider.notifier)
+          .signUpWithEmail(email: 'a@b.com', password: 'pw');
+
+      expectTimedOut(pieces.container);
+    });
+
+    test('resetPassword — never-completing call resolves to AsyncError('
+        'TimeoutException)', () async {
+      final pieces = buildContainerWithRealRepo();
+      addTearDown(pieces.container.dispose);
+      when(
+        () => pieces.mockGoTrue.resetPasswordForEmail(any()),
+      ).thenAnswer((_) => Completer<void>().future);
+
+      await pieces.container
+          .read(authNotifierProvider.notifier)
+          .resetPassword('a@b.com');
+
+      expectTimedOut(pieces.container);
+    });
+
+    test('signOut — never-completing call resolves to AsyncError('
+        'TimeoutException) under the tighter signOutTimeout', () async {
+      final pieces = buildContainerWithRealRepo();
+      addTearDown(pieces.container.dispose);
+      when(
+        () => pieces.mockGoTrue.signOut(),
+      ).thenAnswer((_) => Completer<void>().future);
+
+      await pieces.container.read(authNotifierProvider.notifier).signOut();
+
+      expectTimedOut(pieces.container);
+    });
+
+    test('deleteAccount — never-completing FunctionsClient.invoke resolves '
+        'to AsyncError(TimeoutException)', () async {
+      registerFallbackValue(<String, dynamic>{});
+      final pieces = buildContainerWithRealRepo();
+      addTearDown(pieces.container.dispose);
+      when(
+        () => pieces.mockFunctions.invoke(any(), body: any(named: 'body')),
+      ).thenAnswer((_) => Completer<supabase.FunctionResponse>().future);
+
+      await pieces.container
+          .read(authNotifierProvider.notifier)
+          .deleteAccount();
+
+      expectTimedOut(pieces.container);
+    });
   });
 }

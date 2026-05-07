@@ -1,3 +1,5 @@
+import 'dart:async' as async;
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -15,6 +17,13 @@ class ErrorMapper {
     }
     if (error is AppException) {
       return error;
+    }
+    if (error is async.TimeoutException) {
+      // Map the SDK timeout to our domain [TimeoutException] so feature-level
+      // mappers can branch on the type — no substring matching against
+      // runtimeType-prefixed strings.
+      debugPrint('[ErrorMapper] TimeoutException: ${error.message}');
+      return const TimeoutException();
     }
 
     // Log the raw error for debugging; return a safe network exception.
