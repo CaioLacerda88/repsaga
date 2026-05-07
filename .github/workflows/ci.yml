@@ -152,23 +152,93 @@ jobs:
       - name: Build web
         run: flutter build web
 
+  deno-tests:
+    # Edge Function unit tests (Deno). The handlers under
+    # supabase/functions/**/ ship with self-contained `*.test.ts` files
+    # (vitality-nightly auth gate, _shared/google_play helpers). Without
+    # this job they only ran locally on the author's machine — a regression
+    # in google_play.ts (subscription validation) or vitality-nightly's
+    # auth gate would slip into a deploy with no CI signal.
+    #
+    # Independent of the Flutter pipeline (no Flutter SDK needed) so this
+    # runs in parallel with `analyze` / `test` / `build`. The `ci`
+    # aggregator below depends on this job's success.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: denoland/setup-deno@v2
+        with:
+          # Pinned to a specific 1.x release rather than the floating
+          # `v1.x` range — `setup-deno@v2`'s version resolver can be
+          # finicky with floating ranges. 1.46.3 aligns with the Supabase
+          # Edge Runtime's bundled Deno (mid-2024 stable). Bump together
+          # with supabase-cli's deno version to avoid drift between local
+          # supabase-runtime and CI. Do NOT jump to 2.x without first
+          # verifying `https://deno.land/std@0.224.0/...` URL imports
+          # still resolve — the std lib URLs the tests use are
+          # 1.x-compatible.
+          deno-version: "1.46.3"
+
+      - name: Cache Deno deps
+        uses: actions/cache@v5
+        with:
+          # Hash all .ts files under supabase/functions/ (handlers + tests)
+          # so a change to ANY imported module busts the cache and forces
+          # re-download of any new dependencies — a narrower hash on just
+          # `*.test.ts` would leave stale handler-import caches around.
+          path: |
+            ~/.cache/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('supabase/functions/**/*.ts') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      - name: Run Deno tests
+        # Explicit `**/*.test.ts` glob targets the test files only —
+        # running `deno test supabase/functions/` would walk the whole
+        # tree and try to load handler `index.ts` entry points, which
+        # import Edge-Runtime-only globals (`Deno.serve`, etc.) absent
+        # from plain Deno and produce noisy import-time errors.
+        #
+        # `--allow-net` is for the mocked JWKs server `google_play.test.ts`
+        # spins up locally + the `verifyPubSubJwt` code path's `fetch`
+        # call (Deno checks the permission flag at call time even when
+        # the actual URL is intercepted by a fetch stub). `--allow-env`
+        # is required by both tests (`google_play.test.ts` reads
+        # `SERVICE_ACCOUNT_JSON`; `auth.test.ts` indirectly triggers
+        # `index.ts`'s `SUPABASE_URL` read on module load).
+        env:
+          # `vitality-nightly/index.ts` fails loud at module load when
+          # `SUPABASE_URL` is unset — that's intentional production
+          # behavior (a deployment without this env is broken and we
+          # want a boot error, not a silent blank Allow-Origin). The
+          # auth tests import from `./index.ts`, so the import alone
+          # triggers the check. Provide a dummy URL — the test JWT
+          # payload is not making real HTTP calls; only the module-load
+          # `new URL(...)` / string parse needs to succeed.
+          SUPABASE_URL: http://localhost:54321
+        run: deno test --allow-net --allow-env "supabase/functions/**/*.test.ts"
+
   ci:
     name: ci
     runs-on: ubuntu-latest
     if: always()
-    needs: [exercise-translation-coverage-check, analyze, test, build]
+    needs: [exercise-translation-coverage-check, analyze, test, build, deno-tests]
     steps:
       - name: Check all jobs passed
         run: |
           if [[ "${{ needs.exercise-translation-coverage-check.result }}" != "success" || \
                 "${{ needs.analyze.result }}" != "success" || \
                 "${{ needs.test.result }}" != "success" || \
-                "${{ needs.build.result }}" != "success" ]]; then
+                "${{ needs.build.result }}" != "success" || \
+                "${{ needs.deno-tests.result }}" != "success" ]]; then
             echo "One or more required jobs failed or were skipped"
             echo "  exercise-translation-coverage-check: ${{ needs.exercise-translation-coverage-check.result }}"
             echo "  analyze:                             ${{ needs.analyze.result }}"
             echo "  test:                                ${{ needs.test.result }}"
             echo "  build:                               ${{ needs.build.result }}"
+            echo "  deno-tests:                          ${{ needs.deno-tests.result }}"
             exit 1
           fi
           echo "All required jobs passed"
