@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart';
@@ -5,6 +8,8 @@ import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/auth/providers/notifiers/auth_notifier.dart';
+import 'package:repsaga/features/auth/utils/auth_error_messages.dart';
+import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -15,6 +20,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 class MockAuthRepository extends Mock implements AuthRepository {}
 
 class MockHiveService extends Mock implements HiveService {}
+
+class MockGoTrueClient extends Mock implements supabase.GoTrueClient {}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,5 +215,69 @@ void main() {
         );
       },
     );
+  });
+
+  group('AuthNotifier.signInWithEmail timeout', () {
+    // Guards the fix from `fix/auth-timeout`. Without `.timeout()` on the
+    // AuthRepository network calls, a silent network black hole (captive
+    // portal dropping packets, dead Wi-Fi handoff) leaves the notifier in
+    // `AsyncLoading()` forever. With the fix, a never-completing future
+    // resolves to `AsyncError(NetworkException('... timed out ...'))` and
+    // `AuthErrorMessages.fromError` surfaces the localized timeout copy.
+    test('never-completing signInWithPassword future resolves to AsyncError '
+        'with a NetworkException whose message contains "timeout"', () async {
+      final mockGoTrue = MockGoTrueClient();
+      when(() => mockGoTrue.currentSession).thenReturn(null);
+      // Return a Future that never completes — simulates a packet-dropping
+      // captive portal or dead network. With the timeout fix in place,
+      // AuthRepository will throw a TimeoutException which ErrorMapper
+      // converts to a NetworkException.
+      when(
+        () => mockGoTrue.signInWithPassword(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) => Completer<supabase.AuthResponse>().future);
+
+      // Real AuthRepository with a tight timeout so the test is fast.
+      final realRepo = AuthRepository(
+        mockGoTrue,
+        authTimeout: const Duration(milliseconds: 50),
+      );
+      final mockHive = MockHiveService();
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(realRepo),
+          hiveServiceProvider.overrideWithValue(mockHive),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Force the notifier to build.
+      container.read(authNotifierProvider);
+
+      await container
+          .read(authNotifierProvider.notifier)
+          .signInWithEmail(email: 'a@b.com', password: 'pw');
+
+      final state = container.read(authNotifierProvider);
+      expect(
+        state,
+        isA<AsyncError<dynamic>>(),
+        reason: 'Notifier must not stay in AsyncLoading on a hung network',
+      );
+      final error = (state as AsyncError).error;
+      expect(error, isA<NetworkException>());
+      expect(
+        (error as NetworkException).message.toLowerCase(),
+        contains('timeout'),
+      );
+
+      // The user-facing copy must surface the localized timeout string,
+      // not the generic fallback.
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      expect(AuthErrorMessages.fromError(error, l10n), l10n.authErrorTimeout);
+    });
   });
 }

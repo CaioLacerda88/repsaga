@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -15,6 +17,15 @@ class ErrorMapper {
     }
     if (error is AppException) {
       return error;
+    }
+    if (error is TimeoutException) {
+      // Surface as a NetworkException whose message contains the literal
+      // word `timeout` so feature-level mappers (e.g.
+      // `AuthErrorMessages.fromError`) can substring-match on it and surface
+      // the localized "Request timed out" copy. Keep the literal substring
+      // `timeout` (not `timed out`) — the matcher does not stem.
+      debugPrint('[ErrorMapper] TimeoutException: ${error.message}');
+      return const NetworkException('Request timeout.');
     }
 
     // Log the raw error for debugging; return a safe network exception.

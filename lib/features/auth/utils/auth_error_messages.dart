@@ -27,13 +27,19 @@ class AuthErrorMessages {
         message.contains('password should be')) {
       return l10n.authErrorWeakPassword;
     }
+    // Check `timeout` before `network`/`connection`: a TimeoutException is
+    // mapped to `NetworkException('Request timeout.')` (see ErrorMapper),
+    // and `error.toString()` includes the `NetworkException` runtimeType
+    // prefix — which itself contains the substring `network`. Without this
+    // ordering, every timeout would surface as the generic "no connection"
+    // copy instead of the more accurate "request timed out" one.
+    if (message.contains('timeout')) {
+      return l10n.authErrorTimeout;
+    }
     if (message.contains('network') ||
         message.contains('socket') ||
         message.contains('connection')) {
       return l10n.authErrorNetwork;
-    }
-    if (message.contains('timeout')) {
-      return l10n.authErrorTimeout;
     }
     if (message.contains('otp') || message.contains('token')) {
       return l10n.authErrorTokenExpired;
