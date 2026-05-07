@@ -4,7 +4,24 @@ Patterns and mistakes to avoid. Reviewed at session start.
 
 ---
 
-## 2026-04-10: Placeholder cleanup needs a whole-repo grep, not per-file surgery
+## 2026-05-07: Run `dart format` before pushing any Dart-touching PR
+
+**Mistake:** PRs #160 and #163 both shipped a `dart format` violation that
+the analyze CI step caught at ~30s — `Check formatting` runs
+`dart format --set-exit-if-changed .` and fails fast. Each violation
+required a follow-up "chore(format): apply dart format" commit + a CI
+re-poll round, costing 30+ minutes per PR.
+
+**Root cause:** my edit pipeline produces well-formatted Dart most of the
+time, but multi-line constructor calls / nested widget trees occasionally
+land with line breaks the Dart formatter doesn't agree with. Local
+`dart analyze` passes (it doesn't enforce formatting), so the violation
+slips through to CI.
+
+**Rule:** For any PR that touches `.dart` files, run
+`dart format <changed-files>` (or the full `make format`) BEFORE the
+pre-push verification gate. Cheaper than a CI round-trip. The format
+command is idempotent — running it on already-formatted code is a no-op.
 
 **Mistake:** Round 1 QA flagged one `(placeholder)` instance in `assets/legal/privacy_policy.md` section 1 and the orchestrator briefed tech-lead to fix exactly that one line (plus the `docs/` mirror). Tech-lead did exactly what was asked. Round 2 QA (against live Supabase) then found FIVE more instances the first pass had missed: privacy_policy section 11, terms_of_service sections 11+12, docs/index.md, and both docs/ ToS mirrors — plus a `[JURISDICTION]` template token in the ToS governing-law clause. A cleanup pass that should have been one PR became a two-commit amend cycle.
 
