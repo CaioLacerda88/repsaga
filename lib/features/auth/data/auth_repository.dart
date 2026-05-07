@@ -4,17 +4,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/data/base_repository.dart';
 
 class AuthRepository extends BaseRepository {
-  /// [authTimeout] is exposed for tests so they can drive the timeout path
-  /// without having to advance fake-time by 30 seconds. Production callers
-  /// must not override it.
+  /// [authTimeout] / [signOutTimeout] are exposed for tests so they can drive
+  /// the timeout path without having to advance fake-time by 30/5 seconds.
+  /// Production callers must not override them.
   AuthRepository(
     this._auth, {
     FunctionsClient? functions,
     @visibleForTesting Duration? authTimeout,
+    @visibleForTesting Duration? signOutTimeout,
   }) : _injectedFunctions = functions,
-       _authTimeout = authTimeout ?? _defaultAuthTimeout;
+       _authTimeout = authTimeout ?? _defaultAuthTimeout,
+       _signOutTimeout = signOutTimeout ?? _defaultSignOutTimeout;
 
   static const Duration _defaultAuthTimeout = Duration(seconds: 30);
+
+  /// Sign-out uses a tighter budget than the default auth timeout. Supabase's
+  /// `GoTrueClient.signOut` defaults to `SignOutScope.local`, which clears
+  /// local storage **before** the server call — so a server-side hang has no
+  /// bearing on whether the user is locally signed out. A 30s wait followed
+  /// by an `AsyncError` would be a strictly worse UX than failing fast at 5s.
+  static const Duration _defaultSignOutTimeout = Duration(seconds: 5);
 
   final GoTrueClient _auth;
   final FunctionsClient? _injectedFunctions;
@@ -27,6 +36,9 @@ class AuthRepository extends BaseRepository {
   /// `BaseRepository.mapException` -> `ErrorMapper.mapException` and lands
   /// in `AsyncError`, which the UI surfaces via `AuthErrorMessages.fromError`.
   final Duration _authTimeout;
+
+  /// Tighter timeout used by [signOut] only — see [_defaultSignOutTimeout].
+  final Duration _signOutTimeout;
 
   /// Functions client used for invoking Edge Functions. Tests can inject a
   /// mock via the constructor; in production we fall back to the global
@@ -67,20 +79,28 @@ class AuthRepository extends BaseRepository {
   }
 
   /// Sign in with Google OAuth.
+  ///
+  /// No `.timeout()` here on purpose: `signInWithOAuth` resolves when the OS
+  /// launches the browser (returning `true`), not when OAuth completes. The
+  /// actual session arrives later via `onAuthStateChange` from the deep-link
+  /// redirect, so a timeout would fire on the wrong operation — it would
+  /// only ever trip if the OS itself failed to open Chrome. In-browser /
+  /// post-redirect progress UX is a separate concern.
   Future<bool> signInWithGoogle() {
     return mapException(
-      () => _auth
-          .signInWithOAuth(
-            OAuthProvider.google,
-            redirectTo: 'io.supabase.repsaga://login-callback/',
-          )
-          .timeout(_authTimeout),
+      () => _auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'io.supabase.repsaga://login-callback/',
+      ),
     );
   }
 
-  /// Sign out the current user.
+  /// Sign out the current user. Uses [_signOutTimeout] (shorter than the
+  /// default auth timeout) — local sign-out happens regardless of the
+  /// server response, so a slow server should fail fast rather than block
+  /// the UI for half a minute.
   Future<void> signOut() {
-    return mapException(() => _auth.signOut().timeout(_authTimeout));
+    return mapException(() => _auth.signOut().timeout(_signOutTimeout));
   }
 
   /// Resend the confirmation email to the given address.

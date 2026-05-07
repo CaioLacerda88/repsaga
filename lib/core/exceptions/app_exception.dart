@@ -39,6 +39,22 @@ class NetworkException extends AppException {
       'No internet connection. Please check your network.';
 }
 
+/// Raised when an outbound request did not complete within its allotted
+/// budget. This is intentionally a sibling of [NetworkException] (not a
+/// subtype): the user-facing copy and the recovery affordance differ — a
+/// timed-out request is usually retryable as-is, whereas a no-connection
+/// state typically requires the user to fix their network first.
+///
+/// Naming note: `dart:async` also exports a `TimeoutException`. Callers that
+/// need to refer to both must disambiguate via a prefixed import, e.g.
+/// `import 'dart:async' as async;` and `async.TimeoutException`.
+class TimeoutException extends AppException {
+  const TimeoutException([super.message = 'Request timed out.']);
+
+  @override
+  String get userMessage => 'Request timed out. Please try again.';
+}
+
 class ValidationException extends AppException {
   const ValidationException(super.message, {required this.field});
 
