@@ -4,6 +4,39 @@ Patterns and mistakes to avoid. Reviewed at session start.
 
 ---
 
+## 2026-05-07: Run the reviewer agent before merging — it's CLAUDE.md step 8 for a reason
+
+**Mistake:** Across 8 PRs in one session (#154, #155, #156, #157, #158,
+#159, #160, #161, #162, #163) I went local-verify → PR → CI → merge
+without dispatching the reviewer agent. The user caught it on PR #163
+("did you have reviewer check the code?"). The reviewer pass on #163
+surfaced 2 [Important] findings (a duplicated predicate + a missing
+test for the intersection of two changed axes) — neither caught by
+analyze, tests, or e2e, both worth fixing before merge.
+
+**Root cause:** when local verification is green I treat the PR as
+ready, forgetting that CLAUDE.md step 8 is "Code review — `reviewer`
+flags issues → `tech-lead` fixes → `qa-engineer` re-validates." The
+reviewer agent catches design-quality issues (drift risk, coverage gaps,
+leaky abstractions) that no automated gate can.
+
+**Rule:** Before declaring a PR mergeable, dispatch `reviewer` against
+the diff. The reviewer's output is part of the PR's preparation, not an
+optional post-script. Findings are: Blocker → fix; Important → fix unless
+truly post-merge; Nit → judgement call. **No "post-merge follow-up" for
+non-trivial findings** (this conflicts with the existing memory
+"feedback_no_deferring_review_findings" — same lesson, different angle).
+
+The orchestrator's full pipeline gate before "ready to merge" is:
+1. local `dart format` + `analyze` + `flutter test` + targeted e2e
+2. `reviewer` agent on the branch diff
+3. fix every finding before merging
+4. CI green
+
+I was running 1 + 4 only and skipping 2 + 3.
+
+---
+
 ## 2026-05-07: Run `dart format` before pushing any Dart-touching PR
 
 **Mistake:** PRs #160 and #163 both shipped a `dart format` violation that
