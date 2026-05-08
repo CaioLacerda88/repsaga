@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 3 / 31 bugs — Family 2 (rest timer scrim modality) shipped in PR #175.
+**Resolved so far:** 5 / 31 bugs — Family 2 (rest timer scrim modality) in PR #175 + Family 1A (PR cache bootstrap, BLOCKER) in PR #177.
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -49,22 +49,27 @@ The active workout screen has **8 structural root-cause families** that surface 
 
 Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate is for tech-lead time-to-PR-ready (excluding review).
 
-### Family 1 — Save-error classification + PR cache integrity 🚨 BLOCKER
+### Family 1 — Save-error classification + PR cache integrity 🚨 BLOCKER (split into 1A + 1B)
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-D-US1-01 | **B** | D | False PR celebration — empty in-memory cache + first-set-of-session-always-wins |
-| AW-EX-D-US1-03 | M | D | HTTP 500 silently queued as "offline"; user sees no error |
-| AW-EX-D-US1-04 | M | D | No loading overlay when save hangs; ~2s timeout falls through to queue |
-| AW-EX-E-US1-02 | M | E | Code-confirmed: single `catch (e)` in `finishWorkout`; `isTerminal()` not at enqueue |
-| AW-EX-E-US1-03 | M | E | `clearBox(prCache)` on drain → false-PR risk re-armed for next offline window |
-| AW-EX-D-US1-02 | M | D | Real PR celebration missing post-finish (likely caused by D-01 cache pollution) |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-D-US1-01 | **B** | D | False PR celebration — empty in-memory cache + first-set-of-session-always-wins | ✅ resolved (PR #177, Family 1A) |
+| AW-EX-E-US1-03 | M | E | `clearBox(prCache)` on drain → false-PR risk re-armed for next offline window | ✅ resolved (PR #177, Family 1A) |
+| AW-EX-D-US1-03 | M | D | HTTP 500 silently queued as "offline"; user sees no error | ⏳ pending (Family 1B) |
+| AW-EX-D-US1-04 | M | D | No loading overlay when save hangs; ~2s timeout falls through to queue | ⏳ pending (Family 1B) |
+| AW-EX-E-US1-02 | M | E | Code-confirmed: single `catch (e)` in `finishWorkout`; `isTerminal()` not at enqueue | ⏳ pending (Family 1B) |
+| AW-EX-D-US1-02 | M | D | Real PR celebration missing post-finish (caused by D-01 cache pollution) | ⏳ re-test after 1A — likely dissolved |
 
-**Proposed PR cluster: `fix(workouts)/save-error-classification-and-pr-cache`** — high effort (~6h), wide diff
-- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` — call `SyncErrorClassifier.isTerminal()` at the catch site BEFORE enqueueing; surface terminal 4xx as `AsyncError` instead of silent queue; only enqueue on transient/offline errors. Increase save timeout from ~2s to ~10s and add a real loading overlay with cancel.
-- `lib/features/personal_records/domain/pr_detection_service.dart` (or wherever cache lives) — seed cache from DB on session start, NOT on first read.
-- `lib/core/offline/sync_service.dart` `_reconcilePrCache` — replace `clearBox` with surgical reconcile; alternatively, re-seed from DB after successful drain.
-- Tests: unit tests for catch-site classification (mock 500 → AsyncError, mock offline → queue); unit test for cache seeding; widget test for loading-overlay-with-cancel; e2e test that pins "log lower-than-baseline workout → no PR celebration".
+**Family 1A shipped (PR #177):**
+- `prCacheBootstrapProvider` (new) seeds prCache from DB at session start AND on every auth transition (auth-reactive via `authStateProvider.future`).
+- Eager warmup wired in `_ShellScaffold` next to the existing `rpgProgressProvider` listener.
+- `sync_service._reconcilePrCache` replaced `clearBox(prCache)` with `ref.invalidate(prCacheBootstrapProvider)` — atomic re-seed instead of empty window.
+- Reviewer caught a second amplifier path: `PRRepository.upsertRecords` was independently calling `clearBox` — also removed. Both wipe paths now closed.
+- One-shot Hive migration (`pr_cache_v2_migrated` flag) wipes existing polluted entries on first launch post-fix.
+- Per-exercise cache fallback in `getRecordsForExercises` (load-bearing scope addition not in original plan): the existing `exercises:<sortedSubsetIds>` key shape couldn't satisfy arbitrary workout subsets, so bootstrap alone would have been a no-op for in-session reads. Repo now chains `subset key → per-exercise keys → rethrow`.
+- Tests: 8 bootstrap tests (incl. auth-reactivity contract) + 3 per-exercise cache fallback tests + 5 sync_service tests rewritten to the invalidate contract.
+
+**Family 1B (pending):** error classification at the `finishWorkout` catch site (call `SyncErrorClassifier.isTerminal()` BEFORE enqueueing; surface terminal 4xx as `AsyncError` instead of silent queue; only enqueue on transient/offline errors), bump save timeout from ~2s to ~10s, add a real loading overlay with cancel button. AW-EX-D-US1-02 should be re-probed after 1B ships — the original Charter D observation may dissolve once the false-PR pollution is gone.
 
 ### Family 2 — Rest timer scrim modality (MAJOR, single-line fix) — ✅ RESOLVED in PR #175
 
