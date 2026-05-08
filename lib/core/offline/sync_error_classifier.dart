@@ -23,6 +23,22 @@ import '../exceptions/app_exception.dart' as app;
 abstract final class SyncErrorClassifier {
   static const _terminalCodes = {400, 403, 404, 409, 422};
 
+  /// Extracts the HTTP-style code from a known error shape, returning
+  /// `null` if the error type isn't recognised or the code can't be
+  /// parsed. Recognises both raw [supabase.PostgrestException] and the
+  /// wrapped [app.DatabaseException] / [app.AuthException] forms — the
+  /// same set of code-bearing shapes that [isTerminal] discriminates,
+  /// keeping a single canonical place for HTTP-code extraction so call
+  /// sites don't drift if a new wrapped form is added later.
+  static int? httpCode(Object error) {
+    if (error is supabase.PostgrestException) {
+      return int.tryParse(error.code ?? '');
+    }
+    if (error is app.DatabaseException) return int.tryParse(error.code);
+    if (error is app.AuthException) return int.tryParse(error.code);
+    return null;
+  }
+
   /// Returns `true` if [error] is a terminal error that should not be retried.
   static bool isTerminal(Object error) {
     if (error is supabase.PostgrestException) {

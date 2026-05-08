@@ -3,7 +3,6 @@ import 'dart:developer';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/device/platform_info.dart';
@@ -796,16 +795,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         savedOffline = true;
         // 5xx is transient (queue) but distinct from connectivity failure;
         // the queue still retries, but the UI tells the user it was a server
-        // problem so a "Pending sync (1)" badge is not misleading. Recognises
-        // both the raw [supabase.PostgrestException] and the [BaseRepository]-
-        // mapped [app.DatabaseException] — the production catch site sees
-        // the latter, but defending both keeps the discriminator robust if a
-        // future repository forgets to wrap.
-        final code = switch (e) {
-          supabase.PostgrestException(:final code) => int.tryParse(code ?? ''),
-          app.DatabaseException(:final code) => int.tryParse(code),
-          _ => null,
-        };
+        // problem so a "Pending sync (1)" badge is not misleading.
+        // [SyncErrorClassifier.httpCode] recognises both the raw
+        // [supabase.PostgrestException] and the [BaseRepository]-mapped
+        // [app.DatabaseException] / [app.AuthException] forms — the
+        // production catch site sees the wrapped variant, but routing
+        // through the canonical helper keeps the discriminator robust if a
+        // future repository forgets to wrap or if a new code-bearing shape
+        // is added to [SyncErrorClassifier.isTerminal] without updating
+        // every call site.
+        final code = SyncErrorClassifier.httpCode(e);
         if (code != null && code >= 500 && code < 600) {
           serverErrorQueued = true;
         }

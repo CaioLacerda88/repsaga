@@ -151,5 +151,39 @@ void main() {
         );
       });
     });
+
+    // The httpCode helper is the single canonical extractor used by call
+    // sites that want the numeric HTTP code (e.g. the active-workout notifier
+    // discriminating 5xx queue copy). It must recognise exactly the same
+    // code-bearing shapes that isTerminal pattern-matches; if a new wrapped
+    // form is added to isTerminal, it must also be added here so the two
+    // paths don't drift.
+    group('httpCode', () {
+      test('returns parsed code for PostgrestException with numeric code', () {
+        const error = supabase.PostgrestException(
+          message: 'Bad Request',
+          code: '400',
+        );
+        expect(SyncErrorClassifier.httpCode(error), 400);
+      });
+
+      test('returns parsed code for wrapped app.DatabaseException', () {
+        const error = app.DatabaseException('ISE', code: '500');
+        expect(SyncErrorClassifier.httpCode(error), 500);
+      });
+
+      test('returns null for app.NetworkException (no HTTP code shape)', () {
+        expect(
+          SyncErrorClassifier.httpCode(
+            const app.NetworkException('no connection'),
+          ),
+          isNull,
+        );
+      });
+
+      test('returns null for unknown exception types', () {
+        expect(SyncErrorClassifier.httpCode(Exception('random')), isNull);
+      });
+    });
   });
 }
