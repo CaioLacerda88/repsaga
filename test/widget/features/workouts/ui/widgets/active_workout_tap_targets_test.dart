@@ -21,8 +21,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/core/theme/dialog_button_style.dart';
 import 'package:repsaga/features/workouts/data/workout_local_storage.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
+import 'package:repsaga/features/workouts/domain/pr_row_state.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
@@ -58,6 +60,37 @@ class _FixedActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
 
   @override
   Future<ActiveWorkoutState?> build() async => state_;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Notifier that counts `completeSet` invocations without mutating state.
+///
+/// Exists ONLY to pin the gesture-arena single-fire contract on `_DoneCell`:
+/// a single tap landing inside the inner 32×32 visual must invoke
+/// `completeSet` exactly once. Mutating state would cause the row to repaint
+/// and toggle visuals, masking the underlying bug (a double-fire produces
+/// toggle-on → toggle-off → no visible change — the very symptom we're
+/// guarding against).
+///
+/// `completeSet` is a no-op so the counter is the sole observable. The
+/// notifier returns a fixed state from `build()` so the parent ExerciseCard
+/// / SetRow can render normally.
+class _CountingActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
+    implements ActiveWorkoutNotifier {
+  _CountingActiveWorkoutNotifier(this.state_);
+  final ActiveWorkoutState state_;
+  int completeSetCallCount = 0;
+
+  @override
+  Future<ActiveWorkoutState?> build() async => state_;
+
+  @override
+  Future<void> completeSet(String workoutExerciseId, String setId) async {
+    completeSetCallCount++;
+    // Intentionally NO state mutation — see class doc.
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -179,19 +212,23 @@ void main() {
 
           // The `_DoneCell` is structurally the only 52-wide Container in
           // the row that holds a Checkbox as a descendant. Anchor on it,
-          // then take the OUTERMOST SizedBox descendant — `find.descendant`
-          // walks the tree depth-first parent-before-child, so `.first`
-          // is the topmost hit-test SizedBox (post-fix: 40×48; pre-fix:
-          // the only one, 32×32).
+          // then anchor the outer hit-box on its EXACT (40, 48) constraint
+          // pair — using `.first` over a generic SizedBox finder would
+          // silently measure the wrong widget if a refactor inserted any
+          // other SizedBox above it (e.g. a padding wrapper).
           final cellFinder = find.byWidgetPredicate(
             (w) => w is Container && _containerWidth(w) == 52,
             description: 'done-cell Container(width: 52)',
           );
           expect(cellFinder, findsOneWidget);
 
-          final outerHitBox = find
-              .descendant(of: cellFinder, matching: find.byType(SizedBox))
-              .first;
+          final outerHitBox = find.descendant(
+            of: cellFinder,
+            matching: find.byWidgetPredicate(
+              (w) => w is SizedBox && w.width == 40 && w.height == 48,
+              description: 'outer 40×48 hit-test SizedBox',
+            ),
+          );
           final size = _sizeOf(tester, outerHitBox);
 
           expect(
@@ -224,15 +261,180 @@ void main() {
           );
           expect(cellFinder, findsOneWidget);
 
-          final outerHitBox = find
-              .descendant(of: cellFinder, matching: find.byType(SizedBox))
-              .first;
+          final outerHitBox = find.descendant(
+            of: cellFinder,
+            matching: find.byWidgetPredicate(
+              (w) => w is SizedBox && w.width == 40 && w.height == 48,
+              description: 'outer 40×48 hit-test SizedBox',
+            ),
+          );
           final size = _sizeOf(tester, outerHitBox);
 
           expect(size.width, greaterThanOrEqualTo(40));
           expect(size.height, greaterThanOrEqualTo(48));
         },
       );
+
+      // -----------------------------------------------------------------
+      // Gesture-arena single-fire pin (PR #181 reviewer-round-2).
+      //
+      // The `_DoneCell` nests TWO discrete-tap GestureDetectors:
+      //   * outer 40×48 widening (added for AW-EX-A-BR1-01)
+      //   * inner Checkbox (or `_PredictedPrUncheckedMark` for the
+      //     pending-predicted-PR variant)
+      //
+      // **Investigation finding (Phase 1 systematic debugging):** the
+      // reviewer flagged a theoretical double-fire if the outer detector
+      // uses `HitTestBehavior.translucent`. Empirically, that does NOT
+      // happen today: Flutter's `GestureArena.sweep` resolves two
+      // competing `onTap`-only recognizers by accepting the FIRST member
+      // (innermost child) and rejecting all others (`arena.dart` lines
+      // 170-178). So `completeSet` fires exactly once whether the outer
+      // is `translucent` OR `deferToChild`.
+      //
+      // The fix is still `HitTestBehavior.deferToChild` — for STRUCTURAL
+      // rather than runtime reasons. With `deferToChild` only the
+      // recognizer whose visual region was hit is added to the arena
+      // for that pointer; the contract no longer depends on
+      // first-member-wins arena semantics. This is robust to future
+      // refactors that introduce competing non-tap recognizers (e.g. a
+      // long-press on the outer detector) — those paths could cause
+      // both recognizers to resolve as accepted and double-fire
+      // `_onComplete` (a TOGGLE of `isCompleted`, NOT idempotent → silent
+      // no-op).
+      //
+      // These tests pin the single-fire CONTRACT by counting
+      // `completeSet` invocations on a no-mutation fake notifier. They
+      // pass under both `translucent` and `deferToChild` today; they
+      // would FAIL if a future refactor breaks the contract by adding a
+      // competing recognizer that the arena can't resolve to a single
+      // winner.
+      // -----------------------------------------------------------------
+      group('gesture-arena single-fire pin', () {
+        Future<int> tapCenterOfDoneCellAndCount(
+          WidgetTester tester, {
+          required bool isCompleted,
+          PrRowDisplay display = const PrRowDisplay.plain(PrRowState.none),
+        }) async {
+          tester.view.physicalSize = const Size(360, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          final exercise = Exercise(
+            id: 'exercise-001',
+            name: 'Barbell Bench Press',
+            muscleGroup: MuscleGroup.chest,
+            equipmentType: EquipmentType.barbell,
+            isDefault: true,
+            createdAt: DateTime(2026),
+          );
+          final theSet = _set(isCompleted: isCompleted);
+          final activeExercise = ActiveWorkoutExercise(
+            workoutExercise: WorkoutExercise(
+              id: 'we-001',
+              workoutId: 'workout-001',
+              exerciseId: 'exercise-001',
+              order: 1,
+              exercise: exercise,
+            ),
+            sets: [theSet],
+          );
+          final workout = Workout(
+            id: 'workout-001',
+            userId: 'user-001',
+            name: 'Push Day',
+            startedAt: DateTime.now().toUtc(),
+            isActive: true,
+            createdAt: DateTime.now().toUtc(),
+          );
+          final state = ActiveWorkoutState(
+            workout: workout,
+            exercises: [activeExercise],
+          );
+
+          final notifier = _CountingActiveWorkoutNotifier(state);
+
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                activeWorkoutProvider.overrideWith(() => notifier),
+                restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+                profileProvider.overrideWith(() => _KgProfileNotifier()),
+              ],
+              child: TestMaterialApp(
+                theme: AppTheme.dark,
+                home: Scaffold(
+                  body: SizedBox(
+                    width: 360,
+                    child: SetRow(
+                      set: theSet,
+                      workoutExerciseId: 'we-001',
+                      display: display,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          // Anchor on the outer 40×48 hit-test box, then tap its CENTER
+          // — that's the visual center of the inner 32×32 box and the
+          // exact pixel where both gesture detectors would fire pre-fix.
+          final outerHitBox = find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == 40 && w.height == 48,
+            description: 'outer 40×48 hit-test SizedBox',
+          );
+          expect(outerHitBox, findsOneWidget);
+          await tester.tap(outerHitBox);
+          await tester.pump();
+
+          return notifier.completeSetCallCount;
+        }
+
+        testWidgets(
+          'tap on inner Checkbox region invokes completeSet exactly once',
+          (tester) async {
+            final fireCount = await tapCenterOfDoneCellAndCount(
+              tester,
+              isCompleted: false,
+            );
+            expect(
+              fireCount,
+              1,
+              reason:
+                  'A single tap inside the inner 32×32 visual must invoke '
+                  'completeSet exactly once. completeSet is a toggle '
+                  '(`!isCompleted`), so a double-fire would silently net '
+                  'to no change — the same symptom the wider tap target '
+                  'was meant to fix. Pin guards against future refactors '
+                  'that could break the gesture-arena single-winner '
+                  'contract on this nested layout.',
+            );
+          },
+        );
+
+        testWidgets('tap on inner _PredictedPrUncheckedMark region invokes '
+            'completeSet exactly once', (tester) async {
+          // The pendingPredictedPr branch swaps Checkbox → an inner
+          // GestureDetector(opaque) on `_PredictedPrUncheckedMark`.
+          // Pin the same single-fire contract on this code path too.
+          final fireCount = await tapCenterOfDoneCellAndCount(
+            tester,
+            isCompleted: false,
+            display: const PrRowDisplay.plain(PrRowState.pendingPredictedPr),
+          );
+          expect(
+            fireCount,
+            1,
+            reason:
+                'A single tap inside the inner 32×32 visual on a '
+                'predicted-PR row must invoke completeSet exactly once. '
+                'See Checkbox-variant test for full reasoning.',
+          );
+        });
+      });
     });
 
     // -------------------------------------------------------------------
@@ -475,6 +677,100 @@ void main() {
 
         expectActionsTallEnough(tester, const ['Cancel', 'OK']);
       });
+
+      // -----------------------------------------------------------------
+      // Defense-in-depth pin: `dialogTextButtonStyle` actively overrides
+      // theme defaults (PR #181 reviewer-round-2 warning #2).
+      //
+      // The other dialog tests above pass even WITHOUT
+      // `dialogTextButtonStyle` because Material 3's
+      // `MaterialTapTargetSize.padded` default already inflates the
+      // hit-test region to 48dp. So removing the style from a call site
+      // would silently NOT cause those tests to fail — they only verify
+      // the floor is met, not that the new style is doing the work.
+      //
+      // This test pumps a TextButton under a theme that aggressively
+      // shrinks tap targets (`MaterialTapTargetSize.shrinkWrap`). Without
+      // `dialogTextButtonStyle`, the button drops below 48dp. WITH the
+      // style, the explicit `minimumSize: Size(64, 48)` floor wins. This
+      // pins the structural defense-in-depth contract: the style isn't
+      // theatrical — it actively guards against future theme regressions.
+      // -----------------------------------------------------------------
+      testWidgets(
+        'dialogTextButtonStyle holds 48dp floor even under shrinkWrap theme '
+        '(defense-in-depth, AW-EX-F-BR1-09)',
+        (tester) async {
+          tester.view.physicalSize = const Size(360, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          // Theme that flips `materialTapTargetSize` to `shrinkWrap` —
+          // this drops Material's default 48dp inflation. Without an
+          // explicit `minimumSize`, a TextButton renders at ~36dp.
+          final shrinkTheme = AppTheme.dark.copyWith(
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
+
+          // Sanity baseline (locked into the test as a comparison anchor):
+          // a bare TextButton under shrinkWrap is below 48dp. If a future
+          // Flutter version changes that default and this anchor passes,
+          // the defense-in-depth contract becomes vacuous and we'll know.
+          await tester.pumpWidget(
+            TestMaterialApp(
+              theme: shrinkTheme,
+              home: Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () {},
+                    child: const Text('Bare'),
+                  ),
+                ),
+              ),
+            ),
+          );
+          final bareSize = tester.getSize(find.byType(TextButton));
+          expect(
+            bareSize.height,
+            lessThan(48),
+            reason:
+                'Sanity anchor: under MaterialTapTargetSize.shrinkWrap a '
+                'bare TextButton must render <48dp tall. If this passes, '
+                'the defense-in-depth premise no longer holds and the '
+                'real assertion below becomes vacuous.',
+          );
+
+          // Now the real pin: with `dialogTextButtonStyle` applied, the
+          // TextButton MUST stay ≥48dp tall even under the shrinkWrap
+          // theme. The explicit `minimumSize: Size(64, 48)` wins over the
+          // theme's tap-target-size shrink.
+          await tester.pumpWidget(
+            TestMaterialApp(
+              theme: shrinkTheme,
+              home: Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () {},
+                    style: dialogTextButtonStyle,
+                    child: const Text('Styled'),
+                  ),
+                ),
+              ),
+            ),
+          );
+          final styledSize = tester.getSize(find.byType(TextButton));
+          expect(
+            styledSize.height,
+            greaterThanOrEqualTo(48),
+            reason:
+                'dialogTextButtonStyle must keep dialog actions >=48dp '
+                'tall regardless of ancestor theme defaults. This is the '
+                'structural reason the style exists — not because '
+                'Material 3 defaults already do it, but because they '
+                'might NOT in some future theme override.',
+          );
+        },
+      );
     });
   });
 }

@@ -75,11 +75,13 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              // Compose the destructive foreground color on top of the
-              // shared dialog 48dp tap-target floor.
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
-                minimumSize: const Size(64, 48),
+              // Compose the destructive foreground on the shared dialog
+              // 48dp floor — single source of truth for the tap-target
+              // size lives in `dialogTextButtonStyle`.
+              style: dialogTextButtonStyle.copyWith(
+                foregroundColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.error,
+                ),
               ),
               child: Text(l10n.remove),
             ),

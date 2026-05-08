@@ -113,9 +113,9 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
                 context,
               ).pop(FinishWorkoutResult(notes: notes.isEmpty ? null : notes));
             },
-            // FilledButton's default `minimumSize` is (64,40). Pin to 48 so
-            // the action row stays AAA-compliant alongside the TextButton.
-            style: FilledButton.styleFrom(minimumSize: const Size(64, 48)),
+            // Use the shared FilledButton style so the 48dp floor is the
+            // same single-source-of-truth as `dialogTextButtonStyle`.
+            style: dialogFilledButtonStyle,
             child: Text(l10n.saveAndFinish),
           ),
         ),

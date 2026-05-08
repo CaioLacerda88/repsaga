@@ -52,12 +52,11 @@ class DiscardWorkoutDialog extends StatelessWidget {
           identifier: 'workout-discard-confirm',
           child: TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            // Compose the destructive foreground color on top of the shared
-            // dialog 48dp tap-target floor so the Discard action stays
-            // AAA-compliant without re-declaring `minimumSize` here.
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.error,
-              minimumSize: const Size(64, 48),
+            // Compose the destructive foreground on the shared dialog
+            // 48dp floor — single source of truth for the tap-target
+            // size lives in `dialogTextButtonStyle`.
+            style: dialogTextButtonStyle.copyWith(
+              foregroundColor: WidgetStatePropertyAll(theme.colorScheme.error),
             ),
             child: Text(l10n.discard),
           ),
