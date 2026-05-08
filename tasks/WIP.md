@@ -39,7 +39,14 @@ Compounded by `sync_service._reconcilePrCache` at `sync_service.dart:451` which 
 - [x] tech-lead: extend `PRRepository.getRecordsForExercises` with per-exercise cache fallback so offline subset reads work after bootstrap (was missing — multi-id key shape would otherwise never hit cache for arbitrary subsets)
 - [x] tech-lead: `dart format` + `dart analyze --fatal-infos` clean; full unit/widget suite green (2375 tests)
 - [x] orchestrator: CI green — format clean, `dart analyze --fatal-infos` 0 issues, reward-accent + hardcoded-colors guards clean, 2375 tests passing (+5 net new on the bootstrap path), android-debug APK built in 34.8s
-- [ ] qa-engineer: selector impact (none — no UI changes); review unit-test coverage for the bootstrap + migration contracts; confirm no regression in existing PR-detection tests
-- [ ] orchestrator: open PR; cite AW-EX-D-US1-01 (BLOCKER) + AW-EX-E-US1-03 + Family 1A label
-- [ ] reviewer: pass; address every finding before merge
+- [x] qa-engineer: PASS — selectors untouched (zero E2E impact); 8+3+5 test coverage validated against the new contracts; auth-aware no-op pinned via verifyNever; no regression in existing PR-detection tests; sole `lib/` files touched are the 4 expected
+- [x] orchestrator: PR #177 opened — https://github.com/CaioLacerda88/repsaga/pull/177
+- [x] reviewer: pass; address every finding before merge
+  - Critical 1: removed `_cache.clearBox(HiveService.prCache)` from `PRRepository.upsertRecords` — the post-drain reconcile path's `ref.invalidate(prCacheBootstrapProvider)` is now the single source of truth for cache freshness; per-exercise entries remain serviceable until the rebuild atomically overwrites them, closing the empty-cache window that re-armed AW-EX-E-US1-03.
+  - Critical 2: bootstrap is now auth-reactive — derives userId from `authStateProvider` (via `await ref.watch(authStateProvider.future)`) instead of the synchronous, non-reactive `currentUserIdProvider`. Sign-out → sign-in transitions naturally re-run the provider with the new user. New unit test `re-fetches against the new user when authStateProvider emits a different signed-in user` pins the contract.
+  - Warning 1: deleted the orphan duplicate test at `sync_service_test.dart:1775-1828` — coverage subsumed by the group test at L1306.
+  - Warning 2: removed the duplicate `_seedPerExerciseEntries` helper from `pr_cache_bootstrap_provider.dart`; the bootstrap now calls `repo.seedExerciseCacheEntries(records)` through the repo's public API. The "testability" justification was unnecessary — mocking `seedExerciseCacheEntries` to delegate to a real Hive write produces the same observable contract.
+  - Warning 3: migration comment honestly scopes "leftover stale entries" — the seed write only overwrites entries for exercises still in the user's PR list; entries for exercises no longer in the list (soft-deleted, server-rolled-back) remain until naturally evicted.
+  - Suggestion 1: addressed by Critical 2's new test.
+  - Suggestion 2: addressed inline — the bootstrap body now opens with a `// Note:` block explaining the migration → seed order and the auth source choice.
 - [ ] squash merge to main, delete branch, post-merge cleanup PR (mark Family 1A resolved in master findings)

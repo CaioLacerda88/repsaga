@@ -4,10 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../core/l10n/locale_provider.dart';
-import '../../../core/local_storage/cache_service.dart';
 import '../../../core/local_storage/hive_service.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../models/personal_record.dart';
 import 'pr_providers.dart';
 
 /// Hive `userPrefs` key that records whether the one-shot stale-prCache
@@ -45,9 +43,14 @@ const String prCacheV2MigratedKey = 'pr_cache_v2_migrated';
 /// - `ref.invalidate(prCacheBootstrapProvider)` triggers a re-seed. This is
 ///   the canonical way to re-sync after server-side PR truth changes (used by
 ///   `SyncService._reconcilePrCache` post successful upsertRecords drain).
-/// - Auth-aware: when no user is signed in, the provider returns immediately
-///   without making network calls. Sign-in transitions invalidate the
-///   provider via the auth path so a fresh user always sees their own PRs.
+/// - **Auth-reactive.** The user id is derived from [authStateProvider] (not
+///   the synchronous `currentUserIdProvider`). On sign-out → sign-in into a
+///   different account, Riverpod observes the userId change and rebuilds the
+///   provider — the new user's PRs are seeded; the previous user's per-
+///   exercise entries are wiped by the one-shot migration's idempotent
+///   re-write contract on next drain. While `authStateProvider` is loading
+///   on cold start, the provider returns immediately and waits for the next
+///   non-loading emission to seed (avoids deadlocking the shell on auth init).
 /// - Best-effort: a failed warmup (network down, server error) does NOT
 ///   throw. The existing read-through caching in
 ///   [PRRepository.getRecordsForExercises] still serves subsequent reads;
@@ -58,11 +61,36 @@ const String prCacheV2MigratedKey = 'pr_cache_v2_migrated';
 /// detector. The first build wipes the box once and persists a flag in
 /// [HiveService.userPrefs] so the wipe never repeats.
 final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
-  final userId = ref.watch(currentUserIdProvider);
+  // Note: this body runs the one-shot Hive migration BEFORE the seed write.
+  // Both are side-effects on the prCache box; the migration must complete
+  // first so it can never wipe entries we just wrote in the same build.
+  //
+  // Auth source: we deliberately watch `authStateProvider` instead of
+  // `currentUserIdProvider` so a sign-out → sign-in transition naturally
+  // re-runs this provider with the new user id. `currentUserIdProvider` is
+  // documented as a synchronous, non-reactive read — watching it would not
+  // detect auth changes (Riverpod has no way to know its underlying value
+  // changed because the provider's body never re-evaluates).
+  //
+  // We await `authStateProvider.future` rather than reading its synchronous
+  // `value` so cold-start (auth stream still loading) waits for the first
+  // emission instead of short-circuiting against an `AsyncLoading()`. The
+  // shell mounts this provider via a no-op `ref.listen` and never blocks on
+  // its future, so waiting here is safe — the only consumers awaiting the
+  // future are unit tests and the sync-service reconcile path, both of
+  // which want the seed to actually run.
+  //
+  // `ref.watch(provider.future)` is the canonical Riverpod 2.x pattern for
+  // "depend on the latest emission and rebuild on each new emission" — a
+  // sign-out → sign-in transition emits a new `AuthState`, the future
+  // resolves with the new user, and this provider naturally re-runs.
+  final authState = await ref.watch(authStateProvider.future);
+  final userId = authState.session?.user.id;
   if (userId == null) {
-    // No signed-in user — bootstrap has nothing to seed. Returning a
-    // resolved future means consumers awaiting `prCacheBootstrapProvider.future`
-    // never block on auth.
+    // No signed-in user. Returning a resolved future means consumers
+    // awaiting `prCacheBootstrapProvider.future` never block on auth — and
+    // the next signed-in auth emission rebuilds this provider with the new
+    // id (the `ref.watch` above pins the subscription).
     return;
   }
 
@@ -72,7 +100,6 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
   await _runOneShotMigrationIfNeeded();
 
   final repo = ref.read(prRepositoryProvider);
-  final cache = ref.read(cacheServiceProvider);
   final locale = ref.read(localeProvider).languageCode;
 
   try {
@@ -80,7 +107,7 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
       userId: userId,
       locale: locale,
     );
-    await _seedPerExerciseEntries(cache, records);
+    await repo.seedExerciseCacheEntries(records);
   } catch (e, stack) {
     // Best-effort warmup: a network failure here is recoverable. The
     // read-through cache in `PRRepository` still kicks in on subsequent
@@ -97,37 +124,6 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
     );
   }
 });
-
-/// Group records by `exerciseId` and write one cache entry per exercise
-/// under the canonical `'exercises:<id>'` key shape that
-/// [PRRepository.getRecordsForExercises] reads on its per-exercise fallback
-/// path.
-///
-/// Idempotent — overwrites existing entries. Empty input is a no-op.
-///
-/// Why this lives here rather than on `PRRepository`: the bootstrap depends
-/// only on a `CacheService` and the records it just fetched, so keeping the
-/// write helper in this file lets unit tests verify the seeding contract by
-/// mocking the repository's `getRecordsForUser` and observing real writes
-/// to the underlying box. Routing the writes through the repository would
-/// require a partial-mock pattern that mocktail doesn't support cleanly.
-Future<void> _seedPerExerciseEntries(
-  CacheService cache,
-  List<PersonalRecord> records,
-) async {
-  if (records.isEmpty) return;
-
-  final byExerciseId = <String, List<PersonalRecord>>{};
-  for (final record in records) {
-    (byExerciseId[record.exerciseId] ??= []).add(record);
-  }
-
-  for (final entry in byExerciseId.entries) {
-    await cache.write(HiveService.prCache, 'exercises:${entry.key}', {
-      entry.key: entry.value.map((r) => r.toJson()).toList(),
-    });
-  }
-}
 
 /// One-shot wipe of pre-fix polluted entries in [HiveService.prCache].
 ///
@@ -162,8 +158,13 @@ Future<void> _runOneShotMigrationIfNeeded() async {
         level: 900,
       );
       // Even if clear failed, set the flag — we only ever want to attempt
-      // this wipe once. A leftover stale entry will be overwritten on the
-      // next per-exercise seed write.
+      // this wipe once. Honest scope: a leftover stale entry for an
+      // exercise still in the user's current PR list will be overwritten
+      // by the next seed write; one for an exercise no longer in the
+      // user's PR list (e.g. soft-deleted, or a record that was rolled
+      // back server-side) will remain until it is naturally evicted by
+      // another code path (e.g. `clearAllRecords`, locale switch wipe,
+      // or box recovery on corruption).
     }
   }
   await prefs.put(prCacheV2MigratedKey, true);

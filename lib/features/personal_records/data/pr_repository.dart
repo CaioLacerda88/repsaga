@@ -383,6 +383,20 @@ class PRRepository extends BaseRepository {
   ///
   /// Uses the unique constraint on (user_id, exercise_id, record_type) to
   /// update existing records or insert new ones.
+  ///
+  /// **Cache contract.** This method does NOT touch the prCache. Pre-AW-EX-E
+  /// it called `_cache.clearBox(HiveService.prCache)` here so the cache could
+  /// not serve stale data after a successful upsert — but that wipe ran
+  /// synchronously while the post-drain re-seed (via
+  /// `SyncService._reconcilePrCache` → `ref.invalidate(prCacheBootstrapProvider)`)
+  /// is asynchronous, leaving an empty-cache window in which the in-session
+  /// PR-display resolver and the finish-workout PR detector would falsely
+  /// project the very next set as a "new PR" (AW-EX-E-US1-03 amplifier of
+  /// AW-EX-D-US1-01). The reconcile path's invalidation is the single source
+  /// of truth for cache freshness after an upsert: existing per-exercise
+  /// entries remain serviceable until the bootstrap rebuild fetches fresh
+  /// data, and the rebuild's `seedExerciseCacheEntries` call atomically
+  /// overwrites them.
   Future<void> upsertRecords(List<PersonalRecord> records) {
     return mapException(() async {
       if (records.isEmpty) return;
@@ -392,7 +406,6 @@ class PRRepository extends BaseRepository {
         rows,
         onConflict: 'user_id, exercise_id, record_type',
       );
-      _cache.clearBox(HiveService.prCache);
     });
   }
 }

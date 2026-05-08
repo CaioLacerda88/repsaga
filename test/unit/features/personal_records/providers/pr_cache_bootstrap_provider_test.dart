@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +15,7 @@ import 'package:repsaga/features/personal_records/models/record_type.dart';
 import 'package:repsaga/features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import 'package:repsaga/features/personal_records/providers/pr_providers.dart';
 import 'package:repsaga/core/l10n/locale_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _MockPRRepository extends Mock implements PRRepository {}
 
@@ -41,6 +43,28 @@ PersonalRecord _record({
   );
 }
 
+/// Builds a synthetic [AuthState] with a session whose user has the given
+/// id. We construct the JSON shape Supabase ships with so `Session.fromJson`
+/// produces an instance whose `.user.id` matches — this is what the
+/// bootstrap reads via `authStateProvider`.
+AuthState _signedInState(String userId) {
+  final session = Session.fromJson({
+    'access_token': 'fake-access',
+    'token_type': 'bearer',
+    'user': {
+      'id': userId,
+      'aud': 'authenticated',
+      'email': '$userId@example.com',
+      'created_at': '2026-01-01T00:00:00Z',
+      'app_metadata': <String, dynamic>{},
+      'user_metadata': <String, dynamic>{},
+    },
+  })!;
+  return AuthState(AuthChangeEvent.signedIn, session);
+}
+
+const AuthState _signedOutState = AuthState(AuthChangeEvent.signedOut, null);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -48,6 +72,7 @@ void main() {
   late Box<dynamic> prBox;
   late Box<dynamic> prefsBox;
   late _MockPRRepository mockRepo;
+  late StreamController<AuthState> authController;
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('pr_bootstrap_test_');
@@ -55,20 +80,52 @@ void main() {
     prBox = await Hive.openBox<dynamic>(HiveService.prCache);
     prefsBox = await Hive.openBox<dynamic>(HiveService.userPrefs);
     mockRepo = _MockPRRepository();
+    // Broadcast so multiple subscriptions (post-invalidate rebuilds) can
+    // each replay the latest emission. A single-subscription stream throws
+    // on the second listener attached after a `ref.invalidate` rebuild.
+    authController = StreamController<AuthState>.broadcast();
+
+    // Default stub for `seedExerciseCacheEntries`: replicate the real
+    // implementation's write-through behaviour (group by exerciseId, write
+    // one entry per id under `'exercises:<id>'`) so the bootstrap going
+    // through the repo's public API still produces observable Hive writes
+    // that the existing assertions can inspect.
+    when(() => mockRepo.seedExerciseCacheEntries(any())).thenAnswer((
+      invocation,
+    ) async {
+      final records = invocation.positionalArguments.first as List<dynamic>;
+      if (records.isEmpty) return;
+      final byId = <String, List<PersonalRecord>>{};
+      for (final r in records.cast<PersonalRecord>()) {
+        (byId[r.exerciseId] ??= []).add(r);
+      }
+      for (final entry in byId.entries) {
+        await prBox.put(
+          'exercises:${entry.key}',
+          jsonEncode({entry.key: entry.value.map((r) => r.toJson()).toList()}),
+        );
+      }
+    });
   });
 
   tearDown(() async {
+    await authController.close();
     await Hive.close();
     await tempDir.delete(recursive: true);
   });
 
-  ProviderContainer makeContainer({
+  /// Builds a container with `authStateProvider` driven by [authController].
+  /// The default behaviour replays a single signed-in (or signed-out) event
+  /// and returns once the bootstrap has observed it; the auth-reactivity
+  /// test passes `pumpInitial: false` to drive emissions manually.
+  Future<ProviderContainer> makeContainer({
     String? userId = 'user-1',
     String localeCode = 'en',
-  }) {
+    bool pumpInitial = true,
+  }) async {
     final container = ProviderContainer(
       overrides: [
-        currentUserIdProvider.overrideWithValue(userId),
+        authStateProvider.overrideWith((ref) => authController.stream),
         prRepositoryProvider.overrideWithValue(mockRepo),
         localeProvider.overrideWith(
           () => _FakeLocaleNotifier(Locale(localeCode)),
@@ -76,6 +133,21 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+
+    if (pumpInitial) {
+      // Subscribe so the broadcast-stream emission below has a listener.
+      // (Broadcast streams drop events when no listener is attached — the
+      // bootstrap's subscription is what the auth state needs to land in.)
+      container.listen(authStateProvider, (_, _) {});
+      authController.add(
+        userId == null ? _signedOutState : _signedInState(userId),
+      );
+      // Yield so the StreamProvider transitions to AsyncData before the
+      // bootstrap reads `.future` — without this, the bootstrap's await
+      // races the controller's microtask scheduling.
+      await Future<void>.delayed(Duration.zero);
+    }
+
     return container;
   }
 
@@ -98,7 +170,7 @@ void main() {
         ),
       ).thenAnswer((_) async => records);
 
-      final container = makeContainer();
+      final container = await makeContainer();
 
       // Trigger the future.
       await container.read(prCacheBootstrapProvider.future);
@@ -139,7 +211,7 @@ void main() {
           ),
         ).thenAnswer((_) async => <PersonalRecord>[]);
 
-        final container = makeContainer();
+        final container = await makeContainer();
 
         await container.read(prCacheBootstrapProvider.future);
         await container.read(prCacheBootstrapProvider.future);
@@ -163,7 +235,7 @@ void main() {
         ),
       ).thenAnswer((_) async => <PersonalRecord>[]);
 
-      final container = makeContainer();
+      final container = await makeContainer();
 
       await container.read(prCacheBootstrapProvider.future);
       container.invalidate(prCacheBootstrapProvider);
@@ -177,10 +249,82 @@ void main() {
       ).called(2);
     });
 
+    // Pins the auth-reactivity contract introduced in the PR #177 reviewer
+    // pass: the bootstrap derives its userId from `authStateProvider` (not
+    // the synchronous, non-reactive `currentUserIdProvider`). A sign-out →
+    // sign-in transition into a different account MUST cause Riverpod to
+    // observe the userId change and rebuild this provider against the new
+    // user — without this, `ref.watch(currentUserIdProvider)` would silently
+    // serve the previous user's PRs to the new account until the next
+    // explicit `ref.invalidate`.
+    test(
+      're-fetches against the new user when authStateProvider emits a '
+      'different signed-in user (sign-out → sign-in re-run contract)',
+      () async {
+        when(
+          () => mockRepo.getRecordsForUser(
+            userId: any(named: 'userId'),
+            locale: any(named: 'locale'),
+          ),
+        ).thenAnswer((_) async => <PersonalRecord>[]);
+
+        // pumpInitial: false → we drive emissions manually so we can
+        // observe the bootstrap rebuilding across distinct user ids.
+        final container = await makeContainer(pumpInitial: false);
+        // Keep both providers alive so that an `authStateProvider` emission
+        // (which invalidates the bootstrap via its `ref.watch` dependency)
+        // observably rebuilds the bootstrap on the next read.
+        container.listen(authStateProvider, (_, _) {});
+        container.listen(prCacheBootstrapProvider, (_, _) {});
+
+        // First emission: user-A signed in → bootstrap fetches for user-A.
+        authController.add(_signedInState('user-A'));
+        await container.read(prCacheBootstrapProvider.future);
+
+        verify(
+          () => mockRepo.getRecordsForUser(
+            userId: 'user-A',
+            locale: any(named: 'locale'),
+          ),
+        ).called(1);
+
+        // Sign out — userId becomes null. The new auth emission causes the
+        // bootstrap to rebuild; this build short-circuits without calling
+        // the repo. Drain microtasks so the emission propagates before we
+        // read `.future` (otherwise `.future` returns the prior cached
+        // resolution and we miss the rebuild).
+        authController.add(_signedOutState);
+        await Future<void>.delayed(Duration.zero);
+        await container.read(prCacheBootstrapProvider.future);
+        verifyNever(
+          () => mockRepo.getRecordsForUser(
+            userId: 'user-A',
+            locale: any(named: 'locale'),
+          ),
+        );
+
+        // Sign in as a DIFFERENT user — the bootstrap rebuilds and fetches
+        // PRs for user-B. This is the regression the auth-reactive design
+        // pins: under the old `currentUserIdProvider.watch` shape, this
+        // call never happened because Riverpod could not detect the user
+        // id change from the non-reactive provider's body.
+        authController.add(_signedInState('user-B'));
+        await Future<void>.delayed(Duration.zero);
+        await container.read(prCacheBootstrapProvider.future);
+
+        verify(
+          () => mockRepo.getRecordsForUser(
+            userId: 'user-B',
+            locale: any(named: 'locale'),
+          ),
+        ).called(1);
+      },
+    );
+
     test(
       'returns immediately without calling repo when no signed-in user',
       () async {
-        final container = makeContainer(userId: null);
+        final container = await makeContainer(userId: null);
 
         await container.read(prCacheBootstrapProvider.future);
 
@@ -203,7 +347,7 @@ void main() {
           ),
         ).thenThrow(Exception('offline'));
 
-        final container = makeContainer();
+        final container = await makeContainer();
 
         // The provider must NOT throw — bootstrap is best-effort. A failed
         // network warmup still allows the existing read-through caching path
@@ -246,7 +390,7 @@ void main() {
           ),
         ).thenAnswer((_) async => <PersonalRecord>[]);
 
-        final container = makeContainer();
+        final container = await makeContainer();
         await container.read(prCacheBootstrapProvider.future);
 
         // Stale entries are wiped.
@@ -284,7 +428,7 @@ void main() {
           jsonEncode({'should-survive': []}),
         );
 
-        final container = makeContainer();
+        final container = await makeContainer();
         await container.read(prCacheBootstrapProvider.future);
 
         // Existing entry is preserved (migration was a no-op).
@@ -308,7 +452,7 @@ void main() {
           ),
         ).thenAnswer((_) async => <PersonalRecord>[]);
 
-        final container = makeContainer();
+        final container = await makeContainer();
         await container.read(prCacheBootstrapProvider.future);
         // After first run, flag is set and box is empty (no records to seed).
         expect(prefsBox.get('pr_cache_v2_migrated'), isTrue);
