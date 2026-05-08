@@ -392,6 +392,59 @@ void main() {
     });
 
     test(
+      'transient raw dart:async TimeoutException → enqueued, savedOffline=true, '
+      'serverErrorQueued=false (mapException wrap chain pin)',
+      () async {
+        // The production path is:
+        //   WorkoutRepository.saveWorkout
+        //     → mapException(() => rpc().timeout(30s))
+        //     → dart:async TimeoutException fires inside mapException
+        //     → ErrorMapper.mapException converts to app.TimeoutException
+        //     → notifier sees app.TimeoutException (covered above).
+        //
+        // This test pins the OTHER half of the contract: if a future
+        // refactor ever lets a raw `dart:async TimeoutException` leak past
+        // [BaseRepository.mapException] (e.g. a new code path that calls
+        // `.timeout()` outside the wrap, or a mocked test stub bypassing
+        // the wrap entirely), the notifier's catch-site classifier MUST
+        // still treat it as transient. SyncErrorClassifier explicitly
+        // recognises both `dart:async TimeoutException` and
+        // `app.TimeoutException` (sync_error_classifier.dart L42 + L46) —
+        // this test is the regression gate for that dual recognition.
+        final bundle = _makeBundle(_makeState());
+        addTearDown(bundle.container.dispose);
+
+        when(
+          () => bundle.mockRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+          ),
+        ).thenThrow(TimeoutException('30s'));
+
+        await bundle.container.read(activeWorkoutProvider.future);
+        final finishResult = await bundle.container
+            .read(activeWorkoutProvider.notifier)
+            .finishWorkout();
+
+        expect(
+          bundle.capturedNotifier.enqueued,
+          hasLength(1),
+          reason:
+              'Raw dart:async TimeoutException must be classified as '
+              'transient and enqueued — same as app.TimeoutException.',
+        );
+        expect(finishResult, isNotNull);
+        expect(finishResult!.savedOffline, isTrue);
+        expect(
+          finishResult.serverErrorQueued,
+          isFalse,
+          reason: 'Timeout is a network/transport issue, not a server error.',
+        );
+      },
+    );
+
+    test(
       'unknown exception types stay transient (queue, no rethrow) — '
       'preserves backward compatibility with the existing offline tests',
       () async {

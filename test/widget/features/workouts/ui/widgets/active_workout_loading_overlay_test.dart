@@ -169,11 +169,21 @@ void main() {
         await tester.tap(cancelFinder);
         await tester.pump();
 
-        // Pin: notifier read after the cancel tap returns successfully.
-        // The overlay's onPressed handler called .cancelLoading() — if it
-        // had thrown, this expect would not be reached.
-        final notifier = container.read(activeWorkoutProvider.notifier);
-        expect(notifier, isNotNull);
+        // Pin: state is settled AsyncData (not AsyncLoading, not AsyncError)
+        // after the tap. With `_lastValidState == null` the cancelLoading
+        // implementation skips the explicit `state = AsyncData(...)` line,
+        // so this also pins that the no-restore path leaves the existing
+        // settled state intact rather than dropping into an inconsistent
+        // shape (e.g. partially-finished AsyncLoading from a prior attempt).
+        final state = container.read(activeWorkoutProvider);
+        expect(
+          state,
+          isA<AsyncData<ActiveWorkoutState?>>(),
+          reason:
+              'cancelLoading() must leave the notifier in AsyncData, not '
+              'AsyncLoading or AsyncError — otherwise the overlay would '
+              'remain visible after the cancel tap and trap the user.',
+        );
       },
     );
   });
