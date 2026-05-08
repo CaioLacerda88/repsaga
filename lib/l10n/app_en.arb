@@ -532,6 +532,8 @@
   "@failedToSaveWorkout": { "description": "Snackbar: save workout failed" },
   "workoutSavedOffline": "Workout saved. Will sync when back online.",
   "@workoutSavedOffline": { "description": "Snackbar: workout saved offline" },
+  "workoutSavedServerError": "Server error — saved locally. Will retry automatically.",
+  "@workoutSavedServerError": { "description": "Snackbar: workout queued offline because the server returned a 5xx error (AW-EX-D-US1-03). Distinguishes from plain connectivity loss." },
   "setColumnSet": "SET",
   "@setColumnSet": { "description": "Set column header: set number" },
   "setColumnWeight": "WEIGHT",

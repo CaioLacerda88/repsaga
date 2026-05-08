@@ -29,9 +29,11 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 /// it.
 
 /// Minimal awaitable fake for the `PostgrestFilterBuilder` returned by
-/// `SupabaseClient.rpc(...)`. The real builder implements `Future.then`
-/// internally; we mirror that surface so `await client.rpc(...)` resolves
-/// to whatever value we specify.
+/// `SupabaseClient.rpc(...)`. The real builder implements `Future.then` and
+/// `Future.timeout` internally (the production code chains `.timeout(30s)`
+/// on the rpc Future per AW-EX-D-US1-04 guard); we mirror both so
+/// `await client.rpc(...).timeout(...)` resolves to whatever value we
+/// specify under test.
 class _FakeRpcBuilder extends Fake
     implements supabase.PostgrestFilterBuilder<dynamic> {
   _FakeRpcBuilder(this._value);
@@ -44,6 +46,17 @@ class _FakeRpcBuilder extends Fake
     Function? onError,
   }) {
     return Future.value(_value).then<S>(onValue, onError: onError);
+  }
+
+  @override
+  Future<dynamic> timeout(
+    Duration timeLimit, {
+    FutureOr<dynamic> Function()? onTimeout,
+  }) {
+    // Resolve immediately with the canned value — these tests inspect the
+    // post-RPC null-guard, not the timeout. A real timeout test lives in
+    // active_workout_notifier_finish_classification_test.dart.
+    return Future.value(_value);
   }
 }
 

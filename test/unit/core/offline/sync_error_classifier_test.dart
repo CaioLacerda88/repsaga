@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/core/exceptions/app_exception.dart' as app;
 import 'package:repsaga/core/offline/sync_error_classifier.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -110,6 +111,44 @@ void main() {
           code: 'PGRST',
         );
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      // Wrapped app.* exception types — repository layer maps raw Supabase
+      // errors into these via BaseRepository.mapException. The classifier
+      // must recognise both shapes (PR1B catch-site sees the wrapped form).
+      test('returns true for wrapped app.DatabaseException with 400', () {
+        const error = app.DatabaseException('Bad Request', code: '400');
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns false for wrapped app.DatabaseException with 500', () {
+        const error = app.DatabaseException('ISE', code: '500');
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test('returns false for wrapped app.NetworkException', () {
+        expect(
+          SyncErrorClassifier.isTerminal(
+            const app.NetworkException('no connection'),
+          ),
+          isFalse,
+        );
+      });
+
+      test('returns false for wrapped app.TimeoutException', () {
+        expect(
+          SyncErrorClassifier.isTerminal(const app.TimeoutException()),
+          isFalse,
+        );
+      });
+
+      test('returns false for wrapped app.AuthException', () {
+        expect(
+          SyncErrorClassifier.isTerminal(
+            const app.AuthException('JWT expired', code: '401'),
+          ),
+          isFalse,
+        );
       });
     });
   });

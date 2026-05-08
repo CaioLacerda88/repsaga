@@ -1418,6 +1418,12 @@ abstract class AppLocalizations {
   /// **'Workout saved. Will sync when back online.'**
   String get workoutSavedOffline;
 
+  /// Snackbar: workout queued offline because the server returned a 5xx error (AW-EX-D-US1-03). Distinguishes from plain connectivity loss.
+  ///
+  /// In en, this message translates to:
+  /// **'Server error — saved locally. Will retry automatically.'**
+  String get workoutSavedServerError;
+
   /// Set column header: set number
   ///
   /// In en, this message translates to:

@@ -726,6 +726,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Treino salvo. Será sincronizado quando voltar a ficar online.';
 
   @override
+  String get workoutSavedServerError =>
+      'Erro no servidor — salvo localmente. Vamos tentar novamente em segundo plano.';
+
+  @override
   String get setColumnSet => 'SÉRIE';
 
   @override
