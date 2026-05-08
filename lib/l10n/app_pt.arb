@@ -242,6 +242,7 @@
   "failedToDiscardWorkout": "Falha ao descartar sessão. Tente novamente.",
   "failedToSaveWorkout": "Falha ao salvar treino. Tente novamente.",
   "workoutSavedOffline": "Treino salvo. Será sincronizado quando voltar a ficar online.",
+  "workoutSavedServerError": "Erro no servidor — salvo localmente. Vamos tentar novamente em segundo plano.",
   "setColumnSet": "SÉRIE",
   "setColumnWeight": "PESO",
   "setColumnReps": "REPS",

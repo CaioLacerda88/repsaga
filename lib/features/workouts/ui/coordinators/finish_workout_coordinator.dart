@@ -167,6 +167,11 @@ class FinishWorkoutCoordinator {
       // `finishWorkout` short-circuited (no active workout, or a concurrent
       // finish was already in flight) — treat both as a successful no-op.
       final wasSavedOffline = finishResult?.savedOffline ?? false;
+      // PR1B (AW-EX-D-US1-03): when the queued failure was a 5xx (not pure
+      // connectivity loss), pick a distinct snackbar copy so the user knows
+      // it was a server problem the queue will retry, not a phone-side
+      // network issue. `serverErrorQueued` implies `savedOffline`.
+      final wasServerErrorQueued = finishResult?.serverErrorQueued ?? false;
       final prResult = finishResult?.prResult;
 
       // Invalidate caches so stat cards and lists reflect the new workout.
@@ -183,13 +188,20 @@ class FinishWorkoutCoordinator {
         ref.invalidate(recentPRsProvider);
       }
 
-      // Show offline-save confirmation if the workout was queued.
+      // Show offline-save confirmation if the workout was queued. Server-
+      // error variant uses distinct copy so the user can tell apart a server
+      // outage from "phone is offline" — both still queue, both still drain
+      // automatically, but the cause matters for trust.
       if (wasSavedOffline && context.mounted) {
         final colorScheme = Theme.of(context).colorScheme;
+        final l10n = AppLocalizations.of(context);
+        final message = wasServerErrorQueued
+            ? l10n.workoutSavedServerError
+            : l10n.workoutSavedOffline;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppLocalizations.of(context).workoutSavedOffline,
+              message,
               style: TextStyle(color: colorScheme.onTertiaryContainer),
             ),
             backgroundColor: colorScheme.tertiaryContainer,

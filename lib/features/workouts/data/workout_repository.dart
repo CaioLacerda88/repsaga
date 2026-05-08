@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../../core/data/base_repository.dart';
@@ -38,41 +40,57 @@ class WorkoutRepository extends BaseRepository {
 
   supabase.SupabaseQueryBuilder get _workouts => _client.from('workouts');
 
+  /// Explicit timeout on the `save_workout` RPC.
+  ///
+  /// Without this, a hung connection would sit on whatever HTTP default
+  /// the supabase client carries (effectively unbounded for connect-stalled
+  /// requests on some platforms), and the user would stare at the loading
+  /// overlay forever — only the overlay's 10s Cancel button gives a way out
+  /// (AW-EX-D-US1-04). 30s is the upper bound we accept; beyond that the
+  /// `TimeoutException` is classified as transient by [SyncErrorClassifier]
+  /// and the notifier's catch site enqueues the workout for offline sync.
+  static const _saveWorkoutTimeout = Duration(seconds: 30);
+
   /// Atomically save a finished workout via the save_workout RPC.
   ///
   /// Supabase wraps each RPC call in a transaction, so all inserts/updates
   /// are atomic — a constraint violation rolls back the entire operation.
+  ///
+  /// Throws [TimeoutException] after [_saveWorkoutTimeout] to compose with
+  /// the active-workout notifier's catch-site classifier — see AW-EX-D-US1-04.
   Future<Workout> saveWorkout({
     required Workout workout,
     required List<WorkoutExercise> exercises,
     required List<ExerciseSet> sets,
   }) {
     return mapException(() async {
-      final result = await _client.rpc(
-        'save_workout',
-        params: {
-          'p_workout': {
-            'id': workout.id,
-            'user_id': workout.userId,
-            'name': workout.name,
-            'finished_at': workout.finishedAt?.toIso8601String(),
-            'duration_seconds': workout.durationSeconds,
-            'notes': workout.notes,
-          },
-          'p_exercises': exercises
-              .map(
-                (e) => {
-                  'id': e.id,
-                  'workout_id': e.workoutId,
-                  'exercise_id': e.exerciseId,
-                  'order': e.order,
-                  'rest_seconds': e.restSeconds,
-                },
-              )
-              .toList(),
-          'p_sets': sets.map((s) => s.toRpcJson()).toList(),
-        },
-      );
+      final result = await _client
+          .rpc(
+            'save_workout',
+            params: {
+              'p_workout': {
+                'id': workout.id,
+                'user_id': workout.userId,
+                'name': workout.name,
+                'finished_at': workout.finishedAt?.toIso8601String(),
+                'duration_seconds': workout.durationSeconds,
+                'notes': workout.notes,
+              },
+              'p_exercises': exercises
+                  .map(
+                    (e) => {
+                      'id': e.id,
+                      'workout_id': e.workoutId,
+                      'exercise_id': e.exerciseId,
+                      'order': e.order,
+                      'rest_seconds': e.restSeconds,
+                    },
+                  )
+                  .toList(),
+              'p_sets': sets.map((s) => s.toRpcJson()).toList(),
+            },
+          )
+          .timeout(_saveWorkoutTimeout);
       // Defensive null-guard (BUG-004): Postgrest can return `null` for RPCs
       // that hit a `RAISE EXCEPTION` inside a `DO` block or partial-commit
       // error paths. Without this check the cast throws the cryptic

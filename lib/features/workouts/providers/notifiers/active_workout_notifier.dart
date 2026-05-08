@@ -11,6 +11,7 @@ import '../../../../core/local_storage/cache_service.dart';
 import '../../../../core/local_storage/hive_service.dart';
 import '../../../../core/offline/pending_action.dart';
 import '../../../../core/offline/pending_sync_provider.dart';
+import '../../../../core/offline/sync_error_classifier.dart';
 import '../../../../core/observability/sentry_report.dart';
 import '../../../personal_records/models/personal_record.dart';
 import '../../../analytics/data/models/analytics_event.dart';
@@ -49,12 +50,26 @@ const _uuid = Uuid();
 ///
 /// `prResult` is null when PR detection ran but produced no records or
 /// failed silently (PR detection is non-essential and never blocks the
-/// save). `savedOffline` is `true` iff the network save threw and the
-/// workout was enqueued for offline sync; UI uses it to render the
-/// "Will sync when back online" snackbar.
+/// save). `savedOffline` is `true` iff the network save threw a transient
+/// error (offline / 5xx / timeout) and the workout was enqueued for offline
+/// sync; UI uses it to render the "Will sync when back online" snackbar.
+///
+/// `serverErrorQueued` is `true` iff the queued failure was a server-side 5xx
+/// (not a connectivity/timeout failure). When set, `savedOffline` is also
+/// `true` — it is a discriminator on the queued path so the UI can render a
+/// "server error — saved offline, will retry" message instead of the plain
+/// "Will sync when back online" copy. Surfaces AW-EX-D-US1-03 (HTTP 500
+/// silently treated as offline).
+///
+/// Terminal errors (4xx / RLS denial / FK violation) do NOT enqueue: they
+/// rethrow inside `finishWorkout` so the outer `AsyncValue.guard` lands in
+/// `AsyncError` and the coordinator's existing snackbar plumbing surfaces
+/// the error. In that case `finishWorkout` itself returns `null` and the
+/// notifier state is `AsyncError`.
 typedef FinishWorkoutResult = ({
   PRDetectionResult? prResult,
   bool savedOffline,
+  bool serverErrorQueued,
 });
 
 /// Core state machine for active workouts.
@@ -691,6 +706,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     // return value, not via a notifier field. Restores unidirectional
     // Riverpod data flow (BUG-039).
     var savedOffline = false;
+    var serverErrorQueued = false;
 
     // Capture the pre-finish RPG snapshot + earned-title slug set BEFORE the
     // save call. The post-finish snapshot (read after `record_set_xp`
@@ -748,12 +764,50 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           sets: sets,
         );
       } catch (e) {
+        // Classify at the catch site so terminal errors surface to the user
+        // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
+        // uniformly enqueued as offline — a 4xx / RLS denial / FK violation
+        // produced a "Saved offline" snackbar with no error indication, and
+        // the queue then logged a structural failure no user could fix.
+        //
+        // Contract:
+        //   - terminal (4xx, RLS, FK) → rethrow so the outer AsyncValue.guard
+        //     lands in AsyncError; the coordinator's `asyncState.hasError`
+        //     branch shows the localized "Failed to save workout" snackbar
+        //     and the user keeps their unsaved local state.
+        //   - transient (offline, timeout, 5xx, unknown) → enqueue.
+        //   - 5xx specifically sets `serverErrorQueued = true` so the UI can
+        //     pick a "server error — saved offline, will retry" copy variant
+        //     (Q1.3 in the impact analysis).
+        if (SyncErrorClassifier.isTerminal(e)) {
+          log(
+            'Terminal save error, surfacing to UI: $e',
+            name: 'ActiveWorkoutNotifier',
+            level: 1000,
+          );
+          rethrow;
+        }
         log(
           'Network save failed, queueing offline: $e',
           name: 'ActiveWorkoutNotifier',
           level: 900,
         );
         savedOffline = true;
+        // 5xx is transient (queue) but distinct from connectivity failure;
+        // the queue still retries, but the UI tells the user it was a server
+        // problem so a "Pending sync (1)" badge is not misleading.
+        // [SyncErrorClassifier.httpCode] recognises both the raw
+        // [supabase.PostgrestException] and the [BaseRepository]-mapped
+        // [app.DatabaseException] / [app.AuthException] forms — the
+        // production catch site sees the wrapped variant, but routing
+        // through the canonical helper keeps the discriminator robust if a
+        // future repository forgets to wrap or if a new code-bearing shape
+        // is added to [SyncErrorClassifier.isTerminal] without updating
+        // every call site.
+        final code = SyncErrorClassifier.httpCode(e);
+        if (code != null && code >= 500 && code < 600) {
+          serverErrorQueued = true;
+        }
 
         // Build raw JSON maps matching the RPC shape.
         // Include all required Workout fields so Workout.fromJson succeeds
@@ -1127,7 +1181,22 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = result;
     _isFinishing = false;
 
-    return (prResult: prResult, savedOffline: savedOffline);
+    // PR1B: when the catch site rethrew a terminal error, AsyncValue.guard
+    // captured it into AsyncError. The result record is meaningless in that
+    // case (savedOffline/serverErrorQueued were never flipped because the
+    // catch handler short-circuited via rethrow), so return null and let the
+    // coordinator route via `state.hasError`. Pre-1B this method returned a
+    // record even on AsyncError, which made it impossible for the coordinator
+    // to distinguish "saved offline cleanly" from "save failed terminally".
+    if (result is AsyncError) {
+      return null;
+    }
+
+    return (
+      prResult: prResult,
+      savedOffline: savedOffline,
+      serverErrorQueued: serverErrorQueued,
+    );
   }
 
   /// Refresh the RPG progress + earned-titles providers post-save, then diff

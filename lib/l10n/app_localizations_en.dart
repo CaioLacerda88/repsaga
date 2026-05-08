@@ -720,6 +720,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Workout saved. Will sync when back online.';
 
   @override
+  String get workoutSavedServerError =>
+      'Server error — saved locally. Will retry automatically.';
+
+  @override
   String get setColumnSet => 'SET';
 
   @override
