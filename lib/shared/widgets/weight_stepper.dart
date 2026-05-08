@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/format/number_format.dart';
+import '../../core/theme/dialog_button_style.dart';
 import '../../l10n/app_localizations.dart';
 
 /// A reusable stepper widget for weight values.
@@ -133,6 +134,7 @@ class _WeightStepperState extends State<WeightStepper> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
+              style: dialogTextButtonStyle,
               child: Text(l10n.cancel),
             ),
             TextButton(
@@ -143,6 +145,7 @@ class _WeightStepperState extends State<WeightStepper> {
                 }
                 Navigator.of(dialogCtx).pop();
               },
+              style: dialogTextButtonStyle,
               child: Text(l10n.ok),
             ),
           ],

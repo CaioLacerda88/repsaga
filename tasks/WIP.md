@@ -10,4 +10,33 @@ as work lands, and remove the section after the merge condenses to PLAN.md.
 
 ---
 
-_No work in flight._
+## fix/workouts-tap-targets-48dp — Family 4 from active-workout exploratory pass
+
+**Branch:** `fix/workouts-tap-targets-48dp`
+**Source:** `tasks/active-workout-implementation-plan.md` Family 4 + master findings AW-EX-A-BR1-01 (M), AW-EX-A-BR1-02 (m), AW-EX-F-BR1-09 (m).
+
+**Root cause:** several interactive widgets in the active-workout flow render below Material's 48dp minimum on the smallest priority viewport (360×780):
+- **Done-mark** (`set_row.dart:990` per impact analysis) — 32×32 px, 33% below the 48dp minimum height (AW-EX-A-BR1-01)
+- **Add Set button** — Charter A measured 40-tall on BR-1; impact analysis flagged this as POSSIBLY stale (`_AddSetButton` at `exercise_card.dart:540` already declares `minimumSize: Size(double.infinity, 48)`). Investigate first to confirm the discrepancy. (AW-EX-A-BR1-02)
+- **Dialog `TextButton` actions** (Finish / Discard / Weight / Reps / Remove dialogs + SnackBar Undo) — render at Flutter's default 36dp. Systemic across the active-workout flow. (AW-EX-F-BR1-09)
+
+**Fix scope (Family 4):**
+1. **Investigate AW-EX-A-BR1-02 first.** Measure the `_AddSetButton` rendered size on a 360-wide test viewport. If it's already ≥48dp, the Charter A finding was a measurement error — mark resolved without code change. If real, fix.
+2. **Done-mark cell widening** in `set_row.dart` — increase the wrapper around the done-mark / predicted-PR-mark to ≥48×48dp on smallest viewport. The visual ◆/✓ stays small; only the tap-target box grows.
+3. **Project-wide `dialogTextButtonStyle`** — introduce a shared style with `minimumSize: Size(64, 48)` and apply across all `AlertDialog` actions in the active-workout flow (Finish, Discard, Weight stepper input, Reps stepper input, Remove exercise) AND the SnackBar undo action. Place the style in `lib/core/theme/` next to the existing button styling.
+4. Tests: widget tests measuring `boundingBox` of each interactive on a 360-wide test viewport. Assert ≥40 wide AND ≥48 tall.
+
+### Checklist
+
+- [x] tech-lead: read implementation plan §Family 4 + Charter A / F findings; specifically confirm the AW-EX-A-BR1-02 stale-vs-real status before touching the Add Set button
+- [x] tech-lead: TDD — failing widget tests first (boundingBox of done-mark + dialog actions on 360-wide viewport)
+- [x] tech-lead: widen done-mark cell wrapper to ≥48×48dp without changing the visual size of the icon — done via outer `SizedBox(40, 48)` + `GestureDetector` wrapping the existing 32×32 visual; inner Semantics still owns AOM identifier + tap action
+- [x] tech-lead: introduce `dialogTextButtonStyle` in `lib/core/theme/` with `minimumSize: Size(64, 48)`; apply across the 5 active-workout dialogs (SnackBar Undo deferred — see verdict below)
+- [x] tech-lead: AW-EX-A-BR1-02 — **confirmed STALE.** Pre-fix measurement on 360-wide test viewport: Add Set OutlinedButton renders at **300.0w × 48.0h dp** — already meets Material 2.5.5. The Charter A "40 px tall" reading was a Playwright `boundingBox()` measurement error (probably reported visual content height instead of full button hit-area). Test kept as a regression guard.
+- [x] tech-lead: AW-EX-F-BR1-09 — **also confirmed largely STALE at the rendered level.** Pre-fix dialog action measurements on a 360-wide test viewport all reported 48.0h (Material 3's `MaterialTapTargetSize.padded` default already inflates the hit-test region to ≥48dp even when `minimumSize` is the legacy `(64, 36)`). The `dialogTextButtonStyle` was still applied as defense-in-depth: makes the 48dp floor STRUCTURAL at the call site so a future contributor flipping `materialTapTargetSize: shrinkWrap` won't silently regress. SnackBarAction (the Undo) is also already ≥48dp via the same Material default — and `SnackBarAction` does not expose a `style` parameter, so applying the shared style there would require wrapping in a custom widget; deferred (kept the print verdict in the test for the audit record).
+- [x] tech-lead: `dart format` + `dart analyze --fatal-infos` clean; full unit/widget suite green (2440/2440)
+- [x] orchestrator: CI green — format clean, `dart analyze --fatal-infos` 0 issues, reward-accent + hardcoded-colors guards clean, 2406 tests passing (+7 from Family 4), android-debug APK built in 34.6s
+- [x] qa-engineer: PASS across all 7 acceptance criteria — selector impact zero (outer GestureDetector excluded from semantics; AOM identifier hierarchy unchanged); 7 measurement tests use `tester.getSize` on a 360-wide viewport with proper teardown; defense-in-depth correctly applied across 5 dialog surfaces; SnackBarAction deferral structurally correct (no `style` param; Material default already 48dp); 138 existing workout widget tests pass cleanly; no `lib/` regression
+- [ ] orchestrator: open PR; cite AW-EX-A-BR1-01 (real, fixed), AW-EX-A-BR1-02 (stale, regression guard added), AW-EX-F-BR1-09 (defense-in-depth + regression guard)
+- [ ] reviewer: pass; address every finding (incl. Suggestions) in the same cycle
+- [ ] squash merge to main, delete branch, post-merge cleanup PR (mark Family 4 resolved)

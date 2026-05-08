@@ -987,7 +987,32 @@ class _DoneCell extends StatelessWidget {
             ? Border(right: BorderSide(color: gold, width: 4))
             : null,
       ),
-      child: Center(child: SizedBox(width: 32, height: 32, child: tapTarget)),
+      // AW-EX-A-BR1-01: the visual ◆/✓ stays at 32dp (the inner SizedBox);
+      // an outer 40×48dp hit-test box wraps it so a sweaty thumb on the
+      // 360dp BR-1 viewport always lands. The outer GestureDetector
+      // forwards taps in the slack region to `onChanged` — the inner
+      // Semantics still owns the AOM identifier and tap action so screen
+      // readers and Playwright selectors are unaffected.
+      child: Center(
+        child: SizedBox(
+          width: 40,
+          height: 48,
+          child: GestureDetector(
+            onTap: locked ? null : onChanged,
+            behavior: HitTestBehavior.translucent,
+            // The inner Semantics widget already exposes the
+            // workout-set-done / workout-set-completed identifier + button
+            // role + tap action. Suppressing this detector's semantics
+            // avoids a duplicate AOM node that would compete with the
+            // identifier-bearing one (and re-trigger the role-swap engine
+            // bug documented in the build comment above).
+            excludeFromSemantics: true,
+            child: Center(
+              child: SizedBox(width: 32, height: 32, child: tapTarget),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
