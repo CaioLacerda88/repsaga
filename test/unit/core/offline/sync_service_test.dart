@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:repsaga/core/connectivity/connectivity_provider.dart';
-import 'package:repsaga/core/local_storage/cache_service.dart';
 import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/core/offline/offline_queue_service.dart';
 import 'package:repsaga/core/offline/pending_action.dart';
@@ -19,6 +18,7 @@ import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/exercises/providers/exercise_providers.dart';
 import 'package:repsaga/features/personal_records/data/pr_repository.dart';
 import 'package:repsaga/features/personal_records/models/personal_record.dart';
+import 'package:repsaga/features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import 'package:repsaga/features/personal_records/providers/pr_providers.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
@@ -39,8 +39,6 @@ class _MockPRRepository extends Mock implements PRRepository {}
 class _MockAnalyticsRepository extends Mock implements AnalyticsRepository {}
 
 class _MockExerciseRepository extends Mock implements ExerciseRepository {}
-
-class _MockCacheService extends Mock implements CacheService {}
 
 // ---------------------------------------------------------------------------
 // Fakes (for registerFallbackValue)
@@ -1228,20 +1226,25 @@ void main() {
     );
 
     // ------------------------------------------------------------------
-    // Phase 14d: SyncService reconciles PR cache after upsertRecords drain.
+    // SyncService reconciles PR cache after upsertRecords drain.
     //
-    // Post PR-#127 review: `_reconcilePrCache` no longer fetches server
-    // records — the fetch was dead overhead because only its `.length` was
-    // used (for a Sentry breadcrumb). The reconcile is now strictly a
-    // `clearBox(prCache)` call: next reader re-seeds via PRRepository's
-    // user-keyed bag fallback. The behaviour these tests pin:
+    // **Family 1A fix (AW-EX-E-US1-03 amplifier):** pre-fix `_reconcilePrCache`
+    // called `cache.clearBox(prCache)` which left the device with an empty
+    // cache. If connectivity dropped before the next consumer read, the
+    // empty-cache → false-PR BLOCKER (AW-EX-D-US1-01) re-armed.
     //
-    //   1. After a successful upsertRecords drain → clearBox is called.
-    //   2. After a saveWorkout-only drain → clearBox is NOT called.
-    //   3. clearBox is called once per drain pass regardless of how many
-    //      upsertRecords actions or distinct userIds drained — the box is
-    //      per-device, not per-user.
-    //   4. clearBox failure does NOT break the drain loop.
+    // New contract: `_reconcilePrCache` invalidates `prCacheBootstrapProvider`.
+    // Riverpod re-runs the bootstrap on next read, which fetches the user's
+    // full PR list and writes per-exercise entries. The behaviour these tests
+    // pin:
+    //
+    //   1. After a successful upsertRecords drain → bootstrap rebuilds.
+    //   2. After a saveWorkout-only drain → bootstrap does NOT rebuild.
+    //   3. Bootstrap rebuilds exactly once per drain pass regardless of how
+    //      many upsertRecords actions or distinct userIds drained — one
+    //      invalidation suffices because the bootstrap reads the current
+    //      signed-in user.
+    //   4. Drain loop completes successfully even if bootstrap rebuild fails.
     // ------------------------------------------------------------------
     group('PR cache reconciliation after upsertRecords drain', () {
       /// Builds a minimal [PendingUpsertRecords] with userId for reconciliation.
@@ -1260,13 +1263,15 @@ void main() {
             as PendingUpsertRecords;
       }
 
-      /// Creates a container with PRRepo + CacheService mock overrides for
-      /// reconciliation tests. The cache mock is the load-bearing assertion
-      /// surface now that the fetch was removed.
-      ({ProviderContainer container, _MockCacheService mockCache})
+      /// Creates a container with PRRepo + a tracked stand-in for
+      /// `prCacheBootstrapProvider`. We override the bootstrap with a
+      /// FutureProvider whose body increments a counter on each build —
+      /// so an `invalidate()` from `_reconcilePrCache` is observable as a
+      /// build count change without depending on
+      /// `currentUserIdProvider`/`localeProvider` plumbing.
+      ({ProviderContainer container, int Function() buildCount})
       createReconcileContainer({bool initialOnline = true}) {
-        final mockCache = _MockCacheService();
-        when(() => mockCache.clearBox(any())).thenAnswer((_) async {});
+        var builds = 0;
         final container = ProviderContainer(
           overrides: [
             onlineStatusProvider.overrideWith(
@@ -1279,41 +1284,90 @@ void main() {
             workoutRepositoryProvider.overrideWithValue(mockWorkoutRepo),
             prRepositoryProvider.overrideWithValue(mockPRRepo),
             analyticsRepositoryProvider.overrideWithValue(mockAnalyticsRepo),
-            cacheServiceProvider.overrideWithValue(mockCache),
+            prCacheBootstrapProvider.overrideWith((ref) async {
+              builds++;
+            }),
           ],
         );
         addTearDown(container.dispose);
         container.listen(syncServiceProvider, (_, _) {});
-        return (container: container, mockCache: mockCache);
+        // Subscribe to the bootstrap so initial build is counted and so
+        // invalidation observably triggers a rebuild on the next listener
+        // settle.
+        container.listen(
+          prCacheBootstrapProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        return (container: container, buildCount: () => builds);
       }
 
-      test('clears prCache box after successful upsertRecords drain', () async {
-        final bundle = createReconcileContainer(initialOnline: false);
+      test(
+        'invalidates prCacheBootstrapProvider after successful upsertRecords drain',
+        () async {
+          final bundle = createReconcileContainer(initialOnline: false);
 
-        final notifier = bundle.container.read(pendingSyncProvider.notifier);
-        await notifier.enqueue(makeUpsertAction(id: 'pr-reconcile'));
+          // Initial build from the listener subscription.
+          final initialBuilds = bundle.buildCount();
 
-        when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
+          final notifier = bundle.container.read(pendingSyncProvider.notifier);
+          await notifier.enqueue(makeUpsertAction(id: 'pr-reconcile'));
 
-        connectivityController.add(true);
-        await _pumpAsync(200);
+          when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
 
-        // Reconciliation = clearBox; no server fetch.
-        verify(() => bundle.mockCache.clearBox(HiveService.prCache)).called(1);
-        // Defense-in-depth: getRecordsForUser must NOT be called by the
-        // reconcile path. Drift here = re-introducing the dead fetch.
-        verifyNever(
-          () => mockPRRepo.getRecordsForUser(
-            userId: any(named: 'userId'),
-            locale: any(named: 'locale'),
-          ),
-        );
-      });
+          connectivityController.add(true);
+          await _pumpAsync(200);
+
+          // Force the listener to settle so the invalidation translates
+          // into an observable rebuild.
+          bundle.container.read(prCacheBootstrapProvider);
+          await _pumpAsync(50);
+
+          expect(
+            bundle.buildCount(),
+            greaterThan(initialBuilds),
+            reason:
+                'reconcile must invalidate prCacheBootstrapProvider so the '
+                'next consumer read re-seeds from server truth',
+          );
+          // Defense-in-depth: getRecordsForUser must NOT be called by the
+          // reconcile path itself. The provider's body is what fetches —
+          // and only when the next consumer reads it.
+          verifyNever(
+            () => mockPRRepo.getRecordsForUser(
+              userId: any(named: 'userId'),
+              locale: any(named: 'locale'),
+            ),
+          );
+        },
+      );
 
       test('reconciliation failure does not break the drain loop', () async {
-        final bundle = createReconcileContainer(initialOnline: false);
+        // Override the bootstrap so its body throws — simulates the
+        // pathological case where invalidation triggers a rebuild that
+        // fails. The drain loop must still drive subsequent items to
+        // completion.
+        final container = ProviderContainer(
+          overrides: [
+            onlineStatusProvider.overrideWith(
+              (ref) => connectivityController.stream,
+            ),
+            isOnlineProvider.overrideWith((ref) {
+              return ref.watch(onlineStatusProvider).value ?? false;
+            }),
+            offlineQueueServiceProvider.overrideWithValue(queueService),
+            workoutRepositoryProvider.overrideWithValue(mockWorkoutRepo),
+            prRepositoryProvider.overrideWithValue(mockPRRepo),
+            analyticsRepositoryProvider.overrideWithValue(mockAnalyticsRepo),
+            prCacheBootstrapProvider.overrideWith((ref) async {
+              throw Exception('bootstrap rebuild failed');
+            }),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.listen(syncServiceProvider, (_, _) {});
 
-        final notifier = bundle.container.read(pendingSyncProvider.notifier);
+        final notifier = container.read(pendingSyncProvider.notifier);
 
         // Enqueue an upsertRecords then a saveWorkout.
         await notifier.enqueue(
@@ -1330,44 +1384,47 @@ void main() {
         );
 
         when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
-
-        // Reconciliation throws — must not break drain.
-        when(
-          () => bundle.mockCache.clearBox(any()),
-        ).thenThrow(Exception('clearBox failed'));
-
         stubSaveWorkoutSuccess(id: 'w-after-pr');
 
-        // Transition: offline -> online
         connectivityController.add(true);
         await _pumpAsync(300);
 
-        // Both items should be dequeued (drain completed despite reconcile failure).
-        expect(bundle.container.read(pendingSyncProvider), 0);
+        // Both items should be dequeued — drain loop is robust against
+        // a failed bootstrap rebuild.
+        expect(container.read(pendingSyncProvider), 0);
       });
 
-      test('does NOT clear prCache after a saveWorkout-only drain', () async {
-        final bundle = createReconcileContainer(initialOnline: false);
-
-        final notifier = bundle.container.read(pendingSyncProvider.notifier);
-        await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-no-reconcile'));
-
-        stubSaveWorkoutSuccess(id: 'w-no-reconcile');
-
-        connectivityController.add(true);
-        await _pumpAsync(200);
-
-        // No upsertRecords drained → no PR-cache reconcile.
-        verifyNever(() => bundle.mockCache.clearBox(any()));
-      });
-
-      // The prCache box is per-device, not per-user. Multiple users draining
-      // in the same pass should still trigger exactly one clearBox — clearing
-      // once is sufficient and clearing N times wastes no-op writes.
       test(
-        'clears prCache exactly once even when multiple users drain',
+        'does NOT invalidate bootstrap after a saveWorkout-only drain',
         () async {
           final bundle = createReconcileContainer(initialOnline: false);
+          final initialBuilds = bundle.buildCount();
+
+          final notifier = bundle.container.read(pendingSyncProvider.notifier);
+          await notifier.enqueue(_makeSaveWorkoutAction(id: 'w-no-reconcile'));
+
+          stubSaveWorkoutSuccess(id: 'w-no-reconcile');
+
+          connectivityController.add(true);
+          await _pumpAsync(200);
+          bundle.container.read(prCacheBootstrapProvider);
+          await _pumpAsync(50);
+
+          // No upsertRecords drained → no bootstrap invalidation. Build
+          // count stays at the initial subscription's single build.
+          expect(bundle.buildCount(), equals(initialBuilds));
+        },
+      );
+
+      // The prCache box is per-device, not per-user. Multiple users draining
+      // in the same pass should still trigger exactly one bootstrap rebuild —
+      // the bootstrap reads the current signed-in user, so per-user looping
+      // is unnecessary.
+      test(
+        'invalidates bootstrap exactly once even when multiple users drain',
+        () async {
+          final bundle = createReconcileContainer(initialOnline: false);
+          final initialBuilds = bundle.buildCount();
 
           final notifier = bundle.container.read(pendingSyncProvider.notifier);
 
@@ -1391,21 +1448,20 @@ void main() {
 
           connectivityController.add(true);
           await _pumpAsync(300);
+          bundle.container.read(prCacheBootstrapProvider);
+          await _pumpAsync(50);
 
-          // One clearBox call covers all drained users (box is per-device).
-          verify(
-            () => bundle.mockCache.clearBox(HiveService.prCache),
-          ).called(1);
+          // One invalidation covers all drained users → exactly one
+          // additional build beyond the initial subscription.
+          expect(bundle.buildCount(), equals(initialBuilds + 1));
         },
       );
 
-      // Two items for the SAME user should also trigger one clearBox call —
-      // pin the de-duplication so the gate stays at "did at least one upsert
-      // drain successfully" rather than "how many".
       test(
-        'clears prCache exactly once for duplicate userId across items',
+        'invalidates bootstrap exactly once for duplicate userId across items',
         () async {
           final bundle = createReconcileContainer(initialOnline: false);
+          final initialBuilds = bundle.buildCount();
 
           final notifier = bundle.container.read(pendingSyncProvider.notifier);
 
@@ -1429,10 +1485,10 @@ void main() {
 
           connectivityController.add(true);
           await _pumpAsync(300);
+          bundle.container.read(prCacheBootstrapProvider);
+          await _pumpAsync(50);
 
-          verify(
-            () => bundle.mockCache.clearBox(HiveService.prCache),
-          ).called(1);
+          expect(bundle.buildCount(), equals(initialBuilds + 1));
         },
       );
     });
@@ -1709,15 +1765,17 @@ void main() {
     );
 
     // ------------------------------------------------------------------
-    // BUG-006: After a successful upsertRecords drain, the
-    // `_reconcilePrCache` helper clears the per-exercise pr_cache box so
-    // subsequent offline `detectPRs` re-fetches via the user-keyed bag.
+    // After a successful upsertRecords drain, `_reconcilePrCache`
+    // invalidates `prCacheBootstrapProvider` so the next consumer read
+    // re-seeds from server truth. This replaces the pre-fix `clearBox`
+    // contract (Family 1A — AW-EX-E-US1-03 amplifier) with a strictly
+    // more conservative behaviour: existing per-exercise entries remain
+    // serviceable until the rebuild fetches fresh data.
     // ------------------------------------------------------------------
     test(
-      'BUG-006: PR cache box is cleared after upsertRecords reconcile',
+      'reconcile invalidates prCacheBootstrapProvider after upsertRecords drain',
       () async {
-        final mockCache = _MockCacheService();
-        when(() => mockCache.clearBox(any())).thenAnswer((_) async {});
+        var bootstrapBuilds = 0;
 
         final container = ProviderContainer(
           overrides: [
@@ -1731,11 +1789,19 @@ void main() {
             workoutRepositoryProvider.overrideWithValue(mockWorkoutRepo),
             prRepositoryProvider.overrideWithValue(mockPRRepo),
             analyticsRepositoryProvider.overrideWithValue(mockAnalyticsRepo),
-            cacheServiceProvider.overrideWithValue(mockCache),
+            prCacheBootstrapProvider.overrideWith((ref) async {
+              bootstrapBuilds++;
+            }),
           ],
         );
         addTearDown(container.dispose);
         container.listen(syncServiceProvider, (_, _) {});
+        container.listen(
+          prCacheBootstrapProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        final initialBuilds = bootstrapBuilds;
 
         final notifier = container.read(pendingSyncProvider.notifier);
         await notifier.enqueue(
@@ -1751,9 +1817,12 @@ void main() {
 
         connectivityController.add(true);
         await _pumpAsync(200);
+        container.read(prCacheBootstrapProvider);
+        await _pumpAsync(50);
 
-        // The pr_cache box must have been cleared exactly once.
-        verify(() => mockCache.clearBox(HiveService.prCache)).called(1);
+        // The bootstrap rebuilt at least once after the drain — proof
+        // that `_reconcilePrCache` invalidated it.
+        expect(bootstrapBuilds, greaterThan(initialBuilds));
         expect(container.read(pendingSyncProvider), 0);
       },
     );
