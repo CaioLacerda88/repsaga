@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 8 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179.
+**Resolved so far:** 11 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings reclassified with regression guards).
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -108,18 +108,22 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 - `lib/features/workouts/ui/active_workout_app_bar_title.dart` — add reorder toggle identifier.
 - Tests: widget tests asserting Semantics labels present; e2e selectors test confirming AOM nodes appear.
 
-### Family 4 — Tap targets ≥ Material 48dp (MAJOR-MINOR)
+### Family 4 — Tap targets ≥ Material 48dp — ✅ RESOLVED in PR #181
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-A-BR1-01 | M | A | Done-mark 32×32 (PR #160 missed it) |
-| AW-EX-A-BR1-02 | m | A | Add Set 40-tall (8dp short) |
-| AW-EX-F-BR1-09 | m | F | Dialog `TextButton` actions at default 36dp (systemic across finish/discard/weight/reps/remove dialogs + SnackBar undo) |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-A-BR1-01 | M | A | Done-mark 32×32 (PR #160 missed it) | ✅ resolved (PR #181) |
+| AW-EX-A-BR1-02 | m | A | Add Set 40-tall (8dp short) | ✅ STALE — Charter A's Playwright `boundingBox()` measurement error; `tester.getSize` reports 300×48 dp pre-fix. Regression-guard test added (PR #181) |
+| AW-EX-F-BR1-09 | m | F | Dialog `TextButton` actions at default 36dp | ✅ LARGELY STALE — Material 3's `MaterialTapTargetSize.padded` already inflates hit-test rects to 48dp. `dialogTextButtonStyle` shipped as defense-in-depth + regression guard (PR #181) |
 
-**Proposed PR cluster: `fix(workouts)/tap-targets-48dp`** — low-medium effort (~2h)
-- Done-mark + Add Set: increase wrapper size to ≥48×48dp on smallest viewport.
-- Dialog actions: introduce a project-wide `dialogTextButtonStyle` with `minimumSize: Size(64, 48)` applied across all `AlertDialog`s in the active-workout flow.
-- Tests: widget tests measuring boundingBox of each interactive on a 360-wide test viewport.
+**Family 4 shipped (PR #181):**
+- **Real fix:** done-mark cell wrapped in outer `SizedBox(40, 48)` + `GestureDetector(behavior: HitTestBehavior.deferToChild, excludeFromSemantics: true)`. Visual ◆/✓ stays 32×32; only the hit-test box grows. Inner Semantics retains the `workout-set-done` / `workout-set-completed` AOM identifiers and tap action.
+- **Defense-in-depth:** new shared `dialogTextButtonStyle` (`minimumSize: Size(64, 48)`) + `dialogFilledButtonStyle` companion in `lib/core/theme/dialog_button_style.dart`. Applied across the 5 active-workout dialogs (Finish, Discard, Weight stepper input, Reps stepper input, Remove exercise). The 48dp floor is now structural at each call site — robust to future theme-level `materialTapTargetSize: shrinkWrap` changes.
+- **Tests:** 10 new widget tests using `tester.getSize` on a 360-wide viewport — 2 done-cell hit-area + 1 inner-visual-stays-32×32 + 1 Add Set regression guard + 4 dialog-action regression guards + 2 gesture-arena single-fire pins (Round 2) + 1 shrinkWrap-defense-in-depth pin (Round 2).
+- **Methodology insight saved as memory:** future tap-target audits should verify with `tester.getSize` (the authoritative RenderBox measure), not Playwright `boundingBox()` or source `minimumSize` constants — both miss Flutter's `MaterialTapTargetSize.padded` inflation. Two of three Family 4 bugs were stale measurement errors.
+- **Reviewer's gesture-arena double-fire claim** was empirically wrong (Flutter's `GestureArena.sweep` accepts only the first member when competing recognizers are pure `onTap`). The `deferToChild` flip is structural defense against future refactors that add competing non-tap recognizers, NOT a runtime bug fix today. Honestly framed in code comments.
+
+**SnackBarAction (Undo)** deliberately untouched: no `style` param exposed, and Material default already gives ≥48dp via the same mechanism. Wrapping in a custom widget for parity not justified.
 
 ### Family 5 — Connectivity / sync drain on Flutter Web (MAJOR, architectural)
 
