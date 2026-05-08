@@ -288,6 +288,56 @@ void main() {
       });
     });
 
+    group('tap-through prevention', () {
+      // Structural pin for the outer scrim's `HitTestBehavior.opaque`. A
+      // behavioral test would be misleading here — `Material` absorbs
+      // hit-tests at the render level in the widget-test environment, so a
+      // tap-propagation assertion would pass with or without the production
+      // fix. Pinning the property structurally is the load-bearing test;
+      // the dismissal contract is covered by the existing 'interactions'
+      // group above.
+
+      testWidgets(
+        'outer scrim GestureDetector declares HitTestBehavior.opaque',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          // The widget tree contains exactly two GestureDetectors:
+          //   - the outer scrim-dismiss detector (L49)
+          //   - the inner control-row detector (L108) which is already opaque
+          // The outer is the topmost GestureDetector; the inner is its
+          // descendant. Assert ALL GestureDetectors in the overlay declare
+          // opaque hit-testing — the outer for tap-through prevention, the
+          // inner so button taps don't bubble to the dismiss handler.
+          final detectors = tester
+              .widgetList<GestureDetector>(find.byType(GestureDetector))
+              .toList();
+
+          expect(
+            detectors,
+            isNotEmpty,
+            reason:
+                'RestTimerOverlay must contain at least one GestureDetector',
+          );
+          for (final d in detectors) {
+            expect(
+              d.behavior,
+              HitTestBehavior.opaque,
+              reason:
+                  'RestTimerOverlay GestureDetectors must use '
+                  'HitTestBehavior.opaque to block tap propagation to widgets '
+                  'painted beneath the scrim',
+            );
+          }
+        },
+      );
+    });
+
     group('accessibility', () {
       testWidgets(
         'overlay has semantics label containing remaining time for screen readers',

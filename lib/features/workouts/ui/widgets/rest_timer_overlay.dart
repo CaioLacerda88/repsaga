@@ -47,7 +47,11 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
     final timeText = '$minutes:${seconds.toString().padLeft(2, '0')}';
 
     return GestureDetector(
-      // Tap outside the controls to dismiss (UX-U09).
+      // `HitTestBehavior.opaque` prevents taps from propagating to widgets
+      // beneath the scrim. Without it, dismissing the timer also fires the
+      // handler of whatever is under the tap point. Symmetric with the
+      // inner control-row detector below.
+      behavior: HitTestBehavior.opaque,
       onTap: () => ref.read(restTimerProvider.notifier).stop(),
       child: Material(
         // Full-screen rest-timer scrim. abyss (#0D0319) at ~87% alpha — dark
