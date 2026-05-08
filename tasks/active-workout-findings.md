@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 12 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards).
+**Resolved so far:** 13 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards) + Family 7 in PR #185 (postFrameCallback ordering race in finish flow).
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -58,7 +58,7 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 | AW-EX-D-US1-03 | M | D | HTTP 500 silently queued as "offline"; user sees no error | ✅ resolved (PR #179, Family 1B) |
 | AW-EX-D-US1-04 | M | D | No loading overlay when save hangs; ~2s timeout falls through to queue | ✅ resolved (PR #179, Family 1B) |
 | AW-EX-E-US1-02 | M | E | Code-confirmed: single `catch (e)` in `finishWorkout`; `isTerminal()` not at enqueue | ✅ resolved (PR #179, Family 1B) |
-| AW-EX-D-US1-02 | M | D | Real PR celebration missing post-finish (caused by D-01 cache pollution) | ⏳ medium-high confidence dissolved post-1A — Family 7 Playwright re-probe pending |
+| AW-EX-D-US1-02 | M | D | Real PR celebration missing post-finish | ✅ resolved (PR #185, Family 7) |
 
 **Family 1A shipped (PR #177):**
 - `prCacheBootstrapProvider` (new) seeds prCache from DB at session start AND on every auth transition (auth-reactive via `authStateProvider.future`).
@@ -154,16 +154,17 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 - Set-type abbreviation: pick canonical convention (the localized one is already populated; rip out the hardcoded `tinyAbbr`). Triage decision: which screen is "wrong"? Expectation is that BOTH screens show the SAME abbreviation per-locale.
 - Tests: pt-BR locale golden / unit test for `_generateWorkoutName` returning `"Treino — Qua 7 mai"`.
 
-### Family 7 — Saga intro vs post-finish PR celebration race (MAJOR)
+### Family 7 — postFrameCallback ordering race in finish flow — ✅ RESOLVED in PR #185
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-D-US1-02 | M | D | After a false-PR pollution event, real PR celebration is replaced by Saga intro overlay |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-D-US1-02 | M | D | Real PR celebration missing post-finish | ✅ resolved (PR #185) |
 
-**Proposed PR cluster: `fix(rpg)/saga-intro-defer-to-celebration`** — medium effort (~3h)
-- May overlap with Family 1 (PR cache integrity) — solving D-01 might dissolve D-02. **Re-evaluate after Family 1 ships.**
-- If still present: `lib/features/rpg/ui/saga_intro_gate.dart` should defer presentation when `/pr-celebration` is the next intended route. The existing `SagaIntroSequencer.waitForIntroDismissed()` is the seam for this.
-- Test: e2e pinning the "first PR after first workout → celebration plays first, intro plays after celebration" sequence.
+Original Charter D framing speculated this was a Saga intro race. Live re-probe (PR #185) showed the bug was a postFrameCallback ordering race in `FinishWorkoutCoordinator`: `_isFinishHandled = false` was released BEFORE `navigateAfterFinish` had a chance to push `/pr-celebration`, then `ActiveWorkoutScreen`'s own postFrameCallback fired AFTER `navigateAfterFinish`'s postFrame in the same frame and called `context.go('/home')` — last-write-wins on GoRouter clobbered the PR celebration route.
+
+**Fix shipped (PR #185):** defer `_isFinishHandled = false` release across 2 frames via chained `addPostFrameCallback`. Flag stays `true` through frame N+1's full postFrame phase, releases at end of frame N+2 — by which time the active-workout screen has unmounted via the route change. Tests: 1 E2E regression (`personal-records.spec.ts:584`) + 1 unit reproducer (`active_workout_notifier_test.dart` AW-EX-D-US1-02 group, with `_StatefulFakeCache` JSON-encoding to mirror Hive).
+
+**Why the data-flow hypotheses were wrong:** unit reproducer with real `PRDetectionService` PASSES — proving PR detection itself works correctly. Bug is in UI navigation choreography, not data flow.
 
 ### Family 8 — Disabled-state visual ≠ actual handler — ✅ STALE (PR #183)
 

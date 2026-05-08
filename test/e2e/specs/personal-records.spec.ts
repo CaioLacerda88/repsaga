@@ -24,7 +24,7 @@ import {
   finishWorkout,
 } from '../helpers/workout';
 import { getUser } from '../fixtures/worker-users';
-import { SEED_EXERCISES } from '../fixtures/test-exercises';
+import { EXERCISE_NAMES, SEED_EXERCISES } from '../fixtures/test-exercises';
 
 // The weight x reps pattern: "100 kg x 5" or "20 kg x 3".
 // The x character is U+00D7 (MULTIPLICATION SIGN), which is what _formatValue uses.
@@ -554,5 +554,68 @@ test.describe('Personal records', () => {
     // Note: The "RECENT RECORDS" section was designed but never implemented in
     // HomeScreen. The PR detection itself is validated above by the celebration
     // screen appearing after the second workout.
+  });
+
+  // ---------------------------------------------------------------------------
+  // AW-EX-D-US1-02 regression guard (Family 7 re-probe, PR #179 deferred)
+  //
+  // Context: Charter D B2 observed that a genuine new-PR workout navigated to
+  // /home instead of /pr-celebration when the Saga intro overlay was also
+  // active. The static analysis in Family 7 concluded the root cause was
+  // Family 1 (AW-EX-D-US1-01): an empty prCache meant `prResult.hasNewRecords`
+  // was false, so post_workout_navigator routed to /home (+ saga intro rendered
+  // over it). The Saga intro overlay never blocked the PR navigation — it only
+  // blocks CelebrationPlayer.play() via SagaIntroSequencer, which runs AFTER
+  // navigateAfterFinish() selects the target route.
+  //
+  // Family 1A fix (PR #177): prCacheBootstrapProvider eagerly seeds per-exercise
+  // Hive cache entries from the full user PR history at shell mount. With a
+  // populated cache, `prDetectionService.detectPRs()` now correctly returns
+  // `hasNewRecords = true` when the new workout beats the seeded baseline —
+  // dissolving B2.
+  //
+  // This test pins the B2 contract deterministically:
+  //   Workout A (50 kg × 8, Romanian Deadlift) → seeds baseline in Hive
+  //   Workout B (70 kg × 8, same exercise)     → must navigate to /pr-celebration
+  //
+  // Uses Romanian Deadlift to be independent of the other fullPR tests which
+  // accumulate Bench Press / Squat / Overhead Press / Leg Press history.
+  //
+  // Not tagged @smoke — two-workout sequence with `test.slow()` (triple
+  // timeout) is too slow for the CI smoke gate, which is meant to be a
+  // fast first-pass signal. The full regression suite covers this test on
+  // every PR, which is the appropriate gate for a multi-workout flow guard.
+  // ---------------------------------------------------------------------------
+  test('should navigate to /pr-celebration after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
+    page,
+  }) => {
+    // This test runs two full workouts in sequence plus the post-workout
+    // celebration / overlay chain — triple the default timeout for headroom.
+    test.slow();
+
+    // Workout A — establishes the Romanian Deadlift baseline (50 kg × 8).
+    // After finish, accept any outcome (could be first-workout heading or
+    // navigation straight to home). Romanian Deadlift starts with no seeded
+    // history for fullPR, so workout A itself may trigger a first-workout PR.
+    await doWorkout(page, EXERCISE_NAMES.romanian_deadlift.en, '50', '8');
+    await dismissCelebrationIfPresent(page);
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    // Workout B — 70 kg × 8 beats the 50 kg × 8 baseline on weight.
+    // With prCacheBootstrapProvider seeding the cache on shell mount,
+    // `prDetectionService.detectPRs()` now has the 50 kg × 8 baseline in Hive.
+    // The 70 kg set is strictly greater → `prResult.hasNewRecords == true` →
+    // `post_workout_navigator` must navigate to /pr-celebration.
+    await doWorkout(page, EXERCISE_NAMES.romanian_deadlift.en, '70', '8');
+
+    // Assert we reach /pr-celebration. This is the core regression contract.
+    // waitForURL is immune to ScaleTransition animation — fires as soon as the
+    // route is pushed, regardless of widget animation state.
+    await page.waitForURL('**/pr-celebration**', { timeout: 20_000 });
+    await expect(page.locator(PR.continueButton)).toBeVisible({ timeout: 10_000 });
+
+    // Clean up: dismiss the celebration so subsequent tests start from /home.
+    await page.click(PR.continueButton);
+    await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
   });
 });

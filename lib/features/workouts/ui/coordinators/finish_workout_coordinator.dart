@@ -232,25 +232,101 @@ class FinishWorkoutCoordinator {
         }
       }
 
-      // Release navigation ownership right before the final transition so
-      // any Riverpod-triggered postFrameCallback that fires after context.go
-      // does not double-navigate (the screen is leaving anyway).
-      _isFinishHandled = false;
+      if (!rootContext.mounted) {
+        // Process is being torn down; the finally block will clear
+        // `_isFinishing`. `_isFinishHandled` stays `true` for the screen's
+        // remaining lifetime, which is harmless — the screen is already
+        // unmounting along with the rest of the route.
+        return;
+      }
 
-      if (!rootContext.mounted) return;
+      // AW-EX-D-US1-02 + offline path (Family 7 round 3):
+      // For an offline finish the workout itself has not committed to the
+      // server — only the local queue. Routing to `/pr-celebration` for
+      // queued data would surface a "NEW PR" celebration for a workout that
+      // does not yet exist on the server, which is misleading from a trust
+      // standpoint and breaks the pre-existing user contract pinned by the
+      // OFFLINE-001/002/005/007 E2E tests (offline finish always lands on
+      // /home).
+      //
+      // Pre-Family-7, this contract was held implicitly by a postFrame race:
+      // the active-workout screen's home-redirect callback would clobber
+      // `navigateAfterFinish`'s `/pr-celebration` push because both ran in
+      // the same frame's postFrame phase and `go()` is last-write-wins. The
+      // Family 7 fix correctly removed that race by deferring the
+      // `_isFinishHandled` release across two frames — but doing so also
+      // removed the implicit guarantee.
+      //
+      // Make the contract explicit at the coordinator: when
+      // `wasSavedOffline == true`, suppress the PR-celebration branch by
+      // passing `prResult: null`. The navigator's default branch
+      // (`rootContext.go('/home')`) then handles offline correctly. The
+      // PR cache invalidations above (lines 185-189) still happen — those
+      // are about cache reconciliation (the PR upsert may have committed
+      // independently of the workout), not navigation.
+      final navigationPrResult = wasSavedOffline ? null : prResult;
 
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
         userTappedOverflow: userTappedOverflow,
-        prResult: prResult,
+        prResult: navigationPrResult,
         exerciseNames: exerciseNames,
         shouldPrompt: shouldPrompt,
         routineId: routineId,
         routineName: routineName,
       );
+
+      // AW-EX-D-US1-02 fix: defer the navigation-ownership release by two
+      // frames so the active-workout screen's pending postFrameCallback —
+      // which checks `_isFinishHandled` at FIRE time — sees `true` and
+      // yields instead of clobbering navigateAfterFinish's
+      // `go('/pr-celebration')` with `go('/home')`.
+      //
+      // Race timeline (without this guard):
+      //   Frame N+1 build:  ActiveWorkoutScreen sees displayState == null
+      //                     and registers a "context.go('/home')" postFrame.
+      //   Frame N+1 postFrame phase (FIFO):
+      //     1. navigateAfterFinish callback (registered between frames)
+      //        → rootContext.go('/pr-celebration')  ✓
+      //     2. screen callback (registered DURING build)
+      //        → checks _isFinishHandled → if false, context.go('/home')  ✗
+      //   Result: /home wins because go() is last-write-wins.
+      //
+      // Releasing inside an outer postFrameCallback ensures the flag stays
+      // `true` throughout frame N+1's postFrame phase, then is released at
+      // the end of frame N+2 when the active-workout screen has already
+      // unmounted (route changed). The early release at the top of this
+      // method (before navigateAfterFinish) and the redundant release in
+      // the `finally` block were both removed — the deferred release is
+      // the single owner of the lifecycle. The `finally` only resets
+      // `_isFinishing`. `_isFinishHandled` is NOT reset in `finally` —
+      // on exception paths (e.g. `navigateAfterFinish` throws synchronously,
+      // which it shouldn't in production) the flag stays `true` for the
+      // screen's lifetime. That's harmless because `_isFinishing` is
+      // cleared and the next retry call re-arms the flag normally at
+      // line 146.
+      //
+      // The secondary safety net for late rebuilds is `context.mounted` at
+      // the call site in `active_workout_screen.dart:75`: once the route
+      // has changed, the screen's context is no longer mounted and any
+      // late postFrameCallback (e.g. one Riverpod schedules after the
+      // deferred release fires) returns immediately without calling
+      // `context.go('/home')`.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _isFinishHandled = false;
+        });
+      });
     } finally {
-      _isFinishHandled = false;
       _isFinishing = false;
+      // _isFinishHandled is normally released via the deferred postFrame
+      // chain above. We do NOT reset it here on the happy path because
+      // doing so would re-open the AW-EX-D-US1-02 race. If navigateAfterFinish
+      // somehow throws synchronously (it never does in the production code
+      // — it just registers a callback), the deferred release never fires
+      // and the flag stays `true` for the rest of the screen's lifetime —
+      // which is harmless because `_isFinishing` is also still cleared
+      // here, allowing a subsequent finish to fire and re-set both flags.
     }
   }
 }
