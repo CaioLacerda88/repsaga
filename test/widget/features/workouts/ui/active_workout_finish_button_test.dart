@@ -415,4 +415,214 @@ void main() {
       },
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // AW-EX-C-BR1-03 disabled-state contract pin (Family 8).
+  //
+  // Charter C BR-1 reported the Finish button was tappable (and opened the
+  // FinishWorkoutDialog) when the workout had zero completed sets, despite
+  // rendering at 30% alpha. Static analysis says `finish_bottom_bar.dart:74`
+  // already wires `onPressed: enabled ? onPressed : null`, and
+  // `active_workout_screen.dart:271` passes `enabled: _hasCompletedSet`, where
+  // `_hasCompletedSet` walks `widget.state.exercises[*].sets[*].isCompleted`.
+  //
+  // These pins reproduce both no-completed-set scenarios and assert the
+  // FilledButton's `onPressed` is null, the FinishBottomBar.enabled is false,
+  // and tapping it does NOT open the FinishWorkoutDialog. This is the contract
+  // — if it ever flips back, this test fires before E2E.
+  //
+  // Charter C BR-1 P11 (Playwright, Web) observed the dialog opening; root
+  // cause is unconfirmed (most plausible: stale Hive-resumed completed-set
+  // state). These tests pin the Flutter-engine contract; the Playwright/Web
+  // path was not separately reproduced.
+  //
+  // CONTRACT BOUNDARY (not CI-pinned, see Warning 3 follow-up): the `enabled`
+  // flag MUST derive from live traversal of
+  // `state.exercises[*].sets[*].isCompleted` — any cached/persisted count
+  // field on `ActiveWorkoutState` (e.g. `completedSetsCount`) wired into the
+  // gate would be a regression. The current 3 tests inject
+  // `ActiveWorkoutState` directly and bypass the notifier's Hive
+  // deserialization path, so the Hive-resume boundary is documented here but
+  // not exercised by CI.
+  // ---------------------------------------------------------------------------
+  group('AW-EX-C-BR1-03: Finish button disabled state', () {
+    testWidgets('finish button is non-tappable when exercise has zero sets', (
+      tester,
+    ) async {
+      // Charter C ran on BR-1 (360×780). Pin the same surface so any
+      // narrow-width layout overflow that could hide hit-test geometry is
+      // exercised here, not only on the default 800×600 desktop canvas.
+      await tester.binding.setSurfaceSize(const Size(360, 780));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      // Direct repro of `addExercise` path: notifier creates the exercise
+      // with `sets: const []` (active_workout_notifier.dart:300), so the
+      // first instant after the picker resolves the workout has one
+      // exercise + zero sets total.
+      final state = _makeStateWithSets(const []);
+
+      await tester.pumpWidget(_buildScreen(state));
+      await tester.pump();
+      await tester.pump();
+
+      // Locate the FilledButton inside the workout-finish-btn Semantics.
+      final finishButton = find.descendant(
+        of: find.byWidgetPredicate(
+          (w) =>
+              w is Semantics && w.properties.identifier == 'workout-finish-btn',
+        ),
+        matching: find.byType(FilledButton),
+      );
+      expect(
+        finishButton,
+        findsOneWidget,
+        reason:
+            'Finish bar must still RENDER with zero completed sets — per '
+            'spec §5.5 the disabled state is "visible but disabled", not '
+            '"hidden".',
+      );
+
+      // Flutter\'s canonical disabled signal: FilledButton.onPressed == null.
+      // This is what Material maps to aria-disabled in the AOM.
+      final btn = tester.widget<FilledButton>(finishButton);
+      expect(
+        btn.onPressed,
+        isNull,
+        reason:
+            'AW-EX-C-BR1-03 contract: with zero completed sets, the '
+            'FilledButton.onPressed MUST be null. The wiring is '
+            'active_workout_screen.dart `enabled: _hasCompletedSet` → '
+            'finish_bottom_bar.dart `onPressed: enabled ? onPressed : null`. '
+            'If onPressed is non-null here, the disabled-state contract has '
+            'regressed.',
+      );
+
+      // Behavioural guard: even if a future refactor accidentally re-enables
+      // tap (e.g. wraps in a GestureDetector), tapping must NOT open the
+      // FinishWorkoutDialog.
+      // warnIfMissed: false — disabled FilledButton (onPressed: null) does
+      // not participate in hit-testing; the tap intentionally misses and
+      // that is the behaviour under test.
+      await tester.tap(finishButton, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byType(AlertDialog),
+        findsNothing,
+        reason:
+            'Tapping the disabled Finish button must not open the '
+            'FinishWorkoutDialog. Charter C BR-1 observed this happening '
+            'on Web — the test pins it can never regress.',
+      );
+    });
+
+    testWidgets(
+      'finish button is non-tappable when sets exist but none are completed',
+      (tester) async {
+        // Charter C ran on BR-1 (360×780). Pin the same surface so any
+        // narrow-width layout overflow that could hide hit-test geometry is
+        // exercised here, not only on the default 800×600 desktop canvas.
+        await tester.binding.setSurfaceSize(const Size(360, 780));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        // Charter C BR-1 P11 exact repro: picker auto-adds one set, user has
+        // not tapped the done-mark, so `sets: [oneIncompleteSet]`.
+        final state = _makeStateWithSets([
+          _makeSet(setNumber: 1, isCompleted: false),
+        ]);
+
+        await tester.pumpWidget(_buildScreen(state));
+        await tester.pump();
+        await tester.pump();
+
+        final finishButton = find.descendant(
+          of: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'workout-finish-btn',
+          ),
+          matching: find.byType(FilledButton),
+        );
+        expect(finishButton, findsOneWidget);
+
+        final btn = tester.widget<FilledButton>(finishButton);
+        expect(
+          btn.onPressed,
+          isNull,
+          reason:
+              'AW-EX-C-BR1-03 contract (Charter C P11 repro): one exercise + '
+              'one incomplete set must leave FilledButton.onPressed == null. '
+              'If this fires, the disabled-tap-handler bug from Charter C is '
+              'real and must be fixed in finish_bottom_bar.dart or '
+              'active_workout_screen.dart.',
+        );
+
+        // warnIfMissed: false — disabled FilledButton (onPressed: null) does
+        // not participate in hit-testing; the tap intentionally misses and
+        // that is the behaviour under test.
+        await tester.tap(finishButton, warnIfMissed: false);
+        await tester.pump();
+        await tester.pump();
+        expect(
+          find.byType(AlertDialog),
+          findsNothing,
+          reason:
+              'AW-EX-C-BR1-03: tapping Finish with no completed sets must NOT '
+              'open the FinishWorkoutDialog (the visual 30% alpha and the '
+              'behavioural disable must agree).',
+        );
+      },
+    );
+
+    testWidgets(
+      'finish button enables exactly when at least one set is completed',
+      (tester) async {
+        // Boundary contract: the gate flips on the FIRST completed set, not on
+        // any other condition (set count, exercise count, weight > 0, etc.).
+        // Two-set state with only one completed asserts the gate logic is
+        // `any(isCompleted)`, not `all(isCompleted)` or similar.
+        final state = _makeStateWithSets([
+          _makeSet(setNumber: 1, isCompleted: false),
+          _makeSet(setNumber: 2, isCompleted: true),
+        ]);
+
+        await tester.pumpWidget(_buildScreen(state));
+        await tester.pump();
+        await tester.pump();
+
+        final finishButton = find.descendant(
+          of: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'workout-finish-btn',
+          ),
+          matching: find.byType(FilledButton),
+        );
+        final btn = tester.widget<FilledButton>(finishButton);
+        expect(
+          btn.onPressed,
+          isNotNull,
+          reason:
+              'Gate logic is `_hasCompletedSet = exercises.any(sets.any(s => '
+              's.isCompleted))`. With at least one completed set, '
+              'FilledButton.onPressed must be non-null.',
+        );
+
+        // Symmetric behavioural guard for the enabled side: `onPressed
+        // isNotNull` alone would silently pass if a future regression wired
+        // `onPressed` to a no-op `() {}`. Tapping the enabled Finish button
+        // MUST open the FinishWorkoutDialog.
+        await tester.tap(finishButton);
+        await tester.pumpAndSettle();
+        expect(
+          find.byType(AlertDialog),
+          findsOneWidget,
+          reason:
+              'enabled Finish button must open the FinishWorkoutDialog on '
+              'tap — pins that `onPressed` is wired to the dialog handler, '
+              'not a no-op closure.',
+        );
+      },
+    );
+  });
 }
