@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 11 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings reclassified with regression guards).
+**Resolved so far:** 12 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards).
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -165,17 +165,19 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 - If still present: `lib/features/rpg/ui/saga_intro_gate.dart` should defer presentation when `/pr-celebration` is the next intended route. The existing `SagaIntroSequencer.waitForIntroDismissed()` is the seam for this.
 - Test: e2e pinning the "first PR after first workout → celebration plays first, intro plays after celebration" sequence.
 
-### Family 8 — Disabled-state visual ≠ actual handler (MAJOR, needs-investigation)
+### Family 8 — Disabled-state visual ≠ actual handler — ✅ STALE (PR #183)
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-C-BR1-03 | M | C | Finish button at 30% alpha but tappable with 0 completed sets — opens FinishWorkoutDialog |
-| AW-EX-F-BR1-07 | note | F | Code review: `FinishBottomBar:74` correctly uses `onPressed: enabled ? onPressed : null` — disabled state is wired |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-C-BR1-03 | M | C | Finish button at 30% alpha but tappable with 0 completed sets | ✅ STALE — widget tests show `onPressed: null` correctly when no sets complete; tap doesn't open the dialog at the Flutter layer (PR #183) |
+| AW-EX-F-BR1-07 | note | F | Code review: `FinishBottomBar:74` correctly uses `onPressed: enabled ? onPressed : null` | ✅ Confirmed correct — Family 8 investigation validated this conclusion |
 
-**Proposed action: investigate before opening PR.**
-- Charter C found the bug; Charter F's code reading suggests the wiring is correct. Likely: the `_hasCompletedSet` flag is computed wrong upstream, OR a different callsite (the button might fire on Pulse / Enter key instead of tap).
-- Dispatch a tech-lead investigation: reproduce on the fresh Charter C user state, identify whether `enabled` arrives true at the button or false-but-still-clickable.
-- Once root cause is known, this folds into either Family 4 (tap target / interaction) or becomes its own micro-PR.
+**Family 8 shipped (PR #183) — investigation pass, NO production code changed:**
+- TDD investigation: 3 widget tests pumping `ActiveWorkoutScreen` with various set-completion states. **All passed pre-fix.** The wiring at `finish_bottom_bar.dart:74` (`onPressed: enabled ? onPressed : null`) and `active_workout_screen.dart:271` (`enabled: _hasCompletedSet`) correctly produces `FilledButton.onPressed == null` when no sets are completed, and `tester.tap` does NOT open the FinishWorkoutDialog.
+- Tests use Charter C's exact device viewport (360×780) for the disabled-side repros.
+- Group doc-comment block documents the contract boundary explicitly: "the `enabled` flag MUST derive from live traversal of `state.exercises[*].sets[*].isCompleted` — any cached/persisted count field would be a regression." (Documented-but-not-CI-pinned for the Hive-deserialization boundary; future hardening opportunity.)
+- **What Charter C likely saw:** the widget test rules out the Flutter-engine tap path. It does NOT rule out Playwright Web's `click()` synthesis behavior (focus + Enter on a button with non-null `onPressed`) or stale Hive-resumed completed-set state from the `fullWorkout` worker-scoped seed user (Charter C didn't verify `state.completedSetsCount == 0` before tapping). The Hive-resume hypothesis is the most plausible.
+- 3 regression-guard tests + behavioral symmetry on the enabled side ensure the disabled-state contract stays load-bearing across future refactors.
 
 ### Family 9 — Web-specific edge cases (LOW priority)
 
