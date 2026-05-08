@@ -233,7 +233,10 @@ class FinishWorkoutCoordinator {
       }
 
       if (!rootContext.mounted) {
-        // Process is being torn down; finally block will release the flag.
+        // Process is being torn down; the finally block will clear
+        // `_isFinishing`. `_isFinishHandled` stays `true` for the screen's
+        // remaining lifetime, which is harmless — the screen is already
+        // unmounting along with the rest of the route.
         return;
       }
 
@@ -269,10 +272,20 @@ class FinishWorkoutCoordinator {
       // unmounted (route changed). The early release at the top of this
       // method (before navigateAfterFinish) and the redundant release in
       // the `finally` block were both removed — the deferred release is
-      // the single owner of the lifecycle. The `finally` retains the
-      // `_isFinishing = false` reset (re-entrance guard) and re-asserts
-      // `_isFinishHandled = false` only as a safety net for paths that
-      // never reach here (e.g. `navigateAfterFinish` throws).
+      // the single owner of the lifecycle. The `finally` only resets
+      // `_isFinishing`. `_isFinishHandled` is NOT reset in `finally` —
+      // on exception paths (e.g. `navigateAfterFinish` throws synchronously,
+      // which it shouldn't in production) the flag stays `true` for the
+      // screen's lifetime. That's harmless because `_isFinishing` is
+      // cleared and the next retry call re-arms the flag normally at
+      // line 146.
+      //
+      // The secondary safety net for late rebuilds is `context.mounted` at
+      // the call site in `active_workout_screen.dart:75`: once the route
+      // has changed, the screen's context is no longer mounted and any
+      // late postFrameCallback (e.g. one Riverpod schedules after the
+      // deferred release fires) returns immediately without calling
+      // `context.go('/home')`.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _isFinishHandled = false;

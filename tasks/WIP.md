@@ -80,4 +80,40 @@ URL after `finishWorkout()` returns with `prResult.hasNewRecords = true`.
 - [x] All E2E + unit suites pass
 - [x] All diagnostic prints removed
 
+**Round 2 review fixes (6 findings, all in this cycle):**
+- [x] Critical 1 — `tasks/active-workout-findings.md`: master table row AW-EX-D-US1-02
+      flipped from "⏳ pending re-probe" to "✅ resolved (PR #185, Family 7)";
+      Family 7 section rewritten end-to-end (no more Saga intro framing — now
+      reflects the postFrameCallback ordering race + actual fix); running tally
+      bumped 12 → 13 with PR #185 entry added.
+- [x] Critical 2 — `finish_workout_coordinator.dart` block comment around the
+      deferred-release: removed the false claim that `finally` re-asserts
+      `_isFinishHandled = false`; replaced with truthful description of what
+      `finally` actually does (resets only `_isFinishing`; on exception paths
+      `_isFinishHandled` stays `true` for the screen lifetime — harmless).
+- [x] Warning 1 — same block comment now documents `context.mounted` at
+      `active_workout_screen.dart:75` as the secondary safety net for late
+      Riverpod-triggered rebuilds firing AFTER the deferred release.
+- [x] Warning 2 — `finish_workout_coordinator.dart:236` stale comment fixed:
+      was "finally block will release the flag", now correctly states finally
+      clears only `_isFinishing` and `_isFinishHandled` stays `true` (harmless).
+- [x] Warning 3 — `active_workout_notifier_test.dart` AW-EX-D-US1-02 reproducer:
+      added `verify(() => mockPRRepo.getRecordsForExercises(any())).called(1)`
+      after the workout-B assertions. (Reviewer's `verifyNever` proposal would
+      have failed: workout A's first run is a legitimate cold-cache → DB call.
+      The cache-hit contract is "B doesn't call it" → "total calls stay at 1
+      across both workouts." Same intent, correct shape.) Pins the cache-hit
+      path explicitly; without it the test would silently pass on a workout-B
+      cache miss because the DB stub returns empty (workout A's PR re-detected
+      against empty baseline).
+- [x] Warning 4 — `personal-records.spec.ts:584` regression guard: documented
+      why it's NOT tagged `@smoke` (two-workout sequence + `test.slow()` triple
+      timeout is too slow for the CI smoke gate; full regression suite covers
+      it on every PR).
+- [x] Suggestion (overlap with Warning 2) — addressed by Warning 2's fix.
+- [x] `dart format .` clean
+- [x] `dart analyze --fatal-infos` clean
+- [x] Full unit/widget suite green; AW-EX-D-US1-02 unit reproducer still
+      passes with the new `verifyNever` assertion.
+
 ---

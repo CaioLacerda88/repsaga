@@ -580,6 +580,11 @@ test.describe('Personal records', () => {
   //
   // Uses Romanian Deadlift to be independent of the other fullPR tests which
   // accumulate Bench Press / Squat / Overhead Press / Leg Press history.
+  //
+  // Not tagged @smoke — two-workout sequence with `test.slow()` (triple
+  // timeout) is too slow for the CI smoke gate, which is meant to be a
+  // fast first-pass signal. The full regression suite covers this test on
+  // every PR, which is the appropriate gate for a multi-workout flow guard.
   // ---------------------------------------------------------------------------
   test('should navigate to /pr-celebration after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
     page,

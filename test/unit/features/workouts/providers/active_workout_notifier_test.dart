@@ -3683,6 +3683,18 @@ void main() {
             'in-memory cache fake confirms the bug repros at the '
             'unit level (no Hive/IndexedDB timing involved).',
       );
+
+      // Pin the cache-hit path explicitly. Workout A legitimately calls
+      // `getRecordsForExercises` once (cold cache → DB fallback returns
+      // empty map → first PR detection runs against empty baseline).
+      // Workout B MUST hit the cache that workout A's optimistic write
+      // seeded — so the call count stays at 1, not 2. Without this
+      // assertion the test would silently pass on a workout-B cache miss
+      // because the DB stub also returns empty (workout A's PR would be
+      // re-detected against an empty baseline → `hasNewRecords == true`
+      // for the wrong reason). This verification keeps that loophole
+      // closed.
+      verify(() => mockPRRepo.getRecordsForExercises(any())).called(1);
     });
   });
 }
