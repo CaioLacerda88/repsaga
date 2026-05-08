@@ -34,7 +34,17 @@ class PRRepository extends BaseRepository {
   /// Fetch personal records for a list of exercise IDs.
   ///
   /// Returns a map of exerciseId -> list of [PersonalRecord].
-  /// Uses read-through caching: returns cached data on network failure.
+  ///
+  /// **Cache fallback chain on network failure:**
+  ///   1. The exact subset key `'exercises:<sortedIds>'` (legacy hot path
+  ///      written by previous successful network calls with the same id set).
+  ///   2. Per-exercise-id keys `'exercises:<id>'` written by the bootstrap
+  ///      provider on session start (and by single-id reads via
+  ///      `exercisePRsProvider`). Assembling from these covers offline reads
+  ///      for any subset of the user's exercises without needing a precomputed
+  ///      multi-id entry — which is the contract that fixes
+  ///      AW-EX-D-US1-01 (the empty-cache → false-PR BLOCKER).
+  ///   3. Rethrow when neither cache shape can serve the request.
   Future<Map<String, List<PersonalRecord>>> getRecordsForExercises(
     List<String> exerciseIds,
   ) async {
@@ -83,7 +93,79 @@ class PRRepository extends BaseRepository {
       return fresh;
     } catch (e) {
       if (cached != null) return cached;
+      // Per-exercise fallback: assemble the result from individual
+      // `exercises:<id>` entries written by the bootstrap. Returns the
+      // partial map for whatever ids were cached; ids absent from the cache
+      // are simply omitted (the resolver treats missing keys as "no prior
+      // record" — first-ever-workout semantic).
+      final assembled = _readPerExerciseEntries(exerciseIds);
+      if (assembled.isNotEmpty) return assembled;
       rethrow;
+    }
+  }
+
+  /// Read per-exercise cache entries (`'exercises:<id>'`) and assemble a
+  /// `Map<exerciseId, records>` for the requested ids that have cached data.
+  ///
+  /// Returns an empty map when none of the requested ids are cached — callers
+  /// distinguish "cache miss → rethrow original error" from "partial hit →
+  /// serve what we have" via the emptiness check.
+  Map<String, List<PersonalRecord>> _readPerExerciseEntries(
+    List<String> exerciseIds,
+  ) {
+    final result = <String, List<PersonalRecord>>{};
+    for (final id in exerciseIds) {
+      final perKey = 'exercises:$id';
+      final entry = _cache.read<Map<String, List<PersonalRecord>>>(
+        HiveService.prCache,
+        perKey,
+        (json) {
+          final map = json as Map<String, dynamic>;
+          return map.map(
+            (k, v) => MapEntry(
+              k,
+              (v as List)
+                  .map(
+                    (e) => PersonalRecord.fromJson(e as Map<String, dynamic>),
+                  )
+                  .toList(),
+            ),
+          );
+        },
+      );
+      if (entry == null) continue;
+      final records = entry[id];
+      if (records != null) result[id] = records;
+    }
+    return result;
+  }
+
+  /// Seed the per-exercise prCache entries from a flat list of personal
+  /// records. Writes one cache entry per distinct `exerciseId` under the
+  /// canonical `'exercises:<id>'` key shape that
+  /// [getRecordsForExercises] reads on its per-exercise fallback path.
+  ///
+  /// Used by `prCacheBootstrapProvider` to warm the cache once at shell
+  /// mount so subsequent in-memory PR-display reads (per-exercise) and
+  /// finish-workout PR detection (multi-exercise via the per-exercise
+  /// fallback) have a correct baseline from the moment the app is ready.
+  ///
+  /// Idempotent: re-running with the same input overwrites the same entries.
+  Future<void> seedExerciseCacheEntries(List<PersonalRecord> records) async {
+    if (records.isEmpty) return;
+
+    final byExerciseId = <String, List<PersonalRecord>>{};
+    for (final record in records) {
+      (byExerciseId[record.exerciseId] ??= []).add(record);
+    }
+
+    // Sequential writes — Hive `put` is fast in-memory + lazy flush, and a
+    // user with thousands of PRs is the realistic upper bound. Parallelising
+    // would not measurably help and would obscure ordering for tests.
+    for (final entry in byExerciseId.entries) {
+      await _cache.write(HiveService.prCache, 'exercises:${entry.key}', {
+        entry.key: entry.value.map((r) => r.toJson()).toList(),
+      });
     }
   }
 
@@ -301,6 +383,20 @@ class PRRepository extends BaseRepository {
   ///
   /// Uses the unique constraint on (user_id, exercise_id, record_type) to
   /// update existing records or insert new ones.
+  ///
+  /// **Cache contract.** This method does NOT touch the prCache. Pre-AW-EX-E
+  /// it called `_cache.clearBox(HiveService.prCache)` here so the cache could
+  /// not serve stale data after a successful upsert — but that wipe ran
+  /// synchronously while the post-drain re-seed (via
+  /// `SyncService._reconcilePrCache` → `ref.invalidate(prCacheBootstrapProvider)`)
+  /// is asynchronous, leaving an empty-cache window in which the in-session
+  /// PR-display resolver and the finish-workout PR detector would falsely
+  /// project the very next set as a "new PR" (AW-EX-E-US1-03 amplifier of
+  /// AW-EX-D-US1-01). The reconcile path's invalidation is the single source
+  /// of truth for cache freshness after an upsert: existing per-exercise
+  /// entries remain serviceable until the bootstrap rebuild fetches fresh
+  /// data, and the rebuild's `seedExerciseCacheEntries` call atomically
+  /// overwrites them.
   Future<void> upsertRecords(List<PersonalRecord> records) {
     return mapException(() async {
       if (records.isEmpty) return;
@@ -310,7 +406,6 @@ class PRRepository extends BaseRepository {
         rows,
         onConflict: 'user_id, exercise_id, record_type',
       );
-      _cache.clearBox(HiveService.prCache);
     });
   }
 }

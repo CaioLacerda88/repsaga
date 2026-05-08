@@ -30,6 +30,7 @@ import '../../features/rpg/ui/titles_screen.dart';
 import '../../features/routines/ui/create_routine_screen.dart';
 import '../../features/routines/ui/routine_list_screen.dart';
 import '../../features/personal_records/domain/pr_detection_service.dart';
+import '../../features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import '../../features/personal_records/ui/pr_celebration_screen.dart';
 import '../../features/personal_records/ui/pr_list_screen.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
@@ -381,6 +382,16 @@ class _ShellScaffold extends ConsumerWidget {
     // would invalidate the bottom-nav state for zero visual benefit. The
     // listen subscription is enough to keep the provider alive.
     ref.listen(rpgProgressProvider, (_, _) {});
+    // Eagerly warm up the PR cache so per-exercise lookups (in-session
+    // PR display via `exercisePRsProvider`, finish-workout detection via
+    // the per-exercise fallback in `getRecordsForExercises`) have a
+    // correct historical baseline from the moment the shell mounts.
+    // Without this, the cache is empty on a fresh session and the first
+    // working set of any exercise is falsely projected as a "new PR"
+    // (AW-EX-D-US1-01 BLOCKER). Same `ref.listen` no-op pattern as
+    // rpgProgressProvider — keeps the provider alive across the shell's
+    // lifetime without rebuilding the scaffold on emissions.
+    ref.listen(prCacheBootstrapProvider, (_, _) {});
     final tabIndex = _currentIndex(context);
     // When on a non-tab route (e.g. /records, /plan/week), pass index 0 to
     // satisfy NavigationBar's range requirement but hide the indicator so no

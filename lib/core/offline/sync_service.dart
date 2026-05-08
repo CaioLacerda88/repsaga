@@ -6,14 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/analytics/data/models/analytics_event.dart';
 import '../../features/analytics/providers/analytics_providers.dart';
 import '../../features/exercises/providers/exercise_progress_provider.dart';
+import '../../features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import '../../features/rpg/providers/character_sheet_provider.dart';
 import '../../features/rpg/providers/earned_titles_provider.dart';
 import '../../features/rpg/providers/rpg_progress_provider.dart';
 import '../../features/weekly_plan/providers/weekly_plan_provider.dart';
 import '../../features/workouts/providers/workout_history_providers.dart';
 import '../connectivity/connectivity_provider.dart';
-import '../local_storage/cache_service.dart';
-import '../local_storage/hive_service.dart';
 import '../observability/sentry_report.dart';
 import 'offline_queue_service.dart';
 import 'pending_action.dart';
@@ -423,35 +422,36 @@ class SyncService extends Notifier<SyncState> {
 
   /// Reconcile the PR cache after a successful `upsertRecords` drain.
   ///
-  /// **BUG-006 cache invariant:** the PR cache (`HiveService.prCache`) is
-  /// keyed by `'exercises:<sorted_exercise_ids>'` at the
-  /// `ActiveWorkoutNotifier.detectPRs` write boundary. After a successful
-  /// upsertRecords drain we have to clear those entries so the next offline
-  /// PR detection re-fetches via `prRepo.getRecordsForExercises`, which
-  /// reconciles through the user-keyed bag.  Without the clear, `detectPRs`
-  /// keeps reading the stale pre-reconciliation cache and falsely awards PRs
-  /// the user already holds.
+  /// **AW-EX-E-US1-03 fix.** Pre-fix this method called
+  /// `cache.clearBox(HiveService.prCache)` to invalidate stale subset entries.
+  /// That worked when the device had immediate connectivity to re-seed via
+  /// `getRecordsForExercises` — but in the offline-after-drain window
+  /// (drain succeeded, then connectivity dropped before the next consumer
+  /// read) the empty box would falsely award PRs to every subsequent set.
   ///
-  /// Decision: clear the entire `prCache` box rather than per-key — the box
-  /// is small (one entry per active exercise set) and complete invalidation
-  /// is the only way to guarantee correctness without tracking which
-  /// exercise IDs were touched by the just-drained PR rows.
+  /// New contract: invalidate [prCacheBootstrapProvider]. Riverpod will
+  /// re-run the bootstrap on the next read, which fetches the user's full
+  /// PR list from the server and writes per-exercise entries via
+  /// `seedExerciseCacheEntries`. The cache transitions from "stale" to
+  /// "fresh from server truth" in a single atomic warmup, with no empty
+  /// window for false positives.
   ///
-  /// We do NOT pre-fetch server records here. The clear is sufficient: next
-  /// reader (`PRRepository.getRecordsForExercises`) re-seeds the cache via
-  /// the user-keyed bag. A pre-fetch would be a wasted round-trip whose only
-  /// observable effect was a Sentry breadcrumb count.
+  /// On warmup failure (network drop between drain and warmup), the
+  /// bootstrap logs and returns — the existing per-exercise entries from
+  /// the prior session remain serviceable until connectivity recovers.
+  /// This is strictly more conservative than the pre-fix `clearBox`.
+  ///
+  /// One invalidation covers all drained userIds — the bootstrap reads the
+  /// current signed-in user from `currentUserIdProvider`, so per-user
+  /// looping is unnecessary.
   Future<void> _reconcilePrCache(Set<String> userIds) async {
     if (userIds.isEmpty) return;
     try {
-      // BUG-006: clear the exercise-keyed cache entries so next read
-      // re-fetches from server (single source of truth post-reconcile).
-      // One clearBox call covers all userIds — the box is per-device,
-      // not per-user, so we'd otherwise clear it N times for no benefit.
-      await ref.read(cacheServiceProvider).clearBox(HiveService.prCache);
+      ref.invalidate(prCacheBootstrapProvider);
       SentryReport.addBreadcrumb(
         category: 'sync.reconcile',
-        message: 'PR cache reconciled (cleared) for ${userIds.length} users',
+        message:
+            'PR cache reconciled (re-seed scheduled) for ${userIds.length} users',
       );
     } catch (e) {
       log(
