@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Result returned when the user confirms finishing a workout.
@@ -97,6 +98,7 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
           identifier: 'workout-keep-going',
           child: TextButton(
             onPressed: () => Navigator.of(context).pop(),
+            style: dialogTextButtonStyle,
             child: Text(l10n.keepGoing),
           ),
         ),
@@ -111,6 +113,9 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
                 context,
               ).pop(FinishWorkoutResult(notes: notes.isEmpty ? null : notes));
             },
+            // Use the shared FilledButton style so the 48dp floor is the
+            // same single-source-of-truth as `dialogTextButtonStyle`.
+            style: dialogFilledButtonStyle,
             child: Text(l10n.saveAndFinish),
           ),
         ),

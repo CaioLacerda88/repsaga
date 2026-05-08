@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/dialog_button_style.dart';
 import '../../l10n/app_localizations.dart';
 
 /// A reusable stepper widget for rep counts.
@@ -100,6 +101,7 @@ class _RepsStepperState extends State<RepsStepper> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
+              style: dialogTextButtonStyle,
               child: Text(l10n.cancel),
             ),
             TextButton(
@@ -110,6 +112,7 @@ class _RepsStepperState extends State<RepsStepper> {
                 }
                 Navigator.of(dialogCtx).pop();
               },
+              style: dialogTextButtonStyle,
               child: Text(l10n.ok),
             ),
           ],

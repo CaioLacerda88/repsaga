@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Confirmation dialog shown when the user wants to discard an active workout.
@@ -43,6 +44,7 @@ class DiscardWorkoutDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
+          style: dialogTextButtonStyle,
           child: Text(l10n.cancel),
         ),
         Semantics(
@@ -50,8 +52,11 @@ class DiscardWorkoutDialog extends StatelessWidget {
           identifier: 'workout-discard-confirm',
           child: TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.error,
+            // Compose the destructive foreground on the shared dialog
+            // 48dp floor — single source of truth for the tap-target
+            // size lives in `dialogTextButtonStyle`.
+            style: dialogTextButtonStyle.copyWith(
+              foregroundColor: WidgetStatePropertyAll(theme.colorScheme.error),
             ),
             child: Text(l10n.discard),
           ),

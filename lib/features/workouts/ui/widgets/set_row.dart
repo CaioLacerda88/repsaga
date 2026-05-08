@@ -987,7 +987,64 @@ class _DoneCell extends StatelessWidget {
             ? Border(right: BorderSide(color: gold, width: 4))
             : null,
       ),
-      child: Center(child: SizedBox(width: 32, height: 32, child: tapTarget)),
+      // AW-EX-A-BR1-01: the visual ◆/✓ stays at 32dp (the inner SizedBox);
+      // an outer 40×48dp hit-test box wraps it so a sweaty thumb on the
+      // 360dp BR-1 viewport always lands. The outer GestureDetector
+      // forwards taps in the slack region to `onChanged` — the inner
+      // Semantics still owns the AOM identifier and tap action so screen
+      // readers and Playwright selectors are unaffected.
+      //
+      // **Hit-test behavior — `deferToChild` is structural defense.** The
+      // outer detector uses `HitTestBehavior.deferToChild` (NOT
+      // `translucent`). Flutter's `GestureArena` already resolves two
+      // competing `onTap`-only recognizers in favor of the innermost
+      // (inner Checkbox / `_PredictedPrUncheckedMark` wins; the outer is
+      // rejected — see `arena.dart::sweep` "First member wins; reject all
+      // others"). So `translucent` is correct TODAY by virtue of arena
+      // semantics. `deferToChild` makes the same property STRUCTURAL:
+      //
+      //   * With `deferToChild`, only the recognizer whose visual region
+      //     was actually hit is added to the arena for that pointer. A
+      //     tap inside the inner 32×32 puts only the inner in the arena;
+      //     a tap in the slack zone (outside 32×32 but inside 40×48)
+      //     puts only the outer in. No arena resolution between the two
+      //     is ever needed.
+      //
+      //   * With `translucent`, both are in the arena for inner-region
+      //     taps and the engine relies on first-member-wins to silence
+      //     the outer. Correct today, but fragile if a future change
+      //     adds a competing non-tap gesture (e.g. a long-press on the
+      //     outer or a pan-cancel on the inner) — paths that can resolve
+      //     both as accepted, double-firing `_onComplete` (a toggle of
+      //     `isCompleted`, NOT idempotent → toggle-on → toggle-off →
+      //     silent no-op, the very symptom the wider tap target should
+      //     fix).
+      //
+      // Pinned by the `gesture-arena single-fire pin` group in
+      // `active_workout_tap_targets_test.dart`. Note: the pin currently
+      // passes BOTH pre-fix (`translucent`) and post-fix (`deferToChild`)
+      // because no competing non-tap gesture exists yet — the pin guards
+      // the contract going forward.
+      child: Center(
+        child: SizedBox(
+          width: 40,
+          height: 48,
+          child: GestureDetector(
+            onTap: locked ? null : onChanged,
+            behavior: HitTestBehavior.deferToChild,
+            // The inner Semantics widget already exposes the
+            // workout-set-done / workout-set-completed identifier + button
+            // role + tap action. Suppressing this detector's semantics
+            // avoids a duplicate AOM node that would compete with the
+            // identifier-bearing one (and re-trigger the role-swap engine
+            // bug documented in the build comment above).
+            excludeFromSemantics: true,
+            child: Center(
+              child: SizedBox(width: 32, height: 32, child: tapTarget),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

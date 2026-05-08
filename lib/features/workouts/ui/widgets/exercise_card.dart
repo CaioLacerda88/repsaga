@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/exercise_image.dart';
@@ -69,12 +70,18 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
+              style: dialogTextButtonStyle,
               child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error,
+              // Compose the destructive foreground on the shared dialog
+              // 48dp floor — single source of truth for the tap-target
+              // size lives in `dialogTextButtonStyle`.
+              style: dialogTextButtonStyle.copyWith(
+                foregroundColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.error,
+                ),
               ),
               child: Text(l10n.remove),
             ),
