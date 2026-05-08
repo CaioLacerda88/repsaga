@@ -288,6 +288,132 @@ void main() {
       });
     });
 
+    group('tap-through prevention', () {
+      // Regression: AW-EX-A-BR1-04 / AW-EX-B-US1-01 / AW-EX-F-BR1-05.
+      // The outer GestureDetector wrapping the scrim must declare
+      // `HitTestBehavior.opaque` so taps that dismiss the timer do NOT
+      // propagate to widgets painted underneath (e.g. exercise card name,
+      // weight stepper) on platforms whose hit-test propagation differs
+      // from the desktop test environment. Pinning the property
+      // structurally is the canonical Flutter pattern for "modal scrim"
+      // and is symmetric with the inner control-row detector at L108-109,
+      // which already uses opaque hit-testing for the same reason.
+
+      testWidgets(
+        'outer scrim GestureDetector declares HitTestBehavior.opaque',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          // The widget tree contains exactly two GestureDetectors:
+          //   - the outer scrim-dismiss detector (L49)
+          //   - the inner control-row detector (L108) which is already opaque
+          // The outer is the topmost GestureDetector; the inner is its
+          // descendant. Assert ALL GestureDetectors in the overlay declare
+          // opaque hit-testing — the outer for tap-through prevention, the
+          // inner so button taps don't bubble to the dismiss handler.
+          final detectors = tester
+              .widgetList<GestureDetector>(find.byType(GestureDetector))
+              .toList();
+
+          expect(
+            detectors,
+            isNotEmpty,
+            reason:
+                'RestTimerOverlay must contain at least one GestureDetector',
+          );
+          for (final d in detectors) {
+            expect(
+              d.behavior,
+              HitTestBehavior.opaque,
+              reason:
+                  'RestTimerOverlay GestureDetectors must use '
+                  'HitTestBehavior.opaque to block tap propagation to widgets '
+                  'painted beneath the scrim',
+            );
+          }
+        },
+      );
+
+      testWidgets(
+        'tap on scrim does not propagate to widgets beneath the overlay',
+        (tester) async {
+          // Behavioral companion to the structural assertion above.
+          // Documents the user-visible contract: tapping anywhere on the
+          // scrim dismisses the timer without also firing the underlying
+          // widget (the actual symptom Charters A and B observed).
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+
+          final container = ProviderContainer(
+            overrides: [
+              restTimerProvider.overrideWith(
+                () => _FakeRestTimerNotifier(state),
+              ),
+            ],
+          );
+          addTearDown(container.dispose);
+
+          var underlyingTapCount = 0;
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: TestMaterialApp(
+                theme: AppTheme.dark,
+                home: Scaffold(
+                  body: Stack(
+                    children: [
+                      // Underlying tappable widget — mirrors the real-world
+                      // case where the scrim covers an exercise card or
+                      // weight stepper button.
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => underlyingTapCount++,
+                          child: const ColoredBox(color: Color(0xFF000000)),
+                        ),
+                      ),
+                      // Overlay rendered on top.
+                      const RestTimerOverlay(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          // Sanity: timer is active before the tap.
+          expect(container.read(restTimerProvider), isNotNull);
+
+          // Tap the scrim near the top-left corner — well away from the
+          // inner button row at the centre of the screen.
+          await tester.tapAt(const Offset(20, 20));
+          await tester.pump();
+
+          // Contract: the scrim absorbed the tap. The underlying tappable
+          // widget must NOT have fired.
+          expect(
+            underlyingTapCount,
+            0,
+            reason:
+                'Tap on rest timer scrim must not propagate to widgets '
+                'beneath the overlay',
+          );
+
+          // The overlay still dismissed on plain tap (UX-U09).
+          expect(container.read(restTimerProvider), isNull);
+        },
+      );
+    });
+
     group('accessibility', () {
       testWidgets(
         'overlay has semantics label containing remaining time for screen readers',

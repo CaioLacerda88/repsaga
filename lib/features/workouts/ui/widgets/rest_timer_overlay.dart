@@ -48,6 +48,13 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
 
     return GestureDetector(
       // Tap outside the controls to dismiss (UX-U09).
+      // `HitTestBehavior.opaque` blocks tap propagation to widgets painted
+      // beneath the scrim (exercise card, weight stepper). Without it the
+      // tap dismisses the timer AND fires the underlying handler — the
+      // bug Charters A/B observed (AW-EX-A-BR1-04, AW-EX-B-US1-01,
+      // AW-EX-F-BR1-05). Symmetric with the inner control-row detector
+      // below which already uses opaque hit-testing for the same reason.
+      behavior: HitTestBehavior.opaque,
       onTap: () => ref.read(restTimerProvider.notifier).stop(),
       child: Material(
         // Full-screen rest-timer scrim. abyss (#0D0319) at ~87% alpha — dark
