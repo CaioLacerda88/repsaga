@@ -1,0 +1,28 @@
+{
+  "allResults": {},
+  "consoleErrors": [],
+  "findings": [
+    {
+      "id": "AW-EX-B-US1-FATAL",
+      "severity": "blocker",
+      "summary": "Script fatal: page.waitForFunction: Timeout 30000ms exceeded.",
+      "repro": "",
+      "expected": "",
+      "actual": "",
+      "notes": "page.waitForFunction: Timeout 30000ms exceeded.\n    at waitForAppReady (C:\\Users\\caiol\\Projects\\repsaga\\test\\e2e\\charter-b-probe.mjs:61:14)\n    at async signUp (C:\\Users\\caiol\\Projects\\repsaga\\test\\e2e\\charter-b-probe.mjs:70:3)\n    at async file:///C:/Users/caiol/Projects/repsaga/test/e2e/charter-b-probe.mjs:817:20"
+    }
+  ],
+  "log": [
+    "[00:09:33.893] ================================================================",
+    "[00:09:33.895] Charter B — Workout Interruption Survival",
+    "[00:09:33.896] Date: 2026-05-08T00:09:33.896Z",
+    "[00:09:33.896] Viewport: 393×852 DPR 3.0 (iPhone 15 / US-1)",
+    "[00:09:33.896] ================================================================",
+    "[00:09:33.896] --- SETUP: navigating to app ---",
+    "[00:10:10.250] \nFATAL: page.waitForFunction: Timeout 30000ms exceeded.",
+    "[00:10:10.250] page.waitForFunction: Timeout 30000ms exceeded.\n    at waitForAppReady (C:\\Users\\caiol\\Projects\\repsaga\\test\\e2e\\charter-b-probe.mjs:61:14)\n    at async signUp (C:\\Users\\caiol\\Projects\\repsaga\\test\\e2e\\charter-b-probe.mjs:70:3)\n    at async file:///C:/Users/caiol/Projects/repsaga/test/e2e/charter-b-probe.mjs:817:20",
+    "[00:10:10.363]   screenshot: ../active-workout-findings/screenshots/charter-B-US-1-fatal-error.png",
+    "[00:10:10.363] [FINDING] AW-EX-B-US1-FATAL [blocker]: Script fatal: page.waitForFunction: Timeout 30000ms exceeded.",
+    "[00:10:10.363] \n--- Console errors during session: 0 ---"
+  ]
+}

@@ -5,6 +5,8 @@
 **Scope:** All shipped features -- Auth, Exercise Library, Workout Logging, Routines, Personal Records, Weekly Plan, Home Screen, Profile
 **Tester mindset:** Gym-goer between sets. Sweaty hands. In a hurry. Will tap wrong things.
 
+> **Active Workout deep dive:** for a single-screen exploratory pass on the active workout surface (charters, device matrix, capture templates), see [`active-workout-exploratory-testplan.md`](active-workout-exploratory-testplan.md). The plan in this file covers the broader 12-journey app survey.
+
 ---
 
 ## Personas
