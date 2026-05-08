@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -3481,5 +3482,259 @@ void main() {
         );
       },
     );
+
+    // ------------------------------------------------------------------
+    // AW-EX-D-US1-02 — two-workout PR sequence
+    //
+    // Workout A (50×8, single exercise) finishes online → optimistic
+    // cache write seeds the per-exercise key with a 50kg maxWeight.
+    // Workout B (70×8, same exercise) finishes online → must read the
+    // 50kg baseline back from the cache, detect 70 > 50 as a new PR, and
+    // produce `prResult.hasNewRecords == true` so the post-workout
+    // navigator sends the user to /pr-celebration.
+    //
+    // Reproducer-side note: the test uses a stateful in-memory cache that
+    // serves what was last written (matches Hive's in-memory semantics
+    // — `box.put` is visible to the next synchronous `box.get` even when
+    // the flush is unawaited). If the bug is in the unit-level data flow,
+    // workout B's `prResult.hasNewRecords` will be `false` here.
+    // ------------------------------------------------------------------
+    test('AW-EX-D-US1-02: workout B (70×8) detects PR after workout A (50×8) '
+        'optimistic cache write — same exercise', () async {
+      // Build a state for one finished-equivalent workout with weight
+      // chosen by the caller. We rebuild the state for each call so the
+      // per-set ids do not collide between workout A and workout B.
+      ActiveWorkoutState makeRdlState({
+        required String workoutId,
+        required String exerciseId,
+        required String workoutExerciseId,
+        required String setId,
+        required double weight,
+        required int reps,
+      }) {
+        final exercise = Exercise.fromJson(
+          TestExerciseFactory.create(
+            id: exerciseId,
+            name: 'Romanian Deadlift',
+            equipmentType: 'barbell',
+          ),
+        );
+        final we = WorkoutExercise(
+          id: workoutExerciseId,
+          workoutId: workoutId,
+          exerciseId: exerciseId,
+          order: 0,
+          exercise: exercise,
+        );
+        final sets = [
+          ExerciseSet.fromJson(
+            TestSetFactory.create(
+              id: setId,
+              workoutExerciseId: workoutExerciseId,
+              setNumber: 1,
+              weight: weight,
+              reps: reps,
+              isCompleted: true,
+            ),
+          ),
+        ];
+        return ActiveWorkoutState(
+          workout: Workout.fromJson(
+            TestWorkoutFactory.create(id: workoutId, isActive: true),
+          ),
+          exercises: [ActiveWorkoutExercise(workoutExercise: we, sets: sets)],
+        );
+      }
+
+      // Stateful in-memory cache fake. Mirrors Hive's contract: write
+      // is async-but-immediately-visible (in-memory map updated before
+      // the Future resolves). Read is synchronous.
+      final store = <String, dynamic>{};
+      final fakeCache = _StatefulFakeCache(store);
+
+      final mockRepo = MockWorkoutRepository();
+      final mockStorage = MockWorkoutLocalStorage();
+      final mockAuth = MockAuthRepository();
+      final mockPRRepo = MockPRRepository();
+      final mockRpgRepo = MockRpgRepository();
+      final mockPeakLoadsRepo = MockPeakLoadsRepository();
+      final capturedNotifier = _CapturingPendingSyncNotifier();
+
+      when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(() => mockRepo.getCachedWorkoutCount(any())).thenReturn(5);
+      when(
+        () => mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenAnswer((_) async => Workout.fromJson(TestWorkoutFactory.create()));
+      // RPG providers: stub so the post-save celebration build doesn't
+      // throw and short-circuit the PR detection block via the silent
+      // catch around `_buildAndStashCelebration`. PR detection itself
+      // does not depend on RPG state — but the catch in the production
+      // code is wide enough to swallow either subsystem's failure.
+      when(
+        () => mockRpgRepo.getAllBodyPartProgress(),
+      ).thenAnswer((_) async => const <BodyPartProgress>[]);
+      when(
+        () => mockRpgRepo.getCharacterState(),
+      ).thenAnswer((_) async => CharacterState.empty);
+      // Online → detached upsert is preferred. Stub it as a no-op.
+      when(() => mockPRRepo.upsertRecords(any())).thenAnswer((_) async {});
+      // Cache-miss fallback: PRRepo returns whatever's in the database.
+      // For workout A there's no history → empty map. The cache hit
+      // for workout B should serve workout A's optimistic write — so
+      // this stub should NOT be called for workout B (verified below).
+      when(
+        () => mockPRRepo.getRecordsForExercises(any()),
+      ).thenAnswer((_) async => <String, List<PersonalRecord>>{});
+
+      // Initial state for workout A. We will rebuild via
+      // `loadActiveWorkout` between the two finishes so the notifier
+      // re-reads the second workout's state when we trigger a refresh.
+      var nextState = makeRdlState(
+        workoutId: 'workout-A',
+        exerciseId: 'rdl-1',
+        workoutExerciseId: 'we-A',
+        setId: 'set-A',
+        weight: 50.0,
+        reps: 8,
+      );
+      when(() => mockStorage.loadActiveWorkout()).thenAnswer((_) => nextState);
+
+      final container = ProviderContainer(
+        overrides: [
+          workoutRepositoryProvider.overrideWithValue(mockRepo),
+          workoutLocalStorageProvider.overrideWithValue(mockStorage),
+          authRepositoryProvider.overrideWithValue(mockAuth),
+          analyticsRepositoryProvider.overrideWithValue(
+            const _FakeAnalyticsRepository(),
+          ),
+          pendingSyncProvider.overrideWith(() => capturedNotifier),
+          cacheServiceProvider.overrideWithValue(fakeCache),
+          prRepositoryProvider.overrideWithValue(mockPRRepo),
+          prDetectionServiceProvider.overrideWithValue(PRDetectionService()),
+          rpgRepositoryProvider.overrideWithValue(mockRpgRepo),
+          peakLoadsRepositoryProvider.overrideWithValue(mockPeakLoadsRepo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // ─── Workout A ─────────────────────────────────────────────────
+      await container.read(activeWorkoutProvider.future);
+      final resultA = await container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout();
+
+      expect(resultA, isNotNull);
+      expect(
+        resultA!.prResult?.hasNewRecords,
+        isTrue,
+        reason:
+            'Workout A is the first-ever RDL set → must be detected as a PR.',
+      );
+
+      // The optimistic cache write must have landed under
+      // 'exercises:rdl-1' (single-id key matches the per-exercise
+      // shape Family 1A reads).
+      expect(
+        store.containsKey('pr_cache/exercises:rdl-1'),
+        isTrue,
+        reason: 'Optimistic cache write should land under per-exercise key.',
+      );
+
+      // Drain microtasks so the unawaited detached upsert and
+      // post-finish housekeeping settle before workout B starts.
+      await Future<void>.delayed(Duration.zero);
+
+      // ─── Workout B ─────────────────────────────────────────────────
+      // Swap the storage backing so the next `loadActiveWorkout` returns
+      // workout B's state. Then invalidate the notifier so it re-runs
+      // build() against the new state. This mirrors the production
+      // flow: the user finishes A, /pr-celebration → /home, taps
+      // "Start workout", which mounts a new ActiveWorkoutNotifier
+      // instance that reads from storage.
+      nextState = makeRdlState(
+        workoutId: 'workout-B',
+        exerciseId: 'rdl-1',
+        workoutExerciseId: 'we-B',
+        setId: 'set-B',
+        weight: 70.0,
+        reps: 8,
+      );
+      container.invalidate(activeWorkoutProvider);
+      await container.read(activeWorkoutProvider.future);
+
+      final resultB = await container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout();
+
+      expect(resultB, isNotNull);
+      // CORE REGRESSION ASSERTION — this is the bug surface:
+      expect(
+        resultB!.prResult?.hasNewRecords,
+        isTrue,
+        reason:
+            'Workout B (70 kg × 8) beats workout A (50 kg × 8) on weight '
+            '— must be detected as a new PR. If this fails, the '
+            'in-memory cache fake confirms the bug repros at the '
+            'unit level (no Hive/IndexedDB timing involved).',
+      );
+    });
   });
+}
+
+/// Stateful in-memory cache fake used by the AW-EX-D-US1-02 reproducer.
+///
+/// Mirrors the real `CacheService` contract end-to-end: writes
+/// `jsonEncode` the value into a String and reads `jsonDecode` it before
+/// passing to `fromJson` (matching `lib/core/local_storage/cache_service.dart`).
+/// Without the round-trip the reader's type casts
+/// (`json as Map`, `(v as List)`, `e as Map`)
+/// would not exercise the same code path the production path runs against
+/// a Hive-backed string payload.
+///
+/// `read` and `write` swallow errors silently — same contract as the real
+/// `CacheService` — so a deserialization failure surfaces as a cache MISS
+/// to the caller, never as a thrown exception. This is critical for the
+/// reproducer because production code only logs a cache failure; it does
+/// not bubble up.
+class _StatefulFakeCache implements CacheService {
+  _StatefulFakeCache(this._store);
+
+  final Map<String, dynamic> _store;
+
+  @override
+  T? read<T>(String boxName, String key, T Function(dynamic) fromJson) {
+    final raw = _store['$boxName/$key'];
+    if (raw is! String) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> write(String boxName, String key, dynamic value) async {
+    try {
+      _store['$boxName/$key'] = jsonEncode(value);
+    } catch (_) {
+      // Match the real CacheService: swallow encode failures.
+    }
+  }
+
+  @override
+  Future<void> delete(String boxName, String key) async {
+    _store.remove('$boxName/$key');
+  }
+
+  @override
+  Future<void> clearBox(String boxName) async {
+    _store.removeWhere((k, _) => k.startsWith('$boxName/'));
+  }
 }

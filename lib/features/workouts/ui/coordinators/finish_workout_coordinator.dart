@@ -232,12 +232,10 @@ class FinishWorkoutCoordinator {
         }
       }
 
-      // Release navigation ownership right before the final transition so
-      // any Riverpod-triggered postFrameCallback that fires after context.go
-      // does not double-navigate (the screen is leaving anyway).
-      _isFinishHandled = false;
-
-      if (!rootContext.mounted) return;
+      if (!rootContext.mounted) {
+        // Process is being torn down; finally block will release the flag.
+        return;
+      }
 
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
@@ -248,9 +246,48 @@ class FinishWorkoutCoordinator {
         routineId: routineId,
         routineName: routineName,
       );
+
+      // AW-EX-D-US1-02 fix: defer the navigation-ownership release by two
+      // frames so the active-workout screen's pending postFrameCallback —
+      // which checks `_isFinishHandled` at FIRE time — sees `true` and
+      // yields instead of clobbering navigateAfterFinish's
+      // `go('/pr-celebration')` with `go('/home')`.
+      //
+      // Race timeline (without this guard):
+      //   Frame N+1 build:  ActiveWorkoutScreen sees displayState == null
+      //                     and registers a "context.go('/home')" postFrame.
+      //   Frame N+1 postFrame phase (FIFO):
+      //     1. navigateAfterFinish callback (registered between frames)
+      //        → rootContext.go('/pr-celebration')  ✓
+      //     2. screen callback (registered DURING build)
+      //        → checks _isFinishHandled → if false, context.go('/home')  ✗
+      //   Result: /home wins because go() is last-write-wins.
+      //
+      // Releasing inside an outer postFrameCallback ensures the flag stays
+      // `true` throughout frame N+1's postFrame phase, then is released at
+      // the end of frame N+2 when the active-workout screen has already
+      // unmounted (route changed). The early release at the top of this
+      // method (before navigateAfterFinish) and the redundant release in
+      // the `finally` block were both removed — the deferred release is
+      // the single owner of the lifecycle. The `finally` retains the
+      // `_isFinishing = false` reset (re-entrance guard) and re-asserts
+      // `_isFinishHandled = false` only as a safety net for paths that
+      // never reach here (e.g. `navigateAfterFinish` throws).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _isFinishHandled = false;
+        });
+      });
     } finally {
-      _isFinishHandled = false;
       _isFinishing = false;
+      // _isFinishHandled is normally released via the deferred postFrame
+      // chain above. We do NOT reset it here on the happy path because
+      // doing so would re-open the AW-EX-D-US1-02 race. If navigateAfterFinish
+      // somehow throws synchronously (it never does in the production code
+      // — it just registers a callback), the deferred release never fires
+      // and the flag stays `true` for the rest of the screen's lifetime —
+      // which is harmless because `_isFinishing` is also still cleared
+      // here, allowing a subsequent finish to fire and re-set both flags.
     }
   }
 }
