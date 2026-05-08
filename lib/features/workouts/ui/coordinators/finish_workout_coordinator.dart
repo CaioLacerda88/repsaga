@@ -240,10 +240,36 @@ class FinishWorkoutCoordinator {
         return;
       }
 
+      // AW-EX-D-US1-02 + offline path (Family 7 round 3):
+      // For an offline finish the workout itself has not committed to the
+      // server — only the local queue. Routing to `/pr-celebration` for
+      // queued data would surface a "NEW PR" celebration for a workout that
+      // does not yet exist on the server, which is misleading from a trust
+      // standpoint and breaks the pre-existing user contract pinned by the
+      // OFFLINE-001/002/005/007 E2E tests (offline finish always lands on
+      // /home).
+      //
+      // Pre-Family-7, this contract was held implicitly by a postFrame race:
+      // the active-workout screen's home-redirect callback would clobber
+      // `navigateAfterFinish`'s `/pr-celebration` push because both ran in
+      // the same frame's postFrame phase and `go()` is last-write-wins. The
+      // Family 7 fix correctly removed that race by deferring the
+      // `_isFinishHandled` release across two frames — but doing so also
+      // removed the implicit guarantee.
+      //
+      // Make the contract explicit at the coordinator: when
+      // `wasSavedOffline == true`, suppress the PR-celebration branch by
+      // passing `prResult: null`. The navigator's default branch
+      // (`rootContext.go('/home')`) then handles offline correctly. The
+      // PR cache invalidations above (lines 185-189) still happen — those
+      // are about cache reconciliation (the PR upsert may have committed
+      // independently of the workout), not navigation.
+      final navigationPrResult = wasSavedOffline ? null : prResult;
+
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
         userTappedOverflow: userTappedOverflow,
-        prResult: prResult,
+        prResult: navigationPrResult,
         exerciseNames: exerciseNames,
         shouldPrompt: shouldPrompt,
         routineId: routineId,

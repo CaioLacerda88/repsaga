@@ -116,4 +116,44 @@ URL after `finishWorkout()` returns with `prResult.hasNewRecords = true`.
 - [x] Full unit/widget suite green; AW-EX-D-US1-02 unit reproducer still
       passes with the new `verifyNever` assertion.
 
+**Round 3 review fix — offline-path navigation regression (CI):**
+
+Family 7's deferred `_isFinishHandled` release (round 1) made the screen's
+home-redirect postFrame yield, which exposed a pre-existing implicit
+contract: the offline-finish path was previously landing on `/home` only
+because the screen's home-redirect postFrame happened to clobber
+`navigateAfterFinish`'s `/pr-celebration` push. With the race correctly
+removed, offline finishes with `prResult.hasNewRecords == true` started
+routing to `/pr-celebration`, breaking OFFLINE-001 / OFFLINE-002 /
+OFFLINE-005 / OFFLINE-007 (all assert `/home` after offline finish).
+
+The right shape is to make the contract explicit at the coordinator layer:
+when the workout was saved offline, suppress the PR-celebration branch by
+passing `prResult: null` to `navigateAfterFinish`. The navigator's default
+branch (`go('/home')`) then handles offline correctly. PR cache
+invalidations (`prListProvider`, `prCountProvider`, `recentPRsProvider`)
+still happen — those are about cache reconciliation (the PR upsert may have
+committed independently of the workout), not navigation.
+
+- [x] `finish_workout_coordinator.dart`: introduced `navigationPrResult =
+      wasSavedOffline ? null : prResult` and pass it to
+      `navigateAfterFinish` in place of the raw `prResult`. The deferred
+      postFrame release stays untouched — it's still load-bearing for the
+      online path (Family 7's actual fix).
+- [x] Inline doc comment explains the offline contract and why we still
+      invalidate PR caches above (cache vs. navigation are separate
+      concerns).
+- [x] No coordinator-level test layer currently exists; the offline-path
+      contract is pinned by E2E (OFFLINE-001/002/005/007 + AW-EX-D-US1-02
+      online regression). A unit-level test for the
+      `wasSavedOffline → suppress prResult` branch would strengthen
+      coverage and is left for a follow-up if a coordinator test harness
+      lands.
+- [x] `dart format .` clean
+- [x] `dart analyze --fatal-infos` clean (project-wide)
+- [x] Full unit/widget suite: 2413 tests pass.
+- [x] E2E `offline-sync.spec.ts`: 7/7 pass (OFFLINE-001 through OFFLINE-007).
+- [x] E2E `personal-records.spec.ts` AW-EX-D-US1-02 regression: passes
+      (online PR celebration path not regressed).
+
 ---
