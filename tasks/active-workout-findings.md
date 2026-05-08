@@ -12,6 +12,8 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
+**Resolved so far:** 3 / 31 bugs — Family 2 (rest timer scrim modality) shipped in PR #175.
+
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
 Per-charter detail in:
@@ -64,18 +66,15 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 - `lib/core/offline/sync_service.dart` `_reconcilePrCache` — replace `clearBox` with surgical reconcile; alternatively, re-seed from DB after successful drain.
 - Tests: unit tests for catch-site classification (mock 500 → AsyncError, mock offline → queue); unit test for cache seeding; widget test for loading-overlay-with-cancel; e2e test that pins "log lower-than-baseline workout → no PR celebration".
 
-### Family 2 — Rest timer scrim modality (MAJOR, single-line fix)
+### Family 2 — Rest timer scrim modality (MAJOR, single-line fix) — ✅ RESOLVED in PR #175
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-A-BR1-04 | M | A | Plain tap on rest scrim opens exercise detail sheet underneath |
-| AW-EX-B-US1-01 | M | B | Plain tap on rest scrim opens weight dialog underneath |
-| AW-EX-F-BR1-05 | M | F | Code-level root cause: outer `GestureDetector` at `rest_timer_overlay.dart:49` has default `HitTestBehavior`, no `AbsorbPointer` |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-A-BR1-04 | M | A | Plain tap on rest scrim opens exercise detail sheet underneath | ✅ resolved (PR #175) |
+| AW-EX-B-US1-01 | M | B | Plain tap on rest scrim opens weight dialog underneath | ✅ resolved (PR #175) |
+| AW-EX-F-BR1-05 | M | F | Code-level root cause: outer `GestureDetector` at `rest_timer_overlay.dart:49` had default `HitTestBehavior`, no opaque flag | ✅ resolved (PR #175) |
 
-**Proposed PR cluster: `fix(workouts)/rest-timer-scrim-modal`** — low effort (~30min), single-file
-- `lib/features/workouts/ui/widgets/rest_timer_overlay.dart` — wrap the dismiss `GestureDetector` with `behavior: HitTestBehavior.opaque` AND add `AbsorbPointer` between the scrim and underlying widgets to block hit propagation.
-- Test: widget test — when rest timer is showing, tap on exercise card or stepper coordinates → no underlying handler fires.
-- Charter C narrowed: long-press doesn't repro because pointer-down dismisses before the 900ms threshold. Fix should preserve dismissibility but block tap-through.
+**Shipped:** added `behavior: HitTestBehavior.opaque` to the outer `GestureDetector`. Symmetric with the inner control-row detector. `AbsorbPointer` was rejected as overkill (noted in the original proposal here as a fallback — the impact analysis correctly determined opaque alone was sufficient). Regression guard: a structural pin in `rest_timer_overlay_test.dart` walks all `GestureDetector` instances in the overlay subtree and asserts each declares `HitTestBehavior.opaque` — fails pre-fix, passes post-fix.
 
 ### Family 3 — A11y semantic wrappers across active-workout surface (MAJOR)
 
