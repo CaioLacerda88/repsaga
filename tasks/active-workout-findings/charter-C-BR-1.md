@@ -50,6 +50,7 @@
 
 ### AW-EX-C-BR1-03 — FINISH button appears ENABLED (no aria-disabled) immediately after adding exercise with zero completed sets — §5.5 matrix violation
 
+- **VERDICT (Family 8 investigation, 2026-05-07):** **STALE — contract holds, regression-guard pinned.** Three widget tests in `test/widget/features/workouts/ui/active_workout_finish_button_test.dart` (group `'AW-EX-C-BR1-03: Finish button disabled state'`) reproduce Charter C's exact P11 scenario at the widget layer (one exercise + one incomplete set, plus the zero-sets variant) and confirm: (a) `FilledButton.onPressed == null`, (b) `tester.tap(...)` does not open the `FinishWorkoutDialog`, (c) the gate flips ON exactly when `any(set.isCompleted)`. The production wiring at `finish_bottom_bar.dart:74` (`onPressed: enabled ? onPressed : null`) and `active_workout_screen.dart:271` (`enabled: _hasCompletedSet`) is correct. Best hypothesis for Charter C's observation: a Flutter Web AOM quirk — `aria-disabled` is only emitted as `"true"` (the absent attribute is the canonical "not disabled" signal in the AOM, but Charter C read absence as bug). On the behavioural side, Playwright's `click()` synthesizes a focus + activation that may bypass Flutter's hit-test gate when the button has `onPressed: null` — Flutter routes the activation regardless, but the Dart-level callback fires only if non-null. If a click reproducibly opens the dialog on real Chrome (not Playwright), revisit; for now the contract is pinned by widget test.
 - **Persona:** Alex
 - **Charter:** C
 - **Device:** BR-1 (360×780)
