@@ -2221,82 +2221,78 @@ void main() {
         expect(find.text('Previous: 20kg × 5'), findsOneWidget);
       });
 
-      testWidgets('row height is preserved across the suppression boundary', (
-        tester,
-      ) async {
-        // Pin the layout-stability concern called out in set_row.dart's hint
-        // suppression doc-comment (~:185-197). If hiding the hint causes
-        // column reflow, the parent's `flt-semantics-identifier` emission
-        // can drop (Phase 20 Flutter Web semantics-engine role-swap bug).
-        //
-        // Post-PR-#193-review fix (Important 5): the hint slot is now
-        // wrapped in `Visibility(maintainSize: true, maintainAnimation:
-        // true, maintainState: true, ...)`. With that wrapper the slot
-        // reserves its vertical space whether or not the child is visible,
-        // so the heights MUST be equal — not just `<=`. Asserting equality
-        // (rather than the previous `<=`) pins the contract: any future
-        // change that drops the maintainSize behaviour or replaces the
-        // wrapper with an `if (...)` short-circuit will fail this test.
-        //
-        // The lastSet.weight == 0 branch hides the slot. The current set
-        // does NOT match (current.weight == 60 != 0), so without the
-        // 0-weight guard the hint would render. With the guard, the hint
-        // is invisible but still occupies its layout slot.
-        final pendingSet = makeSet(isCompleted: false, weight: 60, reps: 10);
-        final hintHidden = makeSet(id: 'hidden', weight: 0.0, reps: 5);
-        final hintShown = makeSet(id: 'shown', weight: 20.0, reps: 5);
+      testWidgets(
+        'standing-PR row STILL emits the row state identifier when last-set '
+        'weight is 0 (hint suppressed) — Phase-20 role-swap regression pin',
+        (tester) async {
+          // Regression pin born from PR #193: a Visibility(maintainSize:true)
+          // attempt to "stabilise the column" actually broke the
+          // `set-row-state-standing-pr` AOM emission on the live web build,
+          // failing three E2E tests deterministically. Reverted to
+          // conditional rendering. This static-pump pin asserts the only
+          // thing that matters at the unit level: when the row is rendered
+          // in PrRowState.completedStandingPr the row frame's
+          // `set-row-state-standing-pr` identifier must be present in the
+          // Semantics tree — regardless of whether the hint slot is shown
+          // or suppressed by Fix 3 (lastSet.weight == 0).
+          //
+          // Note: this pin cannot reproduce the LIVE failure, which only
+          // manifests during a state TRANSITION on the Flutter Web semantics
+          // engine. The E2E suite is the canonical guard for the transition
+          // bug; this pin guards the static-state contract.
+          final set = makeSet(isCompleted: true, weight: 60, reps: 8);
+          final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
 
-        // Render row A: hint suppressed (lastSet.weight == 0).
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(
-              set: pendingSet,
-              workoutExerciseId: 'we-001',
-              lastSet: hintHidden,
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+                lastSet: lastSet,
+              ),
             ),
-          ),
-        );
-        final heightHidden = tester.getSize(find.byType(SetRow)).height;
+          );
 
-        // Render row B: hint shown.
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(
-              set: pendingSet,
-              workoutExerciseId: 'we-001',
-              lastSet: hintShown,
-            ),
-          ),
-        );
-        final heightShown = tester.getSize(find.byType(SetRow)).height;
-
-        expect(
-          heightHidden,
-          equals(heightShown),
-          reason:
-              'Visibility(maintainSize:true) keeps the hint slot occupying '
-              'its vertical space whether the child is visible or not. The '
-              'two rows MUST measure equal — any difference indicates the '
-              'maintainSize contract was lost (e.g. the wrapper was replaced '
-              'by `if (...) Padding(...)` again, or maintainSize was set to '
-              'false), which would re-introduce the Phase-20 reflow hazard.',
-        );
-      });
+          expect(
+            find.bySemanticsIdentifier('set-row-state-standing-pr'),
+            findsOneWidget,
+            reason:
+                'Standing-PR row must emit set-row-state-standing-pr '
+                'regardless of hint-slot visibility. A regression here means '
+                'the row frame Semantics structure has broken.',
+          );
+        },
+      );
 
       testWidgets('standing-PR row with 0-weight last set still emits the row '
           'identifier — Phase 20 role-swap regression pin', (tester) async {
         // Important 5 regression pin: the dangerous intersection is
         // standing-PR (the row state that role-swaps on the Flutter Web
         // semantics engine) AND 0-weight lastSet (the case where the
-        // hint suppression triggers). Pre-fix, removing the hint Padding
-        // could drop the row's done-cell identifier as the role swap
-        // collided with the descendant tree change. Post-fix the slot
-        // is wrapped in Visibility(maintainSize:true) so the descendant
-        // tree shape is stable across visibility transitions.
+        // hint suppression triggers). The original concern: removing the
+        // hint Padding when transitioning to standing-PR could drop the
+        // row's done-cell identifier as the role swap collided with the
+        // descendant tree change.
+        //
+        // PR #193 attempted a Visibility(maintainSize:true) wrapper to
+        // stabilise the descendant tree, but that broke E2E in a
+        // different way (see _shouldShowHint doc). Reverted to
+        // conditional rendering. This static-pump pin still has value:
+        // it asserts the done-cell identifier survives in completed
+        // standing-PR even when the hint is suppressed; a structural
+        // change to _DoneCell that drops the identifier would fail
+        // here. The TRANSITION case (the actual engine bug) is pinned
+        // by E2E tests in personal-records.spec.ts and
+        // rank-up-celebration.spec.ts.
         //
         // We assert the done-cell identifier emits — that's the
-        // identifier-bearing node on the row frame; if maintainSize
-        // dropped, the role-swap would silently kill it.
+        // identifier-bearing node on the done cell; this pin guards
+        // its survival under the hint-suppressed branch.
+
         final set = makeSet(isCompleted: true, weight: 60, reps: 8);
         final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
 
@@ -2319,11 +2315,10 @@ void main() {
           findsOneWidget,
           reason:
               'Standing-PR row + 0-weight last set is the Phase-20 role-swap '
-              'intersection. The Visibility(maintainSize:true) wrap on the '
-              'hint slot keeps the descendant tree shape stable across the '
-              'GenericRole → SemanticButton transition, so the row frame\'s '
-              'identifier-bearing node must still emit. A regression here '
-              'would mean the maintainSize contract was lost.',
+              'intersection. The done-cell identifier (workout-set-completed) '
+              'must still emit even with the hint slot suppressed. A '
+              'regression here means a structural change to _DoneCell '
+              'dropped the identifier.',
         );
       });
     });

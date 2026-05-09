@@ -204,10 +204,19 @@ class _SetRowState extends ConsumerState<SetRow> {
   ///     transition. `Semantics(container: true, explicitChildNodes: true)`
   ///     on the hint Padding kept the LABEL out of the parent group but did
   ///     NOT prevent the role-swap from dropping the row identifier. A
-  ///     proper fix needs a layout-stable design — e.g., a fixed-height
-  ///     placeholder for the hint slot — so adding/removing the hint Text
-  ///     doesn't reflow the parent Column on completion. Deferred to a
-  ///     dedicated PR; the match indicator below is shipped alone for now.
+  ///     proper fix needs a layout-stable design that does NOT change
+  ///     the Semantics-tree shape. PR #193 attempted a
+  ///     Visibility(maintainSize: true) wrapper for the slot, but with
+  ///     maintainSemantics defaulting to false the Semantics tree still
+  ///     mutates on visibility flip (the mutation just fires on a nested
+  ///     RenderVisibility instead of the parent Element tree), and the
+  ///     three standing-PR E2E tests still failed. Reverted to
+  ///     conditional rendering. A future fix that keeps the hint after
+  ///     completion will need either maintainSemantics:true with stable
+  ///     content, or a different approach entirely (e.g. precomputing
+  ///     the hint as part of the row frame Semantics so no descendant
+  ///     join/leave occurs on transition). Until then, hint suppression
+  ///     on completion is the correct trade-off for shipping the row.
   ///   * the values exactly match — that case is covered by the
   ///     match-indicator path ([_matchedLastSet]) which gives the row a
   ///     clearer "you matched last session" affordance.
@@ -272,83 +281,84 @@ class _SetRowState extends ConsumerState<SetRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Hint slot — ALWAYS rendered to reserve vertical space, even when
-          // empty. Eliminates the layout-reflow hazard called out in the
-          // `_shouldShowHint` doc-comment: adding/removing the hint Text
-          // re-triggers the Phase-20 Flutter Web semantics-engine role-swap
-          // bug on standing-PR rows (the row frame's
-          // `flt-semantics-identifier` stops emitting after the
-          // GenericRole → SemanticButton transition when a sibling
-          // descendant appears/disappears). With Visibility(maintainSize:
-          // true), the slot's size is stable regardless of whether the
-          // child is visible — no reflow, no semantics-tree shape change,
-          // no role-swap drop.
+          // Hint slot rendering uses CONDITIONAL inclusion (if/else if),
+          // NOT a Visibility(maintainSize) wrapper.
           //
-          // Three states drive the slot's content:
-          //   * matched last set → "= last set" / "= série anterior"
-          //     (visible)
-          //   * previous-set hint → "Previous: 80kg × 8" (visible)
-          //   * neither → an invisible placeholder Text carrying the SAME
-          //     bodySmall style so its intrinsic height matches the visible
-          //     branches exactly. `Visibility(visible: false, ...)` clamps
-          //     paint + hit-test off but preserves layout space.
+          // **Why not Visibility(maintainSize: true, maintainSemantics:
+          // false [default])?** A first attempt (PR #193 commit 5fb02ef)
+          // wrapped this slot in Visibility to keep the row vertical
+          // height stable across hint shows/hides, hoping that would
+          // dodge the Phase-20 Flutter Web semantics-engine role-swap bug
+          // documented in `_DoneCell` below. It DID NOT WORK and broke
+          // E2E in a different way: with maintainSemantics defaulting to
+          // false, `_RenderVisibility.visitChildrenForSemantics` skips
+          // children when invisible. So the Semantics-tree shape still
+          // changes at completion (visible -> invisible), but now via a
+          // markNeedsSemanticsUpdate fired on a NESTED render object
+          // (RenderVisibility) instead of a clean parent-Element-tree
+          // shape change. The nested mutation interleaves with the row
+          // frame Semantics identifier change (pendingPredictedPr ->
+          // completedStandingPr), causing the engine to drop the new
+          // `set-row-state-standing-pr` identifier from the AOM. Three
+          // E2E tests caught this:
           //
-          // The `Semantics(container: true, explicitChildNodes: true)`
-          // a11y-island wrap is preserved on visible branches: post-
-          // Phase-20 the hint may remain after completion, and on a
-          // standing-PR row the row frame's SemanticsNode role transitions
-          // GenericRole → SemanticButton. Without an explicit boundary
-          // around the hint Text, its label gets collected into the
-          // ancestor exercise-card's group, destabilising the row frame's
-          // identifier emission. The container/explicit-child-nodes pair
-          // pins the hint as its own a11y island so the row frame's
-          // identifier survives the role swap.
-          Visibility(
-            visible: _matchedLastSet() || _shouldShowHint(),
-            maintainSize: true,
-            maintainAnimation: true,
-            maintainState: true,
-            child: Padding(
+          //   * personal-records.spec.ts:264 (workout-A baseline + PR)
+          //   * personal-records.spec.ts:309 (single-set PR-from-fresh)
+          //   * rank-up-celebration.spec.ts:847 (1500 kg PR)
+          //
+          // All three failed deterministically on PR #193 CI; reverting
+          // to conditional rendering fixed all three. Static-pump widget
+          // tests passed in both directions because they do not exercise
+          // the pendingPredictedPr -> completedStandingPr TRANSITION
+          // (they pump a single completedStandingPr SetRow). The row
+          // reflow on hint show/hide is acceptable; the engine bug is
+          // not.
+          //
+          // **Why `Semantics(container: true, explicitChildNodes: true)`
+          // around the hint Text?** Post-Phase-20 the hint can sit next
+          // to a standing-PR row whose SemanticsNode role transitions
+          // GenericRole -> SemanticButton (engine role-swap behaviour).
+          // Without an explicit a11y-island around the hint Text, its
+          // label gets collected into the ancestor exercise-card group,
+          // destabilising the row frame identifier emission. The
+          // container + explicitChildNodes pair pins the hint as its own
+          // a11y island so the row frame identifier survives.
+          if (_matchedLastSet())
+            Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
               child: Semantics(
                 container: true,
                 explicitChildNodes: true,
                 child: Text(
-                  _matchedLastSet()
-                      ? AppLocalizations.of(context).matchedLastSet
-                      : (_shouldShowHint()
-                            ? AppLocalizations.of(context).previousSet(
-                                AppNumberFormat.weight(
-                                  (widget.lastSet!.weight ?? 0).toDouble(),
-                                  locale: Localizations.localeOf(
-                                    context,
-                                  ).languageCode,
-                                ),
-                                weightUnit,
-                                widget.lastSet!.reps ?? 0,
-                              )
-                            // Empty placeholder when neither branch
-                            // applies. Carries a non-empty space so its
-                            // intrinsic line-height matches the visible
-                            // branches exactly — keeps the slot's vertical
-                            // size stable across visibility transitions.
-                            : ' '),
-                  style: _matchedLastSet()
-                      ? theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.55,
-                          ),
-                          fontWeight: FontWeight.w600,
-                        )
-                      : theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
+                  AppLocalizations.of(context).matchedLastSet,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          else if (_shouldShowHint())
+            Padding(
+              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Text(
+                  AppLocalizations.of(context).previousSet(
+                    AppNumberFormat.weight(
+                      (widget.lastSet!.weight ?? 0).toDouble(),
+                      locale: Localizations.localeOf(context).languageCode,
+                    ),
+                    weightUnit,
+                    widget.lastSet!.reps ?? 0,
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
                 ),
               ),
             ),
-          ),
           _SetRowFrame(
             display: widget.display,
             isCompleted: set.isCompleted,
