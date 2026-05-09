@@ -67,19 +67,12 @@ class AddRoutinesSheetResultCreateNew extends AddRoutinesSheetResult {
 class AddRoutinesSheet extends StatefulWidget {
   const AddRoutinesSheet({
     required this.availableRoutines,
-    required this.inPlanIds,
     this.preSelectedRoutineIds = const <String>{},
     super.key,
   });
 
   /// Routines not already in the bucket.
   final List<Routine> availableRoutines;
-
-  /// IDs of routines already in the plan (the parent already filters them
-  /// out of `availableRoutines`; the field is retained for callers that
-  /// want to know which were excluded). Currently unused inside the
-  /// sheet — kept for API stability.
-  final Set<String> inPlanIds;
 
   /// IDs to pre-select on first build. Used by the create-new return
   /// flow: the parent navigates to `/routines/create`, then re-opens the
@@ -238,6 +231,21 @@ class _AddRoutinesSheetState extends State<AddRoutinesSheet> {
 /// (primary-coloured `Icons.add` + label), NOT a selectable tile — the
 /// surrounding tiles use a card-like Material; this row is intentionally
 /// distinct so it does not read as another routine to pick.
+///
+/// Implemented as a [TextButton.icon] (matches [_EmptyStateCreateNew])
+/// so we inherit:
+///   * `MaterialTapTargetSize.padded` — guarantees a 48dp tap-target
+///     floor regardless of the inner content's intrinsic height (the
+///     hand-rolled InkWell row was ~44dp, below Material's 48dp floor).
+///   * Built-in tap semantics that merge icon + label into a single
+///     accessibility node, so screen readers announce one button rather
+///     than swiping past three separate elements (icon / spacer / text).
+///     `Semantics(container:true, explicitChildNodes:true)` would have
+///     forced the opposite — three nodes — and is therefore omitted.
+///
+/// `Semantics(container: true, identifier: ...)` is retained at the
+/// outer wrap as the e2e selector hook. The TextButton's child semantics
+/// merge naturally into that container (no `explicitChildNodes`).
 class _CreateNewRoutineRow extends StatelessWidget {
   const _CreateNewRoutineRow({required this.onTap});
 
@@ -251,26 +259,19 @@ class _CreateNewRoutineRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4, bottom: 8),
       child: Semantics(
         container: true,
-        explicitChildNodes: true,
         identifier: 'weekly-plan-create-new-routine',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kRadiusMd),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add, size: 18, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.createNewRoutine,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+        label: l10n.createNewRoutine,
+        button: true,
+        child: Center(
+          child: TextButton.icon(
+            onPressed: onTap,
+            icon: Icon(Icons.add, size: 18, color: theme.colorScheme.primary),
+            label: Text(
+              l10n.createNewRoutine,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),

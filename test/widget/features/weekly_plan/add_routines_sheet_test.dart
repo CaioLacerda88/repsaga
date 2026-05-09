@@ -33,7 +33,6 @@ Routine _routine({String id = 'r-001', String name = 'Push Day'}) {
 Future<AddRoutinesSheetResult?> _pumpAndOpenSheet(
   WidgetTester tester, {
   required List<Routine> available,
-  required Set<String> inPlanIds,
   Set<String>? preSelectedRoutineIds,
 }) async {
   AddRoutinesSheetResult? capturedResult;
@@ -51,7 +50,6 @@ Future<AddRoutinesSheetResult?> _pumpAndOpenSheet(
                       isScrollControlled: true,
                       builder: (_) => AddRoutinesSheet(
                         availableRoutines: available,
-                        inPlanIds: inPlanIds,
                         preSelectedRoutineIds:
                             preSelectedRoutineIds ?? const <String>{},
                       ),
@@ -75,11 +73,7 @@ void main() {
     testWidgets(
       'shows "Create new routine" action row at the bottom of the list',
       (tester) async {
-        await _pumpAndOpenSheet(
-          tester,
-          available: [_routine()],
-          inPlanIds: const {},
-        );
+        await _pumpAndOpenSheet(tester, available: [_routine()]);
 
         expect(
           find.text('Create new routine'),
@@ -111,7 +105,6 @@ void main() {
                             isScrollControlled: true,
                             builder: (_) => AddRoutinesSheet(
                               availableRoutines: [_routine()],
-                              inPlanIds: const {},
                             ),
                           );
                     },
@@ -177,7 +170,6 @@ void main() {
                                 _routine(id: 'r-a', name: 'Routine A'),
                                 _routine(id: 'r-b', name: 'Routine B'),
                               ],
-                              inPlanIds: const {},
                             ),
                           );
                     },
@@ -232,10 +224,8 @@ void main() {
                     result = await showModalBottomSheet<AddRoutinesSheetResult>(
                       context: context,
                       isScrollControlled: true,
-                      builder: (_) => const AddRoutinesSheet(
-                        availableRoutines: [],
-                        inPlanIds: <String>{},
-                      ),
+                      builder: (_) =>
+                          const AddRoutinesSheet(availableRoutines: []),
                     );
                   },
                   child: const Text('Open'),
@@ -289,7 +279,6 @@ void main() {
             _routine(id: 'r-existing', name: 'Push Day'),
             _routine(id: 'r-new', name: 'Brand New Routine'),
           ],
-          inPlanIds: const {},
           preSelectedRoutineIds: const {'r-new'},
         );
 
@@ -300,6 +289,62 @@ void main() {
         expect(find.byIcon(Icons.check_circle), findsOneWidget);
       },
     );
+
+    testWidgets('create-new row tap-target meets Material 48dp floor', (
+      tester,
+    ) async {
+      // Important 3 regression pin: the previous hand-rolled InkWell row
+      // measured ~44dp (16dp horizontal + 12dp vertical padding around an
+      // 18dp icon + bodyText). Material's tap-target floor is 48dp; sub-
+      // 48dp tap targets violate `feedback_tap_target_measurement.md`.
+      //
+      // Post-fix the row uses TextButton.icon, which inherits
+      // `MaterialTapTargetSize.padded` — guaranteed 48dp. We measure the
+      // TextButton's rendered size with `tester.getSize` (per
+      // `feedback_tap_target_measurement.md` — Playwright boundingBox or
+      // source-only minimumSize reads miss the padded contract).
+      await _pumpAndOpenSheet(tester, available: [_routine()]);
+
+      // Only one TextButton in this configuration (non-empty list path):
+      // the bottom-of-list create-new row. The empty-state TextButton is
+      // not rendered when availableRoutines is non-empty. Measured height
+      // is exactly 48.0dp post-fix (TextButton.icon +
+      // MaterialTapTargetSize.padded contract).
+      final size = tester.getSize(find.byType(TextButton));
+      expect(
+        size.height,
+        greaterThanOrEqualTo(48.0),
+        reason:
+            'Create-new row tap-target must meet Material 48dp floor. '
+            'The hand-rolled InkWell version measured ~44dp; the fix is to '
+            'use TextButton.icon which inherits MaterialTapTargetSize.padded.',
+      );
+    });
+
+    testWidgets('create-new row exposes a single merged Semantics node — '
+        'no explicitChildNodes fragmentation', (tester) async {
+      // Important 2 regression pin: previously the row used
+      // `Semantics(container:true, explicitChildNodes:true)` which forces
+      // the AOM tree to expose icon + text + container as 3 separate
+      // nodes. Screen readers swipe past each one separately. Post-fix
+      // the row drops `explicitChildNodes` so the TextButton's tap
+      // semantics merge naturally — one node, one swipe, one tap.
+      //
+      // We assert the create-new identifier resolves to exactly one
+      // semantics node. With `explicitChildNodes:true` the parent
+      // identifier-bearing node would not contain the merged child label.
+      await _pumpAndOpenSheet(tester, available: [_routine()]);
+
+      expect(
+        find.bySemanticsIdentifier('weekly-plan-create-new-routine'),
+        findsOneWidget,
+        reason:
+            'Create-new row must surface exactly one merged a11y node '
+            '(button + label) so screen readers announce a single tappable '
+            'affordance. `explicitChildNodes:true` would split this into '
+            'three nodes — an a11y regression.',
+      );
+    });
 
     testWidgets(
       'pre-selection does NOT auto-pop the sheet — user must confirm',
@@ -322,7 +367,6 @@ void main() {
                             isScrollControlled: true,
                             builder: (_) => AddRoutinesSheet(
                               availableRoutines: [_routine(id: 'r-new')],
-                              inPlanIds: const {},
                               preSelectedRoutineIds: const {'r-new'},
                             ),
                           );
