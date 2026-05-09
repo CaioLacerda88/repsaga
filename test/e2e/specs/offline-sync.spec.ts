@@ -27,32 +27,19 @@
 //   - PendingSyncNotifier increments its count → PendingSyncBadge becomes visible.
 //   - After unrouting, subsequent save attempts (manual retry) succeed.
 //
-// OfflineBanner via context.setOffline() — INVESTIGATION FINDING (Family 5A):
-//   Playwright's context.setOffline(true) correctly fires window.offline in the
-//   JS execution context (confirmed: navigator.onLine becomes false, a plain JS
-//   addEventListener('offline') receives the event — see QA investigation in PR).
-//   However, the package:web EventStreamProvider listener in
-//   web_online_events_web.dart does NOT receive this event. The Dart listener
-//   registered via web.EventStreamProviders.offlineEvent.forTarget(web.window)
-//   appears not to observe browser-generated CDP offline/online events, even
-//   though a plain JS listener on window does. The OfflineBanner does not appear.
-//
-//   This is a production-code bug in the web_online_events_web.dart event
-//   subscription mechanism. E2E tests for the OfflineBanner (intended as
-//   OFFLINE-008 and OFFLINE-009) cannot be written until the underlying issue
-//   is resolved. The banner's Semantics identifier 'offline-banner' was also
-//   confirmed never emitted to the flt-semantics-identifier DOM attribute during
-//   an offline state, consistent with the provider never firing false.
-//
-//   QA investigation evidence (2026-05-09):
-//   - diagnostic test 1: after context.setOffline(true), flt-semantics-identifier
-//     list is unchanged (no 'offline-banner' added); page.locator('text=/Offline/')
-//     is not visible.
-//   - diagnostic test 2: plain JS window.addEventListener('offline', ...) DOES
-//     fire after context.setOffline(true); navigator.onLine correctly transitions
-//     false → true.
-//   Conclusion: CDP fires the event at the JS layer; package:web EventStreamProvider
-//   does not deliver it to the Dart layer.
+// OfflineBanner via context.setOffline() — Family 5A:
+//   `context.setOffline(true)` fires `window.offline` in the JS context, which
+//   `package:web`'s `EventStreamProviders.offlineEvent.forTarget(web.window)`
+//   delivers correctly to the Dart layer. The `connectivity_provider.dart`
+//   merge logic emits `false` on `isOnlineProvider` as expected.
+//   The original symptom — banner never appearing — was a Flutter Web
+//   semantics-tree compaction issue: a descendant of the active tab set
+//   `isBlockingSemanticsOfPreviouslyPaintedNodes`, which culled the banner's
+//   Semantics from the AOM tree even though it rendered visually. Fixed by
+//   restructuring `_ShellScaffold` (`Column` → `Stack`) so the banner paints
+//   AFTER the tab content, putting its Semantics last in paint order.
+//   See `lib/core/router/app_router.dart` for the full explanation.
+//   Tests OFFLINE-008/009 below cover the post-fix banner visibility contract.
 //
 // -----------------------------------------------------------------------
 // Test user
