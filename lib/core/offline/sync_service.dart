@@ -13,7 +13,9 @@ import '../../features/rpg/providers/rpg_progress_provider.dart';
 import '../../features/weekly_plan/providers/weekly_plan_provider.dart';
 import '../../features/workouts/providers/workout_history_providers.dart';
 import '../connectivity/connectivity_provider.dart';
+import '../connectivity/connectivity_recovery_provider.dart';
 import '../observability/sentry_report.dart';
+import 'health_check_provider.dart';
 import 'offline_queue_service.dart';
 import 'pending_action.dart';
 import 'pending_sync_provider.dart';
@@ -45,6 +47,11 @@ class SyncService extends Notifier<SyncState> {
   /// [_coldLaunchDrain] future doesn't call into a destroyed [ref].
   bool _disposed = false;
 
+  /// Periodic health-check timer. Lives only while the queue contains at
+  /// least one transient (retryable) item. Cancelled when the queue becomes
+  /// empty or all-terminal so an idle queue produces zero background traffic.
+  Timer? _healthCheckTimer;
+
   @override
   SyncState build() {
     // Synchronize _lastOnline with the current connectivity state so that
@@ -53,6 +60,8 @@ class SyncService extends Notifier<SyncState> {
 
     ref.onDispose(() {
       _disposed = true;
+      _healthCheckTimer?.cancel();
+      _healthCheckTimer = null;
     });
 
     ref.listen<bool>(isOnlineProvider, (previous, next) {
@@ -61,6 +70,30 @@ class SyncService extends Notifier<SyncState> {
       if (wasOffline && next) {
         _drain();
       }
+    });
+
+    // AW-EX-E-US1-01: third drain trigger. The OS-level adapter event
+    // (above) misses captive portal recovery / same-SSID reconnect / silent
+    // backend outages. The recovery notifier ticks whenever a successful
+    // repository call follows a recent network-class failure — that's the
+    // user's effective recovery signal regardless of what the OS reports.
+    //
+    // The notifier owns its own 5s cooldown and 5min failure window, so the
+    // listener body just kicks `_drain()` on every state change. The
+    // existing `_draining` guard inside `_drain` collapses concurrent ticks
+    // (e.g. tick + tick + tick during a long drain → only the first wins).
+    ref.listen<int>(connectivityRecoveryProvider, (previous, next) {
+      if (previous == next) return;
+      _drain();
+    });
+
+    // Health-check lifecycle. The queue size is reactive (pendingSyncProvider
+    // exposes the int count), so listening to it gives an event-driven
+    // start/stop without polling. Initial check covers the case where the
+    // service was built with pre-existing queue items.
+    _evaluateHealthCheckTimer();
+    ref.listen<int>(pendingSyncProvider, (_, _) {
+      _evaluateHealthCheckTimer();
     });
 
     // Cold-launch drain. The listener above does NOT fire on cold launch
@@ -80,6 +113,79 @@ class SyncService extends Notifier<SyncState> {
     unawaited(_coldLaunchDrain());
 
     return const SyncState();
+  }
+
+  /// Idempotent: starts the health-check timer when the queue gains a
+  /// transient item, stops it when the queue is empty or all-terminal.
+  /// Safe to call from listeners on every queue-count change — the timer
+  /// is only (re)created on a state transition.
+  void _evaluateHealthCheckTimer() {
+    if (_disposed) return;
+    final hasTransient = _hasTransientItems();
+    if (hasTransient) {
+      // Already running? Nothing to do — `Timer.periodic` doesn't restart
+      // on every queue change, which preserves the configured cadence.
+      if (_healthCheckTimer?.isActive == true) return;
+      final interval = ref.read(healthCheckIntervalProvider);
+      _healthCheckTimer = Timer.periodic(interval, (_) {
+        unawaited(_runHealthCheck());
+      });
+    } else {
+      _healthCheckTimer?.cancel();
+      _healthCheckTimer = null;
+    }
+  }
+
+  /// Are there any non-terminal items in the queue? Terminal items
+  /// (retryCount >= kMaxSyncRetries) require a manual user action to
+  /// re-arm via [retryTerminalItems], so they don't justify keeping the
+  /// background probe alive.
+  ///
+  /// Defensive against a closed/missing Hive box: if the underlying queue
+  /// read throws (e.g. widget tests that exercise [SyncService] without
+  /// initialising the `offline_queue` box), treat it as "no transient items"
+  /// so no health-check timer starts. The semantic is correct — no readable
+  /// queue means no items to probe for.
+  bool _hasTransientItems() {
+    try {
+      final actions = ref.read(offlineQueueServiceProvider).getAll();
+      return actions.any((a) => a.retryCount < kMaxSyncRetries);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// One health-check probe. Funnels result through the recovery notifier
+  /// — a success after a recorded failure ticks the recovery state, which
+  /// the listener above turns into a drain. Failures arm the recovery
+  /// window for the next probe / next real call.
+  ///
+  /// The probe runs through [healthCheckProvider] so tests can stub it.
+  /// Errors thrown by the probe itself are caught and recorded as failures
+  /// — the timer must never be torn down by an exception.
+  Future<void> _runHealthCheck() async {
+    if (_disposed) return;
+    if (!_hasTransientItems()) {
+      _healthCheckTimer?.cancel();
+      _healthCheckTimer = null;
+      return;
+    }
+    final probe = ref.read(healthCheckProvider);
+    final recorder = ref.read(connectivityRecoveryProvider.notifier);
+    try {
+      final ok = await probe();
+      if (_disposed) return;
+      if (ok) {
+        recorder.recordSuccess();
+      } else {
+        // Pass a minimal network-class shape so the classifier records the
+        // failure. The exact instance doesn't matter — only its type.
+        recorder.recordFailure(TimeoutException('health-check failed'));
+      }
+    } catch (e) {
+      if (_disposed) return;
+      recorder.recordFailure(e);
+    }
   }
 
   /// Awaits the StreamProvider's first real emission and drains the queue
@@ -120,6 +226,16 @@ class SyncService extends Notifier<SyncState> {
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
+
+    // Suppress the recovery recorder for the duration of the drain. The
+    // drain's own repository calls would otherwise feed back into
+    // recordSuccess/recordFailure, ticking the recovery counter and either
+    // starting a phantom drain (re-entry caught by the `_draining` guard,
+    // but the cooldown still consumes a slot) or triggering an immediate
+    // re-drain after this one finishes. Plan §330 — explicitly spec'd
+    // option 2 (suppression) over option 1 (rely on guard side-effects).
+    final recoveryNotifier = ref.read(connectivityRecoveryProvider.notifier);
+    recoveryNotifier.setRecordingSuppressed(true);
 
     try {
       final notifier = ref.read(pendingSyncProvider.notifier);
@@ -258,6 +374,9 @@ class SyncService extends Notifier<SyncState> {
       state = SyncState(terminalFailureCount: terminalCount);
     } finally {
       _draining = false;
+      // Restore the recorder so subsequent (non-drain) repository calls
+      // can resume feeding the recovery state machine.
+      recoveryNotifier.setRecordingSuppressed(false);
     }
   }
 

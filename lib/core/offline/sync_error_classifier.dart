@@ -63,4 +63,35 @@ abstract final class SyncErrorClassifier {
     // Unknown errors default to transient so the queue retries them.
     return false;
   }
+
+  /// Returns `true` if [error] looks like a network/transport/server-class
+  /// failure rather than a domain (4xx) error.
+  ///
+  /// Used by [ConnectivityRecoveryNotifier] to decide whether a repository
+  /// failure should arm the recovery signal. A 4xx domain error means the
+  /// server WAS reachable enough to return a structured response — the
+  /// network is healthy; recording it as a network failure would falsely
+  /// trigger a drain on the next successful unrelated call.
+  ///
+  /// Conservative for unknown shapes: defaults to `false` so an unrecognised
+  /// exception type cannot accidentally trigger the recovery hook and start
+  /// a retry storm.
+  static bool isNetworkClass(Object error) {
+    // Raw transport-layer errors.
+    if (error is SocketException) return true;
+    if (error is TimeoutException) return true;
+    // Wrapped equivalents emitted by [BaseRepository.mapException].
+    if (error is app.NetworkException) return true;
+    if (error is app.TimeoutException) return true;
+    // Auth-token refresh class — 401 / "JWT expired" — is transient and
+    // generally clears once the SDK refreshes the session. Treat as network
+    // class so a successful retry trips recovery.
+    if (error is supabase.AuthException) return true;
+    if (error is app.AuthException) return true;
+    // Server-class HTTP failures (5xx, including 502/503 captive-portal
+    // recovery shapes). 4xx are domain errors — explicitly excluded.
+    final code = httpCode(error);
+    if (code != null && code >= 500 && code < 600) return true;
+    return false;
+  }
 }
