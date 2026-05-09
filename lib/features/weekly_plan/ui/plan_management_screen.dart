@@ -83,6 +83,20 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   /// showing" predicate.
   bool _undoSnackbarActive = false;
 
+  /// Whether a "Saved" confirmation snackbar is currently in its 1-second
+  /// display window. Two slow consecutive edits each fire `upsertPlan` and
+  /// chain `_maybeShowSavedSnackbar`; without this guard the second call's
+  /// `showSnackBar` REPLACES the still-visible first one, producing a
+  /// visible "Saved... Saved..." stutter as the first snack is dismissed
+  /// mid-display and a fresh 1-second snack appears in its place.
+  ///
+  /// Set true synchronously before `showSnackBar`; cleared via
+  /// `controller.closed.whenComplete` once the 1-second window elapses
+  /// (or another snack pre-empts it). While true, additional `Saved`
+  /// requests are suppressed — the existing snack already gives the user
+  /// the same signal.
+  bool _savedSnackbarActive = false;
+
   /// Captured notifier for debounced save. `ref` cannot be used in dispose(),
   /// so we hold the notifier directly, refreshed on each edit.
   WeeklyPlanNotifier? _debouncedPlanNotifier;
@@ -314,7 +328,6 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
       isScrollControlled: true,
       builder: (context) => AddRoutinesSheet(
         availableRoutines: available,
-        inPlanIds: existingIds,
         preSelectedRoutineIds: preSelectedRoutineIds,
       ),
     );
@@ -554,31 +567,45 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   }
 
   /// Shows the "Saved" confirmation snackbar IF the widget is still
-  /// mounted AND no other snackbar is currently visible. Suppression of
-  /// the second condition protects the undo snackbar that follows
-  /// `_removeRoutine` — replacing it would destroy the user's recovery
-  /// affordance for an action they may have triggered by accident.
+  /// mounted AND no other snackbar is currently visible AND no other
+  /// Saved snack is already in its 1-second display window. Three
+  /// suppression rules:
+  ///
+  ///   * `!mounted` — showing after dispose would crash on
+  ///     `ScaffoldMessenger.of`.
+  ///   * `_undoSnackbarActive` — protects the 5-second undo affordance
+  ///     shipped from `_removeRoutine`. Replacing it would destroy the
+  ///     user's recovery affordance for an action they may have
+  ///     triggered by accident.
+  ///   * `_savedSnackbarActive` — coalesces consecutive Saved snacks.
+  ///     Two slow-but-separate edits (each ≥300ms apart) each fire
+  ///     `upsertPlan` and chain back here; the default
+  ///     `ScaffoldMessenger.showSnackBar` REPLACES the current snack, so
+  ///     without this guard the first Saved is dismissed mid-display
+  ///     and a fresh 1-second Saved appears — visible "Saved... Saved..."
+  ///     stutter. With the guard the second call no-ops, the user
+  ///     continues seeing the still-active Saved snack, and the contract
+  ///     ("the last edit was persisted") still holds.
   void _maybeShowSavedSnackbar() {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    // Suppress if any other snackbar is currently active. The undo snack
-    // shipped from `_removeRoutine` lives for 5s; the Saved snack would
-    // hide and replace it without that guard.
-    //
-    // Note: `ScaffoldMessengerState` does not expose a "currently
-    // showing" boolean, so we use the `_snackBars` queue indirectly via
-    // the public `removeCurrentSnackBar` is unsafe. The clean check is
-    // to track our own pending undo snack via a flag — set it true when
-    // `_removeRoutine` shows its snack, clear it when the snack finishes.
     if (_undoSnackbarActive) return;
+    if (_savedSnackbarActive) return;
+    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
-    messenger.showSnackBar(
+    _savedSnackbarActive = true;
+    final controller = messenger.showSnackBar(
       SnackBar(
         content: Text(l10n.savedConfirmation),
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
       ),
     );
+    // Clear the flag when the snack finishes (timeout, dismiss, or
+    // replacement). Without this, a subsequent edit long after the snack
+    // expired would silently suppress its own Saved confirmation.
+    controller.closed.whenComplete(() {
+      if (mounted) _savedSnackbarActive = false;
+    });
   }
 
   /// Fire the debounced `week_plan_saved` analytics event exactly once.
