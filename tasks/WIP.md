@@ -10,95 +10,9 @@ as work lands, and remove the section after the merge condenses to PLAN.md.
 
 ---
 
-## Active branch: `fix/core-connectivity-web` — Family 5A (Web connectivity)
-
-Per `tasks/active-workout-implementation-plan.md` §302–§350. Bug AW-EX-B-US1-03
-(offline banner never fires on Web — `connectivity_plus` doesn't see CDP
-offline / browser-level disconnects).
-
-**Triage decisions (settled before tech-lead dispatch):**
-- **Conditional-import discriminator:** `dart.library.js_interop` (modern, Flutter 3.13+).
-  Plan §328 mentions `dart.library.html` as legacy alternative — we use the
-  modern one.
-- **Web event API:** `package:web` (canonical `dart:html` successor). Add to
-  pubspec dependencies; pin to a stable version compatible with `dart_sdk
-  ^3.11.4`.
-- **Debounce per source:** keep the existing 500ms debounce on the
-  `connectivity_plus` adapter stream (legitimate flapping). For browser
-  online/offline events, use a smaller (or zero) debounce — Chrome fires the
-  event immediately on real disconnect, no flapping to absorb. Plan §329.
-- **Stream merging:** native + browser sources both feed a single
-  `StreamController<bool>` so `onlineStatusProvider` keeps its existing API
-  (`StreamProvider<bool>` returning a debounced boolean).
-- **Optimistic default of `true`:** preserved (plan §332). The cold-launch
-  drain protocol depends on it.
-
-**Files to touch:**
-- `lib/core/connectivity/connectivity_provider.dart` — refactor to merge native
-  + web sources via conditional-import platform interface.
-- New: `lib/core/connectivity/web_online_events.dart` (web shim, exports
-  `onWebOnlineStatusChange()` returning `Stream<bool>`).
-- New: `lib/core/connectivity/web_online_events_io.dart` (native stub returning
-  `Stream<bool>.empty()`).
-- `pubspec.yaml` — add `web: ^x.y.z` dependency (verify SDK compat).
-
-**Tests (TDD):**
-- New: `test/unit/core/connectivity/connectivity_provider_web_test.dart` —
-  use a fake stream injected via the platform-interface seam, assert the
-  merged provider emits `false` on browser-offline event and `true` on
-  browser-online event.
-- New: `test/widget/shared/widgets/offline_banner_web_test.dart` — pump app
-  shell with the same fake source; assert `OfflineBanner` becomes visible
-  when fake fires offline. (Optional if covered by the unit test on the
-  provider — confirm with tech-lead which level is most valuable.)
-- Existing `test/unit/core/offline/sync_service_test.dart` and offline-sync
-  E2E remain untouched in 5A; QA will overhaul the E2E spec post-merge.
-
-**Acceptance criteria:**
-- `make ci` clean (format + analyze + test + android-debug-build).
-- Native build (Android) does NOT import `package:web`. Verified by
-  android-debug-build step + grep on the bundled Dart classes.
-- Web build (`flutter build web`) emits a bundle that subscribes to
-  `window.online`/`window.offline` and pipes results into
-  `onlineStatusProvider`.
-- Existing native behavior preserved: `connectivity_plus` stream still
-  drives `onlineStatusProvider` on Android/iOS.
-
-**Pipeline tracking:**
-- [x] Branch + WIP entry (Task #41)
-- [x] Tech-lead implements 5A with TDD (Task #42)
-- [x] CI verification + native-build sanity (Task #43) — full `make ci` green
-  (format + gen + analyze + 2458 unit/widget tests + Android debug APK)
-- [x] QA gate — E2E offline-sync rewrite (Task #44) — BLOCKED on prod bug
-  - Added 5 widget-integration tests (offline_banner_integration_test.dart) — all pass
-  - Updated offline-sync.spec.ts: removed stale "documented limitation" header
-  - PROD-CODE BUG FOUND (root cause: NOT package:web): the OfflineBanner's
-    Semantics(identifier: 'offline-banner') node was being culled by the
-    Flutter Web semantics tree compactor because the home/exercises/etc. tab
-    content registers `isBlockingSemanticsOfPreviouslyPaintedNodes` (typical
-    sources: BlockSemantics, ModalBarrier, Drawer scrim) which propagates up
-    to the `Expanded(child)` and drops every sibling semantics node painted
-    before it. With the old `Column([if(!isOnline) OfflineBanner, Expanded(child)])`
-    layout the banner painted BEFORE child and was therefore blocked.
-    The package:web subscription, the merge logic in connectivity_provider,
-    and the listener registration are all correct — diagnostic counters
-    confirmed the Dart listener fires on `setOffline(true)` and the value
-    propagates through `isOnlineProvider`.
-- [x] Tech-lead: fix shell-level layout so OfflineBanner surfaces on web
-  - Switched `_ShellScaffold.body` from `Column` to `Stack` so the banner
-    paints AFTER the active tab content (no longer a "previous sibling")
-  - Added `liveRegion: true` and a `label` to the banner Semantics for
-    proper AT announcement semantics
-  - All 9 offline-sync E2E pass (including OFFLINE-008/009); 115 @smoke pass;
-    2463 unit/widget tests pass; analyzer clean
-- [ ] Verify + PR + reviewer cycle (Task #45)
-- [ ] Post-merge cleanup PR (Task #46)
-
----
-
 ## Resume context (post-compact pickup)
 
-**Active-workout exploratory pass progress: 24 / 31 bugs shipped across 8 PR
+**Active-workout exploratory pass progress: 25 / 31 bugs shipped across 9 PR
 pairs.**
 
 | Family | PRs | Status |
@@ -110,57 +24,62 @@ pairs.**
 | 8 — Finish-button disabled wiring (STALE) | #183, #184 | ✅ |
 | 7 — postFrame race + offline contract | #185, #186 | ✅ (3-round arc) |
 | 3 + 6 — A11y semantics + i18n leaks (combined) | #187, #188 | ✅ (11 bugs in one cycle) |
+| 5A — Web `OfflineBanner` Semantics (root cause: shell layout) | #189, _cleanup_ | ✅ |
 
 **What's left (single remaining family):**
 
-**Family 5 — Connectivity / sync drain on Flutter Web.** 4 bugs. ~8h. High
-risk (architectural; touches every offline-touching feature). Plan reference:
-`tasks/active-workout-implementation-plan.md` §302.
+**Family 5B — Drain reliability fallbacks.** 3 bugs. ~6h. Architectural,
+no UI change. Plan reference: `tasks/active-workout-implementation-plan.md`
+§336 (PR 5B section), §344–§348.
 
 Bugs:
-- AW-EX-B-US1-03 (offline banner never fires on Web — `connectivity_plus`
-  doesn't see CDP offline)
 - AW-EX-E-US1-01 (drain only triggers on OS-level event; captive portal
   recovery / same-SSID reconnect → no auto-drain)
 - AW-EX-E-US1-04 (fallback PR upsert with `dependsOn: []` — fragile)
 - AW-EX-E-US1-05 (mid-drain connectivity flap splits drain into two passes)
 
-Recommended split per plan §336:
-- **PR 5A — Web-specific connectivity:** conditional import for `package:web`
-  online/offline DOM events; merge into existing `connectivity_plus` stream;
-  update `OfflineBanner` for web. Files: `lib/core/connectivity/
-  connectivity_provider.dart` + a new web shim. Risk: conditional imports
-  across native/web are brittle (`dart.library.html` discriminator —
-  modern: `dart.library.js_interop`).
-- **PR 5B — Drain reliability fallbacks:** `connectivityRecoveryProvider`
-  heuristic (any successful repository call after a recent failure → drain
-  signal, with 5s cooldown); periodic health check every 60s while queue
-  non-empty (HEAD on Supabase health endpoint). Risk: feedback loops if
-  recovery signal fires from a request that itself failed.
-
-Sequencing: independent — 5A and 5B can ship in either order.
+Plan-recommended approach:
+- `connectivityRecoveryProvider` — any successful repository call after a
+  recent recorded failure fires a drain signal, gated by a 5s cooldown to
+  prevent retry storms.
+- Periodic health check every 60s while queue non-empty; HEAD on Supabase
+  health endpoint. Stops if queue is entirely terminal-failure items
+  (no transient items remain).
+- Risk: feedback loops if the recovery signal fires from a request that
+  itself failed.
 
 **Process pattern that has been working:**
 - TDD discipline (failing-test-first) caught stale measurement findings in
-  Families 4 and 8, surfaced architecture-level bugs in Families 1A and 7
-- Reviewer agent has caught real bugs in every cycle (Family 3+6 caught a
-  Critical warmup-abbr divergence + a Warning on `lookupAppLocalizations`
-  fallback gap that the orchestrator and tech-lead both initially missed)
+  Families 4 and 8, surfaced architecture-level bugs in Families 1A and 7,
+  and exposed the actual layout-bug root cause in Family 5A (initial
+  hypothesis blamed `package:web`; tech-lead's systematic-debugging found
+  it was a Flutter Web semantics-tree compaction issue in `_ShellScaffold`)
+- Reviewer agent has caught real bugs in every cycle. On 5A: caught the
+  `_kOfflineBannerHeight` undershoot (40 vs actual 42dp) and an E2E
+  cleanup-safety bug where a mid-test timeout would poison subsequent
+  tests with a permanently-offline browser context.
 - Post-merge cleanup PRs admin-merge after fast checks (memory feedback —
   saves ~20 min per cycle vs waiting on e2e)
 - All findings (Critical / Warning / Nit / Suggestion) addressed in same
   cycle per memory feedback — zero post-merge follow-ups
 
-**Next dispatch when resuming:**
-- Decide: 5A (web-specific connectivity) or 5B (drain reliability) first?
-  Plan says they're independent. 5A is the more user-visible fix (offline
-  banner on Web); 5B is the more architecturally interesting work.
-- Create branch (`fix/core-connectivity-web` for 5A or `fix/core-drain-
-  reliability` for 5B)
-- Write WIP entry referencing the implementation plan section
-- Dispatch tech-lead with TDD instructions; the conditional-import surface
-  in 5A warrants extra caution — plan §356 flags brittle native/web build
-  break risk
+**Next dispatch when resuming Family 5B:**
+- Create branch `fix/core-drain-reliability`
+- Write WIP entry referencing implementation plan §344–§348
+- Dispatch tech-lead with TDD instructions:
+  - New: `lib/core/offline/connectivity_recovery_provider.dart` (or extend
+    existing) — record a failure timestamp, expose a "consume" method that
+    treats a successful call within N seconds of a failure as a recovery
+    signal
+  - Wire into `lib/core/data/base_repository.dart` — every repository
+    success/failure goes through `mapException`, ideal hook
+  - `lib/core/offline/sync_service.dart` — listen to recovery signal as a
+    third drain trigger alongside `onlineStatusProvider` and the existing
+    OS-event path
+  - Periodic health-check timer in `sync_service.dart` — start when queue
+    becomes non-empty, stop when empty or all-terminal
+  - Tests: integration around the recovery hook, cooldown enforcement,
+    health-check lifecycle
 - Standard pipeline: tech-lead → CI → QA → PR → reviewer → merge → cleanup PR
 
 ---
