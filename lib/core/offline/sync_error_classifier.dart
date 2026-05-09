@@ -63,4 +63,46 @@ abstract final class SyncErrorClassifier {
     // Unknown errors default to transient so the queue retries them.
     return false;
   }
+
+  /// Returns `true` if [error] looks like a network/transport/server-class
+  /// failure rather than a domain (4xx) error.
+  ///
+  /// Used by [ConnectivityRecoveryNotifier] to decide whether a repository
+  /// failure should arm the recovery signal. A 4xx domain error means the
+  /// server WAS reachable enough to return a structured response — the
+  /// network is healthy; recording it as a network failure would falsely
+  /// trigger a drain on the next successful unrelated call.
+  ///
+  /// Conservative for unknown shapes: defaults to `false` so an unrecognised
+  /// exception type cannot accidentally trigger the recovery hook and start
+  /// a retry storm.
+  static bool isNetworkClass(Object error) {
+    // Raw transport-layer errors.
+    if (error is SocketException) return true;
+    if (error is TimeoutException) return true;
+    // Wrapped equivalents emitted by [BaseRepository.mapException].
+    if (error is app.NetworkException) return true;
+    if (error is app.TimeoutException) return true;
+    // Auth-token refresh class — only 401 ("JWT expired" / unauthenticated).
+    // The SDK refreshes the session and the next call typically succeeds,
+    // so trip recovery on retry. Permanent domain errors (invalid creds:
+    // 400, email-not-confirmed: 400/403, weak password: 422, rate-limited:
+    // 429, ...) MUST NOT arm the window — they will never self-heal and
+    // would cause every login attempt to falsely trigger a drain after a
+    // network blip.
+    //
+    // gotrue's [supabase.AuthException] exposes [statusCode] (String?) for
+    // the HTTP code; the wrapped [app.AuthException] stores it on [code].
+    if (error is supabase.AuthException) {
+      return error.statusCode == '401';
+    }
+    if (error is app.AuthException) {
+      return error.code == '401';
+    }
+    // Server-class HTTP failures (5xx, including 502/503 captive-portal
+    // recovery shapes). 4xx are domain errors — explicitly excluded.
+    final code = httpCode(error);
+    if (code != null && code >= 500 && code < 600) return true;
+    return false;
+  }
 }

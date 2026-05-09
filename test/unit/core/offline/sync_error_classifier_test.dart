@@ -185,5 +185,218 @@ void main() {
         expect(SyncErrorClassifier.httpCode(Exception('random')), isNull);
       });
     });
+
+    // The isNetworkClass helper distinguishes "the request couldn't reach a
+    // healthy server" (timeout, socket-refused, DNS, 5xx, transient auth)
+    // from domain errors (4xx validation, business-logic). The recovery
+    // signal in `connectivityRecoveryProvider` consumes this — a domain
+    // error must NOT mark the network as unhealthy, because the network was
+    // healthy enough to return a structured 4xx.
+    group('isNetworkClass', () {
+      test('returns true for SocketException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(const SocketException('refused')),
+          isTrue,
+        );
+      });
+
+      test('returns true for dart:async TimeoutException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(TimeoutException('timeout')),
+          isTrue,
+        );
+      });
+
+      test('returns true for wrapped app.NetworkException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const app.NetworkException('no connection'),
+          ),
+          isTrue,
+        );
+      });
+
+      test('returns true for wrapped app.TimeoutException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(const app.TimeoutException()),
+          isTrue,
+        );
+      });
+
+      test('returns true for 5xx PostgrestException (server unhealthy)', () {
+        const error = supabase.PostgrestException(
+          message: 'Service Unavailable',
+          code: '503',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isTrue);
+      });
+
+      test('returns true for 5xx wrapped app.DatabaseException', () {
+        const error = app.DatabaseException('ISE', code: '500');
+        expect(SyncErrorClassifier.isNetworkClass(error), isTrue);
+      });
+
+      test(
+        'returns true for raw supabase.AuthException with 401 (token refresh)',
+        () {
+          // Only 401 ("JWT expired" / unauthenticated) counts as transient.
+          // The SDK auto-refreshes the session and the next call usually
+          // succeeds — that successful retry trips the recovery signal.
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const supabase.AuthException('JWT expired', statusCode: '401'),
+            ),
+            isTrue,
+          );
+        },
+      );
+
+      test(
+        'returns true for wrapped app.AuthException with 401 (token refresh)',
+        () {
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const app.AuthException('JWT expired', code: '401'),
+            ),
+            isTrue,
+          );
+        },
+      );
+
+      test(
+        'returns false for raw supabase.AuthException with no statusCode',
+        () {
+          // Pre-fix: any AuthException tripped recovery. Now: only 401.
+          // An exception without a statusCode (e.g. some local SDK errors)
+          // is NOT classified as network — treating it so would risk
+          // arming the window on permanent domain errors that bubble up
+          // without an HTTP code.
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const supabase.AuthException('JWT expired'),
+            ),
+            isFalse,
+          );
+        },
+      );
+
+      test('returns false for raw supabase.AuthException with 400 '
+          '(invalid credentials)', () {
+        // Wrong password / sign-up validation — permanent domain errors.
+        // Will never self-heal; recording as network would arm the window
+        // every time the user mistypes their password and false-trigger a
+        // drain on the next successful call.
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const supabase.AuthException(
+              'Invalid login credentials',
+              statusCode: '400',
+            ),
+          ),
+          isFalse,
+        );
+      });
+
+      test('returns false for raw supabase.AuthException with 403 '
+          '(email not confirmed)', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const supabase.AuthException(
+              'Email not confirmed',
+              statusCode: '403',
+            ),
+          ),
+          isFalse,
+        );
+      });
+
+      test(
+        'returns false for raw supabase.AuthException with 422 (weak password)',
+        () {
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const supabase.AuthException(
+                'Password is too weak',
+                statusCode: '422',
+              ),
+            ),
+            isFalse,
+          );
+        },
+      );
+
+      test(
+        'returns false for raw supabase.AuthException with 429 (rate limited)',
+        () {
+          // Rate-limit is a domain signal — backing off via the queue's own
+          // retry/backoff is correct; don't false-trip recovery on it.
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const supabase.AuthException(
+                'Too many requests',
+                statusCode: '429',
+              ),
+            ),
+            isFalse,
+          );
+        },
+      );
+
+      test(
+        'returns false for wrapped app.AuthException with 400 (invalid creds)',
+        () {
+          expect(
+            SyncErrorClassifier.isNetworkClass(
+              const app.AuthException('Invalid credentials', code: '400'),
+            ),
+            isFalse,
+          );
+        },
+      );
+
+      test('returns false for 400 PostgrestException (domain error)', () {
+        const error = supabase.PostgrestException(
+          message: 'Bad Request',
+          code: '400',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for 404 PostgrestException (domain error)', () {
+        const error = supabase.PostgrestException(
+          message: 'Not Found',
+          code: '404',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for 422 wrapped app.DatabaseException', () {
+        const error = app.DatabaseException('Unprocessable', code: '422');
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for app.ValidationException (domain error)', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const app.ValidationException('Required', field: 'name'),
+          ),
+          isFalse,
+        );
+      });
+
+      test(
+        'returns false for unknown exception types (conservative default)',
+        () {
+          // Unknown shapes are not classified as network — the recovery
+          // signal must be conservative and only fire on clearly-network
+          // failures. An unknown exception triggering the recovery path
+          // would risk false drains and retry storms.
+          expect(
+            SyncErrorClassifier.isNetworkClass(Exception('random')),
+            isFalse,
+          );
+        },
+      );
+    });
   });
 }

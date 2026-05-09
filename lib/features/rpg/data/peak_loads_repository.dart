@@ -16,7 +16,7 @@ import '../models/peak_load.dart';
 ///     for the user's PR history.
 ///   * Test fixtures that need to assert peak advancement after a set.
 class PeakLoadsRepository extends BaseRepository {
-  const PeakLoadsRepository(this._client);
+  PeakLoadsRepository(this._client, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
 

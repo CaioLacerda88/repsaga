@@ -22,7 +22,12 @@ import '../models/personal_record.dart';
 /// Missing exercises (soft-deleted or foreign-owned) silently fall back to
 /// `'Unknown Exercise'` + `EquipmentType.barbell` so the UI never crashes.
 class PRRepository extends BaseRepository {
-  const PRRepository(this._client, this._cache, this._exerciseRepo);
+  PRRepository(
+    this._client,
+    this._cache,
+    this._exerciseRepo, {
+    super.recoveryRecorder,
+  });
 
   final supabase.SupabaseClient _client;
   final CacheService _cache;

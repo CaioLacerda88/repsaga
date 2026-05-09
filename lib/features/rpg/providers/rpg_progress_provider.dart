@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../data/peak_loads_repository.dart';
 import '../data/rpg_repository.dart';
 import '../models/body_part.dart';
@@ -12,12 +13,18 @@ import '../models/body_part_progress.dart';
 
 /// Single instance of the RPG repository.
 final rpgRepositoryProvider = Provider<RpgRepository>((ref) {
-  return RpgRepository(Supabase.instance.client);
+  return RpgRepository(
+    Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 /// Single instance of the peak-loads repository.
 final peakLoadsRepositoryProvider = Provider<PeakLoadsRepository>((ref) {
-  return PeakLoadsRepository(Supabase.instance.client);
+  return PeakLoadsRepository(
+    Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 // ---------------------------------------------------------------------------

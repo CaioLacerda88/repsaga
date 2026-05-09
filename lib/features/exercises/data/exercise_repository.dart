@@ -28,7 +28,7 @@ import '../models/exercise.dart';
 /// repository's keys merely make sure stale-locale data can't leak in if the
 /// switch eviction misses for any reason.
 class ExerciseRepository extends BaseRepository {
-  const ExerciseRepository(this._client, this._cache);
+  ExerciseRepository(this._client, this._cache, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
   final CacheService _cache;

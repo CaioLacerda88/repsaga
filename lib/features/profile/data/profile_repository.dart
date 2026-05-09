@@ -4,7 +4,7 @@ import '../../../core/data/base_repository.dart';
 import '../models/profile.dart';
 
 class ProfileRepository extends BaseRepository {
-  const ProfileRepository(this._client);
+  ProfileRepository(this._client, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
 

@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../data/auth_repository.dart';
 
 /// Provides the [AuthRepository] singleton.
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(Supabase.instance.client.auth);
+  return AuthRepository(
+    Supabase.instance.client.auth,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 /// Synchronous read of the signed-in user's id, so UI/providers don't have to

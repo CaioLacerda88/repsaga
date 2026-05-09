@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../data/profile_repository.dart';
 import '../models/profile.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return ProfileRepository(Supabase.instance.client);
+  return ProfileRepository(
+    Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 final profileProvider = AsyncNotifierProvider<ProfileNotifier, Profile?>(

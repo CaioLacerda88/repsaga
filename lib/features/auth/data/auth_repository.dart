@@ -12,6 +12,7 @@ class AuthRepository extends BaseRepository {
     FunctionsClient? functions,
     @visibleForTesting Duration? authTimeout,
     @visibleForTesting Duration? signOutTimeout,
+    super.recoveryRecorder,
   }) : _injectedFunctions = functions,
        _authTimeout = authTimeout ?? _defaultAuthTimeout,
        _signOutTimeout = signOutTimeout ?? _defaultSignOutTimeout;

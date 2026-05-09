@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../../core/l10n/locale_provider.dart';
 import '../../../core/local_storage/cache_service.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -23,6 +24,7 @@ final prRepositoryProvider = Provider<PRRepository>((ref) {
     Supabase.instance.client,
     ref.watch(cacheServiceProvider),
     ref.watch(exerciseRepositoryProvider),
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
   );
 });
 
