@@ -346,9 +346,19 @@ class _RouterRefreshListenable extends ChangeNotifier {
 }
 
 /// Height in logical pixels of the OfflineBanner overlay. Used to pad the
-/// active tab's content so it isn't covered by the banner. Matches the
-/// banner's intrinsic height: 12 + 12 padding + ~16 line height = ~40dp.
-const double _kOfflineBannerHeight = 40;
+/// active tab's content so it isn't covered by the banner.
+///
+/// Geometry: vertical padding 12 + 12 = 24dp, plus the rendered line height
+/// of `AppTextStyles.bodySmall` (`fontSize: 12 * height: 1.5` = 18dp) which
+/// dominates the inner Row over the 16dp `cloud_off` icon. Total: 42dp.
+///
+/// The constant is only valid as long as the banner is rendered with
+/// `TextScaler.noScaling` — see `_ShellScaffold.build` where the
+/// `OfflineBanner` is wrapped in a `MediaQuery.copyWith(textScaler:)` to
+/// pin the height. If a future change removes that pin, system text
+/// scaling can grow this height (or wrap the row), and the constant must
+/// either become responsive or move back to a measure-and-cache pattern.
+const double _kOfflineBannerHeight = 42;
 
 class _ShellScaffold extends ConsumerWidget {
   const _ShellScaffold({required this.child});
@@ -434,7 +444,24 @@ class _ShellScaffold extends ConsumerWidget {
             ),
           ),
           if (!isOnline)
-            const Align(alignment: Alignment.topCenter, child: OfflineBanner()),
+            Align(
+              alignment: Alignment.topCenter,
+              // Pin the banner to `TextScaler.noScaling` so its rendered
+              // height stays equal to `_kOfflineBannerHeight` (42dp)
+              // regardless of system font scaling. The banner is a short,
+              // high-contrast visual marker — letting it scale would either
+              // wrap the row (worse a11y) or push it past the padded body
+              // and overlap content. Other text in the app respects the
+              // user's text-scale preference; this banner is the one
+              // exception, by design. See `_kOfflineBannerHeight` for the
+              // height contract this pin protects.
+              child: MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.noScaling),
+                child: const OfflineBanner(),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: Column(

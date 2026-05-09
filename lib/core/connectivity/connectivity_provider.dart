@@ -88,6 +88,16 @@ final nativeOnlineEventsProvider = Provider<Stream<bool>>((ref) {
 final onlineStatusProvider = StreamProvider<bool>((ref) {
   final controller = StreamController<bool>();
 
+  // `ref.watch` here is deliberate (not a typo for `ref.read`): if either
+  // source provider is invalidated, this StreamProvider rebuilds, which
+  // re-runs this closure and creates fresh subscriptions on the new source
+  // streams. The previous invocation's `ref.onDispose` callback fires and
+  // cancels the old subscriptions — so subscriptions are not leaked, but
+  // disposal is two-phase (old closure tears down after the new closure
+  // starts subscribing) rather than a synchronous swap. Replacing this
+  // with `ref.read` would freeze the merge to whichever streams existed
+  // on first build and miss subsequent invalidations (e.g. test overrides
+  // swapping out the web events source).
   final nativeStream = ref.watch(nativeOnlineEventsProvider);
   final webStream = ref.watch(webOnlineEventsProvider);
 
