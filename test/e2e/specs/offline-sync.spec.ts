@@ -283,6 +283,58 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
       page.locator(OFFLINE.failureCardSubtitle),
     ).not.toBeVisible();
   });
+
+  // -------------------------------------------------------------------------
+  // Test 8: OfflineBanner appears when CDP toggles browser offline
+  //
+  // Family 5A acceptance criterion. Playwright's context.setOffline(true)
+  // fires window.offline in the JS layer; web_online_events_web.dart's
+  // listener must observe this and push false into onlineStatusProvider so
+  // the OfflineBanner appears.
+  // -------------------------------------------------------------------------
+  test('should show offline banner when browser goes offline via CDP (OFFLINE-008)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    // Sanity: banner must be hidden while online.
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 3_000,
+    });
+
+    // Toggle browser offline. CDP fires window.offline in the JS layer.
+    await page.context().setOffline(true);
+
+    // Banner must appear within 5s.
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Restore connectivity so global teardown isn't disrupted.
+    await page.context().setOffline(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 9: OfflineBanner disappears when CDP restores connectivity
+  //
+  // Family 5A acceptance criterion. After setOffline(true) → setOffline(false),
+  // window.online fires and the banner must hide again.
+  // -------------------------------------------------------------------------
+  test('should hide offline banner when browser comes back online via CDP (OFFLINE-009)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    await page.context().setOffline(true);
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    await page.context().setOffline(false);
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 5_000,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

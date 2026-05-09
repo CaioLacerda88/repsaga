@@ -35,117 +35,107 @@ class _BannerHarness extends ConsumerWidget {
 }
 
 void main() {
-  group('OfflineBanner — provider wiring (isOnlineProvider → banner visibility)',
-      () {
-    testWidgets(
-      'OfflineBanner is hidden when isOnlineProvider is true (online)',
-      (tester) async {
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              isOnlineProvider.overrideWithValue(true),
-            ],
-            child: const TestMaterialApp(home: _BannerHarness()),
-          ),
-        );
+  group(
+    'OfflineBanner — provider wiring (isOnlineProvider → banner visibility)',
+    () {
+      testWidgets(
+        'OfflineBanner is hidden when isOnlineProvider is true (online)',
+        (tester) async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [isOnlineProvider.overrideWithValue(true)],
+              child: const TestMaterialApp(home: _BannerHarness()),
+            ),
+          );
 
-        expect(find.byType(OfflineBanner), findsNothing);
-      },
-    );
+          expect(find.byType(OfflineBanner), findsNothing);
+        },
+      );
 
-    testWidgets(
-      'OfflineBanner is visible when isOnlineProvider is false (offline)',
-      (tester) async {
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              isOnlineProvider.overrideWithValue(false),
-            ],
-            child: const TestMaterialApp(home: _BannerHarness()),
-          ),
-        );
+      testWidgets(
+        'OfflineBanner is visible when isOnlineProvider is false (offline)',
+        (tester) async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [isOnlineProvider.overrideWithValue(false)],
+              child: const TestMaterialApp(home: _BannerHarness()),
+            ),
+          );
 
-        expect(find.byType(OfflineBanner), findsOneWidget);
-      },
-    );
+          expect(find.byType(OfflineBanner), findsOneWidget);
+        },
+      );
 
-    testWidgets(
-      'OfflineBanner disappears when isOnlineProvider transitions from false to true',
-      (tester) async {
-        // Start offline.
-        final container = ProviderContainer(
-          overrides: [
+      testWidgets(
+        'OfflineBanner disappears when isOnlineProvider transitions from false to true',
+        (tester) async {
+          // Start offline.
+          final container = ProviderContainer(
+            overrides: [isOnlineProvider.overrideWithValue(false)],
+          );
+          addTearDown(container.dispose);
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: const TestMaterialApp(home: _BannerHarness()),
+            ),
+          );
+
+          expect(find.byType(OfflineBanner), findsOneWidget);
+
+          // Go online — update the override value.
+          container.updateOverrides([isOnlineProvider.overrideWithValue(true)]);
+          await tester.pump();
+
+          expect(find.byType(OfflineBanner), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'OfflineBanner appears when isOnlineProvider transitions from true to false',
+        (tester) async {
+          // Start online.
+          final container = ProviderContainer(
+            overrides: [isOnlineProvider.overrideWithValue(true)],
+          );
+          addTearDown(container.dispose);
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: const TestMaterialApp(home: _BannerHarness()),
+            ),
+          );
+
+          expect(find.byType(OfflineBanner), findsNothing);
+
+          // Go offline.
+          container.updateOverrides([
             isOnlineProvider.overrideWithValue(false),
-          ],
-        );
-        addTearDown(container.dispose);
+          ]);
+          await tester.pump();
 
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const TestMaterialApp(home: _BannerHarness()),
-          ),
-        );
+          expect(find.byType(OfflineBanner), findsOneWidget);
+        },
+      );
 
-        expect(find.byType(OfflineBanner), findsOneWidget);
+      testWidgets(
+        'OfflineBanner Semantics identifier is offline-banner when visible',
+        (tester) async {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [isOnlineProvider.overrideWithValue(false)],
+              child: const TestMaterialApp(home: _BannerHarness()),
+            ),
+          );
 
-        // Go online — update the override value.
-        container.updateOverrides([
-          isOnlineProvider.overrideWithValue(true),
-        ]);
-        await tester.pump();
-
-        expect(find.byType(OfflineBanner), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'OfflineBanner appears when isOnlineProvider transitions from true to false',
-      (tester) async {
-        // Start online.
-        final container = ProviderContainer(
-          overrides: [
-            isOnlineProvider.overrideWithValue(true),
-          ],
-        );
-        addTearDown(container.dispose);
-
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const TestMaterialApp(home: _BannerHarness()),
-          ),
-        );
-
-        expect(find.byType(OfflineBanner), findsNothing);
-
-        // Go offline.
-        container.updateOverrides([
-          isOnlineProvider.overrideWithValue(false),
-        ]);
-        await tester.pump();
-
-        expect(find.byType(OfflineBanner), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'OfflineBanner Semantics identifier is offline-banner when visible',
-      (tester) async {
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              isOnlineProvider.overrideWithValue(false),
-            ],
-            child: const TestMaterialApp(home: _BannerHarness()),
-          ),
-        );
-
-        // Confirm the Semantics identifier matches the E2E selector
-        // OFFLINE.banner = '[flt-semantics-identifier="offline-banner"]'.
-        final semanticsNode = tester.getSemantics(find.byType(OfflineBanner));
-        expect(semanticsNode.identifier, equals('offline-banner'));
-      },
-    );
-  });
+          // Confirm the Semantics identifier matches the E2E selector
+          // OFFLINE.banner = '[flt-semantics-identifier="offline-banner"]'.
+          final semanticsNode = tester.getSemantics(find.byType(OfflineBanner));
+          expect(semanticsNode.identifier, equals('offline-banner'));
+        },
+      );
+    },
+  );
 }

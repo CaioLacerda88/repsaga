@@ -69,7 +69,28 @@ offline / browser-level disconnects).
 - [x] Tech-lead implements 5A with TDD (Task #42)
 - [x] CI verification + native-build sanity (Task #43) — full `make ci` green
   (format + gen + analyze + 2458 unit/widget tests + Android debug APK)
-- [ ] QA gate — E2E offline-sync rewrite (Task #44)
+- [x] QA gate — E2E offline-sync rewrite (Task #44) — BLOCKED on prod bug
+  - Added 5 widget-integration tests (offline_banner_integration_test.dart) — all pass
+  - Updated offline-sync.spec.ts: removed stale "documented limitation" header
+  - PROD-CODE BUG FOUND (root cause: NOT package:web): the OfflineBanner's
+    Semantics(identifier: 'offline-banner') node was being culled by the
+    Flutter Web semantics tree compactor because the home/exercises/etc. tab
+    content registers `isBlockingSemanticsOfPreviouslyPaintedNodes` (typical
+    sources: BlockSemantics, ModalBarrier, Drawer scrim) which propagates up
+    to the `Expanded(child)` and drops every sibling semantics node painted
+    before it. With the old `Column([if(!isOnline) OfflineBanner, Expanded(child)])`
+    layout the banner painted BEFORE child and was therefore blocked.
+    The package:web subscription, the merge logic in connectivity_provider,
+    and the listener registration are all correct — diagnostic counters
+    confirmed the Dart listener fires on `setOffline(true)` and the value
+    propagates through `isOnlineProvider`.
+- [x] Tech-lead: fix shell-level layout so OfflineBanner surfaces on web
+  - Switched `_ShellScaffold.body` from `Column` to `Stack` so the banner
+    paints AFTER the active tab content (no longer a "previous sibling")
+  - Added `liveRegion: true` and a `label` to the banner Semantics for
+    proper AT announcement semantics
+  - All 9 offline-sync E2E pass (including OFFLINE-008/009); 115 @smoke pass;
+    2463 unit/widget tests pass; analyzer clean
 - [ ] Verify + PR + reviewer cycle (Task #45)
 - [ ] Post-merge cleanup PR (Task #46)
 

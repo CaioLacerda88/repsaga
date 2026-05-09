@@ -345,6 +345,11 @@ class _RouterRefreshListenable extends ChangeNotifier {
   final Ref _ref;
 }
 
+/// Height in logical pixels of the OfflineBanner overlay. Used to pad the
+/// active tab's content so it isn't covered by the banner. Matches the
+/// banner's intrinsic height: 12 + 12 padding + ~16 line height = ~40dp.
+const double _kOfflineBannerHeight = 40;
+
 class _ShellScaffold extends ConsumerWidget {
   const _ShellScaffold({required this.child});
 
@@ -398,11 +403,38 @@ class _ShellScaffold extends ConsumerWidget {
     // tab appears active.
     final isOnTab = tabIndex >= 0;
 
+    // Family 5A / AW-EX-B-US1-03: the OfflineBanner is rendered as a
+    // top-of-body overlay (Stack, painted AFTER child), not as a Column
+    // sibling above the body. Putting it inside
+    // `Column([OfflineBanner, Expanded(child)])` causes the banner's
+    // `Semantics(identifier: 'offline-banner')` to be silently dropped from
+    // the Flutter Web accessibility tree: some descendant of `child` (the
+    // home/exercises/etc. tab content) registers
+    // `isBlockingSemanticsOfPreviouslyPaintedNodes` (typical sources are
+    // `BlockSemantics`, `ModalBarrier`, or `Drawer`-style scrims), and that
+    // bit propagates up to `Expanded` and culls every sibling semantics
+    // node painted before it. The banner widget then renders visually on
+    // canvas but its `flt-semantics-identifier="offline-banner"` DOM node
+    // never appears — breaking the E2E selector and any AT user.
+    //
+    // The Stack approach paints `child` first, then the banner on top, so
+    // the banner is NOT a previous-sibling of the blocking node and its
+    // semantics survive. The child receives `Padding` while offline so the
+    // top of the active tab is not covered. Verified end-to-end with
+    // Playwright `page.context().setOffline(true)` driving OFFLINE-008/009.
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          if (!isOnline) const OfflineBanner(),
-          Expanded(child: child),
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: isOnline ? 0 : _kOfflineBannerHeight,
+              ),
+              child: child,
+            ),
+          ),
+          if (!isOnline)
+            const Align(alignment: Alignment.topCenter, child: OfflineBanner()),
         ],
       ),
       bottomNavigationBar: Column(
