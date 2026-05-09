@@ -5,6 +5,13 @@
 //   14b — Offline workout capture: queue PendingAction in Hive when save fails offline
 //   14c — SyncService auto-drain on reconnection, SyncFailureCard, PendingSyncBadge
 //
+// Family 5A (fix/core-connectivity-web) adds browser-level online/offline detection:
+//   web_online_events_web.dart subscribes to window.online/window.offline DOM events
+//   via package:web and merges them into onlineStatusProvider. On native builds the
+//   merge collapses to connectivity_plus alone. On Flutter Web, the intent is that
+//   Playwright's context.setOffline(true) (which fires window.offline) drives the
+//   OfflineBanner — bug AW-EX-B-US1-03.
+//
 // -----------------------------------------------------------------------
 // How offline simulation works in Playwright
 // -----------------------------------------------------------------------
@@ -20,12 +27,32 @@
 //   - PendingSyncNotifier increments its count → PendingSyncBadge becomes visible.
 //   - After unrouting, subsequent save attempts (manual retry) succeed.
 //
-// What we CANNOT test via Playwright:
-//   - OfflineBanner appearance (requires OS-level network loss)
-//   - SyncService auto-drain on reconnection (requires an OS offline→online
-//     transition so isOnlineProvider emits false then true)
+// OfflineBanner via context.setOffline() — INVESTIGATION FINDING (Family 5A):
+//   Playwright's context.setOffline(true) correctly fires window.offline in the
+//   JS execution context (confirmed: navigator.onLine becomes false, a plain JS
+//   addEventListener('offline') receives the event — see QA investigation in PR).
+//   However, the package:web EventStreamProvider listener in
+//   web_online_events_web.dart does NOT receive this event. The Dart listener
+//   registered via web.EventStreamProviders.offlineEvent.forTarget(web.window)
+//   appears not to observe browser-generated CDP offline/online events, even
+//   though a plain JS listener on window does. The OfflineBanner does not appear.
 //
-// These gaps are documented per-test so future test authors know the boundary.
+//   This is a production-code bug in the web_online_events_web.dart event
+//   subscription mechanism. E2E tests for the OfflineBanner (intended as
+//   OFFLINE-008 and OFFLINE-009) cannot be written until the underlying issue
+//   is resolved. The banner's Semantics identifier 'offline-banner' was also
+//   confirmed never emitted to the flt-semantics-identifier DOM attribute during
+//   an offline state, consistent with the provider never firing false.
+//
+//   QA investigation evidence (2026-05-09):
+//   - diagnostic test 1: after context.setOffline(true), flt-semantics-identifier
+//     list is unchanged (no 'offline-banner' added); page.locator('text=/Offline/')
+//     is not visible.
+//   - diagnostic test 2: plain JS window.addEventListener('offline', ...) DOES
+//     fire after context.setOffline(true); navigator.onLine correctly transitions
+//     false → true.
+//   Conclusion: CDP fires the event at the JS layer; package:web EventStreamProvider
+//   does not deliver it to the Dart layer.
 //
 // -----------------------------------------------------------------------
 // Test user
@@ -97,10 +124,6 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
   //   3. App navigates back to Home (offline queue path skips celebration).
   //   4. PendingSyncBadge is visible with "1 workout pending sync" text.
   //   5. Unblock REST — subsequent manual retry via badge succeeds.
-  //
-  // OfflineBanner: NOT tested here because it requires OS-level offline.
-  // SyncService auto-drain: NOT tested here because it requires an
-  //   isOnlineProvider false→true transition triggered by the OS.
   // -------------------------------------------------------------------------
   test('should show pending sync badge after workout save is queued offline (OFFLINE-001)', async ({
     page,
@@ -142,10 +165,6 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
 
     // Restore connectivity so the app can sync on manual retry.
     await restoreSupabaseRest(page);
-
-    // The badge remains visible until sync completes. We do NOT wait for
-    // auto-drain here because that requires an OS offline→online transition
-    // which Playwright cannot simulate.
   });
 
   // -------------------------------------------------------------------------
@@ -344,15 +363,11 @@ test.describe('Offline sync — badge interaction', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 6: OfflineBanner absence confirmed — OS-level test boundary
+  // Test 6: OfflineBanner is absent when the browser is online
   //
-  // This test documents the boundary of what Playwright can test for the
-  // OfflineBanner. Blocking Supabase REST does NOT trigger the banner because
-  // connectivity_plus reads from the OS network stack, not HTTP responses.
-  //
-  // The banner is covered by widget tests (test/widget/shared/widgets/) where
-  // isOnlineProvider can be mocked to false. This test confirms the banner is
-  // correctly absent when the OS reports the connection as online.
+  // Confirms the banner is correctly absent when navigator.onLine is true
+  // (the default for a test context). This guards against regressions where
+  // the banner renders on startup without any offline signal.
   // -------------------------------------------------------------------------
   test('should not show offline banner when OS connectivity is online (OFFLINE-006)', async ({
     page,
