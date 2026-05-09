@@ -2516,7 +2516,9 @@ void main() {
           );
           await tester.pump();
 
-          final stepper = tester.widget<WeightStepper>(find.byType(WeightStepper));
+          final stepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
           expect(
             stepper.valueChangeDuration,
             const Duration(milliseconds: 150),
@@ -2580,7 +2582,9 @@ void main() {
           // After the user-initiated tap the flag was set to true, then
           // cleared after the build. The AnimatedSwitcher got Duration.zero.
           // Re-read the stepper in the post-tap build state.
-          final stepper = tester.widget<WeightStepper>(find.byType(WeightStepper));
+          final stepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
           expect(
             stepper.valueChangeDuration,
             Duration.zero,
