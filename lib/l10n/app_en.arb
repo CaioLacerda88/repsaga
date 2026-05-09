@@ -926,6 +926,12 @@
       "count": { "type": "int", "example": "2" }
     }
   },
+  "createNewRoutine": "Create new routine",
+  "@createNewRoutine": { "description": "AddRoutinesSheet inline action that pops the sheet and opens the routine-creation flow. Visually a text-link, not a tile." },
+  "savedConfirmation": "Saved",
+  "@savedConfirmation": { "description": "1-second confirmation snackbar shown after the weekly plan autosaves. No spinner, no icon — just visible feedback that the edit landed." },
+  "copyFromPreviousSet": "Copy from previous set",
+  "@copyFromPreviousSet": { "description": "Tooltip on the discoverability copy-icon shown on set 2+ when the row's weight differs from the previous set's. Tapping copies the previous set's weight + reps." },
 
   "weekComplete": "WEEK COMPLETE",
   "@weekComplete": { "description": "Week review: complete header" },

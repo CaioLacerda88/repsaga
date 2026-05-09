@@ -61,6 +61,7 @@ class SetRow extends ConsumerStatefulWidget {
     this.display = const PrRowDisplay.plain(PrRowState.none),
     this.onCompleted,
     this.lastSet,
+    this.previousSet,
     this.isNew = false,
     this.isBodyweight = false,
     super.key,
@@ -82,6 +83,18 @@ class SetRow extends ConsumerStatefulWidget {
 
   /// The matching set from the previous workout session, used to show a hint.
   final ExerciseSet? lastSet;
+
+  /// The set immediately before this one in the SAME current-session
+  /// exercise (i.e. the set at index N-1). Used by Fix 2's discoverability
+  /// affordance: when this row's weight differs from the previous
+  /// in-session set, a small `Icons.content_copy` glyph is rendered next
+  /// to the set-number digit, advertising the existing tap-to-copy
+  /// interaction. Always `null` for set #1 (no previous in-session set).
+  ///
+  /// Distinct from [lastSet], which is the matching set from the PREVIOUS
+  /// WORKOUT SESSION and drives the "Previous: 80kg × 8" hint above the
+  /// row. Two different concepts; two different fields.
+  final ExerciseSet? previousSet;
 
   /// Whether this set was just added. When true, the completion checkbox
   /// is locked for 600ms to prevent accidental taps from thumb drift.
@@ -201,6 +214,13 @@ class _SetRowState extends ConsumerState<SetRow> {
   bool _shouldShowHint() {
     final lastSet = widget.lastSet;
     if (lastSet == null) return false;
+    // Fix 3 — suppress when last session's weight is 0kg. The hint exists
+    // to anchor the user to last session's working weight; a 0kg "anchor"
+    // is noise. No replacement label — empty space is the correct UX.
+    // The reps may still be a valid number (e.g. bodyweight × 12) but
+    // without a meaningful weight prefix the line stops being a useful
+    // anchor and becomes visual chatter.
+    if ((lastSet.weight ?? 0) == 0) return false;
     if (widget.set.isCompleted) return false;
     if (_matchedLastSet()) return false;
     return true;
@@ -316,6 +336,7 @@ class _SetRowState extends ConsumerState<SetRow> {
               children: [
                 _SetNumberCell(
                   set: set,
+                  previousSet: widget.previousSet,
                   onTap: set.setNumber > 1 ? _copyLastSet : null,
                   onLongPress: _cycleSetType,
                 ),
@@ -582,11 +603,20 @@ class _SetRowFrame extends StatelessWidget {
 class _SetNumberCell extends StatelessWidget {
   const _SetNumberCell({
     required this.set,
+    required this.previousSet,
     required this.onTap,
     required this.onLongPress,
   });
 
   final ExerciseSet set;
+
+  /// The set at index N-1 in the same exercise (current session). Drives
+  /// Fix 2's discoverability affordance: when set 2+ has a weight that
+  /// differs from this previous set's weight, a small Icons.content_copy
+  /// is rendered next to the digit, advertising the tap-to-copy gesture.
+  /// Null on set #1.
+  final ExerciseSet? previousSet;
+
   final VoidCallback? onTap;
   final VoidCallback onLongPress;
 
@@ -595,6 +625,16 @@ class _SetNumberCell extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final isCopyable = set.setNumber > 1;
+    // Fix 2 — discoverability: the existing tap-to-copy interaction has been
+    // visually invisible (a dotted underline on the digit). On set 2+ where
+    // the weight differs from the previous in-session set, render a small
+    // 12dp Icons.content_copy at α=0.4 so the user can SEE that there's
+    // something to tap. The icon DOES NOT add a new tap target — the
+    // existing 48dp InkWell still owns the gesture.
+    final showCopyHint =
+        isCopyable &&
+        previousSet != null &&
+        (set.weight ?? 0) != (previousSet!.weight ?? 0);
     final color = set.isCompleted
         ? theme.colorScheme.onSurface.withValues(alpha: 0.55)
         : (isCopyable
@@ -640,23 +680,49 @@ class _SetNumberCell extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '${set.setNumber}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                    // Underline hint for tap-to-copy on sets > 1. Note: the
-                    // underline lives on the digit, NOT on the type label —
-                    // tap-to-copy is a per-digit affordance and adding the
-                    // underline to the label would conflate the two
-                    // interactions.
-                    decoration: isCopyable ? TextDecoration.underline : null,
-                    decorationColor: isCopyable
-                        ? AppColors.hotViolet.withValues(alpha: 0.4)
-                        : null,
-                    decorationStyle: TextDecorationStyle.dotted,
-                  ),
+                // Digit + (optional) copy-hint icon side-by-side. The icon
+                // is render-only (no tap surface of its own — the parent
+                // InkWell still owns the gesture, preserving the 48dp tap
+                // target floor mandated by BUG-018).
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${set.setNumber}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        // Underline hint for tap-to-copy on sets > 1. Note:
+                        // the underline lives on the digit, NOT on the type
+                        // label — tap-to-copy is a per-digit affordance and
+                        // adding the underline to the label would conflate
+                        // the two interactions.
+                        decoration: isCopyable
+                            ? TextDecoration.underline
+                            : null,
+                        decorationColor: isCopyable
+                            ? AppColors.hotViolet.withValues(alpha: 0.4)
+                            : null,
+                        decorationStyle: TextDecorationStyle.dotted,
+                      ),
+                    ),
+                    if (showCopyHint) ...[
+                      const SizedBox(width: 2),
+                      // Fix 2 — discoverability glyph for the existing
+                      // tap-to-copy gesture. 12dp at α=0.4 so it reads as
+                      // a quiet hint, not a competing icon. Wrapped in a
+                      // Tooltip on long-press for users who pause on it.
+                      Tooltip(
+                        message: l10n.copyFromPreviousSet,
+                        child: Icon(
+                          Icons.content_copy,
+                          size: 12,
+                          color: AppColors.hotViolet.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 // Persistent set-type micro-label below the digit. The label
                 // is the affordance for the long-press cycle: a user who
@@ -759,7 +825,28 @@ class _StepperColumn extends StatelessWidget {
 /// gold color is read from the ancestor [RewardAccent] via
 /// `RewardAccent.of(context)`; cream is the default theme color so the
 /// superseded state just clears the dim Opacity and keeps the cream weight.
-class _WeightStepperCell extends ConsumerWidget {
+///
+/// **Fix 2 — animation on propagated change vs user-tap.** This cell is
+/// stateful so it can distinguish between two ways its `set.weight` may
+/// change between rebuilds:
+///
+///   * **User tap on this stepper instance** — `onChanged` fires, we set a
+///     "self-initiated" flag, and the resulting state emission gets an
+///     instant swap (no animation) because the user already knows they
+///     tapped.
+///   * **Propagation** — `set.weight` changes between rebuilds without
+///     this cell's onChanged firing. We animate the value via a 150ms
+///     slot-machine slide-up so the user perceives "the app inferred this
+///     for me" rather than "this number just changed silently".
+///
+/// The mechanism is a per-instance `_userInitiatedThisChange` boolean,
+/// flipped true inside the onChanged handler and consumed by the next
+/// build. This is structural, not a timing trick: the rebuild that follows
+/// `propagateWeight`'s state emission runs synchronously after the flag is
+/// set, so the same build cycle that sees the new weight also sees the
+/// flag. We then clear the flag so subsequent propagated changes (e.g.
+/// from a sibling row's user tap) animate as expected.
+class _WeightStepperCell extends ConsumerStatefulWidget {
   const _WeightStepperCell({
     required this.set,
     required this.weightUnit,
@@ -775,15 +862,68 @@ class _WeightStepperCell extends ConsumerWidget {
   final bool isSuperseded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final notifier = ref.read(activeWorkoutProvider.notifier);
+  ConsumerState<_WeightStepperCell> createState() => _WeightStepperCellState();
+}
 
-    // Dim rule: completed AND not carrying any accent keeps the 60% Opacity
-    // ghost. Superseded rows clear the dim on the accented value(s) so the
-    // cream-700 reads at full strength. Standing/predicted PR rows render
-    // accented values at full strength regardless.
-    final shouldDim = set.isCompleted && !isAccented;
+class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
+  /// True for ONE build cycle when the user just tapped the stepper on
+  /// this row. Suppresses the slot-machine slide for the value change that
+  /// resulted from THAT tap. Cleared as soon as the build observing the
+  /// new weight completes.
+  bool _userInitiatedThisChange = false;
+
+  /// The most recent `set.weight` rendered by this cell. Used to detect
+  /// "did the value actually change between rebuilds" before deciding
+  /// whether to animate. Any rebuild where `set.weight` is unchanged (e.g.
+  /// a parent rebuild for an unrelated reason) does NOT animate.
+  double? _lastSeenWeight;
+
+  void _onWeightTapped(double newWeight) {
+    final old = widget.set.weight ?? 0;
+    if (old == newWeight) return;
+    // Mark this rebuild's value change as user-initiated so the
+    // AnimatedSwitcher does an instant swap on this cell. Sibling cells
+    // that follow via propagation will see the same state emission but
+    // their flag is unchanged → they animate.
+    _userInitiatedThisChange = true;
+    ref
+        .read(activeWorkoutProvider.notifier)
+        .propagateWeight(
+          widget.workoutExerciseId,
+          widget.set.id,
+          old,
+          newWeight,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentWeight = widget.set.weight ?? 0;
+
+    // Decide whether to animate THIS rebuild. The first ever build has no
+    // previous weight, so we never animate then. After that: animate when
+    // the weight actually changed AND this change wasn't initiated by the
+    // user tapping this cell's stepper.
+    final bool weightChanged =
+        _lastSeenWeight != null && _lastSeenWeight != currentWeight;
+    final bool shouldAnimate = weightChanged && !_userInitiatedThisChange;
+
+    // Update the bookkeeping AFTER the decision so the next rebuild
+    // compares against this build's value.
+    _lastSeenWeight = currentWeight;
+    // Clear the user-initiated flag — it's a one-shot marker for the
+    // build cycle that immediately follows a tap. If a subsequent
+    // propagation lands on this cell from a sibling tap, the flag is
+    // false and the animation plays.
+    _userInitiatedThisChange = false;
+
+    // Dim rule: completed AND not carrying any accent keeps the 60%
+    // Opacity ghost. Superseded rows clear the dim on the accented
+    // value(s) so the cream-700 reads at full strength. Standing/
+    // predicted PR rows render accented values at full strength
+    // regardless.
+    final shouldDim = widget.set.isCompleted && !widget.isAccented;
     final dim = shouldDim ? 0.6 : 1.0;
     final unitColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
 
@@ -794,8 +934,8 @@ class _WeightStepperCell extends ConsumerWidget {
     //   * Otherwise → null (let stepper fall back to theme primary).
     Color? valueColor;
     FontWeight? valueFontWeight;
-    if (isAccented) {
-      if (isSuperseded) {
+    if (widget.isAccented) {
+      if (widget.isSuperseded) {
         valueColor = AppColors.textCream;
         valueFontWeight = FontWeight.w700;
       } else {
@@ -811,18 +951,23 @@ class _WeightStepperCell extends ConsumerWidget {
         children: [
           Expanded(
             child: WeightStepper(
-              value: set.weight ?? 0,
-              unit: weightUnit,
+              value: currentWeight,
+              unit: widget.weightUnit,
               valueColor: valueColor,
               valueFontWeight: valueFontWeight,
-              onChanged: (v) =>
-                  notifier.updateSet(workoutExerciseId, set.id, weight: v),
+              valueChangeDuration: shouldAnimate
+                  ? const Duration(milliseconds: 150)
+                  : Duration.zero,
+              valueTransitionBuilder: shouldAnimate
+                  ? _slotMachineSlideTransition
+                  : (child, _) => child,
+              onChanged: _onWeightTapped,
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Text(
-              weightUnit,
+              widget.weightUnit,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: unitColor,
                 fontSize: 10,
@@ -835,6 +980,25 @@ class _WeightStepperCell extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Fix 2 — slot-machine slide-up transition for propagated weight changes.
+///
+/// Slides the new value up from `Offset(0, 0.3)` (30% of its height below
+/// rest) to `Offset.zero`. Easing is `Curves.easeOut` to mimic a flip-card
+/// settle. Duration is owned by the caller (150ms in the active-workout
+/// SetRow). Pure visual chrome — no behavioural side effects.
+Widget _slotMachineSlideTransition(Widget child, Animation<double> animation) {
+  final slide = Tween<Offset>(
+    begin: const Offset(0, 0.3),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
+  return ClipRect(
+    child: SlideTransition(
+      position: slide,
+      child: FadeTransition(opacity: animation, child: child),
+    ),
+  );
 }
 
 /// Reps column inner: stepper, no unit suffix (the column header carries

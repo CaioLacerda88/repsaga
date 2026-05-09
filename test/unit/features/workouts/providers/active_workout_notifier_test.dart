@@ -2241,6 +2241,299 @@ void main() {
     });
   });
 
+  // ---------------------------------------------------------- propagateWeight
+  //
+  // Fix 2 — "follow the leader while still in formation". When the user
+  // dials in working weight on set 1 (e.g. 0 → 20kg), subsequent
+  // not-yet-completed sets that match the OLD weight should follow.
+  // Customized sets (different from the leader's old weight) drop out of
+  // formation; completed sets are immutable.
+  //
+  // Contract requirements:
+  //   * leader set's weight is updated by this method (callers should NOT
+  //     also call updateSet — that would double-emit).
+  //   * single atomic state emission for the whole exercise mutation.
+  //   * weight only — `reps` is sourced from routine prescription and must
+  //     never propagate.
+  //   * sets BEFORE the leader are untouched (we only walk forward).
+  group('ActiveWorkoutNotifier — propagateWeight', () {
+    /// Builds a state with one exercise containing N incomplete working sets
+    /// at the given starting weight. Used to drive the propagation tests.
+    ActiveWorkoutState buildIncompleteState({
+      required int setCount,
+      required double weight,
+      int reps = 10,
+    }) {
+      final json = TestActiveWorkoutStateFactory.create(
+        workout: TestWorkoutFactory.create(isActive: true),
+        exercises: [
+          {
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-001',
+              exerciseId: 'exercise-001',
+              order: 1,
+            ),
+            'sets': List.generate(setCount, (i) {
+              return TestSetFactory.create(
+                id: 'set-${i + 1}',
+                workoutExerciseId: 'we-001',
+                setNumber: i + 1,
+                weight: weight,
+                reps: reps,
+                isCompleted: false,
+              );
+            }),
+          },
+        ],
+      );
+      return ActiveWorkoutState.fromJson(json);
+    }
+
+    test(
+      'happy path: 3 sets all at 0kg, leader → 20kg, all 3 follow',
+      () async {
+        final initial = buildIncompleteState(setCount: 3, weight: 0);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final leaderId = initial.exercises.first.sets.first.id;
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .propagateWeight(weId, leaderId, 0, 20);
+
+        final sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets[0].weight, 20.0, reason: 'leader set updated');
+        expect(sets[1].weight, 20.0, reason: 'follower 1 follows');
+        expect(sets[2].weight, 20.0, reason: 'follower 2 follows');
+      },
+    );
+
+    test('customized follower (different weight) stops propagation', () async {
+      final initial = buildIncompleteState(setCount: 3, weight: 0);
+      // Customize set 2 to 22.5kg before propagating.
+      final customized = initial.copyWith(
+        exercises: [
+          initial.exercises.first.copyWith(
+            sets: [
+              initial.exercises.first.sets[0],
+              initial.exercises.first.sets[1].copyWith(weight: 22.5),
+              initial.exercises.first.sets[2],
+            ],
+          ),
+        ],
+      );
+      final container = makeContainer(customized);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      final weId = customized.exercises.first.workoutExercise.id;
+      final leaderId = customized.exercises.first.sets.first.id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .first
+          .sets;
+      expect(sets[0].weight, 20.0, reason: 'leader updated');
+      expect(
+        sets[1].weight,
+        22.5,
+        reason: 'customized set 2 stays at its custom value',
+      );
+      expect(
+        sets[2].weight,
+        0.0,
+        reason: 'set 3 does NOT follow because set 2 dropped out of formation',
+      );
+    });
+
+    test('completed follower stops propagation (immutable)', () async {
+      final initial = buildIncompleteState(setCount: 3, weight: 0);
+      // Mark set 2 as completed at 0kg.
+      final withCompletedSecond = initial.copyWith(
+        exercises: [
+          initial.exercises.first.copyWith(
+            sets: [
+              initial.exercises.first.sets[0],
+              initial.exercises.first.sets[1].copyWith(isCompleted: true),
+              initial.exercises.first.sets[2],
+            ],
+          ),
+        ],
+      );
+      final container = makeContainer(withCompletedSecond);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      final weId = withCompletedSecond.exercises.first.workoutExercise.id;
+      final leaderId = withCompletedSecond.exercises.first.sets.first.id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .first
+          .sets;
+      expect(sets[0].weight, 20.0);
+      expect(
+        sets[1].weight,
+        0.0,
+        reason: 'completed sets are immutable — never retroactively rewritten',
+      );
+      expect(sets[1].isCompleted, isTrue);
+      // Set 3: contract says completed sets stop propagation; subsequent sets
+      // are not retroactively followed when a completed set is reached.
+      expect(
+        sets[2].weight,
+        0.0,
+        reason: 'completed set short-circuits the walk forward',
+      );
+    });
+
+    test('reps remain unchanged — weight-only propagation', () async {
+      final initial = buildIncompleteState(setCount: 3, weight: 0, reps: 8);
+      final container = makeContainer(initial);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      final weId = initial.exercises.first.workoutExercise.id;
+      final leaderId = initial.exercises.first.sets.first.id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .first
+          .sets;
+      for (final s in sets) {
+        expect(s.reps, 8, reason: 'reps must not propagate');
+      }
+    });
+
+    test('sets BEFORE the leader are untouched', () async {
+      final initial = buildIncompleteState(setCount: 3, weight: 0);
+      final container = makeContainer(initial);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      final weId = initial.exercises.first.workoutExercise.id;
+      // Leader is set 2 (middle).
+      final leaderId = initial.exercises.first.sets[1].id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .first
+          .sets;
+      expect(sets[0].weight, 0.0, reason: 'set BEFORE leader not propagated');
+      expect(sets[1].weight, 20.0, reason: 'leader updated');
+      expect(sets[2].weight, 20.0, reason: 'set AFTER leader follows');
+    });
+
+    test('emits exactly ONE state update for the whole propagation', () async {
+      final initial = buildIncompleteState(setCount: 3, weight: 0);
+      final container = makeContainer(initial);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      // Spy on state updates by listening to the provider. The initial
+      // listener fires once with the seeded state (skip that). Each
+      // subsequent emission counts.
+      final emittedStates = <ActiveWorkoutState>[];
+      final removeListener = container.listen(activeWorkoutProvider, (
+        previous,
+        next,
+      ) {
+        final v = next.value;
+        if (v != null) emittedStates.add(v);
+      });
+      addTearDown(removeListener.close);
+
+      final weId = initial.exercises.first.workoutExercise.id;
+      final leaderId = initial.exercises.first.sets.first.id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      // Exactly one new emission for the propagation (the listener does NOT
+      // fire on the initial seed because we attach AFTER the future
+      // resolved).
+      expect(
+        emittedStates,
+        hasLength(1),
+        reason:
+            'propagateWeight must emit a single AsyncData; multiple emissions '
+            'cause N sequential rebuilds of every set row.',
+      );
+      expect(emittedStates.single.exercises.first.sets[2].weight, 20.0);
+    });
+
+    test('does nothing when state is null', () async {
+      final container = makeContainer(null);
+      addTearDown(container.dispose);
+
+      // Should not throw.
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight('we-x', 'set-x', 0, 20);
+
+      expect(container.read(activeWorkoutProvider).value, isNull);
+    });
+
+    test(
+      'no-op when leader id is unknown — exercise state unchanged',
+      () async {
+        final initial = buildIncompleteState(setCount: 3, weight: 5);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .propagateWeight(weId, 'unknown-set-id', 5, 20);
+
+        final sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        for (final s in sets) {
+          expect(s.weight, 5.0, reason: 'no leader found → no propagation');
+        }
+      },
+    );
+  });
+
   group('ActiveWorkoutNotifier — swapExercise', () {
     test(
       'replaces exerciseId and exercise reference while keeping sets',

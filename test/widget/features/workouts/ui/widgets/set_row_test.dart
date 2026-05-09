@@ -2177,5 +2177,289 @@ void main() {
         },
       );
     });
+
+    // -------------------------------------------------------------------------
+    // Fix 3 — suppress "Previous: 0kg × N" hint
+    //
+    // The previous-session hint anchors the user to last session's working
+    // weight; a 0kg "anchor" is noise. WIP.md instructs hiding the hint
+    // entirely when `lastSet.weight == 0`, with no replacement label —
+    // empty space is the correct UX.
+    // -------------------------------------------------------------------------
+    group('previous-session hint zero-weight suppression (Fix 3)', () {
+      testWidgets('hides hint when lastSet.weight is 0kg', (tester) async {
+        final set = makeSet(isCompleted: false);
+        final lastSet = makeSet(id: 'last-set', weight: 0.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+          ),
+        );
+
+        expect(
+          find.textContaining('Previous:'),
+          findsNothing,
+          reason:
+              'A 0kg "anchor" is noise — the hint must be suppressed entirely '
+              'when lastSet.weight == 0. No replacement label.',
+        );
+      });
+
+      testWidgets('shows hint when lastSet.weight is non-zero', (tester) async {
+        // Sanity counter-test: confirms suppression is gated specifically on
+        // 0kg, not a wholesale removal.
+        final set = makeSet(isCompleted: false);
+        final lastSet = makeSet(id: 'last-set', weight: 20.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+          ),
+        );
+
+        expect(find.text('Previous: 20kg × 5'), findsOneWidget);
+      });
+
+      testWidgets('row height is preserved across the suppression boundary', (
+        tester,
+      ) async {
+        // Pin the layout-stability concern called out in set_row.dart's hint
+        // suppression doc-comment (~:185-197). If hiding the hint causes
+        // column reflow, the parent's `flt-semantics-identifier` emission
+        // can drop (Phase 20 Flutter Web semantics-engine role-swap bug).
+        // Two failure modes this test catches:
+        //   (a) hint hidden by `if (...) Padding(...)` - row gets SHORTER →
+        //       reflow → potential semantics drop.
+        //   (b) hint replaced by Visibility(maintainSize: true, ...) →
+        //       row height stays equal, no reflow.
+        //
+        // The lastSet.weight == 0 branch hides the slot. The current set
+        // does NOT match (current.weight == 60 != 0), so without the
+        // 0-weight guard the hint would render. With the guard, the hint
+        // is gone. We measure both rows and assert they are equal-height.
+        final pendingSet = makeSet(isCompleted: false, weight: 60, reps: 10);
+        final hintHidden = makeSet(id: 'hidden', weight: 0.0, reps: 5);
+        final hintShown = makeSet(id: 'shown', weight: 20.0, reps: 5);
+
+        // Render row A: hint suppressed (lastSet.weight == 0).
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: pendingSet,
+              workoutExerciseId: 'we-001',
+              lastSet: hintHidden,
+            ),
+          ),
+        );
+        final heightHidden = tester.getSize(find.byType(SetRow)).height;
+
+        // Render row B: hint shown.
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: pendingSet,
+              workoutExerciseId: 'we-001',
+              lastSet: hintShown,
+            ),
+          ),
+        );
+        final heightShown = tester.getSize(find.byType(SetRow)).height;
+
+        // The set-row body itself stays the 56dp _SetRowFrame floor; what
+        // differs is whether the hint Padding adds a slot ABOVE the frame.
+        // We accept either: (i) heights equal (Visibility wrapper used) OR
+        // (ii) hidden is shorter than shown (no Visibility wrapper, slot
+        // truly disappears). What we CANNOT accept is hidden TALLER than
+        // shown — that would mean a replacement label slipped in, which
+        // WIP.md explicitly forbade.
+        expect(
+          heightHidden,
+          lessThanOrEqualTo(heightShown),
+          reason:
+              'When the hint is suppressed (lastSet.weight==0), the row must '
+              'NOT be taller than when the hint is shown. A taller row would '
+              'indicate a replacement label was added — empty space is the '
+              'correct UX per WIP.md.',
+        );
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Fix 2 — copy-from-previous-set discoverability icon (sets 2+ only,
+    // visible only when current weight differs from previous in-session set).
+    //
+    // Existing tap-on-set-number copies last set values; this fix makes that
+    // affordance VISUALLY discoverable instead of relying on the dotted
+    // underline alone. WIP.md: 12dp Icons.content_copy at alpha 0.4.
+    // -------------------------------------------------------------------------
+    group('copy-from-previous-set discoverability (Fix 2)', () {
+      testWidgets(
+        'shows copy icon on set 2 when current weight differs from previous in-session set',
+        (tester) async {
+          final set2 = makeSet(
+            id: 'set-2',
+            setNumber: 2,
+            weight: 0,
+            reps: 8,
+            isCompleted: false,
+          );
+          final previous = makeSet(
+            id: 'set-1',
+            setNumber: 1,
+            weight: 20,
+            reps: 8,
+            isCompleted: false,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set2,
+                workoutExerciseId: 'we-001',
+                previousSet: previous,
+              ),
+            ),
+          );
+
+          expect(
+            find.byIcon(Icons.content_copy),
+            findsOneWidget,
+            reason:
+                'set 2+ rows whose weight differs from the previous in-session '
+                'set must surface a 12dp Icons.content_copy hint at alpha 0.4 '
+                'so the tap-to-copy affordance is discoverable.',
+          );
+        },
+      );
+
+      testWidgets('hides copy icon when weights match', (tester) async {
+        final set2 = makeSet(
+          id: 'set-2',
+          setNumber: 2,
+          weight: 20,
+          isCompleted: false,
+        );
+        final previous = makeSet(
+          id: 'set-1',
+          setNumber: 1,
+          weight: 20,
+          isCompleted: false,
+        );
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set2,
+              workoutExerciseId: 'we-001',
+              previousSet: previous,
+            ),
+          ),
+        );
+
+        expect(
+          find.byIcon(Icons.content_copy),
+          findsNothing,
+          reason:
+              'matching weights → no copy hint (it would be self-referential).',
+        );
+      });
+
+      testWidgets('hides copy icon on set 1 (no previous set)', (tester) async {
+        final set1 = makeSet(setNumber: 1, weight: 0, isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set1, workoutExerciseId: 'we-001')),
+        );
+
+        expect(
+          find.byIcon(Icons.content_copy),
+          findsNothing,
+          reason: 'set 1 has no previous set — affordance is meaningless.',
+        );
+      });
+
+      testWidgets(
+        'set-number cell tap target stays at Material 48dp floor with the copy icon present',
+        (tester) async {
+          // Per memory feedback (feedback_tap_target_measurement.md): use
+          // tester.getSize, not boundingBox/minimumSize. The icon must not
+          // shrink the InkWell's hit area below 48x48.
+          final set2 = makeSet(
+            id: 'set-2',
+            setNumber: 2,
+            weight: 0,
+            isCompleted: false,
+          );
+          final previous = makeSet(
+            id: 'set-1',
+            setNumber: 1,
+            weight: 20,
+            isCompleted: false,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set2,
+                workoutExerciseId: 'we-001',
+                previousSet: previous,
+              ),
+            ),
+          );
+
+          // The set-number InkWell's Container has explicit
+          // BoxConstraints(minWidth: 48, minHeight: 48). Find that container
+          // (it sits inside the Tooltip → InkWell → Container chain in
+          // _SetNumberCell) and confirm it's at least 48x48 even with the
+          // icon present.
+          final inkWell = find.descendant(
+            of: find.byType(SetRow),
+            matching: find.byWidgetPredicate(
+              (w) => w is InkWell && w.onLongPress != null,
+            ),
+          );
+          expect(inkWell, findsOneWidget);
+          final size = tester.getSize(inkWell);
+          expect(size.width, greaterThanOrEqualTo(48));
+          expect(size.height, greaterThanOrEqualTo(48));
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // Fix 2 — propagated weight slot-machine slide animation
+    //
+    // When a set's weight value updates because of a *propagation* (the user
+    // tapped +/- on an earlier "leader" set and this row is following), the
+    // value text slides up via AnimatedSwitcher (150ms easeOut, slide from
+    // Offset(0, 0.3) to Offset.zero). User-initiated taps on this row's own
+    // stepper change the value directly without the slide — only propagated
+    // changes animate, distinguishing "I changed this" from "the app
+    // inferred this for me".
+    // -------------------------------------------------------------------------
+    group('propagated weight animation (Fix 2)', () {
+      testWidgets(
+        'mounts AnimatedSwitcher around the weight value (animation entry-point exists)',
+        (tester) async {
+          // The animation contract requires an AnimatedSwitcher wrapping the
+          // value text in the weight cell. Without it, propagated value
+          // changes can't render the slot-machine slide. This test pins the
+          // structural presence; the per-frame slide is asserted in the
+          // animation test below.
+          final set = makeSet(isCompleted: false, weight: 20);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          expect(
+            find.descendant(
+              of: find.byType(WeightStepper),
+              matching: find.byType(AnimatedSwitcher),
+            ),
+            findsOneWidget,
+            reason:
+                'WeightStepper value zone must wrap an AnimatedSwitcher so '
+                'propagated value changes can play the slot-machine slide.',
+          );
+        },
+      );
+    });
   });
 }

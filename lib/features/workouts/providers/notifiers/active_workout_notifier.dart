@@ -422,6 +422,90 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
+  /// Update a set's weight AND propagate the change forward to subsequent
+  /// not-yet-completed sets that share the OLD weight ("follow the leader
+  /// while still in formation").
+  ///
+  /// Common case the user hits: tapping `+` on set 1 to dial in working
+  /// weight from 0 → 20kg, while sets 2 and 3 are still at 0kg. Without
+  /// propagation the user has to repeat every tap on each subsequent set.
+  /// Propagation walks forward from the leader and updates each follower
+  /// whose weight matches the OLD value AND that is not yet completed.
+  ///
+  /// Contract:
+  ///   * The leader set's weight is updated **by this method itself** —
+  ///     callers must NOT also call [updateSet] for the same change. Doing
+  ///     so produces two sequential emissions instead of one and rebuilds
+  ///     every set row in the exercise twice.
+  ///   * Sets BEFORE the leader (lower setNumber) are never touched.
+  ///   * For each set AFTER the leader: if it is completed → stop the walk
+  ///     (completed sets are immutable; we also don't blindly leapfrog them
+  ///     because the user explicitly anchored their session at that set).
+  ///   * Otherwise: if the set's weight equals the leader's OLD weight,
+  ///     update it; if not, the set has been customized — leave it and stop
+  ///     the walk (the customization marks the end of the formation).
+  ///   * Reps are NEVER touched. Reps come from the routine prescription;
+  ///     propagating them would silently overwrite the user's prescription
+  ///     across all subsequent sets.
+  ///
+  /// Emits a single [AsyncData] for the entire update. UI animations that
+  /// distinguish "I tapped this" from "the app inferred this" rely on the
+  /// caller knowing which set ids were updated; the screen owns that signal
+  /// and we keep this method side-effect-free except for the state
+  /// emission + Hive persist.
+  Future<void> propagateWeight(
+    String workoutExerciseId,
+    String fromSetId,
+    double oldWeight,
+    double newWeight,
+  ) async {
+    final current = state.value;
+    if (current == null) return;
+
+    final newState = current.copyWith(
+      exercises: current.exercises.map((e) {
+        if (e.workoutExercise.id != workoutExerciseId) return e;
+
+        // Locate the leader by id. If absent (deleted between tap and this
+        // call), bail without touching anything.
+        final leaderIndex = e.sets.indexWhere((s) => s.id == fromSetId);
+        if (leaderIndex < 0) return e;
+
+        final newSets = <ExerciseSet>[];
+        for (var i = 0; i < e.sets.length; i++) {
+          final s = e.sets[i];
+          if (i < leaderIndex) {
+            // Sets BEFORE the leader are never touched.
+            newSets.add(s);
+            continue;
+          }
+          if (i == leaderIndex) {
+            // Leader: always updated to the new weight.
+            newSets.add(s.copyWith(weight: newWeight));
+            continue;
+          }
+          // After the leader: walk forward. Stop the walk when we hit a
+          // completed set OR a customized weight; everything from that
+          // point on stays as-is.
+          if (s.isCompleted) {
+            newSets.addAll(e.sets.sublist(i));
+            break;
+          }
+          if ((s.weight ?? 0) != oldWeight) {
+            newSets.addAll(e.sets.sublist(i));
+            break;
+          }
+          newSets.add(s.copyWith(weight: newWeight));
+        }
+        return e.copyWith(sets: newSets);
+      }).toList(),
+    );
+
+    // SINGLE emission for the entire propagation.
+    state = AsyncData(newState);
+    await _saveToHive(newState);
+  }
+
   /// Toggle the completion status of a set.
   Future<void> completeSet(String workoutExerciseId, String setId) async {
     final current = state.value;

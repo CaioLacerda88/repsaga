@@ -624,4 +624,93 @@ void main() {
       },
     );
   });
+
+  // ----------------------------------------------------------------------
+  // Fix 1A — Saved confirmation snackbar.
+  //
+  // The screen autosaves on every reorder/add/remove/undo/auto-fill via
+  // `_savePlan`. Persistence is correct; user has no feedback. Show a
+  // 1-second SnackBar saying "Saved" after each save, EXCEPT when an
+  // undo snackbar is already showing — that affordance must not be
+  // destroyed.
+  // ----------------------------------------------------------------------
+  group('PlanManagementScreen saved-confirmation snackbar (Fix 1A)', () {
+    testWidgets(
+      'shows "Saved" SnackBar after the debounced save flushes (auto-fill)',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final routines = [_routine(id: 'r-001', name: 'Push Day')];
+
+        await tester.pumpWidget(
+          _build(plan: null, routines: routines, trainingFrequency: 1),
+        );
+        await tester.pumpAndSettle();
+
+        // Edit: tap auto-fill, which triggers _savePlan → 300ms debounce →
+        // _flushDebouncedSave → upsertPlan → "Saved" snackbar.
+        await tester.tap(find.text('Auto-fill'));
+        await tester.pump(const Duration(milliseconds: 50));
+        // Advance past the debounce.
+        await tester.pump(const Duration(milliseconds: 350));
+        // Allow the upsertPlan future to resolve and the snackbar to mount.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(
+          find.text('Saved'),
+          findsOneWidget,
+          reason:
+              'After a successful upsertPlan, a 1s "Saved" SnackBar must appear '
+              'so the user has visible feedback that their edit landed.',
+        );
+      },
+    );
+
+    testWidgets('does NOT replace the undo snackbar after _removeRoutine', (
+      tester,
+    ) async {
+      // The undo snack lives 5s; if "Saved" hides+replaces it, the user
+      // loses the undo affordance — explicitly forbidden by WIP.md.
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final routines = [_routine(id: 'r-001', name: 'Push Day')];
+      final plan = _plan(routines: [_bucket(routineId: 'r-001', order: 1)]);
+
+      await tester.pumpWidget(
+        _build(plan: plan, routines: routines, trainingFrequency: 3),
+      );
+      await tester.pumpAndSettle();
+
+      // Trigger remove via swipe-dismiss.
+      await tester.drag(find.text('Push Day'), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+      // The undo snackbar should be visible.
+      expect(find.text('UNDO'), findsOneWidget);
+
+      // Now advance past the save debounce. The Saved snackbar must NOT
+      // replace the undo snackbar.
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(
+        find.text('UNDO'),
+        findsOneWidget,
+        reason:
+            'Undo snack must remain visible — Saved snack is suppressed '
+            'whenever an undo is active.',
+      );
+      expect(
+        find.text('Saved'),
+        findsNothing,
+        reason: 'Saved snack must not replace the undo snack.',
+      );
+    });
+  });
 }

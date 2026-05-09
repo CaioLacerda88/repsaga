@@ -1197,6 +1197,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get createNewRoutine => 'Criar nova rotina';
+
+  @override
+  String get savedConfirmation => 'Salvo';
+
+  @override
+  String get copyFromPreviousSet => 'Copiar da série anterior';
+
+  @override
   String get weekComplete => 'SEMANA COMPLETA';
 
   @override
