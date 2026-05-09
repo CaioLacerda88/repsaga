@@ -62,6 +62,23 @@ void main() {
       expect(container.read(connectivityRecoveryProvider), 0);
     });
 
+    test(
+      'recordSuccess at exactly 5min boundary still fires (window inclusive)',
+      () {
+        // Pins the strict-greater-than (`>`) check in `recordSuccess`. A future
+        // refactor flipping to `>=` would silently change boundary semantics
+        // (T+5min would become stale instead of valid) — this test catches
+        // that drift.
+        withClock(Clock.fixed(DateTime.utc(2026, 1, 1, 12, 0, 0)), () {
+          notifier.recordFailure(const SocketException('refused'));
+        });
+        withClock(Clock.fixed(DateTime.utc(2026, 1, 1, 12, 5, 0)), () {
+          notifier.recordSuccess();
+        });
+        expect(container.read(connectivityRecoveryProvider), 1);
+      },
+    );
+
     test('two recordSuccess calls within 5s only fire once (cooldown)', () {
       // Failure at T0.
       withClock(Clock.fixed(DateTime.utc(2026, 1, 1, 12, 0, 0)), () {

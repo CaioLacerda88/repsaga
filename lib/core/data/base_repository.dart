@@ -43,11 +43,16 @@ abstract class BaseRepository {
   ///
   /// **Recovery side-effects.** A successful call calls
   /// [ConnectivityRecoveryRecorder.recordSuccess] (which is a no-op without
-  /// a recent recorded failure). A failed call routes the underlying error
-  /// to [ConnectivityRecoveryRecorder.recordFailure]; the recorder filters
-  /// to network-class shapes only. Domain ([AppException] subclasses
-  /// representing 4xx / validation errors) are NOT recorded as failures —
-  /// the network was healthy enough to return a structured response.
+  /// a recent recorded failure). A failed call forwards the underlying error
+  /// to [ConnectivityRecoveryRecorder.recordFailure] — including ALL
+  /// [AppException] subtypes (validation, database, network, timeout, auth).
+  /// The recorder is the single canonical filter: its
+  /// `SyncErrorClassifier.isNetworkClass` check decides which shapes
+  /// actually arm the recovery window. Domain errors (`ValidationException`,
+  /// `DatabaseException` with 4xx code) reach the recorder but are dropped
+  /// by that filter, so they never trigger a false recovery signal. This
+  /// keeps the classification logic in one place — `mapException` does not
+  /// duplicate or pre-filter it.
   Future<T> mapException<T>(Future<T> Function() action) async {
     try {
       final result = await action();

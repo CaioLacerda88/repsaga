@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/connectivity/connectivity_provider.dart';
@@ -34,31 +35,39 @@ class _MockAnalyticsRepository extends Mock implements AnalyticsRepository {}
 /// Queue stub whose every read throws — simulates a closed/missing Hive
 /// box. Used to pin the defensive guard in `SyncService._hasTransientItems`
 /// against future regressions.
+///
+/// Throws [HiveError] (which `extends Error`) — the same shape the real
+/// `OfflineQueueService` raises when the `offline_queue` box hasn't been
+/// opened. The guard's `on HiveError` clause must absorb this; the parallel
+/// `on Exception` clause covers other transient infrastructure failures.
+/// Programming errors (`StateError`, `TypeError`, ...) intentionally fall
+/// through so genuine bugs surface loudly.
 class _ThrowingQueueService implements OfflineQueueService {
   const _ThrowingQueueService();
 
   @override
   List<PendingAction> getAll() {
-    throw StateError('queue unreadable');
+    throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
   }
 
   @override
   Future<void> enqueue(PendingAction action) async {
-    throw StateError('queue unreadable');
+    throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
   }
 
   @override
   Future<void> dequeue(String id) async {
-    throw StateError('queue unreadable');
+    throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
   }
 
   @override
   Future<void> updateAction(PendingAction action) async {
-    throw StateError('queue unreadable');
+    throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
   }
 
   @override
-  int get pendingCount => throw StateError('queue unreadable');
+  int get pendingCount =>
+      throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
 }
 
 class _FakeWorkout extends Fake implements Workout {}

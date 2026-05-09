@@ -83,11 +83,22 @@ abstract final class SyncErrorClassifier {
     // Wrapped equivalents emitted by [BaseRepository.mapException].
     if (error is app.NetworkException) return true;
     if (error is app.TimeoutException) return true;
-    // Auth-token refresh class — 401 / "JWT expired" — is transient and
-    // generally clears once the SDK refreshes the session. Treat as network
-    // class so a successful retry trips recovery.
-    if (error is supabase.AuthException) return true;
-    if (error is app.AuthException) return true;
+    // Auth-token refresh class — only 401 ("JWT expired" / unauthenticated).
+    // The SDK refreshes the session and the next call typically succeeds,
+    // so trip recovery on retry. Permanent domain errors (invalid creds:
+    // 400, email-not-confirmed: 400/403, weak password: 422, rate-limited:
+    // 429, ...) MUST NOT arm the window — they will never self-heal and
+    // would cause every login attempt to falsely trigger a drain after a
+    // network blip.
+    //
+    // gotrue's [supabase.AuthException] exposes [statusCode] (String?) for
+    // the HTTP code; the wrapped [app.AuthException] stores it on [code].
+    if (error is supabase.AuthException) {
+      return error.statusCode == '401';
+    }
+    if (error is app.AuthException) {
+      return error.code == '401';
+    }
     // Server-class HTTP failures (5xx, including 502/503 captive-portal
     // recovery shapes). 4xx are domain errors — explicitly excluded.
     final code = httpCode(error);

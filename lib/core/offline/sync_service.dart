@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 
 import '../../features/analytics/data/models/analytics_event.dart';
 import '../../features/analytics/providers/analytics_providers.dart';
@@ -92,6 +93,9 @@ class SyncService extends Notifier<SyncState> {
     // start/stop without polling. Initial check covers the case where the
     // service was built with pre-existing queue items.
     _evaluateHealthCheckTimer();
+    // Double-wildcard parameters (`(_, _)`) require Dart >= 3.0; the project's
+    // pubspec SDK constraint (^3.11.4) is well past that. If the SDK lower
+    // bound is ever reduced, this site would need named placeholders.
     ref.listen<int>(pendingSyncProvider, (_, _) {
       _evaluateHealthCheckTimer();
     });
@@ -146,11 +150,21 @@ class SyncService extends Notifier<SyncState> {
   /// initialising the `offline_queue` box), treat it as "no transient items"
   /// so no health-check timer starts. The semantic is correct — no readable
   /// queue means no items to probe for.
+  ///
+  /// **Catch shape.** Hive raises [HiveError] (which `extends Error`, NOT
+  /// `Exception`) when a box isn't open / has been closed — the production
+  /// failure mode this guard exists to absorb. We catch that explicitly
+  /// alongside the generic `Exception` case (network/serialization shapes
+  /// that could surface through a custom queue impl). Programming errors
+  /// — `TypeError`, `RangeError`, `NoSuchMethodError`, plain `StateError`
+  /// — must still surface so test/build regressions are loud, not silent.
   bool _hasTransientItems() {
     try {
       final actions = ref.read(offlineQueueServiceProvider).getAll();
       return actions.any((a) => a.retryCount < kMaxSyncRetries);
-    } catch (_) {
+    } on HiveError catch (_) {
+      return false;
+    } on Exception catch (_) {
       return false;
     }
   }
