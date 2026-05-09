@@ -345,6 +345,21 @@ class _RouterRefreshListenable extends ChangeNotifier {
   final Ref _ref;
 }
 
+/// Height in logical pixels of the OfflineBanner overlay. Used to pad the
+/// active tab's content so it isn't covered by the banner.
+///
+/// Geometry: vertical padding 12 + 12 = 24dp, plus the rendered line height
+/// of `AppTextStyles.bodySmall` (`fontSize: 12 * height: 1.5` = 18dp) which
+/// dominates the inner Row over the 16dp `cloud_off` icon. Total: 42dp.
+///
+/// The constant is only valid as long as the banner is rendered with
+/// `TextScaler.noScaling` — see `_ShellScaffold.build` where the
+/// `OfflineBanner` is wrapped in a `MediaQuery.copyWith(textScaler:)` to
+/// pin the height. If a future change removes that pin, system text
+/// scaling can grow this height (or wrap the row), and the constant must
+/// either become responsive or move back to a measure-and-cache pattern.
+const double _kOfflineBannerHeight = 42;
+
 class _ShellScaffold extends ConsumerWidget {
   const _ShellScaffold({required this.child});
 
@@ -398,11 +413,55 @@ class _ShellScaffold extends ConsumerWidget {
     // tab appears active.
     final isOnTab = tabIndex >= 0;
 
+    // Family 5A / AW-EX-B-US1-03: the OfflineBanner is rendered as a
+    // top-of-body overlay (Stack, painted AFTER child), not as a Column
+    // sibling above the body. Putting it inside
+    // `Column([OfflineBanner, Expanded(child)])` causes the banner's
+    // `Semantics(identifier: 'offline-banner')` to be silently dropped from
+    // the Flutter Web accessibility tree: some descendant of `child` (the
+    // home/exercises/etc. tab content) registers
+    // `isBlockingSemanticsOfPreviouslyPaintedNodes` (typical sources are
+    // `BlockSemantics`, `ModalBarrier`, or `Drawer`-style scrims), and that
+    // bit propagates up to `Expanded` and culls every sibling semantics
+    // node painted before it. The banner widget then renders visually on
+    // canvas but its `flt-semantics-identifier="offline-banner"` DOM node
+    // never appears — breaking the E2E selector and any AT user.
+    //
+    // The Stack approach paints `child` first, then the banner on top, so
+    // the banner is NOT a previous-sibling of the blocking node and its
+    // semantics survive. The child receives `Padding` while offline so the
+    // top of the active tab is not covered. Verified end-to-end with
+    // Playwright `page.context().setOffline(true)` driving OFFLINE-008/009.
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          if (!isOnline) const OfflineBanner(),
-          Expanded(child: child),
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: isOnline ? 0 : _kOfflineBannerHeight,
+              ),
+              child: child,
+            ),
+          ),
+          if (!isOnline)
+            Align(
+              alignment: Alignment.topCenter,
+              // Pin the banner to `TextScaler.noScaling` so its rendered
+              // height stays equal to `_kOfflineBannerHeight` (42dp)
+              // regardless of system font scaling. The banner is a short,
+              // high-contrast visual marker — letting it scale would either
+              // wrap the row (worse a11y) or push it past the padded body
+              // and overlap content. Other text in the app respects the
+              // user's text-scale preference; this banner is the one
+              // exception, by design. See `_kOfflineBannerHeight` for the
+              // height contract this pin protects.
+              child: MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.noScaling),
+                child: const OfflineBanner(),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: Column(

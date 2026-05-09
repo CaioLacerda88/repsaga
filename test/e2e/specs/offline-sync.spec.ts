@@ -5,6 +5,13 @@
 //   14b — Offline workout capture: queue PendingAction in Hive when save fails offline
 //   14c — SyncService auto-drain on reconnection, SyncFailureCard, PendingSyncBadge
 //
+// Family 5A (fix/core-connectivity-web) adds browser-level online/offline detection:
+//   web_online_events_web.dart subscribes to window.online/window.offline DOM events
+//   via package:web and merges them into onlineStatusProvider. On native builds the
+//   merge collapses to connectivity_plus alone. On Flutter Web, the intent is that
+//   Playwright's context.setOffline(true) (which fires window.offline) drives the
+//   OfflineBanner — bug AW-EX-B-US1-03.
+//
 // -----------------------------------------------------------------------
 // How offline simulation works in Playwright
 // -----------------------------------------------------------------------
@@ -20,12 +27,19 @@
 //   - PendingSyncNotifier increments its count → PendingSyncBadge becomes visible.
 //   - After unrouting, subsequent save attempts (manual retry) succeed.
 //
-// What we CANNOT test via Playwright:
-//   - OfflineBanner appearance (requires OS-level network loss)
-//   - SyncService auto-drain on reconnection (requires an OS offline→online
-//     transition so isOnlineProvider emits false then true)
-//
-// These gaps are documented per-test so future test authors know the boundary.
+// OfflineBanner via context.setOffline() — Family 5A:
+//   `context.setOffline(true)` fires `window.offline` in the JS context, which
+//   `package:web`'s `EventStreamProviders.offlineEvent.forTarget(web.window)`
+//   delivers correctly to the Dart layer. The `connectivity_provider.dart`
+//   merge logic emits `false` on `isOnlineProvider` as expected.
+//   The original symptom — banner never appearing — was a Flutter Web
+//   semantics-tree compaction issue: a descendant of the active tab set
+//   `isBlockingSemanticsOfPreviouslyPaintedNodes`, which culled the banner's
+//   Semantics from the AOM tree even though it rendered visually. Fixed by
+//   restructuring `_ShellScaffold` (`Column` → `Stack`) so the banner paints
+//   AFTER the tab content, putting its Semantics last in paint order.
+//   See `lib/core/router/app_router.dart` for the full explanation.
+//   Tests OFFLINE-008/009 below cover the post-fix banner visibility contract.
 //
 // -----------------------------------------------------------------------
 // Test user
@@ -97,10 +111,6 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
   //   3. App navigates back to Home (offline queue path skips celebration).
   //   4. PendingSyncBadge is visible with "1 workout pending sync" text.
   //   5. Unblock REST — subsequent manual retry via badge succeeds.
-  //
-  // OfflineBanner: NOT tested here because it requires OS-level offline.
-  // SyncService auto-drain: NOT tested here because it requires an
-  //   isOnlineProvider false→true transition triggered by the OS.
   // -------------------------------------------------------------------------
   test('should show pending sync badge after workout save is queued offline (OFFLINE-001)', async ({
     page,
@@ -142,10 +152,6 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
 
     // Restore connectivity so the app can sync on manual retry.
     await restoreSupabaseRest(page);
-
-    // The badge remains visible until sync completes. We do NOT wait for
-    // auto-drain here because that requires an OS offline→online transition
-    // which Playwright cannot simulate.
   });
 
   // -------------------------------------------------------------------------
@@ -264,6 +270,7 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
       page.locator(OFFLINE.failureCardSubtitle),
     ).not.toBeVisible();
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -344,15 +351,11 @@ test.describe('Offline sync — badge interaction', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 6: OfflineBanner absence confirmed — OS-level test boundary
+  // Test 6: OfflineBanner is absent when the browser is online
   //
-  // This test documents the boundary of what Playwright can test for the
-  // OfflineBanner. Blocking Supabase REST does NOT trigger the banner because
-  // connectivity_plus reads from the OS network stack, not HTTP responses.
-  //
-  // The banner is covered by widget tests (test/widget/shared/widgets/) where
-  // isOnlineProvider can be mocked to false. This test confirms the banner is
-  // correctly absent when the OS reports the connection as online.
+  // Confirms the banner is correctly absent when navigator.onLine is true
+  // (the default for a test context). This guards against regressions where
+  // the banner renders on startup without any offline signal.
   // -------------------------------------------------------------------------
   test('should not show offline banner when OS connectivity is online (OFFLINE-006)', async ({
     page,
@@ -400,5 +403,89 @@ test.describe('Offline sync — badge interaction', () => {
     await page.waitForURL(/\/home/, { timeout: 5_000 });
 
     await restoreSupabaseRest(page);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offline banner — browser network (CDP setOffline)
+//
+// These tests use Playwright's context.setOffline() — a different testing
+// primitive from the REST-blocking used in the badge tests above. Keeping them
+// in their own describe block:
+//   • Isolates the afterEach cleanup (setOffline(false)) so it only runs for
+//     the banner tests and never for badge tests that use page.route().
+//   • Makes intent clear: these are the acceptance tests for Family 5A
+//     (AW-EX-B-US1-03), not phase-14 queue tests.
+// ---------------------------------------------------------------------------
+
+test.describe('Offline banner — browser network', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeOfflineSync').email,
+      getUser('smokeOfflineSync').password,
+    );
+  });
+
+  // Always reset to online after each test — context.setOffline() is
+  // browser-context-scoped, not page-scoped. If an assertion times out while
+  // the context is offline, the worker's next test would inherit a poisoned
+  // context and Playwright's retry would also start offline. setOffline(false)
+  // is idempotent: calling it on an already-online context is a no-op.
+  test.afterEach(async ({ page }) => {
+    await page.context().setOffline(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 8: OfflineBanner appears when CDP toggles browser offline
+  //
+  // Family 5A acceptance criterion. Playwright's context.setOffline(true)
+  // fires window.offline in the JS layer; web_online_events_web.dart's
+  // listener must observe this and push false into onlineStatusProvider so
+  // the OfflineBanner appears.
+  // -------------------------------------------------------------------------
+  test('should show offline banner when browser goes offline via CDP (OFFLINE-008)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    // Sanity: banner must be hidden while online.
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 3_000,
+    });
+
+    // Toggle browser offline. CDP fires window.offline in the JS layer.
+    await page.context().setOffline(true);
+
+    // Banner must appear within 5s.
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Note: setOffline(false) is handled by afterEach — no need to call here.
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 9: OfflineBanner disappears when CDP restores connectivity
+  //
+  // Family 5A acceptance criterion. After setOffline(true) → setOffline(false),
+  // window.online fires and the banner must hide again.
+  // -------------------------------------------------------------------------
+  test('should hide offline banner when browser comes back online via CDP (OFFLINE-009)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    await page.context().setOffline(true);
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    await page.context().setOffline(false);
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Note: afterEach calls setOffline(false) again — idempotent, safe.
   });
 });

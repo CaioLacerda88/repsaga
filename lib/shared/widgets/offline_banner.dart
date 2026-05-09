@@ -6,6 +6,11 @@ import '../../l10n/app_localizations.dart';
 ///
 /// Uses [ColorScheme.errorContainer] background with [ColorScheme.onErrorContainer]
 /// foreground to clearly signal degraded connectivity without being alarming.
+///
+/// Rendered by `_ShellScaffold` as an overlay on top of the active tab content
+/// (a `Stack` child painted AFTER the body) — see the comment block in
+/// `app_router.dart` for why a `Column` sibling above the body does not work
+/// on Flutter Web (engine drops the semantics node).
 class OfflineBanner extends StatelessWidget {
   const OfflineBanner({super.key});
 
@@ -16,6 +21,8 @@ class OfflineBanner extends StatelessWidget {
     return Semantics(
       container: true,
       identifier: 'offline-banner',
+      label: l10n.offlineBanner,
+      liveRegion: true,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
