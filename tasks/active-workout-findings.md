@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 13 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards) + Family 7 in PR #185 (postFrameCallback ordering race in finish flow).
+**Resolved so far:** 24 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards) + Family 7 in PR #185 (postFrameCallback ordering race in finish flow) + Families 3 + 6 in PR #187 (a11y semantic wrappers + i18n leaks, 11 bugs combined).
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -88,25 +88,24 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 
 **Shipped:** added `behavior: HitTestBehavior.opaque` to the outer `GestureDetector`. Symmetric with the inner control-row detector. `AbsorbPointer` was rejected as overkill (noted in the original proposal here as a fallback — the impact analysis correctly determined opaque alone was sufficient). Regression guard: a structural pin in `rest_timer_overlay_test.dart` walks all `GestureDetector` instances in the overlay subtree and asserts each declares `HitTestBehavior.opaque` — fails pre-fix, passes post-fix.
 
-### Family 3 — A11y semantic wrappers across active-workout surface (MAJOR)
+### Family 3 — A11y semantic wrappers across active-workout surface — ✅ RESOLVED in PR #187
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-A-BR1-03 | M | A | Stepper +/− absent from AOM — tappable via coords only |
-| AW-EX-A-BR1-05 | m | A | Set-type micro-labels (WK/WU/DR/FL) absent from AOM |
-| AW-EX-B-US1-02 | M | B | Rest timer overlay missing AOM nodes (revised by F-06: control buttons present, countdown/scrim absent) |
-| AW-EX-C-BR1-01 | m | C | Reorder toggle / exit-reorder buttons missing `flt-semantics-identifier` |
-| AW-EX-C-BR1-02 | m | C | Swap / remove exercise buttons missing `flt-semantics-identifier` |
-| AW-EX-F-BR1-01 | M | F | Code-level: WeightStepper / RepsStepper +/− have no `Semantics` wrapper |
-| AW-EX-F-BR1-06 | M | F | Rest timer countdown not `aria-live`; dismiss GestureDetector unlabeled |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-A-BR1-03 | M | A | Stepper +/− absent from AOM — tappable via coords only | ✅ resolved (PR #187) |
+| AW-EX-A-BR1-05 | m | A | Set-type micro-labels (WK/WU/DR/FL) absent from AOM | ✅ resolved (PR #187) |
+| AW-EX-B-US1-02 | M | B | Rest timer overlay missing AOM nodes (revised by F-06: control buttons present, countdown/scrim absent) | ✅ resolved (PR #187) |
+| AW-EX-C-BR1-01 | m | C | Reorder toggle / exit-reorder buttons missing `flt-semantics-identifier` | ✅ resolved (PR #187) |
+| AW-EX-C-BR1-02 | m | C | Swap / remove exercise buttons missing `flt-semantics-identifier` | ✅ resolved (PR #187) |
+| AW-EX-F-BR1-01 | M | F | Code-level: WeightStepper / RepsStepper +/− have no `Semantics` wrapper | ✅ resolved (PR #187) |
+| AW-EX-F-BR1-06 | M | F | Rest timer countdown not `aria-live`; dismiss GestureDetector unlabeled | ✅ resolved (PR #187) |
 
-**Proposed PR cluster: `fix(workouts)/a11y-semantics-sweep`** — medium effort (~4h), multi-file
-- `lib/shared/widgets/weight_stepper.dart`, `reps_stepper.dart` — wrap +/− `IconButton`s with `Semantics(button: true, label: l10n.weightIncrement)` etc.
-- `lib/features/workouts/ui/widgets/set_row.dart` — wrap set-type micro-label with Semantics; expose set-row state in label ("Set 3, working, 100kg, 8 reps, completed, standing personal record").
-- `lib/features/workouts/ui/widgets/rest_timer_overlay.dart` — countdown as `liveRegion: true`; dismiss GestureDetector with `Semantics(button: true, label: l10n.restTimerDismiss)`.
-- `lib/features/workouts/ui/widgets/exercise_card.dart` — add `flt-semantics-identifier` to swap/remove/reorder buttons.
-- `lib/features/workouts/ui/active_workout_app_bar_title.dart` — add reorder toggle identifier.
-- Tests: widget tests asserting Semantics labels present; e2e selectors test confirming AOM nodes appear.
+**Family 3 shipped (PR #187, combined with Family 6):**
+- **Steppers (`weight_stepper.dart`, `reps_stepper.dart`):** explicit `Semantics(button: true, label: l10n.*)` wrapping the +/− gesture chain. Took the explicit-Semantics fallback over `IconButton.tooltip:` because Tooltip would contend in the gesture arena with the existing `onLongPressStart` rapid-repeat detector. Long-press fire pinned by widget tests (one per stepper).
+- **Set-type micro-label (`set_row.dart`):** parent `setNumberSemantics` already takes a type placeholder (`set.setType.localizedName(l10n)`); only the visible micro-label was hard-coded. Switched to `_localizedSetTypeAbbr` reading the canonical `setTypeAbbr*Short` ARB family that `workout_detail_screen.dart` already uses.
+- **Rest timer overlay (`rest_timer_overlay.dart`):** countdown wrapped in `Semantics(container: true, liveRegion: true)`; outer scrim wrapped with pair-rule (`container: true` + `explicitChildNodes: true`) + `Semantics(button: true, label: l10n.restTimerDismiss)`; exercise-name `Text` wrapped in `Semantics(container: true, label: …)` with inner `ExcludeSemantics` to prevent double-announcement; `tapToDismiss` visual hint wrapped in `ExcludeSemantics` (added in reviewer cycle) so the outer dismiss-button label owns the AOM contract.
+- **Reorder + swap + remove identifiers:** `active_workout_screen.dart` reorder toggle gets `workout-reorder-toggle`; `exercise_card.dart` swap/remove get `workout-swap-exercise` / `workout-remove-exercise`. Every new identifier carries the pair-rule (`container: true` + `explicitChildNodes: true`) per `lessons.md` PR #152 silent-merge regression. `selectors.ts` extended with three new entries (selector-additive — no existing E2E spec broke).
+- **Pair-rule structurally pinned** in widget tests: each new `Semantics(identifier:)` has a test asserting reachability via `find.bySemanticsIdentifier` AND `container: true` + `explicitChildNodes: true` are set.
 
 ### Family 4 — Tap targets ≥ Material 48dp — ✅ RESOLVED in PR #181
 
@@ -139,20 +138,22 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 - `lib/core/offline/sync_service.dart` — supplement OS-event drain trigger with a fetch-failure-feedback path (when a client request succeeds after recent failures, treat as connectivity recovery and drain).
 - Tests: integration tests around the recovery branches; widget test for offline banner appearing on simulated web disconnect.
 
-### Family 6 — i18n leaks (MAJOR-MINOR)
+### Family 6 — i18n leaks — ✅ RESOLVED in PR #187
 
-| ID | Severity | Charter | Symptom |
-|---|---|---|---|
-| AW-EX-F-BR1-02 | M | F | Default workout name hardcoded English (`"Workout — Wed May 7"` in pt-BR session) |
-| AW-EX-F-BR1-03 | m | F | Stepper Semantics label English literal |
-| AW-EX-F-BR1-04 | m | F | AppBar workout-name rename Semantics English literal |
-| AW-EX-F-BR1-10 | m | F | Set-type abbreviations: active workout uses raw `WK/WU/DR/FL`; workout detail uses localized `N/AQ/D/F` |
+| ID | Severity | Charter | Symptom | Status |
+|---|---|---|---|---|
+| AW-EX-F-BR1-02 | M | F | Default workout name hardcoded English (`"Workout — Wed May 7"` in pt-BR session) | ✅ resolved (PR #187) |
+| AW-EX-F-BR1-03 | m | F | Stepper Semantics label English literal | ✅ resolved (PR #187) |
+| AW-EX-F-BR1-04 | m | F | AppBar workout-name rename Semantics English literal | ✅ resolved (PR #187) |
+| AW-EX-F-BR1-10 | m | F | Set-type abbreviations: active workout uses raw `WK/WU/DR/FL`; workout detail uses localized `N/AQ/D/F` | ✅ resolved (PR #187) |
 
-**Proposed PR cluster: `fix(l10n)/active-workout-strings`** — medium effort (~3h)
-- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart:_generateWorkoutName()` — read locale, build name via localized prefix + `DateFormat('EEE MMM d', locale)`.
-- Stepper / AppBar / set-type Semantics labels — route through `AppLocalizations`.
-- Set-type abbreviation: pick canonical convention (the localized one is already populated; rip out the hardcoded `tinyAbbr`). Triage decision: which screen is "wrong"? Expectation is that BOTH screens show the SAME abbreviation per-locale.
-- Tests: pt-BR locale golden / unit test for `_generateWorkoutName` returning `"Treino — Qua 7 mai"`.
+**Family 6 shipped (PR #187, combined with Family 3):**
+- **Default workout name:** `_generateWorkoutName()` now reads `ref.read(localeProvider).languageCode`, clamps it against `_supportedWorkoutNameLocales = ['en', 'pt']` (defense-in-depth fallback to `en` if a future locale slips through before its ARB lands — added in reviewer cycle), calls `lookupAppLocalizations(Locale(...))` for the prefix, and passes the language code to `DateFormat`. Generated name persists thereafter — preserves the existing "stored data, not display-only" invariant at `active_workout_notifier.dart:259-262`. Unit tests pin en (`'Workout — '`), pt (`'Treino — '`, no en leak, lowercase pt date abbrs), and the unsupported-locale fallback (`'es'` → en prefix).
+- **Stepper + AppBar Semantics labels:** stepper value-zone labels now flow through `l10n.weightValueSemantics(formatted, unit)` / `l10n.repsValueSemantics(value)`; AppBar rename Semantics through `l10n.workoutNameTapToRenameSemantics(name)`. en+pt widget tests pin both surfaces.
+- **Set-type abbreviation (Path A — localized everywhere):** active workout adopts the canonical localized `setTypeAbbr*Short` ARB family that `workout_detail_screen.dart` already uses. Reviewer caught a residual divergence (warmup: `setTypeAbbrWarmup` "WU"/"AQ" vs `setTypeAbbrWarmupShort` "Wu"/"Aq") — fixed in cycle by aligning both screens on `*Short`. `SetType.tinyAbbr` marked `@Deprecated` so future UI bypasses fail review.
+- **ARB keys added:** 9 new keys in both `app_en.arb` and `app_pt.arb` — `decrementWeight`, `incrementWeight`, `decrementReps`, `incrementReps`, `weightValueSemantics(formatted, unit)`, `repsValueSemantics(value)`, `restTimerDismiss`, `workoutNameTapToRenameSemantics(name)`, `workoutDefaultName(date)`. Set-type cell label kept the existing `setNumberSemantics(number, type)` (already takes a type placeholder).
+- **38 new tests** across 7 new widget/unit files + 2 existing tests updated. Bug-to-test mapping audited by qa-engineer; every bug has a regression guard that fails pre-fix and passes post-fix.
+- **Pattern note:** `lookupAppLocalizations(Locale(...))` directly inside a Riverpod notifier (no BuildContext) is the first such use in `lib/`. Defense-in-depth language-code clamping (`['en', 'pt']` allowlist with `'en'` fallback) added per reviewer's Warning to protect `startWorkout` from silent `AsyncError` if a future locale slips through before its ARB lands. New unit test pins the fallback contract.
 
 ### Family 7 — postFrameCallback ordering race in finish flow — ✅ RESOLVED in PR #185
 
