@@ -267,6 +267,18 @@ export const WORKOUT = {
    * identifier: 'workout-remove-exercise')`.
    */
   removeExercise: '[flt-semantics-identifier="workout-remove-exercise"]',
+  /**
+   * Fix 2 — "Copy from previous set" tooltip on the set-number cell of set 2+.
+   * The copy icon (Icons.content_copy at 12dp, α=0.4) is visible ONLY when the
+   * current set's weight differs from the previous in-session set. The tap
+   * target is the parent InkWell (_SetNumberCell), not the icon itself —
+   * tap the set-number cell to trigger the copy.
+   *
+   * No flt-semantics-identifier is emitted for the icon itself (it's render-only);
+   * use role=button selectors on the set-number cell or query by tooltip text.
+   * This entry documents the feature for future selector additions if needed.
+   */
+  copyFromPreviousSetIcon: 'role=img[name="content_copy"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -552,6 +564,20 @@ export const WEEKLY_PLAN = {
    * _buildStatsText always starts with "{n} sessions". Dynamic content — keep text= selector.
    */
   sessionsStatsText: 'text=/sessions/',
+  /**
+   * Fix 1A — "Saved" confirmation SnackBar shown after a successful upsertPlan.
+   * The snackbar content is the l10n key `savedConfirmation` ("Saved" / "Salvo").
+   * Appears for 1s; use waitForSelector with a short timeout.
+   */
+  savedSnackbar: 'text=Saved',
+  /**
+   * Fix 1B — "Create new routine" action row at the bottom of AddRoutinesSheet.
+   * Semantics(identifier: 'weekly-plan-create-new-routine') wraps the InkWell.
+   * Only visible when the sheet is open and availableRoutines.isNotEmpty.
+   * On empty state, the sheet shows the _EmptyStateCreateNew button instead
+   * (which shares the same AOM accessible name "Create new routine").
+   */
+  createNewRoutineRow: '[flt-semantics-identifier="weekly-plan-create-new-routine"]',
 } as const;
 
 // ---------------------------------------------------------------------------

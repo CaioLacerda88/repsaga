@@ -2460,6 +2460,138 @@ void main() {
           );
         },
       );
+
+      testWidgets(
+        'propagated weight change (external rebuild) passes non-zero duration '
+        'to WeightStepper — animation plays',
+        (tester) async {
+          // The Fix 2 animation contract: when set.weight changes between
+          // builds WITHOUT a user tap on THIS cell's stepper, the
+          // _WeightStepperCellState._userInitiatedThisChange flag is false,
+          // so the cell passes valueChangeDuration: 150ms to WeightStepper —
+          // which triggers the slot-machine slide via AnimatedSwitcher.
+          //
+          // Mechanism: pump SetRow(weight=0) first to seed _lastSeenWeight=0
+          // in _WeightStepperCellState. Then re-pump with weight=20 at the
+          // SAME tree position (same container, same SetRow key) WITHOUT
+          // going through _onWeightTapped. The second build sees:
+          //   weightChanged = (_lastSeenWeight=0) != (currentWeight=20) → true
+          //   _userInitiatedThisChange → false  (no tap occurred)
+          //   shouldAnimate = true
+          //   → WeightStepper.valueChangeDuration = Duration(milliseconds:150)
+          //
+          // Using two pumpWidget calls with the same container keeps the
+          // _WeightStepperCellState instance alive across the pump because
+          // the SetRow is at the same position in an otherwise-identical tree.
+          final container = makeContainer(null);
+          addTearDown(container.dispose);
+          const weId = 'we-anim';
+          const setKey = ValueKey('set-anim-key');
+
+          // First pump: weight=0 seeds _lastSeenWeight.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: setKey,
+                set: makeSet(id: 'set-anim', setNumber: 1, weight: 0),
+                workoutExerciseId: weId,
+              ),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Second pump: weight=20. No _onWeightTapped call → propagation path.
+          // Same container + same key → _WeightStepperCellState is PRESERVED,
+          // so _lastSeenWeight carries over from the first pump.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: setKey,
+                set: makeSet(id: 'set-anim', setNumber: 1, weight: 20),
+                workoutExerciseId: weId,
+              ),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          final stepper = tester.widget<WeightStepper>(find.byType(WeightStepper));
+          expect(
+            stepper.valueChangeDuration,
+            const Duration(milliseconds: 150),
+            reason:
+                'A weight change that arrived via external rebuild (propagation) '
+                'must pass valueChangeDuration=150ms so the AnimatedSwitcher '
+                'plays the slot-machine slide. User-initiated taps use '
+                'Duration.zero so only propagated changes animate.',
+          );
+        },
+      );
+
+      testWidgets(
+        'user-initiated weight tap passes Duration.zero to WeightStepper — no animation',
+        (tester) async {
+          // When the user taps +/- on THIS set row's own stepper, the
+          // _WeightStepperCellState._userInitiatedThisChange flag is set to
+          // true before the rebuild. That build sees weightChanged=true but
+          // _userInitiatedThisChange=true → shouldAnimate=false →
+          // WeightStepper.valueChangeDuration stays Duration.zero.
+          //
+          // This test pins the user-initiated path by wiring a real notifier
+          // container, calling propagateWeight on set#1 WITH this set as the
+          // leader (so _onWeightTapped fires, setting the flag), and then
+          // reading valueChangeDuration.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 1,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set1 = workoutState.exercises.first.sets.first;
+
+          // Seed set#1 at weight=0 so the tap-to-20kg is a real change.
+          final seeded = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: [set1.copyWith(weight: 0)],
+              ),
+            ],
+          );
+          final seededSet = seeded.exercises.first.sets.first;
+
+          final container = makeContainer(seeded);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: seededSet, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Tap the + button on the weight stepper to increment weight.
+          // This wires through _onWeightTapped → sets _userInitiatedThisChange=true.
+          await tester.tap(find.byIcon(Icons.add).first);
+          await tester.pump();
+
+          // After the user-initiated tap the flag was set to true, then
+          // cleared after the build. The AnimatedSwitcher got Duration.zero.
+          // Re-read the stepper in the post-tap build state.
+          final stepper = tester.widget<WeightStepper>(find.byType(WeightStepper));
+          expect(
+            stepper.valueChangeDuration,
+            Duration.zero,
+            reason:
+                'A user-initiated tap on THIS cell\'s stepper must pass '
+                'valueChangeDuration=Duration.zero so the value update is '
+                'instant — the user already knows they tapped. Only propagated '
+                'changes (external rebuilds from sibling cell taps) animate.',
+          );
+        },
+      );
     });
   });
 }
