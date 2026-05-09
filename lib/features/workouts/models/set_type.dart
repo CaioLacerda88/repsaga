@@ -11,19 +11,22 @@ enum SetType {
     failure => 'To Failure',
   };
 
-  /// Two-character gym shorthand rendered as a persistent micro-label below
-  /// the set number on the active workout row (Phase 20 polish #3, post-merge).
+  /// Hard-coded English shorthand. **Deprecated for UI use** — Family 6
+  /// (PR fix/workouts-a11y-i18n-combined) replaced the only production
+  /// caller (`set_row.dart` _SetNumberCell) with a localized lookup against
+  /// the existing `setTypeAbbr*` ARB keys. The visible micro-label now
+  /// honors the user's locale (en: W/WU/D/F, pt: N/AQ/D/F) and matches the
+  /// convention already used by `workout_detail_screen.dart`.
   ///
-  /// **Why this lives on the enum** rather than in the widget: the shorthand
-  /// is universal across locales — every Brazilian / English / Spanish lifter
-  /// reads `WU` as warm-up regardless of UI language, and tying it to the
-  /// enum keeps the widget free of switch statements and prevents drift if
-  /// new types are added in the future.
-  ///
-  /// **Why not localize**: gym shorthand is a vocabulary the app teaches via
-  /// the long-press cycle. Translating `DR` to `RP` (redução de carga) would
-  /// undo that teaching every time a Brazilian user reads English fitness
-  /// content. Single source of vocabulary.
+  /// Kept in the model for any future test-only / debug-only use case
+  /// where a locale-stable English string is genuinely useful (e.g.
+  /// log lines, analytics breadcrumbs). Do NOT call this from production
+  /// UI — use `_localizedSetTypeAbbr(setType, l10n)` (or the equivalent
+  /// switch over `setTypeAbbr*` keys) instead.
+  @Deprecated(
+    'UI must localize via setTypeAbbr* ARB keys; see set_row.dart '
+    '_localizedSetTypeAbbr. Kept only for non-UI English-stable callers.',
+  )
   String get tinyAbbr => switch (this) {
     working => 'WK',
     warmup => 'WU',

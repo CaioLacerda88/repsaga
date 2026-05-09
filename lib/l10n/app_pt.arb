@@ -770,5 +770,15 @@
   "title_iron_bound_name": "Atado-em-Ferro",
   "title_iron_bound_flavor": "Supino, remada, agachamento — todos atados em ferro. Os três grandes respondem a você.",
   "title_saga_forged_name": "Saga-Forjada",
-  "title_saga_forged_flavor": "Cada track no sessenta. A saga foi forjada, e foi você quem forjou."
+  "title_saga_forged_flavor": "Cada track no sessenta. A saga foi forjada, e foi você quem forjou.",
+
+  "decrementWeight": "Diminuir peso",
+  "incrementWeight": "Aumentar peso",
+  "decrementReps": "Diminuir repetições",
+  "incrementReps": "Aumentar repetições",
+  "weightValueSemantics": "Valor do peso: {formatted} {unit}. Toque para inserir o peso.",
+  "repsValueSemantics": "Valor das repetições: {value}. Toque para inserir as repetições.",
+  "restTimerDismiss": "Dispensar timer de descanso",
+  "workoutNameTapToRenameSemantics": "{name}. Toque para renomear o treino.",
+  "workoutDefaultName": "Treino — {date}"
 }

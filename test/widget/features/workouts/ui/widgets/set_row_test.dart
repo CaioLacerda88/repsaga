@@ -489,43 +489,56 @@ void main() {
     });
 
     group('set-type micro-label (Phase 20 polish #3)', () {
-      // The persistent "WK" / "WU" / "DR" / "FL" label below the set number
-      // is the visible affordance for the long-press cycle on the set-number
-      // cell. Without it the cycle interaction was structurally hidden — see
-      // the original Phase 20 critique Problem 2 ("set-type ... not
-      // discoverable as interactive"). The label is self-teaching: a user
-      // who long-presses and watches the abbr cycle learns the feature.
+      // The persistent set-type label below the set number is the visible
+      // affordance for the long-press cycle on the set-number cell. Without
+      // it the cycle interaction was structurally hidden — see the original
+      // Phase 20 critique Problem 2 ("set-type ... not discoverable as
+      // interactive"). The label is self-teaching: a user who long-presses
+      // and watches the abbr cycle learns the feature.
+      //
+      // **Path A localization (Family 6):** values now flow from the
+      // canonical `setTypeAbbr*Short` ARB family (warmup uses
+      // `setTypeAbbrWarmupShort`) — en: W/Wu/D/F, pt: N/Aq/D/F — matching
+      // the convention already used by `workout_detail_screen.dart:286`.
+      // The pre-Path-A pins on raw `WK/DR/FL` were the bug; the
+      // intermediate-state pin on `WU` (long form) was the post-Path-A
+      // execution gap addressed by the PR #187 reviewer cycle.
 
-      testWidgets('renders WK label for a Working set', (tester) async {
+      testWidgets('renders "W" label for a Working set (en)', (tester) async {
         final set = makeSet(setType: SetType.working);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        expect(find.text('WK'), findsOneWidget);
+        expect(find.text('W'), findsOneWidget);
       });
 
-      testWidgets('renders WU label for a Warmup set', (tester) async {
+      testWidgets('renders "Wu" label for a Warmup set (en)', (tester) async {
         final set = makeSet(setType: SetType.warmup);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        expect(find.text('WU'), findsOneWidget);
+        // Active workout consumes `setTypeAbbrWarmupShort` (en: 'Wu') —
+        // matches `workout_detail_screen.dart:286`. The verbose
+        // `setTypeAbbrWarmup` (en: 'WU') is unused in the active workout
+        // surface post-PR-187.
+        expect(find.text('Wu'), findsOneWidget);
+        expect(find.text('WU'), findsNothing);
       });
 
-      testWidgets('renders DR label for a Drop set', (tester) async {
+      testWidgets('renders "D" label for a Drop set (en)', (tester) async {
         final set = makeSet(setType: SetType.dropset);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        expect(find.text('DR'), findsOneWidget);
+        expect(find.text('D'), findsOneWidget);
       });
 
-      testWidgets('renders FL label for a Failure set', (tester) async {
+      testWidgets('renders "F" label for a Failure set (en)', (tester) async {
         final set = makeSet(setType: SetType.failure);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        expect(find.text('FL'), findsOneWidget);
+        expect(find.text('F'), findsOneWidget);
       });
 
       testWidgets(
@@ -542,13 +555,11 @@ void main() {
 
           // The cell's Container has `BoxConstraints(minWidth: 48,
           // minHeight: 48)` — verify the rendered size respects that.
+          // Use the localized en label for "Working" — "W".
           final cellFinder = find.ancestor(
-            of: find.text('WK'),
+            of: find.text('W'),
             matching: find.byType(Container),
           );
-          // Multiple Container ancestors exist; the closest with the 48dp
-          // floor is what we care about. Take the first that has the
-          // expected min-height.
           final size = tester.getSize(cellFinder.first);
           expect(size.height, greaterThanOrEqualTo(48));
           expect(size.width, greaterThanOrEqualTo(48));
@@ -568,7 +579,7 @@ void main() {
           );
 
           final digitText = tester.widget<Text>(find.text('2'));
-          final labelText = tester.widget<Text>(find.text('WU'));
+          final labelText = tester.widget<Text>(find.text('Wu'));
 
           expect(
             digitText.style?.decoration,
@@ -627,8 +638,8 @@ void main() {
         'still renders the set-num cell, type label, and done-cell when bodyweight',
         (tester) async {
           // Hiding the weight column must not regress the surrounding chrome
-          // — the digit, the WK type label, and the completion checkbox stay
-          // exactly where they are.
+          // — the digit, the localized "W" type label (en), and the
+          // completion checkbox stay exactly where they are.
           final set = makeSet(setType: SetType.working);
           await tester.pumpWidget(
             buildTestWidget(
@@ -637,7 +648,7 @@ void main() {
           );
 
           expect(find.text('1'), findsOneWidget); // set number
-          expect(find.text('WK'), findsOneWidget); // type micro-label
+          expect(find.text('W'), findsOneWidget); // type micro-label (en)
           expect(find.byType(Checkbox), findsOneWidget); // done-cell
         },
       );
@@ -679,11 +690,11 @@ void main() {
       );
     });
 
-    group('FL micro-label color (PLAN.md backlog 20-P-3)', () {
+    group('Failure micro-label color (PLAN.md backlog 20-P-3)', () {
       // Audit Finding B: pending failure-set label should be amber (warning),
       // not red (error). Red conflicts with the gym-floor emotional register
-      // — "FL" in red on a pending set reads as "something is wrong" rather
-      // than "this is a max-effort set."
+      // — the failure label in red on a pending set reads as "something is
+      // wrong" rather than "this is a max-effort set."
 
       testWidgets(
         'uses AppColors.warning (not error) for a pending Failure set label',
@@ -693,7 +704,9 @@ void main() {
             buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
           );
 
-          final labelText = tester.widget<Text>(find.text('FL'));
+          // Localized en abbreviation for failure is "F"
+          // (l10n.setTypeAbbrFailure).
+          final labelText = tester.widget<Text>(find.text('F'));
           final color = labelText.style?.color;
           expect(color, isNotNull);
 
@@ -706,7 +719,8 @@ void main() {
           expect(
             color!.withValues(alpha: 1.0),
             AppColors.warning,
-            reason: 'FL pending should track AppColors.warning, not error.',
+            reason:
+                'Failure pending should track AppColors.warning, not error.',
           );
         },
       );

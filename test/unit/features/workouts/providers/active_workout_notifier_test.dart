@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:repsaga/core/data/base_repository.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart' as app;
+import 'package:repsaga/core/l10n/locale_provider.dart';
 import 'package:repsaga/core/local_storage/cache_service.dart';
 import 'package:repsaga/core/observability/sentry_report.dart';
 import 'package:repsaga/core/offline/offline_queue_service.dart';
@@ -39,6 +42,7 @@ import 'package:sentry_flutter/sentry_flutter.dart' show SentryId;
 import 'package:supabase_flutter/supabase_flutter.dart' show User;
 
 import '../../../../fixtures/test_factories.dart';
+import '../../../../helpers/stub_locale_notifier.dart';
 
 class MockWorkoutRepository extends Mock implements WorkoutRepository {}
 
@@ -155,7 +159,7 @@ ProviderContainer makeContainer(ActiveWorkoutState? initialState) {
   MockWorkoutLocalStorage mockStorage,
   MockAuthRepository mockAuth,
 })
-makeAsyncContainer(ActiveWorkoutState? initialState) {
+makeAsyncContainer(ActiveWorkoutState? initialState, {Locale? locale}) {
   final mockRepo = MockWorkoutRepository();
   final mockStorage = MockWorkoutLocalStorage();
   final mockAuth = MockAuthRepository();
@@ -171,6 +175,12 @@ makeAsyncContainer(ActiveWorkoutState? initialState) {
       analyticsRepositoryProvider.overrideWithValue(
         const _FakeAnalyticsRepository(),
       ),
+      // Family 6 — `_generateWorkoutName` reads localeProvider. In unit
+      // tests Hive isn't initialised, so callers that exercise the
+      // start-workout path must pass an explicit `locale:` to install a
+      // StubLocaleNotifier override. Other tests skip startWorkout.
+      if (locale != null)
+        localeProvider.overrideWith(() => StubLocaleNotifier(locale)),
     ],
   );
   return (
@@ -239,9 +249,14 @@ makeOfflineContainer(ActiveWorkoutState? initialState) {
 }
 
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     registerFallbackValue(FakeActiveWorkoutState());
     registerFallbackValue(FakeWorkout());
+    // `_generateWorkoutName` uses `DateFormat('EEE MMM d', languageCode)`
+    // which requires intl locale data. Initialise it once for the whole
+    // suite so tests that exercise startWorkout don't blow up on the
+    // first DateFormat call.
+    await initializeDateFormatting();
   });
 
   group('ActiveWorkoutNotifier — local mutations', () {
@@ -2275,8 +2290,14 @@ void main() {
   // ----------------------------------------------- startWorkout auto-name
   group('ActiveWorkoutNotifier — startWorkout auto-name', () {
     test('auto-generates a date-based name when no arg is provided', () async {
+      // **Family 6 follow-up:** `_generateWorkoutName` now reads
+      // `localeProvider`, which in production reads from Hive. In unit
+      // tests Hive isn't initialised, so we override `localeProvider`
+      // with a StubLocaleNotifier. Locale-specific contracts are pinned
+      // in `active_workout_notifier_workout_name_test.dart`; this test
+      // only pins that the en path still produces a date-suffixed name.
       final (:container, :mockRepo, :mockStorage, :mockAuth) =
-          makeAsyncContainer(null);
+          makeAsyncContainer(null, locale: const Locale('en'));
       addTearDown(container.dispose);
 
       final createdWorkout = makeWorkout(id: 'workout-auto');

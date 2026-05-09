@@ -226,15 +226,32 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
   /// Reorder-mode toggle in AppBar.actions; only shown when there are
   /// multiple exercises (single exercise can't be reordered).
+  ///
+  /// **Family 3 (AW-EX-C-BR1-01) — Semantics identifier wrap.** The IconButton
+  /// is wrapped in `Semantics(container: true, explicitChildNodes: true,
+  /// identifier: 'workout-reorder-toggle')` so Playwright can target it via
+  /// `flt-semantics-identifier` instead of the locale-dependent tooltip
+  /// text. The pair-rule (`container` + `explicitChildNodes`) is mandatory
+  /// per lessons.md PR #152 — a bare identifier merges silently into
+  /// ancestor Semantics and breaks both the e2e selector and the row's
+  /// internal AOM structure.
   List<Widget> _buildAppBarActions(AppLocalizations l10n) {
     if (widget.state.exercises.length <= 1) return const [];
     return [
-      IconButton(
-        onPressed: _toggleReorderMode,
-        icon: Icon(_reorderMode ? Icons.done : Icons.swap_vert),
-        tooltip: _reorderMode
+      Semantics(
+        container: true,
+        explicitChildNodes: true,
+        identifier: 'workout-reorder-toggle',
+        label: _reorderMode
             ? l10n.exitReorderModeTooltip
             : l10n.reorderExercisesTooltip,
+        child: IconButton(
+          onPressed: _toggleReorderMode,
+          icon: Icon(_reorderMode ? Icons.done : Icons.swap_vert),
+          tooltip: _reorderMode
+              ? l10n.exitReorderModeTooltip
+              : l10n.reorderExercisesTooltip,
+        ),
       ),
     ];
   }

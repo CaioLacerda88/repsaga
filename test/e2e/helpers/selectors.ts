@@ -243,6 +243,30 @@ export const WORKOUT = {
    */
   exerciseDetailTap: (name: string) =>
     `role=group[name*="Exercise: ${name}. Tap for details"]`,
+  /**
+   * Reorder-mode toggle in the active-workout AppBar. Visible only when the
+   * workout has 2+ exercises. Tapping toggles between Icons.swap_vert (idle)
+   * and Icons.done (in-mode) — the identifier itself is stable across both
+   * states so a single selector covers enter and exit. Family 3 fix
+   * (AW-EX-C-BR1-01) — wrapped in
+   * `Semantics(container: true, explicitChildNodes: true,
+   * identifier: 'workout-reorder-toggle')`.
+   */
+  reorderToggle: '[flt-semantics-identifier="workout-reorder-toggle"]',
+  /**
+   * Swap-exercise IconButton inside `_ExerciseCard` (visible when the card
+   * is NOT in reorder mode). Family 3 fix (AW-EX-C-BR1-02) — wrapped in
+   * `Semantics(container: true, explicitChildNodes: true,
+   * identifier: 'workout-swap-exercise')`.
+   */
+  swapExercise: '[flt-semantics-identifier="workout-swap-exercise"]',
+  /**
+   * Remove-exercise IconButton inside `_ExerciseCard` (visible when the
+   * card is NOT in reorder mode). Family 3 fix (AW-EX-C-BR1-02) — wrapped
+   * in `Semantics(container: true, explicitChildNodes: true,
+   * identifier: 'workout-remove-exercise')`.
+   */
+  removeExercise: '[flt-semantics-identifier="workout-remove-exercise"]',
 } as const;
 
 // ---------------------------------------------------------------------------

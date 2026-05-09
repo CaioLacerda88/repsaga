@@ -660,11 +660,20 @@ class _SetNumberCell extends StatelessWidget {
                 ),
                 // Persistent set-type micro-label below the digit. The label
                 // is the affordance for the long-press cycle: a user who
-                // sees `WU` and wonders what it means, long-presses, and
-                // watches it cycle WU → DR → FL → WK has learned the feature
+                // sees `Wu` (en) / `Aq` (pt) and wonders what it means
+                // long-presses and watches it cycle, learning the feature
                 // without a tooltip. Self-teaching by design.
+                //
+                // **Family 6 — i18n leak (Path A):** the abbreviation
+                // resolves through the same `setTypeAbbr*Short` ARB family
+                // used by `workout_detail_screen.dart:286` so both screens
+                // stay in lockstep per locale (en: W/Wu/D/F, pt: N/Aq/D/F).
+                // Active workout adopted the canonical `*Short` family
+                // (rather than the verbose `setTypeAbbrWarmup = WU/AQ`)
+                // because detail-screen is the older / more reviewed
+                // surface — aligning here minimizes surface change.
                 Text(
-                  set.setType.tinyAbbr,
+                  _localizedSetTypeAbbr(set.setType, l10n),
                   style: theme.textTheme.labelSmall?.copyWith(
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
@@ -699,6 +708,21 @@ Color _setTypeLabelColor(SetType type) => switch (type) {
   SetType.dropset => AppColors.success.withValues(alpha: 0.55),
   SetType.failure => AppColors.warning.withValues(alpha: 0.60),
 };
+
+/// Localized set-type micro-label (Path A — Family 6 fix).
+///
+/// Mirrors the lookup at `workout_detail_screen.dart:284-289`. Active
+/// workout previously used `SetType.tinyAbbr` (hard-coded WK/WU/DR/FL);
+/// post-fix both screens consume the same `setTypeAbbr*Short` ARB family
+/// (warmup uses `setTypeAbbrWarmupShort`, matching detail screen) so the
+/// abbreviation honors the user's locale (en: W/Wu/D/F, pt: N/Aq/D/F).
+String _localizedSetTypeAbbr(SetType type, AppLocalizations l10n) =>
+    switch (type) {
+      SetType.working => l10n.setTypeAbbrWorking,
+      SetType.warmup => l10n.setTypeAbbrWarmupShort,
+      SetType.dropset => l10n.setTypeAbbrDropset,
+      SetType.failure => l10n.setTypeAbbrFailure,
+    };
 
 /// Vertical separator wrapper around a stepper. The mockup's stepper columns
 /// use 1dp hairline borders to read as discrete data-table cells without

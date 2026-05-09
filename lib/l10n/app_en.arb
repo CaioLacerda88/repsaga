@@ -1876,5 +1876,45 @@
   "title_saga_forged_name": "Saga-Forged",
   "@title_saga_forged_name": { "description": "Phase 18e cross-build title — every rank ≥ 60 (end-game prestige). Display name." },
   "title_saga_forged_flavor": "Every track at sixty. The saga is forged, and you forged it.",
-  "@title_saga_forged_flavor": { "description": "Phase 18e cross-build title (saga_forged) flavor line." }
+  "@title_saga_forged_flavor": { "description": "Phase 18e cross-build title (saga_forged) flavor line." },
+
+  "decrementWeight": "Decrease weight",
+  "@decrementWeight": { "description": "Accessibility/tooltip: WeightStepper minus button." },
+  "incrementWeight": "Increase weight",
+  "@incrementWeight": { "description": "Accessibility/tooltip: WeightStepper plus button." },
+  "decrementReps": "Decrease reps",
+  "@decrementReps": { "description": "Accessibility/tooltip: RepsStepper minus button." },
+  "incrementReps": "Increase reps",
+  "@incrementReps": { "description": "Accessibility/tooltip: RepsStepper plus button." },
+  "weightValueSemantics": "Weight value: {formatted} {unit}. Tap to enter weight.",
+  "@weightValueSemantics": {
+    "description": "Accessibility label on the WeightStepper value zone. Reads the formatted weight + unit and hints at tap-to-type.",
+    "placeholders": {
+      "formatted": { "type": "String", "example": "80.5" },
+      "unit": { "type": "String", "example": "kg" }
+    }
+  },
+  "repsValueSemantics": "Reps value: {value}. Tap to enter reps.",
+  "@repsValueSemantics": {
+    "description": "Accessibility label on the RepsStepper value zone. Reads the rep count and hints at tap-to-type.",
+    "placeholders": {
+      "value": { "type": "int", "example": "10" }
+    }
+  },
+  "restTimerDismiss": "Dismiss rest timer",
+  "@restTimerDismiss": { "description": "Accessibility label for the RestTimerOverlay outer dismiss scrim (the GestureDetector that ends the timer when tapped)." },
+  "workoutNameTapToRenameSemantics": "{name}. Tap to rename workout.",
+  "@workoutNameTapToRenameSemantics": {
+    "description": "Accessibility label on the active-workout AppBar title. Announces the workout name and the rename affordance.",
+    "placeholders": {
+      "name": { "type": "String", "example": "Workout — Wed May 7" }
+    }
+  },
+  "workoutDefaultName": "Workout — {date}",
+  "@workoutDefaultName": {
+    "description": "Default name auto-generated when a workout is started without a name. Locale-aware: read at workout-start time and persisted.",
+    "placeholders": {
+      "date": { "type": "String", "example": "Wed May 7" }
+    }
+  }
 }

@@ -124,6 +124,7 @@ class _RepsStepperState extends State<RepsStepper> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     // Phase 20 commit 2 (BUG-019 mirror): structural twin of [WeightStepper]
     // post-commit-1.  Fixed-width 40x48 +/- buttons via
@@ -133,25 +134,32 @@ class _RepsStepperState extends State<RepsStepper> {
     // (`MainAxisSize.min` + `Flexible`) shape grew the inner Row to its
     // children's natural width and overflowed the parent column when paired
     // with the new Direction B SetRow chrome.
+    //
+    // **A11y wrap (Family 3 / Family 6):** see [WeightStepper.build] for
+    // the rationale on `Semantics(button:, label:)` over IconButton.tooltip.
     return Row(
       children: [
-        GestureDetector(
-          onLongPressStart: (_) => _startRepeating(_decrement),
-          onLongPressEnd: (_) => _stopRepeating(),
-          onLongPressCancel: _stopRepeating,
-          child: IconButton(
-            onPressed: widget.value >= widget.increment ? _decrement : null,
-            icon: const Icon(Icons.remove, size: 18),
-            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
-            // plus a 40dp horizontal cap so the value zone owns the slack.
-            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
+        Semantics(
+          button: true,
+          label: l10n.decrementReps,
+          child: GestureDetector(
+            onLongPressStart: (_) => _startRepeating(_decrement),
+            onLongPressEnd: (_) => _stopRepeating(),
+            onLongPressCancel: _stopRepeating,
+            child: IconButton(
+              onPressed: widget.value >= widget.increment ? _decrement : null,
+              icon: const Icon(Icons.remove, size: 18),
+              // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+              // plus a 40dp horizontal cap so the value zone owns the slack.
+              constraints: const BoxConstraints.tightFor(width: 40, height: 48),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ),
         Expanded(
           child: Semantics(
-            label: 'Reps value: ${widget.value}. Tap to enter reps.',
+            label: l10n.repsValueSemantics(widget.value),
             button: true,
             child: GestureDetector(
               onTap: _showNumberInput,
@@ -176,18 +184,22 @@ class _RepsStepperState extends State<RepsStepper> {
             ),
           ),
         ),
-        GestureDetector(
-          onLongPressStart: (_) => _startRepeating(_increment),
-          onLongPressEnd: (_) => _stopRepeating(),
-          onLongPressCancel: _stopRepeating,
-          child: IconButton(
-            onPressed: _increment,
-            icon: const Icon(Icons.add, size: 18),
-            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
-            // plus a 40dp horizontal cap so the value zone owns the slack.
-            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
+        Semantics(
+          button: true,
+          label: l10n.incrementReps,
+          child: GestureDetector(
+            onLongPressStart: (_) => _startRepeating(_increment),
+            onLongPressEnd: (_) => _stopRepeating(),
+            onLongPressCancel: _stopRepeating,
+            child: IconButton(
+              onPressed: _increment,
+              icon: const Icon(Icons.add, size: 18),
+              // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+              // plus a 40dp horizontal cap so the value zone owns the slack.
+              constraints: const BoxConstraints.tightFor(width: 40, height: 48),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ),
       ],
