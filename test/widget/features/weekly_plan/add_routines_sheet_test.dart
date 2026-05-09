@@ -93,7 +93,8 @@ void main() {
     );
 
     testWidgets(
-      'tapping "Create new routine" pops the sheet with createNew() sentinel',
+      'tapping "Create new routine" pops the sheet with createNew() sentinel '
+      'carrying the empty selection set when nothing is checked',
       (tester) async {
         AddRoutinesSheetResult? result;
 
@@ -134,6 +135,84 @@ void main() {
               'Tapping the create row must pop the sheet with a discrete '
               'createNew sentinel so the parent can navigate to the create '
               'route and then re-open the sheet on return.',
+        );
+        // No tile was checked before tapping, so the sentinel must carry
+        // an empty selection set. The parent's merge then collapses to
+        // just the freshly-created routine's id.
+        expect(
+          (result as AddRoutinesSheetResultCreateNew).previouslySelectedIds,
+          isEmpty,
+          reason:
+              'No tile was checked before tapping create-new — sentinel '
+              'must carry an empty set so the merge on return is just the '
+              'new routine.',
+        );
+      },
+    );
+
+    testWidgets(
+      'tapping "Create new routine" with checked tiles carries those ids '
+      'through the sentinel — guards against multi-routine session regression',
+      (tester) async {
+        // Regression pin (from UI/UX post-build review): user checks A,
+        // then taps "Create new routine". On return, the sheet re-opens
+        // with ONLY the newly-created routine pre-selected — A is silently
+        // dropped. The fix is to carry A's id through the sentinel so the
+        // parent can merge {A} ∪ {new} when re-opening.
+        AddRoutinesSheetResult? result;
+
+        await tester.pumpWidget(
+          TestMaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      result =
+                          await showModalBottomSheet<AddRoutinesSheetResult>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => AddRoutinesSheet(
+                              availableRoutines: [
+                                _routine(id: 'r-a', name: 'Routine A'),
+                                _routine(id: 'r-b', name: 'Routine B'),
+                              ],
+                              inPlanIds: const {},
+                            ),
+                          );
+                    },
+                    child: const Text('Open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        // User checks Routine A.
+        await tester.tap(find.text('Routine A'));
+        await tester.pumpAndSettle();
+
+        // Then taps "Create new routine". The confirm button can occlude
+        // the bottom of the list inside the bottom-sheet's small viewport;
+        // ensure the row is visible before tapping so the test exercises
+        // the real production tap path rather than failing on layout.
+        await tester.ensureVisible(find.text('Create new routine'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Create new routine'));
+        await tester.pumpAndSettle();
+
+        expect(result, isA<AddRoutinesSheetResultCreateNew>());
+        expect(
+          (result as AddRoutinesSheetResultCreateNew).previouslySelectedIds,
+          equals({'r-a'}),
+          reason:
+              'Sentinel must carry the user\'s prior selection so the parent '
+              'can merge it with the freshly-created routine\'s id when '
+              're-opening the sheet. Without this, A is silently unchecked '
+              'on return — multi-routine add sessions break.',
         );
       },
     );
@@ -184,6 +263,17 @@ void main() {
             'Empty-state create-new button must emit the same sentinel as '
             'the bottom-of-list row so the parent has a single navigation '
             'path to handle.',
+      );
+      // Empty-state path: there are no available routines to check, so
+      // `_selected` is necessarily empty. The sentinel must carry an empty
+      // set — the parent's merge then collapses to just the freshly-created
+      // routine's id, which is the same UX as the pre-fix behaviour.
+      expect(
+        (result as AddRoutinesSheetResultCreateNew).previouslySelectedIds,
+        isEmpty,
+        reason:
+            'Empty-state path has no possible selection — sentinel carries '
+            'an empty set, parent merge collapses to just the new routine.',
       );
     });
 

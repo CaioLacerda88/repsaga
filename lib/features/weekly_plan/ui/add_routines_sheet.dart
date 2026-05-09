@@ -33,8 +33,20 @@ class AddRoutinesSheetResultSelected extends AddRoutinesSheetResult {
 /// User tapped the "Create new routine" affordance. The parent should
 /// pop the sheet, navigate to the routine-creation flow, then re-invoke
 /// `_showAddSheet` with the new routine's id in `preSelectedRoutineIds`.
+///
+/// Carries [previouslySelectedIds] — the routines the user had already
+/// checked in the sheet before tapping "Create new routine". The parent
+/// must merge these with the freshly-created routine's id when re-opening
+/// the sheet, otherwise the user's prior selection is silently dropped
+/// (multi-routine add sessions regress: "I had A checked, tapped create
+/// new, came back, now A is unchecked"). The empty-state path passes an
+/// empty set — the merge collapses to just the new id, no special-case.
 class AddRoutinesSheetResultCreateNew extends AddRoutinesSheetResult {
-  const AddRoutinesSheetResultCreateNew();
+  const AddRoutinesSheetResultCreateNew({
+    this.previouslySelectedIds = const <String>{},
+  });
+
+  final Set<String> previouslySelectedIds;
 }
 
 /// Bottom sheet for selecting routines to add to the weekly bucket.
@@ -97,7 +109,16 @@ class _AddRoutinesSheetState extends State<AddRoutinesSheet> {
   }
 
   void _emitCreateNew() {
-    Navigator.of(context).pop(const AddRoutinesSheetResultCreateNew());
+    // Snapshot the current selection so the parent can merge it back into
+    // `preSelectedRoutineIds` when re-opening the sheet after creation.
+    // Without this, a user who had routine A checked, then tapped "Create
+    // new routine", would return to a sheet with only the newly-created
+    // routine pre-selected — A would be silently dropped.
+    Navigator.of(context).pop(
+      AddRoutinesSheetResultCreateNew(
+        previouslySelectedIds: _selected.map((r) => r.id).toSet(),
+      ),
+    );
   }
 
   @override

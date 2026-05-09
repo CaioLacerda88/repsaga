@@ -336,7 +336,7 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
           }
         });
         _savePlan(usedAutofill: false, replacedExisting: false);
-      case AddRoutinesSheetResultCreateNew():
+      case AddRoutinesSheetResultCreateNew(:final previouslySelectedIds):
         // Snapshot the current routine ids BEFORE pushing so we can
         // identify the freshly-created one on return. Using a diff on ids
         // is robust against the user creating multiple routines in one
@@ -353,11 +353,17 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
             .map((r) => r.id)
             .where((id) => !beforeIds.contains(id))
             .toSet();
-        // Re-open the sheet. If the user backed out of creation without
-        // saving, `newIds` is empty and the sheet opens with no
-        // pre-selection — exactly the same UX as the user opening the
-        // sheet from scratch.
-        await _showAddSheet(refreshed, preSelectedRoutineIds: newIds);
+        // Merge the user's prior selection (carried through the sentinel)
+        // with the freshly-created id(s). If the user had nothing checked
+        // (empty-state path or just opened the sheet), `previouslySelectedIds`
+        // is empty and the merge collapses to just `newIds`. If the user
+        // backed out of creation without saving, `newIds` is empty and the
+        // merge preserves the prior selection — the sheet re-opens with the
+        // same checks the user had before tapping "Create new routine".
+        await _showAddSheet(
+          refreshed,
+          preSelectedRoutineIds: {...previouslySelectedIds, ...newIds},
+        );
     }
   }
 

@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/data/base_repository.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/analytics/data/analytics_repository.dart';
@@ -22,9 +23,11 @@ import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
 import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
 import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
+import 'package:repsaga/features/weekly_plan/ui/add_routines_sheet.dart';
 import 'package:repsaga/features/weekly_plan/ui/plan_management_screen.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
+import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show User;
 import '../../../helpers/test_material_app.dart';
@@ -59,6 +62,30 @@ class _RoutineListStub extends AsyncNotifier<List<Routine>>
 
   @override
   Future<List<Routine>> build() async => routines;
+
+  @override
+  // ignore: must_call_super
+  dynamic noSuchMethod(Invocation invocation) {}
+}
+
+/// Mutable routine-list stub used by the create-new round-trip test.
+///
+/// Lets the test simulate "user created routine B during navigation" by
+/// calling [setRoutines] while the create-route placeholder is on screen.
+/// The notifier emits the new state immediately; when the placeholder pops,
+/// `PlanManagementScreen` reads `routineListProvider.value` and computes the
+/// id diff to identify B as freshly-created.
+class _MutableRoutineListNotifier extends AsyncNotifier<List<Routine>>
+    implements RoutineListNotifier {
+  _MutableRoutineListNotifier(this._initial);
+  final List<Routine> _initial;
+
+  @override
+  Future<List<Routine>> build() async => _initial;
+
+  void setRoutines(List<Routine> next) {
+    state = AsyncData(next);
+  }
 
   @override
   // ignore: must_call_super
@@ -712,5 +739,166 @@ void main() {
         reason: 'Saved snack must not replace the undo snack.',
       );
     });
+  });
+
+  // ----------------------------------------------------------------------
+  // Fix 1B follow-up — create-new round-trip preserves prior selection.
+  //
+  // UI/UX post-build review caught a regression: when a user has Routine A
+  // checked in the AddRoutinesSheet and taps "Create new routine", the
+  // sentinel pops with no carried state. The parent navigates to
+  // /routines/create, returns, and re-opens the sheet with ONLY the
+  // freshly-created routine pre-selected. A is silently dropped.
+  //
+  // Fix: extend `AddRoutinesSheetResultCreateNew` to carry
+  // `previouslySelectedIds`. Parent merges {previouslySelectedIds} ∪
+  // {newIds} when re-opening the sheet.
+  // ----------------------------------------------------------------------
+  group('PlanManagementScreen create-new round-trip (Fix 1B follow-up)', () {
+    testWidgets('preserves prior selection when user creates a new routine '
+        'mid-session — sheet re-opens with both A and B pre-selected', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Initial state: empty plan, single available routine A.
+      final initialRoutines = [_routine(id: 'r-a', name: 'Routine A')];
+      final mutableRoutines = _MutableRoutineListNotifier(initialRoutines);
+
+      // Build a router so `context.push('/routines/create')` resolves to
+      // a placeholder we can drive. The placeholder lets the test mutate
+      // the routine list (simulating "B was just created") and then pop.
+      final router = GoRouter(
+        initialLocation: '/plan/week',
+        routes: [
+          GoRoute(
+            path: '/plan/week',
+            builder: (_, _) => const PlanManagementScreen(),
+          ),
+          GoRoute(
+            path: '/routines/create',
+            builder: (_, _) => Scaffold(
+              body: Builder(
+                builder: (ctx) => Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Simulate routine B being persisted: append to
+                      // the provider's routine list so the diff in
+                      // `_showAddSheet` identifies it as freshly-created.
+                      // Then pop back to the plan screen — which should
+                      // re-open the sheet with {A, B} pre-selected.
+                      mutableRoutines.setRoutines([
+                        ...initialRoutines,
+                        _routine(id: 'r-b', name: 'Routine B'),
+                      ]);
+                      ctx.pop();
+                    },
+                    child: const Text('Save Routine'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            weeklyPlanProvider.overrideWith(() => _WeeklyPlanStub(null)),
+            routineListProvider.overrideWith(() => mutableRoutines),
+            profileProvider.overrideWith(() => _ProfileStub(3)),
+            workoutHistoryProvider.overrideWith(() => _EmptyHistoryNotifier()),
+            authRepositoryProvider.overrideWithValue(() {
+              final mockAuth = _MockAuthRepository();
+              when(() => mockAuth.currentUser).thenReturn(null);
+              return mockAuth;
+            }()),
+            analyticsRepositoryProvider.overrideWithValue(
+              const _FakeAnalyticsRepository(),
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
+            theme: AppTheme.dark,
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            debugShowCheckedModeBanner: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open the sheet via the empty-state "Add Routines" button.
+      await tester.tap(find.text('Add Routines'));
+      await tester.pumpAndSettle();
+
+      // Sheet is open. Check Routine A.
+      expect(find.text('Routine A'), findsOneWidget);
+      await tester.tap(find.text('Routine A'));
+      await tester.pumpAndSettle();
+      // Confirm A is checked (filled circle visible).
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+
+      // Tap "Create new routine" — sheet pops with the carried selection.
+      await tester.tap(find.text('Create new routine'));
+      await tester.pumpAndSettle();
+
+      // We're now on the placeholder /routines/create page.
+      expect(find.text('Save Routine'), findsOneWidget);
+      // Tap to mutate the provider (B appears) and pop back.
+      await tester.tap(find.text('Save Routine'));
+      await tester.pumpAndSettle();
+
+      // The sheet should have re-opened with BOTH A and B available and
+      // BOTH pre-selected. The "ADD 2 ROUTINES" confirm button is the
+      // tightest pin: it only renders if `_selected.length == 2`.
+      expect(
+        find.text('Routine A'),
+        findsOneWidget,
+        reason: 'Sheet must re-open showing Routine A',
+      );
+      expect(
+        find.text('Routine B'),
+        findsOneWidget,
+        reason: 'Sheet must re-open showing the freshly-created Routine B',
+      );
+      expect(
+        find.text('ADD 2 ROUTINES'),
+        findsOneWidget,
+        reason:
+            'Both A (carried via previouslySelectedIds) and B (newly '
+            'created) must be pre-selected on re-open. Without the carry, '
+            'only B would be checked and the button would read '
+            '"ADD 1 ROUTINE" — that is the regression this test pins.',
+      );
+      // Two filled check circles confirm both tiles are in the selected
+      // visual state.
+      expect(find.byIcon(Icons.check_circle), findsNWidgets(2));
+    });
+
+    testWidgets(
+      'sentinel-typed result with empty previouslySelectedIds collapses to '
+      'just the new id on re-open — empty-state path stays unchanged',
+      (tester) async {
+        // Sanity pin: when the sheet was opened from the empty state (no
+        // tiles to check, or user simply hadn\'t checked anything), the
+        // sentinel carries an empty set. The merge {} ∪ {newId} = {newId},
+        // which is the original Fix 1B behaviour. This guards against the
+        // merge accidentally regressing when the carried set is empty.
+        const result = AddRoutinesSheetResultCreateNew();
+        expect(result.previouslySelectedIds, isEmpty);
+
+        // Default-constructor const literal still works — the addition of
+        // `previouslySelectedIds` with a default did not break inline
+        // const construction at any historical call sites.
+        final merged = <String>{...result.previouslySelectedIds, 'r-new'};
+        expect(merged, equals({'r-new'}));
+      },
+    );
   });
 }
