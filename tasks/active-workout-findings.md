@@ -12,7 +12,7 @@
 | F — A11y, visual scale, i18n | mixed | BR-1 (360×780) | code analysis | 10 | 3 |
 | **Total** | | | | **31** | **18** |
 
-**Resolved so far:** 25 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards) + Family 7 in PR #185 (postFrameCallback ordering race in finish flow) + Families 3 + 6 in PR #187 (a11y semantic wrappers + i18n leaks, 11 bugs combined) + Family 5A in PR #189 (Web `OfflineBanner` Semantics tree compaction fix + browser online/offline event source).
+**Resolved so far:** 28 / 31 bugs — Family 2 in PR #175 + Family 1A (BLOCKER) in PR #177 + Family 1B in PR #179 + Family 4 in PR #181 (1 real fix + 2 stale measurement findings) + Family 8 in PR #183 (1 stale measurement finding reclassified with regression guards) + Family 7 in PR #185 (postFrameCallback ordering race in finish flow) + Families 3 + 6 in PR #187 (a11y semantic wrappers + i18n leaks, 11 bugs combined) + Family 5A in PR #189 (Web `OfflineBanner` Semantics tree compaction fix + browser online/offline event source) + Family 5B in PR #191 (drain reliability fallbacks: `connectivityRecoveryProvider` + 60s health-check timer + drain suppression).
 
 Plus ~96 screenshots in `screenshots/` and 9 gated probe spec files in `test/e2e/specs/charter-*.spec.ts` (CI-safe — all guarded by env vars).
 
@@ -124,16 +124,16 @@ Severity scale: **B**locker / **M**ajor / **m**inor / **n**it. Effort estimate i
 
 **SnackBarAction (Undo)** deliberately untouched: no `style` param exposed, and Material default already gives ≥48dp via the same mechanism. Wrapping in a custom widget for parity not justified.
 
-### Family 5 — Connectivity / sync drain on Flutter Web (MAJOR, architectural)
+### Family 5 — Connectivity / sync drain on Flutter Web — ✅ RESOLVED in PRs #189 + #191
 
 Split into 5A (Web event source + banner Semantics) and 5B (drain reliability fallbacks) per implementation plan §336.
 
 | ID | Severity | Charter | Symptom | Status |
 |---|---|---|---|---|
 | AW-EX-B-US1-03 | M | B | Offline banner never fires on Flutter Web — `connectivity_plus` doesn't see CDP offline | ✅ resolved (PR #189, Family 5A) |
-| AW-EX-E-US1-01 | M | E | Drain only triggers on OS-level event; captive portal recovery / same-SSID reconnect → no auto-drain | ⏳ Family 5B |
-| AW-EX-E-US1-04 | m | E | Fallback PR upsert with `dependsOn: []` — currently safe but fragile | ⏳ Family 5B |
-| AW-EX-E-US1-05 | m | E | Mid-drain connectivity flap splits drain into two passes — safe but subtle | ⏳ Family 5B |
+| AW-EX-E-US1-01 | M | E | Drain only triggers on OS-level event; captive portal recovery / same-SSID reconnect → no auto-drain | ✅ resolved (PR #191, Family 5B) |
+| AW-EX-E-US1-04 | m | E | Fallback PR upsert with `dependsOn: []` — currently safe but fragile | ✅ resolved (PR #191, Family 5B) |
+| AW-EX-E-US1-05 | m | E | Mid-drain connectivity flap splits drain into two passes — safe but subtle | ✅ resolved (PR #191, Family 5B) |
 
 **Family 5A shipped (PR #189):**
 - New `webOnlineEventsProvider` in `lib/core/connectivity/web_online_events_web.dart` — subscribes to `window.online` / `window.offline` via `package:web` and emits a stream of bool. Selected via conditional import (`dart.library.js_interop` discriminator) so native builds resolve to `web_online_events_io.dart` (`Stream<bool>.empty()`) and never link `package:web`.
@@ -141,10 +141,13 @@ Split into 5A (Web event source + banner Semantics) and 5B (drain reliability fa
 - **Real root cause was a layout bug, not the event source** — initial implementation correctly received CDP `setOffline` events but the banner's Semantics was being culled from the AOM tree by a descendant of the active tab that sets `isBlockingSemanticsOfPreviouslyPaintedNodes`. Fixed by restructuring `_ShellScaffold` from `Column` to `Stack` overlay so the banner paints last (and its Semantics survives the compaction). Banner pinned to `TextScaler.noScaling` and `_kOfflineBannerHeight = 42dp` so the content padding reliably matches the banner's intrinsic height across system text scaling.
 - New: 5 unit tests (`connectivity_provider_web_test.dart`) on the merge logic, 7 widget integration tests (`offline_banner_integration_test.dart`) including height-pinning, 2 E2E tests (OFFLINE-008/009) using `page.context().setOffline()` in their own describe block with idempotent `afterEach` cleanup.
 
-**Family 5B (remaining): `fix(core)/connectivity-drain-reliability`** — moderate effort (~6h)
-- `lib/core/offline/sync_service.dart` — supplement OS-event drain trigger with a fetch-failure-feedback path (`connectivityRecoveryProvider`: any successful repository call after a recent failure → drain signal, with 5s cooldown to prevent retry storms).
-- Periodic health check (HEAD on Supabase endpoint every 60s while queue non-empty; stops if queue is entirely terminal-failure items).
-- Tests: integration around the new signals.
+**Family 5B shipped (PR #191):**
+- New `ConnectivityRecoveryNotifier` (`lib/core/connectivity/connectivity_recovery_provider.dart`) — repositories report success/failure to a recovery hook. When a successful network call lands within 5min of a recorded network-class failure, fires a drain trigger. 5s cooldown between recovery-driven triggers prevents storms. `setRecordingSuppressed(true)` is invoked by `SyncService._drain` so the drain's own internal repo calls cannot feedback-storm.
+- New `ConnectivityRecoveryRecorder` interface in `base_repository.dart` — abstract contract decoupled from Riverpod. `_RiverpodConnectivityRecoveryRecorder` (in `recovery_recorder_provider.dart`) is the framework adapter. Threaded through all 11 `BaseRepository` subclasses + their provider factories. `AnalyticsRepository` is intentionally opted out (it swallows errors before reaching `mapException`).
+- Health-check `Timer` in `sync_service.dart` — 60s `HEAD /rest/v1/` while the queue has at least one transient item. Started by `ref.listen` on `pendingSyncProvider`; cancels on empty/all-terminal. On success → calls `recordSuccess` (which can in turn fire the recovery hook). On failure → `recordFailure`.
+- New `isNetworkClass(Object)` helper in `sync_error_classifier.dart` — classifies `SocketException`, `TimeoutException`, `app.NetworkException`/`app.TimeoutException`, 5xx PostgrestException, 5xx `app.DatabaseException`, and `AuthException` with `statusCode == '401'` (token-refresh class) as network-class. Validation/4xx/business-logic errors do NOT trigger recovery.
+- Defensive `try/catch` in `_hasTransientItems` (narrowed to `on HiveError | Exception`, programming errors surface) handles the test-only scenario where Hive isn't initialized.
+- New tests: 8 + 4 + 7 = 19 unit tests across `connectivity_recovery_provider_test.dart`, `sync_service_recovery_test.dart`, `sync_service_health_check_test.dart`. Plus extended coverage in `base_repository_test.dart` (recorder side-effects) and `sync_error_classifier_test.dart` (network-class + 401-narrowed AuthException).
 
 ### Family 6 — i18n leaks — ✅ RESOLVED in PR #187
 
