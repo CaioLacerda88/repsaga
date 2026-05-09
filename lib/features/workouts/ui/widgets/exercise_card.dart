@@ -342,6 +342,10 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
       final (index, s) = entry;
       // Match by position: set 1 maps to lastSets[0], etc.
       final lastSet = index < lastSets.length ? lastSets[index] : null;
+      // Fix 2 — discoverability hint requires the previous in-session set
+      // (set at index N-1) so the cell can compare weights and decide
+      // whether to surface the copy-icon affordance. Null on set #1.
+      final previousSet = index > 0 ? activeExercise.sets[index - 1] : null;
       final isNew = _newSetIds.contains(s.id);
       // Resolve the matching display for this row. If the resolver has not
       // yet produced an entry (race during a transient empty state) fall
@@ -356,6 +360,7 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
         display: display,
         onCompleted: _onSetCompleted,
         lastSet: lastSet,
+        previousSet: previousSet,
         isNew: isNew,
         isBodyweight: isBodyweight,
       );

@@ -75,6 +75,28 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   /// during drag reorder by coalescing multiple calls into one.
   Timer? _saveDebounce;
 
+  /// Whether the undo snackbar from a recent `_removeRoutine` is still
+  /// on-screen. While true, the Fix-1A "Saved" confirmation snackbar is
+  /// suppressed so it can't hide-and-replace the undo affordance.
+  /// Tracked here (rather than poked at the `ScaffoldMessenger` queue)
+  /// because the messenger does not expose a public "is anything
+  /// showing" predicate.
+  bool _undoSnackbarActive = false;
+
+  /// Whether a "Saved" confirmation snackbar is currently in its 1-second
+  /// display window. Two slow consecutive edits each fire `upsertPlan` and
+  /// chain `_maybeShowSavedSnackbar`; without this guard the second call's
+  /// `showSnackBar` REPLACES the still-visible first one, producing a
+  /// visible "Saved... Saved..." stutter as the first snack is dismissed
+  /// mid-display and a fresh 1-second snack appears in its place.
+  ///
+  /// Set true synchronously before `showSnackBar`; cleared via
+  /// `controller.closed.whenComplete` once the 1-second window elapses
+  /// (or another snack pre-empts it). While true, additional `Saved`
+  /// requests are suppressed — the existing snack already gives the user
+  /// the same signal.
+  bool _savedSnackbarActive = false;
+
   /// Captured notifier for debounced save. `ref` cannot be used in dispose(),
   /// so we hold the notifier directly, refreshed on each edit.
   WeeklyPlanNotifier? _debouncedPlanNotifier;
@@ -262,7 +284,8 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
     // Undo snackbar.
     if (mounted) {
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      _undoSnackbarActive = true;
+      final controller = ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.routineRemoved),
           duration: const Duration(seconds: 5),
@@ -281,37 +304,79 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
           ),
         ),
       );
+      // Clear the flag when the snackbar closes (timeout, user dismiss,
+      // or another snack replaces it). Without this, a subsequent edit
+      // long after the undo expired would silently suppress its Saved
+      // confirmation.
+      controller.closed.whenComplete(() {
+        if (mounted) _undoSnackbarActive = false;
+      });
     }
   }
 
-  Future<void> _showAddSheet(List<Routine> allRoutines) async {
+  Future<void> _showAddSheet(
+    List<Routine> allRoutines, {
+    Set<String> preSelectedRoutineIds = const <String>{},
+  }) async {
     final existingIds = _bucketRoutines.map((b) => b.routineId).toSet();
     final available = allRoutines
         .where((r) => !existingIds.contains(r.id))
         .toList();
 
-    final selected = await showModalBottomSheet<List<Routine>>(
+    final result = await showModalBottomSheet<AddRoutinesSheetResult>(
       context: context,
       isScrollControlled: true,
       builder: (context) => AddRoutinesSheet(
         availableRoutines: available,
-        inPlanIds: existingIds,
+        preSelectedRoutineIds: preSelectedRoutineIds,
       ),
     );
 
-    if (selected != null && selected.isNotEmpty) {
-      setState(() {
-        _dirty = true;
-        for (final routine in selected) {
-          _bucketRoutines.add(
-            BucketRoutine(
-              routineId: routine.id,
-              order: _bucketRoutines.length + 1,
-            ),
-          );
-        }
-      });
-      _savePlan(usedAutofill: false, replacedExisting: false);
+    if (!mounted || result == null) return;
+
+    switch (result) {
+      case AddRoutinesSheetResultSelected(:final routines):
+        if (routines.isEmpty) return;
+        setState(() {
+          _dirty = true;
+          for (final routine in routines) {
+            _bucketRoutines.add(
+              BucketRoutine(
+                routineId: routine.id,
+                order: _bucketRoutines.length + 1,
+              ),
+            );
+          }
+        });
+        _savePlan(usedAutofill: false, replacedExisting: false);
+      case AddRoutinesSheetResultCreateNew(:final previouslySelectedIds):
+        // Snapshot the current routine ids BEFORE pushing so we can
+        // identify the freshly-created one on return. Using a diff on ids
+        // is robust against the user creating multiple routines in one
+        // session and against an unrelated routine sync flushing while
+        // the create screen is open.
+        final beforeIds = allRoutines.map((r) => r.id).toSet();
+        await context.push<void>('/routines/create');
+        if (!mounted) return;
+        // Re-read the routine list after creation. The provider may have
+        // refreshed; either way we want the freshly-created id (if any)
+        // pre-selected so the user only has to tap "ADD".
+        final refreshed = ref.read(routineListProvider).value ?? allRoutines;
+        final newIds = refreshed
+            .map((r) => r.id)
+            .where((id) => !beforeIds.contains(id))
+            .toSet();
+        // Merge the user's prior selection (carried through the sentinel)
+        // with the freshly-created id(s). If the user had nothing checked
+        // (empty-state path or just opened the sheet), `previouslySelectedIds`
+        // is empty and the merge collapses to just `newIds`. If the user
+        // backed out of creation without saving, `newIds` is empty and the
+        // merge preserves the prior selection — the sheet re-opens with the
+        // same checks the user had before tapping "Create new routine".
+        await _showAddSheet(
+          refreshed,
+          preSelectedRoutineIds: {...previouslySelectedIds, ...newIds},
+        );
     }
   }
 
@@ -471,8 +536,76 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   /// Called from [dispose] and when the debounce timer fires. Uses the
   /// captured [_debouncedPlanNotifier] instead of `ref.read()` because
   /// `ref` cannot be used after the widget is unmounted.
+  ///
+  /// Fix 1A — on successful flush we show a 1-second "Saved" SnackBar to
+  /// give the user visible feedback that their edit landed. Two suppress
+  /// conditions:
+  ///
+  ///   1. The widget is no longer mounted (e.g. dispose() flush). Showing
+  ///      a snackbar after unmount would crash on `ScaffoldMessenger.of`.
+  ///   2. An undo snackbar is already showing (after `_removeRoutine`).
+  ///      Replacing it would destroy the 5-second undo affordance — the
+  ///      remove path is itself evidence the edit registered, so the
+  ///      Saved confirmation is redundant there.
   void _flushDebouncedSave() {
-    _debouncedPlanNotifier?.upsertPlan(_bucketRoutines);
+    final notifier = _debouncedPlanNotifier;
+    if (notifier == null) return;
+    final future = notifier.upsertPlan(_bucketRoutines);
+    // The persistence call may resolve synchronously (test stubs) or
+    // asynchronously (production). Either way, we only show the snackbar
+    // after the future settles successfully — we never lie about a save
+    // that hasn't actually committed yet.
+    future
+        .then((_) {
+          _maybeShowSavedSnackbar();
+        })
+        .catchError((_) {
+          // Swallow: the offline banner already covers persistence
+          // failures, and the analytics layer logs them. Showing a "Saved"
+          // snack on a failed save would be a lie.
+        });
+  }
+
+  /// Shows the "Saved" confirmation snackbar IF the widget is still
+  /// mounted AND no other snackbar is currently visible AND no other
+  /// Saved snack is already in its 1-second display window. Three
+  /// suppression rules:
+  ///
+  ///   * `!mounted` — showing after dispose would crash on
+  ///     `ScaffoldMessenger.of`.
+  ///   * `_undoSnackbarActive` — protects the 5-second undo affordance
+  ///     shipped from `_removeRoutine`. Replacing it would destroy the
+  ///     user's recovery affordance for an action they may have
+  ///     triggered by accident.
+  ///   * `_savedSnackbarActive` — coalesces consecutive Saved snacks.
+  ///     Two slow-but-separate edits (each ≥300ms apart) each fire
+  ///     `upsertPlan` and chain back here; the default
+  ///     `ScaffoldMessenger.showSnackBar` REPLACES the current snack, so
+  ///     without this guard the first Saved is dismissed mid-display
+  ///     and a fresh 1-second Saved appears — visible "Saved... Saved..."
+  ///     stutter. With the guard the second call no-ops, the user
+  ///     continues seeing the still-active Saved snack, and the contract
+  ///     ("the last edit was persisted") still holds.
+  void _maybeShowSavedSnackbar() {
+    if (!mounted) return;
+    if (_undoSnackbarActive) return;
+    if (_savedSnackbarActive) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context);
+    _savedSnackbarActive = true;
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.savedConfirmation),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    // Clear the flag when the snack finishes (timeout, dismiss, or
+    // replacement). Without this, a subsequent edit long after the snack
+    // expired would silently suppress its own Saved confirmation.
+    controller.closed.whenComplete(() {
+      if (mounted) _savedSnackbarActive = false;
+    });
   }
 
   /// Fire the debounced `week_plan_saved` analytics event exactly once.

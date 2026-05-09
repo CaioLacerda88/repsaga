@@ -1192,6 +1192,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get createNewRoutine => 'Create new routine';
+
+  @override
+  String get savedConfirmation => 'Saved';
+
+  @override
+  String get copyFromPreviousSet => 'Copy from previous set';
+
+  @override
   String get weekComplete => 'WEEK COMPLETE';
 
   @override

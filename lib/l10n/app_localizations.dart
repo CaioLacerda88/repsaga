@@ -2204,6 +2204,24 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{ADD 1 ROUTINE} other{ADD {count} ROUTINES}}'**
   String addCountRoutines(int count);
 
+  /// AddRoutinesSheet inline action that pops the sheet and opens the routine-creation flow. Visually a text-link, not a tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Create new routine'**
+  String get createNewRoutine;
+
+  /// 1-second confirmation snackbar shown after the weekly plan autosaves. No spinner, no icon — just visible feedback that the edit landed.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get savedConfirmation;
+
+  /// Tooltip on the discoverability copy-icon shown on set 2+ when the row's weight differs from the previous set's. Tapping copies the previous set's weight + reps.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy from previous set'**
+  String get copyFromPreviousSet;
+
   /// Week review: complete header
   ///
   /// In en, this message translates to:

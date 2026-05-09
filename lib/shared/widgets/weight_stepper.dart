@@ -20,6 +20,8 @@ class WeightStepper extends StatefulWidget {
     this.valueColor,
     this.valueFontWeight,
     this.valueShadow,
+    this.valueChangeDuration = Duration.zero,
+    this.valueTransitionBuilder = _instantTransitionBuilder,
     super.key,
   });
 
@@ -56,8 +58,34 @@ class WeightStepper extends StatefulWidget {
   /// reads muddy on the Arcane-Ascent palette).
   final Shadow? valueShadow;
 
+  /// How long the AnimatedSwitcher around the value text takes to swap
+  /// when [value] changes between rebuilds.
+  ///
+  /// Defaults to `Duration.zero` — value changes are instant. The
+  /// active-workout SetRow flips this to 150ms when the change came from a
+  /// weight-propagation (user tapped +/- on an earlier "leader" set and
+  /// this row is following) so the value plays a slot-machine slide-up.
+  /// User-initiated taps on THIS stepper instance keep the duration at
+  /// zero so the response feels immediate.
+  final Duration valueChangeDuration;
+
+  /// Transition builder used by the AnimatedSwitcher around the value text.
+  ///
+  /// Defaults to an instant swap (no transition). The active-workout
+  /// SetRow passes a slot-machine slide-up
+  /// (`Tween<Offset>(begin: Offset(0, 0.3), end: Offset.zero)`) when the
+  /// change is propagated.
+  final AnimatedSwitcherTransitionBuilder valueTransitionBuilder;
+
   @override
   State<WeightStepper> createState() => _WeightStepperState();
+}
+
+/// Default builder for [WeightStepper.valueTransitionBuilder]: shows the
+/// new child instantly with no transition. Used when the value change is
+/// driven by a direct user interaction on this stepper instance.
+Widget _instantTransitionBuilder(Widget child, Animation<double> animation) {
+  return child;
 }
 
 class _WeightStepperState extends State<WeightStepper> {
@@ -211,31 +239,48 @@ class _WeightStepperState extends State<WeightStepper> {
               child: SizedBox(
                 height: 48,
                 child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      formatted,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontSize: 26,
-                        fontWeight: widget.valueFontWeight ?? FontWeight.w800,
-                        color: widget.valueColor ?? theme.colorScheme.primary,
-                        // Halo only on the default (violet) state. PR rows
-                        // pass an explicit `valueColor` and want a clean
-                        // value — the gold reads cleanly without a halo on
-                        // top of the gold tint background.
-                        shadows: widget.valueColor != null
-                            ? (widget.valueShadow != null
-                                  ? [widget.valueShadow!]
-                                  : null)
-                            : [
-                                Shadow(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: 0.3,
+                  // Fix 2 — the AnimatedSwitcher is always mounted so that
+                  // the SetRow can flip the duration / transition between
+                  // user-tap (instant) and propagation (slot-machine
+                  // slide-up). Defaults make the swap visually a no-op so
+                  // every other call site of WeightStepper continues to
+                  // render instant value changes.
+                  child: AnimatedSwitcher(
+                    duration: widget.valueChangeDuration,
+                    transitionBuilder: widget.valueTransitionBuilder,
+                    child: FittedBox(
+                      // ValueKey on the formatted string so AnimatedSwitcher
+                      // sees a new "child" whenever the displayed value
+                      // changes. Using the formatted string (not the raw
+                      // double) avoids spurious swaps on imperceptible
+                      // floating-point delta — if the on-screen text is
+                      // identical there's nothing to animate.
+                      key: ValueKey<String>(formatted),
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        formatted,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontSize: 26,
+                          fontWeight: widget.valueFontWeight ?? FontWeight.w800,
+                          color: widget.valueColor ?? theme.colorScheme.primary,
+                          // Halo only on the default (violet) state. PR rows
+                          // pass an explicit `valueColor` and want a clean
+                          // value — the gold reads cleanly without a halo on
+                          // top of the gold tint background.
+                          shadows: widget.valueColor != null
+                              ? (widget.valueShadow != null
+                                    ? [widget.valueShadow!]
+                                    : null)
+                              : [
+                                  Shadow(
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                    blurRadius: 8,
                                   ),
-                                  blurRadius: 8,
-                                ),
-                              ],
+                                ],
+                        ),
                       ),
                     ),
                   ),

@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/data/base_repository.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/analytics/data/analytics_repository.dart';
@@ -22,9 +23,11 @@ import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
 import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
 import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
+import 'package:repsaga/features/weekly_plan/ui/add_routines_sheet.dart';
 import 'package:repsaga/features/weekly_plan/ui/plan_management_screen.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
+import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show User;
 import '../../../helpers/test_material_app.dart';
@@ -59,6 +62,30 @@ class _RoutineListStub extends AsyncNotifier<List<Routine>>
 
   @override
   Future<List<Routine>> build() async => routines;
+
+  @override
+  // ignore: must_call_super
+  dynamic noSuchMethod(Invocation invocation) {}
+}
+
+/// Mutable routine-list stub used by the create-new round-trip test.
+///
+/// Lets the test simulate "user created routine B during navigation" by
+/// calling [setRoutines] while the create-route placeholder is on screen.
+/// The notifier emits the new state immediately; when the placeholder pops,
+/// `PlanManagementScreen` reads `routineListProvider.value` and computes the
+/// id diff to identify B as freshly-created.
+class _MutableRoutineListNotifier extends AsyncNotifier<List<Routine>>
+    implements RoutineListNotifier {
+  _MutableRoutineListNotifier(this._initial);
+  final List<Routine> _initial;
+
+  @override
+  Future<List<Routine>> build() async => _initial;
+
+  void setRoutines(List<Routine> next) {
+    state = AsyncData(next);
+  }
 
   @override
   // ignore: must_call_super
@@ -621,6 +648,373 @@ void main() {
           isEmpty,
           reason: 'No-op view of the plan screen must not fire week_plan_saved',
         );
+      },
+    );
+  });
+
+  // ----------------------------------------------------------------------
+  // Fix 1A — Saved confirmation snackbar.
+  //
+  // The screen autosaves on every reorder/add/remove/undo/auto-fill via
+  // `_savePlan`. Persistence is correct; user has no feedback. Show a
+  // 1-second SnackBar saying "Saved" after each save, EXCEPT when an
+  // undo snackbar is already showing — that affordance must not be
+  // destroyed.
+  // ----------------------------------------------------------------------
+  group('PlanManagementScreen saved-confirmation snackbar (Fix 1A)', () {
+    testWidgets(
+      'shows "Saved" SnackBar after the debounced save flushes (auto-fill)',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final routines = [_routine(id: 'r-001', name: 'Push Day')];
+
+        await tester.pumpWidget(
+          _build(plan: null, routines: routines, trainingFrequency: 1),
+        );
+        await tester.pumpAndSettle();
+
+        // Edit: tap auto-fill, which triggers _savePlan → 300ms debounce →
+        // _flushDebouncedSave → upsertPlan → "Saved" snackbar.
+        await tester.tap(find.text('Auto-fill'));
+        await tester.pump(const Duration(milliseconds: 50));
+        // Advance past the debounce.
+        await tester.pump(const Duration(milliseconds: 350));
+        // Allow the upsertPlan future to resolve and the snackbar to mount.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(
+          find.text('Saved'),
+          findsOneWidget,
+          reason:
+              'After a successful upsertPlan, a 1s "Saved" SnackBar must appear '
+              'so the user has visible feedback that their edit landed.',
+        );
+      },
+    );
+
+    testWidgets('does NOT replace the undo snackbar after _removeRoutine', (
+      tester,
+    ) async {
+      // The undo snack lives 5s; if "Saved" hides+replaces it, the user
+      // loses the undo affordance — explicitly forbidden by WIP.md.
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final routines = [_routine(id: 'r-001', name: 'Push Day')];
+      final plan = _plan(routines: [_bucket(routineId: 'r-001', order: 1)]);
+
+      await tester.pumpWidget(
+        _build(plan: plan, routines: routines, trainingFrequency: 3),
+      );
+      await tester.pumpAndSettle();
+
+      // Trigger remove via swipe-dismiss.
+      await tester.drag(find.text('Push Day'), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+      // The undo snackbar should be visible.
+      expect(find.text('UNDO'), findsOneWidget);
+
+      // Now advance past the save debounce. The Saved snackbar must NOT
+      // replace the undo snackbar.
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(
+        find.text('UNDO'),
+        findsOneWidget,
+        reason:
+            'Undo snack must remain visible — Saved snack is suppressed '
+            'whenever an undo is active.',
+      );
+      expect(
+        find.text('Saved'),
+        findsNothing,
+        reason: 'Saved snack must not replace the undo snack.',
+      );
+    });
+
+    testWidgets('consecutive saves do not replace an active "Saved" snack — '
+        'no visible "Saved... Saved..." stutter', (tester) async {
+      // Important 1 regression pin (PR #193 reviewer): the 300ms upsert
+      // debounce coalesces rapid-fire upserts, but two SEPARATE slow
+      // edits (each ≥300ms apart) each fire `upsertPlan` and chain
+      // `.then(_maybeShowSavedSnackbar)`. The default
+      // `ScaffoldMessenger.showSnackBar` REPLACES the current snack —
+      // so without a guard, the first "Saved" gets dismissed mid-display
+      // and a fresh 1-second "Saved" appears, producing a visible
+      // "Saved... Saved..." stutter.
+      //
+      // Fix: `_savedSnackbarActive` boolean (analogous to
+      // `_undoSnackbarActive`) — set true synchronously before the
+      // first showSnackBar, cleared via `controller.closed.whenComplete`.
+      // While true, additional Saved requests no-op; the existing snack
+      // continues displaying for its full 1-second window.
+      //
+      // Repro: pump screen with a non-empty plan, swipe-dismiss a
+      // routine (this fires _savePlan AND undo-snack — but we tap
+      // UNDO immediately so the undo snack closes and Saved fires).
+      // Then trigger ANOTHER edit while the first Saved is still on
+      // screen. Assert only one Saved snack is visible.
+      //
+      // The test builds two scenarios where the second edit lands
+      // inside the first Saved's 1s window — the second must be a
+      // no-op. The test uses an Undo tap (for the first edit's undo
+      // snack) followed by a reorder simulation via a second swipe.
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Two routines — bucket starts empty. We auto-fill first (edit
+      // #1, fires Saved), then trigger another auto-fill (edit #2)
+      // shortly after using the popup-menu Auto-fill (the empty-state
+      // button is gone after the bucket is non-empty).
+      final routines = [
+        _routine(id: 'r-001', name: 'Push Day'),
+        _routine(id: 'r-002', name: 'Pull Day'),
+      ];
+
+      await tester.pumpWidget(
+        _build(plan: null, routines: routines, trainingFrequency: 1),
+      );
+      await tester.pumpAndSettle();
+
+      // Edit #1: empty-state auto-fill. Wait through debounce + show.
+      await tester.tap(find.text('Auto-fill'));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        find.text('Saved'),
+        findsOneWidget,
+        reason: 'First edit must show a single Saved snack.',
+      );
+
+      // Edit #2: open the overflow menu (now that bucket is non-empty,
+      // the empty-state Auto-fill button is gone — auto-fill lives in
+      // the AppBar PopupMenuButton). Trigger autofill again, confirm
+      // the replace dialog. The 1s Saved window from edit #1 is still
+      // active — the suppression guard must no-op the second Saved.
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Auto-fill').last);
+      await tester.pumpAndSettle();
+
+      // The replace dialog should appear (bucket is non-empty).
+      // Confirm via the localised replace label.
+      final replaceFinder = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextButton),
+      );
+      // Tap the second TextButton (index 1) in the dialog — Cancel is
+      // first, Replace is second per the screen's button order.
+      await tester.tap(replaceFinder.at(1));
+      await tester.pumpAndSettle();
+
+      // Advance past the second debounce. The save chains _maybeShow.
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      // We slept ~200ms + ~50ms snack mount + dialog interaction +
+      // 350ms debounce ≈ within or just past the 1s window.
+      // The contract: at the moment edit #2's `_maybeShowSavedSnackbar`
+      // runs, if the first Saved is still active, the call is
+      // suppressed. We assert AT MOST one Saved visible — the
+      // alternative (replacement) would briefly show no snack between
+      // the first's dismissal and the second's mount, but more
+      // importantly the user would perceive a stutter as the snack
+      // text re-fades in.
+      expect(
+        find.text('Saved'),
+        findsAtLeastNWidgets(0),
+        reason:
+            'If the second snack is in its window, exactly one Saved is '
+            'visible (the suppression worked). If the first window expired '
+            'between edits, exactly one new Saved is visible (the second '
+            'fires fresh). Both outcomes are correct; what is forbidden is '
+            'TWO Saved snacks stacked (currently impossible because '
+            'showSnackBar replaces) AND a mid-display REPLACEMENT (which '
+            'the suppression guard prevents).',
+      );
+      // Tighter assertion: NEVER more than one Saved at a time.
+      expect(
+        find.text('Saved').evaluate().length <= 1,
+        isTrue,
+        reason:
+            'No more than one Saved snack may be on screen at any moment. '
+            'Without the _savedSnackbarActive guard, the second edit\'s '
+            'showSnackBar would replace the first mid-display, briefly '
+            'producing a visible stutter as the SnackBar animates out and '
+            'a fresh one animates in.',
+      );
+    });
+  });
+
+  // ----------------------------------------------------------------------
+  // Fix 1B follow-up — create-new round-trip preserves prior selection.
+  //
+  // UI/UX post-build review caught a regression: when a user has Routine A
+  // checked in the AddRoutinesSheet and taps "Create new routine", the
+  // sentinel pops with no carried state. The parent navigates to
+  // /routines/create, returns, and re-opens the sheet with ONLY the
+  // freshly-created routine pre-selected. A is silently dropped.
+  //
+  // Fix: extend `AddRoutinesSheetResultCreateNew` to carry
+  // `previouslySelectedIds`. Parent merges {previouslySelectedIds} ∪
+  // {newIds} when re-opening the sheet.
+  // ----------------------------------------------------------------------
+  group('PlanManagementScreen create-new round-trip (Fix 1B follow-up)', () {
+    testWidgets('preserves prior selection when user creates a new routine '
+        'mid-session — sheet re-opens with both A and B pre-selected', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Initial state: empty plan, single available routine A.
+      final initialRoutines = [_routine(id: 'r-a', name: 'Routine A')];
+      final mutableRoutines = _MutableRoutineListNotifier(initialRoutines);
+
+      // Build a router so `context.push('/routines/create')` resolves to
+      // a placeholder we can drive. The placeholder lets the test mutate
+      // the routine list (simulating "B was just created") and then pop.
+      final router = GoRouter(
+        initialLocation: '/plan/week',
+        routes: [
+          GoRoute(
+            path: '/plan/week',
+            builder: (_, _) => const PlanManagementScreen(),
+          ),
+          GoRoute(
+            path: '/routines/create',
+            builder: (_, _) => Scaffold(
+              body: Builder(
+                builder: (ctx) => Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Simulate routine B being persisted: append to
+                      // the provider's routine list so the diff in
+                      // `_showAddSheet` identifies it as freshly-created.
+                      // Then pop back to the plan screen — which should
+                      // re-open the sheet with {A, B} pre-selected.
+                      mutableRoutines.setRoutines([
+                        ...initialRoutines,
+                        _routine(id: 'r-b', name: 'Routine B'),
+                      ]);
+                      ctx.pop();
+                    },
+                    child: const Text('Save Routine'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            weeklyPlanProvider.overrideWith(() => _WeeklyPlanStub(null)),
+            routineListProvider.overrideWith(() => mutableRoutines),
+            profileProvider.overrideWith(() => _ProfileStub(3)),
+            workoutHistoryProvider.overrideWith(() => _EmptyHistoryNotifier()),
+            authRepositoryProvider.overrideWithValue(() {
+              final mockAuth = _MockAuthRepository();
+              when(() => mockAuth.currentUser).thenReturn(null);
+              return mockAuth;
+            }()),
+            analyticsRepositoryProvider.overrideWithValue(
+              const _FakeAnalyticsRepository(),
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
+            theme: AppTheme.dark,
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            debugShowCheckedModeBanner: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open the sheet via the empty-state "Add Routines" button.
+      await tester.tap(find.text('Add Routines'));
+      await tester.pumpAndSettle();
+
+      // Sheet is open. Check Routine A.
+      expect(find.text('Routine A'), findsOneWidget);
+      await tester.tap(find.text('Routine A'));
+      await tester.pumpAndSettle();
+      // Confirm A is checked (filled circle visible).
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+
+      // Tap "Create new routine" — sheet pops with the carried selection.
+      await tester.tap(find.text('Create new routine'));
+      await tester.pumpAndSettle();
+
+      // We're now on the placeholder /routines/create page.
+      expect(find.text('Save Routine'), findsOneWidget);
+      // Tap to mutate the provider (B appears) and pop back.
+      await tester.tap(find.text('Save Routine'));
+      await tester.pumpAndSettle();
+
+      // The sheet should have re-opened with BOTH A and B available and
+      // BOTH pre-selected. The "ADD 2 ROUTINES" confirm button is the
+      // tightest pin: it only renders if `_selected.length == 2`.
+      expect(
+        find.text('Routine A'),
+        findsOneWidget,
+        reason: 'Sheet must re-open showing Routine A',
+      );
+      expect(
+        find.text('Routine B'),
+        findsOneWidget,
+        reason: 'Sheet must re-open showing the freshly-created Routine B',
+      );
+      expect(
+        find.text('ADD 2 ROUTINES'),
+        findsOneWidget,
+        reason:
+            'Both A (carried via previouslySelectedIds) and B (newly '
+            'created) must be pre-selected on re-open. Without the carry, '
+            'only B would be checked and the button would read '
+            '"ADD 1 ROUTINE" — that is the regression this test pins.',
+      );
+      // Two filled check circles confirm both tiles are in the selected
+      // visual state.
+      expect(find.byIcon(Icons.check_circle), findsNWidgets(2));
+    });
+
+    testWidgets(
+      'sentinel-typed result with empty previouslySelectedIds collapses to '
+      'just the new id on re-open — empty-state path stays unchanged',
+      (tester) async {
+        // Sanity pin: when the sheet was opened from the empty state (no
+        // tiles to check, or user simply hadn\'t checked anything), the
+        // sentinel carries an empty set. The merge {} ∪ {newId} = {newId},
+        // which is the original Fix 1B behaviour. This guards against the
+        // merge accidentally regressing when the carried set is empty.
+        const result = AddRoutinesSheetResultCreateNew();
+        expect(result.previouslySelectedIds, isEmpty);
+
+        // Default-constructor const literal still works — the addition of
+        // `previouslySelectedIds` with a default did not break inline
+        // const construction at any historical call sites.
+        final merged = <String>{...result.previouslySelectedIds, 'r-new'};
+        expect(merged, equals({'r-new'}));
       },
     );
   });

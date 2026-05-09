@@ -2177,5 +2177,589 @@ void main() {
         },
       );
     });
+
+    // -------------------------------------------------------------------------
+    // Fix 3 — suppress "Previous: 0kg × N" hint
+    //
+    // The previous-session hint anchors the user to last session's working
+    // weight; a 0kg "anchor" is noise. WIP.md instructs hiding the hint
+    // entirely when `lastSet.weight == 0`, with no replacement label —
+    // empty space is the correct UX.
+    // -------------------------------------------------------------------------
+    group('previous-session hint zero-weight suppression (Fix 3)', () {
+      testWidgets('hides hint when lastSet.weight is 0kg', (tester) async {
+        final set = makeSet(isCompleted: false);
+        final lastSet = makeSet(id: 'last-set', weight: 0.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+          ),
+        );
+
+        expect(
+          find.textContaining('Previous:'),
+          findsNothing,
+          reason:
+              'A 0kg "anchor" is noise — the hint must be suppressed entirely '
+              'when lastSet.weight == 0. No replacement label.',
+        );
+      });
+
+      testWidgets('shows hint when lastSet.weight is non-zero', (tester) async {
+        // Sanity counter-test: confirms suppression is gated specifically on
+        // 0kg, not a wholesale removal.
+        final set = makeSet(isCompleted: false);
+        final lastSet = makeSet(id: 'last-set', weight: 20.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
+          ),
+        );
+
+        expect(find.text('Previous: 20kg × 5'), findsOneWidget);
+      });
+
+      testWidgets(
+        'standing-PR row STILL emits the row state identifier when last-set '
+        'weight is 0 (hint suppressed) — Phase-20 role-swap regression pin',
+        (tester) async {
+          // Regression pin born from PR #193: a Visibility(maintainSize:true)
+          // attempt to "stabilise the column" actually broke the
+          // `set-row-state-standing-pr` AOM emission on the live web build,
+          // failing three E2E tests deterministically. Reverted to
+          // conditional rendering. This static-pump pin asserts the only
+          // thing that matters at the unit level: when the row is rendered
+          // in PrRowState.completedStandingPr the row frame's
+          // `set-row-state-standing-pr` identifier must be present in the
+          // Semantics tree — regardless of whether the hint slot is shown
+          // or suppressed by Fix 3 (lastSet.weight == 0).
+          //
+          // Note: this pin cannot reproduce the LIVE failure, which only
+          // manifests during a state TRANSITION on the Flutter Web semantics
+          // engine. The E2E suite is the canonical guard for the transition
+          // bug; this pin guards the static-state contract.
+          final set = makeSet(isCompleted: true, weight: 60, reps: 8);
+          final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+                lastSet: lastSet,
+              ),
+            ),
+          );
+
+          expect(
+            find.bySemanticsIdentifier('set-row-state-standing-pr'),
+            findsOneWidget,
+            reason:
+                'Standing-PR row must emit set-row-state-standing-pr '
+                'regardless of hint-slot visibility. A regression here means '
+                'the row frame Semantics structure has broken.',
+          );
+        },
+      );
+
+      testWidgets('standing-PR row with 0-weight last set still emits the row '
+          'identifier — Phase 20 role-swap regression pin', (tester) async {
+        // Important 5 regression pin: the dangerous intersection is
+        // standing-PR (the row state that role-swaps on the Flutter Web
+        // semantics engine) AND 0-weight lastSet (the case where the
+        // hint suppression triggers). The original concern: removing the
+        // hint Padding when transitioning to standing-PR could drop the
+        // row's done-cell identifier as the role swap collided with the
+        // descendant tree change.
+        //
+        // PR #193 attempted a Visibility(maintainSize:true) wrapper to
+        // stabilise the descendant tree, but that broke E2E in a
+        // different way (see _shouldShowHint doc). Reverted to
+        // conditional rendering. This static-pump pin still has value:
+        // it asserts the done-cell identifier survives in completed
+        // standing-PR even when the hint is suppressed; a structural
+        // change to _DoneCell that drops the identifier would fail
+        // here. The TRANSITION case (the actual engine bug) is pinned
+        // by E2E tests in personal-records.spec.ts and
+        // rank-up-celebration.spec.ts.
+        //
+        // We assert the done-cell identifier emits — that's the
+        // identifier-bearing node on the done cell; this pin guards
+        // its survival under the hint-suppressed branch.
+
+        final set = makeSet(isCompleted: true, weight: 60, reps: 8);
+        final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.completedStandingPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+              lastSet: lastSet,
+            ),
+          ),
+        );
+
+        expect(
+          find.bySemanticsIdentifier('workout-set-completed'),
+          findsOneWidget,
+          reason:
+              'Standing-PR row + 0-weight last set is the Phase-20 role-swap '
+              'intersection. The done-cell identifier (workout-set-completed) '
+              'must still emit even with the hint slot suppressed. A '
+              'regression here means a structural change to _DoneCell '
+              'dropped the identifier.',
+        );
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // Fix 2 — copy-from-previous-set discoverability icon (sets 2+ only,
+    // visible only when current weight differs from previous in-session set).
+    //
+    // Existing tap-on-set-number copies last set values; this fix makes that
+    // affordance VISUALLY discoverable instead of relying on the dotted
+    // underline alone. WIP.md: 12dp Icons.content_copy at alpha 0.4.
+    // -------------------------------------------------------------------------
+    group('copy-from-previous-set discoverability (Fix 2)', () {
+      testWidgets(
+        'shows copy icon on set 2 when current weight differs from previous in-session set',
+        (tester) async {
+          final set2 = makeSet(
+            id: 'set-2',
+            setNumber: 2,
+            weight: 0,
+            reps: 8,
+            isCompleted: false,
+          );
+          final previous = makeSet(
+            id: 'set-1',
+            setNumber: 1,
+            weight: 20,
+            reps: 8,
+            isCompleted: false,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set2,
+                workoutExerciseId: 'we-001',
+                previousSet: previous,
+              ),
+            ),
+          );
+
+          expect(
+            find.byIcon(Icons.content_copy),
+            findsOneWidget,
+            reason:
+                'set 2+ rows whose weight differs from the previous in-session '
+                'set must surface a 12dp Icons.content_copy hint at alpha 0.4 '
+                'so the tap-to-copy affordance is discoverable.',
+          );
+        },
+      );
+
+      testWidgets('hides copy icon when weights match', (tester) async {
+        final set2 = makeSet(
+          id: 'set-2',
+          setNumber: 2,
+          weight: 20,
+          isCompleted: false,
+        );
+        final previous = makeSet(
+          id: 'set-1',
+          setNumber: 1,
+          weight: 20,
+          isCompleted: false,
+        );
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set2,
+              workoutExerciseId: 'we-001',
+              previousSet: previous,
+            ),
+          ),
+        );
+
+        expect(
+          find.byIcon(Icons.content_copy),
+          findsNothing,
+          reason:
+              'matching weights → no copy hint (it would be self-referential).',
+        );
+      });
+
+      testWidgets('hides copy icon on set 1 (no previous set)', (tester) async {
+        final set1 = makeSet(setNumber: 1, weight: 0, isCompleted: false);
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: set1, workoutExerciseId: 'we-001')),
+        );
+
+        expect(
+          find.byIcon(Icons.content_copy),
+          findsNothing,
+          reason: 'set 1 has no previous set — affordance is meaningless.',
+        );
+      });
+
+      testWidgets(
+        'set-number cell tap target stays at Material 48dp floor with the copy icon present',
+        (tester) async {
+          // Per memory feedback (feedback_tap_target_measurement.md): use
+          // tester.getSize, not boundingBox/minimumSize. The icon must not
+          // shrink the InkWell's hit area below 48x48.
+          final set2 = makeSet(
+            id: 'set-2',
+            setNumber: 2,
+            weight: 0,
+            isCompleted: false,
+          );
+          final previous = makeSet(
+            id: 'set-1',
+            setNumber: 1,
+            weight: 20,
+            isCompleted: false,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set2,
+                workoutExerciseId: 'we-001',
+                previousSet: previous,
+              ),
+            ),
+          );
+
+          // The set-number InkWell's Container has explicit
+          // BoxConstraints(minWidth: 48, minHeight: 48). Find that container
+          // (it sits inside the Tooltip → InkWell → Container chain in
+          // _SetNumberCell) and confirm it's at least 48x48 even with the
+          // icon present.
+          final inkWell = find.descendant(
+            of: find.byType(SetRow),
+            matching: find.byWidgetPredicate(
+              (w) => w is InkWell && w.onLongPress != null,
+            ),
+          );
+          expect(inkWell, findsOneWidget);
+          final size = tester.getSize(inkWell);
+          expect(size.width, greaterThanOrEqualTo(48));
+          expect(size.height, greaterThanOrEqualTo(48));
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // Fix 2 — propagated weight slot-machine slide animation
+    //
+    // When a set's weight value updates because of a *propagation* (the user
+    // tapped +/- on an earlier "leader" set and this row is following), the
+    // value text slides up via AnimatedSwitcher (150ms easeOut, slide from
+    // Offset(0, 0.3) to Offset.zero). User-initiated taps on this row's own
+    // stepper change the value directly without the slide — only propagated
+    // changes animate, distinguishing "I changed this" from "the app
+    // inferred this for me".
+    // -------------------------------------------------------------------------
+    group('propagated weight animation (Fix 2)', () {
+      testWidgets(
+        'mounts AnimatedSwitcher around the weight value (animation entry-point exists)',
+        (tester) async {
+          // The animation contract requires an AnimatedSwitcher wrapping the
+          // value text in the weight cell. Without it, propagated value
+          // changes can't render the slot-machine slide. This test pins the
+          // structural presence; the per-frame slide is asserted in the
+          // animation test below.
+          final set = makeSet(isCompleted: false, weight: 20);
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+
+          expect(
+            find.descendant(
+              of: find.byType(WeightStepper),
+              matching: find.byType(AnimatedSwitcher),
+            ),
+            findsOneWidget,
+            reason:
+                'WeightStepper value zone must wrap an AnimatedSwitcher so '
+                'propagated value changes can play the slot-machine slide.',
+          );
+        },
+      );
+
+      testWidgets(
+        'propagated weight change (external rebuild) passes non-zero duration '
+        'to WeightStepper — animation plays',
+        (tester) async {
+          // The Fix 2 animation contract: when set.weight changes between
+          // builds WITHOUT a user tap on THIS cell's stepper, the
+          // _WeightStepperCellState._userInitiatedThisChange flag is false,
+          // so the cell passes valueChangeDuration: 150ms to WeightStepper —
+          // which triggers the slot-machine slide via AnimatedSwitcher.
+          //
+          // Mechanism: pump SetRow(weight=0) first to seed _lastSeenWeight=0
+          // in _WeightStepperCellState. Then re-pump with weight=20 at the
+          // SAME tree position (same container, same SetRow key) WITHOUT
+          // going through _onWeightTapped. The second build sees:
+          //   weightChanged = (_lastSeenWeight=0) != (currentWeight=20) → true
+          //   _userInitiatedThisChange → false  (no tap occurred)
+          //   shouldAnimate = true
+          //   → WeightStepper.valueChangeDuration = Duration(milliseconds:150)
+          //
+          // Using two pumpWidget calls with the same container keeps the
+          // _WeightStepperCellState instance alive across the pump because
+          // the SetRow is at the same position in an otherwise-identical tree.
+          final container = makeContainer(null);
+          addTearDown(container.dispose);
+          const weId = 'we-anim';
+          const setKey = ValueKey('set-anim-key');
+
+          // First pump: weight=0 seeds _lastSeenWeight.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: setKey,
+                set: makeSet(id: 'set-anim', setNumber: 1, weight: 0),
+                workoutExerciseId: weId,
+              ),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Second pump: weight=20. No _onWeightTapped call → propagation path.
+          // Same container + same key → _WeightStepperCellState is PRESERVED,
+          // so _lastSeenWeight carries over from the first pump.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: setKey,
+                set: makeSet(id: 'set-anim', setNumber: 1, weight: 20),
+                workoutExerciseId: weId,
+              ),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          final stepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          expect(
+            stepper.valueChangeDuration,
+            const Duration(milliseconds: 150),
+            reason:
+                'A weight change that arrived via external rebuild (propagation) '
+                'must pass valueChangeDuration=150ms so the AnimatedSwitcher '
+                'plays the slot-machine slide. User-initiated taps use '
+                'Duration.zero so only propagated changes animate.',
+          );
+        },
+      );
+
+      testWidgets(
+        'user-initiated weight tap passes Duration.zero to WeightStepper — no animation',
+        (tester) async {
+          // When the user taps +/- on THIS set row's own stepper, the
+          // _WeightStepperCellState._userInitiatedThisChange flag is set to
+          // true before the rebuild. That build sees weightChanged=true but
+          // _userInitiatedThisChange=true → shouldAnimate=false →
+          // WeightStepper.valueChangeDuration stays Duration.zero.
+          //
+          // This test pins the user-initiated path by wiring a real notifier
+          // container, calling propagateWeight on set#1 WITH this set as the
+          // leader (so _onWeightTapped fires, setting the flag), and then
+          // reading valueChangeDuration.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 1,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+          final set1 = workoutState.exercises.first.sets.first;
+
+          // Seed set#1 at weight=0 so the tap-to-20kg is a real change.
+          final seeded = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: [set1.copyWith(weight: 0)],
+              ),
+            ],
+          );
+          final seededSet = seeded.exercises.first.sets.first;
+
+          final container = makeContainer(seeded);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: seededSet, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Tap the + button on the weight stepper to increment weight.
+          // This wires through _onWeightTapped → sets _userInitiatedThisChange=true.
+          await tester.tap(find.byIcon(Icons.add).first);
+          await tester.pump();
+
+          // After the user-initiated tap the flag was set to true, then
+          // cleared after the build. The AnimatedSwitcher got Duration.zero.
+          // Re-read the stepper in the post-tap build state.
+          final stepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          expect(
+            stepper.valueChangeDuration,
+            Duration.zero,
+            reason:
+                'A user-initiated tap on THIS cell\'s stepper must pass '
+                'valueChangeDuration=Duration.zero so the value update is '
+                'instant — the user already knows they tapped. Only propagated '
+                'changes (external rebuilds from sibling cell taps) animate.',
+          );
+        },
+      );
+
+      testWidgets(
+        'rapid taps on the leader cell propagate to followers using the '
+        'committed state — not the stale widget.set.weight',
+        (tester) async {
+          // Important 4 regression pin: previously `_onWeightTapped` read
+          // `widget.set.weight` to compute `old`. Inside a rapid two-tap
+          // sequence on the same frame, the widget hadn't rebuilt between
+          // taps, so tap #2 saw `old = pre-tap-#1 weight` (stale). The
+          // notifier's walker compared the followers' (already-updated)
+          // weight to the stale `old`, mismatched, and bailed —
+          // followers were silently left behind.
+          //
+          // Repro: leader at 0kg, two followers at 0kg. Tap leader to 5kg
+          // (propagates: leader+followers = 5). Tap leader AGAIN by passing
+          // a STALE widget.set (weight=0) on a fresh pump — same widget
+          // instance, no rebuild. Handler must read 5 from the notifier
+          // (committed state), pass `old=5` to propagateWeight, and
+          // followers must move to 10. Pre-fix: handler would read
+          // `widget.set.weight=0`, propagate `old=0 → new=10`, walker
+          // bails on first follower (weight is 5, not 0), followers stay
+          // at 5.
+          //
+          // We test the contract directly by reading the notifier's
+          // committed state after the rapid sequence and asserting all
+          // three sets land at the final intended weight.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 3,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+
+          // Seed all 3 sets at 0kg AND not completed. The factory default
+          // is `is_completed=true`, which would stop propagation at the
+          // first follower (completed sets are immutable per the
+          // `propagateWeight` contract). We need all three pending so the
+          // walker traverses end-to-end.
+          final seeded = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: workoutState.exercises.first.sets
+                    .map((s) => s.copyWith(weight: 0, isCompleted: false))
+                    .toList(),
+              ),
+            ],
+          );
+          final leaderSet = seeded.exercises.first.sets.first;
+
+          final container = makeContainer(seeded);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+          final notifier = container.read(activeWorkoutProvider.notifier);
+
+          // First propagate: 0 → 5. Simulates tap #1.
+          await notifier.propagateWeight(weId, leaderSet.id, 0, 5);
+          // Verify state committed: all three at 5.
+          final afterFirst = container.read(activeWorkoutProvider).value!;
+          expect(
+            afterFirst.exercises.first.sets.map((s) => s.weight).toList(),
+            [5, 5, 5],
+            reason:
+                'Tap #1 must propagate the new weight to all followers '
+                'still in formation.',
+          );
+
+          // Pump SetRow with the STALE leaderSet (weight=0) — this is
+          // what the widget tree holds between the two rapid taps before
+          // the parent rebuilds. The handler must NOT trust this stale
+          // value.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: leaderSet, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Tap the + button on the weight stepper. The widget tree still
+          // holds `widget.set.weight=0` (stale), but the COMMITTED state
+          // is leader=5, followers=5. The fix is for `_onWeightTapped` to
+          // read the committed weight (5) when computing `oldWeight` —
+          // not `widget.set.weight` (0).
+          //
+          // Pre-fix:  oldWeight=0 → walker compares followers' actual
+          //           weight (5) to 0 → mismatch → walker bails →
+          //           followers DO NOT move with the leader → drift.
+          // Post-fix: oldWeight=5 → walker compares followers' actual
+          //           weight (5) to 5 → match → walker updates them →
+          //           followers move with the leader → no drift.
+          //
+          // We don't pin the EXACT new weight (it depends on what
+          // `widget.value + increment` resolves to with the stale widget,
+          // which is a known orthogonal staleness issue not in scope here).
+          // We pin the propagation CORRECTNESS contract: all three sets
+          // remain equal after the second tap.
+          await tester.tap(find.byIcon(Icons.add).first);
+          await tester.pump();
+
+          final afterSecond = container.read(activeWorkoutProvider).value!;
+          final weights = afterSecond.exercises.first.sets
+              .map((s) => s.weight ?? 0)
+              .toList();
+          expect(
+            weights[1],
+            equals(weights[0]),
+            reason:
+                'Follower #1 must move with the leader. Pre-fix, the handler '
+                'would have read `widget.set.weight=0` as oldWeight, the '
+                'walker would compare followers (at 5) to 0, mismatch, bail, '
+                'and the follower would stay at 5 while the leader moved — '
+                'visible drift. Post-fix, the handler reads the committed '
+                'weight (5) so the walker matches and the follower moves '
+                'with the leader.',
+          );
+          expect(
+            weights[2],
+            equals(weights[0]),
+            reason:
+                'Follower #2 must move with the leader (same contract as '
+                'follower #1). Both followers must remain aligned with the '
+                'leader after a rapid second tap regardless of stale widget '
+                'state.',
+          );
+        },
+      );
+    });
   });
 }
