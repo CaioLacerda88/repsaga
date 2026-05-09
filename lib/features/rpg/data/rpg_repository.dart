@@ -63,7 +63,7 @@ class CharacterState {
 /// ([runBackfill]) is the only client-initiated write, and it's
 /// idempotency-protected by the `(user_id, set_id)` UNIQUE INDEX.
 class RpgRepository extends BaseRepository {
-  const RpgRepository(this._client);
+  RpgRepository(this._client, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
 

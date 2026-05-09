@@ -6,7 +6,7 @@ import 'models/analytics_event.dart';
 /// Fire-and-forget repository for the first-party product analytics events
 /// table. Errors are swallowed — analytics must never break the user's flow.
 class AnalyticsRepository extends BaseRepository {
-  const AnalyticsRepository(this._client);
+  AnalyticsRepository(this._client, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
 

@@ -4,7 +4,7 @@ import '../../../core/data/base_repository.dart';
 import 'models/weekly_plan.dart';
 
 class WeeklyPlanRepository extends BaseRepository {
-  const WeeklyPlanRepository(this._client);
+  WeeklyPlanRepository(this._client, {super.recoveryRecorder});
 
   final supabase.SupabaseClient _client;
 

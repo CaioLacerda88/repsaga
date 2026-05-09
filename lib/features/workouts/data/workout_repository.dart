@@ -32,7 +32,12 @@ typedef WorkoutDetail = ({
 /// Cache keys for history are now `'<userId>:<locale>'` so en and pt entries
 /// coexist; [LocaleNotifier.setLocale] also clears the box on switch.
 class WorkoutRepository extends BaseRepository {
-  const WorkoutRepository(this._client, this._cache, this._exerciseRepo);
+  WorkoutRepository(
+    this._client,
+    this._cache,
+    this._exerciseRepo, {
+    super.recoveryRecorder,
+  });
 
   final supabase.SupabaseClient _client;
   final CacheService _cache;

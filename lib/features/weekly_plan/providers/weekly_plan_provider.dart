@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../../core/device/platform_info.dart';
 import '../../analytics/data/models/analytics_event.dart';
 import '../../analytics/providers/analytics_providers.dart';
@@ -14,7 +15,10 @@ import '../data/weekly_plan_repository.dart';
 
 /// Provides the [WeeklyPlanRepository] singleton.
 final weeklyPlanRepositoryProvider = Provider<WeeklyPlanRepository>((ref) {
-  return WeeklyPlanRepository(Supabase.instance.client);
+  return WeeklyPlanRepository(
+    Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 /// Computes the ordinal week number since user signup from a Supabase

@@ -76,7 +76,7 @@ class EarnedTitleRow {
 /// drive the *celebration overlay* — the durable record was already written
 /// by the time `record_set_xp` returned its deltas.
 class TitlesRepository extends BaseRepository {
-  TitlesRepository(this._client, {AssetBundle? bundle})
+  TitlesRepository(this._client, {AssetBundle? bundle, super.recoveryRecorder})
     : _bundle = bundle ?? rootBundle;
 
   final supabase.SupabaseClient _client;

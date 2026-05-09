@@ -26,7 +26,12 @@ import '../models/routine.dart';
 /// since per-user delete with locale-prefixed keys would require iterating all
 /// keys to find this user's entries.
 class RoutineRepository extends BaseRepository {
-  const RoutineRepository(this._client, this._cache, this._exerciseRepo);
+  RoutineRepository(
+    this._client,
+    this._cache,
+    this._exerciseRepo, {
+    super.recoveryRecorder,
+  });
 
   final supabase.SupabaseClient _client;
   final CacheService _cache;

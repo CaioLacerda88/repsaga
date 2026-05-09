@@ -1,13 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../data/titles_repository.dart';
 import '../models/title.dart';
 
 /// Single instance of the titles repository. Lazily resolves the Supabase
 /// client and the default `rootBundle` for asset reads.
 final titlesRepositoryProvider = Provider<TitlesRepository>((ref) {
-  return TitlesRepository(Supabase.instance.client);
+  return TitlesRepository(
+    Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
 });
 
 /// The full v1 title catalog (78 entries) loaded from the shipped asset.
