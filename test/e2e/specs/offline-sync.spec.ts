@@ -271,57 +271,6 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
     ).not.toBeVisible();
   });
 
-  // -------------------------------------------------------------------------
-  // Test 8: OfflineBanner appears when CDP toggles browser offline
-  //
-  // Family 5A acceptance criterion. Playwright's context.setOffline(true)
-  // fires window.offline in the JS layer; web_online_events_web.dart's
-  // listener must observe this and push false into onlineStatusProvider so
-  // the OfflineBanner appears.
-  // -------------------------------------------------------------------------
-  test('should show offline banner when browser goes offline via CDP (OFFLINE-008)', async ({
-    page,
-  }) => {
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-
-    // Sanity: banner must be hidden while online.
-    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
-      timeout: 3_000,
-    });
-
-    // Toggle browser offline. CDP fires window.offline in the JS layer.
-    await page.context().setOffline(true);
-
-    // Banner must appear within 5s.
-    await expect(page.locator(OFFLINE.banner)).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // Restore connectivity so global teardown isn't disrupted.
-    await page.context().setOffline(false);
-  });
-
-  // -------------------------------------------------------------------------
-  // Test 9: OfflineBanner disappears when CDP restores connectivity
-  //
-  // Family 5A acceptance criterion. After setOffline(true) → setOffline(false),
-  // window.online fires and the banner must hide again.
-  // -------------------------------------------------------------------------
-  test('should hide offline banner when browser comes back online via CDP (OFFLINE-009)', async ({
-    page,
-  }) => {
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-
-    await page.context().setOffline(true);
-    await expect(page.locator(OFFLINE.banner)).toBeVisible({
-      timeout: 5_000,
-    });
-
-    await page.context().setOffline(false);
-    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
-      timeout: 5_000,
-    });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -454,5 +403,89 @@ test.describe('Offline sync — badge interaction', () => {
     await page.waitForURL(/\/home/, { timeout: 5_000 });
 
     await restoreSupabaseRest(page);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offline banner — browser network (CDP setOffline)
+//
+// These tests use Playwright's context.setOffline() — a different testing
+// primitive from the REST-blocking used in the badge tests above. Keeping them
+// in their own describe block:
+//   • Isolates the afterEach cleanup (setOffline(false)) so it only runs for
+//     the banner tests and never for badge tests that use page.route().
+//   • Makes intent clear: these are the acceptance tests for Family 5A
+//     (AW-EX-B-US1-03), not phase-14 queue tests.
+// ---------------------------------------------------------------------------
+
+test.describe('Offline banner — browser network', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeOfflineSync').email,
+      getUser('smokeOfflineSync').password,
+    );
+  });
+
+  // Always reset to online after each test — context.setOffline() is
+  // browser-context-scoped, not page-scoped. If an assertion times out while
+  // the context is offline, the worker's next test would inherit a poisoned
+  // context and Playwright's retry would also start offline. setOffline(false)
+  // is idempotent: calling it on an already-online context is a no-op.
+  test.afterEach(async ({ page }) => {
+    await page.context().setOffline(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 8: OfflineBanner appears when CDP toggles browser offline
+  //
+  // Family 5A acceptance criterion. Playwright's context.setOffline(true)
+  // fires window.offline in the JS layer; web_online_events_web.dart's
+  // listener must observe this and push false into onlineStatusProvider so
+  // the OfflineBanner appears.
+  // -------------------------------------------------------------------------
+  test('should show offline banner when browser goes offline via CDP (OFFLINE-008)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    // Sanity: banner must be hidden while online.
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 3_000,
+    });
+
+    // Toggle browser offline. CDP fires window.offline in the JS layer.
+    await page.context().setOffline(true);
+
+    // Banner must appear within 5s.
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Note: setOffline(false) is handled by afterEach — no need to call here.
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 9: OfflineBanner disappears when CDP restores connectivity
+  //
+  // Family 5A acceptance criterion. After setOffline(true) → setOffline(false),
+  // window.online fires and the banner must hide again.
+  // -------------------------------------------------------------------------
+  test('should hide offline banner when browser comes back online via CDP (OFFLINE-009)', async ({
+    page,
+  }) => {
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+
+    await page.context().setOffline(true);
+    await expect(page.locator(OFFLINE.banner)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    await page.context().setOffline(false);
+    await expect(page.locator(OFFLINE.banner)).not.toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Note: afterEach calls setOffline(false) again — idempotent, safe.
   });
 });
