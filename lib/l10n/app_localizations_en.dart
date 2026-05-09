@@ -2405,4 +2405,39 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get title_saga_forged_flavor =>
       'Every track at sixty. The saga is forged, and you forged it.';
+
+  @override
+  String get decrementWeight => 'Decrease weight';
+
+  @override
+  String get incrementWeight => 'Increase weight';
+
+  @override
+  String get decrementReps => 'Decrease reps';
+
+  @override
+  String get incrementReps => 'Increase reps';
+
+  @override
+  String weightValueSemantics(String formatted, String unit) {
+    return 'Weight value: $formatted $unit. Tap to enter weight.';
+  }
+
+  @override
+  String repsValueSemantics(int value) {
+    return 'Reps value: $value. Tap to enter reps.';
+  }
+
+  @override
+  String get restTimerDismiss => 'Dismiss rest timer';
+
+  @override
+  String workoutNameTapToRenameSemantics(String name) {
+    return '$name. Tap to rename workout.';
+  }
+
+  @override
+  String workoutDefaultName(String date) {
+    return 'Workout — $date';
+  }
 }

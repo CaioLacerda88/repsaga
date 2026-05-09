@@ -487,7 +487,14 @@ class _ExerciseCardHeader extends ConsumerWidget {
             ),
           ),
         ] else ...[
+          // Family 3 (AW-EX-C-BR1-02) — pair-rule Semantics with stable
+          // identifiers so Playwright can target swap / remove without
+          // tooltip-text fallback. `container: true, explicitChildNodes:
+          // true` is mandatory per lessons.md PR #152.
           Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-swap-exercise',
             label: l10n.swapExercise,
             child: IconButton(
               onPressed: () => onSwap(context),
@@ -499,6 +506,9 @@ class _ExerciseCardHeader extends ConsumerWidget {
             ),
           ),
           Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-remove-exercise',
             label: l10n.removeExercise,
             child: IconButton(
               onPressed: () => onConfirmRemove(context),

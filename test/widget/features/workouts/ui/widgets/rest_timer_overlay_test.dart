@@ -369,6 +369,89 @@ void main() {
 
         expect(find.bySemanticsLabel('Skip rest timer'), findsOneWidget);
       });
+
+      testWidgets(
+        'countdown Semantics declares liveRegion: true so screen readers announce ticks (Family 3 — AW-EX-F-BR1-06)',
+        (tester) async {
+          // The rest-timer countdown drives the user's between-set rhythm.
+          // Without `liveRegion: true` on the Semantics wrapping the
+          // countdown, screen readers do NOT re-announce on tick changes —
+          // the user only hears the time when the overlay first appears.
+          // Pin the property structurally so a refactor that drops
+          // liveRegion fails fast, before the regression reaches a
+          // screen-reader user.
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          // Find the Semantics widget that holds the countdown label and
+          // assert it declares `liveRegion: true`. The countdown label
+          // matches `RegExp(r'Rest timer.*remaining')`.
+          final semanticsWidgets = tester
+              .widgetList<Semantics>(find.byType(Semantics))
+              .where(
+                (s) =>
+                    s.properties.label != null &&
+                    RegExp(
+                      r'Rest timer.*remaining',
+                    ).hasMatch(s.properties.label!),
+              )
+              .toList();
+
+          expect(
+            semanticsWidgets,
+            isNotEmpty,
+            reason:
+                'Expected to find a Semantics widget wrapping the countdown '
+                'with a label matching "Rest timer ... remaining".',
+          );
+          expect(
+            semanticsWidgets.first.properties.liveRegion,
+            isTrue,
+            reason:
+                'Countdown Semantics MUST declare liveRegion: true so '
+                'screen readers announce each tick. Without it, the user '
+                'hears the time once and is stranded.',
+          );
+        },
+      );
+
+      testWidgets(
+        'outer dismiss scrim exposes "Dismiss rest timer" Semantics (Family 3 — AW-EX-F-BR1-06)',
+        (tester) async {
+          // The outer GestureDetector at L49 is the tap-anywhere-to-dismiss
+          // affordance. Pre-fix it had no Semantics — sighted users could
+          // dismiss by tapping the scrim, but screen-reader users had no
+          // way to discover or invoke that action. Pin the localized label
+          // is reachable on the AOM.
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          expect(find.bySemanticsLabel('Dismiss rest timer'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'exercise-name Text is wrapped in a Semantics(label:) so it surfaces in the AOM',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            exerciseName: 'Bench Press',
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          expect(find.bySemanticsLabel('Bench Press'), findsOneWidget);
+        },
+      );
     });
   });
 }

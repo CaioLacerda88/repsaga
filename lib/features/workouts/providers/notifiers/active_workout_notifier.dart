@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,12 +8,14 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../core/device/platform_info.dart';
 import '../../../../core/exceptions/app_exception.dart' as app;
+import '../../../../core/l10n/locale_provider.dart';
 import '../../../../core/local_storage/cache_service.dart';
 import '../../../../core/local_storage/hive_service.dart';
 import '../../../../core/offline/pending_action.dart';
 import '../../../../core/offline/pending_sync_provider.dart';
 import '../../../../core/offline/sync_error_classifier.dart';
 import '../../../../core/observability/sentry_report.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../personal_records/models/personal_record.dart';
 import '../../../analytics/data/models/analytics_event.dart';
 import '../../../analytics/providers/analytics_providers.dart';
@@ -269,16 +272,26 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(state.value!);
   }
 
-  /// Generates a default workout name using a fixed English date format.
+  /// Generates a default workout name using the user's CURRENT locale.
   ///
-  /// Locale is intentionally not threaded here because this runs in a
-  /// provider (no BuildContext). The name is stored data, not a display-only
-  /// string, so it must remain stable regardless of the user's locale
-  /// setting at read time.
+  /// Locale is read at GENERATION TIME via `ref.read(localeProvider)` and
+  /// then frozen into the persisted workout name \u2014 the name is stored
+  /// data, not a display-only string, so it must remain stable regardless
+  /// of any LATER locale switch. A user who starts a workout under pt-BR
+  /// sees `'Treino \u2014 qua 7 mai'` and continues to see that string forever,
+  /// even if they later switch the app to en. Conversely a user on en
+  /// gets `'Workout \u2014 Wed May 7'`.
+  ///
+  /// Pre-fix (Family 6 \u2014 AW-EX-F-BR1-02) the prefix and date format were
+  /// hard-coded English: `'Workout \u2014 '` + `DateFormat('EEE MMM d')`. A
+  /// pt-BR user starting an empty workout saw English text on the
+  /// AppBar \u2014 the most visible i18n leak on the active-workout surface.
   String _generateWorkoutName() {
     final now = DateTime.now();
-    final formatted = DateFormat('EEE MMM d').format(now);
-    return 'Workout \u2014 $formatted';
+    final languageCode = ref.read(localeProvider).languageCode;
+    final l10n = lookupAppLocalizations(Locale(languageCode));
+    final formatted = DateFormat('EEE MMM d', languageCode).format(now);
+    return l10n.workoutDefaultName(formatted);
   }
 
   /// Add an exercise to the active workout.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../l10n/app_localizations.dart';
 import 'elapsed_timer.dart';
 
 /// AppBar title block for the active workout screen.
@@ -49,6 +50,7 @@ class ActiveWorkoutAppBarTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -75,7 +77,11 @@ class ActiveWorkoutAppBarTitle extends StatelessWidget {
           )
         else
           Semantics(
-            label: '$name. Tap to rename workout.',
+            // Family 3 (AW-EX-F-BR1-04) / Family 6 — was a hard-coded
+            // English literal. The localized ARB key honors the user's
+            // locale when announcing the rename affordance to a screen
+            // reader.
+            label: l10n.workoutNameTapToRenameSemantics(name),
             child: GestureDetector(
               onTap: onTapToEdit,
               child: Row(

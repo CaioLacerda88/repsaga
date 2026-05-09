@@ -157,6 +157,7 @@ class _WeightStepperState extends State<WeightStepper> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
     final formatted = _formatWeight(widget.value, locale);
 
@@ -167,27 +168,42 @@ class _WeightStepperState extends State<WeightStepper> {
     // stepper occupy its parent's full horizontal width, so the value tap
     // surface scales with the row column instead of the old 32dp pill that
     // missed sweaty-thumb hits on 360dp Brazilian-mid-market screens.
+    //
+    // **A11y wrap (Family 3 / Family 6):** the +/- buttons are wrapped in
+    // an explicit `Semantics(button: true, label: ...)` rather than
+    // `IconButton.tooltip:`. The IconButton is already nested inside a
+    // `GestureDetector(onLongPressStart: _startRepeating)` for rapid-
+    // repeat behavior, and a Material Tooltip injects its own
+    // GestureDetector competing in the gesture arena. Explicit Semantics
+    // labels the AOM node directly without touching the gesture path —
+    // confirmed by `weight_stepper_semantics_test.dart` `parent
+    // GestureDetector(onLongPressStart) survives the a11y wrap` and the
+    // long-press fire pins.
     return Row(
       children: [
-        GestureDetector(
-          onLongPressStart: (_) => _startRepeating(_decrement),
-          onLongPressEnd: (_) => _stopRepeating(),
-          onLongPressCancel: _stopRepeating,
-          child: IconButton(
-            onPressed: widget.value >= widget.increment ? _decrement : null,
-            icon: const Icon(Icons.remove, size: 18),
-            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
-            // a 40dp horizontal cap so the value zone owns the slack. The
-            // BUG-019 widget test asserts both floors on a 360dp viewport.
-            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
+        Semantics(
+          button: true,
+          label: l10n.decrementWeight,
+          child: GestureDetector(
+            onLongPressStart: (_) => _startRepeating(_decrement),
+            onLongPressEnd: (_) => _stopRepeating(),
+            onLongPressCancel: _stopRepeating,
+            child: IconButton(
+              onPressed: widget.value >= widget.increment ? _decrement : null,
+              icon: const Icon(Icons.remove, size: 18),
+              // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+              // plus a 40dp horizontal cap so the value zone owns the slack.
+              // The BUG-019 widget test asserts both floors on a 360dp
+              // viewport.
+              constraints: const BoxConstraints.tightFor(width: 40, height: 48),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ),
         Expanded(
           child: Semantics(
-            label:
-                'Weight value: $formatted ${widget.unit}. Tap to enter weight.',
+            label: l10n.weightValueSemantics(formatted, widget.unit),
             button: true,
             child: GestureDetector(
               onTap: _showNumberInput,
@@ -228,19 +244,24 @@ class _WeightStepperState extends State<WeightStepper> {
             ),
           ),
         ),
-        GestureDetector(
-          onLongPressStart: (_) => _startRepeating(_increment),
-          onLongPressEnd: (_) => _stopRepeating(),
-          onLongPressCancel: _stopRepeating,
-          child: IconButton(
-            onPressed: _increment,
-            icon: const Icon(Icons.add, size: 18),
-            // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min plus
-            // a 40dp horizontal cap so the value zone owns the slack. The
-            // BUG-019 widget test asserts both floors on a 360dp viewport.
-            constraints: const BoxConstraints.tightFor(width: 40, height: 48),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
+        Semantics(
+          button: true,
+          label: l10n.incrementWeight,
+          child: GestureDetector(
+            onLongPressStart: (_) => _startRepeating(_increment),
+            onLongPressEnd: (_) => _stopRepeating(),
+            onLongPressCancel: _stopRepeating,
+            child: IconButton(
+              onPressed: _increment,
+              icon: const Icon(Icons.add, size: 18),
+              // BUG-019: pinned to 40x48 — Material's 48dp vertical tap min
+              // plus a 40dp horizontal cap so the value zone owns the slack.
+              // The BUG-019 widget test asserts both floors on a 360dp
+              // viewport.
+              constraints: const BoxConstraints.tightFor(width: 40, height: 48),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ),
       ],

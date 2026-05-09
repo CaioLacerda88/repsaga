@@ -2415,4 +2415,39 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get title_saga_forged_flavor =>
       'Cada track no sessenta. A saga foi forjada, e foi você quem forjou.';
+
+  @override
+  String get decrementWeight => 'Diminuir peso';
+
+  @override
+  String get incrementWeight => 'Aumentar peso';
+
+  @override
+  String get decrementReps => 'Diminuir repetições';
+
+  @override
+  String get incrementReps => 'Aumentar repetições';
+
+  @override
+  String weightValueSemantics(String formatted, String unit) {
+    return 'Valor do peso: $formatted $unit. Toque para inserir o peso.';
+  }
+
+  @override
+  String repsValueSemantics(int value) {
+    return 'Valor das repetições: $value. Toque para inserir as repetições.';
+  }
+
+  @override
+  String get restTimerDismiss => 'Dispensar timer de descanso';
+
+  @override
+  String workoutNameTapToRenameSemantics(String name) {
+    return '$name. Toque para renomear o treino.';
+  }
+
+  @override
+  String workoutDefaultName(String date) {
+    return 'Treino — $date';
+  }
 }

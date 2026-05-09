@@ -4243,6 +4243,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Every track at sixty. The saga is forged, and you forged it.'**
   String get title_saga_forged_flavor;
+
+  /// Accessibility/tooltip: WeightStepper minus button.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease weight'**
+  String get decrementWeight;
+
+  /// Accessibility/tooltip: WeightStepper plus button.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase weight'**
+  String get incrementWeight;
+
+  /// Accessibility/tooltip: RepsStepper minus button.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease reps'**
+  String get decrementReps;
+
+  /// Accessibility/tooltip: RepsStepper plus button.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase reps'**
+  String get incrementReps;
+
+  /// Accessibility label on the WeightStepper value zone. Reads the formatted weight + unit and hints at tap-to-type.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight value: {formatted} {unit}. Tap to enter weight.'**
+  String weightValueSemantics(String formatted, String unit);
+
+  /// Accessibility label on the RepsStepper value zone. Reads the rep count and hints at tap-to-type.
+  ///
+  /// In en, this message translates to:
+  /// **'Reps value: {value}. Tap to enter reps.'**
+  String repsValueSemantics(int value);
+
+  /// Accessibility label for the RestTimerOverlay outer dismiss scrim (the GestureDetector that ends the timer when tapped).
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss rest timer'**
+  String get restTimerDismiss;
+
+  /// Accessibility label on the active-workout AppBar title. Announces the workout name and the rename affordance.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}. Tap to rename workout.'**
+  String workoutNameTapToRenameSemantics(String name);
+
+  /// Default name auto-generated when a workout is started without a name. Locale-aware: read at workout-start time and persisted.
+  ///
+  /// In en, this message translates to:
+  /// **'Workout — {date}'**
+  String workoutDefaultName(String date);
 }
 
 class _AppLocalizationsDelegate
