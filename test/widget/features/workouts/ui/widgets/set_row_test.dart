@@ -2228,16 +2228,20 @@ void main() {
         // suppression doc-comment (~:185-197). If hiding the hint causes
         // column reflow, the parent's `flt-semantics-identifier` emission
         // can drop (Phase 20 Flutter Web semantics-engine role-swap bug).
-        // Two failure modes this test catches:
-        //   (a) hint hidden by `if (...) Padding(...)` - row gets SHORTER →
-        //       reflow → potential semantics drop.
-        //   (b) hint replaced by Visibility(maintainSize: true, ...) →
-        //       row height stays equal, no reflow.
+        //
+        // Post-PR-#193-review fix (Important 5): the hint slot is now
+        // wrapped in `Visibility(maintainSize: true, maintainAnimation:
+        // true, maintainState: true, ...)`. With that wrapper the slot
+        // reserves its vertical space whether or not the child is visible,
+        // so the heights MUST be equal — not just `<=`. Asserting equality
+        // (rather than the previous `<=`) pins the contract: any future
+        // change that drops the maintainSize behaviour or replaces the
+        // wrapper with an `if (...)` short-circuit will fail this test.
         //
         // The lastSet.weight == 0 branch hides the slot. The current set
         // does NOT match (current.weight == 60 != 0), so without the
         // 0-weight guard the hint would render. With the guard, the hint
-        // is gone. We measure both rows and assert they are equal-height.
+        // is invisible but still occupies its layout slot.
         final pendingSet = makeSet(isCompleted: false, weight: 60, reps: 10);
         final hintHidden = makeSet(id: 'hidden', weight: 0.0, reps: 5);
         final hintShown = makeSet(id: 'shown', weight: 20.0, reps: 5);
@@ -2266,21 +2270,60 @@ void main() {
         );
         final heightShown = tester.getSize(find.byType(SetRow)).height;
 
-        // The set-row body itself stays the 56dp _SetRowFrame floor; what
-        // differs is whether the hint Padding adds a slot ABOVE the frame.
-        // We accept either: (i) heights equal (Visibility wrapper used) OR
-        // (ii) hidden is shorter than shown (no Visibility wrapper, slot
-        // truly disappears). What we CANNOT accept is hidden TALLER than
-        // shown — that would mean a replacement label slipped in, which
-        // WIP.md explicitly forbade.
         expect(
           heightHidden,
-          lessThanOrEqualTo(heightShown),
+          equals(heightShown),
           reason:
-              'When the hint is suppressed (lastSet.weight==0), the row must '
-              'NOT be taller than when the hint is shown. A taller row would '
-              'indicate a replacement label was added — empty space is the '
-              'correct UX per WIP.md.',
+              'Visibility(maintainSize:true) keeps the hint slot occupying '
+              'its vertical space whether the child is visible or not. The '
+              'two rows MUST measure equal — any difference indicates the '
+              'maintainSize contract was lost (e.g. the wrapper was replaced '
+              'by `if (...) Padding(...)` again, or maintainSize was set to '
+              'false), which would re-introduce the Phase-20 reflow hazard.',
+        );
+      });
+
+      testWidgets('standing-PR row with 0-weight last set still emits the row '
+          'identifier — Phase 20 role-swap regression pin', (tester) async {
+        // Important 5 regression pin: the dangerous intersection is
+        // standing-PR (the row state that role-swaps on the Flutter Web
+        // semantics engine) AND 0-weight lastSet (the case where the
+        // hint suppression triggers). Pre-fix, removing the hint Padding
+        // could drop the row's done-cell identifier as the role swap
+        // collided with the descendant tree change. Post-fix the slot
+        // is wrapped in Visibility(maintainSize:true) so the descendant
+        // tree shape is stable across visibility transitions.
+        //
+        // We assert the done-cell identifier emits — that's the
+        // identifier-bearing node on the row frame; if maintainSize
+        // dropped, the role-swap would silently kill it.
+        final set = makeSet(isCompleted: true, weight: 60, reps: 8);
+        final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            SetRow(
+              set: set,
+              workoutExerciseId: 'we-001',
+              display: const PrRowDisplay(
+                state: PrRowState.completedStandingPr,
+                accentTypes: {RecordType.maxWeight},
+              ),
+              lastSet: lastSet,
+            ),
+          ),
+        );
+
+        expect(
+          find.bySemanticsIdentifier('workout-set-completed'),
+          findsOneWidget,
+          reason:
+              'Standing-PR row + 0-weight last set is the Phase-20 role-swap '
+              'intersection. The Visibility(maintainSize:true) wrap on the '
+              'hint slot keeps the descendant tree shape stable across the '
+              'GenericRole → SemanticButton transition, so the row frame\'s '
+              'identifier-bearing node must still emit. A regression here '
+              'would mean the maintainSize contract was lost.',
         );
       });
     });
@@ -2593,6 +2636,132 @@ void main() {
                 'valueChangeDuration=Duration.zero so the value update is '
                 'instant — the user already knows they tapped. Only propagated '
                 'changes (external rebuilds from sibling cell taps) animate.',
+          );
+        },
+      );
+
+      testWidgets(
+        'rapid taps on the leader cell propagate to followers using the '
+        'committed state — not the stale widget.set.weight',
+        (tester) async {
+          // Important 4 regression pin: previously `_onWeightTapped` read
+          // `widget.set.weight` to compute `old`. Inside a rapid two-tap
+          // sequence on the same frame, the widget hadn't rebuilt between
+          // taps, so tap #2 saw `old = pre-tap-#1 weight` (stale). The
+          // notifier's walker compared the followers' (already-updated)
+          // weight to the stale `old`, mismatched, and bailed —
+          // followers were silently left behind.
+          //
+          // Repro: leader at 0kg, two followers at 0kg. Tap leader to 5kg
+          // (propagates: leader+followers = 5). Tap leader AGAIN by passing
+          // a STALE widget.set (weight=0) on a fresh pump — same widget
+          // instance, no rebuild. Handler must read 5 from the notifier
+          // (committed state), pass `old=5` to propagateWeight, and
+          // followers must move to 10. Pre-fix: handler would read
+          // `widget.set.weight=0`, propagate `old=0 → new=10`, walker
+          // bails on first follower (weight is 5, not 0), followers stay
+          // at 5.
+          //
+          // We test the contract directly by reading the notifier's
+          // committed state after the rapid sequence and asserting all
+          // three sets land at the final intended weight.
+          final stateJson = TestActiveWorkoutStateFactory.createWithExercises(
+            exerciseCount: 1,
+            setsPerExercise: 3,
+          );
+          final workoutState = ActiveWorkoutState.fromJson(stateJson);
+          final weId = workoutState.exercises.first.workoutExercise.id;
+
+          // Seed all 3 sets at 0kg AND not completed. The factory default
+          // is `is_completed=true`, which would stop propagation at the
+          // first follower (completed sets are immutable per the
+          // `propagateWeight` contract). We need all three pending so the
+          // walker traverses end-to-end.
+          final seeded = workoutState.copyWith(
+            exercises: [
+              workoutState.exercises.first.copyWith(
+                sets: workoutState.exercises.first.sets
+                    .map((s) => s.copyWith(weight: 0, isCompleted: false))
+                    .toList(),
+              ),
+            ],
+          );
+          final leaderSet = seeded.exercises.first.sets.first;
+
+          final container = makeContainer(seeded);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+          final notifier = container.read(activeWorkoutProvider.notifier);
+
+          // First propagate: 0 → 5. Simulates tap #1.
+          await notifier.propagateWeight(weId, leaderSet.id, 0, 5);
+          // Verify state committed: all three at 5.
+          final afterFirst = container.read(activeWorkoutProvider).value!;
+          expect(
+            afterFirst.exercises.first.sets.map((s) => s.weight).toList(),
+            [5, 5, 5],
+            reason:
+                'Tap #1 must propagate the new weight to all followers '
+                'still in formation.',
+          );
+
+          // Pump SetRow with the STALE leaderSet (weight=0) — this is
+          // what the widget tree holds between the two rapid taps before
+          // the parent rebuilds. The handler must NOT trust this stale
+          // value.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: leaderSet, workoutExerciseId: weId),
+              container: container,
+            ),
+          );
+          await tester.pump();
+
+          // Tap the + button on the weight stepper. The widget tree still
+          // holds `widget.set.weight=0` (stale), but the COMMITTED state
+          // is leader=5, followers=5. The fix is for `_onWeightTapped` to
+          // read the committed weight (5) when computing `oldWeight` —
+          // not `widget.set.weight` (0).
+          //
+          // Pre-fix:  oldWeight=0 → walker compares followers' actual
+          //           weight (5) to 0 → mismatch → walker bails →
+          //           followers DO NOT move with the leader → drift.
+          // Post-fix: oldWeight=5 → walker compares followers' actual
+          //           weight (5) to 5 → match → walker updates them →
+          //           followers move with the leader → no drift.
+          //
+          // We don't pin the EXACT new weight (it depends on what
+          // `widget.value + increment` resolves to with the stale widget,
+          // which is a known orthogonal staleness issue not in scope here).
+          // We pin the propagation CORRECTNESS contract: all three sets
+          // remain equal after the second tap.
+          await tester.tap(find.byIcon(Icons.add).first);
+          await tester.pump();
+
+          final afterSecond = container.read(activeWorkoutProvider).value!;
+          final weights = afterSecond.exercises.first.sets
+              .map((s) => s.weight ?? 0)
+              .toList();
+          expect(
+            weights[1],
+            equals(weights[0]),
+            reason:
+                'Follower #1 must move with the leader. Pre-fix, the handler '
+                'would have read `widget.set.weight=0` as oldWeight, the '
+                'walker would compare followers (at 5) to 0, mismatch, bail, '
+                'and the follower would stay at 5 while the leader moved — '
+                'visible drift. Post-fix, the handler reads the committed '
+                'weight (5) so the walker matches and the follower moves '
+                'with the leader.',
+          );
+          expect(
+            weights[2],
+            equals(weights[0]),
+            reason:
+                'Follower #2 must move with the leader (same contract as '
+                'follower #1). Both followers must remain aligned with the '
+                'leader after a rapid second tap regardless of stale widget '
+                'state.',
           );
         },
       );

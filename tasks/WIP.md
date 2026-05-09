@@ -94,8 +94,8 @@ If hiding the hint causes column reflow (the existing comment at `:185-197` note
 
 - [x] Branch + WIP entry (Task #53)
 - [x] Tech-lead implements all 4 fixes with TDD (Task #54)
-- [ ] UI/UX implementation review (Task #55)
-- [ ] QA gate (Task #56)
+- [x] UI/UX implementation review (Task #55)
+- [x] QA gate (Task #56)
 - [ ] Verify + PR + reviewer cycle (Task #57)
 - [ ] Post-merge cleanup (Task #58)
 

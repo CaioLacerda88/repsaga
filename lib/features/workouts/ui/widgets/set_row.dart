@@ -272,62 +272,83 @@ class _SetRowState extends ConsumerState<SetRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_matchedLastSet())
-            // Subtle "= last set" affordance — Pillar 1's match indicator.
-            // Deliberately NOT gold (gold is reserved for PRs by the
-            // heroGold scarcity rule). textDim at full alpha gives the line
-            // enough weight to read as a confirmation signal without
-            // competing with the gold-tinted predicted/standing-PR rows.
-            //
-            // Wrapped in `Semantics(container: true, explicitChildNodes:
-            // true)`: post-Phase-20 the hint is allowed to remain visible
-            // after completion, and on a standing-PR row the row frame's
-            // SemanticsNode role transitions GenericRole → SemanticButton
-            // on a subsequent update. Without an explicit boundary here,
-            // the sibling hint Text's label gets collected into the
-            // ancestor exercise-card's group, which destabilises the row
-            // frame's `flt-semantics-identifier` emission (the role-swap
-            // bug captured in `tasks/lessons.md`). The container/explicit-
-            // child-nodes pair pins the hint as its own a11y island so the
-            // row frame's identifier survives the role swap.
-            Padding(
+          // Hint slot — ALWAYS rendered to reserve vertical space, even when
+          // empty. Eliminates the layout-reflow hazard called out in the
+          // `_shouldShowHint` doc-comment: adding/removing the hint Text
+          // re-triggers the Phase-20 Flutter Web semantics-engine role-swap
+          // bug on standing-PR rows (the row frame's
+          // `flt-semantics-identifier` stops emitting after the
+          // GenericRole → SemanticButton transition when a sibling
+          // descendant appears/disappears). With Visibility(maintainSize:
+          // true), the slot's size is stable regardless of whether the
+          // child is visible — no reflow, no semantics-tree shape change,
+          // no role-swap drop.
+          //
+          // Three states drive the slot's content:
+          //   * matched last set → "= last set" / "= série anterior"
+          //     (visible)
+          //   * previous-set hint → "Previous: 80kg × 8" (visible)
+          //   * neither → an invisible placeholder Text carrying the SAME
+          //     bodySmall style so its intrinsic height matches the visible
+          //     branches exactly. `Visibility(visible: false, ...)` clamps
+          //     paint + hit-test off but preserves layout space.
+          //
+          // The `Semantics(container: true, explicitChildNodes: true)`
+          // a11y-island wrap is preserved on visible branches: post-
+          // Phase-20 the hint may remain after completion, and on a
+          // standing-PR row the row frame's SemanticsNode role transitions
+          // GenericRole → SemanticButton. Without an explicit boundary
+          // around the hint Text, its label gets collected into the
+          // ancestor exercise-card's group, destabilising the row frame's
+          // identifier emission. The container/explicit-child-nodes pair
+          // pins the hint as its own a11y island so the row frame's
+          // identifier survives the role swap.
+          Visibility(
+            visible: _matchedLastSet() || _shouldShowHint(),
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
               child: Semantics(
                 container: true,
                 explicitChildNodes: true,
                 child: Text(
-                  AppLocalizations.of(context).matchedLastSet,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            )
-          else if (_shouldShowHint())
-            // Same `Semantics(container: true, explicitChildNodes: true)`
-            // a11y-island treatment as the match-indicator branch above —
-            // see that block's comment for the rationale.
-            Padding(
-              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: Semantics(
-                container: true,
-                explicitChildNodes: true,
-                child: Text(
-                  AppLocalizations.of(context).previousSet(
-                    AppNumberFormat.weight(
-                      (widget.lastSet!.weight ?? 0).toDouble(),
-                      locale: Localizations.localeOf(context).languageCode,
-                    ),
-                    weightUnit,
-                    widget.lastSet!.reps ?? 0,
-                  ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
+                  _matchedLastSet()
+                      ? AppLocalizations.of(context).matchedLastSet
+                      : (_shouldShowHint()
+                            ? AppLocalizations.of(context).previousSet(
+                                AppNumberFormat.weight(
+                                  (widget.lastSet!.weight ?? 0).toDouble(),
+                                  locale: Localizations.localeOf(
+                                    context,
+                                  ).languageCode,
+                                ),
+                                weightUnit,
+                                widget.lastSet!.reps ?? 0,
+                              )
+                            // Empty placeholder when neither branch
+                            // applies. Carries a non-empty space so its
+                            // intrinsic line-height matches the visible
+                            // branches exactly — keeps the slot's vertical
+                            // size stable across visibility transitions.
+                            : ' '),
+                  style: _matchedLastSet()
+                      ? theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.55,
+                          ),
+                          fontWeight: FontWeight.w600,
+                        )
+                      : theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                 ),
               ),
             ),
+          ),
           _SetRowFrame(
             display: widget.display,
             isCompleted: set.isCompleted,
@@ -631,10 +652,14 @@ class _SetNumberCell extends StatelessWidget {
     // 12dp Icons.content_copy at α=0.4 so the user can SEE that there's
     // something to tap. The icon DOES NOT add a new tap target — the
     // existing 48dp InkWell still owns the gesture.
+    // Bind `previousSet` to a local so the null-check + comparison reads
+    // without a `!` assertion. Functionally equivalent to the
+    // `previousSet != null && ... previousSet!.weight ...` form (the `&&`
+    // short-circuit guarantees safety) but the local pattern is the
+    // idiomatic Dart flow-analysis read.
+    final prev = previousSet;
     final showCopyHint =
-        isCopyable &&
-        previousSet != null &&
-        (set.weight ?? 0) != (previousSet!.weight ?? 0);
+        isCopyable && prev != null && (set.weight ?? 0) != (prev.weight ?? 0);
     final color = set.isCompleted
         ? theme.colorScheme.onSurface.withValues(alpha: 0.55)
         : (isCopyable
@@ -879,7 +904,37 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
   double? _lastSeenWeight;
 
   void _onWeightTapped(double newWeight) {
-    final old = widget.set.weight ?? 0;
+    // Read the COMMITTED state from the notifier, not `widget.set.weight`.
+    //
+    // Why: `widget.set` is captured at parent rebuild time. Two rapid
+    // taps within the same frame on the SAME leader cell only trigger
+    // one parent rebuild (the second `setState`/state-emission for tap
+    // #2 is microtask-deferred relative to tap #1's render). So inside
+    // tap #2's handler `widget.set.weight` is still the pre-tap-#1
+    // value — STALE.
+    //
+    // Concrete failure: leader at 0kg, sets 2/3 follow at 0kg.
+    //   * Tap 1: handler reads `old=0`, calls propagateWeight(0, 5).
+    //     Notifier emits new state: leader=5, followers=5.
+    //   * Tap 2 (same frame, before rebuild): handler reads
+    //     `widget.set.weight=0` (stale!), calls propagateWeight(0, 10).
+    //     Followers are now at 5, NOT 0, so the walker bails on first
+    //     follower. Followers remain at 5kg even though the user
+    //     intended 10kg.
+    //
+    // Fix: read the committed weight from `activeWorkoutProvider.value`
+    // by id. This always reflects the most-recent emission — including
+    // tap #1's propagation — so the second handler sees `old=5` and
+    // correctly propagates 5 → 10 across followers.
+    final current = ref.read(activeWorkoutProvider).value;
+    if (current == null) return;
+    final exercise = current.exercises
+        .where((e) => e.workoutExercise.id == widget.workoutExerciseId)
+        .firstOrNull;
+    final currentSet = exercise?.sets
+        .where((s) => s.id == widget.set.id)
+        .firstOrNull;
+    final old = currentSet?.weight ?? 0;
     if (old == newWeight) return;
     // Mark this rebuild's value change as user-initiated so the
     // AnimatedSwitcher does an instant swap on this cell. Sibling cells
