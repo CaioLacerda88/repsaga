@@ -185,5 +185,109 @@ void main() {
         expect(SyncErrorClassifier.httpCode(Exception('random')), isNull);
       });
     });
+
+    // The isNetworkClass helper distinguishes "the request couldn't reach a
+    // healthy server" (timeout, socket-refused, DNS, 5xx, transient auth)
+    // from domain errors (4xx validation, business-logic). The recovery
+    // signal in `connectivityRecoveryProvider` consumes this — a domain
+    // error must NOT mark the network as unhealthy, because the network was
+    // healthy enough to return a structured 4xx.
+    group('isNetworkClass', () {
+      test('returns true for SocketException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(const SocketException('refused')),
+          isTrue,
+        );
+      });
+
+      test('returns true for dart:async TimeoutException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(TimeoutException('timeout')),
+          isTrue,
+        );
+      });
+
+      test('returns true for wrapped app.NetworkException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const app.NetworkException('no connection'),
+          ),
+          isTrue,
+        );
+      });
+
+      test('returns true for wrapped app.TimeoutException', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(const app.TimeoutException()),
+          isTrue,
+        );
+      });
+
+      test('returns true for 5xx PostgrestException (server unhealthy)', () {
+        const error = supabase.PostgrestException(
+          message: 'Service Unavailable',
+          code: '503',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isTrue);
+      });
+
+      test('returns true for 5xx wrapped app.DatabaseException', () {
+        const error = app.DatabaseException('ISE', code: '500');
+        expect(SyncErrorClassifier.isNetworkClass(error), isTrue);
+      });
+
+      test('returns true for raw supabase.AuthException (token refresh)', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const supabase.AuthException('JWT expired'),
+          ),
+          isTrue,
+        );
+      });
+
+      test('returns false for 400 PostgrestException (domain error)', () {
+        const error = supabase.PostgrestException(
+          message: 'Bad Request',
+          code: '400',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for 404 PostgrestException (domain error)', () {
+        const error = supabase.PostgrestException(
+          message: 'Not Found',
+          code: '404',
+        );
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for 422 wrapped app.DatabaseException', () {
+        const error = app.DatabaseException('Unprocessable', code: '422');
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
+      });
+
+      test('returns false for app.ValidationException (domain error)', () {
+        expect(
+          SyncErrorClassifier.isNetworkClass(
+            const app.ValidationException('Required', field: 'name'),
+          ),
+          isFalse,
+        );
+      });
+
+      test(
+        'returns false for unknown exception types (conservative default)',
+        () {
+          // Unknown shapes are not classified as network — the recovery
+          // signal must be conservative and only fire on clearly-network
+          // failures. An unknown exception triggering the recovery path
+          // would risk false drains and retry storms.
+          expect(
+            SyncErrorClassifier.isNetworkClass(Exception('random')),
+            isFalse,
+          );
+        },
+      );
+    });
   });
 }
