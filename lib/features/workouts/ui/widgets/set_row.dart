@@ -660,16 +660,18 @@ class _SetNumberCell extends StatelessWidget {
                 ),
                 // Persistent set-type micro-label below the digit. The label
                 // is the affordance for the long-press cycle: a user who
-                // sees `WU` (en) / `AQ` (pt) and wonders what it means
+                // sees `Wu` (en) / `Aq` (pt) and wonders what it means
                 // long-presses and watches it cycle, learning the feature
                 // without a tooltip. Self-teaching by design.
                 //
                 // **Family 6 — i18n leak (Path A):** the abbreviation
-                // resolves through the existing localized `setTypeAbbr*`
-                // ARB keys instead of the hard-coded English-only
-                // `set.setType.tinyAbbr`. `workout_detail_screen.dart:285-288`
-                // uses the same lookup — both screens now display the same
-                // per-locale convention (en: W/WU/D/F, pt: N/AQ/D/F).
+                // resolves through the same `setTypeAbbr*Short` ARB family
+                // used by `workout_detail_screen.dart:286` so both screens
+                // stay in lockstep per locale (en: W/Wu/D/F, pt: N/Aq/D/F).
+                // Active workout adopted the canonical `*Short` family
+                // (rather than the verbose `setTypeAbbrWarmup = WU/AQ`)
+                // because detail-screen is the older / more reviewed
+                // surface — aligning here minimizes surface change.
                 Text(
                   _localizedSetTypeAbbr(set.setType, l10n),
                   style: theme.textTheme.labelSmall?.copyWith(
@@ -711,12 +713,13 @@ Color _setTypeLabelColor(SetType type) => switch (type) {
 ///
 /// Mirrors the lookup at `workout_detail_screen.dart:284-289`. Active
 /// workout previously used `SetType.tinyAbbr` (hard-coded WK/WU/DR/FL);
-/// post-fix both screens consume the same `setTypeAbbr*` ARB keys so the
-/// abbreviation honors the user's locale (en: W/WU/D/F, pt: N/AQ/D/F).
+/// post-fix both screens consume the same `setTypeAbbr*Short` ARB family
+/// (warmup uses `setTypeAbbrWarmupShort`, matching detail screen) so the
+/// abbreviation honors the user's locale (en: W/Wu/D/F, pt: N/Aq/D/F).
 String _localizedSetTypeAbbr(SetType type, AppLocalizations l10n) =>
     switch (type) {
       SetType.working => l10n.setTypeAbbrWorking,
-      SetType.warmup => l10n.setTypeAbbrWarmup,
+      SetType.warmup => l10n.setTypeAbbrWarmupShort,
       SetType.dropset => l10n.setTypeAbbrDropset,
       SetType.failure => l10n.setTypeAbbrFailure,
     };

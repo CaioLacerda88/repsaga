@@ -207,6 +207,51 @@ void main() {
       },
     );
 
+    test('unsupported locale: clamps to en so startWorkout does not crash '
+        '(reviewer finding — PR #187)', () async {
+      // `lookupAppLocalizations` throws a FlutterError on unrecognized
+      // language codes. If `localeProvider` ever returns a code that
+      // isn't en or pt (transient init state, future locale before its
+      // ARB lands, test setup), `_generateWorkoutName` would crash and
+      // `startWorkout` would silently transition into AsyncError.
+      //
+      // The notifier defensively clamps unknown codes to `en` before
+      // calling `lookupAppLocalizations`. Pin the contract here so a
+      // refactor that drops the clamp fails fast.
+      final (:container, :repo, :storage, :auth) = _makeAsyncContainer(
+        locale: const Locale('es'),
+      );
+      addTearDown(container.dispose);
+
+      when(() => auth.currentUser).thenReturn(_fakeUser());
+      when(
+        () => repo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => _makeWorkout());
+
+      await container.read(activeWorkoutProvider.future);
+      await container.read(activeWorkoutProvider.notifier).startWorkout();
+
+      final captured = verify(
+        () => repo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: captureAny(named: 'name'),
+        ),
+      ).captured;
+      final name = captured.first as String;
+
+      expect(
+        name,
+        startsWith('Workout — '),
+        reason:
+            'unsupported locale must fall back to the en prefix; if this '
+            'fails the clamp regressed and startWorkout will crash on '
+            'unknown locales.',
+      );
+    });
+
     test(
       'pt locale: date portion is non-empty and uses the pt locale formatter',
       () async {

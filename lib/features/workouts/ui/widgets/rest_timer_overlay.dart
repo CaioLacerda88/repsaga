@@ -257,10 +257,22 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    l10n.tapToDismiss,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  // The outer dismiss-scrim Semantics already exposes
+                  // "Dismiss rest timer" to the AOM (see L70). The visual
+                  // hint Text below is for sighted users only — without
+                  // ExcludeSemantics, `explicitChildNodes: true` on the
+                  // outer Semantics promotes this Text to its own AOM node,
+                  // and screen-reader users hear both the outer button
+                  // label AND a redundant "Tap anywhere to dismiss" leaf.
+                  // Same pattern as the exercise-name fix above.
+                  ExcludeSemantics(
+                    child: Text(
+                      l10n.tapToDismiss,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.3,
+                        ),
+                      ),
                     ),
                   ),
                 ],

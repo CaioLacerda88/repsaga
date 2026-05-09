@@ -44,6 +44,13 @@ import '../workout_providers.dart';
 
 const _uuid = Uuid();
 
+/// Locales we currently ship ARBs for. Kept local to this file rather than
+/// centralized — `lookupAppLocalizations` throws on unrecognized codes, and
+/// `_generateWorkoutName` is the only caller that needs to clamp defensively
+/// (the rest of the app reads `AppLocalizations.of(context)` which already
+/// resolves through Flutter's locale-resolution callback).
+const _supportedWorkoutNameLocales = ['en', 'pt'];
+
 /// Outcome of [ActiveWorkoutNotifier.finishWorkout].
 ///
 /// Returned as a record (rather than read off a notifier field) so the
@@ -289,8 +296,14 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   String _generateWorkoutName() {
     final now = DateTime.now();
     final languageCode = ref.read(localeProvider).languageCode;
-    final l10n = lookupAppLocalizations(Locale(languageCode));
-    final formatted = DateFormat('EEE MMM d', languageCode).format(now);
+    // Fallback to en if a future locale slips through before its ARB lands.
+    // lookupAppLocalizations throws on unrecognized codes, and we don't want
+    // startWorkout to fail silently into AsyncError because of locale state.
+    final clampedCode = _supportedWorkoutNameLocales.contains(languageCode)
+        ? languageCode
+        : 'en';
+    final l10n = lookupAppLocalizations(Locale(clampedCode));
+    final formatted = DateFormat('EEE MMM d', clampedCode).format(now);
     return l10n.workoutDefaultName(formatted);
   }
 

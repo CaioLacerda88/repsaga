@@ -140,8 +140,26 @@ widgets (steppers, AppBar title, rest timer, set-row, exercise card).
       e2e (selector-additive change — full suite not required unless tech-lead
       reports flow change). Confirm pair-rule on every new identifier.
 - [ ] PR opened
-- [ ] reviewer-agent cycle: ALL findings (Critical/Warning/Nit/Suggestion)
+- [x] reviewer-agent cycle: ALL findings (Critical/Warning/Nit/Suggestion)
       addressed same-cycle per memory feedback
+  - Critical: warmup abbr alignment — `set_row.dart` warmup branch swapped
+    from `setTypeAbbrWarmup` to `setTypeAbbrWarmupShort` so active workout
+    matches `workout_detail_screen.dart:286`. Eliminates en `WU/Wu` and pt
+    `AQ/Aq` divergence that survived Path A.
+  - Warning: `_generateWorkoutName` clamps unsupported language codes to en
+    before `lookupAppLocalizations`. Protects `startWorkout` from silently
+    transitioning to AsyncError if a future locale slips through. Test
+    pinned via `StubLocaleNotifier(Locale('es'))`.
+  - Nit: `rest_timer_overlay.dart` `tapToDismiss` Text wrapped in
+    `ExcludeSemantics` so `explicitChildNodes: true` no longer emits a
+    redundant AOM leaf alongside the outer dismiss-button label. Negative
+    pin added in widget test.
+  - Nit: `set_row_set_type_semantics_test.dart` warmup test asserts
+    localized `Wu/Aq` (not `WU/AQ`) and adds `WU/AQ` negative pins for
+    parity with the other set-type tests.
+  - Nit: `set_row.dart:670` Path A rationale comment names
+    `setTypeAbbr*Short` as the canonical key family and refers to the
+    current detail-screen line (`:286`) instead of the stale `:285-288`.
 - [ ] Squash-merge after CI green
 - [ ] Cleanup PR: close WIP, mark 11 bugs resolved in
       `active-workout-findings.md`

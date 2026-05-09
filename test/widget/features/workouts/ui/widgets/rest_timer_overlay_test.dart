@@ -452,6 +452,42 @@ void main() {
           expect(find.bySemanticsLabel('Bench Press'), findsOneWidget);
         },
       );
+
+      testWidgets(
+        'tapToDismiss visual hint is excluded from the AOM (reviewer finding — PR #187)',
+        (tester) async {
+          // The outer Semantics already exposes "Dismiss rest timer" as the
+          // tap-anywhere affordance. Because the outer wrapper sets
+          // `explicitChildNodes: true`, an unwrapped Text underneath would
+          // emit its own AOM node — screen-reader users would hear the
+          // outer button label AND a redundant non-interactive
+          // "Tap anywhere to dismiss" leaf. Pin that the visual hint is
+          // wrapped in ExcludeSemantics so the AOM stays clean.
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          // Sanity: the visual Text is rendered for sighted users.
+          expect(find.text('Tap anywhere to dismiss'), findsOneWidget);
+
+          // Negative pin: the same string must NOT surface as an AOM label.
+          expect(
+            find.bySemanticsLabel('Tap anywhere to dismiss'),
+            findsNothing,
+            reason:
+                'The tap-to-dismiss hint Text must be wrapped in '
+                'ExcludeSemantics — the outer dismiss-scrim Semantics owns '
+                'the AOM contract for this affordance.',
+          );
+
+          // Positive pin (paired): the canonical AOM affordance is still
+          // reachable via the outer Semantics label.
+          expect(find.bySemanticsLabel('Dismiss rest timer'), findsOneWidget);
+        },
+      );
     });
   });
 }

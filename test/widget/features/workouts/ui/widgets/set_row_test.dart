@@ -497,10 +497,12 @@ void main() {
       // and watches the abbr cycle learns the feature.
       //
       // **Path A localization (Family 6):** values now flow from the
-      // localized `setTypeAbbr*` ARB keys (en: W/WU/D/F, pt: N/AQ/D/F),
-      // matching the convention already used by `workout_detail_screen`.
-      // The pre-Path-A pins on raw `WK/DR/FL` were the bug — keeping them
-      // would re-introduce the leak.
+      // canonical `setTypeAbbr*Short` ARB family (warmup uses
+      // `setTypeAbbrWarmupShort`) — en: W/Wu/D/F, pt: N/Aq/D/F — matching
+      // the convention already used by `workout_detail_screen.dart:286`.
+      // The pre-Path-A pins on raw `WK/DR/FL` were the bug; the
+      // intermediate-state pin on `WU` (long form) was the post-Path-A
+      // execution gap addressed by the PR #187 reviewer cycle.
 
       testWidgets('renders "W" label for a Working set (en)', (tester) async {
         final set = makeSet(setType: SetType.working);
@@ -510,12 +512,17 @@ void main() {
         expect(find.text('W'), findsOneWidget);
       });
 
-      testWidgets('renders "WU" label for a Warmup set (en)', (tester) async {
+      testWidgets('renders "Wu" label for a Warmup set (en)', (tester) async {
         final set = makeSet(setType: SetType.warmup);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        expect(find.text('WU'), findsOneWidget);
+        // Active workout consumes `setTypeAbbrWarmupShort` (en: 'Wu') —
+        // matches `workout_detail_screen.dart:286`. The verbose
+        // `setTypeAbbrWarmup` (en: 'WU') is unused in the active workout
+        // surface post-PR-187.
+        expect(find.text('Wu'), findsOneWidget);
+        expect(find.text('WU'), findsNothing);
       });
 
       testWidgets('renders "D" label for a Drop set (en)', (tester) async {
@@ -572,7 +579,7 @@ void main() {
           );
 
           final digitText = tester.widget<Text>(find.text('2'));
-          final labelText = tester.widget<Text>(find.text('WU'));
+          final labelText = tester.widget<Text>(find.text('Wu'));
 
           expect(
             digitText.style?.decoration,

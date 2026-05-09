@@ -100,17 +100,21 @@ void main() {
         expect(find.text('WK'), findsNothing);
       });
 
-      testWidgets('warmup set renders "WU" (l10n.setTypeAbbrWarmup)', (
+      testWidgets('warmup set renders "Wu" (l10n.setTypeAbbrWarmupShort)', (
         tester,
       ) async {
         final set = makeSet(setType: SetType.warmup);
         await tester.pumpWidget(
           buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
         );
-        // Both the hard-coded `tinyAbbr` and the ARB value happen to be "WU"
-        // for en — this test still pins that the value flows from the ARB
-        // (verified by the pt counterpart below where the values diverge).
-        expect(find.text('WU'), findsOneWidget);
+        // Active workout consumes the canonical `setTypeAbbr*Short` ARB
+        // family (matching `workout_detail_screen.dart:286`) so both
+        // screens display the same per-locale convention. The hard-coded
+        // `SetType.tinyAbbr` value (WU) and the verbose `setTypeAbbrWarmup`
+        // (also WU) MUST NOT leak through — strict separation between
+        // `tinyAbbr` (deprecated) and the canonical short keys.
+        expect(find.text('Wu'), findsOneWidget);
+        expect(find.text('WU'), findsNothing);
       });
 
       testWidgets('dropset renders "D" (l10n.setTypeAbbrDropset)', (
@@ -154,19 +158,24 @@ void main() {
           expect(find.text('W'), findsNothing);
         });
 
-        testWidgets('warmup set renders "AQ" (pt: setTypeAbbrWarmup = AQ)', (
-          tester,
-        ) async {
-          final set = makeSet(setType: SetType.warmup);
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001'),
-              locale: const Locale('pt'),
-            ),
-          );
-          expect(find.text('AQ'), findsOneWidget);
-          expect(find.text('WU'), findsNothing);
-        });
+        testWidgets(
+          'warmup set renders "Aq" (pt: setTypeAbbrWarmupShort = Aq)',
+          (tester) async {
+            final set = makeSet(setType: SetType.warmup);
+            await tester.pumpWidget(
+              buildTestWidget(
+                SetRow(set: set, workoutExerciseId: 'we-001'),
+                locale: const Locale('pt'),
+              ),
+            );
+            expect(find.text('Aq'), findsOneWidget);
+            // The verbose `setTypeAbbrWarmup` (AQ) and the deprecated
+            // hard-coded `tinyAbbr` (WU) MUST NOT surface — both screens
+            // now use the canonical `*Short` family.
+            expect(find.text('AQ'), findsNothing);
+            expect(find.text('WU'), findsNothing);
+          },
+        );
 
         testWidgets('dropset renders "D" (pt: setTypeAbbrDropset = D)', (
           tester,
