@@ -133,29 +133,33 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   ///     is settled-and-null, giving the user an escape hatch instead of a
   ///     permanent spinner (audit C4).
   ///
-  /// `_cancelRequested` is set to `true` on the restore branch so the
-  /// in-flight finish/discard's post-guard check (lines ~750, ~1290) sees
-  /// the cancel and skips the final `state = result` overwrite. On the
-  /// "no restorable state" branch there IS no in-flight finish/discard to
-  /// guard against (cancel happened during startWorkout, which itself has
-  /// no post-guard check), so the flag is reset to `false` immediately to
-  /// avoid leaking into a subsequent finishWorkout/discardWorkout call.
+  /// `_cancelRequested` is unconditionally set to `true` so that any
+  /// in-flight `startWorkout` / `startFromRoutine` / `finishWorkout` /
+  /// `discardWorkout` future hits its post-guard cancel check on resume
+  /// and skips the final `state = result` overwrite. Without this, a
+  /// late-arriving `AsyncData(activeState)` (or `AsyncData(null)`) from
+  /// the guard would clobber the state we just settled into here — and
+  /// the screen's `postFrameCallback` redirect at
+  /// `active_workout_screen.dart:68` only fires on settled-and-null, so
+  /// any overwrite would silently suppress the C4 escape-hatch.
+  ///
+  /// All four call sites (`startWorkout`, `startFromRoutine`,
+  /// `finishWorkout`, `discardWorkout`) reset `_cancelRequested` to
+  /// `false` immediately after consuming it, so the flag never leaks
+  /// across operations.
   void cancelLoading() {
     _isFinishing = false;
     _isDiscarding = false;
+    _cancelRequested = true;
     if (_lastValidState != null) {
       // _lastValidState already carries `savedOffline: false` (reset at the
       // top of finishWorkout / discardWorkout) so restoring it naturally
       // resets the offline-queued flag without a separate field.
-      _cancelRequested = true;
       state = AsyncData(_lastValidState);
     } else {
       // No valid state to restore → settle into AsyncData(null) so the
       // screen's `displayState == null && !asyncState.isLoading` branch
-      // navigates back home. Skip the cancel-flag set: there's no in-flight
-      // finish/discard to suppress (startWorkout has no post-guard check),
-      // and leaving the flag set would leak into the next operation.
-      _cancelRequested = false;
+      // navigates back home (audit C4).
       state = const AsyncData(null);
     }
   }
@@ -186,7 +190,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
-    state = await AsyncValue.guard(() async {
+    _cancelRequested = false;
+    final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
         userId: userId,
@@ -208,6 +213,22 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       );
       return activeState;
     });
+
+    if (_cancelRequested) {
+      // Audit C4 reinforcement: cancelLoading() fired while the guard
+      // future was still in-flight. cancelLoading() already settled the
+      // state into AsyncData(null) (start-phase has no _lastValidState
+      // to restore). A late-arriving guard success (or AsyncError) would
+      // silently overwrite that null, and the screen's
+      // postFrameCallback redirect at active_workout_screen.dart:68
+      // only fires on settled-and-null, so any overwrite would suppress
+      // the C4 escape-hatch.
+      _cancelRequested = false;
+      state = const AsyncData(null);
+      return;
+    }
+
+    state = result;
   }
 
   /// Start a workout pre-populated from a routine template.
@@ -215,7 +236,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
-    state = await AsyncValue.guard(() async {
+    _cancelRequested = false;
+    final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
         userId: userId,
@@ -294,6 +316,19 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       );
       return activeState;
     });
+
+    if (_cancelRequested) {
+      // Mirrors the post-guard check in [startWorkout]. cancelLoading()
+      // already settled into AsyncData(null); a late-arriving guard
+      // success must not resurrect the workout, otherwise the screen
+      // never sees the settled-and-null state needed for the C4
+      // postFrameCallback redirect to /home.
+      _cancelRequested = false;
+      state = const AsyncData(null);
+      return;
+    }
+
+    state = result;
   }
 
   /// Rename the active workout in-memory and persist to Hive.

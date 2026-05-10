@@ -27,6 +27,7 @@ import 'package:repsaga/features/workouts/data/workout_local_storage.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
+import 'package:repsaga/features/workouts/models/routine_start_config.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
@@ -3514,6 +3515,147 @@ void main() {
       );
       expect(result.value, isNull);
       expect(result.isLoading, isFalse);
+    });
+
+    test(
+      'PR1 review — Fix A: cancelLoading during startWorkout AND the in-flight '
+      'createActiveWorkout subsequently SUCCEEDS — state stays AsyncData(null) '
+      'so the screen redirect is not silently suppressed',
+      () async {
+        // Reviewer finding: the C4 fix only emits `AsyncData(null)` from
+        // `cancelLoading`. But `startWorkout` does
+        // `state = await AsyncValue.guard(() async { ... return activeState; })`
+        // — a direct assignment with no intervening check. If `cancelLoading`
+        // fires while the guard future is still in-flight, the guard's
+        // resolved `AsyncData(activeState)` will overwrite the cancel's
+        // `AsyncData(null)` once the network call completes. The screen's
+        // `displayState == null && !asyncState.isLoading` redirect at
+        // `active_workout_screen.dart:68` runs in a `postFrameCallback`, so
+        // the overwrite can land BEFORE the frame callback executes —
+        // silently suppressing the C4 escape-hatch.
+        //
+        // Fix: add a `_cancelRequested` post-guard check to `startWorkout`
+        // mirroring the C1 saveCommitted pattern. When `_cancelRequested`
+        // is true at the end of the guard, reset it and force the state
+        // back to `AsyncData(null)` so the screen redirect fires.
+        final (:container, :mockRepo, :mockStorage, :mockAuth) =
+            makeAsyncContainer(null, locale: const Locale('en'));
+        addTearDown(container.dispose);
+
+        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+        final createCompleter = Completer<Workout>();
+        when(
+          () => mockRepo.createActiveWorkout(
+            userId: any(named: 'userId'),
+            name: any(named: 'name'),
+          ),
+        ).thenAnswer((_) => createCompleter.future);
+
+        await container.read(activeWorkoutProvider.future);
+
+        // 1. Kick off start — the guard hangs on the completer.
+        final startFuture = container
+            .read(activeWorkoutProvider.notifier)
+            .startWorkout('First workout');
+
+        await Future<void>.delayed(Duration.zero);
+        expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+
+        // 2. Cancel — emits AsyncData(null) so the screen would redirect.
+        container.read(activeWorkoutProvider.notifier).cancelLoading();
+        expect(
+          container.read(activeWorkoutProvider).value,
+          isNull,
+          reason: 'cancelLoading null-branch must settle into AsyncData(null)',
+        );
+
+        // 3. Server eventually succeeds — without the post-guard check,
+        // the guard's `AsyncData(activeState)` clobbers the cancel and
+        // the screen never sees the null-and-settled state needed for
+        // the postFrameCallback redirect.
+        createCompleter.complete(makeWorkout(id: 'workout-late-success'));
+        await startFuture;
+        await Future<void>.delayed(Duration.zero);
+
+        final afterComplete = container.read(activeWorkoutProvider);
+        expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+        expect(
+          afterComplete.value,
+          isNull,
+          reason:
+              'When the user cancels during startWorkout, a late-arriving '
+              'guard success must NOT resurrect the workout state — that '
+              'would silently suppress the C4 redirect to /home.',
+        );
+      },
+    );
+
+    test('PR1 review — Fix A: cancelLoading during startFromRoutine AND the '
+        'in-flight createActiveWorkout subsequently SUCCEEDS — state stays '
+        'AsyncData(null)', () async {
+      // Same reviewer finding as the startWorkout test above, applied to
+      // the routine-prefilled start path. `startFromRoutine` has the
+      // identical `state = await AsyncValue.guard(...)` shape and is
+      // exposed to the same overwrite race.
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(null, locale: const Locale('en'));
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      final createCompleter = Completer<Workout>();
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) => createCompleter.future);
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {});
+
+      await container.read(activeWorkoutProvider.future);
+
+      // 1. Kick off startFromRoutine — hangs on the completer.
+      final routineConfig = RoutineStartConfig(
+        routineName: 'Push Day',
+        routineId: 'routine-push',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: 'ex-bench',
+            exercise: makeExercise(id: 'ex-bench', name: 'Bench Press'),
+            setCount: 3,
+            targetReps: 10,
+            restSeconds: 90,
+          ),
+        ],
+      );
+      final startFuture = container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(routineConfig);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+
+      // 2. Cancel — emits AsyncData(null).
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+      expect(container.read(activeWorkoutProvider).value, isNull);
+
+      // 3. Server eventually succeeds — late guard result must NOT
+      //    resurrect the workout state.
+      createCompleter.complete(makeWorkout(id: 'workout-routine-late'));
+      await startFuture;
+      await Future<void>.delayed(Duration.zero);
+
+      final afterComplete = container.read(activeWorkoutProvider);
+      expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(
+        afterComplete.value,
+        isNull,
+        reason:
+            'startFromRoutine must honor a cancel-during-loading the same '
+            'way as startWorkout — late guard success must NOT clobber '
+            'the cancel-emitted null state.',
+      );
     });
   });
 
