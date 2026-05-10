@@ -961,12 +961,18 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
       await route.abort().catch(() => {});
     };
 
-    await page.route(
-      (url) =>
-        url.pathname.includes('/rest/v1/rpc/save_workout') ||
-        (url.pathname.includes('/rest/v1/workouts') && url.search.includes('is_active')),
-      routeHandler,
-    );
+    // PR1 review — Fix C: Playwright's `page.unroute` with a function URL
+    // predicate only removes the handler when called with the EXACT same
+    // function reference. Two arrow-function literals at the route/unroute
+    // call sites are different references, so the unroute is a silent no-op
+    // and the stall handler stays attached for the rest of the page's
+    // lifetime. Bind the predicate (and the handler) to named variables so
+    // both calls share identity.
+    const SAVE_WORKOUT_URL = (url: URL) =>
+      url.pathname.includes('/rest/v1/rpc/save_workout') ||
+      (url.pathname.includes('/rest/v1/workouts') && url.search.includes('is_active'));
+
+    await page.route(SAVE_WORKOUT_URL, routeHandler);
 
     // Tap Finish Workout in the bottom bar.
     await page.click(WORKOUT.finishButton);
@@ -997,13 +1003,10 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
     await expect(cancelButton).not.toBeVisible({ timeout: 5_000 });
 
     // Clean up: disable stalling so subsequent requests (discard) can proceed.
+    // Pass the SAME function references as the page.route() call above —
+    // see Fix C comment at the route() call site.
     stallRequests = false;
-    await page.unroute(
-      (url) =>
-        url.pathname.includes('/rest/v1/rpc/save_workout') ||
-        (url.pathname.includes('/rest/v1/workouts') && url.search.includes('is_active')),
-      routeHandler,
-    );
+    await page.unroute(SAVE_WORKOUT_URL, routeHandler);
 
     // Discard the workout to leave the user in a clean state.
     await page.locator(WORKOUT.discardButton).click();
