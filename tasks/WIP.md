@@ -13,6 +13,7 @@ as work lands, and remove the section after the merge condenses to PLAN.md.
 ## Active Workout Audit — PR-1: State-machine integrity
 
 **Branch:** `fix/active-workout-pr1-state-integrity`
+**PR:** [#195](https://github.com/CaioLacerda88/repsaga/pull/195) — reviewer findings applied, awaiting CI
 
 **Source:** Per the Active Workout audit (this conversation). Fix wave PR-1 of 7.
 Addresses 4 audit findings (C1, C2, C4, H7) plus the Q1 UX decision for the
