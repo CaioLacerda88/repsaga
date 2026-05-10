@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,48 +5,26 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../providers/workout_providers.dart';
 
-/// Loading overlay shown during async operations (finish/discard workout).
+/// Loading overlay shown during async operations (start/finish/discard).
 ///
-/// Initially shows only a spinner. After [_cancelTimeout] seconds a "Cancel"
-/// button appears so the user is not permanently trapped if the network stalls.
+/// **Q1 (PR1) — always-visible Cancel.** Pre-PR1 the Cancel button was
+/// hidden behind a 10s timer AND a `hasRestorable` boolean gate. Both were
+/// removed once C4 made `cancelLoading()` always do something useful:
 ///
-/// [hasRestorable] indicates whether the notifier has a previous valid state
-/// to restore. When false (initial Hive load), the cancel button is never
-/// shown because there is nothing to restore to.
-class ActiveWorkoutLoadingOverlay extends ConsumerStatefulWidget {
-  const ActiveWorkoutLoadingOverlay({required this.hasRestorable, super.key});
-
-  final bool hasRestorable;
-
-  @override
-  ConsumerState<ActiveWorkoutLoadingOverlay> createState() =>
-      _ActiveWorkoutLoadingOverlayState();
-}
-
-class _ActiveWorkoutLoadingOverlayState
-    extends ConsumerState<ActiveWorkoutLoadingOverlay> {
-  /// Duration before the cancel button appears.
-  static const _cancelTimeout = Duration(seconds: 10);
-
-  bool _showCancel = false;
-  Timer? _timer;
+///   * If a prior valid state exists, restore it (mid-workout cancel).
+///   * Otherwise emit `AsyncData(null)` so the active-workout screen
+///     navigates back to /home (start-phase cancel).
+///
+/// With the no-op case eliminated, the affordance is safe to render
+/// immediately — it always has a meaningful action and never traps the
+/// user. Removing the timer also avoids the dual user-hostile failure
+/// modes of "wait 10s before you can escape a stuck network" and "the
+/// button appearing pushes users to abort fast saves on slow networks".
+class ActiveWorkoutLoadingOverlay extends ConsumerWidget {
+  const ActiveWorkoutLoadingOverlay({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _timer = Timer(_cancelTimeout, () {
-      if (mounted) setState(() => _showCancel = true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Stack(
       children: [
         // Scrim over the active-workout surface while the overlay loads.
@@ -62,20 +38,18 @@ class _ActiveWorkoutLoadingOverlayState
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(),
-              if (_showCancel && widget.hasRestorable) ...[
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () {
-                    ref.read(activeWorkoutProvider.notifier).cancelLoading();
-                  },
-                  child: Text(
-                    AppLocalizations.of(context).cancel,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () {
+                  ref.read(activeWorkoutProvider.notifier).cancelLoading();
+                },
+                child: Text(
+                  AppLocalizations.of(context).cancel,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
