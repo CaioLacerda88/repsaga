@@ -79,6 +79,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
 | 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
+| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1 shipped, PR-2..7 open) | IN PROGRESS | #195 (PR-1) |
 | Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
@@ -1339,6 +1340,56 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 - **Notable architectural decisions:** (a) `WORKERS_COUNT` is a single export consumed by both `playwright.config.ts` and `global-setup.ts` — drift would silently misprovision users with a confusing "user not found" failure. (b) `mode: serial` describe blocks + worker-scoped users + `fullyParallel: false` keep within-file order serial; only across-file parallelism is exploited (intra-file parallelism would need per-test isolation we don't yet have). (c) S4 + S4b refactored to drop e2e wall-clock animation assertions (`Timer.delayed` 1.1 s overlay holds, 4 s overflow auto-dismiss) — those properties live at the widget-test layer (`celebration_overflow_card_test.dart` with `tester.pump(Duration)` against a fake clock), where they're cheap and deterministic. e2e is the wrong layer to measure animation timers. (d) Tier 1 `resetRpgStateForUser` retained in `saga.spec.ts:63` and `:387` — Phase 21 fixes *cross-worker* pollution, not *intra-worker* pollution between sequential spec files within a single worker.
 - **Latent infra bugs fixed during implementation:** GoTrue `listUsers()` default `perPage: 50` silently truncating user lookups at 168+ users (fixed: `perPage: 1000`); full-parallel `Promise.allSettled` over 168 deletes saturating GoTrue with ~25% 500s (fixed: 8-wide batched delete); Supabase Auth canonicalizing emails to lowercase causing case-sensitive lookups to mismatch role keys with uppercase letters like `rpgFoundationUser` (fixed: lowercase inside `buildEmailForWorker`); intra-worker pollution between sequential spec files within a single worker (fixed: surgical Tier 1 reset retained in saga.spec.ts).
 - **Deferred follow-ups (all DONE post-merge):** Raised local `sign_in_sign_ups` 30 → 1000 + bumped `WORKERS_COUNT` 3 → 4 in PR #156 (~33% CI speedup vs the workers=2 baseline). Reviewer nits cleanup in PR #157 (consolidated duplicate admin-client + getUserId helpers, deleted stale doc references). Phase 20 validation walkthrough discharged in PR #161.
+
+---
+
+## Phase 22: Active Workout Audit Fix Wave (2026-05-10) — IN PROGRESS
+
+**Trigger:** user request for a "thorough review of active workout logic" after the on-device usability pass (PR #193) shipped — they could still see logical inconsistencies. Surfaced via a fresh multi-agent audit (logic + UX in parallel) over the entire active-workout surface (notifier, coordinators, set row, exercise card, loading overlay, rest timer, picker sheet, etc.).
+
+**Approach:** orchestrator-driven audit then plan, not a freeform sweep. Two parallel audit agents (`feature-dev:code-reviewer` for state-machine + `ui-ux-critic` for sweaty-thumb usability), then `product-owner` web research over leading competitors (Strong / Hevy / Boostcamp / FitNotes / JEFIT) for 6 open UX questions, then RPC idempotency + weekly-plan FK verification (`Explore` agent on `supabase/migrations/`), then RPG-impact pass before plan finalization. Findings tracked live in `BUGS.md` (temporary, deleted after the cycle ships per Phase 18.5 hygiene). Audit findings use this cycle's local code prefix (C/H/M for Critical/High/Medium) — distinct from BUG-XXX (Phase 18.5) and AW-EX-X-XX (the earlier exploratory pass at `tasks/active-workout-findings.md`).
+
+**Scope summary:** 4 critical state-machine integrity issues (data-loss / unrecoverable state), 8 high-priority usability + behavior issues, 11 medium correctness/UX issues, plus visual / brand / generic-AI smell items. All findings, severity, status, and PR routing live in `BUGS.md`.
+
+**6 UX decisions made** (high-confidence, evidence-backed; full rationale in `BUGS.md`):
+
+| # | Decision | Source |
+|---|----------|--------|
+| Q1 | Show Cancel from t=0 on the loading overlay (no fade-in delay, no `hasRestorable` gate) | Material progress-indicator guidance + Strong/Hevy benchmarks |
+| Q2 | Filter previous-session warmup sets when computing pre-fill defaults | FitNotes/Hevy treat warmup as separate type; carrying absolute warmup weights forward is wrong number |
+| Q3 | Conditional confirm on swap-with-completed-sets; silent swap if zero completed | Hevy/Strong never silently re-attribute PR history; silent corruption = category-1 trust failure |
+| Q4 | "Fill Remaining" does NOT trigger rest timer (leave as-is, document the decision) | Fill-Remaining is "log what already happened," not "I just lifted" |
+| Q5 | Undo snackbar 4s → 10s + lift z-order above rest-timer overlay | Material max + the overlay-eats-snackbar layering was a bug, not a duration problem |
+| Q6 | Remove long-press swap on exercise name entirely (visible button is sufficient) | Industry has converged AWAY from gesture shortcuts in gym apps (Apple Watch backlash 2025) |
+
+**Verification artifacts** (one-shot research, results inlined here so the answers don't need re-derivation):
+
+- **`save_workout` + `record_set_xp` RPC idempotency:** XP-safe via the BUG-RPG-001 reversal pattern in `supabase/migrations/00040_rpg_system_v1.sql:~1010-1030` + `xp_events(user_id, set_id)` UNIQUE INDEX + early-return guard at `00040_rpg_system_v1.sql:547-557`. Second `save_workout` call with same set UUIDs hits PK collision → transaction rolls back → client gets error (not silent corruption). Worst case is confusing UX, not XP doubling. Means C1's fix is purely Dart-side correctness; no DB migration required.
+- **`weekly_plans.routines` schema:** JSONB column at `supabase/migrations/00011_create_weekly_plans.sql:9-18`, **no FK** on `completed_workout_id`. The `markRoutineComplete` RPC silently inserts unknown UUIDs. `SyncService` drains FIFO + `dependsOn` only. So missing `dependsOn: [workout.id]` on offline `PendingMarkRoutineComplete` is a real corruption hazard (dangling UUID in the plan's completed reference). Resolved in PR-1 / PR #195.
+
+**Cluster ledger** (live; updates as PRs land):
+
+| Cluster | Theme | PR | Findings | Status |
+|---|---|---|---|---|
+| PR-1 | State-machine integrity (cancel races, discard order, offline weekly-plan dep) + Q1 overlay UX | #195 | C1, C2, C4, H7, Q1 + reviewer-cycle Fix A (start-race) + Fix B (discard-race) | RESOLVED |
+| PR-2 | Done-checkbox tap target + undo-snackbar reachability above rest-timer overlay (Q5) + discard-race E2E | — | H1, C3 | OPEN |
+| PR-3 | Hidden destructive gestures cleanup + Q3 swap-with-completed-sets confirm + add-exercise undo | — | H2/Q6, H3, H5, Q3 | OPEN |
+| PR-4 | Set defaults: filter warmup pre-fills (Q2) + propagateWeight null/0 + cascading-undo order | — | M1, M2, M3 | OPEN |
+| PR-5 | Hint slot stability + visual contrast + disabled-Finish helper text | — | H8, M7, M8, H6, rest-timer dismiss hint | OPEN |
+| PR-6 | PR-row state during PR-data loading + analytics source DRY | — | M6, source-string DRY | OPEN |
+| PR-7 | Brand voice copy + generic-icon swaps (anti-AI aesthetic) | — | Section 5 generic-AI smells, copy revisits | OPEN |
+
+**Deferred backlog** (not in any PR; surfaces as separate phases later):
+
+- **PR-RPG: Offline celebration replay** — when a workout is finished offline and crosses an RPG threshold (rank-up / first-awakening / title-unlock), the celebration moment is permanently lost; the queue drain awards XP correctly but `_buildAndStashCelebration` doesn't re-fire. Two design options (full pre-snapshot persist vs. notify-only on drain). Not a fix — a feature. Belongs in its own phase.
+- **M9, M10 — discoverability coach marks** for set-type long-press cycle and tap-to-copy on set number. Needs onboarding design + Hive-persisted "seen" flags. Worth a dedicated design pass, not a one-line patch.
+- **First-class warmup type as data model** — the cross-cutting product-owner observation: FitNotes/Hevy promoted warmup sets to a typed entity with their own pre-fill rules, PR exclusion, and calculator. RepSaga today treats warmup as a tag on the same set record. The right time to make warmup first-class is before more analytics features ship.
+
+**E2E coverage gap surfaced post-PR-1 (rolling into PR-2):**
+
+- **Discard-race E2E** (Fix B) — directly analogous to PR-1's Q1 cancel-overlay test but on `DELETE /workouts`. ~20 LOC. Filed against PR-2 since both touch the same overlay/snackbar surface.
+
+**File hygiene reminder** (Phase 18.5 convention): `BUGS.md` is the live tracker DURING this cycle, deleted post-completion; resolution narratives + PR refs preserved here and in each PR's commit message.
 
 ---
 
