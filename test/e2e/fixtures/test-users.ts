@@ -267,6 +267,18 @@ export const TEST_USERS = {
   },
 
   // -------------------------------------------------------------------------
+  // PR-1 audit fixes — cancel-during-start (C4/Q1) regression
+  // -------------------------------------------------------------------------
+  // smokeWorkoutCancelStart: lapsed user (has one prior workout, profile seeded).
+  // Used to test the cancel-during-start → /home flow (audit C4 + Q1).
+  // The user is in lapsed state so "Quick workout" appears and we can start
+  // via the normal entry point, then intercept the network call.
+  smokeWorkoutCancelStart: {
+    email: 'e2e-smoke-workout-cancel-start@test.local',
+    password: 'TestPassword123!',
+  },
+
+  // -------------------------------------------------------------------------
   // Phase 18e — Class system + title-equip E2E
   // -------------------------------------------------------------------------
 

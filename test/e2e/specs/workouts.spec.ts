@@ -894,3 +894,125 @@ test.describe('Workout history', () => {
     await expect(page.locator(HISTORY.retryButton)).not.toBeVisible();
   });
 });
+
+// =============================================================================
+// REGRESSION — Cancel button on loading overlay visible from t=0 (PR1 — Q1)
+//
+// Verifies that the loading overlay's Cancel button is visible immediately
+// (from t=0) when the overlay mounts during a finish operation — no 10-second
+// fade-in delay (audit Q1: `_cancelTimeout` timer removed, `hasRestorable`
+// gate removed, Cancel always rendered).
+//
+// This test drives a complete workout to the "Save & Finish" confirmation
+// dialog, intercepts the save_workout RPC to stall the network, confirms the
+// Cancel button is visible as soon as the overlay mounts, then taps Cancel and
+// verifies the workout state is restored (the user's data is not lost).
+//
+// Note on cancel-during-start (C4): the C4 fix (emit AsyncData(null) when
+// _lastValidState == null) is covered by the unit test at
+// `test/unit/.../active_workout_notifier_test.dart:3468`. An E2E for that
+// scenario is not added here because the navigation flow for startWorkout
+// calls `context.go('/workout/active')` AFTER `await startWorkout()` resolves,
+// so the active-workout screen is never visible while the network is stalled —
+// the route intercept would prevent the navigation from completing and the
+// overlay would never mount. The unit test provides the authoritative coverage.
+// =============================================================================
+
+test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutCancelStart').email,
+      getUser('smokeWorkoutCancelStart').password,
+    );
+  });
+
+  test('should show Cancel button immediately on loading overlay and restore workout on tap (PR1 — Q1)', async ({
+    page,
+  }) => {
+    // Set up a workout with one completed set so Finish is enabled.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    // Intercept the save_workout RPC to stall the network — the loading overlay
+    // mounts while this request is in-flight and we assert Cancel from t=0.
+    // The handler is stored so we can unroute it precisely after the cancel.
+    let signalIntercepted!: () => void;
+    const intercepted = new Promise<void>((resolve) => {
+      signalIntercepted = resolve;
+    });
+
+    // Flag: once we tap Cancel we let subsequent requests through so discard works.
+    let stallRequests = true;
+
+    const routeHandler = async (route: import('@playwright/test').Route) => {
+      if (!stallRequests) {
+        await route.continue();
+        return;
+      }
+      // Signal immediately so the test can proceed while this stalls.
+      signalIntercepted();
+      // Hold for up to 30s; the test taps Cancel long before this fires.
+      // Once the page.unroute removes the handler, new requests flow freely.
+      await new Promise<void>((r) => setTimeout(r, 30_000));
+      await route.abort().catch(() => {});
+    };
+
+    // PR1 review — Fix C: Playwright's `page.unroute` with a function URL
+    // predicate only removes the handler when called with the EXACT same
+    // function reference. Two arrow-function literals at the route/unroute
+    // call sites are different references, so the unroute is a silent no-op
+    // and the stall handler stays attached for the rest of the page's
+    // lifetime. Bind the predicate (and the handler) to named variables so
+    // both calls share identity.
+    const SAVE_WORKOUT_URL = (url: URL) =>
+      url.pathname.includes('/rest/v1/rpc/save_workout') ||
+      (url.pathname.includes('/rest/v1/workouts') && url.search.includes('is_active'));
+
+    await page.route(SAVE_WORKOUT_URL, routeHandler);
+
+    // Tap Finish Workout in the bottom bar.
+    await page.click(WORKOUT.finishButton);
+
+    // Confirmation dialog — tap "Save & Finish" to trigger the save RPC.
+    const dialogFinish = page.locator(WORKOUT.dialogFinishButton);
+    await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
+    await dialogFinish.click();
+
+    // Wait for the route to be intercepted (save RPC stalled, overlay mounting).
+    await intercepted;
+
+    // Q1 assertion: the Cancel button must be visible from t=0 — no timer delay.
+    // Pre-PR1 the button only appeared after 10s; now it renders immediately.
+    const cancelButton = page.locator(WORKOUT.loadingOverlayCancelButton);
+    await expect(cancelButton).toBeVisible({ timeout: 5_000 });
+
+    // Tap Cancel to abort the in-flight save.
+    await cancelButton.click();
+
+    // The notifier restores the prior workout state (C1 pre-commit cancel).
+    // The user should be back on the active workout screen with their data intact.
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The loading overlay must no longer be visible.
+    await expect(cancelButton).not.toBeVisible({ timeout: 5_000 });
+
+    // Clean up: disable stalling so subsequent requests (discard) can proceed.
+    // Pass the SAME function references as the page.route() call above —
+    // see Fix C comment at the route() call site.
+    stallRequests = false;
+    await page.unroute(SAVE_WORKOUT_URL, routeHandler);
+
+    // Discard the workout to leave the user in a clean state.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+});

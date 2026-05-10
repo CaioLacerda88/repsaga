@@ -232,6 +232,15 @@ export const WORKOUT = {
   /** Workout notes input — Semantics(identifier: 'workout-notes') */
   notesInput: '[flt-semantics-identifier="workout-notes"]',
   /**
+   * Cancel button inside ActiveWorkoutLoadingOverlay (PR1 — Q1).
+   * The button is a TextButton with the l10n "Cancel" label, visible at t=0
+   * in every phase (start/finish/discard). No flt-semantics-identifier is
+   * added — match by accessible role+name instead, which is locale-sensitive.
+   * The label is "Cancel" in en and "Cancelar" in pt-BR; use the English
+   * variant for all E2E tests running in the default en locale.
+   */
+  loadingOverlayCancelButton: 'role=button[name="Cancel"]',
+  /**
    * Exercise name tappable area inside an exercise card during an active workout.
    *
    * _ExerciseCard wraps the exercise name in a Semantics with the label:

@@ -105,8 +105,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             discardCoordinator: _discardCoordinator,
             finishCoordinator: _finishCoordinator,
           ),
-          if (asyncState.isLoading)
-            ActiveWorkoutLoadingOverlay(hasRestorable: asyncState.hasValue),
+          if (asyncState.isLoading) const ActiveWorkoutLoadingOverlay(),
           if (timerState != null) const RestTimerOverlay(),
         ],
       ),

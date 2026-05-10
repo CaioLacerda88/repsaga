@@ -115,21 +115,52 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     return _localStorage.loadActiveWorkout();
   }
 
-  /// Cancel an in-flight loading operation by restoring the last valid state.
+  /// Cancel an in-flight loading operation by settling the loading state.
   ///
-  /// Used by the loading overlay's timeout cancel button. The underlying
-  /// network request continues in the background, but the UI is unblocked
-  /// so the user can retry or discard. Resets re-entrance guards so the
-  /// user can try again.
+  /// Used by the loading overlay's cancel button. The underlying network
+  /// request continues in the background, but the UI is unblocked so the
+  /// user can retry, discard, or navigate away. Resets re-entrance guards
+  /// so the user can try again.
+  ///
+  /// Behavior depends on whether there is a prior valid state to restore:
+  ///
+  ///   * `_lastValidState != null` (mid-workout finish/discard cancel) →
+  ///     restore that state. The user keeps their workout intact.
+  ///   * `_lastValidState == null` (cancel during the very first
+  ///     start-workout, before any valid state was ever captured) → emit
+  ///     `AsyncData(null)`. The active-workout screen at
+  ///     `active_workout_screen.dart:68` redirects to /home when the state
+  ///     is settled-and-null, giving the user an escape hatch instead of a
+  ///     permanent spinner (audit C4).
+  ///
+  /// `_cancelRequested` is unconditionally set to `true` so that any
+  /// in-flight `startWorkout` / `startFromRoutine` / `finishWorkout` /
+  /// `discardWorkout` future hits its post-guard cancel check on resume
+  /// and skips the final `state = result` overwrite. Without this, a
+  /// late-arriving `AsyncData(activeState)` (or `AsyncData(null)`) from
+  /// the guard would clobber the state we just settled into here — and
+  /// the screen's `postFrameCallback` redirect at
+  /// `active_workout_screen.dart:68` only fires on settled-and-null, so
+  /// any overwrite would silently suppress the C4 escape-hatch.
+  ///
+  /// All four call sites (`startWorkout`, `startFromRoutine`,
+  /// `finishWorkout`, `discardWorkout`) reset `_cancelRequested` to
+  /// `false` immediately after consuming it, so the flag never leaks
+  /// across operations.
   void cancelLoading() {
-    _cancelRequested = true;
     _isFinishing = false;
     _isDiscarding = false;
+    _cancelRequested = true;
     if (_lastValidState != null) {
       // _lastValidState already carries `savedOffline: false` (reset at the
       // top of finishWorkout / discardWorkout) so restoring it naturally
       // resets the offline-queued flag without a separate field.
       state = AsyncData(_lastValidState);
+    } else {
+      // No valid state to restore → settle into AsyncData(null) so the
+      // screen's `displayState == null && !asyncState.isLoading` branch
+      // navigates back home (audit C4).
+      state = const AsyncData(null);
     }
   }
 
@@ -159,7 +190,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
-    state = await AsyncValue.guard(() async {
+    _cancelRequested = false;
+    final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
         userId: userId,
@@ -181,6 +213,22 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       );
       return activeState;
     });
+
+    if (_cancelRequested) {
+      // Audit C4 reinforcement: cancelLoading() fired while the guard
+      // future was still in-flight. cancelLoading() already settled the
+      // state into AsyncData(null) (start-phase has no _lastValidState
+      // to restore). A late-arriving guard success (or AsyncError) would
+      // silently overwrite that null, and the screen's
+      // postFrameCallback redirect at active_workout_screen.dart:68
+      // only fires on settled-and-null, so any overwrite would suppress
+      // the C4 escape-hatch.
+      _cancelRequested = false;
+      state = const AsyncData(null);
+      return;
+    }
+
+    state = result;
   }
 
   /// Start a workout pre-populated from a routine template.
@@ -188,7 +236,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
-    state = await AsyncValue.guard(() async {
+    _cancelRequested = false;
+    final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
         userId: userId,
@@ -267,6 +316,19 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       );
       return activeState;
     });
+
+    if (_cancelRequested) {
+      // Mirrors the post-guard check in [startWorkout]. cancelLoading()
+      // already settled into AsyncData(null); a late-arriving guard
+      // success must not resurrect the workout, otherwise the screen
+      // never sees the settled-and-null state needed for the C4
+      // postFrameCallback redirect to /home.
+      _cancelRequested = false;
+      state = const AsyncData(null);
+      return;
+    }
+
+    state = result;
   }
 
   /// Rename the active workout in-memory and persist to Hive.
@@ -715,10 +777,34 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _lastValidState = current;
     _cancelRequested = false;
 
+    // PR1 review — Fix B: mirrors the C1 saveCommitted pattern. Flipped
+    // to `true` immediately after `_repo.discardWorkout(...)` returns
+    // success. Used by the post-guard cancel-check below to distinguish
+    // pre-commit cancel (cancel wins, state stays restored) from
+    // post-commit cancel (commit wins, state lands AsyncData(null) and
+    // the screen redirects home). Once the server soft-delete commits
+    // we MUST NOT restore the workout client-side — that would surface
+    // a "phantom" workout pointing at a deleted server row, leaving the
+    // user with a recoverable-looking session the server considers gone.
+    var discardCommitted = false;
+
     state = const AsyncLoading();
     final result = await AsyncValue.guard(() async {
-      await _localStorage.clearActiveWorkout();
+      // Audit C2: server FIRST, then Hive. Pre-fix the order was swapped
+      // — Hive cleared, then network call. A network failure left the
+      // user with an empty Hive box but a server-side workout still alive,
+      // so the next read re-hydrated stale server data and the user
+      // believed they had lost their session. Swapping the order means a
+      // failed discard leaves Hive intact: the workout re-loads from local
+      // storage and the user can retry the discard. (Idempotency is fine
+      // — `_repo.discardWorkout` is a soft-delete by id and is safe to
+      // call twice.)
       await _repo.discardWorkout(current.workout.id, userId: _userId);
+      // Fix B: mark the commit so the post-guard cancel-check honors it.
+      // Anything below this line that throws still leaves discardCommitted
+      // true — the server delete already happened.
+      discardCommitted = true;
+      await _localStorage.clearActiveWorkout();
 
       final elapsedSeconds = DateTime.now()
           .toUtc()
@@ -743,11 +829,25 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       return null;
     });
 
-    if (_cancelRequested) {
+    if (_cancelRequested && !discardCommitted) {
+      // PR1 review — Fix B: pre-commit cancel. The user tapped Cancel
+      // while we were still attempting the server delete AND it did NOT
+      // commit. cancelLoading() already restored the previous state —
+      // discard this guard result so we don't overwrite it.
+      //
+      // Post-commit cancel is intentionally ignored: once
+      // `_repo.discardWorkout` returned successfully, the server-side
+      // soft-delete is durable and the discard flow MUST continue
+      // normally so the screen navigates to /home. A client-side tap
+      // cannot "un-delete" a committed soft-delete.
       _cancelRequested = false;
       _isDiscarding = false;
       return;
     }
+    // Reset the flag regardless — if we got here with _cancelRequested
+    // still true it was a post-commit cancel that we deliberately ignored;
+    // either way it must not leak into the next operation.
+    _cancelRequested = false;
 
     state = result;
     _isDiscarding = false;
@@ -817,6 +917,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     // Riverpod data flow (BUG-039).
     var savedOffline = false;
     var serverErrorQueued = false;
+    // Audit C1: flipped to `true` immediately after `_repo.saveWorkout(...)`
+    // returns. Used by the post-guard cancel-check below to distinguish
+    // pre-commit cancel (cancel wins, state stays restored) from
+    // post-commit cancel (commit wins, state lands AsyncData(null) and
+    // celebration plays). A successful save cannot be reversed by a
+    // client-side tap, so once we've crossed that line we MUST NOT block
+    // the normal finish flow — otherwise the screen never navigates to
+    // /home and the celebration overlay never plays.
+    var saveCommitted = false;
 
     // Capture the pre-finish RPG snapshot + earned-title slug set BEFORE the
     // save call. The post-finish snapshot (read after `record_set_xp`
@@ -873,6 +982,11 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           exercises: workoutExercises,
           sets: sets,
         );
+        // C1: mark the commit so the post-guard cancel-check honors it.
+        // Anything below this line that throws will leave saveCommitted
+        // true and the cancel-after-commit semantic still applies — the
+        // server-side write has already happened.
+        saveCommitted = true;
       } catch (e) {
         // Classify at the catch site so terminal errors surface to the user
         // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
@@ -1235,6 +1349,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                         routineId: matchedRoutineId,
                         workoutId: workout.id,
                         queuedAt: now,
+                        // H7: hold the weekly-plan completion until the
+                        // parent workout commits server-side. Without this
+                        // dependency the FIFO drain can fire this RPC
+                        // before the workout exists, and because
+                        // `weekly_plans.routines` is a JSONB column with
+                        // no FK, the RPC silently inserts a phantom
+                        // workout id and the bucket displays a completion
+                        // pointing at nothing. Mirrors the BUG-002 pattern
+                        // for offline PR upserts.
+                        dependsOn: <String>[workout.id],
                       ),
                     );
               }
@@ -1279,14 +1403,26 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       return null;
     });
 
-    if (_cancelRequested) {
-      // User tapped Cancel while we were saving. cancelLoading() already
-      // restored the previous state — discard this guard result so we don't
-      // overwrite it.
+    if (_cancelRequested && !saveCommitted) {
+      // C1: pre-commit cancel. The user tapped Cancel while we were still
+      // attempting the save (or before the catch decided to enqueue
+      // offline) AND the save did NOT commit server-side. cancelLoading()
+      // already restored the previous state — discard this guard result
+      // so we don't overwrite it.
+      //
+      // Post-commit cancel is intentionally ignored: once `saveWorkout`
+      // returned successfully, the sets and xp_events rows are durable
+      // server-side and the finish flow MUST continue normally so the
+      // celebration plays and the screen navigates to /home. A client-side
+      // tap cannot reverse a committed save.
       _cancelRequested = false;
       _isFinishing = false;
       return null;
     }
+    // Reset the flag regardless — if we got here with _cancelRequested
+    // still true it was a post-commit cancel that we deliberately ignored;
+    // either way it must not leak into the next finish call.
+    _cancelRequested = false;
 
     state = result;
     _isFinishing = false;

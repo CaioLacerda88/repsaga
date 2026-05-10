@@ -1353,6 +1353,13 @@ function buildRoleSeedRunners(): Record<
       });
       await seedMinimalWorkout(supabase, userId);
     },
+    smokeWorkoutCancelStart: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId, {
