@@ -37,6 +37,8 @@ import 'package:repsaga/features/rpg/data/peak_loads_repository.dart';
 import 'package:repsaga/features/rpg/data/rpg_repository.dart';
 import 'package:repsaga/features/rpg/models/body_part_progress.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
+import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sentry_flutter/sentry_flutter.dart' show SentryId;
 import 'package:supabase_flutter/supabase_flutter.dart' show User;
@@ -207,6 +209,32 @@ class _CapturingPendingSyncNotifier extends PendingSyncNotifier {
 
   @override
   List<PendingAction> getAll() => List.unmodifiable(enqueued);
+}
+
+/// Stub [WeeklyPlanNotifier] for the offline H7 finishWorkout test.
+///
+/// build() returns the seeded plan synchronously so
+/// `ref.read(weeklyPlanProvider).value` is non-null. [markRoutineComplete]
+/// throws when [throwOnMark] is true, exercising the catch-and-enqueue
+/// branch in the production notifier.
+class _StubWeeklyPlanNotifier extends WeeklyPlanNotifier {
+  _StubWeeklyPlanNotifier({required this.plan, this.throwOnMark = false});
+
+  final WeeklyPlan plan;
+  final bool throwOnMark;
+
+  @override
+  FutureOr<WeeklyPlan?> build() => plan;
+
+  @override
+  Future<void> markRoutineComplete({
+    required String routineId,
+    required String workoutId,
+  }) async {
+    if (throwOnMark) {
+      throw Exception('Network error from weekly-plan markRoutineComplete');
+    }
+  }
 }
 
 /// Creates a container for offline-path tests. Includes MockAuthRepository
@@ -1730,6 +1758,128 @@ void main() {
       // Confirm the enqueued workout ID matches the workout in state.
       expect(firstId, initial.workout.id);
     });
+
+    test('PR1 — H7: offline weekly-plan markRoutineComplete enqueue carries '
+        'dependsOn = [workout.id]', () async {
+      // Audit H7: when finishWorkout fires the weekly-plan update against
+      // a routine that is in this week's bucket, and the network call
+      // throws, the fallback enqueue used to omit `dependsOn`. The
+      // resulting `PendingMarkRoutineComplete` could drain BEFORE the
+      // sibling `PendingSaveWorkout` committed — at which point the RPC
+      // silently inserted an unknown UUID into `weekly_plans.routines`
+      // (JSONB column with no FK) and the bucket displayed a phantom
+      // completion that pointed at a workout id the server had never
+      // seen.
+      //
+      // Fix: stamp `dependsOn: [workout.id]` so the FIFO drain holds the
+      // weekly-plan update until the parent save commits. Same pattern
+      // that BUG-002 already uses for offline PR upserts.
+      const workoutId = 'workout-h7-001';
+      const routineId = 'routine-h7-bench';
+
+      // Build an active workout state pre-populated with the routineId
+      // — the factory doesn't expose routineId, so construct it directly.
+      final exercise = Exercise.fromJson(
+        TestExerciseFactory.create(id: 'exercise-h7', equipmentType: 'barbell'),
+      );
+      final we = WorkoutExercise(
+        id: 'we-h7',
+        workoutId: workoutId,
+        exerciseId: 'exercise-h7',
+        order: 0,
+        exercise: exercise,
+      );
+      final sets = [
+        ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'set-h7',
+            workoutExerciseId: 'we-h7',
+            setNumber: 1,
+            weight: 100.0,
+            reps: 5,
+            isCompleted: true,
+          ),
+        ),
+      ];
+      final initial = ActiveWorkoutState(
+        workout: Workout.fromJson(
+          TestWorkoutFactory.create(id: workoutId, isActive: true),
+        ),
+        exercises: [ActiveWorkoutExercise(workoutExercise: we, sets: sets)],
+        routineId: routineId,
+      );
+
+      final mockRepo = MockWorkoutRepository();
+      final mockStorage = MockWorkoutLocalStorage();
+      final mockAuth = MockAuthRepository();
+      final capturedNotifier = _CapturingPendingSyncNotifier();
+
+      when(() => mockStorage.loadActiveWorkout()).thenReturn(initial);
+      when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      // Save throws → PendingSaveWorkout enqueued; downstream
+      // weekly-plan branch still runs because that catch is independent.
+      when(
+        () => mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenThrow(Exception('Network error'));
+      when(() => mockRepo.getCachedWorkoutCount(any())).thenReturn(1);
+
+      // Pre-populate the weekly plan provider with a plan containing the
+      // routine, then make markRoutineComplete throw so the offline
+      // enqueue path runs.
+      final plan = WeeklyPlan(
+        id: 'plan-h7',
+        userId: 'user-test-001',
+        weekStart: DateTime.utc(2026, 5, 4),
+        routines: const [BucketRoutine(routineId: routineId, order: 0)],
+        createdAt: DateTime.utc(2026, 5, 4),
+        updatedAt: DateTime.utc(2026, 5, 4),
+      );
+      final stubWeeklyNotifier = _StubWeeklyPlanNotifier(
+        plan: plan,
+        throwOnMark: true,
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          workoutRepositoryProvider.overrideWithValue(mockRepo),
+          workoutLocalStorageProvider.overrideWithValue(mockStorage),
+          authRepositoryProvider.overrideWithValue(mockAuth),
+          analyticsRepositoryProvider.overrideWithValue(
+            const _FakeAnalyticsRepository(),
+          ),
+          pendingSyncProvider.overrideWith(() => capturedNotifier),
+          weeklyPlanProvider.overrideWith(() => stubWeeklyNotifier),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(activeWorkoutProvider.future);
+      await container.read(activeWorkoutProvider.notifier).finishWorkout();
+
+      // PendingSaveWorkout (parent) and PendingMarkRoutineComplete
+      // (weekly-plan child) must both be enqueued.
+      final marks = capturedNotifier.enqueued
+          .whereType<PendingMarkRoutineComplete>()
+          .toList();
+      expect(marks, hasLength(1));
+      expect(
+        marks.single.dependsOn,
+        [workoutId],
+        reason:
+            'The weekly-plan completion must wait for the parent save to '
+            'commit, otherwise the RPC silently writes a phantom workout '
+            'id into weekly_plans.routines (JSONB, no FK).',
+      );
+      expect(marks.single.routineId, routineId);
+      expect(marks.single.workoutId, workoutId);
+      expect(marks.single.planId, plan.id);
+    });
   });
 
   group('ActiveWorkoutNotifier — discardWorkout', () {
@@ -1782,29 +1932,83 @@ void main() {
       verifyNever(() => mockStorage.clearActiveWorkout());
     });
 
+    test('repo error: state becomes AsyncError AND Hive is left intact so the '
+        'user can retry (PR1 — C2)', () async {
+      // Audit C2: previously discardWorkout cleared Hive first, then
+      // attempted the server delete — a network failure left the user
+      // with an empty Hive box and a server-side workout still alive.
+      // Reload (or any later read) would surface the stale server row
+      // and the user would believe they had lost data.
+      //
+      // New contract: server first; Hive is cleared ONLY on success.
+      // Terminal error path keeps Hive populated so the workout
+      // re-hydrates on the next read and the user can retry the discard.
+      final initial = makeState(exerciseCount: 0, setsPerExercise: 0);
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(initial);
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+      when(
+        () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+      ).thenThrow(Exception('Delete failed'));
+
+      await container.read(activeWorkoutProvider.future);
+      await container.read(activeWorkoutProvider.notifier).discardWorkout();
+
+      expect(
+        container.read(activeWorkoutProvider),
+        isA<AsyncError<ActiveWorkoutState?>>(),
+      );
+      // Server call must have been attempted exactly once.
+      verify(
+        () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+      ).called(1);
+      // Hive must NOT have been cleared — the workout is still recoverable.
+      verifyNever(() => mockStorage.clearActiveWorkout());
+    });
+
     test(
-      'repo error: state becomes AsyncError but Hive is already cleared',
+      'success: server delete fires BEFORE Hive clear (PR1 — C2 ordering)',
       () async {
+        // Pin the order of side-effects so a future refactor can't silently
+        // re-introduce the C2 bug. The repo call is gated on a Completer the
+        // test controls — at the moment the repo is invoked we assert that
+        // Hive has not yet been touched. Then we let the repo complete and
+        // assert Hive is cleared exactly once.
         final initial = makeState(exerciseCount: 0, setsPerExercise: 0);
         final (:container, :mockRepo, :mockStorage, :mockAuth) =
             makeAsyncContainer(initial);
         addTearDown(container.dispose);
 
         when(() => mockAuth.currentUser).thenReturn(fakeUser());
-        when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+        final discardCompleter = Completer<void>();
         when(
           () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
-        ).thenThrow(Exception('Delete failed'));
+        ).thenAnswer((_) => discardCompleter.future);
+        when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
 
         await container.read(activeWorkoutProvider.future);
-        await container.read(activeWorkoutProvider.notifier).discardWorkout();
 
-        expect(
-          container.read(activeWorkoutProvider),
-          isA<AsyncError<ActiveWorkoutState?>>(),
-        );
-        // Hive is cleared FIRST (before the failing network call) to prevent
-        // orphaned local data if the app crashes between the two operations.
+        // Kick off the discard — it will hang on the completer.
+        final future = container
+            .read(activeWorkoutProvider.notifier)
+            .discardWorkout();
+
+        // Yield so the guard advances into the repo call.
+        await Future<void>.delayed(Duration.zero);
+
+        // Repo call has been issued, Hive has NOT been cleared yet.
+        verify(
+          () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+        ).called(1);
+        verifyNever(() => mockStorage.clearActiveWorkout());
+
+        // Resolve the server delete; Hive clear must run after.
+        discardCompleter.complete();
+        await future;
+
         verify(() => mockStorage.clearActiveWorkout()).called(1);
       },
     );
@@ -3093,63 +3297,127 @@ void main() {
       ).called(greaterThan(0));
     });
 
-    test(
-      'state is NOT clobbered when in-flight finishWorkout completes after cancel',
-      () async {
-        // Regression: cancelLoading() restores state, but the in-flight
-        // AsyncValue.guard future may still complete and overwrite the
-        // restored state. The _cancelRequested flag prevents this.
-        final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            makeAsyncContainer(initial);
-        addTearDown(container.dispose);
+    test('PR1 — C1: cancel BEFORE saveWorkout returns AND save then fails — '
+        'state stays restored (cancel wins pre-commit)', () async {
+      // Pre-commit cancel semantic: when cancelLoading() runs while the
+      // network save is in-flight AND the save subsequently throws (so
+      // nothing committed server-side), the user's local state must be
+      // preserved exactly as cancelLoading() restored it. The guard's
+      // AsyncError result must NOT overwrite the restored AsyncData.
+      final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(initial);
+      addTearDown(container.dispose);
 
-        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
 
-        // Completer lets us control when the repo call completes.
-        final saveCompleter = Completer<Workout>();
-        when(
-          () => mockRepo.saveWorkout(
-            workout: any(named: 'workout'),
-            exercises: any(named: 'exercises'),
-            sets: any(named: 'sets'),
-          ),
-        ).thenAnswer((_) => saveCompleter.future);
-        when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+      final saveCompleter = Completer<Workout>();
+      when(
+        () => mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenAnswer((_) => saveCompleter.future);
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
 
-        await container.read(activeWorkoutProvider.future);
+      await container.read(activeWorkoutProvider.future);
 
-        // 1. Start finishWorkout (don't await — it will hang on the completer).
-        final finishFuture = container
-            .read(activeWorkoutProvider.notifier)
-            .finishWorkout(notes: 'test');
+      // 1. Start finishWorkout (hangs on the completer).
+      final finishFuture = container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout(notes: 'test');
 
-        // Give the async guard time to set loading state.
-        await Future<void>.delayed(Duration.zero);
-        expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
 
-        // 2. Cancel loading — state should be restored.
-        container.read(activeWorkoutProvider.notifier).cancelLoading();
-        final afterCancel = container.read(activeWorkoutProvider);
-        expect(afterCancel, isA<AsyncData<ActiveWorkoutState?>>());
-        expect(afterCancel.value, isNotNull);
-        expect(afterCancel.value!.workout.id, initial.workout.id);
+      // 2. Cancel loading — state restores to the prior workout.
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+      final afterCancel = container.read(activeWorkoutProvider);
+      expect(afterCancel, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(afterCancel.value!.workout.id, initial.workout.id);
 
-        // 3. Let the in-flight future complete (simulate network returning).
-        saveCompleter.complete(makeWorkout(isActive: false));
-        await finishFuture;
+      // 3. Save then FAILS terminally (HTTP 403 → terminal in
+      // SyncErrorClassifier) — saveCommitted stays false, so the
+      // cancel-after-guard branch is taken and state isn't clobbered.
+      saveCompleter.completeError(
+        const app.DatabaseException('rls denied', code: '403'),
+      );
+      await finishFuture;
+      await Future<void>.delayed(Duration.zero);
 
-        // 4. Drain microtasks.
-        await Future<void>.delayed(Duration.zero);
+      final afterComplete = container.read(activeWorkoutProvider);
+      expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(afterComplete.value, isNotNull);
+      expect(afterComplete.value!.workout.id, initial.workout.id);
+    });
 
-        // 5. State should STILL be the restored value, not AsyncData(null)
-        // from the guard result.
-        final afterComplete = container.read(activeWorkoutProvider);
-        expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
-        expect(afterComplete.value, isNotNull);
-        expect(afterComplete.value!.workout.id, initial.workout.id);
-      },
-    );
+    test('PR1 — C1: cancel AFTER saveWorkout returns success — commit wins, '
+        'state ends AsyncData(null)', () async {
+      // Audit C1 semantic: once save committed server-side, cancel is a
+      // no-op. The user's tap to cancel cannot reverse a committed save.
+      // The finish flows through normally — state lands AsyncData(null)
+      // and the screen falls through to /home navigation. This is the
+      // only safe behavior: a save that already wrote sets + xp_events
+      // server-side cannot be made to "un-happen" client-side.
+      final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(initial);
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+
+      final saveCompleter = Completer<Workout>();
+      when(
+        () => mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenAnswer((_) => saveCompleter.future);
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+
+      await container.read(activeWorkoutProvider.future);
+
+      final finishFuture = container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout(notes: 'test');
+
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+
+      // Cancel during save — restores state momentarily.
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+      expect(
+        container.read(activeWorkoutProvider).value!.workout.id,
+        initial.workout.id,
+      );
+
+      // Save then SUCCEEDS — saveCommitted flips true, so the
+      // cancel-after-guard branch is skipped and state lands AsyncData(null).
+      saveCompleter.complete(makeWorkout(isActive: false));
+      final result = await finishFuture;
+      await Future<void>.delayed(Duration.zero);
+
+      // Result record must be returned (not null) so the coordinator
+      // plays celebration + navigates as it would on a normal finish.
+      expect(result, isNotNull);
+      expect(result!.savedOffline, isFalse);
+
+      final afterComplete = container.read(activeWorkoutProvider);
+      expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(
+        afterComplete.value,
+        isNull,
+        reason:
+            'Cancel after a successful save must NOT block the state from '
+            'reaching null — the screen relies on this transition to '
+            'navigate to /home and the celebration overlay needs the '
+            'finish to settle.',
+      );
+      // Hive was cleared as part of the normal finish path.
+      verify(() => mockStorage.clearActiveWorkout()).called(1);
+    });
 
     test(
       'state is NOT clobbered when in-flight discardWorkout completes after cancel',
@@ -3196,6 +3464,57 @@ void main() {
         expect(afterComplete.value!.workout.id, initial.workout.id);
       },
     );
+
+    test('PR1 — C4: cancelLoading during startWorkout (no prior state) emits '
+        'AsyncData(null) so the screen falls through to /home', () async {
+      // Audit C4: when the user taps Cancel during the very first
+      // start-workout (no prior valid state to restore), the overlay used
+      // to be a dead-end — `cancelLoading()` did nothing because the
+      // `_lastValidState != null` guard skipped the state assignment.
+      // The notifier remained in AsyncLoading forever, the screen kept
+      // showing the spinner, and the `displayState == null &&
+      // !asyncState.isLoading` redirect at active_workout_screen.dart:68
+      // never fired.
+      //
+      // Fix: cancelLoading() emits `AsyncData(null)` so the screen's
+      // postFrameCallback navigates back to /home.
+      //
+      // Repro: drive the notifier into AsyncLoading via a stalled
+      // startWorkout, then cancel.
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(null, locale: const Locale('en'));
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      // Never-completing future — simulates a stalled network on first start.
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) => Completer<Workout>().future);
+
+      await container.read(activeWorkoutProvider.future);
+
+      // Kick off start — it hangs in AsyncLoading.
+      unawaited(container.read(activeWorkoutProvider.notifier).startWorkout());
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+
+      // Cancel — must settle into AsyncData(null), not stay in AsyncLoading.
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+
+      final result = container.read(activeWorkoutProvider);
+      expect(
+        result,
+        isA<AsyncData<ActiveWorkoutState?>>(),
+        reason:
+            'cancelLoading must settle the state so the screen redirect '
+            'fires — leaving AsyncLoading traps the user on the spinner.',
+      );
+      expect(result.value, isNull);
+      expect(result.isLoading, isFalse);
+    });
   });
 
   // --------------------------------------------------------------------------
