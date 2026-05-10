@@ -777,6 +777,17 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _lastValidState = current;
     _cancelRequested = false;
 
+    // PR1 review — Fix B: mirrors the C1 saveCommitted pattern. Flipped
+    // to `true` immediately after `_repo.discardWorkout(...)` returns
+    // success. Used by the post-guard cancel-check below to distinguish
+    // pre-commit cancel (cancel wins, state stays restored) from
+    // post-commit cancel (commit wins, state lands AsyncData(null) and
+    // the screen redirects home). Once the server soft-delete commits
+    // we MUST NOT restore the workout client-side — that would surface
+    // a "phantom" workout pointing at a deleted server row, leaving the
+    // user with a recoverable-looking session the server considers gone.
+    var discardCommitted = false;
+
     state = const AsyncLoading();
     final result = await AsyncValue.guard(() async {
       // Audit C2: server FIRST, then Hive. Pre-fix the order was swapped
@@ -789,6 +800,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // — `_repo.discardWorkout` is a soft-delete by id and is safe to
       // call twice.)
       await _repo.discardWorkout(current.workout.id, userId: _userId);
+      // Fix B: mark the commit so the post-guard cancel-check honors it.
+      // Anything below this line that throws still leaves discardCommitted
+      // true — the server delete already happened.
+      discardCommitted = true;
       await _localStorage.clearActiveWorkout();
 
       final elapsedSeconds = DateTime.now()
@@ -814,11 +829,25 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       return null;
     });
 
-    if (_cancelRequested) {
+    if (_cancelRequested && !discardCommitted) {
+      // PR1 review — Fix B: pre-commit cancel. The user tapped Cancel
+      // while we were still attempting the server delete AND it did NOT
+      // commit. cancelLoading() already restored the previous state —
+      // discard this guard result so we don't overwrite it.
+      //
+      // Post-commit cancel is intentionally ignored: once
+      // `_repo.discardWorkout` returned successfully, the server-side
+      // soft-delete is durable and the discard flow MUST continue
+      // normally so the screen navigates to /home. A client-side tap
+      // cannot "un-delete" a committed soft-delete.
       _cancelRequested = false;
       _isDiscarding = false;
       return;
     }
+    // Reset the flag regardless — if we got here with _cancelRequested
+    // still true it was a post-commit cancel that we deliberately ignored;
+    // either way it must not leak into the next operation.
+    _cancelRequested = false;
 
     state = result;
     _isDiscarding = false;

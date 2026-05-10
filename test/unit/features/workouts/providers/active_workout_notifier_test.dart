@@ -2014,6 +2014,83 @@ void main() {
       },
     );
 
+    test('PR1 review — Fix B: cancel AFTER discardWorkout server call returns '
+        'success — commit wins, state ends AsyncData(null), Hive cleared, no '
+        'restoration', () async {
+      // Reviewer finding (mirrors C1 saveCommitted): the discard cancel
+      // guard at `discardWorkout:782` has no `discardCommitted` equivalent.
+      // If `cancelLoading()` fires AFTER `_repo.discardWorkout()` succeeds
+      // but BEFORE `_localStorage.clearActiveWorkout()` runs, the cancel
+      // check intercepts `state = result`, restores the workout visually,
+      // but the server row is already soft-deleted. The user now sees a
+      // "recoverable" workout that the server considers gone.
+      //
+      // Fix: introduce `var discardCommitted = false;` flipped immediately
+      // after the server call returns success. The post-guard cancel check
+      // becomes `if (_cancelRequested && !discardCommitted)`. When cancel
+      // fires post-commit, fall through to `state = result` (which is
+      // `AsyncData(null)`) and let the screen redirect home as it would
+      // on a normal discard.
+      final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(initial);
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+
+      // Server call resolves on demand so we can interleave the cancel.
+      final discardCompleter = Completer<void>();
+      when(
+        () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+      ).thenAnswer((_) => discardCompleter.future);
+
+      // Hive clear hangs until we let it through — this gives us a window
+      // between "server committed" and "Hive cleared" to fire the cancel.
+      final clearCompleter = Completer<void>();
+      when(
+        () => mockStorage.clearActiveWorkout(),
+      ).thenAnswer((_) => clearCompleter.future);
+
+      await container.read(activeWorkoutProvider.future);
+
+      // 1. Kick off discard — guard advances into the server call.
+      final discardFuture = container
+          .read(activeWorkoutProvider.notifier)
+          .discardWorkout();
+
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+
+      // 2. Server call SUCCEEDS — discardCommitted flips true inside the
+      //    guard. Hive clear is still pending.
+      discardCompleter.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      // 3. Cancel fires NOW — post-commit. The cancel guard must be
+      //    skipped because the server delete already happened: the
+      //    workout is gone server-side and restoring locally would be
+      //    a "phantom recovery" pointing at a deleted row.
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+
+      // 4. Let Hive clear complete and the guard resolve.
+      clearCompleter.complete();
+      await discardFuture;
+      await Future<void>.delayed(Duration.zero);
+
+      final afterComplete = container.read(activeWorkoutProvider);
+      expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(
+        afterComplete.value,
+        isNull,
+        reason:
+            'Cancel after a successful discard must NOT restore the '
+            'workout — the server row is already soft-deleted, and the '
+            'screen relies on this null transition to redirect home.',
+      );
+      // Hive must have been cleared as part of the normal discard path.
+      verify(() => mockStorage.clearActiveWorkout()).called(1);
+    });
+
     test(
       'unauthenticated: state becomes AsyncError and no analytics event fires',
       () async {
@@ -3420,51 +3497,68 @@ void main() {
       verify(() => mockStorage.clearActiveWorkout()).called(1);
     });
 
-    test(
-      'state is NOT clobbered when in-flight discardWorkout completes after cancel',
-      () async {
-        final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            makeAsyncContainer(initial);
-        addTearDown(container.dispose);
+    test('PR1 review — Fix B: cancel BEFORE discardWorkout server call returns '
+        'AND the server then FAILS — state stays restored (cancel wins '
+        'pre-commit, discard analogue of C1 pre-commit-fail)', () async {
+      // Pre-commit cancel semantic for discard: when cancelLoading() runs
+      // while the server delete is in-flight AND the delete subsequently
+      // throws (so nothing committed server-side), the user's local
+      // workout must be preserved exactly as cancelLoading() restored it.
+      // The guard's AsyncError result must NOT overwrite the restored
+      // AsyncData. Symmetric to the C1 pre-commit-fail test for finish.
+      //
+      // Pre-Fix-B this test asserted that ANY in-flight cancel preserved
+      // state, even when the server eventually succeeded — which produced
+      // a "phantom recovery" of a workout the server had already
+      // soft-deleted. Fix B narrowed the contract: cancel only wins when
+      // the server delete did NOT commit. The success path is covered by
+      // the dedicated Fix B post-commit test in the discardWorkout group.
+      final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(initial);
+      addTearDown(container.dispose);
 
-        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
 
-        final discardCompleter = Completer<void>();
-        when(
-          () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
-        ).thenAnswer((_) => discardCompleter.future);
-        when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
+      final discardCompleter = Completer<void>();
+      when(
+        () => mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+      ).thenAnswer((_) => discardCompleter.future);
+      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
 
-        await container.read(activeWorkoutProvider.future);
+      await container.read(activeWorkoutProvider.future);
 
-        // 1. Start discardWorkout (don't await).
-        final discardFuture = container
-            .read(activeWorkoutProvider.notifier)
-            .discardWorkout();
+      // 1. Start discardWorkout (don't await).
+      final discardFuture = container
+          .read(activeWorkoutProvider.notifier)
+          .discardWorkout();
 
-        await Future<void>.delayed(Duration.zero);
-        expect(container.read(activeWorkoutProvider).isLoading, isTrue);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(activeWorkoutProvider).isLoading, isTrue);
 
-        // 2. Cancel loading.
-        container.read(activeWorkoutProvider.notifier).cancelLoading();
-        final afterCancel = container.read(activeWorkoutProvider);
-        expect(afterCancel, isA<AsyncData<ActiveWorkoutState?>>());
-        expect(afterCancel.value, isNotNull);
-        expect(afterCancel.value!.workout.id, initial.workout.id);
+      // 2. Cancel loading — restores state to the prior workout.
+      container.read(activeWorkoutProvider.notifier).cancelLoading();
+      final afterCancel = container.read(activeWorkoutProvider);
+      expect(afterCancel, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(afterCancel.value, isNotNull);
+      expect(afterCancel.value!.workout.id, initial.workout.id);
 
-        // 3. Let the in-flight future complete.
-        discardCompleter.complete();
-        await discardFuture;
-        await Future<void>.delayed(Duration.zero);
+      // 3. Server delete then FAILS — discardCommitted stays false, so
+      //    the cancel-after-guard branch is taken and state isn't
+      //    clobbered. Hive must NOT have been cleared either (C2 ordering).
+      discardCompleter.completeError(
+        const app.DatabaseException('rls denied', code: '403'),
+      );
+      await discardFuture;
+      await Future<void>.delayed(Duration.zero);
 
-        // 4. State should STILL be restored, not AsyncData(null).
-        final afterComplete = container.read(activeWorkoutProvider);
-        expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
-        expect(afterComplete.value, isNotNull);
-        expect(afterComplete.value!.workout.id, initial.workout.id);
-      },
-    );
+      // 4. State must STILL be restored, not AsyncError or AsyncData(null).
+      final afterComplete = container.read(activeWorkoutProvider);
+      expect(afterComplete, isA<AsyncData<ActiveWorkoutState?>>());
+      expect(afterComplete.value, isNotNull);
+      expect(afterComplete.value!.workout.id, initial.workout.id);
+      verifyNever(() => mockStorage.clearActiveWorkout());
+    });
 
     test('PR1 — C4: cancelLoading during startWorkout (no prior state) emits '
         'AsyncData(null) so the screen falls through to /home', () async {
