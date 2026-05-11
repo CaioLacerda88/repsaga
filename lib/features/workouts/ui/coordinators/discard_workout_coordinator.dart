@@ -25,11 +25,46 @@ class DiscardWorkoutCoordinator {
   /// already open (or vice-versa).
   bool _isShowingDialog = false;
 
+  /// True while a `discardWorkout()` future is in-flight inside [show]. The
+  /// distinction matters for the PR-3 S1 fix: when `cancelLoading` restores
+  /// state mid-discard, we want to clear [_isShowingDialog] WITHOUT having
+  /// to wait for the held network. The cleared flag lets the user re-open
+  /// the discard dialog immediately; the still-in-flight original call
+  /// finishes silently in the background (its post-await state poll bails
+  /// out cleanly when it sees state has been restored).
+  bool _awaitingDiscardResult = false;
+
   /// Show the discard confirmation dialog and, on confirm, run the discard
   /// notifier action and navigate home.
   ///
   /// Idempotent within a single dialog lifecycle — concurrent invocations
   /// while a dialog is already up are no-ops.
+  ///
+  /// **PR-3 (S1) — re-entrance window after cancel-mid-discard.** When
+  /// `cancelLoading` fires while `discardWorkout()` is still awaiting a
+  /// stalled DELETE, the notifier restores the active-workout state
+  /// immediately (`AsyncData(non-null)`) so the user sees their workout
+  /// re-appear. The await on `discardWorkout()` here, however, stays
+  /// suspended until the held network call eventually resolves — and
+  /// without the fix `_isShowingDialog` would stay `true` for the
+  /// duration of the held call. Any subsequent discard tap during that
+  /// window would silently no-op on the re-entrance guard, even though
+  /// the screen is back to a fully interactive state.
+  ///
+  /// Fix shape (Option B in `BUGS.md` PR-3 / S1): the screen calls
+  /// [notifyStateChanged] from a `ref.listen` on `activeWorkoutProvider`.
+  /// Whenever state transitions back to `AsyncData(non-null)` while a
+  /// discard call is in flight, the coordinator clears [_isShowingDialog]
+  /// even though the `await` is still parked. The still-in-flight call
+  /// observes the cleared flag via [_awaitingDiscardResult] and skips the
+  /// success-path navigation; its `finally` re-clears the (already-false)
+  /// flag harmlessly.
+  ///
+  /// Option A (state-poll post-await) was rejected because the post-await
+  /// runs AFTER the held network completes, which means a re-entrance
+  /// during the stall would still see `_isShowingDialog == true`. Option
+  /// B fires from the state-listener's synchronous notification path,
+  /// which IS observable during the stall.
   Future<void> show(
     BuildContext context,
     WidgetRef ref,
@@ -46,8 +81,22 @@ class DiscardWorkoutCoordinator {
         elapsedDuration: elapsed,
       );
       if (shouldDiscard == true && context.mounted) {
-        await ref.read(activeWorkoutProvider.notifier).discardWorkout();
+        _awaitingDiscardResult = true;
+        try {
+          await ref.read(activeWorkoutProvider.notifier).discardWorkout();
+        } finally {
+          _awaitingDiscardResult = false;
+        }
+
+        // PR-3 S1 — if [notifyStateChanged] cleared the guard while we
+        // were awaiting (cancel-mid-discard restored state), the second
+        // call's dialog has already opened on top of this stale call's
+        // suspended state. Either way, the right action here is to bail
+        // out of the success path: a non-null state means the workout
+        // is back, so we must not navigate home.
         if (!context.mounted) return;
+        final restored = ref.read(activeWorkoutProvider).value != null;
+        if (restored) return;
 
         final result = ref.read(activeWorkoutProvider);
         if (result.hasError) {
@@ -63,6 +112,22 @@ class DiscardWorkoutCoordinator {
         context.go('/home');
       }
     } finally {
+      _isShowingDialog = false;
+    }
+  }
+
+  /// Hook called by the hosting screen when [activeWorkoutProvider] emits
+  /// a new state. When a discard call is in flight AND the new state is
+  /// `AsyncData(non-null)`, that means `cancelLoading` restored the
+  /// workout — clear the re-entrance guard so the user can re-discard
+  /// without waiting on the held network.
+  ///
+  /// Safe to call on every state change; it only mutates the flag inside
+  /// the narrow window. Idempotent.
+  void notifyStateChanged(AsyncValue<ActiveWorkoutState?> newState) {
+    if (!_awaitingDiscardResult) return;
+    if (newState.value != null) {
+      // State restored mid-discard — the user can retry. Drop the guard.
       _isShowingDialog = false;
     }
   }
