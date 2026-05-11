@@ -577,13 +577,30 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
             continue;
           }
           // After the leader: walk forward. Stop the walk when we hit a
-          // completed set OR a customized weight; everything from that
-          // point on stays as-is.
+          // completed set OR an UNINITIALIZED follower (`weight: null`)
+          // OR a customized weight; everything from that point on stays
+          // as-is.
           if (s.isCompleted) {
             newSets.addAll(e.sets.sublist(i));
             break;
           }
-          if ((s.weight ?? 0) != oldWeight) {
+          // PR-4 / M2 — distinguish `null` follower weight from `0`. The
+          // pre-fix expression `(s.weight ?? 0) != oldWeight` collapsed
+          // null to 0, so when `oldWeight == 0` (e.g. the user first
+          // dialled in a working weight on the leader) and a follower
+          // had `weight: null` (uninitialized — e.g. routine-prefilled
+          // with no weight history), the walk overwrote it. That can
+          // produce a false PR if the propagated value beats the
+          // user's true history. A `null`-weighted follower is
+          // semantically "not yet set" / "customized" and ENDS the
+          // formation walk. Explicit nullable read makes the contract
+          // visible.
+          final followerWeight = s.weight;
+          if (followerWeight == null) {
+            newSets.addAll(e.sets.sublist(i));
+            break;
+          }
+          if (followerWeight != oldWeight) {
             newSets.addAll(e.sets.sublist(i));
             break;
           }
