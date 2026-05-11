@@ -78,12 +78,23 @@ final lastWorkoutSetsProvider = FutureProvider.autoDispose
 /// (weight/rep change, completion toggle) is cheap and avoids stale
 /// projections.
 ///
-/// **First-ever workout cache miss:** when `exercisePRsProvider` is still
-/// loading (or errors), this provider falls back to an empty
-/// `existingRecords` list. The resolver then projects every positive-load
-/// completed working set as a standing-PR — which is the correct semantic
-/// for an exercise the user has never trained before. As records load, the
-/// provider rebuilds and the projection sharpens.
+/// **PR data loading / error guard (PR-6 / M6).** While
+/// `exercisePRsProvider(exerciseId)` is `AsyncLoading` (or `AsyncError`),
+/// this provider returns a list of plain [PrRowState.none] displays — one
+/// per set, preserving the 1:1 alignment contract — instead of running the
+/// resolver against an empty `existingRecords` baseline. Pre-fix the empty
+/// fallback caused returning users with a slow `personal_records` fetch to
+/// see every completed working set briefly classified as a standing PR
+/// (gold stripe + bracket), then reclassified once data landed. Visual
+/// flicker, false predicted-PR celebration cue. The "first-ever workout"
+/// behavior is unaffected: when records actually load to `AsyncData([])`,
+/// the resolver runs as before and the first completed working set with
+/// positive load becomes the standing PR. Finish-time PR celebration is
+/// likewise unaffected — that path uses `pr_cache` directly via
+/// `PRDetectionService`, not this row provider. `AsyncError` collapses to
+/// the same `none` shape on purpose: we don't have authoritative baseline
+/// data, so we don't speculate. As records load, the provider rebuilds and
+/// rows reclassify naturally.
 final activeWorkoutRowDisplaysProvider = Provider.autoDispose
     .family<
       List<PrRowDisplay>,
@@ -102,11 +113,29 @@ final activeWorkoutRowDisplaysProvider = Provider.autoDispose
           exercise.workoutExercise.exercise?.equipmentType ??
           EquipmentType.bodyweight;
 
-      // Historical records: read-only snapshot. On loading or error we
-      // pass an empty list and let the resolver project against an empty
-      // baseline — first-ever-workout semantic kicks in naturally.
-      final existingRecords =
-          ref.watch(exercisePRsProvider(key.exerciseId)).value ?? const [];
+      // PR-6 / M6: gate on the AsyncValue's resolution state instead of
+      // `.value ?? []`. While the FIRST emission is in flight (or errored
+      // with no prior data) we return one `PrRowState.none` per set —
+      // preserving the 1:1 alignment contract — instead of feeding an
+      // empty baseline to the resolver and producing transient false
+      // standing-PR signals. A refresh that's still in flight while a
+      // prior `AsyncData` is held keeps using that stale value rather
+      // than blanking the rows; the resolver runs as before. As records
+      // arrive, Riverpod rebuilds this provider and rows reclassify
+      // naturally.
+      final prsAsync = ref.watch(exercisePRsProvider(key.exerciseId));
+      // `AsyncValue.value` is nullable: it returns null while the FIRST
+      // emission is in flight (loading with no prior data) and on error
+      // with no prior data. A refresh that overlays a stale `AsyncData`
+      // returns that stale value here, so we keep classifying with the
+      // last-known baseline rather than blanking the rows.
+      final existingRecords = prsAsync.value;
+      if (existingRecords == null) {
+        return List<PrRowDisplay>.unmodifiable([
+          for (var i = 0; i < exercise.sets.length; i++)
+            const PrRowDisplay.plain(PrRowState.none),
+        ]);
+      }
 
       return resolveRowDisplays(
         sets: exercise.sets,
