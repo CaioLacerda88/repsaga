@@ -1306,15 +1306,10 @@ class _DoneCell extends StatelessWidget {
       // box) routes to the outer detector and toggles. Pre-PR-2 H1
       // this region was unreachable.
       // PR-2 H1 — widen outer hit-test from 40dp to the full 52dp Container
-      // width (and keep height at 48dp). Material 2.5.5 / WCAG 2.5.5 require
-      // ≥48×48dp tappable areas; the prior 40dp horizontal was below floor
-      // for the most time-critical tap in the app (mark set complete). The
-      // visual ◆/✓ stays at 32dp via the inner SizedBox; only the slack
-      // hit-test region grows. `deferToChild` continues to route inner
-      // taps to the inner Checkbox / `_PredictedPrUncheckedMark` (gesture
-      // arena visits only the recognizer whose visual region was hit), so
-      // the wider outer detector cannot steal taps from the steppers
-      // beside it.
+      // width (and keep height at 48dp, the WCAG / Material floor). The
+      // visual ◆/✓ stays at 32dp via the inner SizedBox. `translucent`
+      // (not `deferToChild`) ensures the slack ring is live — see the
+      // detailed arena analysis above.
       child: Center(
         child: SizedBox(
           width: 52,
