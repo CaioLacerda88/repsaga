@@ -216,6 +216,11 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
       throw UnimplementedError('restoreSet is not stubbed for this test');
 
   @override
+  Map<String, int> get debugOriginalSetIndices => throw UnimplementedError(
+    'debugOriginalSetIndices getter is not stubbed for this test',
+  );
+
+  @override
   Future<void> copyLastSet(String workoutExerciseId, String setId) =>
       throw UnimplementedError('copyLastSet is not stubbed for this test');
 

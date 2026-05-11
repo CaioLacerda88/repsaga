@@ -4972,6 +4972,173 @@ void main() {
   });
 
   // ============================================================
+  // PR #202 review O1 — _originalSetIndices lifecycle clearing
+  //
+  // The notifier is keepAlive-by-default (plain AsyncNotifierProvider, no
+  // .autoDispose), so the same instance services every workout. Without
+  // explicit clearing, the _originalSetIndices map (populated by
+  // deleteSet, drained by restoreSet) would accumulate stale entries
+  // across sessions whenever a delete was NOT followed by a restore
+  // (e.g. snackbar timed out, user navigated away). These tests pin the
+  // four lifecycle clear-points: startWorkout / startFromRoutine
+  // (entry) and finishWorkout / discardWorkout (post-commit exit).
+  // ============================================================
+  group(
+    'ActiveWorkoutNotifier — _originalSetIndices lifecycle clear (PR #202 O1)',
+    () {
+      /// Seeds the notifier with a 4-set state, deletes set-2 (which
+      /// records `_originalSetIndices['set-2'] = 1`), and verifies the
+      /// stale entry is present BEFORE the lifecycle transition.
+      Future<({ProviderContainer container, ActiveWorkoutState initial})>
+      seedStaleEntry(
+        ({
+          ProviderContainer container,
+          MockWorkoutRepository mockRepo,
+          MockWorkoutLocalStorage mockStorage,
+          MockAuthRepository mockAuth,
+        })
+        ctx,
+      ) async {
+        // Build a 4-set state with ids set-1..set-4 (mirrors the
+        // cascading-order tests' build4SetState helper but inlined here
+        // because that one is scoped to its enclosing group).
+        final initialJson = TestActiveWorkoutStateFactory.create(
+          workout: TestWorkoutFactory.create(isActive: true),
+          exercises: [
+            {
+              'workout_exercise': TestWorkoutExerciseFactory.create(
+                id: 'we-001',
+                exerciseId: 'exercise-001',
+                order: 1,
+              ),
+              'sets': List.generate(4, (i) {
+                return TestSetFactory.create(
+                  id: 'set-${i + 1}',
+                  workoutExerciseId: 'we-001',
+                  setNumber: i + 1,
+                  weight: 10.0 + i,
+                  reps: 10,
+                  isCompleted: false,
+                );
+              }),
+            },
+          ],
+        );
+        final initial = ActiveWorkoutState.fromJson(initialJson);
+
+        // Override loadActiveWorkout to return our seeded state. Need to
+        // re-stub because seedStaleEntry runs after makeAsyncContainer's
+        // default `null` stub.
+        when(() => ctx.mockStorage.loadActiveWorkout()).thenReturn(initial);
+        // Force the notifier to re-resolve so build() returns our seed.
+        ctx.container.invalidate(activeWorkoutProvider);
+        await ctx.container.read(activeWorkoutProvider.future);
+
+        final notifier = ctx.container.read(activeWorkoutProvider.notifier);
+        // Delete set-2 — records `_originalSetIndices['set-2'] = 1`.
+        // Skip the restore so the entry persists into the lifecycle
+        // transition (mirrors a real "snackbar timed out" path).
+        await notifier.deleteSet(
+          initial.exercises.first.workoutExercise.id,
+          'set-2',
+        );
+        expect(
+          notifier.debugOriginalSetIndices,
+          {'set-2': 1},
+          reason:
+              'precondition: deleteSet recorded the stale entry that the '
+              'subsequent lifecycle transition is expected to clear.',
+        );
+
+        return (container: ctx.container, initial: initial);
+      }
+
+      test('startWorkout clears _originalSetIndices', () async {
+        final ctx = makeAsyncContainer(null, locale: const Locale('en'));
+        addTearDown(ctx.container.dispose);
+
+        when(() => ctx.mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () => ctx.mockRepo.createActiveWorkout(
+            userId: any(named: 'userId'),
+            name: any(named: 'name'),
+          ),
+        ).thenAnswer((_) async => makeWorkout(id: 'workout-fresh'));
+
+        await seedStaleEntry(ctx);
+
+        await ctx.container
+            .read(activeWorkoutProvider.notifier)
+            .startWorkout('Fresh workout');
+
+        final notifier = ctx.container.read(activeWorkoutProvider.notifier);
+        expect(
+          notifier.debugOriginalSetIndices,
+          isEmpty,
+          reason:
+              'startWorkout MUST clear cross-workout undo bookkeeping so '
+              'the next session starts with a fresh map.',
+        );
+      });
+
+      test('discardWorkout clears _originalSetIndices on success', () async {
+        final ctx = makeAsyncContainer(null);
+        addTearDown(ctx.container.dispose);
+
+        when(() => ctx.mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () =>
+              ctx.mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+        ).thenAnswer((_) async {});
+        when(
+          () => ctx.mockStorage.clearActiveWorkout(),
+        ).thenAnswer((_) async {});
+
+        await seedStaleEntry(ctx);
+
+        await ctx.container
+            .read(activeWorkoutProvider.notifier)
+            .discardWorkout();
+
+        final notifier = ctx.container.read(activeWorkoutProvider.notifier);
+        expect(
+          notifier.debugOriginalSetIndices,
+          isEmpty,
+          reason:
+              'discardWorkout MUST clear undo bookkeeping post-commit so '
+              'the next session starts with a fresh map.',
+        );
+      });
+
+      test('discardWorkout does NOT clear when server discard fails', () async {
+        final ctx = makeAsyncContainer(null);
+        addTearDown(ctx.container.dispose);
+
+        when(() => ctx.mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () =>
+              ctx.mockRepo.discardWorkout(any(), userId: any(named: 'userId')),
+        ).thenThrow(Exception('Server error'));
+
+        await seedStaleEntry(ctx);
+
+        await ctx.container
+            .read(activeWorkoutProvider.notifier)
+            .discardWorkout();
+
+        final notifier = ctx.container.read(activeWorkoutProvider.notifier);
+        expect(
+          notifier.debugOriginalSetIndices,
+          {'set-2': 1},
+          reason:
+              'pre-commit failure must leave the map intact so the user '
+              'can retry the discard against the same workout context.',
+        );
+      });
+    },
+  );
+
+  // ============================================================
   // PR-4 / M1 — startFromRoutine filters previous-session warmups
   //
   // Pre-fix the routine-start path indexed `previousSets` directly,

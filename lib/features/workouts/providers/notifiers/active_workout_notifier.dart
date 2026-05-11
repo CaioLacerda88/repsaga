@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:ui' show Locale;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -138,6 +139,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   ///     and the user has moved on.
   final Map<String, int> _originalSetIndices = <String, int>{};
 
+  /// Test-only window into [_originalSetIndices] for verifying lifecycle
+  /// clearing (PR #202 review O1). Production code MUST NOT consume this
+  /// — the map is internal bookkeeping owned by `deleteSet` / `restoreSet`
+  /// and the lifecycle clear-points (`startWorkout`, `startFromRoutine`,
+  /// `finishWorkout` post-commit, `discardWorkout` post-commit). Returns
+  /// an unmodifiable view to prevent accidental mutation from tests.
+  @visibleForTesting
+  Map<String, int> get debugOriginalSetIndices =>
+      Map<String, int>.unmodifiable(_originalSetIndices);
+
   @override
   FutureOr<ActiveWorkoutState?> build() {
     _repo = ref.watch(workoutRepositoryProvider);
@@ -221,6 +232,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
     _cancelRequested = false;
+    // PR #202 review O1: clear cross-workout bookkeeping. The notifier
+    // is keepAlive-by-default (plain AsyncNotifierProvider, no
+    // .autoDispose), so the instance persists across
+    // start/finish/discard cycles. Without explicit clearing, the
+    // _originalSetIndices map would accumulate stale entries across
+    // sessions — unbounded growth + a (UUID-improbable but possible) id
+    // collision risk if the same set id ever recurred. Cleared at every
+    // lifecycle entry point that opens a fresh workout context.
+    _originalSetIndices.clear();
     final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
@@ -267,6 +287,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
     _cancelRequested = false;
+    // PR #202 review O1: see startWorkout for rationale.
+    _originalSetIndices.clear();
     final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
@@ -949,6 +971,12 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // true — the server delete already happened.
       discardCommitted = true;
       await _localStorage.clearActiveWorkout();
+      // PR #202 review O1: server delete + local clear are both committed
+      // → the workout context is gone. Clear the cross-workout undo map
+      // here (post-commit) so a pre-commit failure leaves it intact for
+      // a retry against the same workout, but a successful discard
+      // doesn't leak stale entries into the next start.
+      _originalSetIndices.clear();
 
       final elapsedSeconds = DateTime.now()
           .toUtc()
@@ -1131,6 +1159,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // true and the cancel-after-commit semantic still applies — the
         // server-side write has already happened.
         saveCommitted = true;
+        // PR #202 review O1: workout is durable server-side → the undo
+        // map's contents are no longer relevant. Clear here (post-commit)
+        // so the next session starts with a fresh map regardless of
+        // whether finishWorkout proceeds normally or short-circuits via
+        // the post-guard cancel-check below. Mirrors the discardWorkout
+        // placement (server-commit → clear). The offline-queue branch
+        // does NOT clear: an offline save is not durable and the user
+        // may continue editing the same workout in a degraded state
+        // until a retry succeeds.
+        _originalSetIndices.clear();
       } catch (e) {
         // Classify at the catch site so terminal errors surface to the user
         // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
