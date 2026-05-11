@@ -253,7 +253,7 @@
   "matchedLastSet": "= série anterior",
 
   "discardWorkoutTitle": "Descartar Sessão?",
-  "discardWorkoutContent": "Você está na jornada há {duration}. Descarte agora e o trabalho se perde.",
+  "discardWorkoutContent": "Você está no caminho há {duration}. Descarte agora e o trabalho se perde.",
 
   "finishWorkoutTitle": "Selar esta sessão?",
   "incompleteSetsWarning": "{count, plural, =1{Você tem 1 série incompleta} other{Você tem {count} séries incompletas}}",

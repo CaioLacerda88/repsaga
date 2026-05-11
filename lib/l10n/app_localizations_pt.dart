@@ -762,7 +762,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String discardWorkoutContent(String duration) {
-    return 'Você está na jornada há $duration. Descarte agora e o trabalho se perde.';
+    return 'Você está no caminho há $duration. Descarte agora e o trabalho se perde.';
   }
 
   @override
