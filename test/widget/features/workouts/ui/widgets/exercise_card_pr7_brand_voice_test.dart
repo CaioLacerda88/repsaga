@@ -263,6 +263,21 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // Landmark guard (reviewer PR #208 follow-up): assert the bottom
+        // sheet actually opened before checking its contents. Without this,
+        // a future change to the Semantics label format above would leave
+        // `tester.tap` finding nothing, `pumpAndSettle` returning
+        // immediately, and the empty-row assertions passing trivially —
+        // a vacuous test. Pin a landmark widget unique to the sheet.
+        expect(
+          find.byType(DraggableScrollableSheet),
+          findsOneWidget,
+          reason:
+              'detail bottom sheet did not open — the header tap missed. '
+              'Check the Semantics label regex above against the current '
+              'shape in `_ExerciseCardHeader`.',
+        );
+
         // The PR section's empty-row renders "No records yet" — pin its
         // presence and pin the absence of the generic trophy emoji icon.
         expect(find.text('No records yet'), findsOneWidget);

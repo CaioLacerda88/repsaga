@@ -643,13 +643,17 @@ class _AddSetButton extends StatelessWidget {
         container: true,
         explicitChildNodes: true,
         identifier: 'workout-add-set',
+        // Foreground (icon + label) intentionally NOT set here — inherits
+        // from the global `OutlinedButtonTheme.foregroundColor` (set to
+        // `AppColors.hotViolet` in `app_theme.dart`). Letting the theme
+        // own foreground means a disabled state (if this button ever
+        // gates) will dim correctly via the theme's resolver, instead of
+        // being pinned at full opacity by an explicit override here.
+        // Reviewer PR #208 follow-up.
         child: OutlinedButton.icon(
           onPressed: onPressed,
-          icon: const Icon(Icons.add, size: 20, color: AppColors.hotViolet),
-          label: Text(
-            AppLocalizations.of(context).addSet,
-            style: const TextStyle(color: AppColors.hotViolet),
-          ),
+          icon: const Icon(Icons.add, size: 20),
+          label: Text(AppLocalizations.of(context).addSet),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
             backgroundColor: AppColors.hotViolet.withValues(alpha: 0.12),
