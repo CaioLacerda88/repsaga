@@ -488,6 +488,41 @@ void main() {
           expect(find.bySemanticsLabel('Dismiss rest timer'), findsOneWidget);
         },
       );
+
+      // -------------------------------------------------------------------
+      // PR-5 — Dismiss hint readable contrast.
+      //
+      // Pre-fix the "Tap anywhere to dismiss" hint rendered at α=0.3 on
+      // the near-black abyss scrim — effectively invisible. Post-fix
+      // α=0.6, lifting the hint above the visibility threshold while
+      // keeping it quieter than the primary affordances.
+      // -------------------------------------------------------------------
+      testWidgets(
+        'PR-5 — tapToDismiss hint renders with alpha >= 0.55 for readable '
+        'contrast on the dark scrim',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          final hint = tester.widget<Text>(
+            find.text('Tap anywhere to dismiss'),
+          );
+          final alpha = hint.style?.color?.a ?? 0;
+          expect(
+            alpha,
+            greaterThanOrEqualTo(0.55),
+            reason:
+                'PR-5: the dismiss hint must render at alpha ≥ 0.55 (got '
+                '$alpha) so the affordance is readable on the abyss '
+                'scrim. Pre-fix was 0.3 — invisible. Bumping below 0.55 '
+                'regresses the readability fix.',
+          );
+        },
+      );
     });
   });
 }

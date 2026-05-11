@@ -266,11 +266,18 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                   // label AND a redundant "Tap anywhere to dismiss" leaf.
                   // Same pattern as the exercise-name fix above.
                   ExcludeSemantics(
+                    // PR-5 — dismiss hint α bumped 0.3 -> 0.6 for readable
+                    // contrast against the near-black abyss scrim
+                    // (`abyss #0D0319 @ 87%`). Pre-fix the hint was
+                    // essentially invisible — users had to discover the
+                    // tap-anywhere dismiss by accident. 0.6 sits below
+                    // body-text full strength so the hint stays a hint
+                    // (not a competing CTA) while clearing the AA floor.
                     child: Text(
                       l10n.tapToDismiss,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.3,
+                          alpha: 0.6,
                         ),
                       ),
                     ),
