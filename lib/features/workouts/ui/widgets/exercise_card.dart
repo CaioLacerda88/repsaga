@@ -187,11 +187,28 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
   /// Compute defaults for a brand-new set on this exercise.
   ///
   /// Priority chain:
-  ///   1. Previous session set at the matching position (`lastSets[index]`).
+  ///   1. Previous session WORKING set at the matching position
+  ///      (`workingLastSets[index]`). Warmups from the previous session are
+  ///      filtered OUT before index-matching — see PR-4 / M1 below.
   ///   2. Last set in current session (skip warmup→working — never carry
   ///      warmup weight forward into a working set).
   ///   3. Equipment-type defaults from [defaultSetValues].
   ///   4. Bare 0/0 fallback (when none of the above produce a value).
+  ///
+  /// **PR-4 / M1 — warmup filter on previous-session pre-fill.** Pre-fix
+  /// `lastSets` was indexed directly, so a user whose previous session was
+  /// `[warmup@40, warmup@60, working@100]` got pre-filled `[40, 60, 100]`
+  /// for their new set #1 — they had to manually bump every working set
+  /// up to their actual working weight every session. Per Q2 decision
+  /// (FitNotes / Hevy benchmarks), warmup sets are NOT performance data:
+  /// FitNotes treats warmup as a separate type, Hevy's calculator
+  /// recalculates warmup from the working target. RepSaga's smaller fix
+  /// here is to filter `lastSets` by `setType != SetType.warmup` BEFORE
+  /// the index-match — so the matching working-set index from the
+  /// previous session drives the default. If ALL previous sets were
+  /// warmups (filter returns empty), Priority 1 produces no value and we
+  /// fall through to Priority 2 (current-session) or Priority 3
+  /// (equipment defaults). See `BUGS.md` PR-4 / M1.
   ({double? weight, int? reps}) _computeNewSetDefaults({
     required List<ExerciseSet> currentSets,
     required List<ExerciseSet> lastSets,
@@ -202,9 +219,14 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     double? defaultWeight;
     int? defaultReps;
 
-    // Priority 1: previous session at matching position
-    final lastSetForNewRow = newSetIndex < lastSets.length
-        ? lastSets[newSetIndex]
+    // Priority 1: previous session WORKING set at matching position.
+    // Warmups are filtered out so a `[warmup, warmup, working]` previous
+    // session pre-fills working values from set #1, not warmup weights.
+    final workingLastSets = lastSets
+        .where((s) => s.setType != SetType.warmup)
+        .toList(growable: false);
+    final lastSetForNewRow = newSetIndex < workingLastSets.length
+        ? workingLastSets[newSetIndex]
         : null;
 
     if (lastSetForNewRow != null) {

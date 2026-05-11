@@ -344,4 +344,18 @@ export const TEST_USERS = {
     email: 'e2e-smoke-workout-discard-reentry@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // PR-4 audit fixes — set defaults + cascading undo
+  // -------------------------------------------------------------------------
+  // smokeWorkoutPr4CascadingUndo: dedicated user for the cascading-undo
+  // restore-order E2E (M3). Drives swipe-delete x2 + undo x2 sequence that
+  // depends on the snackbar timing window. Lapsed state so startEmptyWorkout
+  // finds "Quick workout" CTA. Isolated from other workout-swipe users so
+  // the M3 test can't race the PR-2 swipe/undo tests under workers > 1
+  // (both use the same swipe + snackbar machinery).
+  smokeWorkoutPr4CascadingUndo: {
+    email: 'e2e-smoke-workout-pr4-cascading-undo@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

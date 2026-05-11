@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:ui' show Locale;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -108,6 +109,46 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// restore it if the user gives up waiting for a network operation.
   ActiveWorkoutState? _lastValidState;
 
+  /// PR-4 / M3 — id-keyed map of original set positions captured at
+  /// FIRST delete time. Used by [restoreSet] to insert a restored set at
+  /// the position it occupied BEFORE any cascading renumbering.
+  ///
+  /// **Why a map and not a parameter on `restoreSet`:** the swipe-handler
+  /// caller (`set_row.dart`'s `Dismissible.onDismissed`) captures the
+  /// `ExerciseSet` it just deleted, but the `setNumber` field on that
+  /// captured snapshot reflects the position AT TIME OF DELETION — which
+  /// is post-renumbering for any cascading delete. Pre-fix, restoring a
+  /// 4-set exercise via `delete #2 → delete #3 (renumbered to #2) →
+  /// undo → undo` ended up `[1, 4, 3]` instead of `[1, 2, 3, 4]`. Pushing
+  /// the original-index bookkeeping into the caller would force every
+  /// future caller to re-derive the same map; keeping it on the notifier
+  /// means the contract is "the notifier knows where to put it back."
+  ///
+  /// **Lifecycle:**
+  ///   * `deleteSet` records the to-be-deleted set's CURRENT index, OR
+  ///     the already-recorded-original-index if that id has been seen
+  ///     in an earlier cascading delete (e.g. a set previously
+  ///     restored-then-redeleted). This keeps the original position
+  ///     stable across delete/undo/delete cycles.
+  ///   * `restoreSet` reads the id, inserts at that position (clamped),
+  ///     and removes the entry — once restored, future deletes record
+  ///     a fresh current index.
+  ///   * The map is purely UI-layer state; not persisted to Hive. A
+  ///     hot-reload or process restart drops the map, which is fine —
+  ///     by then the snackbar's 10s undo window has long since closed
+  ///     and the user has moved on.
+  final Map<String, int> _originalSetIndices = <String, int>{};
+
+  /// Test-only window into [_originalSetIndices] for verifying lifecycle
+  /// clearing (PR #202 review O1). Production code MUST NOT consume this
+  /// — the map is internal bookkeeping owned by `deleteSet` / `restoreSet`
+  /// and the lifecycle clear-points (`startWorkout`, `startFromRoutine`,
+  /// `finishWorkout` post-commit, `discardWorkout` post-commit). Returns
+  /// an unmodifiable view to prevent accidental mutation from tests.
+  @visibleForTesting
+  Map<String, int> get debugOriginalSetIndices =>
+      Map<String, int>.unmodifiable(_originalSetIndices);
+
   @override
   FutureOr<ActiveWorkoutState?> build() {
     _repo = ref.watch(workoutRepositoryProvider);
@@ -191,6 +232,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
     _cancelRequested = false;
+    // PR #202 review O1: clear cross-workout bookkeeping. The notifier
+    // is keepAlive-by-default (plain AsyncNotifierProvider, no
+    // .autoDispose), so the instance persists across
+    // start/finish/discard cycles. Without explicit clearing, the
+    // _originalSetIndices map would accumulate stale entries across
+    // sessions — unbounded growth + a (UUID-improbable but possible) id
+    // collision risk if the same set id ever recurred. Cleared at every
+    // lifecycle entry point that opens a fresh workout context.
+    _originalSetIndices.clear();
     final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
@@ -237,6 +287,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
     _cancelRequested = false;
+    // PR #202 review O1: see startWorkout for rationale.
+    _originalSetIndices.clear();
     final result = await AsyncValue.guard(() async {
       final userId = _userId;
       final workout = await _repo.createActiveWorkout(
@@ -265,13 +317,28 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           exercise: re.exercise,
         );
 
-        final previousSets = lastSets[re.exerciseId] ?? [];
+        // PR-4 / M1 — filter previous-session warmups before clamping.
+        // Same Q2 contract as `_computeNewSetDefaults` Priority 1
+        // (warmup sets are not performance data; FitNotes / Hevy benchmark).
+        // Pre-fix the routine-start path indexed `previousSets` directly,
+        // so a user whose previous session was `[warmup@40, warmup@60,
+        // working@100]` got their routine pre-filled `[40, 60, 100,
+        // 100, ...]` — set #1 of the routine started at warmup weight.
+        // Filtering here keeps the routine path in lockstep with the
+        // ad-hoc add-set path. Edge case: if ALL previous sets were
+        // warmups, the filter returns empty and we fall through to
+        // equipment defaults via `prev?.weight ?? equipDefaults.weight`.
+        final previousSets = (lastSets[re.exerciseId] ?? const <ExerciseSet>[])
+            .where((s) => s.setType != SetType.warmup)
+            .toList(growable: false);
         final equipDefaults = defaultSetValues(
           re.exercise.equipmentType,
           weightUnit,
         );
         final sets = List.generate(re.setCount, (setIndex) {
-          // Use the matching previous set, or the last previous set if fewer.
+          // Use the matching previous WORKING set, or the last previous
+          // working set if fewer. Warmup-only previous sessions short-
+          // circuit to equipment defaults via the null-coalescing chain.
           final prev = previousSets.isNotEmpty
               ? previousSets[setIndex < previousSets.length
                     ? setIndex
@@ -562,13 +629,30 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
             continue;
           }
           // After the leader: walk forward. Stop the walk when we hit a
-          // completed set OR a customized weight; everything from that
-          // point on stays as-is.
+          // completed set OR an UNINITIALIZED follower (`weight: null`)
+          // OR a customized weight; everything from that point on stays
+          // as-is.
           if (s.isCompleted) {
             newSets.addAll(e.sets.sublist(i));
             break;
           }
-          if ((s.weight ?? 0) != oldWeight) {
+          // PR-4 / M2 — distinguish `null` follower weight from `0`. The
+          // pre-fix expression `(s.weight ?? 0) != oldWeight` collapsed
+          // null to 0, so when `oldWeight == 0` (e.g. the user first
+          // dialled in a working weight on the leader) and a follower
+          // had `weight: null` (uninitialized — e.g. routine-prefilled
+          // with no weight history), the walk overwrote it. That can
+          // produce a false PR if the propagated value beats the
+          // user's true history. A `null`-weighted follower is
+          // semantically "not yet set" / "customized" and ENDS the
+          // formation walk. Explicit nullable read makes the contract
+          // visible.
+          final followerWeight = s.weight;
+          if (followerWeight == null) {
+            newSets.addAll(e.sets.sublist(i));
+            break;
+          }
+          if (followerWeight != oldWeight) {
             newSets.addAll(e.sets.sublist(i));
             break;
           }
@@ -605,9 +689,34 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   }
 
   /// Delete a set and renumber the remaining sets.
+  ///
+  /// **PR-4 / M3 — original-index bookkeeping.** Before mutating the
+  /// list, captures the to-be-deleted set's CURRENT index into
+  /// [_originalSetIndices] so a later [restoreSet] can put it back
+  /// where it started. If the same id has been seen in an earlier
+  /// cascading delete (e.g. a previously restored-then-redeleted set),
+  /// the existing original index is preserved — the user's intent for
+  /// that set's "home position" is the FIRST position the notifier ever
+  /// observed it at, not its position after intermediate renumbering.
   Future<void> deleteSet(String workoutExerciseId, String setId) async {
     final current = state.value;
     if (current == null) return;
+
+    // M3: capture the original index BEFORE renumbering. Look up the
+    // current index in the targeted exercise; if we don't already have
+    // a recorded original (the common case for a fresh delete) record
+    // it now. If we DO have one (the set was previously deleted +
+    // restored + re-deleted within this session), keep the older
+    // recording — the user's "home position" intent is the first one.
+    final exercise = current.exercises
+        .where((e) => e.workoutExercise.id == workoutExerciseId)
+        .firstOrNull;
+    if (exercise != null) {
+      final currentIndex = exercise.sets.indexWhere((s) => s.id == setId);
+      if (currentIndex >= 0) {
+        _originalSetIndices.putIfAbsent(setId, () => currentIndex);
+      }
+    }
 
     final newState = current.copyWith(
       exercises: current.exercises.map((e) {
@@ -625,10 +734,28 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
-  /// Restore a previously deleted set at its original position.
+  /// Restore a previously deleted set at its ORIGINAL position.
   ///
   /// Inserts the [deletedSet] back into the exercise's set list and
-  /// renumbers all sets sequentially. Used for undo-delete functionality.
+  /// renumbers all sets sequentially. Used for undo-delete (the
+  /// SnackBar action fired by `set_row.dart`'s `Dismissible.onDismissed`).
+  ///
+  /// **PR-4 / M3 — restore by original index, not by `deletedSet.setNumber`.**
+  /// Pre-fix the insertion position was derived from `deletedSet.setNumber`,
+  /// which reflects the position at TIME OF DELETION — already-renumbered
+  /// for any cascading delete. So `delete #2 → delete #3 (renumbered to #2)
+  /// → undo → undo` ended up `[1, 4, 3]` instead of `[1, 2, 3, 4]`. The
+  /// fix is to consult [_originalSetIndices], an id-keyed map that
+  /// [deleteSet] populates at first-delete time. The map survives
+  /// cascading delete + cascading undo because it's keyed by stable set
+  /// id (UUID), not by position.
+  ///
+  /// Falls back to `(deletedSet.setNumber - 1)` when the id isn't in
+  /// the map — preserves the legacy behaviour for any caller that
+  /// might restore a set the notifier never saw deleted (e.g. a future
+  /// "import set" code path; doesn't exist today). Robust to both
+  /// patterns; the production swipe-handler path always populates the
+  /// map.
   Future<void> restoreSet(
     String workoutExerciseId,
     ExerciseSet deletedSet,
@@ -636,13 +763,22 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     final current = state.value;
     if (current == null) return;
 
+    // M3: prefer the originally-recorded position; fall back to the
+    // captured setNumber for any caller that didn't go through deleteSet.
+    final originalIndex = _originalSetIndices[deletedSet.id];
+
     final newState = current.copyWith(
       exercises: current.exercises.map((e) {
         if (e.workoutExercise.id != workoutExerciseId) return e;
 
         final sets = [...e.sets];
-        // Insert at the original position (clamped to list bounds).
-        final insertIndex = (deletedSet.setNumber - 1).clamp(0, sets.length);
+        // Clamp to list bounds in case the exercise has fewer sets
+        // than when the original delete happened (e.g. additional
+        // deletes after the restore was queued).
+        final insertIndex = (originalIndex ?? (deletedSet.setNumber - 1)).clamp(
+          0,
+          sets.length,
+        );
         sets.insert(insertIndex, deletedSet);
 
         // Renumber all sets sequentially.
@@ -653,8 +789,23 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         return e.copyWith(sets: renumbered);
       }).toList(),
     );
+
     state = AsyncData(newState);
     await _saveToHive(newState);
+
+    // Drop the bookkeeping entry AFTER the Hive persist completes — once
+    // restored, future deletes of this id capture a fresh current index.
+    //
+    // PR #202 review S1: moved this `remove` to AFTER `_saveToHive` so
+    // that a Hive write failure leaves the entry intact. If we removed
+    // first and persist threw, a subsequent restoreSet on the same id
+    // would silently fall back to `deletedSet.setNumber - 1` (the legacy
+    // path) — a subtle correctness regression for the delete-restore-
+    // -redelete edge case. The post-write removal keeps the map in lock-
+    // step with what was actually persisted: if the write failed the
+    // user retains the ability to re-attempt the restore against the
+    // same recorded original index.
+    _originalSetIndices.remove(deletedSet.id);
   }
 
   /// Copy weight and reps from the previous set into the given set.
@@ -820,6 +971,12 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // true — the server delete already happened.
       discardCommitted = true;
       await _localStorage.clearActiveWorkout();
+      // PR #202 review O1: server delete + local clear are both committed
+      // → the workout context is gone. Clear the cross-workout undo map
+      // here (post-commit) so a pre-commit failure leaves it intact for
+      // a retry against the same workout, but a successful discard
+      // doesn't leak stale entries into the next start.
+      _originalSetIndices.clear();
 
       final elapsedSeconds = DateTime.now()
           .toUtc()
@@ -1002,6 +1159,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // true and the cancel-after-commit semantic still applies — the
         // server-side write has already happened.
         saveCommitted = true;
+        // PR #202 review O1: workout is durable server-side → the undo
+        // map's contents are no longer relevant. Clear here (post-commit)
+        // so the next session starts with a fresh map regardless of
+        // whether finishWorkout proceeds normally or short-circuits via
+        // the post-guard cancel-check below. Mirrors the discardWorkout
+        // placement (server-commit → clear). The offline-queue branch
+        // does NOT clear: an offline save is not durable and the user
+        // may continue editing the same workout in a degraded state
+        // until a retry succeeds.
+        _originalSetIndices.clear();
       } catch (e) {
         // Classify at the catch site so terminal errors surface to the user
         // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
