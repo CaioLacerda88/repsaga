@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -275,12 +276,21 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
     // pre/post id sets. `addExercise` sets state synchronously inside the
     // notifier (no await on the network — Hive persist runs in background)
     // so the new id is observable immediately after the call returns.
+    //
+    // PR-3 review W1 — use `firstWhereOrNull` and bail when the diff yields
+    // nothing instead of falling back to `after.last`. The previous
+    // `orElse: () => after.last` silently passed the WRONG id (the last
+    // entry in the list, which is unrelated to what was just added) the
+    // moment `addExercise` becomes async — and the snackbar's Undo would
+    // then silently delete an exercise the user never added. Bailing
+    // early keeps the contract explicit: no diff entry → no undo
+    // affordance, fail closed instead of fail open.
     final after = ref.read(activeWorkoutProvider).value?.exercises;
     if (after == null || after.isEmpty) return;
-    final added = after.firstWhere(
+    final added = after.firstWhereOrNull(
       (e) => !beforeIds.contains(e.workoutExercise.id),
-      orElse: () => after.last,
     );
+    if (added == null) return;
     final addedId = added.workoutExercise.id;
 
     if (!mounted) return;
