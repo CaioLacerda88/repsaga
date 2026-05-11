@@ -64,89 +64,118 @@ void main() {
     registerFallbackValue(_FakeActiveWorkoutState());
   });
 
-  group(
-    'ActiveWorkoutLoadingOverlay — Cancel-from-t=0 contract (PR1 — Q1)',
-    () {
-      testWidgets('at t=0 shows BOTH the spinner AND the cancel button', (
-        tester,
-      ) async {
+  group('ActiveWorkoutLoadingOverlay — Cancel-from-t=0 contract (PR1 — Q1)', () {
+    testWidgets('at t=0 shows BOTH the spinner AND the cancel button', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildOverlayHarness());
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        find.byType(TextButton),
+        findsOneWidget,
+        reason:
+            'Cancel must be visible immediately on mount — no 10s timer, no '
+            'hasRestorable gate. cancelLoading() always does something '
+            'useful, so the button always has a meaningful action to take.',
+      );
+    });
+
+    testWidgets(
+      'tapping cancel calls notifier.cancelLoading() and the notifier '
+      'settles into AsyncData (not AsyncLoading)',
+      (tester) async {
+        final mockRepo = _MockWorkoutRepository();
+        final mockStorage = _MockWorkoutLocalStorage();
+        when(() => mockStorage.loadActiveWorkout()).thenReturn(null);
+        when(
+          () => mockStorage.saveActiveWorkout(any()),
+        ).thenAnswer((_) async {});
+
+        final container = ProviderContainer(
+          overrides: [
+            workoutRepositoryProvider.overrideWithValue(mockRepo),
+            workoutLocalStorageProvider.overrideWithValue(mockStorage),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const Scaffold(body: ActiveWorkoutLoadingOverlay()),
+            ),
+          ),
+        );
+
+        final cancelFinder = find.byType(TextButton);
+        expect(cancelFinder, findsOneWidget);
+
+        await tester.tap(cancelFinder);
+        await tester.pump();
+
+        // Pin: state is settled AsyncData (not AsyncLoading, not AsyncError)
+        // after the tap. With `_lastValidState == null`, cancelLoading()
+        // emits AsyncData(null) — the C4 fix that makes this widget's
+        // simplification safe.
+        final state = container.read(activeWorkoutProvider);
+        expect(
+          state,
+          isA<AsyncData<ActiveWorkoutState?>>(),
+          reason:
+              'cancelLoading() must leave the notifier in AsyncData so the '
+              'screen redirect fires — leaving AsyncLoading would trap the '
+              'user on the spinner.',
+        );
+        expect(state.value, isNull);
+      },
+    );
+
+    testWidgets('overlay is a ConsumerWidget with no internal timer state', (
+      tester,
+    ) async {
+      // Sanity check: the overlay should be stateless (ConsumerWidget),
+      // not ConsumerStatefulWidget. A future refactor that re-introduces
+      // a timer would be a step backward — pin the simpler shape.
+      await tester.pumpWidget(_buildOverlayHarness());
+      final widget = tester.widget<ActiveWorkoutLoadingOverlay>(
+        find.byType(ActiveWorkoutLoadingOverlay),
+      );
+      expect(widget, isA<ConsumerWidget>());
+    });
+
+    // PR-7 (UI-critic deferred from PR-1): the overlay now uses the
+    // scoped `loadingOverlayStop` ARB key ("Stop" / "Parar") instead of
+    // the generic `cancel` key. "Cancel" reads as "cancel my workout" in
+    // the finish/discard phase — exactly the destructive intent the
+    // user is trying to AVOID by tapping this button. "Stop" is
+    // unambiguous: it stops the in-flight save/discard request and
+    // restores the prior state. Pin both the new label and the absence
+    // of the old one so a future revert can't silently land.
+    testWidgets(
+      'cancel button label is "Stop" (PR-7 — generic Cancel key replaced by scoped Stop)',
+      (tester) async {
         await tester.pumpWidget(_buildOverlayHarness());
 
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
         expect(
-          find.byType(TextButton),
+          find.text('Stop'),
           findsOneWidget,
           reason:
-              'Cancel must be visible immediately on mount — no 10s timer, no '
-              'hasRestorable gate. cancelLoading() always does something '
-              'useful, so the button always has a meaningful action to take.',
+              'PR-7 routes the overlay through the scoped '
+              'loadingOverlayStop key. EN value is "Stop".',
         );
-      });
-
-      testWidgets(
-        'tapping cancel calls notifier.cancelLoading() and the notifier '
-        'settles into AsyncData (not AsyncLoading)',
-        (tester) async {
-          final mockRepo = _MockWorkoutRepository();
-          final mockStorage = _MockWorkoutLocalStorage();
-          when(() => mockStorage.loadActiveWorkout()).thenReturn(null);
-          when(
-            () => mockStorage.saveActiveWorkout(any()),
-          ).thenAnswer((_) async {});
-
-          final container = ProviderContainer(
-            overrides: [
-              workoutRepositoryProvider.overrideWithValue(mockRepo),
-              workoutLocalStorageProvider.overrideWithValue(mockStorage),
-            ],
-          );
-          addTearDown(container.dispose);
-
-          await tester.pumpWidget(
-            UncontrolledProviderScope(
-              container: container,
-              child: TestMaterialApp(
-                theme: AppTheme.dark,
-                home: const Scaffold(body: ActiveWorkoutLoadingOverlay()),
-              ),
-            ),
-          );
-
-          final cancelFinder = find.byType(TextButton);
-          expect(cancelFinder, findsOneWidget);
-
-          await tester.tap(cancelFinder);
-          await tester.pump();
-
-          // Pin: state is settled AsyncData (not AsyncLoading, not AsyncError)
-          // after the tap. With `_lastValidState == null`, cancelLoading()
-          // emits AsyncData(null) — the C4 fix that makes this widget's
-          // simplification safe.
-          final state = container.read(activeWorkoutProvider);
-          expect(
-            state,
-            isA<AsyncData<ActiveWorkoutState?>>(),
-            reason:
-                'cancelLoading() must leave the notifier in AsyncData so the '
-                'screen redirect fires — leaving AsyncLoading would trap the '
-                'user on the spinner.',
-          );
-          expect(state.value, isNull);
-        },
-      );
-
-      testWidgets('overlay is a ConsumerWidget with no internal timer state', (
-        tester,
-      ) async {
-        // Sanity check: the overlay should be stateless (ConsumerWidget),
-        // not ConsumerStatefulWidget. A future refactor that re-introduces
-        // a timer would be a step backward — pin the simpler shape.
-        await tester.pumpWidget(_buildOverlayHarness());
-        final widget = tester.widget<ActiveWorkoutLoadingOverlay>(
-          find.byType(ActiveWorkoutLoadingOverlay),
+        expect(
+          find.text('Cancel'),
+          findsNothing,
+          reason:
+              'The generic Cancel key must NOT bleed into the overlay — '
+              'it stays available for dialog confirmations and other '
+              'call sites where "cancel this dialog" is the right '
+              'mental model.',
         );
-        expect(widget, isA<ConsumerWidget>());
-      });
-    },
-  );
+      },
+    );
+  });
 }

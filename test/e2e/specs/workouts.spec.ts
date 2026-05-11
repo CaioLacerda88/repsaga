@@ -1299,11 +1299,11 @@ test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
     // Wait for the DELETE to be intercepted (loading overlay should be up).
     await intercepted;
 
-    // The loading overlay is up with its always-visible Cancel button (Q1).
-    // PR-2 acceptance: tapping Cancel during the stall must restore the
-    // workout (discardCommitted == false, so the post-guard cancel-check
-    // honors the cancel).
-    const cancelButton = page.locator(WORKOUT.loadingOverlayCancelButton);
+    // The loading overlay is up with its always-visible Stop button (Q1;
+    // relabeled in PR-7 from Cancel → Stop). PR-2 acceptance: tapping Stop
+    // during the stall must restore the workout (discardCommitted == false,
+    // so the post-guard cancel-check honors the cancel).
+    const cancelButton = page.locator(WORKOUT.loadingOverlayStopButton);
     await expect(cancelButton).toBeVisible({ timeout: 5_000 });
     await cancelButton.click();
 
@@ -1423,12 +1423,14 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
     // Wait for the route to be intercepted (save RPC stalled, overlay mounting).
     await intercepted;
 
-    // Q1 assertion: the Cancel button must be visible from t=0 — no timer delay.
-    // Pre-PR1 the button only appeared after 10s; now it renders immediately.
-    const cancelButton = page.locator(WORKOUT.loadingOverlayCancelButton);
+    // Q1 assertion: the Stop button must be visible from t=0 — no timer
+    // delay. Pre-PR1 the button only appeared after 10s; now it renders
+    // immediately. (PR-7 relabel: "Cancel" → "Stop"; the role+name match
+    // changed at the same time.)
+    const cancelButton = page.locator(WORKOUT.loadingOverlayStopButton);
     await expect(cancelButton).toBeVisible({ timeout: 5_000 });
 
-    // Tap Cancel to abort the in-flight save.
+    // Tap Stop to abort the in-flight save.
     await cancelButton.click();
 
     // The notifier restores the prior workout state (C1 pre-commit cancel).
@@ -1891,8 +1893,9 @@ test.describe('Discard re-entrance (PR3 — S1)', () => {
     await confirmDiscard.click();
     await intercepted;
 
-    // 2. Loading overlay is up with its always-visible Cancel button.
-    const cancelOverlay = page.locator(WORKOUT.loadingOverlayCancelButton);
+    // 2. Loading overlay is up with its always-visible Stop button (PR-7
+    //    relabel from Cancel → Stop; selector renamed accordingly).
+    const cancelOverlay = page.locator(WORKOUT.loadingOverlayStopButton);
     await expect(cancelOverlay).toBeVisible({ timeout: 5_000 });
     await cancelOverlay.click();
 

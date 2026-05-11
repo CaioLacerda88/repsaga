@@ -245,14 +245,22 @@ export const WORKOUT = {
   /** Workout notes input — Semantics(identifier: 'workout-notes') */
   notesInput: '[flt-semantics-identifier="workout-notes"]',
   /**
-   * Cancel button inside ActiveWorkoutLoadingOverlay (PR1 — Q1).
-   * The button is a TextButton with the l10n "Cancel" label, visible at t=0
+   * Stop button inside ActiveWorkoutLoadingOverlay (PR1 — Q1; relabeled in
+   * PR-7 from "Cancel" to "Stop" — UI-critic deferred copy fix).
+   *
+   * The button is a TextButton with the l10n "Stop" label, visible at t=0
    * in every phase (start/finish/discard). No flt-semantics-identifier is
    * added — match by accessible role+name instead, which is locale-sensitive.
-   * The label is "Cancel" in en and "Cancelar" in pt-BR; use the English
-   * variant for all E2E tests running in the default en locale.
+   * The label is "Stop" in en and "Parar" in pt-BR; use the English variant
+   * for all E2E tests running in the default en locale.
+   *
+   * **Why renamed?** Pre-PR-7 the overlay used the generic `cancel` ARB key
+   * ("Cancel"). UI critic flagged that "Cancel" during a finish/discard
+   * spinner reads as "cancel my workout" — the exact destructive intent
+   * the user is trying to AVOID. "Stop" is unambiguous: it stops the
+   * in-flight save/discard request and restores prior state.
    */
-  loadingOverlayCancelButton: 'role=button[name="Cancel"]',
+  loadingOverlayStopButton: 'role=button[name="Stop"]',
   /**
    * Exercise name tappable area inside an exercise card during an active workout.
    *
