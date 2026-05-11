@@ -415,6 +415,21 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
+  /// Undo a just-added exercise (PR-3 H5).
+  ///
+  /// Mirrors [removeExercise] in shape — takes the [workoutExerciseId] handle
+  /// the picker just minted, drops it from the active workout, reorders the
+  /// remainder, and persists. Idempotent: if the id is not present (e.g. the
+  /// user already removed it manually before tapping Undo) the call is a
+  /// no-op so a stale snackbar tap can't corrupt state.
+  ///
+  /// Scoped to the ADD-from-picker undo path. Swap-from-picker has its own
+  /// confirm dialog ([SwapExerciseConfirmDialog]) and shares no state with
+  /// this method.
+  Future<void> restoreExercise(String workoutExerciseId) async {
+    return removeExercise(workoutExerciseId);
+  }
+
   /// Add a new empty set to an exercise.
   ///
   /// Optional [defaultWeight] and [defaultReps] pre-fill the new set

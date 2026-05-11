@@ -59,6 +59,20 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // PR-3 S1 — feed every active-workout state transition into the discard
+    // coordinator so it can drop its re-entrance guard the moment
+    // `cancelLoading` restores state mid-discard. Without this listener,
+    // the coordinator's flag stays `true` until the held network call
+    // completes (sometimes unbounded), silently no-op'ing every subsequent
+    // discard tap. The listener fires synchronously on every Riverpod
+    // state notification, which is exactly the window we need.
+    ref.listen<AsyncValue<ActiveWorkoutState?>>(activeWorkoutProvider, (
+      _,
+      next,
+    ) {
+      _discardCoordinator.notifyStateChanged(next);
+    });
+
     final asyncState = ref.watch(activeWorkoutProvider);
     final timerState = ref.watch(restTimerProvider);
 
@@ -221,9 +235,52 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
   Future<void> _onAddExercise() async {
     final exercise = await ExercisePickerSheet.show(context);
-    if (exercise != null) {
-      ref.read(activeWorkoutProvider.notifier).addExercise(exercise);
-    }
+    if (exercise == null) return;
+    if (!mounted) return;
+
+    // Snapshot the WE id set BEFORE the add so we can isolate the new id
+    // even if state mutates between addExercise and the snackbar wiring.
+    // Reading the notifier's state directly is safer than diffing the FAB
+    // build closure — the notifier is the source of truth.
+    final notifier = ref.read(activeWorkoutProvider.notifier);
+    final beforeExercises =
+        ref.read(activeWorkoutProvider).value?.exercises ?? const [];
+    final beforeIds = beforeExercises.map((e) => e.workoutExercise.id).toSet();
+
+    notifier.addExercise(exercise);
+
+    // PR-3 (H5): identify the just-added workoutExercise id by diffing the
+    // pre/post id sets. `addExercise` sets state synchronously inside the
+    // notifier (no await on the network — Hive persist runs in background)
+    // so the new id is observable immediately after the call returns.
+    final after = ref.read(activeWorkoutProvider).value?.exercises;
+    if (after == null || after.isEmpty) return;
+    final added = after.firstWhere(
+      (e) => !beforeIds.contains(e.workoutExercise.id),
+      orElse: () => after.last,
+    );
+    final addedId = added.workoutExercise.id;
+
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    // Hide any prior snackbar so the undo affordance is the most recent
+    // surface — avoids stacking when the user adds several exercises in
+    // quick succession.
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.addExerciseUndo(exercise.name)),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: l10n.undo,
+          onPressed: () {
+            // Read the notifier fresh — `ref` is still valid even after
+            // an await gap because this State outlives the snackbar.
+            ref.read(activeWorkoutProvider.notifier).restoreExercise(addedId);
+          },
+        ),
+      ),
+    );
   }
 
   void _toggleReorderMode() {
