@@ -213,6 +213,25 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     return user.id;
   }
 
+  /// Single source of truth for the analytics `source` discriminator on
+  /// every workout-lifecycle event (`workout_started`, `workout_finished`,
+  /// `workout_discarded`).
+  ///
+  /// Keeps the four call sites (start / startFromRoutine / discard /
+  /// finish) from drifting: a missed update at one site silently produced
+  /// inconsistent analytics under the previous inline-ternary pattern.
+  /// When a new entry-point lands (e.g. `'barcode_scan'`) it slots in
+  /// here once and every event picks it up uniformly.
+  ///
+  /// Pass the [routineId] from the `ActiveWorkoutState` (or `config`) for
+  /// the relevant call site; `null` means an empty / ad-hoc workout.
+  String _workoutSource(String? routineId) {
+    // TODO post-PR: differentiate `planned_bucket` when config exposes
+    // the flag. Centralising the mapping here also centralises that
+    // future expansion.
+    return routineId != null ? 'routine_card' : 'empty';
+  }
+
   /// Count of sets that are not yet completed.
   int get incompleteSetsCount {
     final current = state.value;
@@ -253,8 +272,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       );
       await _saveToHive(activeState);
       _trackWorkoutEvent(
-        event: const AnalyticsEvent.workoutStarted(
-          source: 'empty',
+        event: AnalyticsEvent.workoutStarted(
+          source: _workoutSource(null),
           routineId: null,
           exerciseCount: 0,
         ),
@@ -368,10 +387,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         routineId: config.routineId,
       );
       await _saveToHive(activeState);
-      // TODO post-PR: differentiate planned_bucket when config exposes the flag
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutStarted(
-          source: 'routine_card',
+          source: _workoutSource(config.routineId),
           routineId: config.routineId,
           exerciseCount: config.exercises.length,
         ),
@@ -986,8 +1004,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           .expand((e) => e.sets)
           .where((s) => s.isCompleted)
           .length;
-      // TODO post-PR: differentiate planned_bucket when config exposes the flag
-      final source = current.routineId != null ? 'routine_card' : 'empty';
+      final source = _workoutSource(current.routineId);
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutDiscarded(
           elapsedSeconds: elapsedSeconds,
@@ -1560,8 +1577,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       final completedSetsCount = sets.where((s) => s.isCompleted).length;
       final incompleteSetsSkipped = totalSets - completedSetsCount;
       final hadPr = prResult?.newRecords.isNotEmpty ?? false;
-      // TODO post-PR: differentiate planned_bucket when config exposes the flag
-      final source = current.routineId != null ? 'routine_card' : 'empty';
+      final source = _workoutSource(current.routineId);
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutFinished(
           durationSeconds: durationSeconds,
