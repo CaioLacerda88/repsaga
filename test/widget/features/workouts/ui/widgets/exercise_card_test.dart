@@ -562,5 +562,52 @@ void main() {
         },
       );
     });
+
+    // -----------------------------------------------------------------------
+    // PR-5 M8 — Info-outline icon size + alpha (header detail affordance)
+    //
+    // Pre-fix: 14dp at α=0.35 — the icon sat at the visibility threshold,
+    // making the "tap header for details" affordance invisible to first-
+    // time users. Post-fix: 16dp at α=0.5.
+    // -----------------------------------------------------------------------
+    group('PR-5 / M8 — info_outline visibility', () {
+      testWidgets(
+        'header info_outline renders at 16dp with onSurface @ alpha ~0.5',
+        (tester) async {
+          await tester.pumpWidget(_buildExerciseCard(_makeActiveExercise()));
+          await tester.pump();
+
+          // Locate the info_outline Icon descendant of ExerciseCard. There
+          // is exactly one — the header detail affordance.
+          final infoIcon = tester.widget<Icon>(
+            find.descendant(
+              of: find.byType(ExerciseCard),
+              matching: find.byIcon(Icons.info_outline),
+            ),
+          );
+
+          expect(
+            infoIcon.size,
+            16,
+            reason:
+                'M8 (PR-5): info_outline must render at 16dp. Pre-fix was '
+                '14dp — below the visibility threshold for a functional '
+                'affordance.',
+          );
+
+          // Alpha lives on the Icon's color (`onSurface.withValues(alpha:
+          // 0.5)`). We compare opacity within a tolerance window because
+          // floating-point alpha is not exactly representable.
+          final alpha = infoIcon.color?.a ?? 0;
+          expect(
+            alpha,
+            inInclusiveRange(0.45, 0.55),
+            reason:
+                'M8 (PR-5): info_outline alpha must be ~0.5 (got $alpha). '
+                'Pre-fix was 0.35 — invisible to first-time users.',
+          );
+        },
+      );
+    });
   });
 }

@@ -64,43 +64,80 @@ class FinishBottomBar extends StatelessWidget {
           // semantics + the Text label can be merged with sibling Semantics
           // in the surrounding Column / Material tree, which is what caused
           // the PR #152 e2e regressions on row-level identifiers.
-          child: Semantics(
-            container: true,
-            explicitChildNodes: true,
-            identifier: 'workout-finish-btn',
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: enabled ? onPressed : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryViolet,
-                  foregroundColor: AppColors.textCream,
-                  // Disabled state: dim the violet to ~30% so the bar reads as
-                  // "intentionally unavailable" rather than broken. Foreground
-                  // (textDim) keeps AA contrast against the dimmed background.
-                  disabledBackgroundColor: AppColors.primaryViolet.withValues(
-                    alpha: 0.3,
-                  ),
-                  disabledForegroundColor: AppColors.textDim,
-                  minimumSize: const Size(0, 56),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Text(
-                  AppLocalizations.of(context).finishButtonLabel,
-                  style: AppTextStyles.headline.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    // headline encodes 0.02em tracking; the Finish CTA wants
-                    // tighter chip-style 0.04em tracking — kept explicitly.
-                    letterSpacing: 0.04 * 13,
-                    color: enabled ? AppColors.textCream : AppColors.textDim,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                container: true,
+                explicitChildNodes: true,
+                identifier: 'workout-finish-btn',
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: enabled ? onPressed : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryViolet,
+                      foregroundColor: AppColors.textCream,
+                      // Disabled state: dim the violet to ~30% so the bar reads as
+                      // "intentionally unavailable" rather than broken. Foreground
+                      // (textDim) keeps AA contrast against the dimmed background.
+                      disabledBackgroundColor: AppColors.primaryViolet
+                          .withValues(alpha: 0.3),
+                      disabledForegroundColor: AppColors.textDim,
+                      minimumSize: const Size(0, 56),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      AppLocalizations.of(context).finishButtonLabel,
+                      style: AppTextStyles.headline.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        // headline encodes 0.02em tracking; the Finish CTA wants
+                        // tighter chip-style 0.04em tracking — kept explicitly.
+                        letterSpacing: 0.04 * 13,
+                        color: enabled
+                            ? AppColors.textCream
+                            : AppColors.textDim,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              // PR-5 H6 — explain WHY the button is disabled.
+              //
+              // Pre-fix a new user with all set values entered but none ticked
+              // saw a grey FINISH button and no signal to tap the
+              // completion checkboxes. Adding a single line of helper text
+              // beneath the button gives the user a concrete action to
+              // unblock themselves without consulting docs.
+              //
+              // Wrapped in `Semantics(identifier: 'finish-disabled-hint')`
+              // so E2E can target the helper text directly (selectors.ts
+              // `WORKOUT.finishDisabledHint`). Pair-rule
+              // (`container: true` + `explicitChildNodes: true`) applies
+              // because we expose an identifier for E2E.
+              if (!enabled)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Semantics(
+                    container: true,
+                    explicitChildNodes: true,
+                    identifier: 'finish-disabled-hint',
+                    child: Text(
+                      AppLocalizations.of(context).finishWorkoutDisabledHint,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

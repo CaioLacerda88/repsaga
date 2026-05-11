@@ -2761,5 +2761,223 @@ void main() {
         },
       );
     });
+
+    // -------------------------------------------------------------------------
+    // PR-5 H8 — Hint slot layout stability + AOM survival across the
+    // pending->completed transition.
+    //
+    // Pre-fix: when a set transitioned pending->completed the previous-
+    // session hint Padding was REMOVED from the Column entirely. The row's
+    // vertical geometry collapsed by ~18dp and adjacent rows shifted upward
+    // mid-gesture, causing miss-taps on the next checkbox down.
+    //
+    // Post-fix (mobile only — `!kIsWeb`): a fixed-height ExcludeSemantics-
+    // wrapped SizedBox keeps the hint slot's vertical footprint stable
+    // across the completion transition. Web continues to use the
+    // conditional render to avoid re-triggering the Flutter Web semantics
+    // engine role-swap bug documented in `_shouldShowHint`.
+    //
+    // The two pins below run under the standard test binding (host platform
+    // = Linux/Mac/Win, kIsWeb=false → the !kIsWeb branch is active). They
+    // exercise the layout-stability contract. The AOM survival contract
+    // for the pendingPredictedPr->completedStandingPr transition is pinned
+    // by E2E (personal-records.spec.ts:264/309, rank-up-celebration.spec.ts:847).
+    // -------------------------------------------------------------------------
+
+    group('H8 — hint slot layout stability (PR-5)', () {
+      testWidgets('row top edge is stable across pending->completed transition '
+          '(no ~18dp collapse) when a previous-session hint was shown', (
+        tester,
+      ) async {
+        // Setup: two rows in a Column. The TOP row will transition
+        // pending->completed; the BOTTOM row's y-coordinate must NOT
+        // shift when the top row's hint slot collapses.
+        //
+        // We measure the bottom row's `localToGlobal` top-edge before
+        // and after re-pumping with the top row completed. Pre-fix the
+        // delta was ~18dp (the bodySmall hint line's vertical
+        // footprint). Post-fix the delta must be ~0 (mobile branch
+        // renders a stable 18dp filler when no hint is shown).
+        //
+        // The SetRow widget only reads `widget.set.isCompleted` for the
+        // hint-suppression rule, so we drive the transition by re-pumping
+        // the widget tree with an updated `ExerciseSet` rather than by
+        // mutating a notifier — the cleanest way to express a static
+        // before/after layout assertion.
+
+        final lastSet = makeSet(id: 'top-last', weight: 80.0, reps: 8);
+        final pendingTop = makeSet(
+          id: 'top-set',
+          setNumber: 1,
+          isCompleted: false,
+        );
+        final pendingBottom = makeSet(
+          id: 'bottom-set',
+          setNumber: 2,
+          isCompleted: false,
+        );
+        const bottomKey = ValueKey('h8-bottom-row');
+
+        Widget tree({required bool topCompleted}) => Column(
+          children: [
+            SetRow(
+              set: pendingTop.copyWith(isCompleted: topCompleted),
+              workoutExerciseId: 'we-001',
+              lastSet: lastSet,
+            ),
+            SetRow(
+              key: bottomKey,
+              set: pendingBottom,
+              workoutExerciseId: 'we-001',
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(buildTestWidget(tree(topCompleted: false)));
+        await tester.pump();
+
+        // Sanity: the hint is shown on the top row pre-toggle.
+        expect(
+          find.text('Previous: 80kg × 8'),
+          findsOneWidget,
+          reason: 'top row should show the previous-session hint pre-toggle',
+        );
+
+        // Capture the bottom row's top edge BEFORE toggling.
+        final RenderBox bottomBox = tester.renderObject(find.byKey(bottomKey));
+        final Offset beforeTopLeft = bottomBox.localToGlobal(Offset.zero);
+
+        // Drive the transition by re-pumping with the top row completed.
+        await tester.pumpWidget(buildTestWidget(tree(topCompleted: true)));
+        await tester.pump();
+
+        // Hint must disappear once the row is completed.
+        expect(
+          find.text('Previous: 80kg × 8'),
+          findsNothing,
+          reason:
+              'sanity: hint should be hidden post-completion (the '
+              'documented suppression rule lives in _shouldShowHint)',
+        );
+
+        // Capture the bottom row's top edge AFTER toggling.
+        final RenderBox bottomBoxAfter = tester.renderObject(
+          find.byKey(bottomKey),
+        );
+        final Offset afterTopLeft = bottomBoxAfter.localToGlobal(Offset.zero);
+
+        // Layout stability contract: the bottom row's top-edge y-
+        // coordinate must NOT shift by more than 2dp when the top row's
+        // hint slot collapses. The filler is sized to approximate the
+        // hint line's visual footprint (~18dp = 4dp bottom padding +
+        // 2dp top padding + 12dp bodySmall text line); minor sub-pixel
+        // rounding from text baseline math is acceptable. Pre-fix the
+        // delta was ~18dp; post-fix it is ≤2dp.
+        final delta = (afterTopLeft.dy - beforeTopLeft.dy).abs();
+        expect(
+          delta,
+          lessThanOrEqualTo(2.0),
+          reason:
+              'H8 (PR-5): bottom row y-coordinate delta is ${delta}dp — '
+              'must be ≤2dp. Pre-fix the delta was ~18dp (the previous-'
+              'session hint footprint); post-fix the !kIsWeb filler '
+              'keeps the slot present so the geometry never collapses. '
+              'A large delta here means the filler is missing or '
+              'undersized; adjacent rows would shift under the thumb '
+              'mid-tap.',
+        );
+      });
+
+      testWidgets(
+        'standing-PR row identifier survives the pendingPredictedPr -> '
+        'completedStandingPr transition (AOM regression pin)',
+        (tester) async {
+          // This is the static-pump analogue of the E2E pin in
+          // personal-records.spec.ts:264/309 and rank-up-celebration.spec.ts:847.
+          // The H8 hint-slot filler must NOT re-trigger the Flutter Web
+          // semantics-engine role-swap bug that drops the standing-PR
+          // identifier during the transition.
+          //
+          // We pump the row first in pendingPredictedPr (with a hint
+          // visible) and then rebuild it in completedStandingPr (hint
+          // suppressed → filler activates on mobile, conditional remove
+          // on web). After the second pump the
+          // `set-row-state-standing-pr` identifier must still emit.
+
+          final lastSet = makeSet(id: 'pre-pr', weight: 80.0, reps: 8);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: const ValueKey('h8-transition-row'),
+                set: makeSet(isCompleted: false, weight: 100, reps: 10),
+                workoutExerciseId: 'we-001',
+                lastSet: lastSet,
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          // Sanity: pending state — pending-pr identifier emits, hint shown.
+          expect(
+            find.bySemanticsIdentifier('set-row-state-pending-pr'),
+            findsOneWidget,
+          );
+          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
+
+          // Re-pump the SAME row key into the post-transition state: the
+          // set is now completed AND the row is in completedStandingPr.
+          // This mirrors the live transition the resolver produces when
+          // the user taps the checkbox on a predicted-PR row.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                key: const ValueKey('h8-transition-row'),
+                set: makeSet(isCompleted: true, weight: 100, reps: 10),
+                workoutExerciseId: 'we-001',
+                lastSet: lastSet,
+                display: const PrRowDisplay(
+                  state: PrRowState.completedStandingPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          // Hint is suppressed post-completion (existing rule).
+          expect(find.text('Previous: 80kg × 8'), findsNothing);
+
+          // Contract: the new state identifier MUST emit. If the filler
+          // accidentally regressed to a Visibility(maintainSize) shape,
+          // this static-pump pin still passes (Flutter test binding is
+          // not the Web semantics engine) — the live regression is
+          // caught by the three E2E tests referenced above. This pin
+          // guards the static-frame structure: an Element-tree change
+          // that drops the row identifier (e.g. someone refactoring the
+          // _SetRowFrame Semantics wrapper) fails here.
+          expect(
+            find.bySemanticsIdentifier('set-row-state-standing-pr'),
+            findsOneWidget,
+            reason:
+                'H8 (PR-5): the standing-PR row identifier must emit after '
+                'the predicted->standing transition. If this fails the '
+                '_SetRowFrame Semantics shape has regressed and the '
+                'three E2E tests (personal-records.spec.ts:264/309, '
+                'rank-up-celebration.spec.ts:847) will follow.',
+          );
+          // And the previous identifier must be gone — sanity that we
+          // actually transitioned, not just appended.
+          expect(
+            find.bySemanticsIdentifier('set-row-state-pending-pr'),
+            findsNothing,
+          );
+        },
+      );
+    });
   });
 }

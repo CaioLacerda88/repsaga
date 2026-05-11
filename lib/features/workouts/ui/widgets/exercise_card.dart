@@ -516,11 +516,17 @@ class _ExerciseCardHeader extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
+                        // M8 (PR-5) — bumped from 14dp α=0.35 to 16dp α=0.5.
+                        // Pre-fix the info glyph was below the visibility
+                        // threshold and the "tap header for details"
+                        // affordance was invisible to first-time users.
+                        // 16dp + 50% alpha reads as a quiet hint without
+                        // competing with the exercise name.
                         Icon(
                           Icons.info_outline,
-                          size: 14,
+                          size: 16,
                           color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.35,
+                            alpha: 0.5,
                           ),
                         ),
                       ],

@@ -167,9 +167,37 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  // -30s / Skip / +30s button row
+                  // -30s / Skip / +30s button row.
+                  //
                   // Wrap controls in an opaque GestureDetector to prevent
                   // taps on buttons from bubbling to the outer dismiss handler.
+                  //
+                  // **Button sizing — content-driven, NOT fixed-width
+                  // (PR-5 device-feedback fix).**
+                  //
+                  // Pre-fix: each button was wrapped in `SizedBox(width: 64,
+                  // height: 56)`. On a real Samsung S25 Ultra (and likely
+                  // other Android OEMs with font rendering different from
+                  // Chromium's), `+30s` wrapped to two lines — TextButton's
+                  // default 16dp horizontal padding ate ~32dp of the 64dp
+                  // box, and `+30s` at `titleMedium @ w700` (the `+` glyph
+                  // is wider than `-`) didn't fit in the remaining ~32dp.
+                  // Playwright at 360dp Chromium did NOT catch this.
+                  //
+                  // The brittle fix would be to bump the SizedBox width to
+                  // 76dp. That works for current copy + font, but breaks if:
+                  //   - the user has Android system font scaling >100%
+                  //   - copy ever changes (e.g. localized "+30s" → wider)
+                  //   - a future button shape needs more chrome
+                  //
+                  // Correct fix: drop the SizedBox entirely. TextButton sizes
+                  // to its content + its own padding. We enforce the WCAG
+                  // 48dp tap-target floor via `minimumSize: Size(48, 48)` on
+                  // the button's style. The buttons end up slightly
+                  // asymmetric in width (`-30s` narrower than `+30s` because
+                  // `-` is narrower than `+`) but visually match because
+                  // the gutter between them is constant. Total row width
+                  // adapts to font scale + copy automatically; never wraps.
                   GestureDetector(
                     onTap: () {},
                     behavior: HitTestBehavior.opaque,
@@ -179,78 +207,75 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                         Semantics(
                           label: l10n.subtract30Semantics,
                           button: true,
-                          child: SizedBox(
-                            width: 64,
-                            height: 56,
-                            child: TextButton(
-                              onPressed: () => ref
-                                  .read(restTimerProvider.notifier)
-                                  .adjustTime(-30),
-                              style: TextButton.styleFrom(
-                                foregroundColor: theme.colorScheme.onSurface,
-                                backgroundColor: AppColors.textCream.withValues(
-                                  alpha: 0.12,
-                                ),
-                                textStyle: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                          child: TextButton(
+                            onPressed: () => ref
+                                .read(restTimerProvider.notifier)
+                                .adjustTime(-30),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              foregroundColor: theme.colorScheme.onSurface,
+                              backgroundColor: AppColors.textCream.withValues(
+                                alpha: 0.12,
                               ),
-                              child: const Text('-30s'),
+                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            child: const Text('-30s'),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Semantics(
                           label: l10n.skipRestSemantics,
                           button: true,
-                          child: SizedBox(
-                            width: 120,
-                            height: 56,
-                            child: TextButton(
-                              onPressed: () =>
-                                  ref.read(restTimerProvider.notifier).skip(),
-                              style: TextButton.styleFrom(
-                                foregroundColor: theme.colorScheme.onSurface,
-                                textStyle: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.3),
+                          child: TextButton(
+                            onPressed: () =>
+                                ref.read(restTimerProvider.notifier).skip(),
+                            style: TextButton.styleFrom(
+                              // Skip is the primary action — wider min so it
+                              // reads as the dominant CTA in the row.
+                              minimumSize: const Size(120, 48),
+                              foregroundColor: theme.colorScheme.onSurface,
+                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.3,
                                   ),
                                 ),
                               ),
-                              child: Text(l10n.skip),
                             ),
+                            child: Text(l10n.skip),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Semantics(
                           label: l10n.add30Semantics,
                           button: true,
-                          child: SizedBox(
-                            width: 64,
-                            height: 56,
-                            child: TextButton(
-                              onPressed: () => ref
-                                  .read(restTimerProvider.notifier)
-                                  .adjustTime(30),
-                              style: TextButton.styleFrom(
-                                foregroundColor: theme.colorScheme.onSurface,
-                                backgroundColor: AppColors.textCream.withValues(
-                                  alpha: 0.12,
-                                ),
-                                textStyle: theme.textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                          child: TextButton(
+                            onPressed: () => ref
+                                .read(restTimerProvider.notifier)
+                                .adjustTime(30),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              foregroundColor: theme.colorScheme.onSurface,
+                              backgroundColor: AppColors.textCream.withValues(
+                                alpha: 0.12,
                               ),
-                              child: const Text('+30s'),
+                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            child: const Text('+30s'),
                           ),
                         ),
                       ],
@@ -266,11 +291,18 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                   // label AND a redundant "Tap anywhere to dismiss" leaf.
                   // Same pattern as the exercise-name fix above.
                   ExcludeSemantics(
+                    // PR-5 — dismiss hint α bumped 0.3 -> 0.6 for readable
+                    // contrast against the near-black abyss scrim
+                    // (`abyss #0D0319 @ 87%`). Pre-fix the hint was
+                    // essentially invisible — users had to discover the
+                    // tap-anywhere dismiss by accident. 0.6 sits below
+                    // body-text full strength so the hint stays a hint
+                    // (not a competing CTA) while clearing the AA floor.
                     child: Text(
                       l10n.tapToDismiss,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.3,
+                          alpha: 0.6,
                         ),
                       ),
                     ),

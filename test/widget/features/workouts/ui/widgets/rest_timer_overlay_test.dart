@@ -488,6 +488,116 @@ void main() {
           expect(find.bySemanticsLabel('Dismiss rest timer'), findsOneWidget);
         },
       );
+
+      // -------------------------------------------------------------------
+      // PR-5 — Dismiss hint readable contrast.
+      //
+      // Pre-fix the "Tap anywhere to dismiss" hint rendered at α=0.3 on
+      // the near-black abyss scrim — effectively invisible. Post-fix
+      // α=0.6, lifting the hint above the visibility threshold while
+      // keeping it quieter than the primary affordances.
+      // -------------------------------------------------------------------
+      testWidgets(
+        'PR-5 — tapToDismiss hint renders with alpha >= 0.55 for readable '
+        'contrast on the dark scrim',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 60,
+            remainingSeconds: 45,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          final hint = tester.widget<Text>(
+            find.text('Tap anywhere to dismiss'),
+          );
+          final alpha = hint.style?.color?.a ?? 0;
+          expect(
+            alpha,
+            greaterThanOrEqualTo(0.55),
+            reason:
+                'PR-5: the dismiss hint must render at alpha ≥ 0.55 (got '
+                '$alpha) so the affordance is readable on the abyss '
+                'scrim. Pre-fix was 0.3 — invisible. Bumping below 0.55 '
+                'regresses the readability fix.',
+          );
+        },
+      );
+    });
+
+    // PR-5 — device-feedback fix (Samsung S25 Ultra).
+    //
+    // Pre-fix: each control button was wrapped in
+    // `SizedBox(width: 64, height: 56)`. On a real Android device with
+    // OEM font rendering, `+30s` wrapped to two lines because TextButton's
+    // default 16dp horizontal padding ate ~32dp of the 64dp box, and `+30s`
+    // at `titleMedium @ w700` (the `+` glyph is wider than `-`) didn't fit
+    // in the remaining ~32dp. Playwright at 360dp Chromium did NOT catch
+    // it — desktop font metrics differed enough.
+    //
+    // Fix shape: dropped the SizedBox; use TextButton's intrinsic content +
+    // padding sizing, with `minimumSize: Size(48, 48)` enforcing the WCAG
+    // tap-target floor. Buttons end up slightly asymmetric in width but
+    // never wrap, scale with font accessibility settings, and meet the
+    // 48dp tap-target floor on every screen size.
+    //
+    // This pin guards both contracts: tap-target floor + single-line.
+    group('PR-5 — control button sizing (device-feedback fix)', () {
+      testWidgets(
+        '-30s, Skip, +30s render single-line + meet 48dp tap-target floor',
+        (tester) async {
+          const state = RestTimerState(
+            totalSeconds: 90,
+            remainingSeconds: 90,
+            isActive: true,
+          );
+          await tester.pumpWidget(buildOverlay(state));
+
+          final plusButton = find.widgetWithText(TextButton, '+30s');
+          final minusButton = find.widgetWithText(TextButton, '-30s');
+          final skipButton = find.widgetWithText(TextButton, 'Skip');
+
+          expect(plusButton, findsOneWidget);
+          expect(minusButton, findsOneWidget);
+          expect(skipButton, findsOneWidget);
+
+          final plusSize = tester.getSize(plusButton);
+          final minusSize = tester.getSize(minusButton);
+          final skipSize = tester.getSize(skipButton);
+
+          // Single-line height contract — if the SizedBox constraint ever
+          // returns and `+30s` wraps, the rendered height grows past
+          // ~60dp. A single-line `titleMedium @ w700` button should be
+          // ~48-56dp tall.
+          expect(
+            plusSize.height,
+            lessThan(72),
+            reason:
+                '+30s wrapped to multiple lines (got ${plusSize.height}dp). '
+                'Pre-fix bug from Samsung S25 Ultra device feedback.',
+          );
+          expect(
+            minusSize.height,
+            lessThan(72),
+            reason:
+                '-30s wrapped to multiple lines (got ${minusSize.height}dp).',
+          );
+
+          // WCAG 48dp tap-target floor on both axes.
+          for (final s in [plusSize, minusSize, skipSize]) {
+            expect(
+              s.width,
+              greaterThanOrEqualTo(48),
+              reason: 'tap-target width below 48dp floor: $s',
+            );
+            expect(
+              s.height,
+              greaterThanOrEqualTo(48),
+              reason: 'tap-target height below 48dp floor: $s',
+            );
+          }
+        },
+      );
     });
   });
 }

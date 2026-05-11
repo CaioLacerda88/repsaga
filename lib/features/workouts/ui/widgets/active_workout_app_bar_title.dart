@@ -89,10 +89,16 @@ class ActiveWorkoutAppBarTitle extends StatelessWidget {
                 children: [
                   Text(name, style: theme.textTheme.titleMedium),
                   const SizedBox(width: 4),
+                  // M8 (PR-5) — bumped from 14dp α=0.4 to 16dp α=0.6.
+                  // Pre-fix the pencil sat at the visibility threshold —
+                  // users were unaware the workout name was tap-to-edit.
+                  // 16dp + 60% alpha keeps the icon as a quiet hint
+                  // (no competing accent) while clearing the
+                  // "functionally invisible" threshold.
                   AppIcons.render(
                     AppIcons.edit,
-                    size: 14,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ],
               ),

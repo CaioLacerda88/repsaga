@@ -1413,6 +1413,8 @@
   "@prChipLabel": { "description": "Phase 18c inline mid-set PR chip label (heroGold via RewardAccent). Identical in both locales." },
   "finishButtonLabel": "FINISH",
   "@finishButtonLabel": { "description": "Phase 18c active-workout AppBar trailing OutlinedButton label." },
+  "finishWorkoutDisabledHint": "Complete at least one set to finish.",
+  "@finishWorkoutDisabledHint": { "description": "PR-5 H6 — helper text shown beneath the disabled FINISH button explaining why it cannot be tapped. Hidden once the button becomes enabled." },
   "addExerciseFabLabel": "Add exercise",
   "@addExerciseFabLabel": { "description": "Phase 18c active-workout FAB label (replaces the Finish-FAB, freed by moving Finish to the AppBar)." },
   "celebrationOverflowLabel": "{count, plural, one{1 more rank-up — open Saga} other{{count} more rank-ups — open Saga}}",

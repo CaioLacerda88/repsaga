@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -331,6 +332,37 @@ class _SetRowState extends ConsumerState<SetRow> {
           // destabilising the row frame identifier emission. The
           // container + explicitChildNodes pair pins the hint as its own
           // a11y island so the row frame identifier survives.
+          // **H8 — Layout-stable hint slot (PR-5).**
+          //
+          // The hint slot reserves a fixed ~18dp vertical strip ABOVE the
+          // row frame so adjacent rows do NOT shift up under the thumb when
+          // a set is completed and the previous-session hint collapses.
+          // Without this filler, completing set #3 right before tapping
+          // set #4's checkbox makes set #4's checkbox y-coordinate slide
+          // upward by ~18dp mid-gesture, causing the user to miss-tap.
+          //
+          // **CRITICAL Flutter Web AOM constraint** (see `_shouldShowHint`
+          // dartdoc above + PR #193 post-mortem): wrapping this slot in
+          // `Visibility(maintainSize: true)` re-triggered the engine
+          // role-swap bug — the `_RenderVisibility.visitChildrenForSemantics`
+          // mutation interleaves with the row-frame's
+          // `pendingPredictedPr -> completedStandingPr` Semantics identifier
+          // change, causing the engine to drop the
+          // `set-row-state-standing-pr` identifier from the AOM. Three E2E
+          // tests caught it:
+          //   * personal-records.spec.ts:264
+          //   * personal-records.spec.ts:309
+          //   * rank-up-celebration.spec.ts:847
+          //
+          // **Approach:** gate the filler behind `!kIsWeb`. Mobile gets the
+          // layout-stable empty filler (which keeps a Padding child present
+          // even when there is no hint to render) so the row's vertical
+          // geometry never collapses. Web keeps the proven conditional
+          // render (no Padding child when no hint) so the engine bug is
+          // not re-triggered. The trade-off is intentional: mobile is
+          // where the thumb-drift miss-tap is a real hazard; Web is where
+          // the AOM regression is a real hazard. Each platform gets the
+          // option that avoids its dominant failure mode.
           if (_matchedLastSet())
             Padding(
               padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
@@ -363,6 +395,29 @@ class _SetRowState extends ConsumerState<SetRow> {
                   ),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ),
+            )
+          else if (!kIsWeb)
+            // Mobile-only layout filler. Mirrors the EXACT padding + text
+            // metrics of the hint branches above (Padding(left: 56,
+            // bottom: 4, top: 2) + a single bodySmall line) so the row's
+            // vertical geometry never collapses when the hint is hidden.
+            // Renders an invisible single-space Text instead of a raw
+            // SizedBox so the baseline math matches the hint branches
+            // exactly — a constant SizedBox height under-shoots by ~6dp
+            // because the actual line-height of bodySmall depends on the
+            // font's vertical metrics and is not 12dp on every platform.
+            // ExcludeSemantics keeps the filler out of the AOM — it has
+            // no a11y content.
+            Padding(
+              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
+              child: ExcludeSemantics(
+                child: Text(
+                  ' ',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.transparent,
                   ),
                 ),
               ),

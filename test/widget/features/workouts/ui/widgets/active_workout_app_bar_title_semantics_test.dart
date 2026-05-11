@@ -3,11 +3,17 @@
 /// `'$name. Tap to rename workout.'`. Post-PR it flows through
 /// `l10n.workoutNameTapToRenameSemantics(name)` so screen-reader users
 /// hear the rename affordance in their own locale.
+///
+/// **PR-5 M8** — also pins the pencil icon size/alpha. Pre-fix the
+/// pencil rendered at 14dp α=0.4 — below the visibility threshold for
+/// a functional affordance. Post-fix it is 16dp α=0.6.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/core/theme/app_icons.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/workouts/ui/widgets/active_workout_app_bar_title.dart';
 
@@ -79,5 +85,116 @@ void main() {
         );
       },
     );
+  });
+
+  group('M8 (PR-5) — pencil edit-name icon visibility', () {
+    // Pre-fix: 14dp at α=0.4. The icon was at the visibility threshold and
+    // first-time users were unaware the workout name was tap-to-edit.
+    // Post-fix: 16dp at α=0.6 — quiet but unambiguously visible. A
+    // regression to the lower values flips this pin.
+
+    testWidgets(
+      'pencil renders at size 16dp with onSurface @ alpha ~0.6 (visibility '
+      'floor for a functional affordance)',
+      (tester) async {
+        await tester.pumpWidget(_buildTitle(name: 'Push Day'));
+
+        // The edit icon is rendered via AppIcons.render(AppIcons.edit, ...).
+        // Locate the underlying SvgPicture child by predicate: the only
+        // descendant with a size constraint matching the rendered icon.
+        // AppIcons.render wraps the glyph in a SizedBox(width: size,
+        // height: size), so any SizedBox whose width is exactly 16
+        // beneath the title is the pencil container.
+        final pencilBoxes = tester
+            .widgetList<SizedBox>(
+              find.descendant(
+                of: find.byType(ActiveWorkoutAppBarTitle),
+                matching: find.byType(SizedBox),
+              ),
+            )
+            .where((b) => b.width == 16 && b.height == 16)
+            .toList();
+        expect(
+          pencilBoxes,
+          isNotEmpty,
+          reason:
+              'M8 (PR-5): the pencil icon container must be 16x16dp. Pre-'
+              'fix it was 14x14dp — invisible to first-time users.',
+        );
+
+        // Alpha pin (PR-5 review S1 follow-up): `AppIcons.render` with
+        // explicit `color` wraps the SVG in
+        // `ColorFilter.mode(color, BlendMode.srcIn)` (see
+        // `lib/core/theme/app_icons.dart:163`). Locate the SvgPicture
+        // descendant of the title and read its colorFilter back to
+        // verify the effective alpha. This catches alpha regressions
+        // independently of the size pin above.
+        final svgPictures = tester
+            .widgetList<SvgPicture>(
+              find.descendant(
+                of: find.byType(ActiveWorkoutAppBarTitle),
+                matching: find.byType(SvgPicture),
+              ),
+            )
+            .toList();
+        expect(
+          svgPictures,
+          isNotEmpty,
+          reason: 'expected at least one SvgPicture (the pencil) under title',
+        );
+        final pencilSvg = svgPictures.first;
+        final colorFilter = pencilSvg.colorFilter;
+        expect(
+          colorFilter,
+          isA<ColorFilter>(),
+          reason:
+              'PR-5 M8: the pencil SVG must be rendered through a srcIn '
+              'ColorFilter so its alpha is verifiable.',
+        );
+        // ColorFilter.mode toString in this Flutter version:
+        //   "ColorFilter.mode(Color(alpha: 0.6000, red: ..., green: ..., blue: ...), srcIn)"
+        // Match the alpha component substring directly. Pre-fix was 0.4;
+        // post-fix is 0.6. Tolerate the trailing zeros (0.6000) by
+        // matching on the prefix only.
+        final filterStr = colorFilter.toString();
+        expect(
+          filterStr,
+          contains('alpha: 0.6'),
+          reason:
+              'PR-5 M8: the pencil icon must render at alpha ≈ 0.6. '
+              'Pre-fix was 0.4 — invisible. Got: $filterStr',
+        );
+
+        // Sanity that AppIcons constant we expect is the edit pencil.
+        expect(AppIcons.edit, isNotNull);
+      },
+    );
+
+    testWidgets('pencil disappears when the title is in editing mode', (
+      tester,
+    ) async {
+      // Sanity: the icon is only visible in the non-editing branch. The
+      // TextField branch has no pencil. Pinning this avoids a regression
+      // where a future refactor accidentally renders the pencil over the
+      // input.
+      await tester.pumpWidget(_buildTitle(name: 'Push Day', isEditing: true));
+
+      final pencilBoxes = tester
+          .widgetList<SizedBox>(
+            find.descendant(
+              of: find.byType(ActiveWorkoutAppBarTitle),
+              matching: find.byType(SizedBox),
+            ),
+          )
+          .where((b) => b.width == 16 && b.height == 16)
+          .toList();
+      expect(
+        pencilBoxes,
+        isEmpty,
+        reason:
+            'M8 (PR-5): the pencil icon must NOT render while the title is '
+            'in editing mode — the TextField branch is rendered instead.',
+      );
+    });
   });
 }
