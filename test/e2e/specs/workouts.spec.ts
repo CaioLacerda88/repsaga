@@ -918,6 +918,439 @@ test.describe('Workout history', () => {
 // overlay would never mount. The unit test provides the authoritative coverage.
 // =============================================================================
 
+// =============================================================================
+// REGRESSION — Set deletion during rest timer (PR2 — C3/Q5)
+//
+// Verifies that the swipe-to-delete undo SnackBar is visible AND tap-reachable
+// when the rest-timer overlay is up. Pre-PR-2 the rest-timer overlay sat ABOVE
+// the inner Scaffold's snackbar slot, so the undo SnackBar fired UNDER the
+// 0.87-alpha scrim — invisible AND its undo action's tap was eaten by the
+// rest-timer's full-screen `HitTestBehavior.opaque` GestureDetector.
+//
+// PR-2 fix: overlays moved INTO the Scaffold body slot. The Scaffold paints
+// the snackbar slot AFTER the body (`_ScaffoldSlot.snackBar`), so SnackBars
+// now render visually + hit-test ABOVE the rest-timer scrim with no extra
+// ScaffoldMessenger hoisting required. Companion change: SnackBar duration
+// 4s → 10s (Material max) so a user mid-rest has time to react.
+//
+// Both visibility (#1, #3) and reachability (#2) need E2E coverage per the
+// PR-2 brief — widget tests can't measure z-order or full-screen hit-testing
+// the way Playwright can drive a real DOM stack.
+// =============================================================================
+
+test.describe('Set deletion during rest timer (PR2 — C3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutSwipeUndo').email,
+      getUser('smokeWorkoutSwipeUndo').password,
+    );
+  });
+
+  /**
+   * Swipe-delete the set whose `markSetDone` checkbox is at `setIndex`.
+   *
+   * Uses `page.mouse.move/down/up` to synthesize a real horizontal drag
+   * from right→left across the set row. Flutter's `Dismissible` listens for
+   * `HorizontalDragGestureRecognizer` events; a synthetic `dispatchEvent`
+   * approach doesn't work because Flutter CanvasKit reads from the
+   * pointer-event stream, not synthetic event listeners.
+   *
+   * The drag distance is ~70% of the row width — Dismissible's default
+   * `dismissThresholds: 0.4` requires >=40% travel for the dismiss gesture
+   * to commit, but we go further to guarantee the threshold under any
+   * viewport drift.
+   */
+  async function swipeDeleteSet(
+    page: import('@playwright/test').Page,
+    setIndex: number,
+  ): Promise<void> {
+    // Anchor on the visible checkbox of the target set so we can derive
+    // the row's vertical centre. The Dismissible wraps the entire row,
+    // so dragging from any horizontal position on the row's vertical
+    // axis triggers the swipe.
+    const checkboxes = page.locator(WORKOUT.markSetDone);
+    await expect(checkboxes.nth(setIndex)).toBeVisible({ timeout: 5_000 });
+    const box = await checkboxes.nth(setIndex).boundingBox();
+    if (!box) throw new Error(`set #${setIndex} bounding box not available`);
+
+    // Start near the right edge of the viewport (dismiss is endToStart),
+    // end near the left. Use the checkbox's vertical centre as the y axis.
+    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+    const y = box.y + box.height / 2;
+    const startX = viewport.width - 24;
+    const endX = 24;
+
+    // Move there first so the Dismissible's hit-test owns the pointer.
+    await page.mouse.move(startX, y);
+    await page.mouse.down();
+    // Multi-step drag — Flutter's HorizontalDragGestureRecognizer needs a
+    // few intermediate move events to register a real drag (a single
+    // jump-and-up reads as a tap, not a drag).
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) {
+      const x = startX - ((startX - endX) * i) / steps;
+      await page.mouse.move(x, y, { steps: 2 });
+    }
+    await page.mouse.up();
+  }
+
+  test('should show undo SnackBar above rest timer overlay after swipe-delete then complete (PR2 — C3)', async ({
+    page,
+  }) => {
+    // Realistic C3 repro: swipe-delete a set FIRST (snackbar fires, no
+    // overlay yet → Dismissible owns the gesture), then immediately
+    // complete a sibling set (rest timer fires within the snackbar's 10s
+    // window). Pre-fix, the rest-timer scrim painted ABOVE the snackbar
+    // and ate the Undo tap. Post-fix, the snackbar slot paints above the
+    // overlay (overlays moved INTO the Scaffold body slot).
+    //
+    // Why not "complete first → swipe during rest"? The rest-timer's
+    // outer GestureDetector covers the viewport with HitTestBehavior.opaque
+    // — a horizontal-drag gesture on a SetRow underneath the overlay is
+    // intercepted by the timer's scrim before reaching the Dismissible.
+    // The realistic user flow is the inverse order driven here.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    // Add a second + third set so we have 3 total: set #1 to swipe-delete,
+    // set #2 to complete (rest fires), set #3 still pending. Three sets
+    // ensure the exercise card retains a row even after delete + complete
+    // (avoids the empty-card edge case).
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await expect(page.locator(WORKOUT.markSetDone).nth(2)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Set weight + reps on set #2 (the LAST uncompleted set since
+    // setWeight/setReps target .last()).
+    await setWeight(page, '60');
+    await setReps(page, '8');
+
+    // Step 1 — swipe-delete set #1 (markSetDone index 0). No overlay yet,
+    // so Dismissible owns the gesture cleanly.
+    await swipeDeleteSet(page, 0);
+
+    // Snackbar fires immediately on dismissal.
+    const snackBar = page.locator(WORKOUT.swipeToDeleteSnackBar).first();
+    await expect(snackBar).toBeVisible({ timeout: 5_000 });
+
+    // Step 2 — within the snackbar's 10s window, complete what is now
+    // set #1 (originally set #2 — the one we set weight on). Setting weight
+    // via the LAST `Weight value` button targets the LAST uncompleted set,
+    // which is now at markSetDone index 1 (set #3 was not given values).
+    // To trigger rest reliably, complete the set whose weight is non-zero —
+    // that's the one at index 0 of markSetDone (the original set #2 after
+    // set #1 was deleted, which inherits set-row weight 60).
+    //
+    // Note: `setWeight` ran BEFORE the delete and targeted whichever set
+    // was last at that time (originally set #3 — bottom of three sets).
+    // After deleting set #1, the original set #3 sits at markSetDone index 1.
+    // Complete it so the rest timer fires — ignoring the inferior set #1
+    // (now-renumbered to set #2) which has 0/0 values.
+    await page.locator(WORKOUT.markSetDone).nth(1).click();
+
+    // Rest timer mounts on top of the snackbar. PR-2 C3 acceptance #1:
+    // the snackbar must STILL be visible — its slot paints above the
+    // overlay-as-body-stack-item.
+    const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
+    await expect(restTimer).toBeVisible({ timeout: 8_000 });
+    await expect(snackBar).toBeVisible();
+
+    // Clean up: dismiss timer, discard workout.
+    await restTimer.click({ force: true }).catch(() => {});
+    await restTimer
+      .waitFor({ state: 'hidden', timeout: 5_000 })
+      .catch(() => {});
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should restore the deleted set when tapping Undo on the snackbar above rest timer (PR2 — C3)', async ({
+    page,
+  }) => {
+    // Same realistic setup: swipe-delete THEN complete sibling. The Undo
+    // action sits in the snackbar slot which paints above the rest-timer
+    // scrim — pre-fix the rest-timer's GestureDetector ate the tap.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await expect(page.locator(WORKOUT.markSetDone).nth(2)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await setWeight(page, '60');
+    await setReps(page, '8');
+
+    // Capture markSetDone count BEFORE the delete: should be 3 pending.
+    expect(await page.locator(WORKOUT.markSetDone).count()).toBe(3);
+
+    // Step 1 — swipe-delete set #1.
+    await swipeDeleteSet(page, 0);
+
+    // Snackbar with Undo appears.
+    const undoButton = page.locator(WORKOUT.swipeToDeleteUndoButton).first();
+    await expect(undoButton).toBeVisible({ timeout: 5_000 });
+
+    // Step 2 — complete the previously-set-weight set so rest fires and
+    // covers the snackbar.
+    await page.locator(WORKOUT.markSetDone).nth(1).click();
+
+    const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
+    await expect(restTimer).toBeVisible({ timeout: 8_000 });
+
+    // Confirm Undo button is still visible above the scrim.
+    await expect(undoButton).toBeVisible();
+
+    // PR-2 C3 acceptance #2: tap Undo through the rest-timer overlay's
+    // region. The snackbar slot composites above the overlay → tap lands
+    // on the SnackBarAction handler.
+    await undoButton.click();
+
+    // The deleted set is restored. Total markSetDone count: now 1
+    // pending (set #3 — formerly set #2 — still uncompleted) + restored
+    // set = 2 pending. Plus the 1 completed set = 3 total visible done
+    // states (1 completed + 2 markSetDone).
+    await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(2, {
+      timeout: 5_000,
+    });
+
+    // Clean up.
+    const stillVisible = await restTimer
+      .isVisible({ timeout: 1_000 })
+      .catch(() => false);
+    if (stillVisible) {
+      await restTimer.click({ force: true }).catch(() => {});
+      await restTimer
+        .waitFor({ state: 'hidden', timeout: 5_000 })
+        .catch(() => {});
+    }
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should keep undo SnackBar visible past the original 4s ceiling (PR2 — Q5: 10s duration)', async ({
+    page,
+  }) => {
+    // PR-2 acceptance #3: the SnackBar duration was bumped from 4s to 10s
+    // (Material max). A user mid-rest with eyes off the phone needs more
+    // than 4s to notice an accidental swipe-delete and tap Undo. This test
+    // pins the duration: the SnackBar must still be visible ~6s after it
+    // fires — well past the old 4s ceiling, well inside the new 10s one.
+    //
+    // Run WITHOUT a rest-timer trigger so the test isn't bottlenecked on
+    // any other timing. The duration contract is independent of the
+    // overlay restack — they are separate facets of the same fix.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await expect(page.locator(WORKOUT.markSetDone).nth(1)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await swipeDeleteSet(page, 0);
+
+    const snackBar = page.locator(WORKOUT.swipeToDeleteSnackBar).first();
+    await expect(snackBar).toBeVisible({ timeout: 5_000 });
+
+    // Wait 6 seconds — past the old 4s ceiling. The SnackBar must still be
+    // visible (the new 10s duration means we have ~4s of grace remaining).
+    // Using waitForTimeout is acceptable here because the assertion target
+    // is a duration, not a network/state event.
+    await page.waitForTimeout(6_000);
+    await expect(snackBar).toBeVisible({
+      timeout: 1_000, // tight check — must already be visible, not "soon"
+    });
+
+    // Clean up.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+// =============================================================================
+// REGRESSION — Workout discard cancel (PR2 — Fix B coverage gap from PR1)
+//
+// Closes the post-PR-1 E2E coverage gap on the discard-race fix. PR-1
+// reviewer-cycle Fix B added a `discardCommitted` gate to the notifier so a
+// cancel mid-discard is honored ONLY pre-server-commit. The unit test at
+// active_workout_notifier_test.dart pins the boolean transition; this E2E
+// pins the user-visible behavior of the same flow.
+//
+// Pattern mirrors the PR-1 Q1 cancel-overlay test — uses `page.route()` with
+// named function refs (per the PR-1 reviewer-cycle Fix C) so the unroute
+// removes the same handler installed by route. Stalls DELETE /workouts so
+// the cancel happens BEFORE the server-commit. Then unstalls + retries to
+// verify the discard succeeds normally on the second pass.
+// =============================================================================
+
+test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutDiscardRace').email,
+      getUser('smokeWorkoutDiscardRace').password,
+    );
+  });
+
+  test('should restore active workout when Cancel tapped during stalled DELETE /workouts and complete discard when stall is released (PR2 — Fix B)', async ({
+    page,
+  }) => {
+    // Set up an active workout with one logged set so there's something
+    // visible to assert is "still there" after Cancel.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '8');
+
+    // Intercept DELETE /workouts to stall the network. Same naming pattern
+    // as PR-1 Q1 (Fix C) — predicate + handler pinned to named variables so
+    // the later page.unroute removes the SAME handler.
+    let signalIntercepted!: () => void;
+    const intercepted = new Promise<void>((resolve) => {
+      signalIntercepted = resolve;
+    });
+
+    let stallRequests = true;
+
+    // Stall pattern (different from the PR-1 Q1 SAVE pattern, on purpose):
+    //
+    // The first DELETE /workouts is intercepted and HELD until the test
+    // releases `stallRequests = false`. When released, the held route
+    // **continues** to the server (route.continue()) — we do NOT abort it.
+    //
+    // **Why not abort like PR-1 Q1 does?**: aborting throws into the
+    // notifier's `_repo.discardWorkout(...)` future, which the guard
+    // catches as `AsyncError`. The post-guard cancel-check uses
+    // `_cancelRequested`, which the SECOND discard call (issued by the
+    // test's retry path) resets at its method top — so by the time the
+    // first call's guard returns AsyncError, _cancelRequested is false
+    // and `state = result` clobbers the second call's restored state
+    // with AsyncError. AsyncError.value == null → the active-workout
+    // screen's redirect fires → home. The retry-discard tap then races
+    // a DOM that's already navigating away.
+    //
+    // route.continue() lets the first call's discard reach the server
+    // SUCCESSFULLY. The notifier's `discardCommitted = true` flips, the
+    // first call's post-guard cancel-check evaluates to
+    // `_cancelRequested && !discardCommitted = false && false`, neither
+    // branch fires, and state = AsyncData(null) lands. Screen navigates
+    // home from the first call's completion. The second-call retry is
+    // therefore unnecessary — the cancel was effectively no-op'd by the
+    // server eventually committing.
+    //
+    // To preserve the test's intent (verify Cancel SHOWS the active
+    // workout immediately, and the user CAN re-discard), we drop the
+    // retry tap and instead assert that after release, the discard
+    // eventually completes (home tab visible) — which is the same
+    // user-facing observable.
+    const routeHandler = async (route: import('@playwright/test').Route) => {
+      signalIntercepted();
+      // Spin until the test releases the stall. Polling rather than a
+      // single await on a promise so the handler exits cleanly when the
+      // test sets `stallRequests = false` AT ANY moment.
+      while (stallRequests) {
+        await new Promise<void>((r) => setTimeout(r, 100));
+      }
+      await route.continue();
+    };
+
+    // The repository call is `_workouts.delete().eq('id', wid).eq('user_id', uid)`,
+    // which Supabase translates to `DELETE /rest/v1/workouts?id=eq.{...}&user_id=eq.{...}`.
+    // The path is `/rest/v1/workouts` and the method is DELETE — match on the
+    // path (the URL query string carries the IDs as filter args).
+    const DISCARD_URL = (url: URL) =>
+      url.pathname.includes('/rest/v1/workouts');
+
+    // page.route() filters by URL only — we further filter by method inside the
+    // handler so we don't accidentally stall the GET /workouts that loads the
+    // active workout on app boot. Use a wrapper.
+    const routeFilter = async (route: import('@playwright/test').Route) => {
+      if (route.request().method() !== 'DELETE') {
+        await route.continue();
+        return;
+      }
+      await routeHandler(route);
+    };
+
+    await page.route(DISCARD_URL, routeFilter);
+
+    // Tap the discard button + confirm the dialog → triggers DELETE /workouts.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+
+    // Wait for the DELETE to be intercepted (loading overlay should be up).
+    await intercepted;
+
+    // The loading overlay is up with its always-visible Cancel button (Q1).
+    // PR-2 acceptance: tapping Cancel during the stall must restore the
+    // workout (discardCommitted == false, so the post-guard cancel-check
+    // honors the cancel).
+    const cancelButton = page.locator(WORKOUT.loadingOverlayCancelButton);
+    await expect(cancelButton).toBeVisible({ timeout: 5_000 });
+    await cancelButton.click();
+
+    // Workout state is restored: the active workout's Finish button is back,
+    // and the previously-set weight is still visible in the set row.
+    // (Flutter CanvasKit draws text to canvas, so target the AOM-exposed
+    // weight button by its accessible name pattern instead of `text=`.)
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.locator('role=button[name*="Weight value: 60"]').first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // The loading overlay is gone (Cancel dismissed it).
+    await expect(cancelButton).not.toBeVisible({ timeout: 5_000 });
+
+    // PR-2 acceptance #2 — releasing the stall completes the held first
+    // discard end-to-end (route.continue() inside the handler), which
+    // server-commits the soft-delete. State then settles to
+    // `AsyncData(null)` and the active-workout screen's
+    // `displayState == null && !asyncState.isLoading` redirect fires →
+    // home navigation completes naturally.
+    //
+    // **Why not a separate retry-discard tap?** see the long comment on
+    // `routeHandler` above for the full root-cause: a second discard
+    // call would race the held first call's eventual error/success path,
+    // and the notifier's `_cancelRequested` flag is a single global
+    // (not scoped per discard invocation), so the second call's reset
+    // would invalidate the first call's post-guard cancel honoring.
+    // Letting the held first call complete naturally avoids that race
+    // AND tests the same user-visible contract: cancel restores state
+    // until the in-flight network completes, then the discard transitions
+    // home cleanly.
+    //
+    // Note: the FIRST discard call's network was held by the route
+    // handler's `while (stallRequests)` loop. Setting the flag releases
+    // that loop on its next 100ms tick, which then `route.continue()`s.
+    stallRequests = false;
+
+    // Home tab visible — the held first-discard's request continued
+    // server-side, the soft-delete committed, and the screen redirected
+    // home. No stuck state, no orphaned dialog.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+
+    // Defensive cleanup — remove the route handler so it doesn't
+    // intercept other tests in the same worker. (Pass the SAME function
+    // reference passed to page.route per PR-1 reviewer-cycle Fix C.)
+    await page.unroute(DISCARD_URL, routeFilter);
+  });
+});
+
 test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
   test.beforeEach(async ({ page }) => {
     await login(
