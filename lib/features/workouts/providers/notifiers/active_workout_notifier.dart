@@ -265,13 +265,28 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           exercise: re.exercise,
         );
 
-        final previousSets = lastSets[re.exerciseId] ?? [];
+        // PR-4 / M1 — filter previous-session warmups before clamping.
+        // Same Q2 contract as `_computeNewSetDefaults` Priority 1
+        // (warmup sets are not performance data; FitNotes / Hevy benchmark).
+        // Pre-fix the routine-start path indexed `previousSets` directly,
+        // so a user whose previous session was `[warmup@40, warmup@60,
+        // working@100]` got their routine pre-filled `[40, 60, 100,
+        // 100, ...]` — set #1 of the routine started at warmup weight.
+        // Filtering here keeps the routine path in lockstep with the
+        // ad-hoc add-set path. Edge case: if ALL previous sets were
+        // warmups, the filter returns empty and we fall through to
+        // equipment defaults via `prev?.weight ?? equipDefaults.weight`.
+        final previousSets = (lastSets[re.exerciseId] ?? const <ExerciseSet>[])
+            .where((s) => s.setType != SetType.warmup)
+            .toList(growable: false);
         final equipDefaults = defaultSetValues(
           re.exercise.equipmentType,
           weightUnit,
         );
         final sets = List.generate(re.setCount, (setIndex) {
-          // Use the matching previous set, or the last previous set if fewer.
+          // Use the matching previous WORKING set, or the last previous
+          // working set if fewer. Warmup-only previous sessions short-
+          // circuit to equipment defaults via the null-coalescing chain.
           final prev = previousSets.isNotEmpty
               ? previousSets[setIndex < previousSets.length
                     ? setIndex
