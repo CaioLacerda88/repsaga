@@ -597,7 +597,7 @@ void main() {
           );
           expect(outerHitBox, findsOneWidget);
           final center = tester.getCenter(outerHitBox);
-          // Slack zone tap: +22dp x-offset puts us 6dp inside the
+          // Slack zone tap: +22dp x-offset puts us 4dp inside the
           // right edge (52/2 - 22 = 4dp from edge, well inside the
           // slack ring outside the inner 32dp).
           await tester.tapAt(Offset(center.dx + 22, center.dy));
@@ -613,7 +613,7 @@ void main() {
                 'outer was 40dp wide → slack-zone taps at the cell edges '
                 'fell on the empty Container padding and missed entirely. '
                 'Widening to 52dp closes the gap. If a future refactor '
-                'narrows the outer SizedBox or breaks `deferToChild` '
+                'narrows the outer SizedBox or breaks slack-zone '
                 'routing, this pin fires.',
           );
         });
