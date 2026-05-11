@@ -79,7 +79,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
 | 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
-| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1..4 shipped, PR-5..7 open) | IN PROGRESS | #195 (PR-1), #198 (PR-2), #200 (PR-3), #202 (PR-4) |
+| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1..5 shipped, PR-6..7 open) | IN PROGRESS | #195 (PR-1), #198 (PR-2), #200 (PR-3), #202 (PR-4), #204 (PR-5) |
 | Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
