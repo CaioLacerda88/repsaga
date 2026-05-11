@@ -153,9 +153,17 @@ class FinishWorkoutCoordinator {
       final asyncState = ref.read(activeWorkoutProvider);
       if (asyncState.hasError) {
         _isFinishHandled = false;
-        ScaffoldMessenger.of(context).showSnackBar(
+        // PR-3 (review fix) — use the ROOT messenger here, not the route-scoped
+        // one installed by `ActiveWorkoutScreen`. The error path stays on the
+        // active-workout screen (we early-return below), so technically the
+        // local messenger would also work; using `rootContext` keeps all
+        // finish-coordinator snackbars on a single, predictable messenger
+        // (the offline-saved snackbar a few lines below MUST be on the root
+        // because it's shown immediately before navigating away from the
+        // screen, which would otherwise destroy a local messenger's queue).
+        ScaffoldMessenger.of(rootContext).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context).failedToSaveWorkout),
+            content: Text(AppLocalizations.of(rootContext).failedToSaveWorkout),
           ),
         );
         return;
@@ -193,12 +201,21 @@ class FinishWorkoutCoordinator {
       // outage from "phone is offline" — both still queue, both still drain
       // automatically, but the cause matters for trust.
       if (wasSavedOffline && context.mounted) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final l10n = AppLocalizations.of(context);
+        // PR-3 (review fix) — must use the ROOT messenger. Local messengers
+        // installed by `ActiveWorkoutScreen` for in-screen undo affordances
+        // (H5 add-exercise, swipe-to-delete set, etc.) get torn down with
+        // the route the moment `navigateAfterFinish` runs below. A snackbar
+        // posted to a local messenger immediately before navigation would
+        // never display on the destination screen — exactly the behavior we
+        // want for in-screen undos but exactly what we DON'T want for
+        // "Saved offline" / "Saved (server retry)" confirmations that need
+        // to follow the user to /home or /pr-celebration.
+        final colorScheme = Theme.of(rootContext).colorScheme;
+        final l10n = AppLocalizations.of(rootContext);
         final message = wasServerErrorQueued
             ? l10n.workoutSavedServerError
             : l10n.workoutSavedOffline;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(rootContext).showSnackBar(
           SnackBar(
             content: Text(
               message,

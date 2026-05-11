@@ -128,6 +128,26 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // reachable during rest is fine (no destructive action mid-rest), and
     // the AppBar's discard-X is exactly the affordance a user wanting to
     // bail on a workout mid-rest needs.
+    //
+    // PR-3 (review fix) — wrap the body in a route-scoped `ScaffoldMessenger`.
+    // Without this, in-screen snackbars (H5 add-exercise undo, swipe-to-delete
+    // set undo, etc.) attach to the app-level messenger that MaterialApp
+    // installs at the root. Their queue then survives `context.go('/home')`
+    // — which has the user-visible regression of the H5 "Bench Press added"
+    // snackbar still being on-screen when the user navigates Home → Profile
+    // → Manage Data, blocking the manage-data success snackbar from
+    // appearing (MD-006/007/010/011 all failed for this reason).
+    //
+    // A route-scoped messenger is bounded by the screen's lifetime: when
+    // the route is replaced post-finish/discard, the messenger disposes
+    // and its queue dies cleanly. Snackbars that MUST outlive the screen
+    // (offline-saved confirmation, failed-to-save error from the finish
+    // coordinator) explicitly use the root messenger via `rootContext`.
+    //
+    // Snackbar-over-rest-timer ordering (PR-2 C3 contract) is preserved —
+    // the local messenger sits ABOVE the Scaffold, but `Scaffold._ScaffoldSlot`
+    // still paints its snackbar slot AFTER the body within that Scaffold,
+    // so the snackbar still renders above the body's rest-timer overlay.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -135,12 +155,14 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           _discardCoordinator.show(context, ref, displayState);
         }
       },
-      child: _ActiveWorkoutBody(
-        state: displayState,
-        discardCoordinator: _discardCoordinator,
-        finishCoordinator: _finishCoordinator,
-        showLoadingOverlay: asyncState.isLoading,
-        showRestTimerOverlay: timerState != null,
+      child: ScaffoldMessenger(
+        child: _ActiveWorkoutBody(
+          state: displayState,
+          discardCoordinator: _discardCoordinator,
+          finishCoordinator: _finishCoordinator,
+          showLoadingOverlay: asyncState.isLoading,
+          showRestTimerOverlay: timerState != null,
+        ),
       ),
     );
   }
