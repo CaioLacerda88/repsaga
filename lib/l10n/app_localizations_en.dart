@@ -1369,10 +1369,10 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count logged sets',
-      one: '$count logged set',
+      other: 'sets',
+      one: 'set',
     );
-    return 'Your $_temp0 will count toward $newExercise PRs (not $oldExercise).';
+    return 'Swapping from $oldExercise: your $count logged $_temp0 will move to $newExercise\'s PR history.';
   }
 
   @override

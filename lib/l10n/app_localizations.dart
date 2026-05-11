@@ -2483,7 +2483,7 @@ abstract class AppLocalizations {
   /// PR-3 Q3 — confirm dialog body explaining that completed sets re-attribute to the new exercise's PR history. Uses concrete names on both sides + the count of logged sets.
   ///
   /// In en, this message translates to:
-  /// **'Your {count, plural, one{{count} logged set} other{{count} logged sets}} will count toward {newExercise} PRs (not {oldExercise}).'**
+  /// **'Swapping from {oldExercise}: your {count} logged {count, plural, one{set} other{sets}} will move to {newExercise}\'s PR history.'**
   String swapExerciseConfirmBody(
     int count,
     String newExercise,

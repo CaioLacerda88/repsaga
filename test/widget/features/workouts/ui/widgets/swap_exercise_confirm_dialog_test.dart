@@ -134,7 +134,11 @@ void main() {
         // Both names + the PR-attribution language must be in the body.
         expect(bodyText, contains('Incline Bench'));
         expect(bodyText, contains('Bench Press'));
-        expect(bodyText, contains('PRs'));
+        // PR-3 (review reframe) — copy now uses "PR history" (front-loaded
+        // risk: "Swapping from X: ... will move to Y's PR history") instead
+        // of the former trailing "(not X)" parenthetical. The substring
+        // "PR" still pins the load-bearing concept.
+        expect(bodyText, contains('PR history'));
       },
     );
 
