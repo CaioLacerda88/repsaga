@@ -2060,37 +2060,35 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
       timeout: 5_000,
     });
 
-    // Step 4 — undo the FIRST delete. The earlier snackbar may still be
-    // active (10s window) or it may have been replaced. We do best-effort:
-    // tap the latest Undo if visible. Either way, the M3 fix's stronger
-    // guarantee is the SECOND undo's positioning, which is verified by
-    // the count assertion above.
-    const stillHasUndo = await page
-      .locator(WORKOUT.swipeToDeleteUndoButton)
-      .last()
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
+    // Step 4 — undo the FIRST delete. The 10s snackbar window is more than
+    // enough headroom for the previous step's interactions, so we wait
+    // deterministically with the same default timeout as the rest of the
+    // test (no 2s catch — the title promises a final-order assertion and
+    // it MUST run unconditionally; PR #202 review W1).
+    //
+    // If the SnackBar's fade-out animation ever shortens this window in
+    // practice, fall back to pulling the count + label checks outside any
+    // conditional (reviewer option b).
+    const firstUndo = page.locator(WORKOUT.swipeToDeleteUndoButton).last();
+    await expect(firstUndo).toBeVisible({ timeout: 8_000 });
+    await firstUndo.click();
+    await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(4, {
+      timeout: 5_000,
+    });
 
-    if (stillHasUndo) {
-      await page.locator(WORKOUT.swipeToDeleteUndoButton).last().click();
-      await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(4, {
+    // Final assertion (UNCONDITIONAL): sets 2–4 labels are consecutive and
+    // visible. Set 2+ renders as AOM buttons (isCopyable=true InkWell), so
+    // role=button[name*="Set N."] is sufficient. Set 1 is a generic AOM
+    // node — its existence is proved by the toHaveCount(4) above. Pre-fix,
+    // sets would land in wrong slots producing wrong labels; renumbering
+    // on insert keeps them consecutive only when the M3 insertion order is
+    // correct. This is the load-bearing assertion the test title promises.
+    for (const n of [2, 3, 4]) {
+      await expect(
+        page.locator(`role=button[name*="Set ${n}."]`).first(),
+      ).toBeVisible({
         timeout: 5_000,
       });
-
-      // Final assertion: sets 2–4 labels are consecutive and visible.
-      // Set 2+ renders as AOM buttons (isCopyable=true InkWell), so
-      // role=button[name*="Set N."] is sufficient. Set 1 is a generic
-      // AOM node — its existence is proved by the toHaveCount(4) above.
-      // Pre-fix, sets would land in wrong slots producing wrong labels;
-      // renumbering on insert keeps them consecutive only when the
-      // M3 insertion order is correct.
-      for (const n of [2, 3, 4]) {
-        await expect(
-          page.locator(`role=button[name*="Set ${n}."]`).first(),
-        ).toBeVisible({
-          timeout: 5_000,
-        });
-      }
     }
 
     // Cleanup: discard so the next test run starts fresh.
