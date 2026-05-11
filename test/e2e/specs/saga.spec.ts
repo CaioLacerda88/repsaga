@@ -424,7 +424,7 @@ test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => 
 // the immediacy property at the unit level.
 // ---------------------------------------------------------------------------
 
-test.describe('Saga — class label updates after rank cross (S12)', () => {
+test.describe('Saga — class label updates after rank cross (S12)', { tag: '@flaky' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,

@@ -112,6 +112,36 @@ class _KgProfileNotifier extends AsyncNotifier<Profile?>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Capturing notifier for M1 widget-level test. Records the weight argument
+/// passed to [addSet] so we can assert the warmup filter was applied.
+/// All other methods are no-ops (same as [_FixedActiveWorkoutNotifier]).
+class _CapturingActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
+    implements ActiveWorkoutNotifier {
+  _CapturingActiveWorkoutNotifier(this.state_);
+  final ActiveWorkoutState state_;
+
+  double? capturedWeight;
+  int? capturedReps;
+
+  @override
+  Future<ActiveWorkoutState?> build() async => state_;
+
+  @override
+  Future<void> addSet(
+    String workoutExerciseId, {
+    double? defaultWeight,
+    int? defaultReps,
+  }) async {
+    capturedWeight = defaultWeight;
+    capturedReps = defaultReps;
+    // Do not mutate state — the widget will observe no new set, which is fine
+    // for asserting the pre-fill values that were computed and passed in.
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 Widget _buildExerciseCard(ActiveWorkoutExercise activeExercise) {
   return ProviderScope(
     overrides: [
@@ -409,6 +439,124 @@ void main() {
                 'affordances for the same action (one invisible) violated '
                 'the no-redundant-affordance rule. If this fails, someone '
                 're-added the long-press handler — see BUGS.md PR-3 / H3.',
+          );
+        },
+      );
+    });
+
+    // -----------------------------------------------------------------------
+    // PR-4 / M1 — _computeNewSetDefaults warmup filter
+    //
+    // `_computeNewSetDefaults` is private to [ExerciseCard]. This widget test
+    // verifies it via the public "Add Set" button: seed `lastWorkoutSetsProvider`
+    // with a previous session that contains warmup sets before the working set,
+    // then tap "Add Set" and assert the notifier receives the WORKING weight (100),
+    // not the warmup weight (40). This pins the CARD-level M1 fix path, which is
+    // separate from the NOTIFIER-level `startFromRoutine` path covered by unit
+    // tests. See BUGS.md PR-4 / M1.
+    // -----------------------------------------------------------------------
+    group('PR-4 / M1 — Add Set pre-fill skips previous-session warmups', () {
+      testWidgets(
+        'M1: Add Set pre-fills working weight (100kg), skipping warmup weights '
+        '(40kg / 60kg) from the previous session',
+        (tester) async {
+          // Build an exercise card with ONE existing set (so the second add
+          // hits Priority 1 of `_computeNewSetDefaults` — previous-session
+          // match). The capturing notifier records the defaultWeight passed to
+          // addSet. Seed `lastWorkoutSetsProvider` with [warmup@40, warmup@60,
+          // working@100] for exercise-001 to reproduce the M1 bug shape.
+          final capturingNotifier = _CapturingActiveWorkoutNotifier(
+            _makeState(_makeActiveExercise(setCount: 0)),
+          );
+
+          final prevWarmup1 = ExerciseSet(
+            id: 'prev-warm-1',
+            workoutExerciseId: 'we-prev',
+            setNumber: 1,
+            weight: 40,
+            reps: 12,
+            setType: SetType.warmup,
+            isCompleted: true,
+            createdAt: DateTime(2026, 5, 1),
+          );
+          final prevWarmup2 = ExerciseSet(
+            id: 'prev-warm-2',
+            workoutExerciseId: 'we-prev',
+            setNumber: 2,
+            weight: 60,
+            reps: 10,
+            setType: SetType.warmup,
+            isCompleted: true,
+            createdAt: DateTime(2026, 5, 1),
+          );
+          final prevWorking = ExerciseSet(
+            id: 'prev-work-1',
+            workoutExerciseId: 'we-prev',
+            setNumber: 3,
+            weight: 100,
+            reps: 8,
+            setType: SetType.working,
+            isCompleted: true,
+            createdAt: DateTime(2026, 5, 1),
+          );
+
+          final widget = ProviderScope(
+            overrides: [
+              activeWorkoutProvider.overrideWith(
+                () => capturingNotifier,
+              ),
+              restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+              profileProvider.overrideWith(() => _KgProfileNotifier()),
+              exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
+              // Seed previous session with [warmup@40, warmup@60, working@100].
+              // The key is 'exercise-001' — the exerciseId used by _testExercise.
+              lastWorkoutSetsProvider.overrideWith(
+                (ref, _) => Future.value({
+                  'exercise-001': [prevWarmup1, prevWarmup2, prevWorking],
+                }),
+              ),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: Scaffold(
+                body: SizedBox(
+                  width: 800,
+                  child: ExerciseCard(
+                    activeExercise: _makeActiveExercise(setCount: 0),
+                    reorderMode: false,
+                    isFirst: true,
+                    isLast: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          await tester.pumpWidget(widget);
+          // Drain the async provider builds for both activeWorkoutProvider
+          // and lastWorkoutSetsProvider.
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+
+          // Tap the "Add Set" button by its Semantics identifier.
+          final addSetFinder = find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'workout-add-set',
+          );
+          expect(addSetFinder, findsOneWidget, reason: 'Add Set button must be present');
+          await tester.tap(addSetFinder);
+          await tester.pump();
+
+          expect(
+            capturingNotifier.capturedWeight,
+            100.0,
+            reason:
+                'PR-4 / M1: `_computeNewSetDefaults` must filter previous-session '
+                'warmups BEFORE index-matching. With [warmup@40, warmup@60, '
+                'working@100], the first working-set match is 100kg — not 40kg '
+                '(the warmup at index 0). If this fails, the `.where(setType != '
+                'warmup)` filter in `_computeNewSetDefaults` is missing or broken.',
           );
         },
       );

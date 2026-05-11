@@ -2005,13 +2005,15 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
       timeout: 10_000,
     });
 
-    // Pre-condition: every set number 1–4 visible by accessible name.
-    // The `_SetNumberCell` Semantics emits "Set N. ..." regardless of
-    // copy-hint state. Match by `name=/^Set N\./` so we don't depend on
-    // the suffix copy.
-    for (const n of [1, 2, 3, 4]) {
+    // Pre-condition: all 4 set rows visible. `markSetDone` count already
+    // verified above; additionally confirm set labels 2–4 via their AOM
+    // button nodes (set 2+ renders as a button with "Set N." in the name
+    // because `isCopyable=true` produces a copyable InkWell). Set 1 is
+    // a generic node in the AOM (not a button) — its existence is
+    // covered by the `toHaveCount(4)` assertion above.
+    for (const n of [2, 3, 4]) {
       await expect(
-        page.locator(`role=group[name=/^Set ${n}\\./]`).first(),
+        page.locator(`role=button[name*="Set ${n}."]`).first(),
       ).toBeVisible({ timeout: 5_000 });
     }
 
@@ -2023,8 +2025,9 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
       timeout: 5_000,
     });
     // The "Set 4" label should no longer be present after the renumber.
+    // Set 4 was an isCopyable set (button), so use role=button.
     await expect(
-      page.locator(`role=group[name=/^Set 4\\./]`).first(),
+      page.locator(`role=button[name*="Set 4."]`).first(),
     ).not.toBeVisible({ timeout: 3_000 });
 
     // The first delete fires a snackbar. We don't tap Undo yet — we want
@@ -2074,17 +2077,16 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
         timeout: 5_000,
       });
 
-      // Final assertion: every original set number 1–4 is back in
-      // sequential order. Pre-fix this would FAIL because the restored
-      // sets land in the wrong renumbered slots — the resulting list
-      // renumber sequentially but the IDs are in the wrong slots.
-      // The visible setNumber 1–4 contract IS what survives the M3
-      // fix; renumbering on insert keeps the visible labels consecutive
-      // regardless of the underlying ID ordering. So we additionally
-      // assert each label resolves.
-      for (const n of [1, 2, 3, 4]) {
+      // Final assertion: sets 2–4 labels are consecutive and visible.
+      // Set 2+ renders as AOM buttons (isCopyable=true InkWell), so
+      // role=button[name*="Set N."] is sufficient. Set 1 is a generic
+      // AOM node — its existence is proved by the toHaveCount(4) above.
+      // Pre-fix, sets would land in wrong slots producing wrong labels;
+      // renumbering on insert keeps them consecutive only when the
+      // M3 insertion order is correct.
+      for (const n of [2, 3, 4]) {
         await expect(
-          page.locator(`role=group[name=/^Set ${n}\\./]`).first(),
+          page.locator(`role=button[name*="Set ${n}."]`).first(),
         ).toBeVisible({
           timeout: 5_000,
         });

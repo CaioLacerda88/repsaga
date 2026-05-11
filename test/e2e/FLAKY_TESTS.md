@@ -6,12 +6,20 @@ This is a **debt register**, not a permanent home. The goal is to converge to ze
 
 **State as of 2026-05-06 (Phase 21):** S4 + S4b (`rank-up-celebration.spec.ts` overflow card) were briefly tagged `@flaky` after CI hit 4 vCPU saturation at workers=4. Root cause was e2e assertions on Flutter `Timer.delayed` animation timing (1.1 s overlay holds, 4 s overflow auto-dismiss) that race against real wall-clock under any CPU contention. Discharged in the same PR by trimming the e2e assertions to the integration property the test exists to verify (cap-at-3 produces a visible overflow card with the correct `+N ranks` label; tap routes to /profile) and leaving the auto-dismiss timing to its widget test (`celebration_overflow_card_test.dart` — `tester.pump(Duration)` against a fake clock). Tag removed; verified 16 consecutive passes across workers=3 / workers=4 with `--repeat-each=5`.
 
+**State as of 2026-05-11 (PR-4 QA gate):** S12 (`saga.spec.ts` class-badge update after rank cross) tagged `@flaky`. Full-suite run at workers=4 hits a 60s test timeout when CPU saturation extends the `dismissCelebrationIfPresent(25_000)` budget past the test-level wall-clock limit. Passes 100% in isolation (49.4s solo run). Root cause is the celebration overlay's `Timer.delayed` animation chain (~4–6s total) consuming most of the 60s budget under contention, leaving no slack for the subsequent `navigateToTab` → `waitFor` chain. Not a PR-4 regression — PR-4 did not touch `finishWorkout`, celebration logic, or RPG. Active investigation entry below.
+
 ## How this doc is used
 
 - `qa-engineer` excludes anything tagged `@flaky` from Stage 2 of the staged-run strategy and routes it through Stage 3 with `--retries=2` instead.
 - When a new flake appears, add a row here, tag the test `@flaky`, and open or update an investigation entry.
 - When a test passes 5 consecutive runs (cross-PR, cross-platform), remove the `@flaky` tag AND delete its entry here.
 - A flaky test that fails 3× in a row in Stage 3 has drifted toward "broken." Promote to a real bug report against `lib/**` (tech-lead) or `test/e2e/**` (qa-engineer self).
+
+## Active flaky tests
+
+| # | Spec | Test name | Tag | Observed mode | Suspected cause | Investigation status |
+|---|------|-----------|-----|---------------|-----------------|----------------------|
+| 22 | `specs/saga.spec.ts:437` | `should update class badge after chest crosses rank 5 (S12)` | `@flaky` | Fails under full-suite workers=4 run (60s timeout); passes 100% in isolation (49s) | `dismissCelebrationIfPresent(25_000)` + post-dismiss navigation chain saturates 60s budget under CPU contention — same shape as Phase 21 S4/S4b | **Open.** Fix options: (a) raise test timeout to 90s for this test only via `test.setTimeout(90_000)`; (b) make `finishWorkout` E2E helper wait for the celebration overlay to be gone before returning (deterministic wait over budget polling); (c) investigate whether ClassChangeOverlay + rank-up overlay can be fast-tracked in web test mode. Option (b) is cleanest. |
 
 ## Carryover entries (test-methodology, not bugs)
 
