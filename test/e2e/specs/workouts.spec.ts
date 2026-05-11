@@ -1356,7 +1356,7 @@ test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
   });
 });
 
-test.describe('Workout loading overlay cancel (PR1 — Q1)', { tag: '@flaky' }, () => {
+test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,

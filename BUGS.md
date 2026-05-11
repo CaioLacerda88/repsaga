@@ -80,39 +80,29 @@ Reviewer surfaced as a "one-question check": same C1 shape on the discard path. 
 
 ---
 
-## PR-2 — Tap target + undo snackbar reachability — OPEN
+## PR-2 — Tap target + undo snackbar reachability ✅ RESOLVED (PR #198, merged as `a7fa13a`)
 
 ### H1 — Done-checkbox tap target only 40dp wide
-**Status:** OPEN — assigned to PR-2
-**File:** `lib/features/workouts/ui/widgets/set_row.dart` `_DoneCell` lines ~1281-1296
+**Status:** RESOLVED — PR #198
+**Fix:** widened inner `GestureDetector` to full 52dp Container width and swapped `HitTestBehavior.deferToChild` → `translucent` so the slack ring is hittable. Pinned by `tester.getSize()` widget tests + a slack-zone single-fire test.
 
-Outer `SizedBox(width: 40, height: 48)` constrains the GestureDetector to 40dp horizontally even though the containing Container is 52dp wide. Combined with `MaterialTapTargetSize.shrinkWrap` + `VisualDensity.compact` on the Checkbox, the most time-critical tap in the app (mark set complete) misses Material's 48dp floor. Same issue for `_PredictedPrUncheckedMark` (32dp visual + 40dp wrapper).
-
-**Fix sketch:** change inner `SizedBox(width: 40, ...)` to `width: 48` or use full `52`. `deferToChild` hit behavior already prevents stealing taps from steppers.
-
-### C3 — Swipe-to-delete undo SnackBar is hidden behind rest timer overlay
-**Status:** OPEN — assigned to PR-2
-**Files:** `lib/features/workouts/ui/widgets/set_row.dart:264-278`, `lib/features/workouts/ui/widgets/rest_timer_overlay.dart:71-77`, `lib/features/workouts/ui/active_workout_screen.dart` (Stack ordering)
-
-Snackbar duration 4s. Set completion auto-starts rest timer (opaque scrim covering screen, intercepts taps). User accidentally swipe-deletes a set during rest → undo snackbar fires UNDER the overlay → invisible AND unreachable.
-
-**Fix sketch:** re-stack so `ScaffoldMessenger` overlay sits ABOVE `RestTimerOverlay` (dedicated `ScaffoldMessenger` higher in tree, or move rest timer into a non-blocking widget that excludes the snackbar slot). Bump duration 4s → 10s (Material max). Per Q5 decision.
+### C3 / Q5 — Swipe-to-delete undo SnackBar hidden behind rest timer overlay
+**Status:** RESOLVED — PR #198
+**Fix:** structural re-layering — moved `RestTimerOverlay` + `ActiveWorkoutLoadingOverlay` INTO `_ActiveWorkoutBody`'s Scaffold body slot via new `showLoadingOverlay` / `showRestTimerOverlay` flags. Flutter's `_ScaffoldSlot` paints the snackbar slot AFTER the body slot, so SnackBars now naturally composite above the overlays. Plus duration bumped 4s → 10s (Material max). Side effect (validated by UI critic): rest-timer scrim now covers body area only, not AppBar / FinishBottomBar — every reachable AppBar action is gated by a confirm dialog or non-destructive.
 
 ### Discard-race E2E (post-PR-1 gap)
-**Status:** OPEN — assigned to PR-2
-**File:** `test/e2e/specs/workouts.spec.ts` (new test)
-
-E2E for the reviewer-cycle Fix B (discard cancel-after-commit). Same `page.route()` stall pattern as PR-1's Q1 test but on `DELETE /workouts`. ~20 LOC. PR-2 is the right home since it touches the same overlay/snackbar surface.
+**Status:** RESOLVED — PR #198
+**Fix:** added `should restore active workout when Cancel tapped during stalled DELETE /workouts` E2E. Uses `route.continue()` instead of `route.abort()` to avoid an unrelated cross-invocation `_cancelRequested` race (separately tracked as S1).
 
 ### S1 — `DiscardWorkoutCoordinator._isShowingDialog` re-entrance window during post-cancel stall
-**Status:** OPEN — file under PR-3 (closest related cluster; scope minimal, non-blocking for PR-2 ship)
+**Status:** OPEN — assigned to PR-3 (closest related cluster; scope minimal, non-blocking for PR-2 ship)
 **File:** `lib/features/workouts/ui/coordinators/discard_workout_coordinator.dart`
 
-When `cancelLoading` is called mid-discard (the `discardWorkout()` awaitable is still in-flight waiting for the stalled DELETE), the notifier restores state immediately and the workout UI reappears. However, `_isShowingDialog` remains `true` inside the coordinator's `show()` method, which is still suspended at `await ref.read(activeWorkoutProvider.notifier).discardWorkout()`. Any subsequent tap on the AppBar X or system back gesture hits the `if (_isShowingDialog) return;` guard and silently no-ops. The user cannot re-open the discard dialog until the stalled network eventually completes and the `finally` clears the flag — an unbounded wait from the user's perspective (could be 30 seconds if the route handler is configured with a long abort timeout).
+When `cancelLoading` is called mid-discard (the `discardWorkout()` awaitable is still in-flight waiting for the stalled DELETE), the notifier restores state immediately and the workout UI reappears. However, `_isShowingDialog` remains `true` inside the coordinator's `show()` method, which is still suspended at `await ref.read(activeWorkoutProvider.notifier).discardWorkout()`. Any subsequent tap on the AppBar X or system back gesture hits the `if (_isShowingDialog) return;` guard and silently no-ops. The user cannot re-open the discard dialog until the stalled network eventually completes and the `finally` clears the flag — an unbounded wait from the user's perspective.
 
 **Evidence:** `DiscardWorkoutCoordinator.show` at lines 38–67. The flag is set at line 39 and only cleared in `finally` at line 66. `cancelLoading` operates on the notifier's state, not on the coordinator's flag — they are decoupled. The PR-2 E2E test (`Fix B`) uses `route.continue()` which lets the DELETE complete naturally, so the coordinator exits on its own. A test that asserts the discard dialog re-opens AFTER Cancel but BEFORE the stall resolves would fail.
 
-**Fix sketch:** in `DiscardWorkoutCoordinator.show`, listen for state restoration after `discardWorkout()` returns (e.g., check `ref.read(activeWorkoutProvider).valueOrNull != null` post-await) and if state was restored by a cancel, clear `_isShowingDialog` early so the user can retry. Alternatively, convert `_isShowingDialog` to a `ValueNotifier<bool>` and set it false as part of `cancelLoading`'s state emission path. Tech-lead should evaluate which coupling is cleaner.
+**Fix sketch:** in `DiscardWorkoutCoordinator.show`, listen for state restoration after `discardWorkout()` returns (check `ref.read(activeWorkoutProvider).valueOrNull != null` post-await) and if state was restored by a cancel, clear `_isShowingDialog` early so the user can retry. Alternatively, convert `_isShowingDialog` to a `ValueNotifier<bool>` and set it false as part of `cancelLoading`'s state emission path.
 
 ---
 
