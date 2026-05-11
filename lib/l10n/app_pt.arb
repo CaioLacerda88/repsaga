@@ -442,6 +442,10 @@
   "moveDown": "Mover para baixo",
   "swapExercise": "Trocar exercício",
   "removeExercise": "Remover exercício",
+  "swapExerciseConfirmTitle": "Trocar para {newExercise}?",
+  "swapExerciseConfirmBody": "{count, plural, one{Sua {count} série registrada vai contar} other{Suas {count} séries registradas vão contar}} para os recordes de {newExercise} (não de {oldExercise}).",
+  "swapExerciseConfirmAction": "Trocar",
+  "addExerciseUndo": "{name} adicionado",
   "rpeTooltip": "Percepção subjetiva de esforço",
 
   "last30Days": "30d",
@@ -477,7 +481,7 @@
 
   "reorderExercisesTooltip": "Reordenar exercícios",
   "exitReorderModeTooltip": "Sair do modo de reordenação",
-  "exerciseSemanticsLabel": "Exercício: {name}. Toque para detalhes. Toque e segure para trocar.",
+  "exerciseSemanticsLabel": "Exercício: {name}. Toque para detalhes.",
   "fillRemainingSetsSemantics": "Preencher séries restantes com os últimos valores",
   "addExerciseToWorkoutSemantics": "Adicionar exercício ao treino",
   "searchExercisesToAddSemantics": "Buscar exercícios para adicionar",

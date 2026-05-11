@@ -1356,6 +1356,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeExercise => 'Remove exercise';
 
   @override
+  String swapExerciseConfirmTitle(String newExercise) {
+    return 'Swap to $newExercise?';
+  }
+
+  @override
+  String swapExerciseConfirmBody(
+    int count,
+    String newExercise,
+    String oldExercise,
+  ) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count logged sets',
+      one: '$count logged set',
+    );
+    return 'Your $_temp0 will count toward $newExercise PRs (not $oldExercise).';
+  }
+
+  @override
+  String get swapExerciseConfirmAction => 'Swap';
+
+  @override
+  String addExerciseUndo(String name) {
+    return '$name added';
+  }
+
+  @override
   String get rpeTooltip => 'Rate of perceived exertion';
 
   @override
@@ -1471,7 +1499,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String exerciseSemanticsLabel(String name) {
-    return 'Exercise: $name. Tap for details. Long press to swap.';
+    return 'Exercise: $name. Tap for details.';
   }
 
   @override

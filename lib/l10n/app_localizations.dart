@@ -2474,6 +2474,34 @@ abstract class AppLocalizations {
   /// **'Remove exercise'**
   String get removeExercise;
 
+  /// PR-3 Q3 — confirm dialog title shown when the user tries to swap an exercise that already has one or more completed sets. Uses the concrete new-exercise name (per UI critic guidance: never 'the new exercise').
+  ///
+  /// In en, this message translates to:
+  /// **'Swap to {newExercise}?'**
+  String swapExerciseConfirmTitle(String newExercise);
+
+  /// PR-3 Q3 — confirm dialog body explaining that completed sets re-attribute to the new exercise's PR history. Uses concrete names on both sides + the count of logged sets.
+  ///
+  /// In en, this message translates to:
+  /// **'Your {count, plural, one{{count} logged set} other{{count} logged sets}} will count toward {newExercise} PRs (not {oldExercise}).'**
+  String swapExerciseConfirmBody(
+    int count,
+    String newExercise,
+    String oldExercise,
+  );
+
+  /// PR-3 Q3 — confirm-side action label on the swap-exercise confirm dialog. Distinct from the generic `swapExercise` (used as tooltip on the icon button) so we can keep the verb tight in dialog chrome.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get swapExerciseConfirmAction;
+
+  /// PR-3 H5 — undo snackbar text shown for ~4 seconds after adding an exercise from the picker. Pairs with an `Undo` action that calls `restoreExercise` to revert. Scoped to the ADD path only — swap has its own confirm (Q3).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} added'**
+  String addExerciseUndo(String name);
+
   /// RPE tooltip
   ///
   /// In en, this message translates to:
@@ -2660,10 +2688,10 @@ abstract class AppLocalizations {
   /// **'Exit reorder mode'**
   String get exitReorderModeTooltip;
 
-  /// Exercise card accessibility label in active workout
+  /// Exercise card accessibility label in active workout. PR-3 (H2/Q6) — the long-press-to-swap shortcut was removed; the visible swap_horiz icon button is the sole entry point. The label no longer mentions long-press.
   ///
   /// In en, this message translates to:
-  /// **'Exercise: {name}. Tap for details. Long press to swap.'**
+  /// **'Exercise: {name}. Tap for details.'**
   String exerciseSemanticsLabel(String name);
 
   /// Accessibility: fill remaining sets button
