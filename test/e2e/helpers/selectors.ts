@@ -208,6 +208,19 @@ export const WORKOUT = {
   startEmpty: 'text=Start Empty Workout',
   /** "Finish Workout" button — Semantics(identifier: 'workout-finish-btn') */
   finishButton: '[flt-semantics-identifier="workout-finish-btn"]',
+  /**
+   * PR-5 H6 — helper text shown beneath the disabled FINISH button.
+   *
+   * `Semantics(identifier: 'finish-disabled-hint')` wraps a localized line
+   * ("Complete at least one set to finish." in en / "Complete pelo menos
+   * uma série para finalizar." in pt). Rendered ONLY when the bar is
+   * `enabled: false` (no completed sets / in-flight save / cancellation).
+   * Disappears when the button becomes tappable.
+   *
+   * E2E uses this to assert the disabled-state UX: the user sees a
+   * concrete unblock action rather than a silent grey button.
+   */
+  finishDisabledHint: '[flt-semantics-identifier="finish-disabled-hint"]',
   /** "Save & Finish" button in dialog — Semantics(identifier: 'workout-dialog-finish') */
   dialogFinishButton: '[flt-semantics-identifier="workout-dialog-finish"]',
   // Identifier appears on both the empty-state FilledButton and the FAB

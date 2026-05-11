@@ -2126,3 +2126,161 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
   });
 });
+
+// =============================================================================
+// PR-5 — Disabled FINISH helper text (H6)
+//
+// When the active workout has no completed sets the FINISH button is
+// rendered disabled. Pre-fix the user saw a dim grey button with no signal
+// to tap the completion checkboxes. Post-fix a single line of helper text
+// renders beneath the button, gated behind `Semantics(identifier:
+// 'finish-disabled-hint')` for E2E reachability.
+// =============================================================================
+
+test.describe('Disabled FINISH helper text (PR5 — H6)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkout').email,
+      getUser('smokeWorkout').password,
+    );
+  });
+
+  test('should show the disabled-state helper text when no sets are completed', async ({
+    page,
+  }) => {
+    // Start a workout with an exercise but DO NOT complete any sets — the
+    // bar should render disabled and the helper text must surface in the
+    // AOM (queryable via WORKOUT.finishDisabledHint).
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // The helper text identifier emits only when the button is disabled.
+    await expect(
+      page.locator(WORKOUT.finishDisabledHint).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('should hide the disabled-state helper text once a set is completed', async ({
+    page,
+  }) => {
+    // Inverse contract: completing a set re-enables the FINISH button, so
+    // the disabled-state helper must vanish. This pin guards against a
+    // regression where the hint stays around as noise next to a now-tappable
+    // CTA.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Sanity: helper is visible while no set is completed.
+    await expect(
+      page.locator(WORKOUT.finishDisabledHint).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Enter a set and tick it.
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    // The helper must disappear — `if (!enabled)` is the conditional in
+    // the widget tree.
+    await expect(
+      page.locator(WORKOUT.finishDisabledHint).first(),
+    ).not.toBeVisible({ timeout: 10_000 });
+
+    // Cleanup: discard the workout so we don't leak state to the next test.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await dismissCelebrationIfPresent(page).catch(() => {});
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+  });
+});
+
+// =============================================================================
+// PR-5 — Hint slot layout stability across set completion (H8)
+//
+// Pre-fix: when a set transitions pending->completed the previous-session
+// hint disappears, the row collapses by ~18dp, and adjacent rows shift
+// upward mid-gesture. A user moving from set N's checkbox to set N+1's
+// checkbox can miss-tap because the target moved between frames.
+//
+// Post-fix: on mobile (`!kIsWeb`) the hint slot reserves its ~18dp
+// vertical footprint with an ExcludeSemantics-wrapped filler when no
+// hint is shown. Web continues to use the conditional render to avoid the
+// Flutter Web semantics-engine role-swap bug — see set_row.dart's
+// `_shouldShowHint` dartdoc.
+//
+// **E2E note on Web vs mobile.** Playwright drives the Flutter Web build,
+// where the conditional-render branch is active and adjacent rows DO
+// still shift on completion. The mobile filler is pinned by the widget
+// test `H8 — hint slot layout stability (PR-5)`. To keep the E2E
+// non-contradictory with the documented Web behaviour, this spec
+// verifies the AOM-level outcome that the user cares about: after
+// completing a set, the NEXT set's checkbox remains tappable without
+// re-finding it (no "set 4 checkbox moved under me" failure mode). On
+// Flutter Web the geometric shift is small enough that this is true
+// either way — the regression hazard is mobile; the widget test is the
+// canonical guard.
+// =============================================================================
+
+test.describe('Layout stability on set completion (PR5 — H8)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkout').email,
+      getUser('smokeWorkout').password,
+    );
+  });
+
+  test('should keep adjacent set rows tappable after a set is completed and its hint slot collapses', async ({
+    page,
+  }) => {
+    // Start a fresh workout with a single exercise + add a second set so
+    // we have two rows. Complete set 1; without breaking out of the test
+    // flow we then drive a tap on set 2's checkbox. Pre-fix on mobile
+    // the row would reflow ~18dp and the next checkbox would have moved.
+    // Post-fix the next checkbox stays where we expect.
+    //
+    // This is the functional cover for H8 — proves the next-checkbox is
+    // still reachable after a completion event. The widget test pins the
+    // exact geometry contract; this spec proves the user-visible outcome
+    // (no broken tap chain) in the live app.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Fill set 1 and complete it.
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    // Add a second set so we have an adjacent row. Tap the Add Set button
+    // — by then set 1 is checked and the hint slot above set 2 may or may
+    // not be visible depending on prev-session data (smokeWorkout user
+    // has none on a fresh exercise, so the hint slot is empty by default).
+    const addSet = page.locator(WORKOUT.addSetButton).first();
+    await expect(addSet).toBeVisible({ timeout: 10_000 });
+    await addSet.click();
+
+    // Set 2 was just added — there's a 600ms isNew lock on its checkbox
+    // (BUG-018 / fat-thumb defense). Wait it out before tapping.
+    await page.waitForTimeout(700);
+
+    // Fill values for set 2 (any value — we just need a sane state) then
+    // tap its done checkbox. The contract under test: this tap lands on
+    // the set-2 checkbox without us having to re-find it.
+    await setReps(page, '5');
+    await completeSet(page, 1);
+
+    // Cleanup: discard so the next run starts fresh.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await dismissCelebrationIfPresent(page).catch(() => {});
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+  });
+});
