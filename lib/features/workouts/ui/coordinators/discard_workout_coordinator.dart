@@ -99,6 +99,21 @@ class DiscardWorkoutCoordinator {
     if (_isShowingDialog) return;
     _isShowingDialog = true;
     final myGeneration = ++_dialogGeneration;
+    // C2 (PR-3 review) — capture the root navigator's context once, while
+    // the active-workout screen's State is guaranteed mounted. Used for
+    // the discard-error snackbar below so it routes through the root
+    // ScaffoldMessenger instead of the route-scoped one installed by
+    // `ActiveWorkoutScreen`. Mirrors the finish coordinator's pattern.
+    //
+    // Why this matters: `ActiveWorkoutScreen` installs a route-scoped
+    // `ScaffoldMessenger` whose queue dies when the route unmounts. The
+    // discard-error path stays on the active-workout screen (we early
+    // return below), so the route-scoped messenger would technically work
+    // — but unifying both coordinators on the root messenger removes a
+    // maintenance trap: a future contributor who refactors the discard
+    // flow to navigate-on-error would otherwise have to remember to swap
+    // messengers. Pin the contract here.
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
     try {
       final elapsed = DateTime.now().toUtc().difference(
         state.workout.startedAt,
@@ -127,10 +142,11 @@ class DiscardWorkoutCoordinator {
 
         final result = ref.read(activeWorkoutProvider);
         if (result.hasError) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          if (!rootContext.mounted) return;
+          ScaffoldMessenger.of(rootContext).showSnackBar(
             SnackBar(
               content: Text(
-                AppLocalizations.of(context).failedToDiscardWorkout,
+                AppLocalizations.of(rootContext).failedToDiscardWorkout,
               ),
             ),
           );
