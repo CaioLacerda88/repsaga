@@ -502,9 +502,7 @@ void main() {
 
           final widget = ProviderScope(
             overrides: [
-              activeWorkoutProvider.overrideWith(
-                () => capturingNotifier,
-              ),
+              activeWorkoutProvider.overrideWith(() => capturingNotifier),
               restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
               profileProvider.overrideWith(() => _KgProfileNotifier()),
               exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
@@ -541,10 +539,13 @@ void main() {
           // Tap the "Add Set" button by its Semantics identifier.
           final addSetFinder = find.byWidgetPredicate(
             (w) =>
-                w is Semantics &&
-                w.properties.identifier == 'workout-add-set',
+                w is Semantics && w.properties.identifier == 'workout-add-set',
           );
-          expect(addSetFinder, findsOneWidget, reason: 'Add Set button must be present');
+          expect(
+            addSetFinder,
+            findsOneWidget,
+            reason: 'Add Set button must be present',
+          );
           await tester.tap(addSetFinder);
           await tester.pump();
 
