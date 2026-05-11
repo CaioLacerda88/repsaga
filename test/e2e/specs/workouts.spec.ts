@@ -1446,18 +1446,22 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', { tag: '@flaky' }, 
     stallRequests = false;
     await page.unroute(SAVE_WORKOUT_URL, routeHandler);
 
-    // Cleanup: navigate directly to / instead of running through the
-    // discard → confirm → home navigation chain. That chain ran past 15s
-    // under CI load (FLAKY_TESTS.md #22 — root cause is post-discard
-    // state-restore + home navigation timing slowness on the GHA runner,
-    // NOT a product bug). The Q1 product contract is asserted at lines
-    // 1428-1441 above (Cancel visible from t=0 → restores workout →
-    // overlay dismissed). The discard cleanup was incidental; replacing
-    // it with a direct goto skips the timing-sensitive chain. The
-    // workout remains active on the server, but smokeWorkoutCancelStart
-    // is a per-test-run isolated user (recreated by global-setup), so
-    // residual state does not cross runs.
-    await page.goto('/');
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+    // No cleanup discard / nav assertion. Two prior attempts proved that
+    // class of cleanup is fundamentally brittle here:
+    //   1. Original PR-1 chain (tap discard → confirm → wait nav-home 15s)
+    //      — fails on GHA when the real server discard takes >15s to
+    //      clear state + flip nav (FLAKY_TESTS.md #22 history).
+    //   2. `page.goto('/')` shortcut (PR-2 first attempt) — fails because
+    //      Hive still has the active workout, so the app auto-resumes
+    //      to `/workout/active` and nav-home never appears.
+    //
+    // The Q1 product contract is fully asserted at lines 1428-1441
+    // above (Cancel visible from t=0 → restores workout → overlay
+    // dismissed). Cleanup is optional: Playwright per-test browser
+    // context isolation wipes Hive between tests (so the next test
+    // sees a fresh storage), and `smokeWorkoutCancelStart` is dedicated
+    // to this single test (no cross-test pollution risk). The
+    // server-side workout row stays `is_active: true` — harmless
+    // because `loadActiveWorkout` reads from Hive, not the server.
   });
 });
