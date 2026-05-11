@@ -129,7 +129,7 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
 /// `coordinator.show(context, ref, state)` so the test drives the
 /// coordinator through realistic context plumbing.
 class _Harness extends ConsumerStatefulWidget {
-  const _Harness({required this.coordinator, required this.state});
+  const _Harness({super.key, required this.coordinator, required this.state});
 
   final DiscardWorkoutCoordinator coordinator;
   final ActiveWorkoutState state;
@@ -139,8 +139,20 @@ class _Harness extends ConsumerStatefulWidget {
 }
 
 class _HarnessState extends ConsumerState<_Harness> {
+  /// Captured BuildContext + WidgetRef so a test can call
+  /// `harnessKey.currentState!.openDiscard()` directly even when a modal
+  /// dialog is on-screen (and would otherwise eat taps on the button below
+  /// it). Required for the C1 race-pin test where dialog #2 covers the
+  /// button at the moment we want to attempt opening dialog #3.
+  late BuildContext _ctx;
+
+  void openDiscard() {
+    widget.coordinator.show(_ctx, ref, widget.state);
+  }
+
   @override
   Widget build(BuildContext context) {
+    _ctx = context;
     // Mirror the production wiring: every state change is fed into the
     // coordinator so it can drop the re-entrance guard the moment
     // cancelLoading restores state mid-discard (PR-3 S1).
@@ -153,7 +165,7 @@ class _HarnessState extends ConsumerState<_Harness> {
     return Scaffold(
       body: Center(
         child: ElevatedButton(
-          onPressed: () => widget.coordinator.show(context, ref, widget.state),
+          onPressed: openDiscard,
           child: const Text('open-discard'),
         ),
       ),
@@ -165,6 +177,7 @@ Widget _build({
   required _StubActiveWorkoutNotifier notifier,
   required DiscardWorkoutCoordinator coordinator,
   required ActiveWorkoutState state,
+  GlobalKey<_HarnessState>? harnessKey,
 }) {
   return ProviderScope(
     overrides: [activeWorkoutProvider.overrideWith(() => notifier)],
@@ -182,7 +195,7 @@ Widget _build({
         ),
         child: child!,
       ),
-      home: _Harness(coordinator: coordinator, state: state),
+      home: _Harness(key: harnessKey, coordinator: coordinator, state: state),
     ),
   );
 }
@@ -276,6 +289,104 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         notifier.discardCalls.first.complete();
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'first call\'s finally MUST NOT release the re-entrance guard while a '
+      'second dialog is still open — a third tap during that window must be '
+      'rejected (PR-3 review C1: race window between stalled-call cleanup '
+      'and second-dialog lifetime)',
+      (tester) async {
+        // Race shape (pre-fix):
+        //   1. First show() opens dialog #1, user confirms → notifier
+        //      `discardWorkout()` is awaited and stalls.
+        //   2. `notifyStateChanged` fires (cancelLoading restored state) and
+        //      clears `_isShowingDialog`.
+        //   3. Second show() runs, opens dialog #2 — flips
+        //      `_isShowingDialog` back to true.
+        //   4. First call's stalled completer resolves. Its inner finally
+        //      runs, then control returns to the outer `finally` which
+        //      sets `_isShowingDialog = false` — UNCONDITIONALLY.
+        //   5. While dialog #2 is still on-screen, a third tap now passes
+        //      the guard check and stacks a third dialog.
+        //
+        // The fix uses a per-call generation counter so only the LATEST
+        // owner of the flag clears it on cleanup. This test pins that
+        // contract: assert step 5 yields exactly ONE dialog (not two).
+        final initialState = _makeState();
+        final notifier = _StubActiveWorkoutNotifier(initialState);
+        final coordinator = DiscardWorkoutCoordinator();
+        final harnessKey = GlobalKey<_HarnessState>();
+
+        await tester.pumpWidget(
+          _build(
+            notifier: notifier,
+            coordinator: coordinator,
+            state: initialState,
+            harnessKey: harnessKey,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // 1. Open dialog #1 and confirm — `discardWorkout()` is now parked.
+        //    Use the harness method instead of tapping the button so this
+        //    test is symmetric with steps 3 and 5 below where the button
+        //    is hidden behind a modal dialog.
+        harnessKey.currentState!.openDiscard();
+        await tester.pumpAndSettle();
+        expect(find.text('Discard Workout?'), findsOneWidget);
+        await tester.tap(find.text('Discard'));
+        await tester.pump();
+        expect(notifier.discardCalls, hasLength(1));
+
+        // 2. Drive a state-restore cycle so the listener clears the guard.
+        notifier.simulateDiscardLoading();
+        await tester.pump();
+        notifier.simulateCancelLoading(initialState);
+        await tester.pump();
+
+        // 3. Open dialog #2 — guard was cleared in step 2, so this opens.
+        harnessKey.currentState!.openDiscard();
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Discard Workout?'),
+          findsOneWidget,
+          reason: 'Dialog #2 should be on-screen at this point.',
+        );
+
+        // 4. Resolve the FIRST call's parked completer. Its inner finally
+        //    + outer finally now run, while dialog #2 is still up. Pre-fix
+        //    the outer finally sets `_isShowingDialog = false` even though
+        //    the second call still owns the open dialog.
+        notifier.discardCalls.first.complete();
+        await tester.pump();
+        await tester.pump();
+
+        // 5. Attempt to open dialog #3 from inside the modal. Pre-fix
+        //    `_isShowingDialog` was just cleared in step 4, so the guard
+        //    permits this call and a SECOND "Discard Workout?" dialog
+        //    stacks on top of dialog #2 → `findsNWidgets(2)`. Post-fix the
+        //    generation counter means the stalled call's finally is a
+        //    no-op (it's no longer the latest owner), so this call hits
+        //    the guard and is silently rejected.
+        harnessKey.currentState!.openDiscard();
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Discard Workout?'),
+          findsOneWidget,
+          reason:
+              'PR-3 review C1: a stalled first call MUST NOT release the '
+              're-entrance guard while a second dialog is still open. The '
+              'generation counter ensures only the latest call\'s finally '
+              'clears the flag, so a third tap during the second dialog\'s '
+              'lifetime is rejected (would otherwise stack as findsNWidgets(2)).',
+        );
+
+        // Cleanup: dismiss dialog #2.
+        await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
       },
     );

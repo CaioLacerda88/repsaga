@@ -25,6 +25,32 @@ class DiscardWorkoutCoordinator {
   /// already open (or vice-versa).
   bool _isShowingDialog = false;
 
+  /// Per-call generation counter. Incremented at the top of each [show]
+  /// invocation that passes the re-entrance guard, and captured into a
+  /// local `myGeneration`. The cleanup `finally` only clears
+  /// [_isShowingDialog] when the finishing call's `myGeneration` still
+  /// matches [_dialogGeneration] — i.e. when the finishing call still owns
+  /// the latest dialog lifecycle.
+  ///
+  /// **Why this is required (PR-3 review C1).** Pre-fix, the outer `finally`
+  /// unconditionally cleared the flag. The race:
+  ///   1. First show() awaits `discardWorkout()` and stalls.
+  ///   2. [notifyStateChanged] clears [_isShowingDialog] mid-stall (S1 path).
+  ///   3. Second show() runs, sets [_isShowingDialog] back to true,
+  ///      opens dialog #2.
+  ///   4. First call's stalled completer resolves. Its `finally` fires AND
+  ///      sets [_isShowingDialog] = false — **even though dialog #2 is
+  ///      still open.**
+  ///   5. A third tap during that window now passes the guard and stacks
+  ///      a third dialog.
+  ///
+  /// With the generation counter, step 4's finally observes
+  /// `myGeneration != _dialogGeneration` (the second call already
+  /// incremented past it) and bails out without touching the flag. The
+  /// second call's own finally is the only one that can release the guard,
+  /// which is exactly the structural guarantee we want.
+  int _dialogGeneration = 0;
+
   /// True while a `discardWorkout()` future is in-flight inside [show]. The
   /// distinction matters for the PR-3 S1 fix: when `cancelLoading` restores
   /// state mid-discard, we want to clear [_isShowingDialog] WITHOUT having
@@ -72,6 +98,7 @@ class DiscardWorkoutCoordinator {
   ) async {
     if (_isShowingDialog) return;
     _isShowingDialog = true;
+    final myGeneration = ++_dialogGeneration;
     try {
       final elapsed = DateTime.now().toUtc().difference(
         state.workout.startedAt,
@@ -112,7 +139,15 @@ class DiscardWorkoutCoordinator {
         context.go('/home');
       }
     } finally {
-      _isShowingDialog = false;
+      // C1 (PR-3 review) — only release the guard when this call still owns
+      // the latest dialog lifecycle. If a second show() ran while we were
+      // stalled and bumped [_dialogGeneration], that second call now owns
+      // the open dialog and our cleanup MUST be a no-op — otherwise we
+      // would clear the flag while dialog #2 is still up and a third tap
+      // would stack on top.
+      if (_dialogGeneration == myGeneration) {
+        _isShowingDialog = false;
+      }
     }
   }
 
