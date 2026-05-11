@@ -1440,17 +1440,24 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', { tag: '@flaky' }, 
     // The loading overlay must no longer be visible.
     await expect(cancelButton).not.toBeVisible({ timeout: 5_000 });
 
-    // Clean up: disable stalling so subsequent requests (discard) can proceed.
+    // Disable stalling so we don't leave a route handler armed for the next test.
     // Pass the SAME function references as the page.route() call above —
     // see Fix C comment at the route() call site.
     stallRequests = false;
     await page.unroute(SAVE_WORKOUT_URL, routeHandler);
 
-    // Discard the workout to leave the user in a clean state.
-    await page.locator(WORKOUT.discardButton).click();
-    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
-    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
-    await confirmDiscard.click();
+    // Cleanup: navigate directly to / instead of running through the
+    // discard → confirm → home navigation chain. That chain ran past 15s
+    // under CI load (FLAKY_TESTS.md #22 — root cause is post-discard
+    // state-restore + home navigation timing slowness on the GHA runner,
+    // NOT a product bug). The Q1 product contract is asserted at lines
+    // 1428-1441 above (Cancel visible from t=0 → restores workout →
+    // overlay dismissed). The discard cleanup was incidental; replacing
+    // it with a direct goto skips the timing-sensitive chain. The
+    // workout remains active on the server, but smokeWorkoutCancelStart
+    // is a per-test-run isolated user (recreated by global-setup), so
+    // residual state does not cross runs.
+    await page.goto('/');
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 });
