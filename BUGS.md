@@ -104,6 +104,16 @@ Snackbar duration 4s. Set completion auto-starts rest timer (opaque scrim coveri
 
 E2E for the reviewer-cycle Fix B (discard cancel-after-commit). Same `page.route()` stall pattern as PR-1's Q1 test but on `DELETE /workouts`. ~20 LOC. PR-2 is the right home since it touches the same overlay/snackbar surface.
 
+### S1 — `DiscardWorkoutCoordinator._isShowingDialog` re-entrance window during post-cancel stall
+**Status:** OPEN — file under PR-3 (closest related cluster; scope minimal, non-blocking for PR-2 ship)
+**File:** `lib/features/workouts/ui/coordinators/discard_workout_coordinator.dart`
+
+When `cancelLoading` is called mid-discard (the `discardWorkout()` awaitable is still in-flight waiting for the stalled DELETE), the notifier restores state immediately and the workout UI reappears. However, `_isShowingDialog` remains `true` inside the coordinator's `show()` method, which is still suspended at `await ref.read(activeWorkoutProvider.notifier).discardWorkout()`. Any subsequent tap on the AppBar X or system back gesture hits the `if (_isShowingDialog) return;` guard and silently no-ops. The user cannot re-open the discard dialog until the stalled network eventually completes and the `finally` clears the flag — an unbounded wait from the user's perspective (could be 30 seconds if the route handler is configured with a long abort timeout).
+
+**Evidence:** `DiscardWorkoutCoordinator.show` at lines 38–67. The flag is set at line 39 and only cleared in `finally` at line 66. `cancelLoading` operates on the notifier's state, not on the coordinator's flag — they are decoupled. The PR-2 E2E test (`Fix B`) uses `route.continue()` which lets the DELETE complete naturally, so the coordinator exits on its own. A test that asserts the discard dialog re-opens AFTER Cancel but BEFORE the stall resolves would fail.
+
+**Fix sketch:** in `DiscardWorkoutCoordinator.show`, listen for state restoration after `discardWorkout()` returns (e.g., check `ref.read(activeWorkoutProvider).valueOrNull != null` post-await) and if state was restored by a cancel, clear `_isShowingDialog` early so the user can retry. Alternatively, convert `_isShowingDialog` to a `ValueNotifier<bool>` and set it false as part of `cancelLoading`'s state emission path. Tech-lead should evaluate which coupling is cleaner.
+
 ---
 
 ## PR-3 — Hidden destructive gestures cleanup — OPEN

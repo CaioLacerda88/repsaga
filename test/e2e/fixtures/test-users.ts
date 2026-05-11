@@ -300,4 +300,26 @@ export const TEST_USERS = {
     email: 'e2e-rpg-title-equip@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // PR-2 audit fixes — undo-snackbar reachability + discard-race
+  // -------------------------------------------------------------------------
+  // smokeWorkoutSwipeUndo: lapsed user (one prior workout, profile seeded) for
+  // the "swipe-delete during rest timer → undo SnackBar visible AND reachable
+  // above rest-timer overlay" tests (PR-2 C3/Q5). Isolated from
+  // smokeWorkoutCancelStart so the swipe/snackbar test never collides with
+  // the loading-overlay-cancel test under workers > 1.
+  smokeWorkoutSwipeUndo: {
+    email: 'e2e-smoke-workout-swipe-undo@test.local',
+    password: 'TestPassword123!',
+  },
+  // smokeWorkoutDiscardRace: lapsed user for the discard-cancel race E2E
+  // (PR-1 reviewer-cycle Fix B — post-PR-1 coverage gap closed in PR-2).
+  // Mirrors the smokeWorkoutCancelStart pattern but on the discard path.
+  // Isolated so a stall on DELETE /workouts can't bleed into the
+  // save-workout-stall test running concurrently on another worker.
+  smokeWorkoutDiscardRace: {
+    email: 'e2e-smoke-workout-discard-race@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

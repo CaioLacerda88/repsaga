@@ -1360,6 +1360,25 @@ function buildRoleSeedRunners(): Record<
       });
       await seedMinimalWorkout(supabase, userId);
     },
+    // PR-2 — swipe-delete undo SnackBar reachability tests need the lapsed
+    // state (one prior workout) so `startEmptyWorkout` finds the
+    // "Quick workout" CTA rather than the brand-new beginner card.
+    smokeWorkoutSwipeUndo: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    // PR-2 — discard-race cancel E2E (closes post-PR-1 coverage gap).
+    // Same lapsed-state seed as the loading-overlay-cancel test.
+    smokeWorkoutDiscardRace: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId, {

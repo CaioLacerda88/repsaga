@@ -277,6 +277,37 @@ export const WORKOUT = {
    */
   removeExercise: '[flt-semantics-identifier="workout-remove-exercise"]',
   /**
+   * PR-2 C3/Q5 — swipe-to-delete undo SnackBar.
+   *
+   * Swipe-deleting a set fires a 10s SnackBar with content "Set N deleted"
+   * and a SnackBarAction labelled "Undo" (en) / "Desfazer" (pt). The
+   * structural change in PR-2 (overlays moved INTO the Scaffold body slot)
+   * makes this SnackBar visible AND tap-reachable when the rest-timer
+   * overlay is up — pre-fix, the rest-timer scrim hid the SnackBar both
+   * visually and from hit-testing.
+   *
+   * Use the regex below (`/Set \d+ deleted/`) so the selector matches any
+   * set-number. Flutter CanvasKit draws the SnackBar's Text widget to
+   * canvas, so a `text=` selector misses (no DOM text node). The
+   * SnackBar's content surfaces in the AOM as a `role=group` whose
+   * accessible name is the localized text — matching by role+name is the
+   * stable selector. Use `.first()` because Flutter renders two AOM
+   * boundaries per SnackBar (per the CLAUDE.md E2E Conventions note).
+   */
+  swipeToDeleteSnackBar: 'role=group[name=/Set \\d+ deleted/]',
+  /**
+   * PR-2 C3/Q5 — Undo action button inside the swipe-to-delete SnackBar.
+   * `SnackBarAction` renders as a TextButton inside the SnackBar — Flutter
+   * exposes it as role=button via the AOM. Locale-sensitive: the label is
+   * "Undo" in en (default for E2E) and "Desfazer" in pt.
+   *
+   * Pinning the button as the reachability target proves the rest-timer
+   * overlay's full-screen GestureDetector no longer eats taps in the
+   * SnackBar region — pre-PR-2 the tap landed on the scrim and dismissed
+   * the timer instead of triggering the undo action.
+   */
+  swipeToDeleteUndoButton: 'role=button[name="Undo"]',
+  /**
    * Fix 2 — "Copy from previous set" tooltip on the set-number cell of set 2+.
    * The copy icon (Icons.content_copy at 12dp, α=0.4) is visible ONLY when the
    * current set's weight differs from the previous in-session set. The tap

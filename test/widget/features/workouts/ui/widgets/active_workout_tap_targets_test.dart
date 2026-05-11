@@ -206,7 +206,8 @@ void main() {
     // -------------------------------------------------------------------
     group('done-mark cell (AW-EX-A-BR1-01)', () {
       testWidgets(
-        'pending-non-PR done-mark hit area is at least 40 wide AND 48 tall',
+        'pending-non-PR done-mark hit area is at least 48 wide AND 48 tall '
+        '(PR-2 H1 — was 40 wide, below Material floor)',
         (tester) async {
           await _pumpSetRowAt360(tester, set: _set(isCompleted: false));
 
@@ -225,19 +226,23 @@ void main() {
           final outerHitBox = find.descendant(
             of: cellFinder,
             matching: find.byWidgetPredicate(
-              (w) => w is SizedBox && w.width == 40 && w.height == 48,
-              description: 'outer 40×48 hit-test SizedBox',
+              (w) => w is SizedBox && w.width == 52 && w.height == 48,
+              description:
+                  'outer 52×48 hit-test SizedBox (PR-2 H1 widened '
+                  'from 40 to full 52dp Container width to clear Material '
+                  '2.5.5 / WCAG floor)',
             ),
           );
           final size = _sizeOf(tester, outerHitBox);
 
           expect(
             size.width,
-            greaterThanOrEqualTo(40),
+            greaterThanOrEqualTo(48),
             reason:
-                'Done-mark hit area must be >=40dp wide on a 360dp viewport. '
-                'Material 2.5.5 AAA target size + Charter A finding '
-                'AW-EX-A-BR1-01.',
+                'Done-mark hit area must be >=48dp wide on a 360dp viewport. '
+                'Material 2.5.5 / WCAG floor. PR-2 H1 widened from 40 → 52dp '
+                '(full Container width). Pre-fix: 40dp horizontal '
+                'failed the floor for the most time-critical tap.',
           );
           expect(
             size.height,
@@ -250,8 +255,73 @@ void main() {
         },
       );
 
+      // PR-2 H1 — the predicted-PR variant swaps Checkbox →
+      // `_PredictedPrUncheckedMark` (the gold ◆ rune), but the OUTER
+      // 52×48 hit-test box wraps both variants. Pin the parent tap area
+      // for the predicted-PR path explicitly so a future refactor that
+      // moves the outer SizedBox INSIDE the Checkbox-only branch (and
+      // skips it for the predicted-PR branch) flips this assertion.
       testWidgets(
-        'completed done-mark hit area is at least 40 wide AND 48 tall',
+        'predicted-PR pending done-mark parent tap area is at least 48×48dp '
+        '(PR-2 H1)',
+        (tester) async {
+          tester.view.physicalSize = const Size(360, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: _container(),
+              child: TestMaterialApp(
+                theme: AppTheme.dark,
+                home: Scaffold(
+                  body: SizedBox(
+                    width: 360,
+                    child: SetRow(
+                      set: _set(isCompleted: false),
+                      workoutExerciseId: 'we-001',
+                      display: const PrRowDisplay.plain(
+                        PrRowState.pendingPredictedPr,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          final cellFinder = find.byWidgetPredicate(
+            (w) => w is Container && _containerWidth(w) == 52,
+            description: 'done-cell Container(width: 52)',
+          );
+          expect(cellFinder, findsOneWidget);
+
+          final outerHitBox = find.descendant(
+            of: cellFinder,
+            matching: find.byWidgetPredicate(
+              (w) => w is SizedBox && w.width == 52 && w.height == 48,
+              description:
+                  'outer 52×48 hit-test SizedBox '
+                  '(predicted-PR variant)',
+            ),
+          );
+          final size = _sizeOf(tester, outerHitBox);
+          expect(
+            size.width,
+            greaterThanOrEqualTo(48),
+            reason:
+                '_PredictedPrUncheckedMark parent tap area must be >=48dp '
+                'wide. PR-2 H1 mandates Material 2.5.5 across BOTH the '
+                'Checkbox and predicted-PR done-mark variants.',
+          );
+          expect(size.height, greaterThanOrEqualTo(48));
+        },
+      );
+
+      testWidgets(
+        'completed done-mark hit area is at least 48 wide AND 48 tall '
+        '(PR-2 H1)',
         (tester) async {
           await _pumpSetRowAt360(tester, set: _set(isCompleted: true));
 
@@ -264,13 +334,16 @@ void main() {
           final outerHitBox = find.descendant(
             of: cellFinder,
             matching: find.byWidgetPredicate(
-              (w) => w is SizedBox && w.width == 40 && w.height == 48,
-              description: 'outer 40×48 hit-test SizedBox',
+              (w) => w is SizedBox && w.width == 52 && w.height == 48,
+              description:
+                  'outer 52×48 hit-test SizedBox (PR-2 H1 widened '
+                  'from 40 to full 52dp Container width to clear Material '
+                  '2.5.5 / WCAG floor)',
             ),
           );
           final size = _sizeOf(tester, outerHitBox);
 
-          expect(size.width, greaterThanOrEqualTo(40));
+          expect(size.width, greaterThanOrEqualTo(48));
           expect(size.height, greaterThanOrEqualTo(48));
         },
       );
@@ -379,12 +452,14 @@ void main() {
           );
           await tester.pump();
 
-          // Anchor on the outer 40×48 hit-test box, then tap its CENTER
-          // — that's the visual center of the inner 32×32 box and the
-          // exact pixel where both gesture detectors would fire pre-fix.
+          // Anchor on the outer 52×48 hit-test box (PR-2 H1 widened from
+          // 40 to 52dp), then tap its CENTER — that's the visual center
+          // of the inner 32×32 box and the exact pixel where both
+          // gesture detectors would fire if the arena ever resolved
+          // both as winners.
           final outerHitBox = find.byWidgetPredicate(
-            (w) => w is SizedBox && w.width == 40 && w.height == 48,
-            description: 'outer 40×48 hit-test SizedBox',
+            (w) => w is SizedBox && w.width == 52 && w.height == 48,
+            description: 'outer 52×48 hit-test SizedBox',
           );
           expect(outerHitBox, findsOneWidget);
           await tester.tap(outerHitBox);
@@ -432,6 +507,114 @@ void main() {
                 'A single tap inside the inner 32×32 visual on a '
                 'predicted-PR row must invoke completeSet exactly once. '
                 'See Checkbox-variant test for full reasoning.',
+          );
+        });
+
+        // -----------------------------------------------------------------
+        // PR-2 H1 — tap in the slack zone (outside the inner 32dp visual,
+        // inside the new 52dp outer hit-test box) must reach the outer
+        // GestureDetector and invoke completeSet exactly once.
+        //
+        // This is the regression that motivated widening the outer
+        // SizedBox from 40 → 52dp: pre-fix, a tap at the cell's left or
+        // right edge (within the 52dp Container but outside the 40dp
+        // inner SizedBox) fell on the Container's empty padding area
+        // and missed completion entirely. The pin uses the same
+        // counting-notifier plumbing as the inner-region pin so any
+        // future refactor that drops slack-region routing (e.g. by
+        // narrowing the outer SizedBox or swapping `deferToChild` to
+        // `opaque`) flips this assertion.
+        // -----------------------------------------------------------------
+        testWidgets('tap in slack zone (outer 52dp, outside inner 32dp visual) '
+            'invokes completeSet exactly once (PR-2 H1)', (tester) async {
+          tester.view.physicalSize = const Size(360, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          final exercise = Exercise(
+            id: 'exercise-001',
+            name: 'Barbell Bench Press',
+            muscleGroup: MuscleGroup.chest,
+            equipmentType: EquipmentType.barbell,
+            isDefault: true,
+            createdAt: DateTime(2026),
+          );
+          final theSet = _set(isCompleted: false);
+          final activeExercise = ActiveWorkoutExercise(
+            workoutExercise: WorkoutExercise(
+              id: 'we-001',
+              workoutId: 'workout-001',
+              exerciseId: 'exercise-001',
+              order: 1,
+              exercise: exercise,
+            ),
+            sets: [theSet],
+          );
+          final workout = Workout(
+            id: 'workout-001',
+            userId: 'user-001',
+            name: 'Push Day',
+            startedAt: DateTime.now().toUtc(),
+            isActive: true,
+            createdAt: DateTime.now().toUtc(),
+          );
+          final state = ActiveWorkoutState(
+            workout: workout,
+            exercises: [activeExercise],
+          );
+
+          final notifier = _CountingActiveWorkoutNotifier(state);
+
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                activeWorkoutProvider.overrideWith(() => notifier),
+                restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+                profileProvider.overrideWith(() => _KgProfileNotifier()),
+              ],
+              child: TestMaterialApp(
+                theme: AppTheme.dark,
+                home: Scaffold(
+                  body: SizedBox(
+                    width: 360,
+                    child: SetRow(set: theSet, workoutExerciseId: 'we-001'),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          // Anchor on the outer 52×48 hit-test box. The inner visual is
+          // 32dp centered → leaves (52-32)/2 = 10dp of slack on each
+          // side. A tap 4dp inside the right edge (offset +22 from
+          // center horizontally) sits in the slack zone: outside the
+          // inner 32dp Checkbox visual, inside the outer 52dp box.
+          final outerHitBox = find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == 52 && w.height == 48,
+            description: 'outer 52×48 hit-test SizedBox',
+          );
+          expect(outerHitBox, findsOneWidget);
+          final center = tester.getCenter(outerHitBox);
+          // Slack zone tap: +22dp x-offset puts us 4dp inside the
+          // right edge (52/2 - 22 = 4dp from edge, well inside the
+          // slack ring outside the inner 32dp).
+          await tester.tapAt(Offset(center.dx + 22, center.dy));
+          await tester.pump();
+
+          expect(
+            notifier.completeSetCallCount,
+            1,
+            reason:
+                'A tap in the slack zone (between the inner 32dp visual '
+                'and the outer 52dp hit-test box) must reach the outer '
+                'GestureDetector and toggle completion. Pre-PR-2 the '
+                'outer was 40dp wide → slack-zone taps at the cell edges '
+                'fell on the empty Container padding and missed entirely. '
+                'Widening to 52dp closes the gap. If a future refactor '
+                'narrows the outer SizedBox or breaks slack-zone '
+                'routing, this pin fires.',
           );
         });
       });
