@@ -26,9 +26,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
+import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
+import 'package:repsaga/features/workouts/models/exercise_set.dart';
+import 'package:repsaga/features/workouts/models/routine_start_config.dart';
+import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
+import 'package:repsaga/features/workouts/providers/notifiers/active_workout_notifier.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/coordinators/discard_workout_coordinator.dart';
 
@@ -84,6 +89,23 @@ ActiveWorkoutState _makeState() {
 // notifier path).
 // ---------------------------------------------------------------------------
 
+/// Hand-rolled stub for [ActiveWorkoutNotifier].
+///
+/// **PR-3 review W3 — explicit `UnimplementedError` over `noSuchMethod`.**
+/// The previous version used `noSuchMethod` as the catch-all so any future
+/// method added to [ActiveWorkoutNotifier] that the coordinator started
+/// calling would silently no-op in the test (Object.noSuchMethod returns
+/// `null`, which is then implicitly accepted by `Future<void>` returns).
+/// The reviewer flagged this as a long-term correctness trap.
+///
+/// Every member the test does NOT exercise now throws
+/// [UnimplementedError] explicitly. If a coordinator change starts calling
+/// any of them, the test fails loudly with a stack trace pointing at the
+/// new call instead of mysteriously passing.
+///
+/// Members the test DOES exercise (`build`, `discardWorkout`) are
+/// implemented properly. The `simulate...` helpers are test-only hooks
+/// that don't exist on the real interface.
 class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
     implements ActiveWorkoutNotifier {
   _StubActiveWorkoutNotifier(this._initialState);
@@ -116,8 +138,109 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
     state = const AsyncLoading();
   }
 
+  // --- Explicit "not used by this test" stubs ---------------------------
+  // Each one matches a member of the [ActiveWorkoutNotifier] public API.
+  // Throw on call so a future coordinator change that starts using one
+  // fails loudly here instead of mysteriously passing.
+
   @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  void cancelLoading() => throw UnimplementedError(
+    '_StubActiveWorkoutNotifier.cancelLoading() is not stubbed for this test',
+  );
+
+  @override
+  int get incompleteSetsCount => throw UnimplementedError(
+    '_StubActiveWorkoutNotifier.incompleteSetsCount getter is not stubbed',
+  );
+
+  @override
+  Future<void> startWorkout([String? name]) =>
+      throw UnimplementedError('startWorkout is not stubbed for this test');
+
+  @override
+  Future<void> startFromRoutine(RoutineStartConfig config) =>
+      throw UnimplementedError('startFromRoutine is not stubbed for this test');
+
+  @override
+  Future<void> renameWorkout(String name) =>
+      throw UnimplementedError('renameWorkout is not stubbed for this test');
+
+  @override
+  Future<void> addExercise(Exercise exercise) =>
+      throw UnimplementedError('addExercise is not stubbed for this test');
+
+  @override
+  Future<void> removeExercise(String workoutExerciseId) =>
+      throw UnimplementedError('removeExercise is not stubbed for this test');
+
+  @override
+  Future<void> restoreExercise(String workoutExerciseId) =>
+      throw UnimplementedError('restoreExercise is not stubbed for this test');
+
+  @override
+  Future<void> addSet(
+    String workoutExerciseId, {
+    double? defaultWeight,
+    int? defaultReps,
+  }) => throw UnimplementedError('addSet is not stubbed for this test');
+
+  @override
+  Future<void> updateSet(
+    String workoutExerciseId,
+    String setId, {
+    double? weight,
+    int? reps,
+    int? rpe,
+    SetType? setType,
+    String? notes,
+  }) => throw UnimplementedError('updateSet is not stubbed for this test');
+
+  @override
+  Future<void> propagateWeight(
+    String workoutExerciseId,
+    String fromSetId,
+    double oldWeight,
+    double newWeight,
+  ) => throw UnimplementedError('propagateWeight is not stubbed for this test');
+
+  @override
+  Future<void> completeSet(String workoutExerciseId, String setId) =>
+      throw UnimplementedError('completeSet is not stubbed for this test');
+
+  @override
+  Future<void> deleteSet(String workoutExerciseId, String setId) =>
+      throw UnimplementedError('deleteSet is not stubbed for this test');
+
+  @override
+  Future<void> restoreSet(String workoutExerciseId, ExerciseSet deletedSet) =>
+      throw UnimplementedError('restoreSet is not stubbed for this test');
+
+  @override
+  Future<void> copyLastSet(String workoutExerciseId, String setId) =>
+      throw UnimplementedError('copyLastSet is not stubbed for this test');
+
+  @override
+  Future<void> fillRemainingSets(String workoutExerciseId) =>
+      throw UnimplementedError(
+        'fillRemainingSets is not stubbed for this test',
+      );
+
+  @override
+  Future<void> reorderExercise(String workoutExerciseId, int direction) =>
+      throw UnimplementedError('reorderExercise is not stubbed for this test');
+
+  @override
+  Future<void> swapExercise(String workoutExerciseId, Exercise newExercise) =>
+      throw UnimplementedError('swapExercise is not stubbed for this test');
+
+  @override
+  Future<FinishWorkoutResult?> finishWorkout({String? notes}) =>
+      throw UnimplementedError('finishWorkout is not stubbed for this test');
+
+  @override
+  CelebrationQueueResult? consumeLastCelebration() => throw UnimplementedError(
+    'consumeLastCelebration is not stubbed for this test',
+  );
 }
 
 // ---------------------------------------------------------------------------
