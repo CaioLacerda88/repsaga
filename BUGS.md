@@ -158,47 +158,35 @@ Tap = immediate add. Remove requires icon → confirm dialog → confirm. 1 tap 
 
 ---
 
-## PR-5 — Hint slot stability + visual contrast + disabled-Finish helper — OPEN
+## PR-5 — Hint slot stability + visual contrast + disabled-Finish helper ✅ RESOLVED (PR #204, merged as `7f53998`)
 
-### H8 — Hint slot reflow shifts adjacent rows under the thumb
-**Status:** OPEN — assigned to PR-5
-**File:** `lib/features/workouts/ui/widgets/set_row.dart:283-361`
+### H8 — Hint slot stability across set completion
+**Status:** RESOLVED — PR #204
+**Fix:** `!kIsWeb` gate. Web keeps the byte-identical pre-fix conditional render (provably safe — avoids the Flutter Web semantics-engine role-swap bug that bit PR #193). Mobile gets an `ExcludeSemantics + Padding + Text(' ')` filler matching hint baseline exactly. Pinned by widget test + the `pendingPredictedPr → completedStandingPr` AOM regression pin.
 
-Set transitions pending → completed → previous-session hint disappears, row collapses by ~18dp, adjacent rows shift up. User tapping done on set 3 then quickly moving to set 4 may miss because set 4's checkbox shifted. Comment acknowledges "row reflow is acceptable" — that decision was made because `Visibility(maintainSize: true)` triggered a Flutter Web semantics bug. On mobile that bug doesn't apply.
+### M7 — Elapsed timer WCAG AA contrast
+**Status:** RESOLVED — PR #204
+**Fix:** swap `theme.colorScheme.primary` → `AppColors.hotViolet` (#B36DFF; ~5.9:1 on abyss, passes AA).
 
-**Fix sketch:** fixed-height filler `SizedBox(height: 18)` when hint is hidden, gated behind `kIsWeb` check if the AOM bug still bites.
+### M8 — Edit-name pencil + exercise info icons visibility
+**Status:** RESOLVED — PR #204
+**Fix:** pencil 14dp α=0.4 → 16dp α=0.6 (`active_workout_app_bar_title.dart`); info_outline 14dp α=0.35 → 16dp α=0.5 (`exercise_card.dart`). Pinned by widget tests reading `SvgPicture.colorFilter`.
 
-### M7 — Elapsed timer color fails WCAG AA contrast
-**Status:** OPEN — assigned to PR-5
-**File:** `lib/features/workouts/ui/widgets/elapsed_timer.dart:38`
+### H6 — Disabled FINISH button has no explanation
+**Status:** RESOLVED — PR #204
+**Fix:** new conditional helper text below button when `enabled == false`: "Complete at least one set to finish." New `finishWorkoutDisabledHint` ARB key (EN + PT). Pinned by 3 widget tests (shown / hidden / Semantics id).
 
-Uses `theme.colorScheme.primary` (`primaryViolet #6A2FA8`) on `abyss #0D0319` background. ~2.6:1 contrast (AA needs 4.5:1).
+### Rest-timer dismiss hint contrast
+**Status:** RESOLVED — PR #204
+**Fix:** alpha 0.3 → 0.6.
 
-**Fix sketch:** swap to `hotViolet #B36DFF` (~5.9:1, passes AA).
+### Rest-timer +30s wraps on Samsung S25 Ultra (device feedback)
+**Status:** RESOLVED — PR #204 (folded in mid-PR per user device feedback)
+**File:** `lib/features/workouts/ui/widgets/rest_timer_overlay.dart`
 
-### M8 — Edit-name pencil + exercise info icons functionally invisible
-**Status:** OPEN — assigned to PR-5
-**Files:** `lib/features/workouts/ui/widgets/active_workout_app_bar_title.dart:92-97` (pencil 14dp α=0.4), `lib/features/workouts/ui/widgets/exercise_card.dart:455-460` (info 14dp α=0.35)
+Pre-fix: each control button wrapped in `SizedBox(width: 64, height: 56)`. On Samsung S25 Ultra (and likely other Android OEM font rendering) `+30s` wrapped to two lines because TextButton's default 16dp horizontal padding ate ~32dp of the 64dp box, and `+30s` at `titleMedium @ w700` (the `+` glyph is wider than `-`) didn't fit in the remaining ~32dp. Playwright at 360dp Chromium did NOT catch it.
 
-Functional affordances rendered at the visibility threshold.
-
-**Fix sketch:** pencil → 16dp α=0.6; info → 16dp α=0.5.
-
-### H6 — Disabled "FINISH" button has no explanation
-**Status:** OPEN — assigned to PR-5
-**File:** `lib/features/workouts/ui/widgets/finish_bottom_bar.dart:74-100`
-
-Renders dim violet, no helper text, no tooltip. New user with all sets entered but none ticked sees a grey button and no signal to tap the checkboxes.
-
-**Fix sketch:** when `enabled == false`, show short helper text "Complete at least one set to finish."
-
-### Rest-timer dismiss hint near-invisible
-**Status:** OPEN — assigned to PR-5
-**File:** `lib/features/workouts/ui/widgets/rest_timer_overlay.dart:269-276`
-
-"Tap anywhere to dismiss" at α=0.3 on near-black scrim.
-
-**Fix sketch:** raise to α=0.55-0.65.
+**Fix:** dropped the SizedBox wrappers entirely. TextButton sizes to content + own padding; `minimumSize: Size(48, 48)` enforces WCAG tap-target floor (Skip gets `Size(120, 48)` to remain dominant CTA). Buttons end up slightly asymmetric in width but never wrap, scale with font accessibility settings, and meet the 48dp floor on every screen size. Pinned by widget test asserting `height < 72dp` (single-line) AND `width/height >= 48dp` (tap-target).
 
 ---
 
