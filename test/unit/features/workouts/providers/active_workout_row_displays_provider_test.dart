@@ -563,6 +563,12 @@ void main() {
           // Expected — the override deliberately rejects.
         }
 
+        // Yield to let Riverpod propagate the AsyncError through the
+        // graph before reading the dependent provider — makes the
+        // settle-before-read guarantee explicit instead of relying on
+        // internal Riverpod scheduling (reviewer PR #206 follow-up).
+        await Future<void>.microtask(() {});
+
         final displays = container.read(
           activeWorkoutRowDisplaysProvider((
             workoutExerciseId: weId,

@@ -2309,7 +2309,7 @@ test.describe('Layout stability on set completion (PR5 — H8)', () => {
 // The unit suite owns the contract precisely (loading / error / transition).
 // This E2E pins the user-visible behavior end-to-end via the AOM identifier
 // node emitted by `_SetRowFrame` in `set_row.dart`.
-test.describe('PR-row state during loading (PR6 — M6)', () => {
+test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,

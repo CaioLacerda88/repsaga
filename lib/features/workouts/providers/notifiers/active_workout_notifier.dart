@@ -273,6 +273,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       await _saveToHive(activeState);
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutStarted(
+          // null: no routineId — empty ad-hoc workout, not started from
+          // a saved routine. Resolves to source: 'empty'.
           source: _workoutSource(null),
           routineId: null,
           exerciseCount: 0,
