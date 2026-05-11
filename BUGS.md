@@ -95,7 +95,7 @@ Reviewer surfaced as a "one-question check": same C1 shape on the discard path. 
 **Fix:** added `should restore active workout when Cancel tapped during stalled DELETE /workouts` E2E. Uses `route.continue()` instead of `route.abort()` to avoid an unrelated cross-invocation `_cancelRequested` race (separately tracked as S1).
 
 ### S1 — `DiscardWorkoutCoordinator._isShowingDialog` re-entrance window during post-cancel stall
-**Status:** OPEN — assigned to PR-3 (closest related cluster; scope minimal, non-blocking for PR-2 ship)
+**Status:** RESOLVED — PR #200 (closest related cluster; scope minimal, non-blocking for PR-2 ship)
 **File:** `lib/features/workouts/ui/coordinators/discard_workout_coordinator.dart`
 
 When `cancelLoading` is called mid-discard (the `discardWorkout()` awaitable is still in-flight waiting for the stalled DELETE), the notifier restores state immediately and the workout UI reappears. However, `_isShowingDialog` remains `true` inside the coordinator's `show()` method, which is still suspended at `await ref.read(activeWorkoutProvider.notifier).discardWorkout()`. Any subsequent tap on the AppBar X or system back gesture hits the `if (_isShowingDialog) return;` guard and silently no-ops. The user cannot re-open the discard dialog until the stalled network eventually completes and the `finally` clears the flag — an unbounded wait from the user's perspective.
@@ -106,10 +106,10 @@ When `cancelLoading` is called mid-discard (the `discardWorkout()` awaitable is 
 
 ---
 
-## PR-3 — Hidden destructive gestures cleanup — OPEN
+## PR-3 — Hidden destructive gestures cleanup ✅ RESOLVED (PR #200, merged as `4e39ff4`)
 
 ### H2 / Q6 — Long-press on exercise name = silent destructive swap
-**Status:** OPEN — assigned to PR-3
+**Status:** RESOLVED — PR #200
 **File:** `lib/features/workouts/ui/widgets/exercise_card.dart:424-427`
 
 Tap on header = open detail sheet. Long-press = open exercise picker → tapping a different exercise IMMEDIATELY swaps. Visible swap-icon button does the same thing. Hidden long-press is undiscoverable AND destructive (loses user's mental model). Per Q6 decision: industry has converged AWAY from gesture shortcuts in gym apps.
@@ -117,7 +117,7 @@ Tap on header = open detail sheet. Long-press = open exercise picker → tapping
 **Fix sketch:** remove `onLongPress` from header InkWell entirely.
 
 ### H3 — Long-press on "Add Set" silently runs Fill Remaining
-**Status:** OPEN — assigned to PR-3
+**Status:** RESOLVED — PR #200
 **File:** `lib/features/workouts/ui/widgets/exercise_card.dart:313-315`
 
 `_AddSetButton.onLongPress` calls `_fillRemaining`. The dedicated `_FillRemainingButton` is rendered separately right below it. Two affordances for the same action; one invisible.
@@ -125,7 +125,7 @@ Tap on header = open detail sheet. Long-press = open exercise picker → tapping
 **Fix sketch:** drop the `onLongPress`. Keep the dedicated button.
 
 ### Q3 — Confirm dialog when swap-exercise has logged sets
-**Status:** OPEN — assigned to PR-3
+**Status:** RESOLVED — PR #200
 **File:** `lib/features/workouts/ui/widgets/exercise_card.dart` `_swapExercise`
 
 Today: silent swap regardless of state. Logged sets re-attribute to new exercise's PR history.
@@ -133,7 +133,7 @@ Today: silent swap regardless of state. Logged sets re-attribute to new exercise
 **Fix sketch:** zero completed sets → silent swap (no friction). One or more completed sets → confirm sheet ("Swap to **Incline Bench**? Your 3 logged sets will count toward Incline Bench PRs (not Bench Press).") with explicit Cancel. Per Q3 decision; copy uses concrete exercise names per UI critic guidance.
 
 ### H5 — Adding wrong exercise has no undo
-**Status:** OPEN — assigned to PR-3
+**Status:** RESOLVED — PR #200
 **Files:** `lib/features/workouts/ui/widgets/exercise_picker_sheet.dart:215`, `active_workout_notifier.dart` (new `restoreExercise` mirror of `removeExercise`)
 
 Tap = immediate add. Remove requires icon → confirm dialog → confirm. 1 tap to mistake, 3-4 taps to fix.

@@ -79,7 +79,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
 | 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
-| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1+2 shipped, PR-3..7 open) | IN PROGRESS | #195 (PR-1), #198 (PR-2) |
+| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1+2+3 shipped, PR-4..7 open) | IN PROGRESS | #195 (PR-1), #198 (PR-2), #200 (PR-3) |
 | Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
@@ -1373,7 +1373,7 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 |---|---|---|---|---|
 | PR-1 | State-machine integrity (cancel races, discard order, offline weekly-plan dep) + Q1 overlay UX | #195 | C1, C2, C4, H7, Q1 + reviewer-cycle Fix A (start-race) + Fix B (discard-race) | RESOLVED |
 | PR-2 | Done-checkbox tap target + undo-snackbar reachability above rest-timer overlay (Q5) + discard-race E2E | #198 | H1, C3, Q5 + reviewer-cycle (4 items: stale comment, arithmetic nit, S1 doc, AppBar-discard widget pin) + FLAKY_TESTS #22 fix | RESOLVED |
-| PR-3 | Hidden destructive gestures cleanup + Q3 swap-with-completed-sets confirm + add-exercise undo | — | H2/Q6, H3, H5, Q3 | OPEN |
+| PR-3 | Hidden destructive gestures cleanup + Q3 swap-with-completed-sets confirm + H5 add-exercise undo + S1 discard re-entrance fix | #200 | H2/Q6, H3, Q3, H5, S1 + reviewer-cycle round 1 (H5 snackbar route-leak, PT degender, Q3 EN reframe) + reviewer-cycle round 2 (2 Critical: dialog-flag generation counter + discard error snackbar root-routing; 3 Warning: id-diff fallback, EN-only selector doc, explicit stub; 1 Suggestion: Semantics hoist) | RESOLVED |
 | PR-4 | Set defaults: filter warmup pre-fills (Q2) + propagateWeight null/0 + cascading-undo order | — | M1, M2, M3 | OPEN |
 | PR-5 | Hint slot stability + visual contrast + disabled-Finish helper text | — | H8, M7, M8, H6, rest-timer dismiss hint | OPEN |
 | PR-6 | PR-row state during PR-data loading + analytics source DRY | — | M6, source-string DRY | OPEN |
