@@ -1991,9 +1991,42 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
     await page.mouse.up();
   }
 
-  test('should restore deleted sets in original order across cascading deletes (M3)', async ({
+  test('should restore the most-recent cascading delete with correct count + label consecutivity (M3)', async ({
     page,
   }) => {
+    // M3 E2E SCOPE NOTE.
+    //
+    // Material's SnackBar replaces an in-flight SnackBar when a new one
+    // is shown — only ONE is visible at a time. After Step 2 below
+    // (second swipe-delete), the SnackBar from Step 1's delete has
+    // already been dismissed permanently; tapping its Undo is no longer
+    // physically possible from the UI. Earlier drafts of this test
+    // chained TWO undo taps to assert the full cascading-undo-of-multi-
+    // -deletes restoration (`[1,2,3,4]` final order). That second tap
+    // was unreachable in practice, and the original `stillHasUndo`
+    // conditional silently skipped it — PR #202 review W1 (the
+    // unconditional-final-order ask) surfaced the impossibility.
+    //
+    // What CAN this E2E meaningfully pin:
+    //   - Swipe-delete fires a SnackBar with Undo.
+    //   - Tapping Undo restores the just-deleted set's row.
+    //   - After cascading delete + one undo, count + label consecutivity
+    //     are correct (3 sets visible, labels Set 2..3 present, no Set
+    //     4 leftover).
+    //
+    // What this E2E CANNOT pin (and shouldn't try to):
+    //   - The post-fix vs pre-fix DIVERGENCE in restored-set IDENTITY
+    //     within a multi-undo cascade. All sets in this seed share the
+    //     same equipment defaults — labels renumber on insert regardless
+    //     of position, so label consecutivity alone does not distinguish
+    //     `[set-1, set-3, set-4]` from `[set-1, set-4, set-3]`. The
+    //     unit test "M3: cascading delete (#2, #3) then undo, undo →
+    //     original order [1,2,3,4]" in
+    //     active_workout_notifier_test.dart asserts the id-keyed order
+    //     directly. Trust the unit coverage for that property.
+    //
+    // Title reflects the actual contract this E2E pins.
+
     // Setup: 4-set exercise. Add bench press (auto-creates 1 set), then
     // add 3 more so we have set numbers [1, 2, 3, 4] before any deletion.
     await startEmptyWorkout(page);
@@ -2031,7 +2064,8 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
     ).not.toBeVisible({ timeout: 3_000 });
 
     // The first delete fires a snackbar. We don't tap Undo yet — we want
-    // to delete a SECOND set first to reproduce the cascading-renumber bug.
+    // to delete a SECOND set first to reproduce the cascading-renumber
+    // scenario that the M3 fix targets.
     const snackbar = page.locator(WORKOUT.swipeToDeleteSnackBar).first();
     await expect(snackbar).toBeVisible({ timeout: 5_000 });
 
@@ -2039,57 +2073,49 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
     // swipe handler captures its setNumber as "2" — the M3 trap. After
     // this:
     //   visible sets = [Set 1, Set 2 (was #4)]
+    // Step 1's SnackBar is replaced by Step 2's and is no longer
+    // tappable (see scope note at the top).
     await swipeDeleteSet(page, 1);
     await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(2, {
       timeout: 5_000,
     });
 
     // The latest snackbar replaces the earlier one. Pick the last (most
-    // recent) Undo by .last().
+    // recent) Undo by .last() — this is the ONLY Undo reachable from
+    // here forward (Material SnackBar contract).
     const undoButtons = page.locator(WORKOUT.swipeToDeleteUndoButton);
     await expect(undoButtons.last()).toBeVisible({ timeout: 5_000 });
 
-    // Step 3 — undo the SECOND delete. M3 contract: the restored set
-    // lands at its ORIGINAL position (index 2 → set #3). After this:
+    // Step 3 — undo the SECOND delete (most-recent). M3 contract: the
+    // restored set lands at its ORIGINAL position (index 2 → set #3 in
+    // the renumbered list). After this:
     //   visible sets = [Set 1, Set 2 (was #4), Set 3 (restored set #3)]
-    // Pre-fix the restored set would have landed at index 1 (its captured
-    // post-renumbered setNumber - 1) producing [Set 1, restored, was-#4]
-    // and the next undo would compound the misordering.
+    // Pre-fix this would have landed at index 1 (the snapshot's
+    // post-renumbered setNumber - 1 = 1) producing [Set 1, restored,
+    // was-#4]. With renumber-on-insert this STILL produces
+    // [Set 1, Set 2, Set 3] labels (consecutivity is preserved either
+    // way) — see the scope note above on why the unit test is the
+    // authority for the id-keyed ordering claim.
     await undoButtons.last().click();
     await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(3, {
       timeout: 5_000,
     });
 
-    // Step 4 — undo the FIRST delete. The 10s snackbar window is more than
-    // enough headroom for the previous step's interactions, so we wait
-    // deterministically with the same default timeout as the rest of the
-    // test (no 2s catch — the title promises a final-order assertion and
-    // it MUST run unconditionally; PR #202 review W1).
-    //
-    // If the SnackBar's fade-out animation ever shortens this window in
-    // practice, fall back to pulling the count + label checks outside any
-    // conditional (reviewer option b).
-    const firstUndo = page.locator(WORKOUT.swipeToDeleteUndoButton).last();
-    await expect(firstUndo).toBeVisible({ timeout: 8_000 });
-    await firstUndo.click();
-    await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(4, {
-      timeout: 5_000,
-    });
-
-    // Final assertion (UNCONDITIONAL): sets 2–4 labels are consecutive and
-    // visible. Set 2+ renders as AOM buttons (isCopyable=true InkWell), so
-    // role=button[name*="Set N."] is sufficient. Set 1 is a generic AOM
-    // node — its existence is proved by the toHaveCount(4) above. Pre-fix,
-    // sets would land in wrong slots producing wrong labels; renumbering
-    // on insert keeps them consecutive only when the M3 insertion order is
-    // correct. This is the load-bearing assertion the test title promises.
-    for (const n of [2, 3, 4]) {
+    // Final assertion (UNCONDITIONAL — PR #202 review W1): the user-
+    // visible signal after cascading-delete + most-recent-undo is
+    // consistent — Set 1..3 are present, no Set 4 leftover. Set 2+
+    // render as AOM buttons (isCopyable=true InkWell). Set 1 is a
+    // generic AOM node; its existence is proved by `toHaveCount(3)`.
+    for (const n of [2, 3]) {
       await expect(
         page.locator(`role=button[name*="Set ${n}."]`).first(),
       ).toBeVisible({
         timeout: 5_000,
       });
     }
+    await expect(
+      page.locator(`role=button[name*="Set 4."]`).first(),
+    ).not.toBeVisible({ timeout: 2_000 });
 
     // Cleanup: discard so the next test run starts fresh.
     await page.locator(WORKOUT.discardButton).click();
