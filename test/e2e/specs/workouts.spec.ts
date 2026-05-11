@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, FIRST_WORKOUT_CTA, EXERCISE_PICKER } from '../helpers/selectors';
+import { NAV, WORKOUT, HOME, HISTORY, FIRST_WORKOUT_CTA, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -2280,6 +2280,173 @@ test.describe('Layout stability on set completion (PR5 — H8)', () => {
     await completeSet(page, 0);
 
     // Cleanup: discard so the next run starts fresh.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await dismissCelebrationIfPresent(page).catch(() => {});
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+  });
+});
+
+// =============================================================================
+// PR-6 / M6 — `activeWorkoutRowDisplaysProvider` loading-state contract
+// =============================================================================
+//
+// Pre-fix `exercisePRsProvider(...).value ?? const []` flattened "loading"
+// and "no PRs" into the same empty-baseline branch. While `personal_records`
+// was in flight every completed working set was projected as a standing PR
+// (gold stripe + bracket / `set-row-state-standing-pr` identifier), then the
+// rows reclassified once data landed. Visual flicker, false predicted-PR cue.
+//
+// The fix gates on `AsyncValue.value`: while it is null (first emission in
+// flight, or error with no prior data), every row resolves to
+// `PrRowState.none` — identifier `set-row-state-none`. Once the future
+// settles to `AsyncData(...)` the resolver runs normally and rows re-emit
+// with their real classification (here, since the test user has no PR
+// records yet, the first completed working set should become standing PR).
+//
+// The unit suite owns the contract precisely (loading / error / transition).
+// This E2E pins the user-visible behavior end-to-end via the AOM identifier
+// node emitted by `_SetRowFrame` in `set_row.dart`.
+test.describe('PR-row state during loading (PR6 — M6)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutPr6RowFlicker').email,
+      getUser('smokeWorkoutPr6RowFlicker').password,
+    );
+  });
+
+  test('should NOT classify completed sets as standing-PR while exercisePRsProvider is loading; should reclassify once data lands', async ({
+    page,
+  }) => {
+    // ---- Phase 1: wait for home so prCacheBootstrap has time to flush -----
+    //
+    // `prCacheBootstrapProvider` fires `getRecordsForUser` (a `user_id=eq.X`
+    // GET to /rest/v1/personal_records) shortly after login. We wait for the
+    // home tab to be visible so the bootstrap GET has a fair chance to
+    // complete before our route handler is installed. The route filter
+    // below ALSO defensively passes through `user_id=eq.` GETs in case the
+    // bootstrap is still in flight when the route is installed — only
+    // `exercise_id=in.` GETs (the row provider's `exercisePRsProvider`
+    // dependency) get held.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+
+    // ---- Phase 2: install the per-exercise stall BEFORE addExercise ------
+    //
+    // `addExercise()` auto-creates the first set (clicks "Add Set" at the
+    // end of its body), which mounts `activeWorkoutRowDisplaysProvider`
+    // and fires `exercisePRsProvider(benchId).future`. The route MUST be
+    // in place before that — otherwise the GET resolves before we can
+    // observe the loading window.
+    let signalIntercepted!: () => void;
+    const intercepted = new Promise<void>((resolve) => {
+      signalIntercepted = resolve;
+    });
+
+    let stallRequests = true;
+
+    // Match GETs to /rest/v1/personal_records WHOSE QUERY contains
+    // `exercise_id=in.` — the per-exercise filter shape Supabase emits for
+    // `_records.select().inFilter('exercise_id', [...])`. The bootstrap
+    // query (`?user_id=eq.X&order=achieved_at.desc.nullslast`) does NOT
+    // match this filter and continues uninterrupted, even if it happens to
+    // race the route install. URL-only matching on the path then a
+    // method-and-query gate inside the handler keeps non-target traffic
+    // (POST /upsert, GET ?user_id=eq for the prListProvider / bootstrap)
+    // flowing.
+    const PR_URL = (url: URL) => url.pathname.endsWith('/rest/v1/personal_records');
+
+    const routeFilter = async (route: import('@playwright/test').Route) => {
+      const req = route.request();
+      const url = req.url();
+      const isExerciseFilter = url.includes('exercise_id=in.');
+      if (req.method() !== 'GET' || !isExerciseFilter) {
+        await route.continue();
+        return;
+      }
+      // Per-exercise PR fetch — the row provider's dependency. Hold here
+      // until the test releases the stall, then continue normally so the
+      // app receives a real (empty) records list and the provider settles
+      // into AsyncData(const <PersonalRecord>[]).
+      signalIntercepted();
+      while (stallRequests) {
+        await new Promise<void>((r) => setTimeout(r, 100));
+      }
+      await route.continue();
+    };
+
+    await page.route(PR_URL, routeFilter);
+
+    // ---- Phase 3: drive the active workout into the loading window -------
+    //
+    // startEmptyWorkout → addExercise. The latter auto-creates set #1,
+    // which mounts the row provider and fires the per-exercise GET that
+    // our handler now stalls.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Wait until our handler captured the per-exercise GET. Proves the
+    // stall is live before any value mutation could trigger a PR
+    // projection.
+    await intercepted;
+
+    // Set positive weight + reps. The default 0/0 set wouldn't project
+    // as a predicted PR even with the empty-baseline bug (the resolver
+    // short-circuits on `weight <= 0` / `reps <= 0`), so we MUST seed
+    // values that WOULD project as a PR to make the loading-window
+    // assertion load-bearing. setWeight / setReps drive purely the UI
+    // (TextField dialogs) and don't depend on the held PR fetch.
+    await setWeight(page, '80');
+    await setReps(page, '5');
+
+    // ---- Phase 4: assert the row is NOT classified as a (predicted) PR --
+    //
+    // While `prsAsync.value` is null (the GET is held), the row provider
+    // returns `PrRowDisplay.plain(PrRowState.none)` for every set, which
+    // `_SetRowFrame` maps to identifier `set-row-state-none`. Pre-fix the
+    // empty-baseline projection produced `set-row-state-pending-pr` (gold
+    // ◆) for set #1's 80×5 because the resolver saw an empty `runningBest`
+    // map and treated every positive (weight, reps) as breaking it. This
+    // assertion is the load-bearing M6 pin: NO PR-classified row
+    // identifier may appear while the baseline is unknown.
+    //
+    // We assert on the un-completed (pending) set because completing it
+    // requires the rest-timer dismiss path, which adds incidental
+    // complexity. The same loading-window guard governs both pending and
+    // completed rows — pre-fix `pendingPredictedPr` and `completedStandingPr`
+    // both leaked through the empty-baseline branch.
+    await expect(page.locator(SET_ROW.stateNone).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(SET_ROW.statePendingPr)).toHaveCount(0, {
+      timeout: 1_000,
+    });
+    await expect(page.locator(SET_ROW.stateStandingPr)).toHaveCount(0, {
+      timeout: 1_000,
+    });
+
+    // ---- Phase 5: release the stall + assert reclassification -------------
+    //
+    // After releasing, the per-exercise GET resolves with `[]` (fresh user
+    // has no records). The resolver then runs against the empty baseline
+    // and projects the pending working set (80×5) as a predicted PR —
+    // identifier flips to `set-row-state-pending-pr`. This pins the
+    // loading→loaded transition: the row reclassifies once data lands,
+    // proving the loading-state guard is the only thing that was hiding
+    // the (correct, post-load) classification.
+    stallRequests = false;
+    await expect(page.locator(SET_ROW.statePendingPr).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Defensive cleanup — remove the route handler (same pattern as PR-1
+    // Q1 / PR-2 Fix B): pass the SAME function reference passed to
+    // page.route to remove the SAME handler.
+    await page.unroute(PR_URL, routeFilter);
+
+    // Discard so the next test invocation starts from a clean lapsed state.
     await page.locator(WORKOUT.discardButton).click();
     const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
     await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });

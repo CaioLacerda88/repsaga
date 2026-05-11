@@ -1409,6 +1409,18 @@ function buildRoleSeedRunners(): Record<
       });
       await seedMinimalWorkout(supabase, userId);
     },
+    // PR-6 M6 — PR-row loading-state contract. Stalls per-exercise GETs to
+    // `/rest/v1/personal_records?exercise_id=in.` while the user adds and
+    // completes a first set, then asserts the row is NOT classified as
+    // `set-row-state-standing-pr` until the stall releases. Fresh state →
+    // no historical records → unambiguous post-load reclassification.
+    smokeWorkoutPr6RowFlicker: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId, {

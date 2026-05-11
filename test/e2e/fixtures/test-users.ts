@@ -358,4 +358,21 @@ export const TEST_USERS = {
     email: 'e2e-smoke-workout-pr4-cascading-undo@test.local',
     password: 'TestPassword123!',
   },
+
+  // ---------------------------------------------------------------------------
+  // smokeWorkoutPr6RowFlicker: dedicated user for the PR-6 / M6 E2E that pins
+  // the `activeWorkoutRowDisplaysProvider` loading-state contract. The test
+  // stalls GETs to `/rest/v1/personal_records` whose query string carries
+  // `exercise_id=in.` (i.e., per-exercise queries fired from the row provider
+  // — the bootstrap query targets `?user_id=eq.` and is left to flow). Fresh
+  // state is required so the post-stall reclassification is unambiguous (no
+  // historical PR records → first completed working set becomes
+  // `set-row-state-standing-pr` once data lands). Isolated from the
+  // PR-1/PR-2/PR-3 stall-route users so two route handlers can never collide
+  // on the same backing user under workers > 1.
+  // ---------------------------------------------------------------------------
+  smokeWorkoutPr6RowFlicker: {
+    email: 'e2e-smoke-workout-pr6-row-flicker@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;
