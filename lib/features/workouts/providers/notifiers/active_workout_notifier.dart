@@ -768,12 +768,22 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       }).toList(),
     );
 
-    // Drop the bookkeeping entry — once restored, future deletes of
-    // this id capture a fresh current index.
-    _originalSetIndices.remove(deletedSet.id);
-
     state = AsyncData(newState);
     await _saveToHive(newState);
+
+    // Drop the bookkeeping entry AFTER the Hive persist completes — once
+    // restored, future deletes of this id capture a fresh current index.
+    //
+    // PR #202 review S1: moved this `remove` to AFTER `_saveToHive` so
+    // that a Hive write failure leaves the entry intact. If we removed
+    // first and persist threw, a subsequent restoreSet on the same id
+    // would silently fall back to `deletedSet.setNumber - 1` (the legacy
+    // path) — a subtle correctness regression for the delete-restore-
+    // -redelete edge case. The post-write removal keeps the map in lock-
+    // step with what was actually persisted: if the write failed the
+    // user retains the ability to re-attempt the restore against the
+    // same recorded original index.
+    _originalSetIndices.remove(deletedSet.id);
   }
 
   /// Copy weight and reps from the previous set into the given set.
