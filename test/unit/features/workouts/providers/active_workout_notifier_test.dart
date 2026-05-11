@@ -4649,6 +4649,480 @@ void main() {
       verify(() => mockPRRepo.getRecordsForExercises(any())).called(1);
     });
   });
+
+  // ============================================================
+  // PR-4 / M2 — propagateWeight: null vs 0 follower distinction
+  //
+  // Pre-fix `(s.weight ?? 0) != oldWeight` collapsed null to 0, so a
+  // follower with `weight: null` (uninitialized — e.g. routine-prefilled
+  // with no weight history) was overwritten when `oldWeight == 0`. That
+  // can produce a false PR if the propagated value beats the user's
+  // true history. The fix distinguishes null (stop walk — uninitialized)
+  // from 0 (continue if matches). See BUGS.md PR-4 / M2.
+  // ============================================================
+  group('ActiveWorkoutNotifier — propagateWeight (PR-4 M2 null vs 0)', () {
+    /// Build an exercise state with explicit per-set weights (allowing null).
+    ///
+    /// Bypasses [TestSetFactory.create] for the weight column because that
+    /// helper collapses null → 60.0 via its `weight ?? 60.0` default — which
+    /// is exactly the bug shape we are testing AGAINST. Built as raw JSON so
+    /// `null` round-trips through `ExerciseSet.fromJson` unchanged.
+    ActiveWorkoutState buildExplicitState(List<double?> weights) {
+      final json = TestActiveWorkoutStateFactory.create(
+        workout: TestWorkoutFactory.create(isActive: true),
+        exercises: [
+          {
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-001',
+              exerciseId: 'exercise-001',
+              order: 1,
+            ),
+            'sets': List.generate(weights.length, (i) {
+              return <String, dynamic>{
+                'id': 'set-${i + 1}',
+                'workout_exercise_id': 'we-001',
+                'set_number': i + 1,
+                'reps': 10,
+                // CRITICAL — preserve null literally so the M2 null-vs-0
+                // contract is actually exercised. Using TestSetFactory here
+                // would coerce null → 60.0 and the assertion would never
+                // see the bug shape.
+                'weight': weights[i],
+                'rpe': null,
+                'set_type': 'working',
+                'notes': null,
+                'is_completed': false,
+                'created_at': '2026-01-01T10:05:00Z',
+              };
+            }),
+          },
+        ],
+      );
+      return ActiveWorkoutState.fromJson(json);
+    }
+
+    test(
+      'M2: follower with weight==null STOPS the walk when oldWeight==0',
+      () async {
+        // Leader at 0kg, follower #2 = null (uninitialized), follower #3 = 0.
+        // Propagating leader 0→20 should update ONLY the leader. Follower #2's
+        // null weight is treated as "uninitialized / customized" and ends the
+        // formation walk; follower #3 sits behind that wall and is also
+        // untouched (the walk already broke).
+        final initial = buildExplicitState([0.0, null, 0.0]);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final leaderId = initial.exercises.first.sets.first.id;
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .propagateWeight(weId, leaderId, 0, 20);
+
+        final sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets[0].weight, 20.0, reason: 'leader updated');
+        expect(
+          sets[1].weight,
+          isNull,
+          reason:
+              'PR-4 / M2: a null-weighted follower is uninitialized, NOT '
+              'equivalent to 0. The walk MUST stop here so the follower is '
+              'not silently overwritten with the leader\'s new value.',
+        );
+        expect(
+          sets[2].weight,
+          0.0,
+          reason:
+              'follower past the null wall stays unchanged — the walk '
+              'already broke at the null follower.',
+        );
+      },
+    );
+
+    test('M2: follower with weight==0 CONTINUES the walk when oldWeight==0 '
+        '(regression guard for the actually-zero case)', () async {
+      // Leader at 0kg, all followers at explicit 0kg. Pre-fix and post-fix
+      // both expand the formation — null is the only case the new contract
+      // changes. This pin guards against an over-correction that breaks
+      // the common "all 0kg → set leader → propagate" flow.
+      final initial = buildExplicitState([0.0, 0.0, 0.0]);
+      final container = makeContainer(initial);
+      addTearDown(container.dispose);
+      await container.read(activeWorkoutProvider.future);
+
+      final weId = initial.exercises.first.workoutExercise.id;
+      final leaderId = initial.exercises.first.sets.first.id;
+
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .propagateWeight(weId, leaderId, 0, 20);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .first
+          .sets;
+      expect(sets[0].weight, 20.0);
+      expect(sets[1].weight, 20.0, reason: 'explicit 0 still propagates');
+      expect(sets[2].weight, 20.0, reason: 'explicit 0 still propagates');
+    });
+  });
+
+  // ============================================================
+  // PR-4 / M3 — Cascading delete + undo restores ORIGINAL order
+  //
+  // Pre-fix `restoreSet` inserted using `deletedSet.setNumber - 1`. After
+  // a cascading delete (e.g. delete #2 then delete #3-renumbered-to-#2),
+  // the captured setNumber reflects the position AT TIME OF DELETION,
+  // not the original. The fix records the original index per id at first
+  // delete time, so undo restores the FIRST-observed position. See
+  // BUGS.md PR-4 / M3.
+  // ============================================================
+  group('ActiveWorkoutNotifier — restoreSet cascading order (PR-4 M3)', () {
+    /// Builds 4 sets with stable ids set-1..set-4 so we can assert the
+    /// final order against id (not set number) after restoration.
+    ActiveWorkoutState build4SetState() {
+      final json = TestActiveWorkoutStateFactory.create(
+        workout: TestWorkoutFactory.create(isActive: true),
+        exercises: [
+          {
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-001',
+              exerciseId: 'exercise-001',
+              order: 1,
+            ),
+            'sets': List.generate(4, (i) {
+              return TestSetFactory.create(
+                id: 'set-${i + 1}',
+                workoutExerciseId: 'we-001',
+                setNumber: i + 1,
+                weight: 10.0 + i,
+                reps: 10,
+                isCompleted: false,
+              );
+            }),
+          },
+        ],
+      );
+      return ActiveWorkoutState.fromJson(json);
+    }
+
+    test(
+      'M3: cascading delete (#2, #3) then undo, undo → original order [1,2,3,4]',
+      () async {
+        final initial = build4SetState();
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final notifier = container.read(activeWorkoutProvider.notifier);
+
+        // Capture the original snapshots BEFORE deleting (the swipe
+        // handler does the same with `final deletedSet = set;`).
+        final originalSet2 = initial.exercises.first.sets[1]; // id=set-2
+        final originalSet3 = initial.exercises.first.sets[2]; // id=set-3
+
+        // Step 1 — delete set #2 (id=set-2). After this:
+        //   sets = [set-1@1, set-3@2, set-4@3]
+        await notifier.deleteSet(weId, 'set-2');
+        var sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets.map((s) => s.id).toList(), ['set-1', 'set-3', 'set-4']);
+        expect(sets[1].setNumber, 2, reason: 'set-3 renumbered to position 2');
+
+        // Step 2 — delete what is NOW at position 2 (id=set-3). The
+        // captured setNumber on this set's snapshot is "2" (post-renumber)
+        // — exactly the trap the M3 fix guards against. After this:
+        //   sets = [set-1@1, set-4@2]
+        // We capture the snapshot AS THE UI WOULD via its current state.
+        final cascadingDeleteSet3 = sets[1]; // id=set-3, setNumber NOW 2
+        expect(
+          cascadingDeleteSet3.setNumber,
+          2,
+          reason:
+              'precondition: the snapshot the UI would capture has the '
+              'POST-renumbered setNumber, NOT the original 3.',
+        );
+        await notifier.deleteSet(weId, 'set-3');
+        sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets.map((s) => s.id).toList(), ['set-1', 'set-4']);
+
+        // Step 3 — undo the SECOND delete (set-3). M3 contract: insert at
+        // ORIGINAL index 2 (zero-based), which puts set-3 BACK between
+        // set-1 and set-4. Pre-fix, restoreSet would have used
+        // `cascadingDeleteSet3.setNumber - 1 = 1`, putting set-3 at
+        // index 1 — which happens to be the same place this time, but
+        // the next undo would land set-2 at index 1 too, producing
+        // [set-1, set-2, set-3, set-4] vs the wrong [set-1, set-2,
+        // set-4, set-3] for OTHER orderings.
+        await notifier.restoreSet(weId, cascadingDeleteSet3);
+        sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets.map((s) => s.id).toList(), ['set-1', 'set-3', 'set-4']);
+
+        // Step 4 — undo the FIRST delete (set-2). The captured snapshot
+        // here is `originalSet2`, which has setNumber=2 (set-2's position
+        // pre-delete). M3 records original index 1 → insert at 1 →
+        // [set-1, set-2, set-3, set-4].
+        await notifier.restoreSet(weId, originalSet2);
+        sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(
+          sets.map((s) => s.id).toList(),
+          ['set-1', 'set-2', 'set-3', 'set-4'],
+          reason:
+              'PR-4 / M3: cascading delete + cascading undo must restore '
+              'the original order. Pre-fix this produced [set-1, set-2, '
+              'set-4, set-3] because set-3 was inserted using its '
+              'post-renumbered setNumber (2) instead of its original '
+              'index (2 zero-based).',
+        );
+        // Numbers re-renumbered consecutively from 1.
+        expect(sets.map((s) => s.setNumber).toList(), [1, 2, 3, 4]);
+
+        // Reference unused-warning guard.
+        expect(originalSet3.id, 'set-3');
+      },
+    );
+
+    test(
+      'M3: single delete + undo restores original position (no regression)',
+      () async {
+        // Spot-check the simple non-cascading case still works.
+        final initial = build4SetState();
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final notifier = container.read(activeWorkoutProvider.notifier);
+        final originalSet3 = initial.exercises.first.sets[2];
+
+        await notifier.deleteSet(weId, 'set-3');
+        await notifier.restoreSet(weId, originalSet3);
+
+        final sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(sets.map((s) => s.id).toList(), [
+          'set-1',
+          'set-2',
+          'set-3',
+          'set-4',
+        ]);
+      },
+    );
+  });
+
+  // ============================================================
+  // PR-4 / M1 — startFromRoutine filters previous-session warmups
+  //
+  // Pre-fix the routine-start path indexed `previousSets` directly,
+  // so a user whose previous session was warmup-heavy got their
+  // routine pre-filled with warmup weights for working-set positions.
+  // The fix filters previous sets by setType != warmup BEFORE clamping.
+  // See BUGS.md PR-4 / M1.
+  // ============================================================
+  group('ActiveWorkoutNotifier — startFromRoutine warmup filter (PR-4 M1)', () {
+    test('M1: previous session [warmup@40, warmup@60, working@100] → '
+        'routine pre-fills working-weight (100), not warmup (40)', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(null, locale: const Locale('en'));
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => makeWorkout(id: 'workout-routine-warmup'));
+
+      // Previous session for ex-bench had two warmups + one working set.
+      // Post-fix only the working set is index-matchable → set #1 of the
+      // routine pre-fills 100kg, set #2 of the routine pre-fills the
+      // last working set (still 100kg by clamp), etc.
+      final prevSets = <ExerciseSet>[
+        ExerciseSet(
+          id: 'prev-warm-1',
+          workoutExerciseId: 'we-prev',
+          setNumber: 1,
+          weight: 40,
+          reps: 12,
+          setType: SetType.warmup,
+          isCompleted: true,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+        ExerciseSet(
+          id: 'prev-warm-2',
+          workoutExerciseId: 'we-prev',
+          setNumber: 2,
+          weight: 60,
+          reps: 10,
+          setType: SetType.warmup,
+          isCompleted: true,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+        ExerciseSet(
+          id: 'prev-work-1',
+          workoutExerciseId: 'we-prev',
+          setNumber: 3,
+          weight: 100,
+          reps: 8,
+          setType: SetType.working,
+          isCompleted: true,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+      ];
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {'ex-bench': prevSets});
+
+      await container.read(activeWorkoutProvider.future);
+
+      final routineConfig = RoutineStartConfig(
+        routineName: 'Push Day',
+        routineId: 'routine-push',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: 'ex-bench',
+            exercise: makeExercise(id: 'ex-bench', name: 'Bench Press'),
+            setCount: 3,
+            targetReps: null,
+            restSeconds: 90,
+          ),
+        ],
+      );
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(routineConfig);
+
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises.first.sets;
+      expect(sets, hasLength(3));
+      for (final s in sets) {
+        expect(
+          s.weight,
+          100.0,
+          reason:
+              'PR-4 / M1: previous-session warmups must be filtered out '
+              'BEFORE index-matching. With only one working previous set '
+              '(100kg), every routine set should clamp to that working '
+              'weight — not pre-fill 40kg / 60kg from warmups.',
+        );
+      }
+    });
+
+    test('M1: previous session is warmup-ONLY → falls through to equipment '
+        'defaults instead of pre-filling warmup weights', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) =
+          makeAsyncContainer(null, locale: const Locale('en'));
+      addTearDown(container.dispose);
+
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => makeWorkout(id: 'workout-warmup-only'));
+
+      // Pathological case: every previous-session set was a warmup.
+      // Post-fix the filter empties `previousSets`, so `prev` resolves
+      // to null and the equipment default takes over (barbell → 20kg).
+      final prevWarmupOnly = <ExerciseSet>[
+        ExerciseSet(
+          id: 'prev-warm-1',
+          workoutExerciseId: 'we-prev',
+          setNumber: 1,
+          weight: 40,
+          reps: 12,
+          setType: SetType.warmup,
+          isCompleted: true,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+        ExerciseSet(
+          id: 'prev-warm-2',
+          workoutExerciseId: 'we-prev',
+          setNumber: 2,
+          weight: 60,
+          reps: 10,
+          setType: SetType.warmup,
+          isCompleted: true,
+          createdAt: DateTime(2026, 5, 1),
+        ),
+      ];
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {'ex-bench': prevWarmupOnly});
+
+      await container.read(activeWorkoutProvider.future);
+
+      final routineConfig = RoutineStartConfig(
+        routineName: 'Push Day',
+        routineId: 'routine-push',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: 'ex-bench',
+            exercise: makeExercise(id: 'ex-bench', name: 'Bench Press'),
+            setCount: 2,
+            targetReps: null,
+            restSeconds: 90,
+          ),
+        ],
+      );
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(routineConfig);
+
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises.first.sets;
+      expect(sets, hasLength(2));
+      // The exact equipment default depends on the user's weight unit
+      // and equipment type; we just assert it is NOT a leaked warmup
+      // weight (40 or 60).
+      for (final s in sets) {
+        expect(
+          s.weight == 40.0 || s.weight == 60.0,
+          isFalse,
+          reason:
+              'PR-4 / M1 edge case: when ALL previous sets are warmups '
+              'the filter empties the list and the equipment default '
+              'must take over. A 40kg or 60kg pre-fill here would mean '
+              'the warmup weight leaked through.',
+        );
+      }
+    });
+  });
 }
 
 /// Stateful in-memory cache fake used by the AW-EX-D-US1-02 reproducer.

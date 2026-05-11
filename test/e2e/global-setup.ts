@@ -1398,6 +1398,17 @@ function buildRoleSeedRunners(): Record<
       });
       await seedMinimalWorkout(supabase, userId);
     },
+    // PR-4 M3 — cascading delete + undo restores original order. Lapsed
+    // state so startEmptyWorkout finds "Quick workout" CTA. The test
+    // adds 4 sets, swipe-deletes #2 then #3, undoes both, and asserts
+    // the rendered set numbers match the original [1,2,3,4] sequence.
+    smokeWorkoutPr4CascadingUndo: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId, {
