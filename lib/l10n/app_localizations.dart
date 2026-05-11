@@ -338,6 +338,12 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancel;
 
+  /// PR-7 — UI-critic deferred from PR-1. Scoped label for the abort button inside `ActiveWorkoutLoadingOverlay`. The generic `cancel` key reads as 'cancel my workout' in the finish/discard phase (the user just confirmed the destructive action; 'Cancel' on the spinner reads as undoing the entire workout). 'Stop' is unambiguous: it stops the in-flight save/discard request and restores the prior state. Scoped to this single call site — every other dialog and Material control still uses `cancel`.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get loadingOverlayStop;
+
   /// Delete button label
   ///
   /// In en, this message translates to:
@@ -1472,16 +1478,16 @@ abstract class AppLocalizations {
   /// **'Discard Workout?'**
   String get discardWorkoutTitle;
 
-  /// Discard workout dialog content
+  /// Discard workout dialog content. PR-7 brand-voice revisit: pre-fix copy was 'You've been working out for {duration}. This cannot be undone.' — descriptively flat for the highest-stakes destructive moment in the active workout. New copy borrows the journey framing already established by `vitalityCopy*` and class-tagline strings ('the path begins', 'return to the path') and replaces 'cannot be undone' with the concrete consequence: the work disappears. Lower abstraction, higher weight, same brand voice as the rest of the app.
   ///
   /// In en, this message translates to:
-  /// **'You\'ve been working out for {duration}. This cannot be undone.'**
+  /// **'You\'ve been on the path {duration}. Discard now and the work is gone.'**
   String discardWorkoutContent(String duration);
 
-  /// Finish workout dialog title
+  /// Finish workout dialog title. PR-7 brand-voice revisit: pre-fix 'Finish Workout?' read as a generic Material confirm prompt. 'Seal' echoes the saga / chapter framing the rest of the app uses without going LARP-y; 'session' stays grounded in lifting reality. Pairs with the Save & Finish CTA which now reads as the deliberate close of a chapter rather than a transactional save.
   ///
   /// In en, this message translates to:
-  /// **'Finish Workout?'**
+  /// **'Seal this session?'**
   String get finishWorkoutTitle;
 
   /// Warning about incomplete sets
@@ -1526,10 +1532,10 @@ abstract class AppLocalizations {
   /// **'\"{name}\" is still in progress.'**
   String workoutInProgress(String name);
 
-  /// Resume dialog: stale workout interrupted info
+  /// Resume dialog: stale workout interrupted info. Rendered on its own visual line after a `\n` separator following the quoted workout name, so the leading word starts a sentence — capital W, not lowercase. PR-7 capitalization fix.
   ///
   /// In en, this message translates to:
-  /// **'was interrupted {age}.'**
+  /// **'Was interrupted {age}.'**
   String workoutInterrupted(String age);
 
   /// Resume anyway button for stale workouts

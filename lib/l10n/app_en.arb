@@ -85,6 +85,8 @@
   "@save": { "description": "Save button label" },
   "cancel": "Cancel",
   "@cancel": { "description": "Cancel button label" },
+  "loadingOverlayStop": "Stop",
+  "@loadingOverlayStop": { "description": "PR-7 — UI-critic deferred from PR-1. Scoped label for the abort button inside `ActiveWorkoutLoadingOverlay`. The generic `cancel` key reads as 'cancel my workout' in the finish/discard phase (the user just confirmed the destructive action; 'Cancel' on the spinner reads as undoing the entire workout). 'Stop' is unambiguous: it stops the in-flight save/discard request and restores the prior state. Scoped to this single call site — every other dialog and Material control still uses `cancel`." },
   "delete": "Delete",
   "@delete": { "description": "Delete button label" },
   "confirm": "Confirm",
@@ -565,16 +567,16 @@
 
   "discardWorkoutTitle": "Discard Workout?",
   "@discardWorkoutTitle": { "description": "Discard workout dialog title" },
-  "discardWorkoutContent": "You've been working out for {duration}. This cannot be undone.",
+  "discardWorkoutContent": "You've been on the path {duration}. Discard now and the work is gone.",
   "@discardWorkoutContent": {
-    "description": "Discard workout dialog content",
+    "description": "Discard workout dialog content. PR-7 brand-voice revisit: pre-fix copy was 'You've been working out for {duration}. This cannot be undone.' — descriptively flat for the highest-stakes destructive moment in the active workout. New copy borrows the journey framing already established by `vitalityCopy*` and class-tagline strings ('the path begins', 'return to the path') and replaces 'cannot be undone' with the concrete consequence: the work disappears. Lower abstraction, higher weight, same brand voice as the rest of the app.",
     "placeholders": {
       "duration": { "type": "String", "example": "45m 12s" }
     }
   },
 
-  "finishWorkoutTitle": "Finish Workout?",
-  "@finishWorkoutTitle": { "description": "Finish workout dialog title" },
+  "finishWorkoutTitle": "Seal this session?",
+  "@finishWorkoutTitle": { "description": "Finish workout dialog title. PR-7 brand-voice revisit: pre-fix 'Finish Workout?' read as a generic Material confirm prompt. 'Seal' echoes the saga / chapter framing the rest of the app uses without going LARP-y; 'session' stays grounded in lifting reality. Pairs with the Save & Finish CTA which now reads as the deliberate close of a chapter rather than a transactional save." },
   "incompleteSetsWarning": "{count, plural, =1{You have 1 incomplete set} other{You have {count} incomplete sets}}",
   "@incompleteSetsWarning": {
     "description": "Warning about incomplete sets",
@@ -600,9 +602,9 @@
       "name": { "type": "String", "example": "Push Day" }
     }
   },
-  "workoutInterrupted": "was interrupted {age}.",
+  "workoutInterrupted": "Was interrupted {age}.",
   "@workoutInterrupted": {
-    "description": "Resume dialog: stale workout interrupted info",
+    "description": "Resume dialog: stale workout interrupted info. Rendered on its own visual line after a `\\n` separator following the quoted workout name, so the leading word starts a sentence — capital W, not lowercase. PR-7 capitalization fix.",
     "placeholders": {
       "age": { "type": "String", "example": "yesterday at 3:30 PM" }
     }

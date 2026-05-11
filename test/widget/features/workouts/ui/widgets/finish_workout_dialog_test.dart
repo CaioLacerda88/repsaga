@@ -73,10 +73,15 @@ void main() {
     });
 
     group('dialog structure', () {
-      testWidgets('shows title "Finish Workout?"', (tester) async {
+      testWidgets('shows title "Seal this session?"', (tester) async {
+        // PR-7 brand-voice revisit: pre-fix the dialog title was the
+        // generic Material confirm prompt "Finish Workout?". The new copy
+        // anchors to the saga / chapter framing the rest of the app uses
+        // ("Seal" → bind / close a chapter) without going LARP-y.
         await showDialog(tester, incompleteCount: 0);
 
-        expect(find.text('Finish Workout?'), findsOneWidget);
+        expect(find.text('Seal this session?'), findsOneWidget);
+        expect(find.text('Finish Workout?'), findsNothing);
       });
 
       testWidgets('shows notes text field', (tester) async {
@@ -141,7 +146,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(captured, isNull);
-        expect(find.text('Finish Workout?'), findsNothing);
+        expect(find.text('Seal this session?'), findsNothing);
       });
     });
 
@@ -272,7 +277,7 @@ void main() {
         await tester.tap(find.text('Save & Finish'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Finish Workout?'), findsNothing);
+        expect(find.text('Seal this session?'), findsNothing);
       });
     });
   });
