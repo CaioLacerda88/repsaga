@@ -4865,14 +4865,36 @@ void main() {
             .sets;
         expect(sets.map((s) => s.id).toList(), ['set-1', 'set-4']);
 
-        // Step 3 — undo the SECOND delete (set-3). M3 contract: insert at
-        // ORIGINAL index 2 (zero-based), which puts set-3 BACK between
-        // set-1 and set-4. Pre-fix, restoreSet would have used
-        // `cascadingDeleteSet3.setNumber - 1 = 1`, putting set-3 at
-        // index 1 — which happens to be the same place this time, but
-        // the next undo would land set-2 at index 1 too, producing
-        // [set-1, set-2, set-3, set-4] vs the wrong [set-1, set-2,
-        // set-4, set-3] for OTHER orderings.
+        // Step 3 — undo the SECOND delete (set-3). This assertion is a
+        // CONSISTENCY check: it verifies the post-fix code produces the
+        // expected output and that the _originalSetIndices map IS
+        // consulted on every restoreSet call (recorded index for set-3
+        // is 1 — the position it held when deleted at step 2, after
+        // step 1 had already renumbered it down from 3 → 2).
+        //
+        // It is NOT a pre-fix vs post-fix differentiator on its own. For
+        // this LIFO undo order (undo most-recent-delete first), both
+        // pre-fix (insertIndex = `setNumber - 1` = 2 - 1 = 1) AND
+        // post-fix (insertIndex = recorded index 1) land set-3 at index
+        // 1 of `[set-1, set-4]`, yielding [set-1, set-3, set-4] after
+        // renumber. Because `_originalSetIndices[setId]` always records
+        // the CURRENT index at delete time (algebraically equal to the
+        // snapshot's `setNumber - 1` since renumbering is consecutive
+        // from 1), the two paths only diverge on a
+        // delete → restore → re-delete → restore-again sequence, where
+        // the second delete's `putIfAbsent` preserves the FIRST observed
+        // index instead of recapturing the (potentially shifted) current
+        // one. That delete-restore-redelete scenario is not exercised
+        // here. See BUGS.md PR-4/M3 for the underlying bug description.
+        //
+        // Future maintainers: do NOT delete or weaken this assertion. It
+        // pins down the post-fix shape so a regression in either
+        // direction (lookup short-circuit OR insertion-index off-by-one)
+        // is caught. Step 4 below has the same caveat — for THIS seed,
+        // pre-fix and post-fix both produce the correct
+        // [set-1, set-2, set-3, set-4]. Both assertions are load-bearing
+        // for documenting the post-fix shape, but the differentiating
+        // delete-restore-redelete coverage is tracked separately.
         await notifier.restoreSet(weId, cascadingDeleteSet3);
         sets = container
             .read(activeWorkoutProvider)
@@ -4882,10 +4904,13 @@ void main() {
             .sets;
         expect(sets.map((s) => s.id).toList(), ['set-1', 'set-3', 'set-4']);
 
-        // Step 4 — undo the FIRST delete (set-2). The captured snapshot
-        // here is `originalSet2`, which has setNumber=2 (set-2's position
-        // pre-delete). M3 records original index 1 → insert at 1 →
-        // [set-1, set-2, set-3, set-4].
+        // Step 4 — undo the FIRST delete (set-2). Captured snapshot is
+        // `originalSet2`, which has setNumber=2 (set-2's pre-delete
+        // position). M3 looks up _originalSetIndices['set-2'] = 1 and
+        // inserts at index 1 → [set-1, set-2, set-3, set-4]. (Pre-fix
+        // would have used `originalSet2.setNumber - 1 = 1` and produced
+        // the same result; see step-3 comment for why these paths
+        // coincide for non-redelete sequences.)
         await notifier.restoreSet(weId, originalSet2);
         sets = container
             .read(activeWorkoutProvider)
@@ -4897,11 +4922,14 @@ void main() {
           sets.map((s) => s.id).toList(),
           ['set-1', 'set-2', 'set-3', 'set-4'],
           reason:
-              'PR-4 / M3: cascading delete + cascading undo must restore '
-              'the original order. Pre-fix this produced [set-1, set-2, '
-              'set-4, set-3] because set-3 was inserted using its '
-              'post-renumbered setNumber (2) instead of its original '
-              'index (2 zero-based).',
+              'PR-4 / M3: cascading delete + cascading undo must end at '
+              'the original order. This assertion documents the post-fix '
+              'end state. The pre-fix vs post-fix DIVERGENCE only shows '
+              'up in delete-restore-redelete sequences (where '
+              '_originalSetIndices.putIfAbsent preserves the original '
+              'index instead of recapturing a shifted one) — that '
+              'scenario is documented in BUGS.md PR-4/M3 and is not '
+              'exercised by this specific test.',
         );
         // Numbers re-renumbered consecutively from 1.
         expect(sets.map((s) => s.setNumber).toList(), [1, 2, 3, 4]);
