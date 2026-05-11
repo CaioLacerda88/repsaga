@@ -22,13 +22,23 @@ import '../../providers/workout_providers.dart';
 import '../../utils/set_defaults.dart';
 import 'exercise_picker_sheet.dart';
 import 'set_row.dart';
+import 'swap_exercise_confirm_dialog.dart';
 
 /// Card representing one exercise inside an active workout.
 ///
 /// Hosts the exercise header (name + reorder/swap/delete actions), the set
 /// rows (via [SetRow]), and the "Add set" / "Fill remaining" buttons.
-/// Tapping the name opens an [_ExerciseDetailSheet]; long-pressing swaps
-/// the exercise via [ExercisePickerSheet].
+/// Tapping the name opens an [_ExerciseDetailSheet].
+///
+/// **PR-3 (H2/Q6, H3) — destructive long-press gestures removed.** Earlier
+/// builds wired `onLongPress` on the header to swap-via-picker and on the
+/// Add Set button to fill-remaining. Both shortcuts were undiscoverable AND
+/// destructive (lost user mental model on accidental press). Industry has
+/// converged AWAY from gesture shortcuts in gym apps. Both actions are now
+/// reachable only through visible affordances: the `swap_horiz` icon button
+/// in the card header (sole entry point for swap) and the dedicated
+/// `_FillRemainingButton` rendered below `_AddSetButton` (sole entry point
+/// for fill-remaining). See `BUGS.md` PR-3 / H2 / H3.
 ///
 /// Tracks recently-added set IDs locally so the corresponding [SetRow]
 /// captures the `isNew` flag in its `initState` (the flag is cleared after
@@ -96,13 +106,41 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     }
   }
 
+  /// Swap the exercise on this card via the picker.
+  ///
+  /// **PR-3 (Q3) — conditional confirm with concrete exercise names.** When
+  /// the user has zero completed sets on this exercise, the swap is silent
+  /// (no friction). When they have one or more completed sets, the swap is
+  /// guarded by a confirm dialog that names BOTH sides (old and new) and
+  /// the count of logged sets that will re-attribute to the new exercise's
+  /// PR history. Per Q3 decision + UI critic guidance: copy uses concrete
+  /// exercise names, never "the new exercise."
   Future<void> _swapExercise(BuildContext context) async {
-    final exercise = await ExercisePickerSheet.show(context);
-    if (exercise != null) {
-      ref
-          .read(activeWorkoutProvider.notifier)
-          .swapExercise(widget.activeExercise.workoutExercise.id, exercise);
+    final newExercise = await ExercisePickerSheet.show(context);
+    if (newExercise == null) return;
+    if (!context.mounted) return;
+
+    final activeExercise = widget.activeExercise;
+    final completedCount = activeExercise.sets
+        .where((s) => s.isCompleted)
+        .length;
+    if (completedCount > 0) {
+      final oldName =
+          activeExercise.workoutExercise.exercise?.name ??
+          AppLocalizations.of(context).exerciseGeneric;
+      final confirmed = await SwapExerciseConfirmDialog.show(
+        context,
+        oldExerciseName: oldName,
+        newExerciseName: newExercise.name,
+        completedSetCount: completedCount,
+      );
+      if (confirmed != true) return;
+      if (!context.mounted) return;
     }
+
+    ref
+        .read(activeWorkoutProvider.notifier)
+        .swapExercise(activeExercise.workoutExercise.id, newExercise);
   }
 
   void _onSetCompleted() {
@@ -309,7 +347,6 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
                 exercise: exercise,
                 weightUnit: weightUnit,
               ),
-              onLongPress: () => _fillRemaining(context),
             ),
             if (_hasFillableSets(activeExercise.sets))
               _FillRemainingButton(onPressed: () => _fillRemaining(context)),
@@ -422,22 +459,30 @@ class _ExerciseCardHeader extends ConsumerWidget {
             label: l10n.exerciseSemanticsLabel(
               exercise?.name ?? l10n.exerciseGeneric,
             ),
+            // PR-3 (H2/Q6): `onLongPress` was wired to the swap-via-picker
+            // flow. That gesture was undiscoverable AND destructive — an
+            // accidental long-press would silently open the picker and a
+            // stray tap on a different exercise immediately re-attributed
+            // every logged set to the new PR history. The visible
+            // `swap_horiz` IconButton in the header (rendered by the else-
+            // branch below) is the sole entry point for swap. Per Q6
+            // decision (industry has converged AWAY from gesture shortcuts
+            // in gym apps).
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: exercise != null
                   ? () => onShowDetail(context, exercise!)
                   : null,
-              onLongPress: () => onSwap(context),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 48),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   // Inner visual content is decorative — the parent Semantics
-                  // label already describes the affordance ("Exercise: …. Tap
-                  // for details. Long press to swap."). ExcludeSemantics here
-                  // prevents the inner Text + Icon from emitting their own
-                  // semantic nodes that the AOM would merge upward into a
-                  // sibling group, which is exactly the bug we just fixed.
+                  // label already describes the affordance ("Exercise: ….
+                  // Tap for details."). ExcludeSemantics here prevents the
+                  // inner Text + Icon from emitting their own semantic
+                  // nodes that the AOM would merge upward into a sibling
+                  // group, which is exactly the bug PR #152 fix #3 chased.
                   child: ExcludeSemantics(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -532,11 +577,16 @@ class _ExerciseCardHeader extends ConsumerWidget {
 
 /// "Add set" OutlinedButton — wrapped in `Semantics(identifier: 'workout-add-set')`
 /// (E2E selector contract; see `WORKOUT.addSetButton` in selectors.ts).
+///
+/// **PR-3 (H3) — long-press fill-remaining shortcut removed.** The button
+/// previously carried `onLongPress: _fillRemaining` while the dedicated
+/// `_FillRemainingButton` rendered right below — two affordances for the
+/// same action, one of them invisible. The visible `_FillRemainingButton`
+/// is now the sole entry point. See `BUGS.md` PR-3 / H3.
 class _AddSetButton extends StatelessWidget {
-  const _AddSetButton({required this.onPressed, required this.onLongPress});
+  const _AddSetButton({required this.onPressed});
 
   final VoidCallback onPressed;
-  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -555,7 +605,6 @@ class _AddSetButton extends StatelessWidget {
         identifier: 'workout-add-set',
         child: OutlinedButton.icon(
           onPressed: onPressed,
-          onLongPress: onLongPress,
           icon: const Icon(Icons.add, size: 20),
           label: Text(AppLocalizations.of(context).addSet),
           style: OutlinedButton.styleFrom(
