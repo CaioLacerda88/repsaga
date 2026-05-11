@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_icons.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
@@ -121,23 +122,48 @@ void main() {
               'fix it was 14x14dp — invisible to first-time users.',
         );
 
-        // Alpha is encoded on the SVG's color filter. AppIcons.render
-        // applies `Color.withValues(alpha: ...)` to onSurface; we read
-        // back the effective color via the IconTheme's `color` field
-        // on the descendant. Locate the AppIcons render path output —
-        // a ColorFiltered with a matrix encoding the alpha. Simpler:
-        // walk for any child that has the expected color in its
-        // properties. Use a runtime check on the AppIcons widget if
-        // exposed, otherwise infer via the wrapping ColorFiltered.
-        //
-        // Practical pin: a) the icon container is 16dp (above);
-        // b) the surrounding AppIcons.render call site passes the
-        // documented alpha. The source assertion in
-        // `active_workout_app_bar_title.dart` is the single source of
-        // truth — this widget-level pin guards the SIZE, which is the
-        // user-visible regression risk. Alpha changes inside
-        // AppIcons.render's downstream wiring are caught by the source
-        // file dartdoc + reviewer.
+        // Alpha pin (PR-5 review S1 follow-up): `AppIcons.render` with
+        // explicit `color` wraps the SVG in
+        // `ColorFilter.mode(color, BlendMode.srcIn)` (see
+        // `lib/core/theme/app_icons.dart:163`). Locate the SvgPicture
+        // descendant of the title and read its colorFilter back to
+        // verify the effective alpha. This catches alpha regressions
+        // independently of the size pin above.
+        final svgPictures = tester
+            .widgetList<SvgPicture>(
+              find.descendant(
+                of: find.byType(ActiveWorkoutAppBarTitle),
+                matching: find.byType(SvgPicture),
+              ),
+            )
+            .toList();
+        expect(
+          svgPictures,
+          isNotEmpty,
+          reason: 'expected at least one SvgPicture (the pencil) under title',
+        );
+        final pencilSvg = svgPictures.first;
+        final colorFilter = pencilSvg.colorFilter;
+        expect(
+          colorFilter,
+          isA<ColorFilter>(),
+          reason:
+              'PR-5 M8: the pencil SVG must be rendered through a srcIn '
+              'ColorFilter so its alpha is verifiable.',
+        );
+        // ColorFilter.mode toString in this Flutter version:
+        //   "ColorFilter.mode(Color(alpha: 0.6000, red: ..., green: ..., blue: ...), srcIn)"
+        // Match the alpha component substring directly. Pre-fix was 0.4;
+        // post-fix is 0.6. Tolerate the trailing zeros (0.6000) by
+        // matching on the prefix only.
+        final filterStr = colorFilter.toString();
+        expect(
+          filterStr,
+          contains('alpha: 0.6'),
+          reason:
+              'PR-5 M8: the pencil icon must render at alpha ≈ 0.6. '
+              'Pre-fix was 0.4 — invisible. Got: $filterStr',
+        );
 
         // Sanity that AppIcons constant we expect is the edit pencil.
         expect(AppIcons.edit, isNotNull);

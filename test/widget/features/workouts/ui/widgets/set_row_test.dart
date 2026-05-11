@@ -2867,10 +2867,6 @@ void main() {
         final Offset afterTopLeft = bottomBoxAfter.localToGlobal(Offset.zero);
 
         // Layout stability contract: the bottom row's top-edge y-
-        // coordinate must NOT shift when the top row's hint slot
-        // collapses. Allow zero tolerance — the filler is exactly
-        // sized for the hint's visual footprint.
-        // Layout stability contract: the bottom row's top-edge y-
         // coordinate must NOT shift by more than 2dp when the top row's
         // hint slot collapses. The filler is sized to approximate the
         // hint line's visual footprint (~18dp = 4dp bottom padding +
