@@ -347,6 +347,16 @@ export const WORKOUT = {
    * because Flutter CanvasKit draws the SnackBar text to canvas (no DOM
    * text node) and the AOM exposes it as a `role=group`. Use `.first()`
    * — Flutter renders two AOM boundaries per SnackBar.
+   *
+   * EN-ONLY ASSUMPTION (PR3 review W2): the `<name> added$` regex matches
+   * only the EN structural copy. The PT translation is structurally
+   * different — `Exercício adicionado: <name>` (prefix-then-name) vs EN's
+   * suffix-then-verb — and would NOT match this selector. The full
+   * E2E suite runs under the en locale by default (see global-setup), so
+   * this is a deliberate scoping. If/when the suite gains a pt-locale
+   * variant, add a sibling `addExerciseUndoSnackBarPt` matching
+   * `/^Exercício adicionado:.+/` and gate the assertion on the active
+   * locale.
    */
   addExerciseUndoSnackBar: 'role=group[name=/.+ added$/]',
   /**
