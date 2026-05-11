@@ -365,7 +365,12 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
             : l10n.reorderExercisesTooltip,
         child: IconButton(
           onPressed: _toggleReorderMode,
-          icon: Icon(_reorderMode ? Icons.done : Icons.swap_vert),
+          // PR-7 generic-icon swap: `Icons.swap_vert` reads as "swap two
+          // entries" rather than "reorder a list". `Icons.reorder` is the
+          // 3-line drag-handle convention (Material spec for reorderable
+          // lists) — less ambiguous and matches what users see in every
+          // mainstream gym app's exercise reorder mode.
+          icon: Icon(_reorderMode ? Icons.done : Icons.reorder),
           tooltip: _reorderMode
               ? l10n.exitReorderModeTooltip
               : l10n.reorderExercisesTooltip,

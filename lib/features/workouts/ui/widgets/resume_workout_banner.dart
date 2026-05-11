@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_icons.dart';
 import '../../providers/workout_providers.dart';
 
 /// Prominent banner shown on the home screen when there is an active workout
@@ -44,8 +45,14 @@ class ResumeWorkoutBanner extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(
-                Icons.fitness_center,
+              // PR-7 brand-glyph swap: Material `Icons.fitness_center` reads
+              // as a generic AI fitness app. `AppIcons.lift` is the
+              // Game-Icons silhouette that doubles as the app's signature
+              // glyph (see `AppIcons.lift` doc — same asset reused here so
+              // the resume banner reads as continuity with the running
+              // workout, not a separate Material widget.).
+              AppIcons.render(
+                AppIcons.lift,
                 size: 24,
                 color: theme.colorScheme.onPrimary,
               ),

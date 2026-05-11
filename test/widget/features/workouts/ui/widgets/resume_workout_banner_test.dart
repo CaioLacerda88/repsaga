@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:repsaga/core/theme/app_icons.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
@@ -109,6 +111,22 @@ Widget buildBanner(
 }
 
 // ---------------------------------------------------------------------------
+// Asset finders
+// ---------------------------------------------------------------------------
+
+/// Finder for the [AppIcons.lift] SVG asset rendered inside the banner.
+/// `flutter_svg`'s `SvgPicture.asset(...)` uses an `ExactAssetPicture`
+/// loader keyed by the same path string we passed to [AppIcons.render]; a
+/// substring match on `toString()` is the cheapest stable way to assert
+/// "this exact asset is mounted" in widget tests without reaching into
+/// private SvgPicture internals.
+Finder _findLiftSvg() => find.byWidgetPredicate(
+  (widget) =>
+      widget is SvgPicture &&
+      widget.bytesLoader.toString().contains('lift.svg'),
+);
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -120,14 +138,14 @@ void main() {
         await tester.pump(); // let async provider settle
 
         expect(find.byType(GestureDetector), findsNothing);
-        expect(find.byIcon(Icons.fitness_center), findsNothing);
+        expect(_findLiftSvg(), findsNothing);
       });
 
       testWidgets('active workout has zero exercises', (tester) async {
         await tester.pumpWidget(buildBanner(_makeStateNoExercises()));
         await tester.pump();
 
-        expect(find.byIcon(Icons.fitness_center), findsNothing);
+        expect(_findLiftSvg(), findsNothing);
         expect(find.text('Test Workout'), findsNothing);
       });
     });
@@ -142,11 +160,21 @@ void main() {
         expect(find.text('Push Day'), findsOneWidget);
       });
 
-      testWidgets('shows fitness_center icon', (tester) async {
+      // PR-7 brand-glyph swap: pre-fix this asserted the generic Material
+      // `Icons.fitness_center` (typical AI fitness UI). Post-fix the banner
+      // renders `AppIcons.lift` — the app's signature Game-Icons silhouette
+      // and the same asset used everywhere a workout-in-progress is
+      // surfaced (continuity glyph, not a separate Material widget).
+      // Regression-pin: also assert `Icons.fitness_center` is gone so a
+      // future revert can't silently land.
+      testWidgets('shows AppIcons.lift brand glyph (not fitness_center)', (
+        tester,
+      ) async {
         await tester.pumpWidget(buildBanner(_makeStateWithExercises()));
         await tester.pump();
 
-        expect(find.byIcon(Icons.fitness_center), findsOneWidget);
+        expect(_findLiftSvg(), findsOneWidget);
+        expect(find.byIcon(Icons.fitness_center), findsNothing);
       });
 
       testWidgets('shows chevron_right icon', (tester) async {

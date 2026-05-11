@@ -173,5 +173,23 @@ void main() {
         );
       },
     );
+
+    // PR-7 generic-icon swap. Pre-fix the toggle used `Icons.swap_vert`
+    // which reads as "swap two entries" (e.g. swap A with B), not
+    // "reorder this list." `Icons.reorder` is the 3-line drag-handle
+    // convention every mainstream gym app uses for a reorderable list of
+    // exercises. Pin both the new icon's presence and the old icon's
+    // absence so a future revert can't silently land.
+    testWidgets(
+      'reorder toggle renders Icons.reorder (not the deprecated Icons.swap_vert) in idle state',
+      (tester) async {
+        await tester.pumpWidget(_buildScreen(_stateWithMultipleExercises()));
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byIcon(Icons.reorder), findsOneWidget);
+        expect(find.byIcon(Icons.swap_vert), findsNothing);
+      },
+    );
   });
 }
