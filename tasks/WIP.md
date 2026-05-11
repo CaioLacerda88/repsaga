@@ -105,11 +105,49 @@ Add new fixture users if needed for isolation.
 
 ### Pipeline checklist
 
-- [ ] `tech-lead` reads PLAN.md Phase 22 + this WIP + the BUGS.md PR-3 entries (H2/Q6, H3, Q3, H5, S1), then implements with TDD.
-- [ ] After each fix: `dart format .` + `dart analyze --fatal-infos` clean.
-- [ ] All new tests pass; existing tests still pass.
-- [ ] `qa-engineer` reviews coverage, runs full E2E suite locally, adds any missing E2E. Selector additions go in `helpers/selectors.ts`.
-- [ ] Orchestrator runs CI verification — 0 failures, full output read.
-- [ ] PR opened with copy of acceptance criteria and "Closes BUGS.md H2/Q6, H3, Q3, H5, S1."
+- [x] `tech-lead` reads PLAN.md Phase 22 + this WIP + the BUGS.md PR-3 entries (H2/Q6, H3, Q3, H5, S1), then implements with TDD.
+- [x] After each fix: `dart format .` + `dart analyze --fatal-infos` clean.
+- [x] All new tests pass; existing tests still pass.
+- [x] `qa-engineer` reviews coverage, runs full E2E suite locally, adds any missing E2E. Selector additions go in `helpers/selectors.ts`.
+- [x] Orchestrator runs CI verification — 0 failures, full output read.
+- [x] PR opened with copy of acceptance criteria and "Closes BUGS.md H2/Q6, H3, Q3, H5, S1." (PR #200)
 - [ ] `reviewer` flags addressed in same cycle (no deferral, per memory rule).
 - [ ] Squash merge to `main`; no DB migration; close WIP section in a follow-up docs PR; update BUGS.md to mark items RESOLVED with PR ref.
+
+### PR #200 reviewer cycle — 7 findings
+
+Source: reviewer task brief on this branch (this thread).
+
+- [x] **C1 — `_isShowingDialog` race in DiscardWorkoutCoordinator.** Generation
+      counter applied; race-pin test added FIRST and confirmed failing pre-fix
+      (`Found 2 widgets with text "Discard Workout?"`), passing post-fix.
+- [x] **C2 — Discard error snackbar uses route-scoped messenger.** Captured
+      `rootContext = Navigator.of(context, rootNavigator: true).context` once
+      at the top of `show()`; routed both the snackbar and its
+      `AppLocalizations.of(...)` lookup through it. Mirrors the finish
+      coordinator pattern. No user-visible behavior change today (error path
+      stays on screen) — but a future refactor that navigates-on-error inherits
+      the correct messenger.
+- [x] **W1 — id-diff fallback in `_onAddExercise`.** Replaced
+      `firstWhere(orElse: () => after.last)` with `firstWhereOrNull` + early
+      return. Added `collection: ^1.18.0` to pubspec.
+- [x] **W2 — E2E selector EN-only assumption.** Added a comment block above
+      `addExerciseUndoSnackBar` documenting the EN-only regex contract and the
+      pt-locale variant pattern.
+- [x] **W3 — `_StubActiveWorkoutNotifier` `noSuchMethod`.** Replaced
+      `noSuchMethod` with explicit `throw UnimplementedError(...)` overrides
+      for every member of the `ActiveWorkoutNotifier` interface the test does
+      not exercise.
+- [x] **S1 — `restoreExercise` one-liner.** SKIPPED per reviewer ("no action
+      required").
+- [x] **S2 — Semantics identifier wraps title not dialog root.** Hoisted the
+      Semantics wrap from the title `Text` up to the `AlertDialog` root.
+
+### Commits (one per concern)
+
+- [x] `fix(workouts): generation counter on discard coordinator dialog flag (PR3 review C1)` — 0427688
+- [x] `fix(workouts): route discard error snackbar through root messenger (PR3 review C2)` — 8d57807
+- [x] `refactor(workouts): drop dangerous id-diff fallback in add-exercise undo (PR3 review W1)` — d36e86c
+- [x] `test(workouts): explicit stubs in discard coordinator test (PR3 review W3)` — da54e07
+- [x] `docs(e2e): clarify EN-only assumption on add-exercise undo selector (PR3 review W2)` — 90ccbdb
+- [x] `refactor(workouts): hoist Semantics identifier to dialog root (PR3 review S2)` — 77bc395
