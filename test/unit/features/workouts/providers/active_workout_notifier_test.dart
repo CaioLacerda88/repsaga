@@ -437,6 +437,89 @@ void main() {
       });
     });
 
+    // ----------------------------------------------------------- restoreExercise
+    //
+    // PR-3 H5: `restoreExercise` is the undo path for the add-from-picker
+    // snackbar. It mirrors `removeExercise` in shape — takes the
+    // workoutExercise id (UUID), drops it from `state.exercises`, and
+    // persists. These tests pin the contract independent of the snackbar
+    // wiring (which lives in `active_workout_screen.dart` and is
+    // exercised by E2E).
+    group('restoreExercise (PR-3 H5)', () {
+      test('removes the target exercise by workoutExerciseId', () async {
+        final initial = makeState(exerciseCount: 2, setsPerExercise: 0);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final targetId = initial.exercises.last.workoutExercise.id;
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .restoreExercise(targetId);
+
+        final result = container.read(activeWorkoutProvider).value!;
+        expect(result.exercises, hasLength(1));
+        expect(
+          result.exercises.any((e) => e.workoutExercise.id == targetId),
+          isFalse,
+          reason:
+              'restoreExercise must drop the just-added entry so the undo '
+              'snackbar action reverts the picker add. See BUGS.md PR-3 / H5.',
+        );
+      });
+
+      test(
+        'reorders remaining exercises starting from 0 (mirrors removeExercise)',
+        () async {
+          final initial = makeState(exerciseCount: 3, setsPerExercise: 0);
+          final container = makeContainer(initial);
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          final firstId = initial.exercises.first.workoutExercise.id;
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .restoreExercise(firstId);
+
+          final result = container.read(activeWorkoutProvider).value!;
+          expect(result.exercises[0].workoutExercise.order, 0);
+          expect(result.exercises[1].workoutExercise.order, 1);
+        },
+      );
+
+      test('is idempotent — calling twice with the same id is safe', () async {
+        final initial = makeState(exerciseCount: 2, setsPerExercise: 0);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final targetId = initial.exercises.last.workoutExercise.id;
+        final notifier = container.read(activeWorkoutProvider.notifier);
+        await notifier.restoreExercise(targetId);
+        await notifier.restoreExercise(targetId);
+
+        // Second call must not throw and must not affect the surviving
+        // exercise — protects against a stale snackbar tap firing after
+        // the user already removed the entry manually.
+        final result = container.read(activeWorkoutProvider).value!;
+        expect(result.exercises, hasLength(1));
+      });
+
+      test('does nothing when workoutExerciseId does not exist', () async {
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 0);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .restoreExercise('nonexistent-id');
+
+        final result = container.read(activeWorkoutProvider).value!;
+        expect(result.exercises, hasLength(1));
+      });
+    });
+
     // ------------------------------------------------------------------ addSet
     group('addSet', () {
       test(

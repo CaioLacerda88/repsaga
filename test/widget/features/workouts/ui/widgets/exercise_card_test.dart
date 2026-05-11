@@ -48,14 +48,14 @@ final _testWorkout = Workout(
   createdAt: DateTime.now().toUtc(),
 );
 
-ExerciseSet _makeSet({required int setNumber}) {
+ExerciseSet _makeSet({required int setNumber, bool isCompleted = false}) {
   return ExerciseSet(
     id: 'set-$setNumber',
     workoutExerciseId: 'we-001',
     setNumber: setNumber,
     reps: 10,
     weight: 60.0,
-    isCompleted: false,
+    isCompleted: isCompleted,
     setType: SetType.working,
     createdAt: DateTime.now().toUtc(),
   );
@@ -296,6 +296,120 @@ void main() {
           );
 
           handle.dispose();
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------
+    // PR-3 (H2/Q6, H3) — destructive long-press shortcuts removed
+    //
+    // Earlier builds wired `onLongPress` on TWO surfaces inside the card:
+    //
+    //   1. Header InkWell (`_ExerciseCardHeader`) → opened the exercise
+    //      picker → tapping any exercise IMMEDIATELY swapped (no confirm,
+    //      logged sets re-attributed silently). H2/Q6.
+    //   2. `_AddSetButton` OutlinedButton → fired `_fillRemaining` (the
+    //      same action the visible `_FillRemainingButton` below it
+    //      already exposes). H3.
+    //
+    // Both shortcuts violated the principle that destructive actions
+    // should never be fired by undiscoverable gestures (industry has
+    // converged AWAY from gesture shortcuts in gym apps per Q6
+    // benchmarks).
+    //
+    // These tests pin the structural fix at the InkWell / OutlinedButton
+    // construction site so a future commit re-adding `onLongPress` is
+    // caught at compile-time-equivalent (widget-tree assertion). We test
+    // by reading the widget tree, not by simulating long-press — the
+    // long-press semantics on Flutter's Inkwell are timing-sensitive in
+    // tests, but the widget-tree contract is deterministic.
+    // -------------------------------------------------------------------
+    group('PR-3 (H2/Q6, H3) — long-press shortcuts removed', () {
+      testWidgets(
+        'header InkWell exposes onTap (open detail) but NOT onLongPress (H2/Q6)',
+        (tester) async {
+          await tester.pumpWidget(_buildExerciseCard(_makeActiveExercise()));
+          await tester.pump();
+
+          // Find the header InkWell — the one wired up to open the
+          // exercise detail sheet. There are several InkWells in the
+          // tree (every IconButton has one); we identify the header by
+          // walking down from the Semantics label that matches the
+          // exercise name prefix.
+          final headerInkWell = tester
+              .widgetList<InkWell>(
+                find.descendant(
+                  of: find.bySemanticsLabel(
+                    RegExp(r'^Exercise: Barbell Bench Press\.'),
+                  ),
+                  matching: find.byType(InkWell),
+                ),
+              )
+              .firstWhere(
+                (w) => w.onTap != null,
+                orElse: () => throw StateError(
+                  'No tappable InkWell found in header — the header should '
+                  'always wire onTap for opening the detail sheet.',
+                ),
+              );
+
+          // PR-3 H2/Q6 contract: the header InkWell MUST keep onTap (open
+          // detail sheet) and MUST NOT set onLongPress (long-press swap
+          // shortcut removed).
+          expect(
+            headerInkWell.onTap,
+            isNotNull,
+            reason: 'Header tap must still open the exercise detail sheet.',
+          );
+          expect(
+            headerInkWell.onLongPress,
+            isNull,
+            reason:
+                'PR-3 H2/Q6: the long-press-to-swap shortcut on the exercise '
+                'name was removed because it was an undiscoverable destructive '
+                'gesture (silent re-attribution of logged sets to a different '
+                'exercise). The visible swap_horiz icon button is the sole '
+                'entry point for swap. If this assertion fails, someone re-'
+                'added onLongPress — see BUGS.md PR-3 / H2.',
+          );
+        },
+      );
+
+      testWidgets(
+        'Add Set OutlinedButton exposes onPressed but NOT onLongPress (H3)',
+        (tester) async {
+          await tester.pumpWidget(_buildExerciseCard(_makeActiveExercise()));
+          await tester.pump();
+
+          // The Add Set OutlinedButton lives inside a Semantics container
+          // identified by 'workout-add-set'.
+          final addSetOutlined = tester.widget<OutlinedButton>(
+            find.descendant(
+              of: find.byWidgetPredicate(
+                (w) =>
+                    w is Semantics &&
+                    w.properties.identifier == 'workout-add-set',
+              ),
+              matching: find.byType(OutlinedButton),
+            ),
+          );
+
+          expect(
+            addSetOutlined.onPressed,
+            isNotNull,
+            reason: 'Add Set must keep its primary tap action.',
+          );
+          expect(
+            addSetOutlined.onLongPress,
+            isNull,
+            reason:
+                'PR-3 H3: the long-press-to-fill-remaining shortcut on the '
+                'Add Set button was removed because the visible '
+                '_FillRemainingButton renders right below it — having two '
+                'affordances for the same action (one invisible) violated '
+                'the no-redundant-affordance rule. If this fails, someone '
+                're-added the long-press handler — see BUGS.md PR-3 / H3.',
+          );
         },
       );
     });
