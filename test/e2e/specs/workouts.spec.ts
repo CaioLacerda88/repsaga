@@ -1256,6 +1256,11 @@ test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
     // user-facing observable.
     const routeHandler = async (route: import('@playwright/test').Route) => {
       signalIntercepted();
+      // S1 coverage gap (BUGS.md PR-2): this test does NOT cover the
+      // re-entrance window where DiscardWorkoutCoordinator._isShowingDialog
+      // stays `true` while the cancelled-but-still-in-flight DELETE is
+      // held. Closing it requires asserting the discard dialog re-opens
+      // BEFORE `stallRequests = false`. Tracked under PR-3 per BUGS.md S1.
       // Spin until the test releases the stall. Polling rather than a
       // single await on a promise so the handler exits cleanly when the
       // test sets `stallRequests = false` AT ANY moment.
