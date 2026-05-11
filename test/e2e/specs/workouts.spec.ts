@@ -2272,8 +2272,12 @@ test.describe('Layout stability on set completion (PR5 — H8)', () => {
     // Fill values for set 2 (any value — we just need a sane state) then
     // tap its done checkbox. The contract under test: this tap lands on
     // the set-2 checkbox without us having to re-find it.
+    //
+    // setIndex=0: after completing set 1, only set 2's checkbox remains in
+    // the `workout-set-done` locator pool. `completeSet` indexes into the
+    // currently-uncompleted checkboxes, not into global row positions.
     await setReps(page, '5');
-    await completeSet(page, 1);
+    await completeSet(page, 0);
 
     // Cleanup: discard so the next run starts fresh.
     await page.locator(WORKOUT.discardButton).click();
