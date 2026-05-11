@@ -190,23 +190,15 @@ Pre-fix: each control button wrapped in `SizedBox(width: 64, height: 56)`. On Sa
 
 ---
 
-## PR-6 — PR-row loading flicker + analytics DRY — OPEN
+## PR-6 — PR-row loading flicker + analytics DRY ✅ RESOLVED (PR #206, merged as `005f580`)
 
-### M6 — `activeWorkoutRowDisplaysProvider` returns empty PR list during loading → false predicted-PR signals
-**Status:** OPEN — assigned to PR-6
-**File:** `lib/features/workouts/providers/workout_providers.dart:109-110`
-
-`exercisePRsProvider(...).value ?? const []` — while loading, every completed working set looks like a "standing PR" (gold stripe + bracket). Once data lands, rows reclassify. Visual flicker. Documented as "first-ever workout" behavior but also fires for returning users with slow PR data.
-
-**Fix sketch:** when `exercisePRsProvider.isLoading`, return `PrRowState.none` for completed sets (don't classify until data lands).
+### M6 — No false predicted-PR while pr_cache is loading
+**Status:** RESOLVED — PR #206
+**Fix:** `activeWorkoutRowDisplaysProvider` now gates on `AsyncValue.value == null` (vs the old `?? const []` flatten). Returns `PrRowState.none` for ALL row positions (pending + completed) during loading and AsyncError-with-no-prior-data; preserves stale `AsyncData` during refresh overlays. PR celebration at finish uses `pr_cache` (not the row provider) so finish-time correctness is unaffected. Pinned by 3 unit tests (loading/error/transition) + 1 E2E test using `page.route()` to stall the per-exercise PR query.
 
 ### Source-string DRY (smell)
-**Status:** OPEN — assigned to PR-6
-**File:** `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` lines 259, 732, 1258
-
-`current.routineId != null ? 'routine_card' : 'empty'` duplicated in three call sites. Bug-prone — one missed update produces inconsistent analytics.
-
-**Fix sketch:** extract `_workoutSource()` helper.
+**Status:** RESOLVED — PR #206
+**Fix:** extracted `_workoutSource(String? routineId)` helper; routed all 4 analytics emit sites (start / startFromRoutine / finish / discard) through it. Was 2 ternaries + 2 hardcoded literals.
 
 ---
 
