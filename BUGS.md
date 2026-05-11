@@ -142,31 +142,19 @@ Tap = immediate add. Remove requires icon → confirm dialog → confirm. 1 tap 
 
 ---
 
-## PR-4 — Set defaults + edge cases — OPEN
+## PR-4 — Set defaults + edge cases ✅ RESOLVED (PR #202, merged as `a6642be`)
 
-### M1 / Q2 — Warmup sets from previous session leak as defaults for working sets
-**Status:** OPEN — assigned to PR-4
-**Files:** `lib/features/workouts/ui/widgets/exercise_card.dart` `_computeNewSetDefaults`, `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` `startFromRoutine`
+### M1 / Q2 — Warmup pre-fill filter
+**Status:** RESOLVED — PR #202
+**Fix:** filter `lastSets` (and `previousSets` in `startFromRoutine`) by `setType != warmup` BEFORE index-matching. Empty-after-filter falls through cleanly to next priority. Pinned by 2 unit tests + 1 widget test using `_CapturingActiveWorkoutNotifier`.
 
-`_computeNewSetDefaults` Priority 2 explicitly skips warmup-from-current-session. Priority 1 (previous session at matching index) does NOT skip warmups. Same in `startFromRoutine` — `previousSets[setIndex]` includes warmups. User who logged `[warmup@40, warmup@60, working@100]` last session gets pre-filled `[40, 60, 100]` — has to manually bump sets 1-2.
+### M2 — `propagateWeight` null vs 0 distinction
+**Status:** RESOLVED — PR #202
+**Fix:** explicit nullable check — null follower stops the walk (treated as uninitialized / end of formation). Regression-guard test pins that explicit `weight: 0` still propagates when `oldWeight == 0`.
 
-**Fix sketch:** filter `lastSets` (and `previousSets` in routine path) by `setType != warmup` BEFORE index-matching.
-
-### M2 — `propagateWeight` treats follower `weight: null` as same as `0`
-**Status:** OPEN — assigned to PR-4
-**File:** `lib/features/workouts/providers/notifiers/active_workout_notifier.dart:494`
-
-`(s.weight ?? 0) != oldWeight` — when `oldWeight==0` and follower has `weight: null`, walk continues past it and overwrites. Edge case (follower added from routine with no weight history). Could produce false-PR if propagated value beats history.
-
-**Fix sketch:** distinguish `null` from `0` — treat null as customized → stop walk.
-
-### M3 — Cascading undo of deleted sets restores in wrong order
-**Status:** OPEN — assigned to PR-4
-**File:** `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` `restoreSet`
-
-Delete set #2, delete set #3 (now renumbered to #2), undo each → original set #4 ends up at position 2 instead of 3 because `setNumber` was renumbered between deletes. Data preserved, order broken.
-
-**Fix sketch:** `restoreSet` should insert based on captured ORIGINAL position with a stable sort over current sets, not a re-renumbered position.
+### M3 — Cascading undo restores in original order
+**Status:** RESOLVED — PR #202
+**Fix:** notifier-owned `Map<String, int> _originalSetIndices` keyed by stable set UUID. `deleteSet` records the original index BEFORE renumbering (using `putIfAbsent`). `restoreSet` reads + drops by id after Hive persist succeeds (per reviewer suggestion). Map cleared on every workout lifecycle transition (startWorkout / startFromRoutine / finishWorkout / discardWorkout) — reviewer's one-question check caught a real unbounded-growth memory smell.
 
 ---
 
