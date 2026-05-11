@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -59,6 +60,20 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // PR-3 S1 — feed every active-workout state transition into the discard
+    // coordinator so it can drop its re-entrance guard the moment
+    // `cancelLoading` restores state mid-discard. Without this listener,
+    // the coordinator's flag stays `true` until the held network call
+    // completes (sometimes unbounded), silently no-op'ing every subsequent
+    // discard tap. The listener fires synchronously on every Riverpod
+    // state notification, which is exactly the window we need.
+    ref.listen<AsyncValue<ActiveWorkoutState?>>(activeWorkoutProvider, (
+      _,
+      next,
+    ) {
+      _discardCoordinator.notifyStateChanged(next);
+    });
+
     final asyncState = ref.watch(activeWorkoutProvider);
     final timerState = ref.watch(restTimerProvider);
 
@@ -114,6 +129,26 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // reachable during rest is fine (no destructive action mid-rest), and
     // the AppBar's discard-X is exactly the affordance a user wanting to
     // bail on a workout mid-rest needs.
+    //
+    // PR-3 (review fix) — wrap the body in a route-scoped `ScaffoldMessenger`.
+    // Without this, in-screen snackbars (H5 add-exercise undo, swipe-to-delete
+    // set undo, etc.) attach to the app-level messenger that MaterialApp
+    // installs at the root. Their queue then survives `context.go('/home')`
+    // — which has the user-visible regression of the H5 "Bench Press added"
+    // snackbar still being on-screen when the user navigates Home → Profile
+    // → Manage Data, blocking the manage-data success snackbar from
+    // appearing (MD-006/007/010/011 all failed for this reason).
+    //
+    // A route-scoped messenger is bounded by the screen's lifetime: when
+    // the route is replaced post-finish/discard, the messenger disposes
+    // and its queue dies cleanly. Snackbars that MUST outlive the screen
+    // (offline-saved confirmation, failed-to-save error from the finish
+    // coordinator) explicitly use the root messenger via `rootContext`.
+    //
+    // Snackbar-over-rest-timer ordering (PR-2 C3 contract) is preserved —
+    // the local messenger sits ABOVE the Scaffold, but `Scaffold._ScaffoldSlot`
+    // still paints its snackbar slot AFTER the body within that Scaffold,
+    // so the snackbar still renders above the body's rest-timer overlay.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -121,12 +156,14 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           _discardCoordinator.show(context, ref, displayState);
         }
       },
-      child: _ActiveWorkoutBody(
-        state: displayState,
-        discardCoordinator: _discardCoordinator,
-        finishCoordinator: _finishCoordinator,
-        showLoadingOverlay: asyncState.isLoading,
-        showRestTimerOverlay: timerState != null,
+      child: ScaffoldMessenger(
+        child: _ActiveWorkoutBody(
+          state: displayState,
+          discardCoordinator: _discardCoordinator,
+          finishCoordinator: _finishCoordinator,
+          showLoadingOverlay: asyncState.isLoading,
+          showRestTimerOverlay: timerState != null,
+        ),
       ),
     );
   }
@@ -221,9 +258,61 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
   Future<void> _onAddExercise() async {
     final exercise = await ExercisePickerSheet.show(context);
-    if (exercise != null) {
-      ref.read(activeWorkoutProvider.notifier).addExercise(exercise);
-    }
+    if (exercise == null) return;
+    if (!mounted) return;
+
+    // Snapshot the WE id set BEFORE the add so we can isolate the new id
+    // even if state mutates between addExercise and the snackbar wiring.
+    // Reading the notifier's state directly is safer than diffing the FAB
+    // build closure — the notifier is the source of truth.
+    final notifier = ref.read(activeWorkoutProvider.notifier);
+    final beforeExercises =
+        ref.read(activeWorkoutProvider).value?.exercises ?? const [];
+    final beforeIds = beforeExercises.map((e) => e.workoutExercise.id).toSet();
+
+    notifier.addExercise(exercise);
+
+    // PR-3 (H5): identify the just-added workoutExercise id by diffing the
+    // pre/post id sets. `addExercise` sets state synchronously inside the
+    // notifier (no await on the network — Hive persist runs in background)
+    // so the new id is observable immediately after the call returns.
+    //
+    // PR-3 review W1 — use `firstWhereOrNull` and bail when the diff yields
+    // nothing instead of falling back to `after.last`. The previous
+    // `orElse: () => after.last` silently passed the WRONG id (the last
+    // entry in the list, which is unrelated to what was just added) the
+    // moment `addExercise` becomes async — and the snackbar's Undo would
+    // then silently delete an exercise the user never added. Bailing
+    // early keeps the contract explicit: no diff entry → no undo
+    // affordance, fail closed instead of fail open.
+    final after = ref.read(activeWorkoutProvider).value?.exercises;
+    if (after == null || after.isEmpty) return;
+    final added = after.firstWhereOrNull(
+      (e) => !beforeIds.contains(e.workoutExercise.id),
+    );
+    if (added == null) return;
+    final addedId = added.workoutExercise.id;
+
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    // Hide any prior snackbar so the undo affordance is the most recent
+    // surface — avoids stacking when the user adds several exercises in
+    // quick succession.
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.addExerciseUndo(exercise.name)),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: l10n.undo,
+          onPressed: () {
+            // Read the notifier fresh — `ref` is still valid even after
+            // an await gap because this State outlives the snackbar.
+            ref.read(activeWorkoutProvider.notifier).restoreExercise(addedId);
+          },
+        ),
+      ),
+    );
   }
 
   void _toggleReorderMode() {

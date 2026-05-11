@@ -1379,6 +1379,25 @@ function buildRoleSeedRunners(): Record<
       });
       await seedMinimalWorkout(supabase, userId);
     },
+    // PR-3 — destructive-gesture cleanup, Q3 swap confirm, H5 add-undo.
+    // Lapsed state so `startEmptyWorkout` finds the "Quick workout" CTA.
+    smokeWorkoutDestructiveGestures: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    // PR-3 S1 — DiscardWorkoutCoordinator re-entrance test. Stalls
+    // DELETE /workouts via page.route(). Isolated from smokeWorkoutDiscardRace
+    // so two stall handlers can't race the same backing user across workers.
+    smokeWorkoutDiscardReentry: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId, {

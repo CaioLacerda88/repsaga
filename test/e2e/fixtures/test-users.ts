@@ -322,4 +322,26 @@ export const TEST_USERS = {
     email: 'e2e-smoke-workout-discard-race@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // PR-3 audit fixes — destructive-gesture cleanup + Q3 confirm + H5 undo + S1
+  // -------------------------------------------------------------------------
+  // smokeWorkoutDestructiveGestures: lapsed user for the long-press cleanup,
+  // Q3 swap confirm, and H5 add-exercise undo flows. Isolated so the H5 add-
+  // then-undo test can't race the Q3 swap-with-completed-sets test under
+  // workers > 1 (both rely on the picker bottom-sheet sequence).
+  smokeWorkoutDestructiveGestures: {
+    email: 'e2e-smoke-workout-destructive-gestures@test.local',
+    password: 'TestPassword123!',
+  },
+  // smokeWorkoutDiscardReentry: dedicated user for the S1 re-entrance test
+  // — stalls DELETE /workouts mid-discard via page.route() so the re-entrance
+  // window can be probed BEFORE the network resolves. Isolated from
+  // smokeWorkoutDiscardRace because both tests stall the same endpoint and
+  // a shared user would race on workout state when running on different
+  // workers.
+  smokeWorkoutDiscardReentry: {
+    email: 'e2e-smoke-workout-discard-reentry@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

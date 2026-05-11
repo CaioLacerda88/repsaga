@@ -37,6 +37,11 @@ dependencies:
   web: ^1.1.1
   fl_chart: ^1.1.0
   package_info_plus: ^9.0.1 # Pinned: 10.x requires Dart SDK newer than 3.11.4
+  # Used for `firstWhereOrNull` in `active_workout_screen.dart` (PR3 review W1)
+  # — the previous `firstWhere(orElse: () => after.last)` silently returned the
+  # wrong element when no diff entry was found, which would corrupt undo state
+  # the moment `addExercise` becomes async.
+  collection: ^1.18.0
   # Transitive pins: meta (1.17→1.18) and vector_math (2.2→2.3) are held back
   # by the Flutter SDK itself — no action until Flutter upgrades them.
 

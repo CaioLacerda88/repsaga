@@ -9,9 +9,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { dismissCelebrationIfPresent, waitForAppReady } from '../helpers/app';
+import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, FIRST_WORKOUT_CTA } from '../helpers/selectors';
+import { NAV, WORKOUT, HOME, HISTORY, FIRST_WORKOUT_CTA, EXERCISE_PICKER } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -1463,5 +1463,476 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
     // to this single test (no cross-test pollution risk). The
     // server-side workout row stays `is_active: true` — harmless
     // because `loadActiveWorkout` reads from Hive, not the server.
+  });
+});
+
+// =============================================================================
+// PR-3 — Destructive-gesture cleanup + Q3 swap confirm + H5 add undo
+//
+// Per BUGS.md PR-3: every destructive shortcut on the active-workout surface
+// is now either removed or behind an explicit confirm/undo. These tests pin
+// the user-visible behavior of those changes so a future commit can't
+// silently re-add a long-press shortcut or regress the confirm copy.
+// =============================================================================
+
+test.describe('Exercise card destructive gestures cleanup (PR3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutDestructiveGestures').email,
+      getUser('smokeWorkoutDestructiveGestures').password,
+    );
+  });
+
+  test('should NOT swap exercise on long-press of header (H2/Q6)', async ({
+    page,
+  }) => {
+    // PR-3 H2/Q6: long-press on the exercise name was removed. The visible
+    // swap_horiz icon button is the sole entry point. We verify the negative
+    // contract by long-pressing the header and asserting the exercise picker
+    // bottom sheet does NOT open.
+    //
+    // Note on Flutter InkWell long-press semantics: when `onLongPress` is
+    // null but `onTap` is set, a long-press of any duration falls through
+    // to the onTap handler on pointer up. So the long-press synthesised
+    // here MAY open the exercise detail sheet (onTap firing). That's
+    // correct, expected behaviour — the regression to catch is the OLD
+    // behaviour where long-press opened the EXERCISE PICKER. We pin only
+    // the absence of the picker; the detail sheet may or may not appear
+    // and is dismissed before cleanup either way.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Long-press the header. Use the same role-group selector the existing
+    // exercise-detail tests use to target the InkWell.
+    const header = page
+      .locator(WORKOUT.exerciseDetailTap('Barbell Bench Press'))
+      .first();
+    await expect(header).toBeVisible({ timeout: 10_000 });
+    const box = await header.boundingBox();
+    if (!box) throw new Error('header bounding box not available');
+    // Synthesize a long-press: pointer down → wait > Material's 500ms
+    // long-press threshold → pointer up. The test passes when the
+    // picker DOES NOT mount as a result.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(900); // > 500ms long-press threshold
+    await page.mouse.up();
+    await page.waitForTimeout(500); // settle
+
+    // Load-bearing assertion: the EXERCISE PICKER did NOT open. The picker's
+    // search input is the stable selector for "the picker is on screen."
+    await expect(page.locator(EXERCISE_PICKER.searchInput).first()).toHaveCount(
+      0,
+      { timeout: 2_000 },
+    );
+
+    // The detail sheet may have opened (InkWell.onTap fallback when
+    // onLongPress is null). Dismiss it via Escape before cleanup so the
+    // discard button is reachable.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    // Cleanup: discard the workout to clear server-side state.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should NOT trigger fill remaining on long-press of Add Set (H3)', async ({
+    page,
+  }) => {
+    // PR-3 H3: long-press on "Add Set" was removed. The visible
+    // _FillRemainingButton (only rendered when there are completable sets)
+    // is the sole entry point. We assert the negative contract by long-
+    // pressing Add Set and asserting the "Filled remaining sets" snackbar
+    // — the unique signature of the fill-remaining action — does NOT appear.
+    //
+    // Note on Flutter OutlinedButton long-press semantics: when
+    // `onLongPress` is null, the Material button does NOT fall through
+    // to onPressed. The button-class API is distinct from InkWell's tap
+    // semantics — see [ButtonStyleButton._onLongPressed]. So this gesture
+    // has NO observable effect post-fix; the snackbar absence is the
+    // proof.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Add a second set so there's something fill-remaining could affect,
+    // then complete set #1 so fill-remaining would have a source.
+    await page.locator(WORKOUT.addSetButton).first().click();
+    await expect(page.locator(WORKOUT.markSetDone).nth(1)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    // Long-press the Add Set button.
+    const addBtn = page.locator(WORKOUT.addSetButton).first();
+    await expect(addBtn).toBeVisible();
+    const box = await addBtn.boundingBox();
+    if (!box) throw new Error('Add Set bounding box not available');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+
+    // Wait for any potential fill-remaining snackbar to fire — if the long-
+    // press were still wired, "Filled remaining sets" would appear within
+    // ~500ms.
+    await page.waitForTimeout(800);
+
+    // Load-bearing assertion: the fill-remaining snackbar must NOT appear.
+    // The snackbar text is unique to the fill-remaining action; if it
+    // shows, the long-press handler regressed. Match by text to keep the
+    // assertion locale-independent in en (default test locale).
+    await expect(
+      page.locator('text=Filled remaining sets').first(),
+    ).toHaveCount(0, { timeout: 2_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe('Swap exercise with logged sets (PR3 — Q3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutDestructiveGestures').email,
+      getUser('smokeWorkoutDestructiveGestures').password,
+    );
+  });
+
+  test('should swap silently when no sets are completed (Q3)', async ({
+    page,
+  }) => {
+    // Zero completed sets → silent swap (no friction). The confirm dialog
+    // MUST NOT appear.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Tap swap-icon to open picker.
+    await page.locator(WORKOUT.swapExercise).first().click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Pick a different exercise.
+    await flutterFill(page, EXERCISE_PICKER.searchInput, SEED_EXERCISES.squat);
+    const addBarbellSquat = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.squat))
+      .first();
+    await expect(addBarbellSquat).toBeVisible({ timeout: 10_000 });
+    await addBarbellSquat.click();
+
+    // PR-3 Q3 contract: zero-completed → no confirm dialog.
+    await expect(
+      page.locator(WORKOUT.swapExerciseConfirmDialog),
+    ).toHaveCount(0, { timeout: 2_000 });
+
+    // The swap landed — picker is gone and the squat header is now visible.
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).not.toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(
+      page.locator(WORKOUT.exerciseDetailTap(SEED_EXERCISES.squat)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should show confirm dialog with concrete exercise names when ≥1 set is completed (Q3)', async ({
+    page,
+  }) => {
+    // One or more completed sets → confirm dialog with concrete copy.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Log + complete one set so the swap has something to attribute.
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    // Open picker via swap icon, pick a different exercise.
+    await page.locator(WORKOUT.swapExercise).first().click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 5_000,
+    });
+    await flutterFill(page, EXERCISE_PICKER.searchInput, SEED_EXERCISES.squat);
+    const addSquat = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.squat))
+      .first();
+    await expect(addSquat).toBeVisible({ timeout: 10_000 });
+    await addSquat.click();
+
+    // The confirm dialog must appear with concrete names. The selector is
+    // identifier-based; locale-independent.
+    await expect(
+      page.locator(WORKOUT.swapExerciseConfirmDialog).first(),
+    ).toBeVisible({ timeout: 5_000 });
+    // The title text contains the NEW exercise name (en — default locale).
+    await expect(
+      page.locator(`text=Swap to ${SEED_EXERCISES.squat}?`).first(),
+    ).toBeVisible({ timeout: 2_000 });
+    // The body contains both names + the "1 logged set" count.
+    await expect(
+      page.locator('text=/1 logged set/').first(),
+    ).toBeVisible({ timeout: 2_000 });
+
+    // Cancel — original exercise stays.
+    await page.locator(WORKOUT.swapExerciseConfirmCancelButton).first().click();
+    await expect(
+      page.locator(WORKOUT.swapExerciseConfirmDialog),
+    ).toHaveCount(0, { timeout: 5_000 });
+    await expect(
+      page.locator(WORKOUT.exerciseDetailTap('Barbell Bench Press')).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should swap when Confirm is tapped on the swap dialog (Q3)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '8');
+    await completeSet(page, 0);
+
+    await page.locator(WORKOUT.swapExercise).first().click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 5_000,
+    });
+    await flutterFill(page, EXERCISE_PICKER.searchInput, SEED_EXERCISES.squat);
+    const addSquat = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.squat))
+      .first();
+    await expect(addSquat).toBeVisible({ timeout: 10_000 });
+    await addSquat.click();
+
+    await expect(
+      page.locator(WORKOUT.swapExerciseConfirmDialog).first(),
+    ).toBeVisible({ timeout: 5_000 });
+    // Confirm Swap → the exercise is replaced; header shows the new name.
+    await page.locator(WORKOUT.swapExerciseConfirmSwapButton).first().click();
+    await expect(
+      page.locator(WORKOUT.swapExerciseConfirmDialog),
+    ).toHaveCount(0, { timeout: 5_000 });
+    await expect(
+      page.locator(WORKOUT.exerciseDetailTap(SEED_EXERCISES.squat)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe('Add exercise undo (PR3 — H5)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutDestructiveGestures').email,
+      getUser('smokeWorkoutDestructiveGestures').password,
+    );
+  });
+
+  test('should show undo snackbar after adding an exercise from picker (H5)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // The undo snackbar fires immediately after the picker dismisses.
+    // Note: addExercise() helper performs a single round-trip and then
+    // taps Add Set internally, but the snackbar is shown by the SCREEN
+    // (`_onAddExercise`) so it lands BEFORE the helper's Add Set tap.
+    // The snackbar's 4s duration easily covers the helper sequence.
+    const snackBar = page.locator(WORKOUT.addExerciseUndoSnackBar).first();
+    await expect(snackBar).toBeVisible({ timeout: 5_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should remove the just-added exercise when Undo is tapped (H5)', async ({
+    page,
+  }) => {
+    // Verify the undo action actually invokes restoreExercise — the
+    // just-added exercise is dropped and the workout returns to the
+    // empty body state.
+    await startEmptyWorkout(page);
+
+    // Tap the FAB → picker → benchPress directly so we control the
+    // snackbar lifetime tightly.
+    await page.click(WORKOUT.addExerciseFab);
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFill(
+      page,
+      EXERCISE_PICKER.searchInput,
+      SEED_EXERCISES.benchPress,
+    );
+    const addBench = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.benchPress))
+      .first();
+    await expect(addBench).toBeVisible({ timeout: 10_000 });
+    await addBench.click();
+
+    // Undo snackbar appears.
+    const undoButton = page.locator(WORKOUT.addExerciseUndoButton).first();
+    await expect(undoButton).toBeVisible({ timeout: 5_000 });
+
+    // Tap Undo → the exercise is removed → the empty-body CTA returns.
+    await undoButton.click();
+
+    // After undo, no exercise card should be visible. The empty-body
+    // shows the same FAB selector (workout-add-exercise) — but no
+    // exercise header, no add-set button. Assert the bench-press header
+    // is gone.
+    await expect(
+      page.locator(WORKOUT.exerciseDetailTap('Barbell Bench Press')),
+    ).toHaveCount(0, { timeout: 5_000 });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+// =============================================================================
+// PR-3 S1 — DiscardWorkoutCoordinator re-entrance window
+//
+// Stalls DELETE /workouts so we can probe the coordinator's re-entrance
+// guard BEFORE the network resolves. Pre-fix, tapping discard a SECOND time
+// while the held first call awaits silently no-ops on `_isShowingDialog`.
+// Post-fix, the post-await state poll clears the flag the moment Cancel
+// restores state, so the second tap re-opens the dialog cleanly.
+// =============================================================================
+
+test.describe('Discard re-entrance (PR3 — S1)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWorkoutDiscardReentry').email,
+      getUser('smokeWorkoutDiscardReentry').password,
+    );
+  });
+
+  test('should allow re-opening discard dialog after Cancel during stalled DELETE (S1)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '8');
+
+    // Stall handler — same naming pattern as PR-2 Fix B test (named
+    // function refs so page.unroute removes the SAME handler).
+    let signalIntercepted!: () => void;
+    const intercepted = new Promise<void>((resolve) => {
+      signalIntercepted = resolve;
+    });
+    let stallRequests = true;
+
+    const routeHandler = async (route: import('@playwright/test').Route) => {
+      signalIntercepted();
+      while (stallRequests) {
+        await new Promise<void>((r) => setTimeout(r, 100));
+      }
+      await route.continue();
+    };
+
+    const DISCARD_URL = (url: URL) =>
+      url.pathname.includes('/rest/v1/workouts');
+    const routeFilter = async (route: import('@playwright/test').Route) => {
+      if (route.request().method() !== 'DELETE') {
+        await route.continue();
+        return;
+      }
+      await routeHandler(route);
+    };
+    await page.route(DISCARD_URL, routeFilter);
+
+    // 1. Tap discard → confirm → DELETE is intercepted + held.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await intercepted;
+
+    // 2. Loading overlay is up with its always-visible Cancel button.
+    const cancelOverlay = page.locator(WORKOUT.loadingOverlayCancelButton);
+    await expect(cancelOverlay).toBeVisible({ timeout: 5_000 });
+    await cancelOverlay.click();
+
+    // 3. State is restored — the workout is back. The held DELETE is STILL
+    //    in flight at this point.
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(cancelOverlay).not.toBeVisible({ timeout: 5_000 });
+
+    // 4. Tap discard AGAIN — pre-fix this silently no-op'd on
+    //    `_isShowingDialog`. Post-fix the coordinator's post-await state
+    //    poll cleared the guard the moment Cancel restored state, so
+    //    this tap re-opens the dialog cleanly.
+    await page.locator(WORKOUT.discardButton).click();
+    await expect(
+      page.locator(WORKOUT.discardConfirmButton),
+    ).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // 5. Dismiss this second dialog so the test can wind down — tap the
+    //    Cancel button on the discard dialog (NOT the loading overlay,
+    //    which is no longer up).
+    await page.locator(WORKOUT.keepGoingButton).click().catch(async () => {
+      // Fallback: some builds expose Cancel via role=button instead of
+      // the keep-going semantics identifier. Use the role-name selector.
+      await page
+        .locator('role=button[name="Cancel"]')
+        .first()
+        .click()
+        .catch(() => {});
+    });
+
+    // Release the held DELETE so the test exits cleanly. The held first
+    // discard call now completes server-side; the screen redirects home
+    // because `discardCommitted` flips and state lands AsyncData(null).
+    stallRequests = false;
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+
+    await page.unroute(DISCARD_URL, routeFilter);
   });
 });

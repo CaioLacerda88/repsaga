@@ -319,6 +319,54 @@ export const WORKOUT = {
    * This entry documents the feature for future selector additions if needed.
    */
   copyFromPreviousSetIcon: 'role=img[name="content_copy"]',
+  /**
+   * PR-3 Q3 — confirm dialog shown when the user attempts to swap an
+   * exercise that already has one or more completed sets. The dialog's
+   * title is wrapped in `Semantics(container: true, explicitChildNodes:
+   * true, identifier: 'workout-swap-confirm-dialog')` so we can target it
+   * deterministically across locales.
+   */
+  swapExerciseConfirmDialog:
+    '[flt-semantics-identifier="workout-swap-confirm-dialog"]',
+  /**
+   * PR-3 Q3 — Cancel action inside the swap-confirm dialog. Wrapped in
+   * `Semantics(identifier: 'workout-swap-confirm-cancel')`.
+   */
+  swapExerciseConfirmCancelButton:
+    '[flt-semantics-identifier="workout-swap-confirm-cancel"]',
+  /**
+   * PR-3 Q3 — Swap (confirm) action inside the swap-confirm dialog.
+   * Wrapped in `Semantics(identifier: 'workout-swap-confirm-swap')`.
+   */
+  swapExerciseConfirmSwapButton:
+    '[flt-semantics-identifier="workout-swap-confirm-swap"]',
+  /**
+   * PR-3 H5 — undo SnackBar fired after adding an exercise from the
+   * picker. The content text reads `"<Exercise> added"` (en) or
+   * `"<Exercise> adicionado"` (pt). Match by accessible name as a regex
+   * because Flutter CanvasKit draws the SnackBar text to canvas (no DOM
+   * text node) and the AOM exposes it as a `role=group`. Use `.first()`
+   * — Flutter renders two AOM boundaries per SnackBar.
+   *
+   * EN-ONLY ASSUMPTION (PR3 review W2): the `<name> added$` regex matches
+   * only the EN structural copy. The PT translation is structurally
+   * different — `Exercício adicionado: <name>` (prefix-then-name) vs EN's
+   * suffix-then-verb — and would NOT match this selector. The full
+   * E2E suite runs under the en locale by default (see global-setup), so
+   * this is a deliberate scoping. If/when the suite gains a pt-locale
+   * variant, add a sibling `addExerciseUndoSnackBarPt` matching
+   * `/^Exercício adicionado:.+/` and gate the assertion on the active
+   * locale.
+   */
+  addExerciseUndoSnackBar: 'role=group[name=/.+ added$/]',
+  /**
+   * PR-3 H5 — Undo action button inside the add-exercise SnackBar.
+   * Locale-sensitive: "Undo" in en (default for E2E) — same key as
+   * `swipeToDeleteUndoButton` (`undo` ARB) so the selector matches both
+   * use cases. When two snackbars are stacked, prefer the role-name
+   * selector + .first() to grab the most-recent.
+   */
+  addExerciseUndoButton: 'role=button[name="Undo"]',
 } as const;
 
 // ---------------------------------------------------------------------------
