@@ -20,6 +20,8 @@
 ///      semantic) and correctly classifies the sets.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
@@ -418,6 +420,257 @@ void main() {
         );
       },
     );
+
+    // -----------------------------------------------------------------
+    // PR-6 / M6 — loading + error states must NOT classify rows.
+    //
+    // Pre-fix `exercisePRsProvider(...).value ?? const []` flattened
+    // both "loading" and "no PRs" into the same empty-baseline branch,
+    // so the resolver projected every completed working set as a
+    // standing PR while the network was in flight (gold stripe + right
+    // bracket). Once data landed the rows reclassified — visual flicker
+    // and a false predicted-PR cue.
+    //
+    // The fix is an `existingRecords == null` guard inside the provider
+    // (`AsyncValue.value` is null until first emission, or under error
+    // with no prior data). When triggered, the provider returns one
+    // `PrRowState.none` per set — preserving 1:1 alignment, but
+    // emitting no PR signals at all until the baseline is known.
+    // -----------------------------------------------------------------
+    group('PR-6 / M6 — PR data loading + error guard', () {
+      // Sets cherry-picked to BREAK every standing record bar in the
+      // sibling "first-ever workout fallback" test (80×5 and 75×5 both
+      // would project as standing PRs against an empty baseline). If
+      // the loading guard regresses, this assertion will pop.
+      final flickerProneSets = [
+        _set(id: 's1', setNumber: 1, weId: weId, weight: 80, reps: 5),
+        _set(id: 's2', setNumber: 2, weId: weId, weight: 75, reps: 5),
+        _set(id: 's3', setNumber: 3, weId: weId, weight: 60, reps: 5),
+      ];
+
+      /// Builds a container whose `exercisePRsProvider(exerciseId)` is
+      /// overridden to STAY in the requested AsyncValue terminal state
+      /// (loading or error) for the duration of the test. Loading is
+      /// modeled with a never-completing future; error with a
+      /// pre-rejected future. We deliberately do NOT
+      /// `await container.read(exercisePRsProvider(...).future)` from
+      /// within the test, otherwise the future would block forever
+      /// (loading) or rethrow (error).
+      ProviderContainer makeStalledContainer({
+        required ActiveWorkoutState state,
+        required String exerciseId,
+        required bool error,
+      }) {
+        final mockStorage = MockWorkoutLocalStorage();
+        when(() => mockStorage.loadActiveWorkout()).thenReturn(state);
+        when(
+          () => mockStorage.saveActiveWorkout(any()),
+        ).thenAnswer((_) async {});
+
+        return ProviderContainer(
+          overrides: [
+            workoutRepositoryProvider.overrideWithValue(
+              MockWorkoutRepository(),
+            ),
+            workoutLocalStorageProvider.overrideWithValue(mockStorage),
+            exercisePRsProvider(exerciseId).overrideWith(
+              (ref) => error
+                  ? Future<List<PersonalRecord>>.error(
+                      StateError('forced PR fetch failure for test'),
+                    )
+                  // Never-completing future keeps the provider in
+                  // AsyncLoading for the whole test.
+                  : Completer<List<PersonalRecord>>().future,
+            ),
+          ],
+        );
+      }
+
+      test(
+        'returns PrRowState.none for every set while exercisePRsProvider is '
+        'loading — no false standing-PR signals during pr_cache miss',
+        () async {
+          final state = _makeState(
+            weId: weId,
+            exerciseId: exerciseId,
+            sets: flickerProneSets,
+          );
+          final container = makeStalledContainer(
+            state: state,
+            exerciseId: exerciseId,
+            error: false,
+          );
+          addTearDown(container.dispose);
+
+          // Prime the active workout notifier (synchronous via mock).
+          await container.read(activeWorkoutProvider.future);
+          // Crucial: do NOT await `exercisePRsProvider(...).future` —
+          // the override never resolves while the test is running.
+
+          final displays = container.read(
+            activeWorkoutRowDisplaysProvider((
+              workoutExerciseId: weId,
+              exerciseId: exerciseId,
+            )),
+          );
+
+          expect(
+            displays,
+            hasLength(3),
+            reason: 'provider must preserve 1:1 alignment with sets',
+          );
+          for (var i = 0; i < displays.length; i++) {
+            expect(
+              displays[i].state,
+              PrRowState.none,
+              reason:
+                  'row $i must resolve to PrRowState.none while PR data is '
+                  'loading — no false standing-PR signals',
+            );
+            expect(
+              displays[i].accentTypes,
+              isEmpty,
+              reason:
+                  'row $i must carry no accent types in the loading-state '
+                  'plain display',
+            );
+          }
+        },
+      );
+
+      test('returns PrRowState.none for every set when exercisePRsProvider '
+          'errors with no prior data — no speculative classification on '
+          'transient failures', () async {
+        final state = _makeState(
+          weId: weId,
+          exerciseId: exerciseId,
+          sets: flickerProneSets,
+        );
+        final container = makeStalledContainer(
+          state: state,
+          exerciseId: exerciseId,
+          error: true,
+        );
+        addTearDown(container.dispose);
+
+        await container.read(activeWorkoutProvider.future);
+        // Drain the error future so the provider settles into
+        // AsyncError. We swallow the error here — the assertion
+        // below verifies the row provider's response.
+        try {
+          await container.read(exercisePRsProvider(exerciseId).future);
+        } on StateError {
+          // Expected — the override deliberately rejects.
+        }
+
+        // Yield to let Riverpod propagate the AsyncError through the
+        // graph before reading the dependent provider — makes the
+        // settle-before-read guarantee explicit instead of relying on
+        // internal Riverpod scheduling (reviewer PR #206 follow-up).
+        await Future<void>.microtask(() {});
+
+        final displays = container.read(
+          activeWorkoutRowDisplaysProvider((
+            workoutExerciseId: weId,
+            exerciseId: exerciseId,
+          )),
+        );
+
+        expect(displays, hasLength(3));
+        for (var i = 0; i < displays.length; i++) {
+          expect(
+            displays[i].state,
+            PrRowState.none,
+            reason:
+                'row $i must resolve to PrRowState.none when '
+                'exercisePRsProvider errors with no prior data',
+          );
+        }
+      });
+
+      test('transitions from loading-none to resolver-classified when PR data '
+          'lands (pins the post-load reclassification flow)', () async {
+        // Same flicker-prone set list. While loading → all none. After
+        // the override flips to AsyncData(records), the resolver
+        // should classify normally and the very-first set (80×5)
+        // should become the standing PR (no historical records →
+        // first-ever-workout semantic).
+        final state = _makeState(
+          weId: weId,
+          exerciseId: exerciseId,
+          sets: flickerProneSets,
+        );
+
+        final mockStorage = MockWorkoutLocalStorage();
+        when(() => mockStorage.loadActiveWorkout()).thenReturn(state);
+        when(
+          () => mockStorage.saveActiveWorkout(any()),
+        ).thenAnswer((_) async {});
+
+        // Use a Completer so the test controls when AsyncLoading
+        // settles into AsyncData.
+        final completer = Completer<List<PersonalRecord>>();
+        final container = ProviderContainer(
+          overrides: [
+            workoutRepositoryProvider.overrideWithValue(
+              MockWorkoutRepository(),
+            ),
+            workoutLocalStorageProvider.overrideWithValue(mockStorage),
+            exercisePRsProvider(
+              exerciseId,
+            ).overrideWith((ref) => completer.future),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await container.read(activeWorkoutProvider.future);
+
+        // Phase 1 — still loading. All rows should be `none`.
+        final loadingDisplays = container.read(
+          activeWorkoutRowDisplaysProvider((
+            workoutExerciseId: weId,
+            exerciseId: exerciseId,
+          )),
+        );
+        expect(loadingDisplays, hasLength(3));
+        expect(
+          loadingDisplays.every((d) => d.state == PrRowState.none),
+          isTrue,
+          reason: 'all rows must be `none` during the loading window',
+        );
+
+        // Phase 2 — resolve to empty (first-ever-workout semantic).
+        completer.complete(const <PersonalRecord>[]);
+        await container.read(exercisePRsProvider(exerciseId).future);
+
+        final loadedDisplays = container.read(
+          activeWorkoutRowDisplaysProvider((
+            workoutExerciseId: weId,
+            exerciseId: exerciseId,
+          )),
+        );
+        expect(loadedDisplays, hasLength(3));
+        expect(
+          loadedDisplays[0].state,
+          PrRowState.completedStandingPr,
+          reason:
+              'after data lands, set 1 (80×5) must reclassify to '
+              'standing PR — pins the loading→loaded transition',
+        );
+        expect(
+          loadedDisplays[1].state,
+          PrRowState.completedNonPr,
+          reason:
+              'set 2 (75×5) < set 1 (80×5), no standing PR after the '
+              'transition completes',
+        );
+        expect(
+          loadedDisplays[2].state,
+          PrRowState.completedNonPr,
+          reason: 'set 3 (60×5) < set 1, no PR',
+        );
+      });
+    });
 
     test(
       'first-ever workout fallback: when exercise has no historical PRs '
