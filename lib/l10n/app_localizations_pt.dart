@@ -1713,6 +1713,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get finishButtonLabel => 'FINALIZAR';
 
   @override
+  String get finishWorkoutDisabledHint =>
+      'Complete pelo menos uma série para finalizar.';
+
+  @override
   String get addExerciseFabLabel => 'Adicionar exercício';
 
   @override

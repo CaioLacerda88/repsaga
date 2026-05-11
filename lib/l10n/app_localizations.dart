@@ -3036,6 +3036,12 @@ abstract class AppLocalizations {
   /// **'FINISH'**
   String get finishButtonLabel;
 
+  /// PR-5 H6 — helper text shown beneath the disabled FINISH button explaining why it cannot be tapped. Hidden once the button becomes enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete at least one set to finish.'**
+  String get finishWorkoutDisabledHint;
+
   /// Phase 18c active-workout FAB label (replaces the Finish-FAB, freed by moving Finish to the AppBar).
   ///
   /// In en, this message translates to:

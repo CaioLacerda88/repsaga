@@ -1701,6 +1701,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get finishButtonLabel => 'FINISH';
 
   @override
+  String get finishWorkoutDisabledHint =>
+      'Complete at least one set to finish.';
+
+  @override
   String get addExerciseFabLabel => 'Add exercise';
 
   @override

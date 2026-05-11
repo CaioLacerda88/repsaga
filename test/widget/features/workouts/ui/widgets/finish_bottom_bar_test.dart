@@ -163,5 +163,78 @@ void main() {
         );
       },
     );
+
+    // -------------------------------------------------------------------------
+    // PR-5 H6 — Disabled state explains itself.
+    //
+    // Pre-fix: a user with all set values entered but none ticked saw a dim
+    // FINISH button and no signal to tap the completion checkboxes. The bar
+    // now renders a single line of helper text beneath the button when
+    // `enabled: false`, localized through `finishWorkoutDisabledHint`.
+    //
+    // The helper carries a stable Semantics identifier `finish-disabled-hint`
+    // so E2E can target it (test/e2e/helpers/selectors.ts
+    // WORKOUT.finishDisabledHint).
+    // -------------------------------------------------------------------------
+    group('H6 — disabled-state helper text (PR-5)', () {
+      testWidgets(
+        'renders the localized helper text beneath the button when disabled '
+        '(en)',
+        (tester) async {
+          await tester.pumpWidget(_host(enabled: false, onPressed: () {}));
+
+          expect(
+            find.text('Complete at least one set to finish.'),
+            findsOneWidget,
+            reason:
+                'H6 (PR-5): when the FINISH button is disabled, the user '
+                'must see a concrete unblock action. The localized en '
+                'string `finishWorkoutDisabledHint` ("Complete at least '
+                'one set to finish.") is the contract.',
+          );
+        },
+      );
+
+      testWidgets('hides the helper text when the button becomes enabled', (
+        tester,
+      ) async {
+        // Inverse pin: once the bar is tappable, the helper text becomes
+        // noise. The hint is conditional on `!enabled` — re-rendering
+        // with `enabled: true` must drop it from the tree entirely.
+        await tester.pumpWidget(_host(enabled: true, onPressed: () {}));
+
+        expect(
+          find.text('Complete at least one set to finish.'),
+          findsNothing,
+          reason:
+              'H6 (PR-5): the disabled-state hint must vanish once the '
+              'button is enabled. Leaving it visible would be redundant '
+              'noise next to a tappable CTA.',
+        );
+      });
+
+      testWidgets(
+        'helper text carries the `finish-disabled-hint` Semantics identifier '
+        'for the E2E selector contract',
+        (tester) async {
+          await tester.pumpWidget(_host(enabled: false, onPressed: () {}));
+
+          final hintSemantics = find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'finish-disabled-hint',
+          );
+          expect(
+            hintSemantics,
+            findsOneWidget,
+            reason:
+                'H6 (PR-5): `Semantics(identifier: "finish-disabled-hint")` '
+                'is the public E2E contract. test/e2e/helpers/selectors.ts '
+                '`WORKOUT.finishDisabledHint` depends on this identifier. '
+                'Do not rename without updating selectors.ts.',
+          );
+        },
+      );
+    });
   });
 }
