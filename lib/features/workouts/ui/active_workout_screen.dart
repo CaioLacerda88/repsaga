@@ -91,6 +91,29 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       );
     }
 
+    // PR-2 C3 — overlays are pushed INTO the Scaffold body slot (see
+    // `_ActiveWorkoutBody.build`) instead of being painted as siblings of
+    // the Scaffold. This is the load-bearing structural change for the
+    // undo-snackbar reachability fix:
+    //
+    //   * Scaffold's `_ScaffoldSlot.snackBar` paints AFTER `body`, so a
+    //     SnackBar shown via `ScaffoldMessenger.of(context)` automatically
+    //     renders above any widget that lives inside the body. With the
+    //     overlays inside the body, the swipe-to-delete undo SnackBar
+    //     paints — AND hit-tests — above the rest-timer scrim, no extra
+    //     ScaffoldMessenger hoisting required.
+    //   * The previous outer-Stack ordering rendered the rest-timer
+    //     overlay above the inner Scaffold's snackbar slot, hiding the
+    //     undo affordance and consuming taps in its region (the overlay's
+    //     full-screen `HitTestBehavior.opaque` GestureDetector ate the
+    //     Undo tap before it could reach the SnackBarAction).
+    //
+    // Behavioral note: the rest-timer scrim now covers the body area only,
+    // not the AppBar / FinishBottomBar — those Scaffold slots paint on top
+    // of the body. Per Strong/Hevy reference apps the bottom bar staying
+    // reachable during rest is fine (no destructive action mid-rest), and
+    // the AppBar's discard-X is exactly the affordance a user wanting to
+    // bail on a workout mid-rest needs.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -98,16 +121,12 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           _discardCoordinator.show(context, ref, displayState);
         }
       },
-      child: Stack(
-        children: [
-          _ActiveWorkoutBody(
-            state: displayState,
-            discardCoordinator: _discardCoordinator,
-            finishCoordinator: _finishCoordinator,
-          ),
-          if (asyncState.isLoading) const ActiveWorkoutLoadingOverlay(),
-          if (timerState != null) const RestTimerOverlay(),
-        ],
+      child: _ActiveWorkoutBody(
+        state: displayState,
+        discardCoordinator: _discardCoordinator,
+        finishCoordinator: _finishCoordinator,
+        showLoadingOverlay: asyncState.isLoading,
+        showRestTimerOverlay: timerState != null,
       ),
     );
   }
@@ -118,11 +137,22 @@ class _ActiveWorkoutBody extends ConsumerStatefulWidget {
     required this.state,
     required this.discardCoordinator,
     required this.finishCoordinator,
+    required this.showLoadingOverlay,
+    required this.showRestTimerOverlay,
   });
 
   final ActiveWorkoutState state;
   final DiscardWorkoutCoordinator discardCoordinator;
   final FinishWorkoutCoordinator finishCoordinator;
+
+  /// PR-2 C3 — overlays are now passed in as flags so they can be stacked
+  /// INSIDE this Scaffold's `body` slot. See the comment on the parent
+  /// build above for the load-bearing reason: `Scaffold._ScaffoldSlot`
+  /// paints the snackbar slot AFTER the body, so a SnackBar shown via
+  /// `ScaffoldMessenger.of(context)` from a SetRow lands above any
+  /// overlay rendered as part of the body.
+  final bool showLoadingOverlay;
+  final bool showRestTimerOverlay;
 
   @override
   ConsumerState<_ActiveWorkoutBody> createState() => _ActiveWorkoutBodyState();
@@ -260,6 +290,28 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
     final l10n = AppLocalizations.of(context);
     final hasExercises = widget.state.exercises.isNotEmpty;
 
+    final Widget bodyContent = hasExercises
+        ? ExerciseList(
+            exercises: widget.state.exercises,
+            reorderMode: _reorderMode,
+          )
+        : EmptyWorkoutBody(onAddExercise: _onAddExercise);
+
+    // PR-2 C3 — body slot wraps the actual body content + overlays in a
+    // Stack so SnackBars (rendered in the Scaffold's snackbar slot, which
+    // paints AFTER the body slot) appear ABOVE the rest-timer scrim.
+    //
+    // Loading overlay sits above the rest-timer overlay so a cancel during
+    // a slow finish/discard shows its Cancel CTA on top of the dim scrim
+    // — preserves PR-1 Q1's always-visible-Cancel contract.
+    final Widget body = Stack(
+      children: [
+        bodyContent,
+        if (widget.showRestTimerOverlay) const RestTimerOverlay(),
+        if (widget.showLoadingOverlay) const ActiveWorkoutLoadingOverlay(),
+      ],
+    );
+
     return Scaffold(
       appBar: AppBar(
         leading: _buildDiscardLeading(l10n),
@@ -274,12 +326,7 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
         centerTitle: true,
         actions: _buildAppBarActions(l10n),
       ),
-      body: hasExercises
-          ? ExerciseList(
-              exercises: widget.state.exercises,
-              reorderMode: _reorderMode,
-            )
-          : EmptyWorkoutBody(onAddExercise: _onAddExercise),
+      body: body,
       // BUG-020: Finish bar is hidden on the empty body — EmptyWorkoutBody
       // owns its own CTA and a Finish bar with no logged sets is dead chrome.
       // Full BUG-020 narrative on FinishBottomBar's class doc.
