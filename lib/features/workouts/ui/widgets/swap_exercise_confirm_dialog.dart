@@ -51,46 +51,57 @@ class SwapExerciseConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
-      // PR-3 — pair-rule Semantics so the E2E suite can find the dialog
-      // boundary deterministically. Title-as-identifier holds across
-      // locales (en + pt) because the identifier is locale-independent
-      // by construction.
-      title: Semantics(
-        container: true,
-        explicitChildNodes: true,
-        identifier: 'workout-swap-confirm-dialog',
-        child: Text(l10n.swapExerciseConfirmTitle(newExerciseName)),
-      ),
-      content: Text(
-        l10n.swapExerciseConfirmBody(
-          completedSetCount,
-          newExerciseName,
-          oldExerciseName,
-        ),
-      ),
-      actions: [
-        Semantics(
-          container: true,
-          explicitChildNodes: true,
-          identifier: 'workout-swap-confirm-cancel',
-          child: TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            style: dialogTextButtonStyle,
-            child: Text(l10n.cancel),
+    // PR-3 review S2 — hoist the dialog identifier so it wraps the
+    // AlertDialog ROOT, not just the title Text. Pre-fix the identifier
+    // was on the title only, so a Playwright selector keyed off
+    // `workout-swap-confirm-dialog` would resolve to the title's
+    // semantics node instead of the dialog boundary. Functional impact
+    // was minimal (Playwright's `flt-semantics-identifier` lookup still
+    // worked because there's only one such id on screen at a time), but
+    // the contract reads "dialog boundary identifier" — pinning the wrap
+    // at the root makes that contract honest and lets future tests use
+    // `locator.locator(...)` to scope queries to the dialog interior.
+    //
+    // Pair-rule (`container: true, explicitChildNodes: true`) is
+    // mandatory per lessons.md PR #152 — without both the inner
+    // AlertDialog content can absorb the identifier or merge it upward
+    // into the surrounding Navigator overlay, breaking selector lookup.
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: 'workout-swap-confirm-dialog',
+      child: AlertDialog(
+        title: Text(l10n.swapExerciseConfirmTitle(newExerciseName)),
+        content: Text(
+          l10n.swapExerciseConfirmBody(
+            completedSetCount,
+            newExerciseName,
+            oldExerciseName,
           ),
         ),
-        Semantics(
-          container: true,
-          explicitChildNodes: true,
-          identifier: 'workout-swap-confirm-swap',
-          child: TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: dialogTextButtonStyle,
-            child: Text(l10n.swapExerciseConfirmAction),
+        actions: [
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-swap-confirm-cancel',
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              style: dialogTextButtonStyle,
+              child: Text(l10n.cancel),
+            ),
           ),
-        ),
-      ],
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-swap-confirm-swap',
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: dialogTextButtonStyle,
+              child: Text(l10n.swapExerciseConfirmAction),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
