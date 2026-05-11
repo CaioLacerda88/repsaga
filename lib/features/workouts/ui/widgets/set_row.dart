@@ -262,12 +262,20 @@ class _SetRowState extends ConsumerState<SetRow> {
         notifier.deleteSet(widget.workoutExerciseId, set.id);
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
+          // PR-2 C3/Q5 — bump duration from 4s to Material's 10s ceiling so
+          // a user mid-rest (eyes off the phone) still has time to react to
+          // an accidental swipe-delete. The companion structural fix in
+          // `active_workout_screen.dart` re-stacks the rest-timer overlay
+          // INSIDE the Scaffold body slot so this SnackBar paints (and
+          // hit-tests) ABOVE the scrim — without the restack, even a 10s
+          // duration would render under the rest-timer scrim and remain
+          // unreachable. Both changes are required.
           ..showSnackBar(
             SnackBar(
               content: Text(
                 AppLocalizations.of(context).setDeleted(deletedSet.setNumber),
               ),
-              duration: const Duration(seconds: 4),
+              duration: const Duration(seconds: 10),
               action: SnackBarAction(
                 label: AppLocalizations.of(context).undo,
                 onPressed: () {
@@ -1240,51 +1248,90 @@ class _DoneCell extends StatelessWidget {
             ? Border(right: BorderSide(color: gold, width: 4))
             : null,
       ),
-      // AW-EX-A-BR1-01: the visual ◆/✓ stays at 32dp (the inner SizedBox);
-      // an outer 40×48dp hit-test box wraps it so a sweaty thumb on the
-      // 360dp BR-1 viewport always lands. The outer GestureDetector
-      // forwards taps in the slack region to `onChanged` — the inner
-      // Semantics still owns the AOM identifier and tap action so screen
-      // readers and Playwright selectors are unaffected.
+      // AW-EX-A-BR1-01 + PR-2 H1: the visual ◆/✓ stays at 32dp (the
+      // inner SizedBox); an outer 52×48dp hit-test box wraps it so a
+      // sweaty thumb on the 360dp BR-1 viewport always lands. The outer
+      // GestureDetector forwards taps in the slack region to `onChanged`
+      // — the inner Semantics still owns the AOM identifier and tap
+      // action so screen readers and Playwright selectors are unaffected.
       //
-      // **Hit-test behavior — `deferToChild` is structural defense.** The
-      // outer detector uses `HitTestBehavior.deferToChild` (NOT
-      // `translucent`). Flutter's `GestureArena` already resolves two
-      // competing `onTap`-only recognizers in favor of the innermost
-      // (inner Checkbox / `_PredictedPrUncheckedMark` wins; the outer is
-      // rejected — see `arena.dart::sweep` "First member wins; reject all
-      // others"). So `translucent` is correct TODAY by virtue of arena
-      // semantics. `deferToChild` makes the same property STRUCTURAL:
+      // **Hit-test behavior — `translucent` is required for slack-zone
+      // routing.** The outer detector uses `HitTestBehavior.translucent`
+      // (NOT `deferToChild`). The structural reason:
       //
-      //   * With `deferToChild`, only the recognizer whose visual region
-      //     was actually hit is added to the arena for that pointer. A
-      //     tap inside the inner 32×32 puts only the inner in the arena;
-      //     a tap in the slack zone (outside 32×32 but inside 40×48)
-      //     puts only the outer in. No arena resolution between the two
-      //     is ever needed.
+      //   * `deferToChild` only adds the outer to the gesture arena if a
+      //     CHILD was hit at that position. The inner SizedBox/tapTarget
+      //     covers only the central 32×32dp; the slack ring (10dp on
+      //     each side after PR-2 H1's 52dp widening) has no child. With
+      //     `deferToChild`, slack-zone pointer events fall through with
+      //     `hitTarget = false` — neither the inner nor the outer
+      //     GestureDetector ever fires. Slack zone is dead; widening
+      //     was theatrical.
       //
-      //   * With `translucent`, both are in the arena for inner-region
-      //     taps and the engine relies on first-member-wins to silence
-      //     the outer. Correct today, but fragile if a future change
-      //     adds a competing non-tap gesture (e.g. a long-press on the
-      //     outer or a pan-cancel on the inner) — paths that can resolve
-      //     both as accepted, double-firing `_onComplete` (a toggle of
-      //     `isCompleted`, NOT idempotent → toggle-on → toggle-off →
-      //     silent no-op, the very symptom the wider tap target should
-      //     fix).
+      //   * `translucent` adds the outer to the arena unconditionally
+      //     for any pointer inside the 52×48 area AND lets the event
+      //     also reach widgets behind in the same Stack. For inner-zone
+      //     taps both the inner Checkbox/`_PredictedPrUncheckedMark`
+      //     `onTap` and the outer's `onTap` enter the arena — Flutter's
+      //     `GestureArena.sweep` resolves competing `onTap`-only
+      //     recognizers by accepting the FIRST member and rejecting all
+      //     others (`arena.dart` lines 170-178). Arena order is
+      //     hit-test order from leaf to root, so the inner wins; the
+      //     outer is rejected; `_onComplete` fires exactly once. For
+      //     slack-zone taps only the outer is in the arena; it wins by
+      //     default; `_onComplete` fires exactly once.
       //
-      // Pinned by the `gesture-arena single-fire pin` group in
-      // `active_workout_tap_targets_test.dart`. Note: the pin currently
-      // passes BOTH pre-fix (`translucent`) and post-fix (`deferToChild`)
-      // because no competing non-tap gesture exists yet — the pin guards
-      // the contract going forward.
+      // **Why not `opaque`:** `opaque` is functionally equivalent to
+      // `translucent` for this layout (nothing sits visually behind in
+      // the same Stack — `_DoneCell` is the rightmost column of an
+      // exercise card row). `translucent` is the more-conservative
+      // choice — if a future refactor parents this cell into a Stack
+      // with a sibling that also needs slack-zone taps, `translucent`
+      // doesn't pre-empt that sibling.
+      //
+      // **Future-refactor risk** (the original `deferToChild` rationale
+      // raised this): if a competing non-tap recognizer is added (e.g.
+      // a long-press on the outer detector or a pan-cancel on the
+      // inner), both could resolve as accepted and double-fire
+      // `_onComplete` (a toggle of `isCompleted`, NOT idempotent →
+      // toggle-on → toggle-off → silent no-op). Today no such recognizer
+      // exists. The single-fire pin in
+      // `active_workout_tap_targets_test.dart` guards the contract
+      // going forward — adding a competing non-tap recognizer that
+      // breaks single-fire flips that test.
+      //
+      // **Slack-zone pin** (`tap in slack zone … invokes completeSet
+      // exactly once`): explicitly verifies a tap 22dp off-center
+      // (well outside the inner 32dp visual, inside the outer 52dp
+      // box) routes to the outer detector and toggles. Pre-PR-2 H1
+      // this region was unreachable.
+      // PR-2 H1 — widen outer hit-test from 40dp to the full 52dp Container
+      // width (and keep height at 48dp). Material 2.5.5 / WCAG 2.5.5 require
+      // ≥48×48dp tappable areas; the prior 40dp horizontal was below floor
+      // for the most time-critical tap in the app (mark set complete). The
+      // visual ◆/✓ stays at 32dp via the inner SizedBox; only the slack
+      // hit-test region grows. `deferToChild` continues to route inner
+      // taps to the inner Checkbox / `_PredictedPrUncheckedMark` (gesture
+      // arena visits only the recognizer whose visual region was hit), so
+      // the wider outer detector cannot steal taps from the steppers
+      // beside it.
       child: Center(
         child: SizedBox(
-          width: 40,
+          width: 52,
           height: 48,
           child: GestureDetector(
             onTap: locked ? null : onChanged,
-            behavior: HitTestBehavior.deferToChild,
+            // PR-2 H1 — `translucent` (was `deferToChild`). See the
+            // multi-paragraph block above the Container for the full
+            // hit-test rationale: `deferToChild` only routes taps
+            // inside a child's RenderBox, and the new 10dp slack ring
+            // (between the inner 32dp visual and the outer 52dp box)
+            // has no child — slack-zone taps would silently fall
+            // through. `translucent` adds this detector to the gesture
+            // arena unconditionally for any pointer inside its 52×48
+            // bounds; the inner Checkbox / `_PredictedPrUncheckedMark`
+            // wins inner-zone taps via first-member-wins arena rules.
+            behavior: HitTestBehavior.translucent,
             // The inner Semantics widget already exposes the
             // workout-set-done / workout-set-completed identifier + button
             // role + tap action. Suppressing this detector's semantics
