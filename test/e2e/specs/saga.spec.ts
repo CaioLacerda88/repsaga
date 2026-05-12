@@ -424,7 +424,7 @@ test.describe('Saga — stats deep-dive (fresh user)', { tag: '@smoke' }, () => 
 // the immediacy property at the unit level.
 // ---------------------------------------------------------------------------
 
-test.describe('Saga — class label updates after rank cross (S12)', { tag: '@flaky' }, () => {
+test.describe('Saga — class label updates after rank cross (S12)', () => {
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -437,6 +437,22 @@ test.describe('Saga — class label updates after rank cross (S12)', { tag: '@fl
   test('should update class badge after chest crosses rank 5 (S12)', async ({
     page,
   }) => {
+    // S12 exercises a full rank-up flow that compounds with every overlay step:
+    // ProfileNav (5 s) + EmptyWorkout (5 s) + addExercise (5 s) + set inputs
+    // (3 s × 2) + completeSet (3 s) + finishWorkout (2 s) + ClassChangeOverlay
+    // (best-effort 10 s) + dismissCelebrationIfPresent (up to 25 s for the
+    // celebration URL + 12 s overlay loop) + ProfileNav (3 s) + character-sheet
+    // assertions (10 s) ≈ 65–80 s under typical local conditions, more under
+    // worker contention. Successful runs land around 24–35 s; the 60 s default
+    // is insufficient when any celebration step takes its full budget.
+    //
+    // Every other E2E test stays well under 60 s, so the global default stays.
+    // We extend ONLY this test rather than raising the global cap or carving up
+    // the production helpers — the inherent celebration timeline (1.6 s
+    // ClassChangeOverlay + 1.1 s rank-up + 1.1 s level-up + 1.1 s title) is the
+    // correct production behaviour and the test must wait it out.
+    test.setTimeout(120_000);
+
     // Navigate to the character sheet and capture the class badge before the workout.
     // At rank 4 the resolver returns Initiate — badge is visible (placeholder or
     // Initiate label depending on provider load timing).
