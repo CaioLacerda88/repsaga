@@ -2783,6 +2783,157 @@ void main() {
           handle.dispose();
         },
       );
+
+      // Phase 23 QA REV-4 — multi-row sibling stability.
+      //
+      // The Cluster B fix wraps each row's identifier-bearing Semantics in
+      // a `ValueKey(rowStateId)`. That key must be PER-ROW: if it were
+      // accidentally shared (e.g. derived from a global state instead of
+      // the row's own state), one row transitioning would force its
+      // siblings' SemanticsNodes to re-mount too, churning their
+      // identifiers and re-opening the same Flutter Web propagation hole
+      // (just with the symptom moved one sibling over).
+      //
+      // Pump three rows side by side — one pending-no-pr, one
+      // pending-predicted-pr, one completed-no-pr — record every
+      // `set-row-state-*` identifier in document order, transition the
+      // middle row from pendingPredictedPr → completedStandingPr, then
+      // assert the FIRST and THIRD identifiers are byte-identical to
+      // their pre-transition values. The middle row's identifier
+      // intentionally flips (covered by the sibling tests above); this
+      // test pins that the siblings stay put.
+      testWidgets(
+        'sibling rows keep their identifier when one row transitions state '
+        '(Phase 23 QA REV-4)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final pendingNoPr = makeSet(
+            id: 'sibling-no-pr',
+            weight: 60,
+            reps: 8,
+            isCompleted: false,
+          );
+          final pendingPredicted = makeSet(
+            id: 'sibling-pred-pr',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+          final completedNoPr = makeSet(
+            id: 'sibling-completed',
+            weight: 50,
+            reps: 10,
+            isCompleted: true,
+          );
+
+          Widget threeRows({required Widget middle}) => Column(
+            children: [
+              SetRow(
+                set: pendingNoPr,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+              middle,
+              SetRow(
+                set: completedNoPr,
+                workoutExerciseId: 'we-003',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ],
+          );
+
+          // Pre-transition: middle row is predicted-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              threeRows(
+                middle: SetRow(
+                  set: pendingPredicted,
+                  workoutExerciseId: 'we-002',
+                  display: const PrRowDisplay(
+                    state: PrRowState.pendingPredictedPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          final preIds = _collectRowStateIdentifiers(tester);
+          expect(
+            preIds,
+            [
+              'set-row-state-none',
+              'set-row-state-pending-pr',
+              'set-row-state-completed',
+            ],
+            reason:
+                'Pre-transition: three rows must emit none / pending-pr / '
+                'completed identifiers in document order. If this list is '
+                'shorter than 3, the SetRow Semantics(identifier:) wiring '
+                'changed and the rest of the test is invalid.',
+          );
+
+          // Transition: middle row → completedStandingPr.
+          final completedPredicted = pendingPredicted.copyWith(
+            isCompleted: true,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              threeRows(
+                middle: SetRow(
+                  set: completedPredicted,
+                  workoutExerciseId: 'we-002',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          final postIds = _collectRowStateIdentifiers(tester);
+          expect(postIds, hasLength(3));
+
+          // Middle row MUST have advanced (covered by sibling tests, but
+          // we re-pin here so a passing assertion below cannot be
+          // accidentally satisfied by all three rows freezing).
+          expect(
+            postIds[1],
+            'set-row-state-standing-pr',
+            reason:
+                'Phase 23 QA REV-4 control: the row that actually '
+                'transitioned must flip its identifier. If this fails, the '
+                'sibling-stability claim below is meaningless because no '
+                'transition occurred.',
+          );
+
+          // The real assertion: siblings 0 and 2 are unchanged.
+          expect(
+            postIds[0],
+            preIds[0],
+            reason:
+                'Phase 23 QA REV-4: row 0 (pending-no-pr) identifier '
+                'changed when row 1 transitioned — the ValueKey on the '
+                "identifier-bearing Semantics is shared across rows or "
+                "leaked through a global, re-opening the Flutter Web "
+                'propagation hole on siblings.',
+          );
+          expect(
+            postIds[2],
+            preIds[2],
+            reason:
+                'Phase 23 QA REV-4: row 2 (completed-no-pr) identifier '
+                'changed when row 1 transitioned — same root cause as '
+                'row 0 above; the per-row ValueKey scoping is broken.',
+          );
+
+          handle.dispose();
+        },
+      );
     });
   });
 }
@@ -2811,6 +2962,34 @@ String? _findRowStateIdentifier(WidgetTester tester) {
   if (owner == null) return null;
   visit(owner.rootSemanticsNode!);
   return found;
+}
+
+/// Walks the Semantics tree and returns every `set-row-state-*` identifier
+/// in document (visit) order. Used by the Phase 23 QA REV-4 sibling-
+/// stability test to assert that one row transitioning does not perturb
+/// its siblings' identifier strings.
+List<String> _collectRowStateIdentifiers(WidgetTester tester) {
+  final ids = <String>[];
+  void visit(SemanticsNode node) {
+    final data = node.getSemanticsData();
+    final id = data.identifier;
+    if (id.startsWith('set-row-state-')) {
+      ids.add(id);
+      // Do not recurse past a row-state node — the identifier is the
+      // boundary; nested identifiers are not expected.
+      return;
+    }
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  // ignore: deprecated_member_use
+  final owner = tester.binding.pipelineOwner.semanticsOwner;
+  if (owner == null) return ids;
+  visit(owner.rootSemanticsNode!);
+  return ids;
 }
 
 /// Walks the Semantics tree under the current widget tree and returns the
