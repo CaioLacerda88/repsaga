@@ -297,5 +297,66 @@ void main() {
             'over-broad and also hid the AppBar.',
       );
     });
+
+    testWidgets(
+      'should set AppBar backgroundColor to abyss when rest timer is active '
+      'and restore the theme default when rest stops (Phase 23 REV-2)',
+      (tester) async {
+        // Phase 23 UI/UX REV-2 (2026-05-12) — the AppBar previously
+        // painted at the theme default (transparent), competing with the
+        // 72px countdown for visual hierarchy on top of the abyss scrim.
+        // The fix: while `showRestTimerOverlay` is true, paint the AppBar
+        // at `AppColors.abyss` so the chrome plane visually merges with
+        // the scrim. When rest stops, the bar returns to the theme
+        // default (null → transparent). Pin both directions.
+        final restTimerNotifier = _ControllableRestTimerNotifier(
+          const RestTimerState(
+            totalSeconds: 90,
+            remainingSeconds: 90,
+            isActive: true,
+            exerciseName: 'Bench Press',
+          ),
+        );
+        await tester.pumpWidget(
+          _buildScreen(
+            state: _activeStateWithOneSet(),
+            restTimerNotifier: restTimerNotifier,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Active rest → AppBar background == AppColors.abyss.
+        final appBarActive = tester.widget<AppBar>(find.byType(AppBar));
+        expect(
+          appBarActive.backgroundColor,
+          AppColors.abyss,
+          reason:
+              'Phase 23 REV-2: while rest is active, the AppBar must '
+              'merge into the scrim by painting at AppColors.abyss. If '
+              'this fails, the conditional was reverted or the wrong '
+              'colour was wired.',
+        );
+
+        // Stop the rest timer — same path as user-tap on the scrim.
+        restTimerNotifier.stop();
+        await tester.pump();
+
+        // No rest → AppBar background falls back to theme default (null).
+        // The AppTheme.dark `appBarTheme.backgroundColor` is
+        // `Colors.transparent`; what we assert here is the widget-level
+        // override is dropped (`null`), letting the theme own the colour.
+        final appBarRestored = tester.widget<AppBar>(find.byType(AppBar));
+        expect(
+          appBarRestored.backgroundColor,
+          isNull,
+          reason:
+              'Phase 23 REV-2: stopping rest must restore the AppBar '
+              "backgroundColor to null so the theme's transparent default "
+              'takes over again. If this returns a concrete Color, the '
+              'merge-during-rest override leaked outside its window.',
+        );
+      },
+    );
   });
 }

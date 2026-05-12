@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/active_workout_state.dart';
 import '../providers/workout_providers.dart';
@@ -462,6 +463,14 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
           startedAt: widget.state.workout.startedAt,
         ),
         centerTitle: true,
+        // Phase 23 UI/UX REV-2 (2026-05-12) — when the rest overlay is
+        // active, merge the AppBar into the abyss scrim. At theme default
+        // (transparent) the AppBar plane competed with the 72px countdown
+        // for visual hierarchy. Painting at `AppColors.abyss` (opaque)
+        // matches the scrim's near-black floor so the bar reads as
+        // "quieted chrome" — the discard X stays semantically reachable
+        // but recedes from same-plane competition with the countdown.
+        backgroundColor: widget.showRestTimerOverlay ? AppColors.abyss : null,
         actions: _buildAppBarActions(l10n),
       ),
       body: body,
