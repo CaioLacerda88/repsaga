@@ -773,13 +773,17 @@ test.describe('Workout logging', () => {
     await expect(exerciseTap).toBeVisible({ timeout: 10_000 });
     await exerciseTap.click();
 
-    // Sheet is open — verify via the exercise name text in the sheet heading.
-    // Squat doesn't have ABOUT/FORM TIPS sections, so check the name directly.
-    // The card renders the name inside the group's accessible label (not standalone),
-    // so `text=Barbell Squat` only matches the sheet heading.
-    await expect(
-      page.locator(`text=${SEED_EXERCISES.squat}`),
-    ).toBeVisible({ timeout: 10_000 });
+    // Sheet is open — verify via the ABOUT section, consistent with EX-DETAIL-001/002.
+    //
+    // Original comment said "Squat doesn't have ABOUT/FORM TIPS sections" — that
+    // was incorrect; squat DOES have ABOUT. The original `text=Barbell Squat`
+    // approach broke in Phase 23 Cluster C: after the await-fix the H5 SnackBar
+    // fires reliably, posting "Barbell Squat added" into the ARIA live region.
+    // `text=Barbell Squat` then matches BOTH the live region ("Barbell Squat added")
+    // AND the sheet heading ("Barbell Squat"), causing a strict-mode violation.
+    // Switch to `text=ABOUT` (same as EX-DETAIL-001/002) — deterministic, no
+    // live-region collision.
+    await expect(page.locator('text=ABOUT')).toBeVisible({ timeout: 10_000 });
 
     // Dismiss the sheet by pressing Escape.
     await page.keyboard.press('Escape');

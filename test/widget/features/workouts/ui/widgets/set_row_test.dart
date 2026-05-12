@@ -2656,6 +2656,133 @@ void main() {
           );
         },
       );
+
+      // Transition 2: pendingNoPr → completedNoPr.
+      //
+      // The row has no PR projection (PrRowState.none). User marks the
+      // set done; the display advances to completedNonPr. The identifier
+      // must reflect the transition — 'set-row-state-none' →
+      // 'set-row-state-completed'. Pins the ValueKey fix for the
+      // no-PR path (the Cluster B fix is generic to any identifier
+      // change, not just the predicted-PR path).
+      testWidgets(
+        'row Semantics identifier transitions: none → completedNonPr',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+          final pending = makeSet(
+            id: 'no-pr-row',
+            weight: 60,
+            reps: 8,
+            isCompleted: false,
+          );
+          final completed = pending.copyWith(isCompleted: true);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: pending,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-none',
+            reason: 'no-PR pending row must emit set-row-state-none',
+          );
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: completed,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-completed',
+            reason:
+                'Phase 23 Cluster B: identifier MUST transition to '
+                'set-row-state-completed after a non-PR set is completed. '
+                "If still 'set-row-state-none', the ValueKey was dropped.",
+          );
+          handle.dispose();
+        },
+      );
+
+      // Transition 3: pendingPredictedPr → none (mid-set weight edit
+      // drops the PR projection without completing the set).
+      //
+      // User edits the weight field DOWNWARD so it no longer beats the
+      // standing record. The resolver transitions display.state from
+      // pendingPredictedPr → none. The identifier must update:
+      // 'set-row-state-pending-pr' → 'set-row-state-none'. This is the
+      // "mid-set edit" path that the WIP explicitly called out as a
+      // third required transition.
+      testWidgets(
+        'row Semantics identifier transitions: pendingPredictedPr → none '
+        '(mid-set weight edit drops PR projection)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+          final set = makeSet(
+            id: 'pr-drop-row',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+
+          // Start as predicted-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay(
+                  state: PrRowState.pendingPredictedPr,
+                  accentTypes: {RecordType.maxWeight},
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-pending-pr',
+            reason:
+                'pre-edit: predicted-PR row must emit set-row-state-pending-pr',
+          );
+
+          // Simulate weight edit drops below PR threshold → display
+          // reverts to PrRowState.none.
+          final lowWeight = set.copyWith(weight: 80);
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: lowWeight,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-none',
+            reason:
+                'Phase 23 Cluster B: after weight edit drops the PR '
+                'projection, identifier MUST transition to '
+                "set-row-state-none. If still 'set-row-state-pending-pr', "
+                'the ValueKey was dropped — reopens the stale-identifier '
+                'hole for the predicted-PR → none path.',
+          );
+          handle.dispose();
+        },
+      );
     });
   });
 }

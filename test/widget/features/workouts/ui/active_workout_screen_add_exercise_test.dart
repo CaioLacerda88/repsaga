@@ -86,6 +86,32 @@ void main() {
     registerFallbackValue(_FakeActiveWorkoutState());
   });
 
+  // ---------------------------------------------------------------------------
+  // H5 undo SnackBar coverage note (Phase 23 Cluster C fix)
+  //
+  // The Cluster C regression was: `_ActiveWorkoutBody._onAddExercise` called
+  // `notifier.addExercise(exercise)` without `await`, so the state diff ran
+  // on the PRE-mutation exercise list and the SnackBar was never shown.
+  //
+  // The fix is `await notifier.addExercise(exercise)` in `_onAddExercise`.
+  // The full SnackBar path (picker → addExercise → await → diff → showSnackBar)
+  // is driven by `_onAddExercise`, a private method on `_ActiveWorkoutBodyState`
+  // that is only invoked when `ExercisePickerSheet.show(context)` resolves with
+  // a non-null exercise. `ExercisePickerSheet.show` is a static method wrapping
+  // `showModalBottomSheet` — there is no DI seam to mock it at the widget
+  // level without a `lib/` change (which is out of QA lane).
+  //
+  // Coverage strategy:
+  //   * Unit: `addExercise auto-seed (Phase 23 D6)` group in
+  //     `active_workout_notifier_test.dart` — pins that `addExercise` returns
+  //     the correct state after the async seed-fetch.
+  //   * Widget (below): pins the *rendering* contract — after notifier mutation,
+  //     the screen renders the pre-filled set row.
+  //   * E2E: `workouts.spec.ts` lines 1764/1786 — `Add exercise undo (PR3 — H5)`
+  //     describe pins the full round-trip (picker → addExercise awaited →
+  //     SnackBar visible → Undo taps restoreExercise). This is the definitive
+  //     regression guard for the Cluster C fix.
+  // ---------------------------------------------------------------------------
   group('ActiveWorkoutScreen — addExercise auto-seeds set 1 (Phase 23 D6)', () {
     testWidgets(
       'should render exercise card with one pre-filled set immediately '
