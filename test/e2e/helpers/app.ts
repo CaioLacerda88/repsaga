@@ -434,22 +434,79 @@ export async function dismissCelebrationIfPresent(
  *
  * Flutter CanvasKit routes semantics `click()` directly to `SemanticsAction.tap`,
  * bypassing the GestureDetector long-press timer. To trigger `onLongPress`, we
- * must send raw pointer events: hover to position the cursor, mouse down, wait
- * for Flutter's long-press threshold (~500ms), then mouse up.
+ * must send raw pointer events that satisfy Flutter's
+ * `LongPressGestureRecognizer` arena rules:
+ *   1. `pointerdown` lands inside the target widget.
+ *   2. The pointer stays put (within `kTouchSlop` ≈ 18 logical px) for at least
+ *      `kLongPressTimeout` (500 ms by default).
+ *   3. `pointerup` fires AFTER step 2 completes.
+ *
+ * Historical flake (FLAKY_TESTS #routines-edit / #routines-delete): the previous
+ * `hover() → mouse.down() → waitForTimeout → mouse.up()` pattern fired `onTap`
+ * instead of `onLongPress` ~10 % of the time. Failure screenshots showed the
+ * routine had been STARTED (active workout screen) — i.e. Flutter's tap
+ * recognizer won the arena. The likely mechanism is that Chromium intermittently
+ * dispatches a synthetic `pointermove` (sub-pixel jitter) or `pointercancel`
+ * during the inert wait window, which rejects the long-press recognizer and lets
+ * the tap recognizer fire on pointerup.
+ *
+ * Mitigations applied here (defence in depth):
+ *   - Compute the element centre BEFORE pressing, so we control the press
+ *     coordinates exactly (no implicit re-hit-test in the helper).
+ *   - After `mouse.down()`, explicitly re-issue `mouse.move(cx, cy)` to anchor
+ *     the cursor at the press location. This invalidates any stale browser
+ *     pointer state and signals "I am still holding here" to Flutter.
+ *   - Hold for `duration` ms (default 1000) — safely past Flutter's 500 ms
+ *     long-press threshold even if the hold gets briefly preempted.
+ *   - Re-issue `mouse.move(cx, cy)` once more right before `mouse.up()` so the
+ *     release coordinate matches the press coordinate. Any drift between press
+ *     and release would be interpreted as a drag and reject the long-press.
  *
  * @param page     - Playwright page.
  * @param selector - Playwright selector string for the target element.
- * @param duration - How long to hold the pointer down (ms). Default 800ms.
+ * @param duration - How long to hold the pointer down (ms). Default 1000ms,
+ *                   chosen to comfortably exceed Flutter's 500 ms long-press
+ *                   threshold even under CPU contention.
  */
 export async function flutterLongPress(
   page: Page,
   selector: string,
-  duration = 800,
+  duration = 1000,
 ): Promise<void> {
   const element = page.locator(selector).first();
-  await element.hover();
+
+  // Resolve the element's bounding box BEFORE pressing so we have stable
+  // coordinates. `element.hover()` would re-hit-test on each call; computing
+  // (cx, cy) once lets us re-anchor the cursor at the SAME spot during the
+  // hold, which is essential for Flutter's long-press recognizer.
+  await element.scrollIntoViewIfNeeded();
+  const box = await element.boundingBox();
+  if (!box) {
+    throw new Error(
+      `flutterLongPress: '${selector}' has no bounding box — element may be ` +
+        `detached or zero-sized.`,
+    );
+  }
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  // Move into position with a few interpolation steps so Flutter sees a clean
+  // pointermove sequence, not a jump.
+  await page.mouse.move(cx, cy, { steps: 3 });
   await page.mouse.down();
+
+  // Re-anchor immediately after press: same coordinates, single step. Flutter
+  // treats this as a pointermove with delta 0, which keeps the long-press
+  // recognizer's "stillness" check happy and pre-empts any synthetic
+  // pointercancel that Chromium might dispatch during the inert wait.
+  await page.mouse.move(cx, cy);
+
   await page.waitForTimeout(duration);
+
+  // Re-anchor once more right before release so the up coordinate matches the
+  // down coordinate exactly. Drift between down and up coordinates would be
+  // interpreted as a drag and reject the long-press recognizer.
+  await page.mouse.move(cx, cy);
   await page.mouse.up();
 }
 
