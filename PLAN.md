@@ -1434,7 +1434,31 @@ Items in (d) move to a "v2-park" sub-list and don't get worked on without new pr
   slot so adding/removing the visible Text never reflows the parent Column.
   Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert
   note. Picks up when someone has appetite for the layout-stable redesign or
-  the Flutter engine bug is fixed upstream.
+  the Flutter engine bug is fixed upstream. (Superseded for v1 by the
+  Phase 23 hint-removal verdict — the entire hint mechanic is gone. This
+  entry stays parked in case future telemetry justifies bringing it back
+  with the layout-stable design.)
+- **23-P-1 — seeded-set provenance cue** (Phase 23 UI/UX-critic IMPORTANT #2,
+  deferred 2026-05-12). After Phase 23 D6 auto-seeds set 1 with prior-
+  session values, a user adding an exercise they have NEVER trained still
+  sees a pre-filled set — but the values come from equipment defaults, not
+  "your last session." UI/UX-critic accepts ship-as-is because the seeded
+  values are correct and the experience matches Hevy/Strong. Future v1.1
+  cue: a 150ms slot-machine slide on the first render of a seeded row
+  (reuse `_slotMachineSlideTransition` already wired into `_WeightStepperCell`)
+  so the user reads "values just appeared" rather than "values were
+  pre-typed by me." No text, no chip. Triggered when the user moves the
+  rep/weight stepper, the slide is a one-shot per row.
+- **23-P-2 — H5 add-exercise undo SnackBar widget coverage** (Phase 23 QA
+  risk #3, deferred 2026-05-12). The H5 undo SnackBar is currently pinned
+  by the E2E tests in `workouts.spec.ts:1764 / :1786`. A unit-level widget
+  test is architecturally blocked because `ExercisePickerSheet.show` is a
+  static method that returns a future and cannot be mocked without a
+  library-level refactor (extract to an injectable picker). The E2E
+  coverage is sufficient for v1 — the SnackBar is a tiny surface, and
+  Phase 23 Cluster C already documents the regression mode that the E2E
+  tests catch. Revisit if the picker grows enough complexity to justify
+  the injection refactor.
 ### v2-park (post-launch telemetry decisions)
 
 - **"Add set" button visual weight** — `_AddSetButton` border at

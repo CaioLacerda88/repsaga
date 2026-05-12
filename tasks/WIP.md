@@ -141,6 +141,105 @@ The checklists below pair each implementation item with its required tests + doc
 - [x] Full E2E regression locally — **237 passed, 62 @flaky skipped, 1 flaky** (workouts.spec.ts:762 EX-DETAIL-003 passed on retry, pre-existing intermittent flake unrelated to Phase 23). Run: `cd test/e2e && FLUTTER_APP_URL= npx playwright test --reporter=list`.
 - [ ] On-device walkthrough on Samsung S25 Ultra (Android 16) — pending user verification on real device.
 
+### Review-cycle revisions (2026-05-12)
+
+Design review + QA gate returned five revisions. All landed in the same cycle
+per CLAUDE.md "no deferring review findings" (Blockers / Importants / Nits all
+fixed now; only the two genuinely architectural items deferred — both
+documented in `PLAN.md` → Active Backlog → Architectural follow-ups, entries
+`23-P-1` and `23-P-2`).
+
+- [x] **REV-1 [UI/UX IMPORTANT #1]** — PT-BR `addExerciseUndo` copy aligned
+  with EN structure. `lib/l10n/app_pt.arb` flipped from
+  `"Exercício adicionado: {name}"` to `"{name} adicionado"`. `make gen`
+  regenerated `app_localizations_pt.dart`. No test references the old
+  prefix-then-name string (grep clean across `test/`). E2E selectors comment
+  in `test/e2e/helpers/selectors.ts` updated — PT and EN now share the
+  suffix-verb structure, so the `EN-ONLY ASSUMPTION` caveat in the
+  `addExerciseUndoSnackBar` doc is gone.
+- [x] **REV-2 [UI/UX IMPORTANT #3]** — AppBar merges into the abyss scrim
+  during rest. `lib/features/workouts/ui/active_workout_screen.dart`
+  AppBar `backgroundColor` becomes `AppColors.abyss` when
+  `widget.showRestTimerOverlay` is true, else `null` (theme default —
+  transparent). Inline comment cites D1 visual-merge rationale +
+  REV-2 date. Widget test
+  `test/widget/features/workouts/ui/active_workout_rest_chrome_visibility_test.dart`
+  extended with the new
+  `should set AppBar backgroundColor to abyss when rest timer is active`
+  test (both directions pinned — active = `AppColors.abyss`,
+  stopped = `null`).
+- [x] **REV-3 [UI/UX NIT #6]** — `tapToDismiss` hint copy fully removed.
+  `lib/features/workouts/ui/widgets/rest_timer_overlay.dart` drops the
+  `SizedBox(height: 24)` + `ExcludeSemantics(Text(l10n.tapToDismiss, ...))`
+  block, replaced with a one-liner explaining the removal. ARB keys
+  deleted from `lib/l10n/app_en.arb` and `lib/l10n/app_pt.arb`; `make gen`
+  regenerated the localization classes — `dart analyze --fatal-infos`
+  confirms zero remaining consumers. Widget test
+  `tapToDismiss visual hint is excluded from the AOM` rewritten as
+  `tap-to-dismiss hint copy is removed (Phase 23 UI/UX REV-3)`,
+  pinning both the absent Text AND the absent AOM label. The PR-5
+  contrast pin (`PR-5 — tapToDismiss hint renders with alpha >= 0.55`)
+  deleted — moot once the Text is gone; the new test's reason comment
+  notes the PR-5 + PR #187 pins re-engage automatically if the Text is
+  ever re-added. REV-3 supersedes the original NIT #4 (PT verb
+  consistency) — removing the copy removes the verb-mismatch concern.
+- [x] **REV-4 [QA risk #1]** — multi-row Semantics sibling stability.
+  `test/widget/features/workouts/ui/widgets/set_row_test.dart` adds
+  `sibling rows keep their identifier when one row transitions state
+  (Phase 23 QA REV-4)` — pumps three sibling rows (pending-no-pr,
+  pending-predicted-pr, completed-no-pr), records every
+  `set-row-state-*` identifier in document order, transitions the
+  middle row to `completedStandingPr`, asserts siblings 0 and 2 keep
+  their pre-transition identifier (belt-and-suspenders on the per-row
+  `ValueKey(rowStateId)` Cluster B fix). New helper
+  `_collectRowStateIdentifiers(tester)` walks the SemanticsOwner to
+  collect them in visit order; matches the helper style of the existing
+  `_findRowStateIdentifier` single-row variant.
+- [x] **REV-5 [QA risk #2]** — routine-start direct non-call assertion.
+  `test/unit/features/workouts/providers/start_from_routine_test.dart`
+  adds `routine-start path does NOT invoke addExercise auto-seed`. The
+  test pumps a three-exercise routine and verifies
+  `mockRepo.getLastWorkoutSets` is called EXACTLY ONCE (routine-start's
+  own pre-fill) — never the 1 + 3 fan-out a hidden addExercise per-
+  exercise call would produce. A defensive cross-pin asserts the state
+  contains exactly the three routine exercises in order, catching any
+  duplicate from a stray addExercise pass.
+
+**Verification re-run after review-cycle revisions**
+
+- [x] `dart format .` — 508 files, 0 changed.
+- [x] `dart analyze --fatal-infos` — No issues found.
+- [x] `flutter test` — 2639 unit/widget tests pass. (Second pass after a
+  transient Hive-timing flake on first run; second run was deterministic
+  green, exit 0.)
+- [x] Targeted re-run on the four files touched by REV-2 / REV-3 / REV-4 /
+  REV-5 — all 103 selected tests pass including
+  `should set AppBar backgroundColor to abyss when rest timer is active`,
+  `tap-to-dismiss hint copy is removed`,
+  `sibling rows keep their identifier when one row transitions state`,
+  and `routine-start path does NOT invoke addExercise auto-seed`.
+- [x] `flutter build apk --debug --no-shrink` — `Built build\app\outputs\flutter-apk\app-debug.apk`.
+- [x] PLAN.md Active Backlog updated with `23-P-1` (seeded-set provenance
+  cue) and `23-P-2` (H5 add-exercise undo SnackBar widget coverage) —
+  the two architectural follow-ups deferred to v1.1 per the spec.
+
+**Post-mortem (handoff continuity, 2026-05-12)**
+
+The original tech-lead session that implemented REV-1..REV-5 died
+silently after staging all 13 file edits and the WIP.md updates but
+before committing or pushing. A follow-up orchestrator dispatch found
+the branch at `8770f05` with the working tree fully populated and the
+WIP.md verification gate already marked green. The handover tech-lead
+verified the working tree against the REV-1..REV-5 spec line-by-line
+(every revision present and correct in source + tests + docs), re-ran
+`dart format` (clean), `dart analyze --fatal-infos` (clean), and
+`flutter test` (success=true, exit 0 on second pass — the same
+transient Hive-timing flake the original session reported reproduces
+here, second run deterministic green). The five commits were then
+created in the logical chunks the original spec called for. No code
+changes were needed during the handover — purely a continuity action
+to land the work the previous session had completed but not committed.
+
 **Risk register**
 1. **AOM role-swap regression** on the three previously-fragile E2E tests. Mitigation: those three tests are explicitly in the smoke gate above. The structural change here (removing the conditional hint slot) makes the row Semantics tree shape STRICTLY simpler than the failed PR #159/#193 attempts; risk surface is lower than those, but the smoke gate is the verifier.
 2. **Auto-seed regression in routine-start flow.** `addExercise` is the quick-workout / mid-routine add path; `startRoutineWorkout` has its own pre-fill at notifier L340-370. Tech-lead must verify call-site separation in code AND add a unit test pinning `startRoutineWorkout` is untouched (no double-seed).
