@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -603,7 +604,7 @@ class _ExerciseCardHeader extends ConsumerWidget {
   }
 }
 
-/// "Add set" OutlinedButton — wrapped in `Semantics(identifier: 'workout-add-set')`
+/// "Add set" button — wrapped in `Semantics(identifier: 'workout-add-set')`
 /// (E2E selector contract; see `WORKOUT.addSetButton` in selectors.ts).
 ///
 /// **PR-3 (H3) — long-press fill-remaining shortcut removed.** The button
@@ -611,6 +612,18 @@ class _ExerciseCardHeader extends ConsumerWidget {
 /// `_FillRemainingButton` rendered right below — two affordances for the
 /// same action, one of them invisible. The visible `_FillRemainingButton`
 /// is now the sole entry point. See `BUGS.md` PR-3 / H3.
+///
+/// **PR-7 — filled accent treatment.** Pre-fix this was an `OutlinedButton`
+/// with a `primary @ alpha 0.3` border that read fainter than the
+/// `_FillRemainingButton` `TextButton` rendered immediately below. "Add set"
+/// is the highest-frequency action in the active workout (one tap per
+/// completed exercise + per-set during straight-set programs). It deserves
+/// to read as a positive primary action, not a quiet secondary one. Switch
+/// to `OutlinedButton` carrying a 12%-alpha `hotViolet` fill plus a
+/// 60%-alpha `hotViolet` border + full-strength `hotViolet` foreground so
+/// the affordance reads bright on the abyss surface without escalating to a
+/// reward-flash gold tone (which is reserved for `RewardAccent` per the
+/// heroGold scarcity rule). 48dp tap-target floor preserved.
 class _AddSetButton extends StatelessWidget {
   const _AddSetButton({required this.onPressed});
 
@@ -618,7 +631,6 @@ class _AddSetButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       // `explicitChildNodes: true` keeps the OutlinedButton's own Semantics
@@ -631,15 +643,21 @@ class _AddSetButton extends StatelessWidget {
         container: true,
         explicitChildNodes: true,
         identifier: 'workout-add-set',
+        // Foreground (icon + label) intentionally NOT set here — inherits
+        // from the global `OutlinedButtonTheme.foregroundColor` (set to
+        // `AppColors.hotViolet` in `app_theme.dart`). Letting the theme
+        // own foreground means a disabled state (if this button ever
+        // gates) will dim correctly via the theme's resolver, instead of
+        // being pinned at full opacity by an explicit override here.
+        // Reviewer PR #208 follow-up.
         child: OutlinedButton.icon(
           onPressed: onPressed,
           icon: const Icon(Icons.add, size: 20),
           label: Text(AppLocalizations.of(context).addSet),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
-            side: BorderSide(
-              color: theme.colorScheme.primary.withValues(alpha: 0.3),
-            ),
+            backgroundColor: AppColors.hotViolet.withValues(alpha: 0.12),
+            side: BorderSide(color: AppColors.hotViolet.withValues(alpha: 0.6)),
           ),
         ),
       ),
@@ -1015,21 +1033,22 @@ class _SheetPRSection extends StatelessWidget {
   }
 
   Widget _emptyRow(ThemeData theme, AppLocalizations l10n) {
-    return Row(
-      children: [
-        Icon(
-          Icons.emoji_events_rounded,
-          size: 20,
+    // PR-7 brand-glyph swap: `Icons.emoji_events_rounded` (Material trophy
+    // emoji) reads as a generic congratulations sticker — wrong tone for an
+    // empty state ("No records yet") that should feel like a quiet absence,
+    // not a participation award. The v3-silhouette pack has no trophy glyph
+    // so we drop the icon entirely and lean on muted italic text. This also
+    // keeps the heroGold reward-flash semantic exclusive to the
+    // `RewardAccent` PR celebration moment per the heroGold scarcity rule.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Text(
+        l10n.noRecordsYet,
+        style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          fontStyle: FontStyle.italic,
         ),
-        const SizedBox(width: 4),
-        Text(
-          l10n.noRecordsYet,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

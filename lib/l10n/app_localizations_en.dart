@@ -137,6 +137,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancel => 'Cancel';
 
   @override
+  String get loadingOverlayStop => 'Stop';
+
+  @override
   String get delete => 'Delete';
 
   @override
@@ -753,11 +756,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String discardWorkoutContent(String duration) {
-    return 'You\'ve been working out for $duration. This cannot be undone.';
+    return 'You\'ve been on the path $duration. Discard now and the work is gone.';
   }
 
   @override
-  String get finishWorkoutTitle => 'Finish Workout?';
+  String get finishWorkoutTitle => 'Seal this session?';
 
   @override
   String incompleteSetsWarning(int count) {
@@ -792,7 +795,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String workoutInterrupted(String age) {
-    return 'was interrupted $age.';
+    return 'Was interrupted $age.';
   }
 
   @override

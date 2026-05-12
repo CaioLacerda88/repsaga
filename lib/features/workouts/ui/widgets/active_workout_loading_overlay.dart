@@ -43,8 +43,15 @@ class ActiveWorkoutLoadingOverlay extends ConsumerWidget {
                 onPressed: () {
                   ref.read(activeWorkoutProvider.notifier).cancelLoading();
                 },
+                // PR-7 (UI-critic deferred from PR-1): scoped `loadingOverlayStop`
+                // key replaces the generic `cancel` key. "Cancel" on the
+                // spinner during a finish/discard flow reads as "cancel my
+                // workout" — i.e. discard the entire session — when the
+                // intent is only to abort the in-flight save/discard
+                // request and restore the prior state. "Stop" / "Parar" is
+                // unambiguous about what gets stopped.
                 child: Text(
-                  AppLocalizations.of(context).cancel,
+                  AppLocalizations.of(context).loadingOverlayStop,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,
                   ),

@@ -140,6 +140,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cancel => 'Cancelar';
 
   @override
+  String get loadingOverlayStop => 'Parar';
+
+  @override
   String get delete => 'Excluir';
 
   @override
@@ -759,11 +762,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String discardWorkoutContent(String duration) {
-    return 'Você está treinando há $duration. Esta ação não pode ser desfeita.';
+    return 'Você está no caminho há $duration. Descarte agora e o trabalho se perde.';
   }
 
   @override
-  String get finishWorkoutTitle => 'Finalizar Sessão?';
+  String get finishWorkoutTitle => 'Selar esta sessão?';
 
   @override
   String incompleteSetsWarning(int count) {
@@ -798,7 +801,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String workoutInterrupted(String age) {
-    return 'foi interrompido $age.';
+    return 'Foi interrompido $age.';
   }
 
   @override
@@ -1537,7 +1540,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get setTypeAbbrWarmup => 'AQ';
 
   @override
-  String get setTypeAbbrDropset => 'D';
+  String get setTypeAbbrDropset => 'Dr';
 
   @override
   String get setTypeAbbrFailure => 'F';

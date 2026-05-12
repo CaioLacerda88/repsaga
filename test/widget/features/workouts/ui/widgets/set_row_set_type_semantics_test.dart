@@ -177,9 +177,15 @@ void main() {
           },
         );
 
-        testWidgets('dropset renders "D" (pt: setTypeAbbrDropset = D)', (
+        testWidgets('dropset renders "Dr" (pt: setTypeAbbrDropset = Dr)', (
           tester,
         ) async {
+          // PR-7 brand-voice revisit: pre-fix the PT abbreviation was
+          // "D" — ambiguous in PT (Drop / Direto / Diminuição). UI critic
+          // flagged it on the audit. "Dr" is the shortest unambiguous
+          // form (Drop = Dropset universally in the PT lifting community)
+          // and remains visually distinct from "F" (failure) and "N"
+          // (working) at the 9dp micro-label size.
           final set = makeSet(setType: SetType.dropset);
           await tester.pumpWidget(
             buildTestWidget(
@@ -187,8 +193,10 @@ void main() {
               locale: const Locale('pt'),
             ),
           );
-          expect(find.text('D'), findsOneWidget);
-          expect(find.text('DR'), findsNothing);
+          expect(find.text('Dr'), findsOneWidget);
+          // Pin the absence of the prior single-letter abbreviation so a
+          // revert can't silently land.
+          expect(find.text('D'), findsNothing);
         });
 
         testWidgets('failure renders "F" (pt: setTypeAbbrFailure = F)', (
