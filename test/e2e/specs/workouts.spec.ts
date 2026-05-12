@@ -2461,6 +2461,26 @@ test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () 
 
 // =============================================================================
 // Phase 23 D1 — rest-overlay chrome visibility (smokeRestChrome user)
+//
+// **Flutter Web back-button convention** (rediscovered 2026-05-12 during
+// Phase 23 root-cause triage):
+//
+// Flutter's `PopScope.onPopInvokedWithResult` fires for `popRoute`
+// system-channel events. On Flutter Web, browser back / `window.history.back()`
+// does NOT produce a `popRoute` message — `MultiEntriesBrowserHistory.onPopState`
+// (which GoRouter relies on) routes browser `popstate` to a `pushRouteInformation`
+// message that the `Router` consumes by changing the route. The PopScope callback
+// of the OUTGOING screen is never invoked. Keyboard `Escape` is unwired entirely.
+//
+// Net effect for E2E: there is NO Flutter-Web-reachable path that fires the
+// active-workout PopScope's `onPopInvokedWithResult`. That callback is
+// Android-hardware-back-only. The deeper PopScope branch chain (D2/D3) is
+// fully owned by `active_workout_back_button_priority_test.dart` via
+// `tester.binding.handlePopRoute()`. The E2E layer here ONLY pins the
+// user-observable chrome contract: that the FAB + Finish bar hide while
+// the rest overlay is visible (D1). Rest dismissal happens via the Skip
+// button on the rest overlay — the user-visible discoverable surface that
+// works on both web and Android.
 // =============================================================================
 test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
@@ -2475,9 +2495,9 @@ test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
     'should hide add-exercise FAB and finish bar while rest timer is visible',
     async ({ page }) => {
       // Drive the workout into the rest-active state, then assert the
-      // FAB + Finish bar are absent. After dismissing the rest timer,
-      // both must reappear — pins both the hide AND the restore halves
-      // of the D1 contract.
+      // FAB + Finish bar are absent. After dismissing the rest timer
+      // via its own Skip button, both surfaces must reappear — pins both
+      // the hide AND the restore halves of the D1 contract.
       await startEmptyWorkout(page);
       await addExercise(page, SEED_EXERCISES.benchPress);
       // Phase 23 D6: addExercise auto-seeds set 1. Set a non-zero weight
@@ -2507,9 +2527,13 @@ test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
         timeout: 3_000,
       });
 
-      // Dismiss the rest timer via Escape (Flutter Web maps Escape to
-      // PopScope — same code path as Android hardware back).
-      await page.keyboard.press('Escape');
+      // Dismiss the rest timer via its own Skip button — the only
+      // Flutter-Web-reachable dismissal path. Note: browser back /
+      // keyboard Escape do NOT fire PopScope on Flutter Web — see file
+      // header. Skip is the user-visible affordance that works on both
+      // platforms.
+      const skip = page.locator('role=button[name*="Skip"]').first();
+      await skip.click();
       await expect(restTimer).toBeHidden({ timeout: 5_000 });
 
       // After dismiss: chrome must reappear immediately. Drives the
@@ -2531,71 +2555,14 @@ test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
     },
   );
 
-  test(
-    'should dismiss rest timer when Escape (browser back analog) is pressed',
-    async ({ page }) => {
-      // Phase 23 D2 — Flutter web maps Escape to PopScope; same code
-      // path as Android hardware back. Pin the rest-stop branch of the
-      // priority chain without invoking the discard coordinator.
-      //
-      // Android-native hardware back is not Playwright-reachable; the
-      // deeper widget-level PopScope contract is owned by
-      // `active_workout_back_button_priority_test.dart`.
-      await startEmptyWorkout(page);
-      await addExercise(page, SEED_EXERCISES.benchPress);
-      await setWeight(page, '60');
-      await setReps(page, '8');
-      await page.locator(WORKOUT.markSetDone).first().click();
-
-      const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
-      await expect(restTimer).toBeVisible({ timeout: 8_000 });
-
-      await page.keyboard.press('Escape');
-
-      await expect(restTimer).toBeHidden({ timeout: 5_000 });
-      // The discard dialog MUST NOT have opened — back-press during rest
-      // is rest-dismiss, not discard.
-      await expect(page.locator('text="Discard Workout?"')).toBeHidden({
-        timeout: 1_000,
-      });
-
-      // Clean up.
-      await page.locator(WORKOUT.discardButton).click();
-      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
-      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
-      await confirmDiscard.click();
-      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
-    },
-  );
-
-  test(
-    'should show discard dialog when Escape is pressed with no rest timer active',
-    async ({ page }) => {
-      // Phase 23 D2 inverse: no rest timer → the chain falls through to
-      // discard. This is the historical contract; the test guards
-      // against an over-broad rest-dismiss branch accidentally
-      // swallowing the no-rest case.
-      await startEmptyWorkout(page);
-      await addExercise(page, SEED_EXERCISES.benchPress);
-
-      // No rest timer active. Escape must open the discard dialog.
-      await page.keyboard.press('Escape');
-      await expect(page.locator('text="Discard Workout?"')).toBeVisible({
-        timeout: 5_000,
-      });
-
-      // Clean up — cancel the dialog AND discard via the AppBar.
-      await page.locator('text="Cancel"').click();
-      await expect(page.locator('text="Discard Workout?"')).toBeHidden({
-        timeout: 3_000,
-      });
-      await page.locator(WORKOUT.discardButton).click();
-      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
-      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
-      await confirmDiscard.click();
-      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
-    },
-  );
+  // Phase 23 D2/D3 PopScope priority chain (rest-dismiss vs discard)
+  // is intentionally NOT covered at the E2E level — Flutter Web has no
+  // way to fire `PopScope.onPopInvokedWithResult` (see file header). The
+  // contract is fully pinned at the widget layer:
+  //   * `active_workout_back_button_priority_test.dart` — all 4 priority
+  //     cases (rest-only, no-rest, rest-and-loading, idempotent stop).
+  //   * `active_workout_appbar_discard_during_rest_test.dart` — the
+  //     in-rest AppBar discard affordance.
 });
 
 // =============================================================================
