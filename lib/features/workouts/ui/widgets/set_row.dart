@@ -490,7 +490,47 @@ class _SetRowFrame extends StatelessWidget {
     // keeps each descendant's Checkbox / GestureDetector / button semantics
     // independently addressable so per-button identifiers (`workout-set-done`,
     // `workout-set-completed`) keep emitting their own DOM nodes.
+    //
+    // **`key: ValueKey(rowStateId)` is load-bearing for the Flutter Web
+    // identifier-transition propagation contract** (Phase 23 root-cause
+    // 2026-05-12). On Flutter Web, when a `Semantics(identifier: X, ...)`
+    // node's `identifier` value changes WITHOUT a corresponding role or
+    // structural change, the engine's `_updateIdentifier` path runs and
+    // SHOULD propagate the new value to the DOM via
+    // `setAttribute('flt-semantics-identifier', ...)`. In practice this
+    // propagation is unreliable for nodes whose only mutation is the
+    // identifier value — the engine treats the SemanticsNode as
+    // "unchanged" (same Element, same parent, same role=group container)
+    // and the dirty bit set in framework Dart land does not always make
+    // it through to a DOM `setAttribute` call.
+    //
+    // The observable failure: a set in the predicted-PR state pre-
+    // completion emitted `set-row-state-pending-pr` correctly; the user
+    // completed the set; the resolver returned `completedStandingPr`;
+    // the widget rebuilt with the new chrome (gold stripe + gold values
+    // + green checkbox + gold bracket — confirmed visually); but the
+    // row's DOM element retained `flt-semantics-identifier=
+    // "set-row-state-pending-pr"`. The widget tree shape was correct;
+    // only the AOM string was stale. Two-set tests breaking PR cascades
+    // (PR #159 / #193 / now the three previously-fragile specs) all
+    // share this root cause: the identifier transition `pending-pr →
+    // standing-pr` is silent in the DOM.
+    //
+    // Forcing a `ValueKey(rowStateId)` ensures the Semantics widget is a
+    // DIFFERENT element to the framework when the identifier changes —
+    // Flutter mounts a fresh SemanticsNode rather than mutating the
+    // existing one, and the engine emits the new
+    // `flt-semantics-identifier` attribute on a freshly-created DOM
+    // node. Cost: a single SemanticsNode rebuild on PR-state
+    // transitions, which fire at most once per set per workout (on
+    // completion). No perf concern; no visual change.
+    //
+    // The widget test `row Semantics emits the correct identifier across
+    // state transitions` in `set_row_test.dart` pins this contract via
+    // `tester.binding.pipelineOwner.semanticsOwner` so the regression is
+    // caught at unit speed if a future refactor drops the key.
     return Semantics(
+      key: ValueKey(rowStateId),
       identifier: rowStateId,
       container: true,
       explicitChildNodes: true,

@@ -2572,8 +2572,118 @@ void main() {
               'previously-fragile E2E specs.',
         );
       });
+
+      testWidgets(
+        'row Semantics emits the correct identifier across state transitions',
+        (tester) async {
+          // Phase 23 root-cause (2026-05-12) — the three previously-
+          // fragile E2E specs (personal-records.spec.ts:264/:309,
+          // rank-up-celebration.spec.ts:847) all failed for the same
+          // reason: on Flutter Web, when a `Semantics(identifier: X)`
+          // node's identifier value changes WITHOUT a structural / role
+          // change, the engine does not always propagate the new value
+          // via `setAttribute('flt-semantics-identifier', ...)`. The
+          // row's chrome rebuilt correctly (gold stripe + values + green
+          // checkbox visible in the failure screenshot) but the DOM
+          // element retained the pre-completion identifier. The fix is
+          // a `ValueKey(rowStateId)` on the identifier-bearing
+          // Semantics so a fresh SemanticsNode mounts when the
+          // identifier value changes.
+          //
+          // This test pins the contract at unit speed: pump the row in
+          // predicted-PR state, capture the identifier-bearing node's
+          // identifier; transition to standing-PR (set completes + the
+          // row's display state advances); the identifier observed in
+          // the Semantics tree MUST be the new value, not the stale one.
+          final pending = makeSet(
+            id: 'identifier-row',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+          final completed = pending.copyWith(isCompleted: true);
+
+          // Predicted-PR pre-completion — display.state =
+          // pendingPredictedPr.
+          const pendingDisplay = PrRowDisplay(
+            state: PrRowState.pendingPredictedPr,
+            accentTypes: {RecordType.maxWeight},
+          );
+          // Standing-PR post-completion — display.state =
+          // completedStandingPr.
+          const standingDisplay = PrRowDisplay(
+            state: PrRowState.completedStandingPr,
+            accentTypes: {RecordType.maxWeight},
+          );
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: pending,
+                workoutExerciseId: 'we-001',
+                display: pendingDisplay,
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-pending-pr',
+            reason: 'predicted-PR pre-completion must emit pending-pr id',
+          );
+
+          // Transition: set completes, display advances to standing-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: completed,
+                workoutExerciseId: 'we-001',
+                display: standingDisplay,
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-standing-pr',
+            reason:
+                'Phase 23 root-cause: identifier MUST transition to '
+                'standing-pr post-completion. If this assertion stays at '
+                "'set-row-state-pending-pr', the ValueKey on the row's "
+                'identifier-bearing Semantics was dropped — re-opens the '
+                'Flutter Web identifier-propagation hole that broke the '
+                'three previously-fragile E2E specs.',
+          );
+        },
+      );
     });
   });
+}
+
+/// Walks the Semantics tree under the current widget and returns the
+/// `identifier` of the first node whose identifier starts with
+/// `set-row-state-`. Used by the Phase 23 root-cause regression test.
+String? _findRowStateIdentifier(WidgetTester tester) {
+  String? found;
+  void visit(SemanticsNode node) {
+    if (found != null) return;
+    final data = node.getSemanticsData();
+    final id = data.identifier;
+    if (id.startsWith('set-row-state-')) {
+      found = id;
+      return;
+    }
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  // ignore: deprecated_member_use
+  final owner = tester.binding.pipelineOwner.semanticsOwner;
+  if (owner == null) return null;
+  visit(owner.rootSemanticsNode!);
+  return found;
 }
 
 /// Walks the Semantics tree under the current widget tree and returns the
