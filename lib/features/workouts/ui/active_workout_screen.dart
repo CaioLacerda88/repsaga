@@ -109,26 +109,30 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // PR-2 C3 — overlays are pushed INTO the Scaffold body slot (see
     // `_ActiveWorkoutBody.build`) instead of being painted as siblings of
     // the Scaffold. This is the load-bearing structural change for the
-    // undo-snackbar reachability fix:
+    // undo-snackbar reachability fix: `Scaffold._ScaffoldSlot.snackBar`
+    // paints AFTER `body`, so a SnackBar shown via
+    // `ScaffoldMessenger.of(context)` automatically renders above any
+    // widget that lives inside the body. With the overlays inside the
+    // body, the swipe-to-delete undo SnackBar paints — AND hit-tests —
+    // above the rest-timer scrim, no extra messenger hoisting required.
+    // The previous outer-Stack ordering rendered the rest-timer overlay
+    // above the inner Scaffold's snackbar slot, hiding the undo affordance
+    // and consuming taps in its region (the overlay's full-screen
+    // `HitTestBehavior.opaque` GestureDetector ate the Undo tap before it
+    // could reach the SnackBarAction).
     //
-    //   * Scaffold's `_ScaffoldSlot.snackBar` paints AFTER `body`, so a
-    //     SnackBar shown via `ScaffoldMessenger.of(context)` automatically
-    //     renders above any widget that lives inside the body. With the
-    //     overlays inside the body, the swipe-to-delete undo SnackBar
-    //     paints — AND hit-tests — above the rest-timer scrim, no extra
-    //     ScaffoldMessenger hoisting required.
-    //   * The previous outer-Stack ordering rendered the rest-timer
-    //     overlay above the inner Scaffold's snackbar slot, hiding the
-    //     undo affordance and consuming taps in its region (the overlay's
-    //     full-screen `HitTestBehavior.opaque` GestureDetector ate the
-    //     Undo tap before it could reach the SnackBarAction).
-    //
-    // Behavioral note: the rest-timer scrim now covers the body area only,
-    // not the AppBar / FinishBottomBar — those Scaffold slots paint on top
-    // of the body. Per Strong/Hevy reference apps the bottom bar staying
-    // reachable during rest is fine (no destructive action mid-rest), and
-    // the AppBar's discard-X is exactly the affordance a user wanting to
-    // bail on a workout mid-rest needs.
+    // Phase 23 D1 — body-slot coverage extended to FAB + FinishBottomBar.
+    // PR #198 left those Scaffold slots painting ON TOP of the rest scrim
+    // (acceptable per Strong/Hevy reference). User on-device feedback
+    // 2026-05-12 flagged the chrome leak as visual noise — `+ Adicionar
+    // exercício` FAB and `FINALIZAR` bottom button rendered above the
+    // scrim during rest. Conditionally hiding both while
+    // `showRestTimerOverlay` is true completes the "overlay over
+    // everything" contract WITHOUT moving the overlay back to a Stack
+    // root (which would re-break the snackbar slot ordering above). The
+    // AppBar stays — its X is the in-rest discard affordance and the
+    // `active_workout_appbar_discard_during_rest_test.dart` contract
+    // remains pinned.
     //
     // PR-3 (review fix) — wrap the body in a route-scoped `ScaffoldMessenger`.
     // Without this, in-screen snackbars (H5 add-exercise undo, swipe-to-delete
@@ -149,20 +153,39 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // the local messenger sits ABOVE the Scaffold, but `Scaffold._ScaffoldSlot`
     // still paints its snackbar slot AFTER the body within that Scaffold,
     // so the snackbar still renders above the body's rest-timer overlay.
+    // Phase 23 D2/D3 — back-press priority chain:
+    //   1. Rest timer active AND loading overlay NOT active → dismiss rest.
+    //      Rest is the dominant on-screen affordance; the user's mental
+    //      model says "back closes the thing on top." Discard is reached
+    //      via the AppBar X (still painted above the scrim).
+    //   2. Loading overlay active → fall through to discard coordinator.
+    //      The loading overlay carries its own Stop CTA (PR-1 Q1); back
+    //      is a reasonable escape, and routing to the coordinator keeps
+    //      the discard re-entrance guard (PR-3 S1) authoritative for the
+    //      whole "exit a workout" surface.
+    //   3. Else → discard coordinator (the historical contract).
+    //
+    // `_cancelRequested` flag on the notifier remains untouched — the
+    // loading overlay's Stop button owns that path.
+    final bool restActive = timerState != null;
+    final bool loadingActive = asyncState.isLoading;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          _discardCoordinator.show(context, ref, displayState);
+        if (didPop) return;
+        if (restActive && !loadingActive) {
+          ref.read(restTimerProvider.notifier).stop();
+          return;
         }
+        _discardCoordinator.show(context, ref, displayState);
       },
       child: ScaffoldMessenger(
         child: _ActiveWorkoutBody(
           state: displayState,
           discardCoordinator: _discardCoordinator,
           finishCoordinator: _finishCoordinator,
-          showLoadingOverlay: asyncState.isLoading,
-          showRestTimerOverlay: timerState != null,
+          showLoadingOverlay: loadingActive,
+          showRestTimerOverlay: restActive,
         ),
       ),
     );
@@ -406,6 +429,15 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
       ],
     );
 
+    // Phase 23 D1 — hide FAB + FinishBottomBar while rest is active so
+    // the rest-overlay's "cover everything" contract holds visually
+    // without moving the overlay back to a Stack root (which would
+    // re-break the PR-2 C3 snackbar slot ordering preserved above).
+    // AppBar untouched: its discard-X is the in-rest exit affordance and
+    // `active_workout_appbar_discard_during_rest_test.dart` keeps that
+    // reachability contract pinned.
+    final bool chromeVisible = hasExercises && !widget.showRestTimerOverlay;
+
     return Scaffold(
       appBar: AppBar(
         leading: _buildDiscardLeading(l10n),
@@ -424,10 +456,10 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
       // BUG-020: Finish bar is hidden on the empty body — EmptyWorkoutBody
       // owns its own CTA and a Finish bar with no logged sets is dead chrome.
       // Full BUG-020 narrative on FinishBottomBar's class doc.
-      bottomNavigationBar: hasExercises
+      bottomNavigationBar: chromeVisible
           ? FinishBottomBar(enabled: _hasCompletedSet, onPressed: _onFinish)
           : null,
-      floatingActionButton: hasExercises
+      floatingActionButton: chromeVisible
           ? AddExerciseFab(onPressed: _onAddExercise)
           : null,
     );

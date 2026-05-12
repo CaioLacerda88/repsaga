@@ -45,9 +45,9 @@ The checklists below pair each implementation item with its required tests + doc
 ### Fix 1 — Rest overlay chrome cleanup
 
 **F1.1 — Hide FAB + FinishBottomBar while rest is active**
-- [ ] **Code** — `lib/features/workouts/ui/active_workout_screen.dart` `_ActiveWorkoutBody.build`: gate `floatingActionButton` and `bottomNavigationBar` on `!widget.showRestTimerOverlay`. AppBar untouched.
-- [ ] **Doc** — Replace the existing PR-2 C3 dartdoc block (L109-131) with a brief note: "Rest overlay covers the body slot only by PR #198's C3 design. To complete the 'overlay over everything' contract (Phase 23 D1), FAB + FinishBottomBar are conditionally hidden while `showRestTimerOverlay` is true. AppBar stays — its X is the in-rest discard affordance."
-- [ ] **Widget test** — new `test/widget/features/workouts/ui/active_workout_rest_chrome_visibility_test.dart`:
+- [x] **Code** — `lib/features/workouts/ui/active_workout_screen.dart` `_ActiveWorkoutBody.build`: gate `floatingActionButton` and `bottomNavigationBar` on `!widget.showRestTimerOverlay`. AppBar untouched.
+- [x] **Doc** — Replace the existing PR-2 C3 dartdoc block (L109-131) with a brief note: "Rest overlay covers the body slot only by PR #198's C3 design. To complete the 'overlay over everything' contract (Phase 23 D1), FAB + FinishBottomBar are conditionally hidden while `showRestTimerOverlay` is true. AppBar stays — its X is the in-rest discard affordance."
+- [x] **Widget test** — new `test/widget/features/workouts/ui/active_workout_rest_chrome_visibility_test.dart`:
   - `should hide AddExerciseFab when rest timer is active`
   - `should hide FinishBottomBar when rest timer is active`
   - `should restore FAB and Finish after rest timer stops`
@@ -58,9 +58,9 @@ The checklists below pair each implementation item with its required tests + doc
   - Update `test/e2e/helpers/selectors.ts` if needed — confirm `WORKOUT.addExerciseFab` and `WORKOUT.finishBtn` selectors exist; add semantic identifiers in the widget if either is missing (`Semantics(identifier:)` with pair-rule per PR #152 lessons).
 
 **F1.2 — Back-press priority chain (rest → dismiss; loading → discard; else → discard)**
-- [ ] **Code** — `lib/features/workouts/ui/active_workout_screen.dart` outer `PopScope.onPopInvokedWithResult` (L152-158): replace with the priority chain. `timerState` is already in scope at the parent `build` (L78); use directly.
-- [ ] **Doc** — Inline dartdoc on the `onPopInvokedWithResult` callback explaining the three branches and pointing to D2/D3. One paragraph. Include "Phase 23 D2: rest is the dominant on-screen affordance; back-press dismisses rest first. Loading overlay branch (D3) preserves existing discard route — loading has its own Cancel CTA."
-- [ ] **Widget test** — extend `test/widget/features/workouts/ui/active_workout_appbar_discard_during_rest_test.dart` (or new sibling `active_workout_back_button_priority_test.dart`):
+- [x] **Code** — `lib/features/workouts/ui/active_workout_screen.dart` outer `PopScope.onPopInvokedWithResult` (L152-158): replace with the priority chain. `timerState` is already in scope at the parent `build` (L78); use directly.
+- [x] **Doc** — Inline dartdoc on the `onPopInvokedWithResult` callback explaining the three branches and pointing to D2/D3. One paragraph. Include "Phase 23 D2: rest is the dominant on-screen affordance; back-press dismisses rest first. Loading overlay branch (D3) preserves existing discard route — loading has its own Cancel CTA."
+- [x] **Widget test** — extend `test/widget/features/workouts/ui/active_workout_appbar_discard_during_rest_test.dart` (or new sibling `active_workout_back_button_priority_test.dart`):
   - `should stop rest timer on Android back press without showing discard dialog`
   - `should fall through to discard dialog when rest timer is inactive`
   - `should fall through to discard dialog when loading overlay is active even if rest timer is also active`
