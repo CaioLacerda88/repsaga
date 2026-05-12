@@ -1384,7 +1384,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String addExerciseUndo(String name) {
-    return 'Exercício adicionado: $name';
+    return '$name adicionado';
   }
 
   @override

@@ -364,20 +364,14 @@ export const WORKOUT = {
   /**
    * PR-3 H5 — undo SnackBar fired after adding an exercise from the
    * picker. The content text reads `"<Exercise> added"` (en) or
-   * `"<Exercise> adicionado"` (pt). Match by accessible name as a regex
-   * because Flutter CanvasKit draws the SnackBar text to canvas (no DOM
-   * text node) and the AOM exposes it as a `role=group`. Use `.first()`
-   * — Flutter renders two AOM boundaries per SnackBar.
-   *
-   * EN-ONLY ASSUMPTION (PR3 review W2): the `<name> added$` regex matches
-   * only the EN structural copy. The PT translation is structurally
-   * different — `Exercício adicionado: <name>` (prefix-then-name) vs EN's
-   * suffix-then-verb — and would NOT match this selector. The full
-   * E2E suite runs under the en locale by default (see global-setup), so
-   * this is a deliberate scoping. If/when the suite gains a pt-locale
-   * variant, add a sibling `addExerciseUndoSnackBarPt` matching
-   * `/^Exercício adicionado:.+/` and gate the assertion on the active
-   * locale.
+   * `"<Exercise> adicionado"` (pt) — both share the suffix-verb
+   * structure after the Phase 23 UI/UX REV-1 alignment (2026-05-12).
+   * Match by accessible name as a regex because Flutter CanvasKit
+   * draws the SnackBar text to canvas (no DOM text node) and the AOM
+   * exposes it as a `role=group`. Use `.first()` — Flutter renders
+   * two AOM boundaries per SnackBar. The selector remains EN-scoped
+   * for now (full suite runs under en); a sibling pt selector can be
+   * added when a pt-locale run is introduced.
    */
   addExerciseUndoSnackBar: 'role=group[name=/.+ added$/]',
   /**

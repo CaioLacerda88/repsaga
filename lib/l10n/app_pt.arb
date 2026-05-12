@@ -443,7 +443,7 @@
   "swapExerciseConfirmTitle": "Trocar para {newExercise}?",
   "swapExerciseConfirmBody": "{count, plural, one{Sua {count} série registrada vai contar} other{Suas {count} séries registradas vão contar}} para os recordes de {newExercise} (não de {oldExercise}).",
   "swapExerciseConfirmAction": "Trocar",
-  "addExerciseUndo": "Exercício adicionado: {name}",
+  "addExerciseUndo": "{name} adicionado",
   "rpeTooltip": "Percepção subjetiva de esforço",
 
   "last30Days": "30d",
