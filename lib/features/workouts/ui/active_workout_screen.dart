@@ -293,21 +293,33 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
         ref.read(activeWorkoutProvider).value?.exercises ?? const [];
     final beforeIds = beforeExercises.map((e) => e.workoutExercise.id).toSet();
 
-    notifier.addExercise(exercise);
+    // Phase 23 D6: `addExercise` is now async — it awaits
+    // `_seedFirstSetForAddedExercise` which itself awaits
+    // `WorkoutRepository.getLastWorkoutSets` to derive the pre-filled
+    // weight/reps for the seeded set. We MUST await here. Pre-Phase-23
+    // this was fire-and-forget because `addExercise` mutated state
+    // synchronously and the diff below could read the new id immediately.
+    // Without the `await`, the diff reads the OLD exercise list, finds no
+    // newly-added id, hits `if (added == null) return;` and the H5
+    // undo SnackBar is never shown — breaking
+    // `workouts.spec.ts:1764 / :1786`. See PR-3 review W1 comment below
+    // for the original async-defence reasoning.
+    await notifier.addExercise(exercise);
+    if (!mounted) return;
 
     // PR-3 (H5): identify the just-added workoutExercise id by diffing the
-    // pre/post id sets. `addExercise` sets state synchronously inside the
-    // notifier (no await on the network — Hive persist runs in background)
-    // so the new id is observable immediately after the call returns.
+    // pre/post id sets. `addExercise` has already awaited the seed-fetch
+    // and the Hive persist; the new id is in state by the time we read
+    // it here.
     //
     // PR-3 review W1 — use `firstWhereOrNull` and bail when the diff yields
     // nothing instead of falling back to `after.last`. The previous
     // `orElse: () => after.last` silently passed the WRONG id (the last
-    // entry in the list, which is unrelated to what was just added) the
-    // moment `addExercise` becomes async — and the snackbar's Undo would
-    // then silently delete an exercise the user never added. Bailing
-    // early keeps the contract explicit: no diff entry → no undo
-    // affordance, fail closed instead of fail open.
+    // entry in the list, which is unrelated to what was just added) under
+    // any concurrent mutation — and the snackbar's Undo would then
+    // silently delete an exercise the user never added. Bailing early
+    // keeps the contract explicit: no diff entry → no undo affordance,
+    // fail closed instead of fail open.
     final after = ref.read(activeWorkoutProvider).value?.exercises;
     if (after == null || after.isEmpty) return;
     final added = after.firstWhereOrNull(
