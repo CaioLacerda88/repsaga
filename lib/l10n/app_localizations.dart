@@ -1460,18 +1460,6 @@ abstract class AppLocalizations {
   /// **'Set {number} deleted'**
   String setDeleted(int number);
 
-  /// Previous session set hint
-  ///
-  /// In en, this message translates to:
-  /// **'Previous: {weight}{unit} × {reps}'**
-  String previousSet(String weight, String unit, int reps);
-
-  /// Subtle match indicator: shown above a set row when its current weight and reps exactly equal the previous-session set. Not gold — that is reserved for PRs per the heroGold scarcity rule. Pillar 1 (target-state-first) makes the row's job 'confirm I matched or beat last session' before completion.
-  ///
-  /// In en, this message translates to:
-  /// **'= last set'**
-  String get matchedLastSet;
-
   /// Discard workout dialog title
   ///
   /// In en, this message translates to:

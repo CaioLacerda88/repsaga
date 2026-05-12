@@ -1016,6 +1016,7 @@ test.describe('Charter C — Reorder + add + remove juggling — BR-1', () => {
 
     // Current state: workout with Bench Press, 1 completed set
     // Check for "Previous: X kg × Y" hint on set rows
+    // Phase 23: per-row hint removed; probe kept for historical diagnostics, will report 0 hits.
     const prevHintBefore = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('flt-semantics'))
         .map((el: Element) => {

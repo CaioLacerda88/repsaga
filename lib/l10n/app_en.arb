@@ -551,20 +551,6 @@
       "number": { "type": "int", "example": "3" }
     }
   },
-  "previousSet": "Previous: {weight}{unit} \u00d7 {reps}",
-  "@previousSet": {
-    "description": "Previous session set hint",
-    "placeholders": {
-      "weight": { "type": "String", "example": "80" },
-      "unit": { "type": "String", "example": "kg" },
-      "reps": { "type": "int", "example": "10" }
-    }
-  },
-  "matchedLastSet": "= last set",
-  "@matchedLastSet": {
-    "description": "Subtle match indicator: shown above a set row when its current weight and reps exactly equal the previous-session set. Not gold — that is reserved for PRs per the heroGold scarcity rule. Pillar 1 (target-state-first) makes the row's job 'confirm I matched or beat last session' before completion."
-  },
-
   "discardWorkoutTitle": "Discard Workout?",
   "@discardWorkoutTitle": { "description": "Discard workout dialog title" },
   "discardWorkoutContent": "You've been on the path {duration}. Discard now and the work is gone.",

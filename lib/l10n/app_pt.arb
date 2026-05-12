@@ -249,9 +249,6 @@
   "setColumnReps": "REPS",
   "setColumnType": "TIPO",
   "setDeleted": "Série {number} excluída",
-  "previousSet": "Anterior: {weight}{unit} \u00d7 {reps}",
-  "matchedLastSet": "= série anterior",
-
   "discardWorkoutTitle": "Descartar Sessão?",
   "discardWorkoutContent": "Você está no caminho há {duration}. Descarte agora e o trabalho se perde.",
 

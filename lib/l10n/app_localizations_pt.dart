@@ -750,14 +750,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String previousSet(String weight, String unit, int reps) {
-    return 'Anterior: $weight$unit × $reps';
-  }
-
-  @override
-  String get matchedLastSet => '= série anterior';
-
-  @override
   String get discardWorkoutTitle => 'Descartar Sessão?';
 
   @override

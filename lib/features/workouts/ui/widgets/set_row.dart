@@ -1,11 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/format/number_format.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -61,7 +59,6 @@ class SetRow extends ConsumerStatefulWidget {
     required this.workoutExerciseId,
     this.display = const PrRowDisplay.plain(PrRowState.none),
     this.onCompleted,
-    this.lastSet,
     this.previousSet,
     this.isNew = false,
     this.isBodyweight = false,
@@ -82,19 +79,12 @@ class SetRow extends ConsumerStatefulWidget {
   /// Called after the set completion is toggled (for rest timer integration).
   final VoidCallback? onCompleted;
 
-  /// The matching set from the previous workout session, used to show a hint.
-  final ExerciseSet? lastSet;
-
   /// The set immediately before this one in the SAME current-session
   /// exercise (i.e. the set at index N-1). Used by Fix 2's discoverability
   /// affordance: when this row's weight differs from the previous
   /// in-session set, a small `Icons.content_copy` glyph is rendered next
   /// to the set-number digit, advertising the existing tap-to-copy
   /// interaction. Always `null` for set #1 (no previous in-session set).
-  ///
-  /// Distinct from [lastSet], which is the matching set from the PREVIOUS
-  /// WORKOUT SESSION and drives the "Previous: 80kg × 8" hint above the
-  /// row. Two different concepts; two different fields.
   final ExerciseSet? previousSet;
 
   /// Whether this set was just added. When true, the completion checkbox
@@ -171,71 +161,6 @@ class _SetRowState extends ConsumerState<SetRow> {
     }
   }
 
-  /// Whether the row's current weight × reps exactly equal the previous-
-  /// session set. When true, the row renders a subtle "= last set" indicator
-  /// in place of the regular previous-session hint (Pillar 1, Phase 20
-  /// post-merge polish).
-  ///
-  /// Treats null/zero current values as non-matching even if last is also
-  /// zero — a freshly-added set with weight=0/reps=0 shouldn't read as
-  /// "matching" before the user enters anything.
-  bool _matchedLastSet() {
-    final lastSet = widget.lastSet;
-    if (lastSet == null) return false;
-    final currentWeight = widget.set.weight ?? 0;
-    final currentReps = widget.set.reps ?? 0;
-    if (currentWeight == 0 && currentReps == 0) return false;
-    final lastWeight = lastSet.weight ?? 0;
-    final lastReps = lastSet.reps ?? 0;
-    return currentWeight == lastWeight.toDouble() && currentReps == lastReps;
-  }
-
-  /// Whether the regular "Previous: {weight} × {reps}" hint line should be
-  /// shown.
-  ///
-  /// Suppressed when:
-  ///   * the set is already completed — the hint stays for *pre-completion*
-  ///     reference. (Critique Problem 3 / Pillar 1 argued for keeping the
-  ///     hint visible after completion too. The first attempt at that —
-  ///     PR #159 — added a sibling Text widget that re-triggered the
-  ///     Phase 20 Flutter Web semantics-engine role-swap bug on standing-
-  ///     PR rows: the row frame's `flt-semantics-identifier` stopped
-  ///     emitting because the new descendant Text caused a subsequent
-  ///     SemanticsUpdate during the GenericRole → SemanticButton role
-  ///     transition. `Semantics(container: true, explicitChildNodes: true)`
-  ///     on the hint Padding kept the LABEL out of the parent group but did
-  ///     NOT prevent the role-swap from dropping the row identifier. A
-  ///     proper fix needs a layout-stable design that does NOT change
-  ///     the Semantics-tree shape. PR #193 attempted a
-  ///     Visibility(maintainSize: true) wrapper for the slot, but with
-  ///     maintainSemantics defaulting to false the Semantics tree still
-  ///     mutates on visibility flip (the mutation just fires on a nested
-  ///     RenderVisibility instead of the parent Element tree), and the
-  ///     three standing-PR E2E tests still failed. Reverted to
-  ///     conditional rendering. A future fix that keeps the hint after
-  ///     completion will need either maintainSemantics:true with stable
-  ///     content, or a different approach entirely (e.g. precomputing
-  ///     the hint as part of the row frame Semantics so no descendant
-  ///     join/leave occurs on transition). Until then, hint suppression
-  ///     on completion is the correct trade-off for shipping the row.
-  ///   * the values exactly match — that case is covered by the
-  ///     match-indicator path ([_matchedLastSet]) which gives the row a
-  ///     clearer "you matched last session" affordance.
-  bool _shouldShowHint() {
-    final lastSet = widget.lastSet;
-    if (lastSet == null) return false;
-    // Fix 3 — suppress when last session's weight is 0kg. The hint exists
-    // to anchor the user to last session's working weight; a 0kg "anchor"
-    // is noise. No replacement label — empty space is the correct UX.
-    // The reps may still be a valid number (e.g. bodyweight × 12) but
-    // without a meaningful weight prefix the line stops being a useful
-    // anchor and becomes visual chatter.
-    if ((lastSet.weight ?? 0) == 0) return false;
-    if (widget.set.isCompleted) return false;
-    if (_matchedLastSet()) return false;
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -286,213 +211,101 @@ class _SetRowState extends ConsumerState<SetRow> {
             ),
           );
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Hint slot rendering uses CONDITIONAL inclusion (if/else if),
-          // NOT a Visibility(maintainSize) wrapper.
-          //
-          // **Why not Visibility(maintainSize: true, maintainSemantics:
-          // false [default])?** A first attempt (PR #193 commit 5fb02ef)
-          // wrapped this slot in Visibility to keep the row vertical
-          // height stable across hint shows/hides, hoping that would
-          // dodge the Phase-20 Flutter Web semantics-engine role-swap bug
-          // documented in `_DoneCell` below. It DID NOT WORK and broke
-          // E2E in a different way: with maintainSemantics defaulting to
-          // false, `_RenderVisibility.visitChildrenForSemantics` skips
-          // children when invisible. So the Semantics-tree shape still
-          // changes at completion (visible -> invisible), but now via a
-          // markNeedsSemanticsUpdate fired on a NESTED render object
-          // (RenderVisibility) instead of a clean parent-Element-tree
-          // shape change. The nested mutation interleaves with the row
-          // frame Semantics identifier change (pendingPredictedPr ->
-          // completedStandingPr), causing the engine to drop the new
-          // `set-row-state-standing-pr` identifier from the AOM. Three
-          // E2E tests caught this:
-          //
-          //   * personal-records.spec.ts:264 (workout-A baseline + PR)
-          //   * personal-records.spec.ts:309 (single-set PR-from-fresh)
-          //   * rank-up-celebration.spec.ts:847 (1500 kg PR)
-          //
-          // All three failed deterministically on PR #193 CI; reverting
-          // to conditional rendering fixed all three. Static-pump widget
-          // tests passed in both directions because they do not exercise
-          // the pendingPredictedPr -> completedStandingPr TRANSITION
-          // (they pump a single completedStandingPr SetRow). The row
-          // reflow on hint show/hide is acceptable; the engine bug is
-          // not.
-          //
-          // **Why `Semantics(container: true, explicitChildNodes: true)`
-          // around the hint Text?** Post-Phase-20 the hint can sit next
-          // to a standing-PR row whose SemanticsNode role transitions
-          // GenericRole -> SemanticButton (engine role-swap behaviour).
-          // Without an explicit a11y-island around the hint Text, its
-          // label gets collected into the ancestor exercise-card group,
-          // destabilising the row frame identifier emission. The
-          // container + explicitChildNodes pair pins the hint as its own
-          // a11y island so the row frame identifier survives.
-          // **H8 — Layout-stable hint slot (PR-5).**
-          //
-          // The hint slot reserves a fixed ~18dp vertical strip ABOVE the
-          // row frame so adjacent rows do NOT shift up under the thumb when
-          // a set is completed and the previous-session hint collapses.
-          // Without this filler, completing set #3 right before tapping
-          // set #4's checkbox makes set #4's checkbox y-coordinate slide
-          // upward by ~18dp mid-gesture, causing the user to miss-tap.
-          //
-          // **CRITICAL Flutter Web AOM constraint** (see `_shouldShowHint`
-          // dartdoc above + PR #193 post-mortem): wrapping this slot in
-          // `Visibility(maintainSize: true)` re-triggered the engine
-          // role-swap bug — the `_RenderVisibility.visitChildrenForSemantics`
-          // mutation interleaves with the row-frame's
-          // `pendingPredictedPr -> completedStandingPr` Semantics identifier
-          // change, causing the engine to drop the
-          // `set-row-state-standing-pr` identifier from the AOM. Three E2E
-          // tests caught it:
-          //   * personal-records.spec.ts:264
-          //   * personal-records.spec.ts:309
-          //   * rank-up-celebration.spec.ts:847
-          //
-          // **Approach:** gate the filler behind `!kIsWeb`. Mobile gets the
-          // layout-stable empty filler (which keeps a Padding child present
-          // even when there is no hint to render) so the row's vertical
-          // geometry never collapses. Web keeps the proven conditional
-          // render (no Padding child when no hint) so the engine bug is
-          // not re-triggered. The trade-off is intentional: mobile is
-          // where the thumb-drift miss-tap is a real hazard; Web is where
-          // the AOM regression is a real hazard. Each platform gets the
-          // option that avoids its dominant failure mode.
-          if (_matchedLastSet())
-            Padding(
-              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: Semantics(
-                container: true,
-                explicitChildNodes: true,
-                child: Text(
-                  AppLocalizations.of(context).matchedLastSet,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            )
-          else if (_shouldShowHint())
-            Padding(
-              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: Semantics(
-                container: true,
-                explicitChildNodes: true,
-                child: Text(
-                  AppLocalizations.of(context).previousSet(
-                    AppNumberFormat.weight(
-                      (widget.lastSet!.weight ?? 0).toDouble(),
-                      locale: Localizations.localeOf(context).languageCode,
-                    ),
-                    weightUnit,
-                    widget.lastSet!.reps ?? 0,
-                  ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
-              ),
-            )
-          else if (!kIsWeb)
-            // Mobile-only layout filler. Mirrors the EXACT padding + text
-            // metrics of the hint branches above (Padding(left: 56,
-            // bottom: 4, top: 2) + a single bodySmall line) so the row's
-            // vertical geometry never collapses when the hint is hidden.
-            // Renders an invisible single-space Text instead of a raw
-            // SizedBox so the baseline math matches the hint branches
-            // exactly — a constant SizedBox height under-shoots by ~6dp
-            // because the actual line-height of bodySmall depends on the
-            // font's vertical metrics and is not 12dp on every platform.
-            // ExcludeSemantics keeps the filler out of the AOM — it has
-            // no a11y content.
-            Padding(
-              padding: const EdgeInsets.only(left: 56, bottom: 4, top: 2),
-              child: ExcludeSemantics(
-                child: Text(
-                  ' ',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.transparent,
-                  ),
-                ),
-              ),
+      // Phase 23 D4 — per-row previous-session hint removed (2026-05-12).
+      //
+      // Pre-Phase-23 this Column hosted a conditional "Previous: 80kg × 8"
+      // / "= last set" hint slot ABOVE the row frame, plus a mobile-only
+      // empty filler to keep adjacent rows from shifting on completion.
+      // The hint flickered on/off under PR #159 + #193's suppression
+      // rules (no prior data → no hint, 0kg → no hint, completed → no
+      // hint, exact match → different copy), and the conditional render
+      // was the load-bearing mutation vector for the Phase-20 Flutter Web
+      // semantics-engine role-swap bug that broke
+      // `personal-records.spec.ts:264 / :309` and
+      // `rank-up-celebration.spec.ts:847`.
+      //
+      // Removing the hint:
+      //   * carries no UX regression — pre-fill already anchors the
+      //     user's working values on add-set / add-exercise (Phase 22 Q2
+      //     warmup-filter + Phase 23 D6 auto-seed). The yellow PR marker
+      //     remains the win signal; "= last set" gave the row no
+      //     actionable information beyond what the pre-filled steppers
+      //     already showed.
+      //   * locks the Semantics-tree shape at render time. There are no
+      //     more descendant Semantics nodes that join/leave on
+      //     completion. The pendingPredictedPr → completedStandingPr
+      //     transition no longer interleaves with a sibling
+      //     `markNeedsSemanticsUpdate`, so the engine role-swap mutation
+      //     vector documented in `_DoneCell` is permanently closed for
+      //     this slot.
+      child: _SetRowFrame(
+        display: widget.display,
+        isCompleted: set.isCompleted,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SetNumberCell(
+              set: set,
+              previousSet: widget.previousSet,
+              onTap: set.setNumber > 1 ? _copyLastSet : null,
+              onLongPress: _cycleSetType,
             ),
-          _SetRowFrame(
-            display: widget.display,
-            isCompleted: set.isCompleted,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SetNumberCell(
+            // Weight column hidden in bodyweight mode (push-ups, pull-ups,
+            // planks). Weight is meaningless for bodyweight movements
+            // and `pr_row_state_resolver.dart` already disregards it for
+            // PR detection in this mode (only `RecordType.maxReps` is
+            // checked). Hiding the column aligns the chrome with the
+            // resolver contract; the reps column below absorbs the
+            // freed space via `flex: 1` instead of `flex: 2` so it
+            // expands to fill the input area between the set-num cell
+            // and the done-cell.
+            if (!widget.isBodyweight)
+              Expanded(
+                flex: 3,
+                child: _StepperColumn(
+                  // No left border: the 3dp left rune-stripe + 48dp
+                  // set-num cell already provide visual separation. A
+                  // second 1dp hairline immediately to the right of the
+                  // cell would double-line the gutter and consume
+                  // horizontal slack we cannot afford on 360dp
+                  // Brazilian-mid-market screens.
+                  child: _WeightStepperCell(
+                    set: set,
+                    weightUnit: weightUnit,
+                    workoutExerciseId: widget.workoutExerciseId,
+                    isAccented: widget.display.isWeightAccented,
+                    isSuperseded:
+                        widget.display.state ==
+                        PrRowState.completedSupersededPr,
+                  ),
+                ),
+              ),
+            Expanded(
+              flex: widget.isBodyweight ? 1 : 2,
+              child: _StepperColumn(
+                // The left hairline border is the visual separator
+                // between weight and reps in the standard layout. In
+                // bodyweight mode the set-num cell is the immediate
+                // left neighbour so the hairline is redundant; drop it
+                // to keep the gutter clean.
+                showLeftBorder: !widget.isBodyweight,
+                child: _RepsStepperCell(
                   set: set,
-                  previousSet: widget.previousSet,
-                  onTap: set.setNumber > 1 ? _copyLastSet : null,
-                  onLongPress: _cycleSetType,
+                  workoutExerciseId: widget.workoutExerciseId,
+                  isAccented: widget.display.isRepsAccented,
+                  isSuperseded:
+                      widget.display.state == PrRowState.completedSupersededPr,
                 ),
-                // Weight column hidden in bodyweight mode (push-ups, pull-ups,
-                // planks). Weight is meaningless for bodyweight movements
-                // and `pr_row_state_resolver.dart` already disregards it for
-                // PR detection in this mode (only `RecordType.maxReps` is
-                // checked). Hiding the column aligns the chrome with the
-                // resolver contract; the reps column below absorbs the
-                // freed space via `flex: 1` instead of `flex: 2` so it
-                // expands to fill the input area between the set-num cell
-                // and the done-cell.
-                if (!widget.isBodyweight)
-                  Expanded(
-                    flex: 3,
-                    child: _StepperColumn(
-                      // No left border: the 3dp left rune-stripe + 48dp
-                      // set-num cell already provide visual separation. A
-                      // second 1dp hairline immediately to the right of the
-                      // cell would double-line the gutter and consume
-                      // horizontal slack we cannot afford on 360dp
-                      // Brazilian-mid-market screens.
-                      child: _WeightStepperCell(
-                        set: set,
-                        weightUnit: weightUnit,
-                        workoutExerciseId: widget.workoutExerciseId,
-                        isAccented: widget.display.isWeightAccented,
-                        isSuperseded:
-                            widget.display.state ==
-                            PrRowState.completedSupersededPr,
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  flex: widget.isBodyweight ? 1 : 2,
-                  child: _StepperColumn(
-                    // The left hairline border is the visual separator
-                    // between weight and reps in the standard layout. In
-                    // bodyweight mode the set-num cell is the immediate
-                    // left neighbour so the hairline is redundant; drop it
-                    // to keep the gutter clean.
-                    showLeftBorder: !widget.isBodyweight,
-                    child: _RepsStepperCell(
-                      set: set,
-                      workoutExerciseId: widget.workoutExerciseId,
-                      isAccented: widget.display.isRepsAccented,
-                      isSuperseded:
-                          widget.display.state ==
-                          PrRowState.completedSupersededPr,
-                    ),
-                  ),
-                ),
-                _DoneCell(
-                  display: widget.display,
-                  isCompleted: set.isCompleted,
-                  locked: _locked,
-                  onChanged: _onComplete,
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            _DoneCell(
+              display: widget.display,
+              isCompleted: set.isCompleted,
+              locked: _locked,
+              onChanged: _onComplete,
+            ),
+          ],
+        ),
       ),
     );
   }

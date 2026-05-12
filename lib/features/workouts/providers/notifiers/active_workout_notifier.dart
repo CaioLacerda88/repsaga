@@ -457,26 +457,137 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   }
 
   /// Add an exercise to the active workout.
+  ///
+  /// **Phase 23 D6 — auto-seed set 1** with the user's last-session
+  /// working values. Mirrors the routine-start pre-fill (see
+  /// [startFromRoutine] above L341-370) so the two entry points are in
+  /// lockstep: a user who adds bench press mid-workout gets the same
+  /// pre-filled weight/reps they would have gotten from a routine
+  /// containing bench press.
+  ///
+  /// **Fallback chain:**
+  ///   1. Previous session's WORKING sets (warmups filtered out per
+  ///      Phase 22 Q2 — FitNotes/Hevy treat warmups as non-performance
+  ///      data). Take the set with the lowest `setNumber` (the "set 1"
+  ///      match); if none, fall back to the LAST working set's values.
+  ///   2. Equipment defaults via [defaultSetValues] when there's no
+  ///      prior data — or when prior data contained ONLY warmups.
+  ///
+  /// Bodyweight exercises (`EquipmentType.bodyweight`) skip weight on
+  /// the prior-data path (`weight = 0` falls out naturally from the
+  /// equipment-defaults table). The seeded set is marked
+  /// `setType: working`, `isCompleted: false`, `setNumber: 1`, with a
+  /// fresh client UUID.
+  ///
+  /// **Call-site map** (verified 2026-05-12): `addExercise` is invoked
+  /// from EXACTLY ONE place — `_ActiveWorkoutBody._onAddExercise` in
+  /// `active_workout_screen.dart`. The routine-start path uses
+  /// [startFromRoutine] which has its own pre-fill loop. No double-seed
+  /// risk.
   Future<void> addExercise(Exercise exercise) async {
     final current = state.value;
     if (current == null) return;
 
+    final workoutExerciseId = _uuid.v4();
     final workoutExercise = WorkoutExercise(
-      id: _uuid.v4(),
+      id: workoutExerciseId,
       workoutId: current.workout.id,
       exerciseId: exercise.id,
       order: current.exercises.length,
       exercise: exercise,
     );
 
+    final seededSet = await _seedFirstSetForAddedExercise(
+      workoutExerciseId: workoutExerciseId,
+      exercise: exercise,
+    );
+
     final newState = current.copyWith(
       exercises: [
         ...current.exercises,
-        ActiveWorkoutExercise(workoutExercise: workoutExercise, sets: const []),
+        ActiveWorkoutExercise(
+          workoutExercise: workoutExercise,
+          sets: [seededSet],
+        ),
       ],
     );
     state = AsyncData(newState);
     await _saveToHive(newState);
+  }
+
+  /// Builds the auto-seeded set 1 for [addExercise].
+  ///
+  /// Pure-ish helper: depends on the repository (`getLastWorkoutSets`)
+  /// and on the user's current `weightUnit`, but does NOT mutate notifier
+  /// state. Returns the [ExerciseSet] the caller should slot into the new
+  /// [ActiveWorkoutExercise].
+  ///
+  /// Failure of the network fetch is treated as "no prior data" — the
+  /// equipment-defaults fallback kicks in. We never block add-exercise
+  /// on a network failure; the user must always be able to add an
+  /// exercise mid-workout even when offline.
+  Future<ExerciseSet> _seedFirstSetForAddedExercise({
+    required String workoutExerciseId,
+    required Exercise exercise,
+  }) async {
+    final weightUnitStr = ref.read(profileProvider).value?.weightUnit ?? 'kg';
+    final weightUnit = WeightUnit.fromString(weightUnitStr);
+
+    Map<String, List<ExerciseSet>> lastSetsByExercise = const {};
+    try {
+      lastSetsByExercise = await _repo.getLastWorkoutSets([exercise.id]);
+    } catch (_) {
+      // Pre-fill is a UX nicety, never a blocker. A repo error here
+      // (offline, transient 5xx) just falls through to the equipment
+      // defaults below.
+    }
+
+    final priorWorkingSets =
+        (lastSetsByExercise[exercise.id] ?? const [])
+            .where((s) => s.setType != SetType.warmup)
+            .toList(growable: false)
+          // Match routine-start: choose the lowest setNumber as the "set 1"
+          // anchor. The repo's natural ordering already does this, but pin
+          // it locally so a future repo change can't silently flip the
+          // anchor.
+          ..sort((a, b) => a.setNumber.compareTo(b.setNumber));
+
+    double? seedWeight;
+    int? seedReps;
+
+    if (priorWorkingSets.isNotEmpty) {
+      // Priority 1 — the lowest-numbered working set IS the set-1 match.
+      // If only set 2+ working data exists (uncommon — implies set 1 was
+      // a warmup), the .sort above still picks the smallest available
+      // setNumber which is the closest analog to "the first working set
+      // I did last time."
+      final anchor = priorWorkingSets.first;
+      seedWeight = anchor.weight;
+      seedReps = anchor.reps;
+    }
+
+    if (seedWeight == null || seedReps == null) {
+      // Priority 2 — equipment defaults. Covers: no prior data at all,
+      // OR prior session was ALL warmups (the .where filter above
+      // returned empty).
+      final equipDefaults = defaultSetValues(
+        exercise.equipmentType,
+        weightUnit,
+      );
+      seedWeight ??= equipDefaults.weight;
+      seedReps ??= equipDefaults.reps;
+    }
+
+    return ExerciseSet(
+      id: _uuid.v4(),
+      workoutExerciseId: workoutExerciseId,
+      setNumber: 1,
+      weight: seedWeight,
+      reps: seedReps,
+      setType: SetType.working,
+      isCompleted: false,
+      createdAt: DateTime.now().toUtc(),
+    );
   }
 
   /// Remove an exercise and reorder remaining exercises.

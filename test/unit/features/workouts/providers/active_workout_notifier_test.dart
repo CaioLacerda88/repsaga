@@ -135,12 +135,20 @@ Exercise makeExercise({String id = 'exercise-new', String name = 'Squat'}) {
 }
 
 /// Creates a container with mocked dependencies and a pre-seeded notifier state.
+///
+/// Stubs [WorkoutRepository.getLastWorkoutSets] to return an empty map by
+/// default — the Phase 23 D6 auto-seed in `addExercise` reads from this
+/// path on every call, and an unstubbed `when` would throw. Tests that
+/// exercise the auto-seed with prior data override this stub locally.
 ProviderContainer makeContainer(ActiveWorkoutState? initialState) {
   final mockRepo = MockWorkoutRepository();
   final mockStorage = MockWorkoutLocalStorage();
 
   when(() => mockStorage.loadActiveWorkout()).thenReturn(initialState);
   when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
+  when(
+    () => mockRepo.getLastWorkoutSets(any()),
+  ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
 
   return ProviderContainer(
     overrides: [
@@ -151,6 +159,32 @@ ProviderContainer makeContainer(ActiveWorkoutState? initialState) {
       ),
     ],
   );
+}
+
+/// Variant of [makeContainer] that exposes the [MockWorkoutRepository] so
+/// tests can stub additional repo behaviour (e.g. seeding prior workouts
+/// for the Phase 23 D6 auto-seed tests).
+({ProviderContainer container, MockWorkoutRepository mockRepo})
+makeContainerWithRepo(ActiveWorkoutState? initialState) {
+  final mockRepo = MockWorkoutRepository();
+  final mockStorage = MockWorkoutLocalStorage();
+
+  when(() => mockStorage.loadActiveWorkout()).thenReturn(initialState);
+  when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
+  when(
+    () => mockRepo.getLastWorkoutSets(any()),
+  ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
+
+  final container = ProviderContainer(
+    overrides: [
+      workoutRepositoryProvider.overrideWithValue(mockRepo),
+      workoutLocalStorageProvider.overrideWithValue(mockStorage),
+      analyticsRepositoryProvider.overrideWithValue(
+        const _FakeAnalyticsRepository(),
+      ),
+    ],
+  );
+  return (container: container, mockRepo: mockRepo);
 }
 
 /// Creates a container suitable for testing async methods (startWorkout,
@@ -323,7 +357,10 @@ void main() {
         addTearDown(container.dispose);
         await container.read(activeWorkoutProvider.future);
 
-        container
+        // Phase 23 D6 — `addExercise` is now async (awaits
+        // `getLastWorkoutSets`). The notifier MUST be awaited or the
+        // state read below races the auto-seed.
+        await container
             .read(activeWorkoutProvider.notifier)
             .addExercise(makeExercise());
 
@@ -337,26 +374,41 @@ void main() {
         await container.read(activeWorkoutProvider.future);
 
         final notifier = container.read(activeWorkoutProvider.notifier);
-        notifier.addExercise(makeExercise(id: 'ex-a', name: 'Squat'));
-        notifier.addExercise(makeExercise(id: 'ex-b', name: 'Deadlift'));
+        // Same rationale as above — both calls awaited (Phase 23 D6).
+        await notifier.addExercise(makeExercise(id: 'ex-a', name: 'Squat'));
+        await notifier.addExercise(makeExercise(id: 'ex-b', name: 'Deadlift'));
 
         final result = container.read(activeWorkoutProvider).value!;
         expect(result.exercises[0].workoutExercise.order, 0);
         expect(result.exercises[1].workoutExercise.order, 1);
       });
 
-      test('new exercise starts with no sets', () async {
-        final container = makeContainer(makeState());
-        addTearDown(container.dispose);
-        await container.read(activeWorkoutProvider.future);
+      test(
+        'new exercise starts with one auto-seeded set (Phase 23 D6)',
+        () async {
+          // Pre-Phase-23 this test asserted `sets.isEmpty`. Post-Phase-23
+          // `addExercise` always auto-seeds set 1 from last-session
+          // values OR equipment defaults. The default container stubs
+          // `getLastWorkoutSets` to return empty → equipment-defaults
+          // fallback. `makeExercise` defaults to `equipment_type: barbell`
+          // (see `TestExerciseFactory`), so the seeded set is 20 kg × 5
+          // per `defaultSetValues(EquipmentType.barbell, WeightUnit.kg)`.
+          final container = makeContainer(makeState());
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
 
-        container
-            .read(activeWorkoutProvider.notifier)
-            .addExercise(makeExercise());
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .addExercise(makeExercise());
 
-        final result = container.read(activeWorkoutProvider).value!;
-        expect(result.exercises.first.sets, isEmpty);
-      });
+          final result = container.read(activeWorkoutProvider).value!;
+          expect(result.exercises.first.sets, hasLength(1));
+          final seeded = result.exercises.first.sets.first;
+          expect(seeded.setNumber, 1);
+          expect(seeded.setType, SetType.working);
+          expect(seeded.isCompleted, isFalse);
+        },
+      );
 
       test('new exercise workoutExercise links to correct workoutId', () async {
         final initial = makeState();
@@ -364,7 +416,7 @@ void main() {
         addTearDown(container.dispose);
         await container.read(activeWorkoutProvider.future);
 
-        container
+        await container
             .read(activeWorkoutProvider.notifier)
             .addExercise(makeExercise());
 
@@ -385,6 +437,345 @@ void main() {
             .addExercise(makeExercise());
 
         expect(container.read(activeWorkoutProvider).value, isNull);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Phase 23 D6 — addExercise auto-seeds set 1 from last-session values.
+    //
+    // Locked-in behaviour:
+    //   * Priority 1: previous session's WORKING sets (warmups filtered).
+    //     Take the lowest-setNumber working set.
+    //   * Priority 2: equipment defaults via defaultSetValues().
+    //   * Bodyweight exercises ride priority 1 (skip-weight emerges from
+    //     equipment-default 0kg) or priority 2 naturally.
+    //   * Seeded set: setNumber=1, setType=working, isCompleted=false,
+    //     unique client UUID.
+    // -----------------------------------------------------------------------
+    group('addExercise auto-seed (Phase 23 D6)', () {
+      test('should auto-seed set 1 with prior working-set values when last '
+          'session has matching exercise data', () async {
+        final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        // Two prior working sets — the lowest setNumber wins.
+        final prior1 = ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'prev-1',
+            setNumber: 1,
+            weight: 100,
+            reps: 8,
+            setType: 'working',
+            isCompleted: true,
+          ),
+        );
+        final prior2 = ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'prev-2',
+            setNumber: 2,
+            weight: 95,
+            reps: 6,
+            setType: 'working',
+            isCompleted: true,
+          ),
+        );
+        when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
+          (_) async => {
+            'exercise-new': [prior1, prior2],
+          },
+        );
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise());
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        expect(seeded.weight, 100);
+        expect(seeded.reps, 8);
+      });
+
+      test('should auto-seed set 1 with the lowest-setNumber working values '
+          'when only set 2+ exists (fallback to closest analog)', () async {
+        // Edge case: prior session had `[warmup@40, working@95]`.
+        // After the warmup filter the only remaining working set has
+        // setNumber=2. The contract says: use it as the closest analog
+        // to "the first working set the user did." Sorting by
+        // setNumber picks 95kg × 6.
+        final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final priorWarmup = ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'w1',
+            setNumber: 1,
+            weight: 40,
+            reps: 10,
+            setType: 'warmup',
+            isCompleted: true,
+          ),
+        );
+        final priorWorking = ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'w2',
+            setNumber: 2,
+            weight: 95,
+            reps: 6,
+            setType: 'working',
+            isCompleted: true,
+          ),
+        );
+        when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
+          (_) async => {
+            'exercise-new': [priorWarmup, priorWorking],
+          },
+        );
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise());
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        expect(seeded.weight, 95);
+        expect(seeded.reps, 6);
+      });
+
+      test(
+        'should fall back to equipment defaults when no prior data exists',
+        () async {
+          // Default makeContainer stubs getLastWorkoutSets to {}.
+          // Barbell equipment + kg → 20kg × 5 from defaultSetValues.
+          final container = makeContainer(makeState());
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .addExercise(makeExercise()); // barbell default
+
+          final seeded = container
+              .read(activeWorkoutProvider)
+              .value!
+              .exercises
+              .first
+              .sets
+              .first;
+          expect(seeded.weight, 20);
+          expect(seeded.reps, 5);
+        },
+      );
+
+      test(
+        'should fall back to equipment defaults when prior session contained '
+        'ONLY warmup sets (warmup-filter applied)',
+        () async {
+          final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          final priorWarmup1 = ExerciseSet.fromJson(
+            TestSetFactory.create(
+              id: 'w1',
+              setNumber: 1,
+              weight: 40,
+              reps: 10,
+              setType: 'warmup',
+              isCompleted: true,
+            ),
+          );
+          final priorWarmup2 = ExerciseSet.fromJson(
+            TestSetFactory.create(
+              id: 'w2',
+              setNumber: 2,
+              weight: 60,
+              reps: 8,
+              setType: 'warmup',
+              isCompleted: true,
+            ),
+          );
+          when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
+            (_) async => {
+              'exercise-new': [priorWarmup1, priorWarmup2],
+            },
+          );
+
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .addExercise(makeExercise()); // barbell default
+
+          final seeded = container
+              .read(activeWorkoutProvider)
+              .value!
+              .exercises
+              .first
+              .sets
+              .first;
+          // Equipment default (barbell + kg) — NOT the warmup weights.
+          expect(seeded.weight, 20);
+          expect(seeded.reps, 5);
+        },
+      );
+
+      test('should auto-seed reps from prior data but keep 0 weight for a '
+          'bodyweight exercise with prior data', () async {
+        final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        // Bodyweight prior — weight is 0 by definition.
+        final prior = ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'p1',
+            setNumber: 1,
+            weight: 0,
+            reps: 15,
+            setType: 'working',
+            isCompleted: true,
+          ),
+        );
+        when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
+          (_) async => {
+            'pullups': [prior],
+          },
+        );
+
+        final bodyweight = Exercise.fromJson(
+          TestExerciseFactory.create(
+            id: 'pullups',
+            name: 'Pull-up',
+            equipmentType: 'bodyweight',
+          ),
+        );
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(bodyweight);
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        expect(seeded.weight, 0);
+        expect(seeded.reps, 15);
+      });
+
+      test('should auto-seed equipment-default reps for a bodyweight exercise '
+          'with no prior data', () async {
+        final container = makeContainer(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final bodyweight = Exercise.fromJson(
+          TestExerciseFactory.create(
+            id: 'pushups',
+            name: 'Push-up',
+            equipmentType: 'bodyweight',
+          ),
+        );
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(bodyweight);
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        // defaultSetValues(bodyweight, kg) = (0, 10)
+        expect(seeded.weight, 0);
+        expect(seeded.reps, 10);
+      });
+
+      test('should generate a unique client UUID for the seeded set', () async {
+        final container = makeContainer(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise(id: 'ex-a'));
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise(id: 'ex-b'));
+
+        final ids = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .map((e) => e.sets.first.id)
+            .toList();
+        expect(ids.toSet(), hasLength(2));
+        // UUID v4 shape — `_uuid.v4()` produces 36 chars with dashes.
+        for (final id in ids) {
+          expect(id, hasLength(36));
+        }
+      });
+
+      test(
+        'should set is_completed=false and set_type=working on the seeded set',
+        () async {
+          final container = makeContainer(makeState());
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
+
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .addExercise(makeExercise());
+
+          final seeded = container
+              .read(activeWorkoutProvider)
+              .value!
+              .exercises
+              .first
+              .sets
+              .first;
+          expect(seeded.isCompleted, isFalse);
+          expect(seeded.setType, SetType.working);
+        },
+      );
+
+      test('should NOT block add-exercise on repo error — falls back to '
+          'equipment defaults (offline resilience)', () async {
+        // Pre-fill is a UX nicety, never a blocker. A repo throw must
+        // be swallowed and the equipment defaults kick in instead.
+        final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        when(
+          () => mockRepo.getLastWorkoutSets(any()),
+        ).thenThrow(Exception('offline'));
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise()); // barbell default
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        expect(seeded.weight, 20);
+        expect(seeded.reps, 5);
       });
     });
 
@@ -896,28 +1287,29 @@ void main() {
     group('Hive persistence', () {
       test('saveActiveWorkout is called after addExercise', () async {
         final mockStorage = MockWorkoutLocalStorage();
+        final mockRepo = MockWorkoutRepository();
         when(() => mockStorage.loadActiveWorkout()).thenReturn(makeState());
         when(
           () => mockStorage.saveActiveWorkout(any()),
         ).thenAnswer((_) async {});
+        // Phase 23 D6 — addExercise reads last-session sets for auto-seed.
+        when(
+          () => mockRepo.getLastWorkoutSets(any()),
+        ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
 
         final container = ProviderContainer(
           overrides: [
-            workoutRepositoryProvider.overrideWithValue(
-              MockWorkoutRepository(),
-            ),
+            workoutRepositoryProvider.overrideWithValue(mockRepo),
             workoutLocalStorageProvider.overrideWithValue(mockStorage),
           ],
         );
         addTearDown(container.dispose);
         await container.read(activeWorkoutProvider.future);
 
-        container
+        await container
             .read(activeWorkoutProvider.notifier)
             .addExercise(makeExercise());
 
-        // Give the unawaited save a chance to run.
-        await Future<void>.delayed(Duration.zero);
         verify(
           () => mockStorage.saveActiveWorkout(any()),
         ).called(greaterThan(0));

@@ -73,14 +73,14 @@ The checklists below pair each implementation item with its required tests + doc
 ### Fix 2 — Hint removal + pre-fill on add-exercise
 
 **F2.1 — Strip hint logic from `SetRow`**
-- [ ] **Code** — `lib/features/workouts/ui/widgets/set_row.dart`:
+- [x] **Code** — `lib/features/workouts/ui/widgets/set_row.dart`:
   - Remove `_matchedLastSet()`, `_shouldShowHint()` methods.
   - Remove the three-branch hint slot block (L366-424) including the mobile-only `!kIsWeb` filler.
   - Remove the `lastSet` constructor parameter + field. Search the file for every remaining `widget.lastSet` reference and verify all callsites are dead.
   - Remove `package:flutter/foundation.dart` import iff no remaining `kIsWeb` reference (verify via grep before deleting).
   - Verify `previousSet` field (in-session N-1 copy-hint at L65) is UNTOUCHED — it's a separate concept.
-- [ ] **Doc** — Replace the L174-237 + L293-365 dartdoc blocks with a single short note: "Hint logic removed 2026-05-12 (Phase 23 D4). Pre-fill carries the anchor; the PR yellow marker carries the win signal. Removing the conditional hint slot eliminates the Flutter Web AOM role-swap mutation vector documented in the PR #159 / #193 incidents — the row Semantics tree shape is now fixed at render time."
-- [ ] **Widget test** — `test/widget/features/workouts/ui/widgets/set_row_test.dart`:
+- [x] **Doc** — Replace the L174-237 + L293-365 dartdoc blocks with a single short note: "Hint logic removed 2026-05-12 (Phase 23 D4). Pre-fill carries the anchor; the PR yellow marker carries the win signal. Removing the conditional hint slot eliminates the Flutter Web AOM role-swap mutation vector documented in the PR #159 / #193 incidents — the row Semantics tree shape is now fixed at render time."
+- [x] **Widget test** — `test/widget/features/workouts/ui/widgets/set_row_test.dart`:
   - DELETE `group('ghost text (previous session hint)', …)` (~L335-404)
   - DELETE `group('match indicator (Pillar 1)', …)` (~L406-489)
   - DELETE the "Fix 3 — 0kg suppression" block (~L2182-2320; search `Fix 3 —`)
@@ -93,22 +93,22 @@ The checklists below pair each implementation item with its required tests + doc
 - [ ] **E2E cleanup** — `test/e2e/specs/charter-c-exploratory.spec.ts` L1018-1034 `prevHintBefore` probe — leave the probe (exploratory diagnostics, returns 0 hits now) AND add an inline comment: `// Phase 23: per-row hint removed; probe kept for historical diagnostics, will report 0 hits.`
 
 **F2.2 — Drop `lastSet:` arg at the `SetRow` callsite**
-- [ ] **Code** — `lib/features/workouts/ui/widgets/exercise_card.dart`: remove the `lastSet: lastSet,` arg in `_buildSetRows` (~L422) and the `index < lastSets.length ? lastSets[index] : null` lookup feeding it (~L404). Preserve the `lastSets` variable + lookup that drives `_onAddSet` pre-fill — still load-bearing.
-- [ ] **Doc** — short inline comment on the kept `lastSets` lookup: "Used only for `_onAddSet` pre-fill defaults (Phase 23 D6). Per-row hint consumption removed."
-- [ ] **Widget test** — `test/widget/features/workouts/ui/widgets/exercise_card_test.dart`:
+- [x] **Code** — `lib/features/workouts/ui/widgets/exercise_card.dart`: remove the `lastSet: lastSet,` arg in `_buildSetRows` (~L422) and the `index < lastSets.length ? lastSets[index] : null` lookup feeding it (~L404). Preserve the `lastSets` variable + lookup that drives `_onAddSet` pre-fill — still load-bearing.
+- [x] **Doc** — short inline comment on the kept `lastSets` lookup: "Used only for `_onAddSet` pre-fill defaults (Phase 23 D6). Per-row hint consumption removed."
+- [x] **Widget test** — `test/widget/features/workouts/ui/widgets/exercise_card_test.dart`:
   - Confirm the warmup-filter pre-fill tests (~L451-540) still pass unchanged (they exercise Add Set, not the hint).
   - Add new test: `should not render any per-row hint text` for an exercise with prior data (mirror of F2.1's row-level test but at the card level).
 
 **F2.3 — Auto-seed set 1 on `addExercise`**
-- [ ] **Code** — `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` `addExercise`: instead of `sets: const []`, build a single seeded set:
+- [x] **Code** — `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` `addExercise`: instead of `sets: const []`, build a single seeded set:
   - Read `lastWorkoutSets[exerciseId]` (existing data plumbing).
   - Filter `setType != SetType.warmup` (Phase 22 Q2 warmup-filter convention).
   - Take the working-set with the lowest set_number (set 1's match); if absent, fall back to the LAST working set's values; if no working sets exist, fall back to the exercise's equipment defaults.
   - Bodyweight exercises: skip the weight value (keep `weight: null` or `weight: 0` per existing schema convention — verify in the model), use the prior reps; if no prior data, use equipment-default reps.
   - The new set must have: fresh client UUID, `set_number: 1`, `is_completed: false`, `set_type: SetType.working`.
   - Verify call-site separation: confirm `addExercise` is NOT reached on routine-start (routine-start uses `startRoutineWorkout` which has its own pre-fill at L340-370). Document the call-site map in a comment.
-- [ ] **Doc** — Dartdoc on `addExercise` explaining the auto-seed contract (D6), the fallback chain, and the warmup-filter convention pointer (Phase 22 Q2).
-- [ ] **Unit test** — `test/unit/features/workouts/providers/active_workout_notifier_test.dart` (or wherever `addExercise` is exercised today; create the group if absent):
+- [x] **Doc** — Dartdoc on `addExercise` explaining the auto-seed contract (D6), the fallback chain, and the warmup-filter convention pointer (Phase 22 Q2).
+- [x] **Unit test** — `test/unit/features/workouts/providers/active_workout_notifier_test.dart` (or wherever `addExercise` is exercised today; create the group if absent):
   - `should auto-seed set 1 with prior working-set values when last session has matching exercise data`
   - `should auto-seed set 1 with last working-set values when prior set count < 1 match (fallback to last available)`
   - `should fall back to equipment defaults when no prior data exists for the exercise`
@@ -117,7 +117,7 @@ The checklists below pair each implementation item with its required tests + doc
   - `should auto-seed equipment-default reps for a bodyweight exercise with no prior data`
   - `should generate a unique client UUID for the seeded set` (regression guard against any accidental shared-UUID bug)
   - `should set is_completed=false and set_type=working on the seeded set`
-- [ ] **Widget test** — `test/widget/features/workouts/ui/active_workout_screen_add_exercise_test.dart` (new or extend existing):
+- [x] **Widget test** — `test/widget/features/workouts/ui/active_workout_screen_add_exercise_test.dart` (new or extend existing):
   - `should render exercise card with one pre-filled set immediately after add-exercise` — pump screen, trigger picker → pick exercise with prior data, assert exactly one set row exists with the expected weight/reps values.
 - [ ] **E2E test** — extend `test/e2e/specs/workouts.spec.ts` Workout logging describe block (or add a new sibling describe `Add exercise auto-seed`):
   - `should auto-seed set 1 with last session values when adding an exercise mid-workout` — seed user with a prior workout of bench press at 80kg×8 (use existing test fixture helpers), start a fresh quick workout, tap Add Exercise → pick bench press, assert the new exercise card has one set with the weight stepper showing `80` and the reps stepper showing `8`.
@@ -125,10 +125,10 @@ The checklists below pair each implementation item with its required tests + doc
   - New user `smokeAutoSeed` in `test-users.ts` + `global-setup.ts`. Reuse seeded prior-workout helpers from `seededFinishWorkoutUsers` pattern (verify the helper exists, otherwise add it).
 
 **F2.4 — ARB key cleanup**
-- [ ] **Code** — `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb`: remove the `previousSet` key + `@previousSet` placeholders block, `matchedLastSet` key + its placeholders, and any `*Semantics` keys exclusively serving these strings (search both ARBs for `previous`, `matched`, `lastSet` to enumerate).
-- [ ] **Doc** — No inline doc needed for ARB deletes (the WIP entry + commit message carry the rationale).
-- [ ] **Build verification** — Run `make gen` after the ARB edits. The build will fail loudly if any Dart file still references the deleted keys — that's the test. Also run `dart analyze --fatal-infos` to surface dead references.
-- [ ] **E2E** — none for this item (ARB deletion is verified by F2.1's "no hint text visible" assertions).
+- [x] **Code** — `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb`: remove the `previousSet` key + `@previousSet` placeholders block, `matchedLastSet` key + its placeholders, and any `*Semantics` keys exclusively serving these strings (search both ARBs for `previous`, `matched`, `lastSet` to enumerate).
+- [x] **Doc** — No inline doc needed for ARB deletes (the WIP entry + commit message carry the rationale).
+- [x] **Build verification** — Run `make gen` after the ARB edits. The build will fail loudly if any Dart file still references the deleted keys — that's the test. Also run `dart analyze --fatal-infos` to surface dead references.
+- [x] **E2E** — none for this item (ARB deletion is verified by F2.1's "no hint text visible" assertions).
 
 ### Cross-cutting
 
