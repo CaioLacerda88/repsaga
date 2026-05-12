@@ -811,9 +811,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skipRestSemantics => 'Skip rest timer';
 
   @override
-  String get tapToDismiss => 'Tap anywhere to dismiss';
-
-  @override
   String get lessThanAnHourAgo => 'less than an hour ago';
 
   @override

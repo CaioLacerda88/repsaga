@@ -613,8 +613,6 @@
   "@add30Semantics": { "description": "Rest timer +30s button semantics" },
   "skipRestSemantics": "Skip rest timer",
   "@skipRestSemantics": { "description": "Rest timer skip button semantics" },
-  "tapToDismiss": "Tap anywhere to dismiss",
-  "@tapToDismiss": { "description": "Rest timer dismiss hint" },
 
   "lessThanAnHourAgo": "less than an hour ago",
   "@lessThanAnHourAgo": { "description": "Resume age: less than 1 hour" },

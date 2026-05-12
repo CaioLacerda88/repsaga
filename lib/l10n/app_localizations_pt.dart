@@ -817,9 +817,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get skipRestSemantics => 'Pular descanso';
 
   @override
-  String get tapToDismiss => 'Toque em qualquer lugar para fechar';
-
-  @override
   String get lessThanAnHourAgo => 'há menos de uma hora';
 
   @override

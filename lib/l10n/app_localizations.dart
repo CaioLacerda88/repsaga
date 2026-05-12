@@ -1562,12 +1562,6 @@ abstract class AppLocalizations {
   /// **'Skip rest timer'**
   String get skipRestSemantics;
 
-  /// Rest timer dismiss hint
-  ///
-  /// In en, this message translates to:
-  /// **'Tap anywhere to dismiss'**
-  String get tapToDismiss;
-
   /// Resume age: less than 1 hour
   ///
   /// In en, this message translates to:

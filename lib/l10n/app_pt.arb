@@ -269,7 +269,6 @@
   "subtract30Semantics": "Subtrair 30 segundos",
   "add30Semantics": "Adicionar 30 segundos",
   "skipRestSemantics": "Pular descanso",
-  "tapToDismiss": "Toque em qualquer lugar para fechar",
   "lessThanAnHourAgo": "há menos de uma hora",
   "hoursAgo": "{count, plural, =1{há 1 hora} other{há {count} horas}}",
   "yesterdayAt": "ontem às {time}",
