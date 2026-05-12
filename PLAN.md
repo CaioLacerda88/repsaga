@@ -79,7 +79,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 18.5 | Multi-Agent Audit Cycle (8 clusters, 41 numbered findings; only deferred: BUG-017) | DONE | #124, #127, #128, #129, #130, #132, #134, #136, #138, #140, #142, #144 |
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
 | 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
-| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit; PR-1..6 shipped, PR-7 open) | IN PROGRESS | #195 (PR-1), #198 (PR-2), #200 (PR-3), #202 (PR-4), #204 (PR-5), #206 (PR-6) |
+| 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit) | DONE | #195, #198, #200, #202, #204, #206, #208 |
 | Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
@@ -1343,7 +1343,7 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 
 ---
 
-## Phase 22: Active Workout Audit Fix Wave (2026-05-10) — IN PROGRESS
+## Phase 22: Active Workout Audit Fix Wave (2026-05-10 → 2026-05-11) — DONE
 
 **Trigger:** user request for a "thorough review of active workout logic" after the on-device usability pass (PR #193) shipped — they could still see logical inconsistencies. Surfaced via a fresh multi-agent audit (logic + UX in parallel) over the entire active-workout surface (notifier, coordinators, set row, exercise card, loading overlay, rest timer, picker sheet, etc.).
 
@@ -1377,7 +1377,7 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 | PR-4 | Set defaults: filter warmup pre-fills (Q2) + propagateWeight null/0 + cascading-undo order | #202 | M1/Q2, M2, M3 + reviewer-cycle (W1 M3 E2E unconditional assertion → discovered Material SnackBar replace-not-queue makes Step 4 unreachable, restructured per option (b); W2 step-3 comment clarification; S1 _originalSetIndices.remove after Hive persist; O1 real bug — map cleared on lifecycle transitions, was leaking across keepAlive notifier sessions) | RESOLVED |
 | PR-5 | Hint slot stability + visual contrast + disabled-Finish helper | #204 | H8 (`!kIsWeb` gate; mobile filler matching hint baseline), M7 (hotViolet WCAG), M8 (icon size + alpha bumps), H6 (disabled-Finish helper text), rest-timer dismiss hint contrast + reviewer-cycle (W1 stale comment, S1 pencil alpha assertion) + **device feedback fix** (rest-timer ±30s buttons size to content via `minimumSize: Size(48, 48)`, no hardcoded widths — caught on Samsung S25 Ultra after Playwright @ 360dp Chromium missed it) + QA gate (E2E `completeSet` index fix). Admin-merged with 2 pre-existing flakes (routines-rename + S12 saga, neither PR-5-related; tracked separately for root-cause investigation). | RESOLVED |
 | PR-6 | PR-row state during PR-data loading + analytics source DRY | #206 | M6 (gate `activeWorkoutRowDisplaysProvider` on `value == null`; covers loading + AsyncError-no-prior-data; preserves stale `AsyncData` on refresh; pending AND completed rows both gated) + source-string DRY (4 emit sites through `_workoutSource()`) + reviewer-cycle (W1 @smoke tag on E2E describe; S1 explicit `Future.microtask` settle in error-state unit test; S2 inline comment at startWorkout `_workoutSource(null)` call site) | RESOLVED |
-| PR-7 | Brand voice copy + generic-icon swaps (anti-AI aesthetic) | — | Section 5 generic-AI smells, copy revisits | OPEN |
+| PR-7 | Brand voice copy + generic-icon swaps (anti-AI aesthetic) | #208 | Section 5 generic-AI smells (Icons.fitness_center → AppIcons.lift, Icons.swap_vert → Icons.reorder, Icons.emoji_events_rounded → text-only) + brand-voice copy ("Seal this session?", "You've been on the path X. Discard now and the work is gone.") + UI-critic deferred Cancel→Stop overlay key (loadingOverlayStop) + _AddSetButton filled accent (hotViolet @ 12% fill + 60% border) + PT setTypeAbbrDropset D→Dr + UI-critic round 1 (PT 'jornada'→'caminho' consistency with vitalityCopy* anchor) + reviewer-cycle (S1 vacuous-test landmark guard on PR-empty-state pin; S2 drop redundant explicit foreground in _AddSetButton — also addresses disabled-state inheritance question) | RESOLVED |
 
 **Deferred backlog** (not in any PR; surfaces as separate phases later):
 
@@ -1385,11 +1385,23 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 - **M9, M10 — discoverability coach marks** for set-type long-press cycle and tap-to-copy on set number. Needs onboarding design + Hive-persisted "seen" flags. Worth a dedicated design pass, not a one-line patch.
 - **First-class warmup type as data model** — the cross-cutting product-owner observation: FitNotes/Hevy promoted warmup sets to a typed entity with their own pre-fill rules, PR exclusion, and calculator. RepSaga today treats warmup as a tag on the same set record. The right time to make warmup first-class is before more analytics features ship.
 
-**E2E coverage gap surfaced post-PR-1 (rolling into PR-2):**
+**E2E coverage gap surfaced post-PR-1 (rolled into PR-2):** Discard-race E2E (Fix B) — directly analogous to PR-1's Q1 cancel-overlay test but on `DELETE /workouts`. Shipped in PR #198.
 
-- **Discard-race E2E** (Fix B) — directly analogous to PR-1's Q1 cancel-overlay test but on `DELETE /workouts`. ~20 LOC. Filed against PR-2 since both touch the same overlay/snackbar surface.
+**Wave outcome:**
 
-**File hygiene reminder** (Phase 18.5 convention): `BUGS.md` is the live tracker DURING this cycle, deleted post-completion; resolution narratives + PR refs preserved here and in each PR's commit message.
+- **18+ findings shipped** across 7 PRs (4 Critical, 8 High, 11 Medium + numerous Smell + 7 reviewer-cycle issues caught after initial implementation).
+- **Test corpus growth:** ~2274 → 2595 unit/widget tests (+321), 234 E2E tests passing (62 pre-existing `@flaky` excluded).
+- **2 user-on-device feedback items folded mid-wave** (PR-1 reviewer cycle: start-race + discard-race; PR-5 device feedback: rest-timer +30s wraps on Samsung S25 Ultra → content-driven button sizing with `minimumSize: Size(48, 48)` instead of hardcoded widths).
+- **Reviewer-cycle pattern proved load-bearing:** caught the H5 snackbar route-leak (broke 4 unrelated manage-data tests), the M3 cascading-undo `_originalSetIndices` map leaking across keepAlive notifier sessions, the `_isShowingDialog` race in DiscardWorkoutCoordinator, and the Q3 PT 'jornada' vs established 'caminho' metaphor — all within the same cycle, none deferred.
+
+**Deferred backlog** (not in this wave; surfaces as separate phases later):
+
+- **PR-RPG: Offline celebration replay** — when a workout is finished offline and crosses an RPG threshold (rank-up / first-awakening / title-unlock), the celebration moment is permanently lost; the queue drain awards XP correctly but `_buildAndStashCelebration` doesn't re-fire. Two design options (full pre-snapshot persist vs. notify-only on drain). Not a fix — a feature. Belongs in its own phase.
+- **M9, M10 — discoverability coach marks** for set-type long-press cycle and tap-to-copy on set number. Needs onboarding design + Hive-persisted "seen" flags. Worth a dedicated design pass.
+- **First-class warmup type as data model** — the cross-cutting product-owner observation: FitNotes/Hevy promoted warmup sets to a typed entity with their own pre-fill rules, PR exclusion, and calculator. RepSaga today treats warmup as a tag on the same set record. PR-4's M1 fix patches the symptom (filter warmups in defaults) — the real fix is to model warmups as their own class.
+- **Routines-rename + S12 saga E2E flakes** — pre-existing flakes, not Phase 22 regressions. Routines-rename is the same family as the documented routines-delete flake (action-sheet rendering / state pollution). S12 saga is a worker crash pattern. Tracked separately for root-cause investigation; CI workflow improvement (`--grep-invert "@flaky"` mirroring QA's local pattern) is the related infrastructure question.
+
+**File hygiene** (Phase 18.5 convention): `BUGS.md` deleted post-completion; resolution narratives + PR refs preserved here and in each PR's commit message.
 
 ---
 
