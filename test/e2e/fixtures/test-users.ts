@@ -375,4 +375,26 @@ export const TEST_USERS = {
     email: 'e2e-smoke-workout-pr6-row-flicker@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // Phase 23 — rest-overlay chrome + addExercise auto-seed
+  // -------------------------------------------------------------------------
+  // smokeRestChrome: lapsed user for the Phase 23 D1 chrome-visibility test.
+  // The test starts a workout, completes a set to trigger the rest timer,
+  // then asserts the FAB + finish bar are hidden and the rest scrim covers
+  // the body. Isolated from smokeWorkoutSwipeUndo so rest-overlay tests
+  // can run in parallel without colliding on the rest-timer state.
+  smokeRestChrome: {
+    email: 'e2e-smoke-rest-chrome@test.local',
+    password: 'TestPassword123!',
+  },
+  // smokeAutoSeed: lapsed user with one prior workout containing bench press
+  // logged at a known weight. The Phase 23 D6 test starts a fresh workout,
+  // mid-workout adds bench press, and asserts the new exercise card opens
+  // with one set pre-filled at the prior weight/reps. Isolated user keeps
+  // the seed data deterministic across worker counts.
+  smokeAutoSeed: {
+    email: 'e2e-smoke-auto-seed@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

@@ -210,218 +210,215 @@ Widget _buildScreen({
 }
 
 void main() {
-  group(
-    'ActiveWorkoutScreen — back-press priority chain (Phase 23 D2/D3)',
-    () {
-      testWidgets(
-        'should stop rest timer on Android back press without showing discard '
-        'dialog',
-        (tester) async {
-          final restTimer = _ControllableRestTimerNotifier(
-            const RestTimerState(
-              totalSeconds: 90,
-              remainingSeconds: 90,
-              isActive: true,
-              exerciseName: 'Bench Press',
-            ),
-          );
-          await tester.pumpWidget(
-            _buildScreen(
-              activeOverride: () =>
-                  _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
-              restOverride: () => restTimer,
-            ),
-          );
-          await tester.pump();
-          await tester.pump();
+  group('ActiveWorkoutScreen — back-press priority chain (Phase 23 D2/D3)', () {
+    testWidgets(
+      'should stop rest timer on Android back press without showing discard '
+      'dialog',
+      (tester) async {
+        final restTimer = _ControllableRestTimerNotifier(
+          const RestTimerState(
+            totalSeconds: 90,
+            remainingSeconds: 90,
+            isActive: true,
+            exerciseName: 'Bench Press',
+          ),
+        );
+        await tester.pumpWidget(
+          _buildScreen(
+            activeOverride: () =>
+                _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
+            restOverride: () => restTimer,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
 
-          // Pre-condition: the screen is in the rest-active branch (D2).
-          // Loading overlay must NOT be active or D3 would take over.
-          expect(restTimer.stopCallCount, 0);
+        // Pre-condition: the screen is in the rest-active branch (D2).
+        // Loading overlay must NOT be active or D3 would take over.
+        expect(restTimer.stopCallCount, 0);
 
-          // Simulate Android hardware back via the same hook the existing
-          // popscope test uses (handlePopRoute fires the route-pop chain
-          // that drives PopScope callbacks).
-          final dynamic binding = tester.binding;
-          // ignore: avoid_dynamic_calls
-          await binding.handlePopRoute();
-          await tester.pumpAndSettle();
+        // Simulate Android hardware back via the same hook the existing
+        // popscope test uses (handlePopRoute fires the route-pop chain
+        // that drives PopScope callbacks).
+        final dynamic binding = tester.binding;
+        // ignore: avoid_dynamic_calls
+        await binding.handlePopRoute();
+        await tester.pumpAndSettle();
 
-          expect(
-            restTimer.stopCallCount,
-            1,
-            reason:
-                'Phase 23 D2: back-press during rest must call '
-                '`restTimerProvider.notifier.stop()` exactly once. If this '
-                'fails the chain is misrouted — most likely the rest-active '
-                'branch was dropped and the call fell through to the discard '
-                'coordinator instead.',
-          );
-          expect(
-            find.text('Discard Workout?'),
-            findsNothing,
-            reason:
-                'Phase 23 D2: rest-active back-press must NOT open the discard '
-                'dialog. If this fails the priority chain is reversed (discard '
-                'wins over rest). Verify the `if (restActive && !loadingActive)` '
-                'branch in `PopScope.onPopInvokedWithResult` returns BEFORE '
-                'the coordinator call.',
-          );
-        },
-      );
+        expect(
+          restTimer.stopCallCount,
+          1,
+          reason:
+              'Phase 23 D2: back-press during rest must call '
+              '`restTimerProvider.notifier.stop()` exactly once. If this '
+              'fails the chain is misrouted — most likely the rest-active '
+              'branch was dropped and the call fell through to the discard '
+              'coordinator instead.',
+        );
+        expect(
+          find.text('Discard Workout?'),
+          findsNothing,
+          reason:
+              'Phase 23 D2: rest-active back-press must NOT open the discard '
+              'dialog. If this fails the priority chain is reversed (discard '
+              'wins over rest). Verify the `if (restActive && !loadingActive)` '
+              'branch in `PopScope.onPopInvokedWithResult` returns BEFORE '
+              'the coordinator call.',
+        );
+      },
+    );
 
-      testWidgets(
-        'should fall through to discard dialog when rest timer is inactive',
-        (tester) async {
-          await tester.pumpWidget(
-            _buildScreen(
-              activeOverride: () =>
-                  _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
-              restOverride: () => _NullRestTimerNotifier(),
-            ),
-          );
-          await tester.pump();
-          await tester.pump();
+    testWidgets(
+      'should fall through to discard dialog when rest timer is inactive',
+      (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(
+            activeOverride: () =>
+                _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
+            restOverride: () => _NullRestTimerNotifier(),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
 
-          final dynamic binding = tester.binding;
-          // ignore: avoid_dynamic_calls
-          await binding.handlePopRoute();
-          await tester.pumpAndSettle();
+        final dynamic binding = tester.binding;
+        // ignore: avoid_dynamic_calls
+        await binding.handlePopRoute();
+        await tester.pumpAndSettle();
 
-          expect(
-            find.text('Discard Workout?'),
-            findsOneWidget,
-            reason:
-                'Phase 23: with no rest timer active the chain falls through to '
-                'the discard coordinator — the historical contract. If this '
-                'fails the `else` branch was dropped from '
-                'PopScope.onPopInvokedWithResult.',
-          );
+        expect(
+          find.text('Discard Workout?'),
+          findsOneWidget,
+          reason:
+              'Phase 23: with no rest timer active the chain falls through to '
+              'the discard coordinator — the historical contract. If this '
+              'fails the `else` branch was dropped from '
+              'PopScope.onPopInvokedWithResult.',
+        );
 
-          // Clean up so the coordinator guard resets.
-          await tester.tap(find.text('Cancel'));
-          await tester.pumpAndSettle();
-        },
-      );
+        // Clean up so the coordinator guard resets.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+      },
+    );
 
-      testWidgets(
-        'should fall through to discard dialog when loading overlay is active '
-        'even if rest timer is also active',
-        (tester) async {
-          // D3 — loading-overlay-active path. The loading overlay carries
-          // its own Stop CTA (PR-1 Q1), so back-press routes to the
-          // discard coordinator regardless of rest state.
-          final restTimer = _ControllableRestTimerNotifier(
-            const RestTimerState(
-              totalSeconds: 90,
-              remainingSeconds: 90,
-              isActive: true,
-              exerciseName: 'Bench Press',
-            ),
-          );
-          final loadingNotifier = _LoadingActiveWorkoutNotifier(
-            _activeStateWithOneSet(),
-          );
-          await tester.pumpWidget(
-            _buildScreen(
-              activeOverride: () => loadingNotifier,
-              restOverride: () => restTimer,
-            ),
-          );
-          // Complete the build() future so the screen has displayState then
-          // bump back into AsyncLoading-with-prior-data (the shape produced
-          // by `ref.refresh` on an AsyncNotifier — `isLoading: true` AND
-          // `.value: priorState`).
-          loadingNotifier.complete();
-          await tester.pump();
-          await tester.pump();
-          loadingNotifier.enterLoadingWithPriorData();
-          await tester.pump();
+    testWidgets(
+      'should fall through to discard dialog when loading overlay is active '
+      'even if rest timer is also active',
+      (tester) async {
+        // D3 — loading-overlay-active path. The loading overlay carries
+        // its own Stop CTA (PR-1 Q1), so back-press routes to the
+        // discard coordinator regardless of rest state.
+        final restTimer = _ControllableRestTimerNotifier(
+          const RestTimerState(
+            totalSeconds: 90,
+            remainingSeconds: 90,
+            isActive: true,
+            exerciseName: 'Bench Press',
+          ),
+        );
+        final loadingNotifier = _LoadingActiveWorkoutNotifier(
+          _activeStateWithOneSet(),
+        );
+        await tester.pumpWidget(
+          _buildScreen(
+            activeOverride: () => loadingNotifier,
+            restOverride: () => restTimer,
+          ),
+        );
+        // Complete the build() future so the screen has displayState then
+        // bump back into AsyncLoading-with-prior-data (the shape produced
+        // by `ref.refresh` on an AsyncNotifier — `isLoading: true` AND
+        // `.value: priorState`).
+        loadingNotifier.complete();
+        await tester.pump();
+        await tester.pump();
+        loadingNotifier.enterLoadingWithPriorData();
+        await tester.pump();
 
-          final dynamic binding = tester.binding;
-          // ignore: avoid_dynamic_calls
-          await binding.handlePopRoute();
-          // Bounded pumps instead of pumpAndSettle: the loading overlay
-          // shows a CircularProgressIndicator that animates forever, so
-          // pumpAndSettle never returns. 3 frames is enough to drive the
-          // PopScope callback → coordinator.show → DiscardWorkoutDialog
-          // route push → first paint.
-          for (var i = 0; i < 5; i++) {
-            await tester.pump(const Duration(milliseconds: 50));
-          }
+        final dynamic binding = tester.binding;
+        // ignore: avoid_dynamic_calls
+        await binding.handlePopRoute();
+        // Bounded pumps instead of pumpAndSettle: the loading overlay
+        // shows a CircularProgressIndicator that animates forever, so
+        // pumpAndSettle never returns. 3 frames is enough to drive the
+        // PopScope callback → coordinator.show → DiscardWorkoutDialog
+        // route push → first paint.
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
 
-          expect(
-            restTimer.stopCallCount,
-            0,
-            reason:
-                'Phase 23 D3: during the loading-overlay-active branch the '
-                'rest-stop short-circuit MUST NOT fire — back-press routes to '
-                'the discard coordinator instead. If this fails the '
-                '`&& !loadingActive` guard is missing on the rest-active '
-                'branch.',
-          );
-          expect(
-            find.text('Discard Workout?'),
-            findsOneWidget,
-            reason:
-                'Phase 23 D3: with loading overlay active, back-press falls '
-                'through to discard. Loading carries its own Stop CTA — back '
-                'is a reasonable secondary escape.',
-          );
+        expect(
+          restTimer.stopCallCount,
+          0,
+          reason:
+              'Phase 23 D3: during the loading-overlay-active branch the '
+              'rest-stop short-circuit MUST NOT fire — back-press routes to '
+              'the discard coordinator instead. If this fails the '
+              '`&& !loadingActive` guard is missing on the rest-active '
+              'branch.',
+        );
+        expect(
+          find.text('Discard Workout?'),
+          findsOneWidget,
+          reason:
+              'Phase 23 D3: with loading overlay active, back-press falls '
+              'through to discard. Loading carries its own Stop CTA — back '
+              'is a reasonable secondary escape.',
+        );
 
-          // Same bounded-pump pattern for the dismiss tap — the loading
-          // overlay is still animating in the background.
-          await tester.tap(find.text('Cancel'));
-          for (var i = 0; i < 5; i++) {
-            await tester.pump(const Duration(milliseconds: 50));
-          }
-        },
-      );
+        // Same bounded-pump pattern for the dismiss tap — the loading
+        // overlay is still animating in the background.
+        await tester.tap(find.text('Cancel'));
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      },
+    );
 
-      testWidgets(
-        'should stop rest timer exactly once when back press fires during rest',
-        (tester) async {
-          // Pin the idempotent-stop contract: one back press equals exactly
-          // one `stop()` call. Without this guard a future refactor could
-          // accidentally re-invoke the notifier inside a postFrameCallback
-          // listener and double-stop (harmless functionally, but a hint
-          // the chain has a feedback loop).
-          final restTimer = _ControllableRestTimerNotifier(
-            const RestTimerState(
-              totalSeconds: 90,
-              remainingSeconds: 90,
-              isActive: true,
-              exerciseName: 'Bench Press',
-            ),
-          );
-          await tester.pumpWidget(
-            _buildScreen(
-              activeOverride: () =>
-                  _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
-              restOverride: () => restTimer,
-            ),
-          );
-          await tester.pump();
-          await tester.pump();
+    testWidgets(
+      'should stop rest timer exactly once when back press fires during rest',
+      (tester) async {
+        // Pin the idempotent-stop contract: one back press equals exactly
+        // one `stop()` call. Without this guard a future refactor could
+        // accidentally re-invoke the notifier inside a postFrameCallback
+        // listener and double-stop (harmless functionally, but a hint
+        // the chain has a feedback loop).
+        final restTimer = _ControllableRestTimerNotifier(
+          const RestTimerState(
+            totalSeconds: 90,
+            remainingSeconds: 90,
+            isActive: true,
+            exerciseName: 'Bench Press',
+          ),
+        );
+        await tester.pumpWidget(
+          _buildScreen(
+            activeOverride: () =>
+                _FixedActiveWorkoutNotifier(_activeStateWithOneSet()),
+            restOverride: () => restTimer,
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
 
-          final dynamic binding = tester.binding;
-          // ignore: avoid_dynamic_calls
-          await binding.handlePopRoute();
-          // Single settle so any postFrameCallback that erroneously
-          // re-fires stop() also drains here.
-          await tester.pumpAndSettle();
+        final dynamic binding = tester.binding;
+        // ignore: avoid_dynamic_calls
+        await binding.handlePopRoute();
+        // Single settle so any postFrameCallback that erroneously
+        // re-fires stop() also drains here.
+        await tester.pumpAndSettle();
 
-          expect(
-            restTimer.stopCallCount,
-            1,
-            reason:
-                'Phase 23 D2: back-press must call `stop()` exactly once. A '
-                'count > 1 means a state listener or postFrameCallback is '
-                're-entering the stop path — silent state churn but a strong '
-                'signal the priority chain has a feedback loop.',
-          );
-        },
-      );
-    },
-  );
+        expect(
+          restTimer.stopCallCount,
+          1,
+          reason:
+              'Phase 23 D2: back-press must call `stop()` exactly once. A '
+              'count > 1 means a state listener or postFrameCallback is '
+              're-entering the stop path — silent state churn but a strong '
+              'signal the priority chain has a feedback loop.',
+        );
+      },
+    );
+  });
 }

@@ -132,17 +132,11 @@ export async function addExercise(
     timeout: 10_000,
   });
 
-  // The exercise starts with zero sets (ActiveWorkoutNotifier.addExercise
-  // creates with `sets: const []`). Click "Add Set" to create the first set
-  // row so that weight/reps buttons are available for subsequent interactions.
-  // Use .last() to target the newly added exercise's button (when multiple
-  // exercises are present, each has its own "Add Set" button).
-  await expect(page.locator(WORKOUT.addSetButton).last()).toBeVisible({
-    timeout: 10_000,
-  });
-  await page.locator(WORKOUT.addSetButton).last().click();
-
-  // Wait for the set row to render — the weight button confirms it.
+  // Phase 23 D6: `ActiveWorkoutNotifier.addExercise` now auto-seeds set 1
+  // with prior-session working values (or equipment defaults when there's
+  // no prior data). The exercise card renders with one set immediately —
+  // no `Add Set` click required. The weight button is the user-visible
+  // sentinel for "set 1 is rendered."
   await expect(
     page.locator('role=button[name*="Weight value"]').first(),
   ).toBeVisible({ timeout: 10_000 });

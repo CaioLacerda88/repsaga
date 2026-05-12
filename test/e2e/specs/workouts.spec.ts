@@ -2458,3 +2458,185 @@ test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () 
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
   });
 });
+
+// =============================================================================
+// Phase 23 D1 — rest-overlay chrome visibility (smokeRestChrome user)
+// =============================================================================
+test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeRestChrome').email,
+      getUser('smokeRestChrome').password,
+    );
+  });
+
+  test(
+    'should hide add-exercise FAB and finish bar while rest timer is visible',
+    async ({ page }) => {
+      // Drive the workout into the rest-active state, then assert the
+      // FAB + Finish bar are absent. After dismissing the rest timer,
+      // both must reappear — pins both the hide AND the restore halves
+      // of the D1 contract.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+      // Phase 23 D6: addExercise auto-seeds set 1. Set a non-zero weight
+      // so the row is meaningful; complete it to fire the rest timer.
+      await setWeight(page, '60');
+      await setReps(page, '8');
+
+      // Pre-condition: chrome is visible while rest is OFF.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Trigger rest by completing set 1. The rest-timer progressbar is
+      // the user-visible sentinel for "rest is active."
+      await page.locator(WORKOUT.markSetDone).first().click();
+      const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
+      await expect(restTimer).toBeVisible({ timeout: 8_000 });
+
+      // Phase 23 D1 contract: both surfaces must be hidden during rest.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeHidden({
+        timeout: 3_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeHidden({
+        timeout: 3_000,
+      });
+
+      // Dismiss the rest timer via Escape (Flutter Web maps Escape to
+      // PopScope — same code path as Android hardware back).
+      await page.keyboard.press('Escape');
+      await expect(restTimer).toBeHidden({ timeout: 5_000 });
+
+      // After dismiss: chrome must reappear immediately. Drives the
+      // "restore" branch of the D1 contract — proves the gate is
+      // reactive, not a one-shot hide.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Clean up so the next test invocation starts from a clean state.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
+
+  test(
+    'should dismiss rest timer when Escape (browser back analog) is pressed',
+    async ({ page }) => {
+      // Phase 23 D2 — Flutter web maps Escape to PopScope; same code
+      // path as Android hardware back. Pin the rest-stop branch of the
+      // priority chain without invoking the discard coordinator.
+      //
+      // Android-native hardware back is not Playwright-reachable; the
+      // deeper widget-level PopScope contract is owned by
+      // `active_workout_back_button_priority_test.dart`.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+      await setWeight(page, '60');
+      await setReps(page, '8');
+      await page.locator(WORKOUT.markSetDone).first().click();
+
+      const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
+      await expect(restTimer).toBeVisible({ timeout: 8_000 });
+
+      await page.keyboard.press('Escape');
+
+      await expect(restTimer).toBeHidden({ timeout: 5_000 });
+      // The discard dialog MUST NOT have opened — back-press during rest
+      // is rest-dismiss, not discard.
+      await expect(page.locator('text="Discard Workout?"')).toBeHidden({
+        timeout: 1_000,
+      });
+
+      // Clean up.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
+
+  test(
+    'should show discard dialog when Escape is pressed with no rest timer active',
+    async ({ page }) => {
+      // Phase 23 D2 inverse: no rest timer → the chain falls through to
+      // discard. This is the historical contract; the test guards
+      // against an over-broad rest-dismiss branch accidentally
+      // swallowing the no-rest case.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+
+      // No rest timer active. Escape must open the discard dialog.
+      await page.keyboard.press('Escape');
+      await expect(page.locator('text="Discard Workout?"')).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Clean up — cancel the dialog AND discard via the AppBar.
+      await page.locator('text="Cancel"').click();
+      await expect(page.locator('text="Discard Workout?"')).toBeHidden({
+        timeout: 3_000,
+      });
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
+});
+
+// =============================================================================
+// Phase 23 D6 — addExercise auto-seeds set 1 (smokeAutoSeed user)
+// =============================================================================
+test.describe('Add exercise auto-seed', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeAutoSeed').email,
+      getUser('smokeAutoSeed').password,
+    );
+  });
+
+  test(
+    'should auto-seed set 1 with last session values when adding an exercise mid-workout',
+    async ({ page }) => {
+      // Phase 23 D6: smokeAutoSeed has a prior completed workout with
+      // Barbell Bench Press @ 80 kg × 8 (seeded in global-setup). Adding
+      // bench press to a fresh workout must produce one set carrying
+      // those exact values.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+
+      // The weight + reps stepper values must reflect the seeded prior
+      // session. We probe the user-visible Semantics labels — the
+      // stepper renders "Weight value: 80 kg" / "Reps value: 8" — to
+      // avoid coupling to internal Text widget structure.
+      await expect(
+        page.locator('role=button[name*="Weight value: 80"]').first(),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        page.locator('role=button[name*="Reps value: 8"]').first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      // Clean up.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
+});

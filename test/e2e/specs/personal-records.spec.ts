@@ -413,6 +413,38 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
   });
+
+  test(
+    'should not show per-row previous-session hint in active workout (Phase 23)',
+    async ({ page }) => {
+      // Phase 23 D4 — pin the user-visible negative contract: the smokePR
+      // user has seeded PR history (bench press 100 kg × 5 in
+      // global-setup). Pre-Phase-23 starting a fresh workout and adding
+      // bench press would render the "Previous: 100 kg × 5" hint above
+      // the set row. Post-Phase-23 the hint is gone — pre-fill carries
+      // the anchor instead.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+
+      // None of the historical hint fragments may appear, in either
+      // locale. (smokePR runs in en by default; pt fragments are
+      // belt-and-suspenders against an ARB resurrection.)
+      for (const fragment of ['Previous:', 'Anterior:', '= last set', 'série anterior']) {
+        await expect(
+          page.locator(`text=${fragment}`),
+        ).toHaveCount(0, {
+          timeout: 2_000,
+        });
+      }
+
+      // Clean up — discard the workout so the next test starts clean.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
 });
 
 // =============================================================================
