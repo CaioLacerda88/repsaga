@@ -80,6 +80,7 @@ Gym training app for logging workouts, tracking personal records, and managing e
 | 20 | Active Workout Set-Row Redesign (Direction B + standing-PR semantic; closes BUG-018/019/020) | DONE | #152 |
 | 21 | E2E per-worker user isolation + parallelism bump (CI ~32min → ~21min, workers 2→4) | DONE | #154, #156, #157 |
 | 22 | Active Workout Audit Fix Wave (7 PRs from multi-agent re-audit) | DONE | #195, #198, #200, #202, #204, #206, #208 |
+| 23 | Active Workout: rest-overlay chrome + per-row hint removal + auto-seed set 1 | DONE | #212 |
 | Backlog | Active backlog (Phase 20 polish carry-overs, architectural follow-ups, post-rebrand, Phase 16 parked status) | BACKLOG | see "## Active Backlog" section |
 | 19 | Deferred RPG v2 + Nice-to-Have (Quests engine, Stats radar, Synergy, PR mini-events, Cardio track, etc.) | BACKLOG | - |
 
@@ -1405,6 +1406,19 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 
 ---
 
+## Phase 23: Active Workout — rest-overlay chrome + hint removal + auto-seed (2026-05-12) — DONE
+
+**Trigger:** user on-device feedback during a real workout (Upper/Lower — Supino Reto com Barra) flagged two distinct issues that escaped Phase 22's re-audit.
+
+- **Rest overlay chrome (D1–D3):** FAB + FinishBottomBar conditionally hidden while rest is active so the scrim truly covers everything except the AppBar X (the in-rest discard affordance). AppBar `backgroundColor` flips to `AppColors.abyss` during rest so it visually merges into the scrim. Android back-press priority chain: rest active → dismiss rest; loading overlay → discard coordinator (loading has its own Cancel CTA); else → discard dialog.
+- **Per-row hint removal (D4–D5):** all `Previous: …` / `= last set` / mobile-only filler hint logic deleted from `SetRow` and `ExerciseCard`; `lastSet` constructor param dropped; ARB keys `previousSet` / `matchedLastSet` / `tapToDismiss` removed. Pre-fill carries the anchor; the yellow PR marker carries the win signal. Per-exercise summary chip explicitly rejected by user — keep the surface bare.
+- **Auto-seed set 1 on `addExercise` (D6):** Hevy/Strong-style — when the user adds an exercise mid-workout, set 1 is pre-filled from the prior session's first working set (warmup-filtered per Phase 22 Q2), falling back to last working set, then equipment defaults. Bodyweight exercises seed reps but not weight. Routine-start path untouched — it has its own pre-fill at `startRoutineWorkout` and a unit test (REV-5) now pins `getLastWorkoutSets` is called exactly once for routines, never the 1+N fan-out a stray `addExercise` call would cause.
+- **Root-caused incidents folded mid-cycle:** Cluster A (Flutter Web has no PopScope-reachable path for browser back / Escape — GoRouter's `MultiEntriesBrowserHistory` consumes `popstate` before reaching the screen; widget tests own the PopScope contract via `tester.binding.handlePopRoute()`). Cluster B (Flutter Web AOM identifier-only mutations don't reach `setAttribute` when the SemanticsNode is reused; fixed by `ValueKey(rowStateId)` on the row's identifier-bearing Semantics). Cluster C (Phase 23 D6 made `addExercise` async; the fire-and-forget H5 undo SnackBar caller broke silently — `await`-ed in the same cycle; PR-3 review W1 had warned about this exact failure mode).
+- **Test corpus growth:** 2595 → 2639 unit/widget tests; 26 new + updated Phase 23 widget/unit tests; new E2E describes `Rest overlay chrome` (smoke-tagged) and `Add exercise auto-seed` with two new test users (`smokeRestChrome`, `smokeAutoSeed`). Full E2E regression: 237 passed, 62 @flaky skipped, 1 retry-passed pre-existing flake. Review cycle: 5 revisions (REV-1 PT copy alignment, REV-2 AppBar abyss merge, REV-3 tap-to-dismiss copy removal, REV-4 multi-row Semantics sibling stability, REV-5 routine-start non-call assertion) all landed in-cycle per "no deferring review findings."
+- **Deferred follow-ups** in Active Backlog: `23-P-1` (seeded-set provenance slot-machine cue, v1.1), `23-P-2` (H5 undo SnackBar widget coverage — blocked on `ExercisePickerSheet.show` static-method refactor).
+
+---
+
 ## Active Backlog
 
 Single source of truth for **deferred work that is not yet a phase but is on the backlog**. Items here are either:
@@ -1484,6 +1498,14 @@ coordination.
   animation curves, real-thumb misfire under sweat. The autonomous code-state
   half landed in PR #161. The remaining visual half needs human eyes on a
   device — not catchable from code review or Playwright headless.
+- **23-P-3 — Phase 23 on-device walkthrough** (Samsung S25 Ultra, Android 16).
+  Validate the rest-overlay chrome cleanup (FAB + FinishBottomBar hidden,
+  AppBar merged into abyss scrim), the Android-native back-press priority
+  chain (rest → dismiss; loading → discard; else → discard), and the
+  auto-seed set 1 behavior on a real device under real thumbs. Widget +
+  E2E coverage is comprehensive (PR #212) but Flutter Web's PopScope hole
+  means the Android-native back-press path is widget-tested only, not
+  E2E-reachable — only on-device confirms.
 - **Supabase project display name** — Dashboard → Project Settings →
   General → rename to "RepSaga" (cosmetic; not blocking anything).
 - **Auth redirect URLs allowlist** — Dashboard → Authentication → URL
