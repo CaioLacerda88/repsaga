@@ -227,11 +227,10 @@ class _SnackBarTapOutDismissInherited extends InheritedWidget {
       !identical(state, oldWidget.state);
 }
 
-/// Owns the entire SnackBar interior — message row + optional action
-/// button + bottom-edge countdown progress bar.
+/// SnackBar content widget owning the full snack interior: message row +
+/// optional action button + bottom-edge countdown progress bar.
 ///
-/// **Why this widget owns everything:** see the factory's class-level
-/// doc. The short version: Flutter's `SnackBar.content` and
+/// **Why this widget owns everything:** Flutter's `SnackBar.content` and
 /// `SnackBar.action` slots are siblings in a Row; a progress bar inside
 /// `content` can never reach the right edge of the snack because the
 /// `action:` column claims its own width. By collapsing both into one
@@ -245,19 +244,35 @@ class _SnackBarTapOutDismissInherited extends InheritedWidget {
 /// `SnackBarBehavior.floating`'s defaults). The progress bar inherits
 /// the Column's stretched width — no fixed `width:` props anywhere.
 ///
-/// **Countdown lifecycle:** the controller is `vsync`-driven via
-/// `SingleTickerProviderStateMixin` so the framework auto-pauses ticks
-/// when the app is backgrounded. No `Timer`, no wall-clock arithmetic.
-/// SnackBar content widget owning the full snack interior: message row +
-/// optional action button + bottom-edge countdown progress bar.
-///
 /// Public type with a **private constructor** — instantiation is reserved
 /// to [SnackBarTapOutDismissScopeState.showCountdownSnackBar]. The class
 /// is public so widget tests can locate it via `find.byType(...)`
 /// without depending on the library's private GlobalKey lookup. The
 /// private constructor prevents call sites from bypassing the factory
 /// and dropping the persist:false + tap-out wiring.
-class SnackBarCountdown extends StatefulWidget {
+///
+/// **Drain mechanism** (root-cause fix 2026-05-14): the bar uses
+/// [TweenAnimationBuilder] (begin 1.0, end 0.0, curve `Curves.linear`,
+/// duration `duration`) instead of a manual `AnimationController` +
+/// `forward()`. Single source of truth for the duration, no controller
+/// lifecycle to mishandle, and `TweenAnimationBuilder` only animates
+/// once on mount — which exactly matches the "drain once over
+/// [duration], never restart" contract. The widget can be a
+/// [StatelessWidget] as a result.
+///
+/// **Why `FractionallySizedBox` and not `Align(widthFactor:)`:** the
+/// previous implementation used `Align(widthFactor: X, child:
+/// ColoredBox(...))`. `Align` passes LOOSE constraints to its child, and
+/// a `ColoredBox` with no child collapses to 0×0 under loose constraints
+/// — so the draining rectangle was invisible on every frame. The user
+/// saw only the unchanging track. `FractionallySizedBox(widthFactor: X,
+/// child: ColoredBox)` passes a TIGHT width constraint
+/// (`parent.width × X`) so the `ColoredBox` fills it. The wrapping
+/// `SizedBox(height: 3, width: double.infinity)` gives the
+/// `TweenAnimationBuilder`'s subtree a concrete-bounded parent rect
+/// for the `FractionallySizedBox` math to multiply against; without
+/// it both axes could be loose and we'd re-introduce the original bug.
+class SnackBarCountdown extends StatelessWidget {
   const SnackBarCountdown._({
     super.key,
     required this.message,
@@ -266,17 +281,27 @@ class SnackBarCountdown extends StatefulWidget {
     this.onAction,
   });
 
-  /// Key on the track [SizedBox] (the 3 dp container that holds both the
-  /// dim background and the draining bar). Exposed so widget tests can
-  /// measure the bar's rendered rect without coupling to private state
-  /// or walking the descendant tree by type.
+  /// Key on the track widget — the dim-violet [ColoredBox] that holds
+  /// the full-width track plus the draining filler. Exposed so widget
+  /// tests can measure the track's rendered rect.
   static const trackKey = ValueKey('snackbar-countdown-track');
+
+  /// Key on the inner draining widget — the [FractionallySizedBox] whose
+  /// width shrinks from `parent × 1.0` → `parent × 0.0` over [duration].
+  /// Exposed so widget tests can measure the *fill* width at two time
+  /// slices and assert it actually drained (regression guard for the
+  /// 2026-05-14 "fill collapses to 0×0 under loose constraints" bug).
+  static const fillerKey = ValueKey('snackbar-countdown-filler');
 
   final String message;
   final Duration duration;
 
   /// Localized action label (e.g. `l10n.undo`). When null, the action
   /// button is omitted and the message takes the full row width.
+  ///
+  /// Kept nullable to mirror the factory's `SnackBarAction?` arg — every
+  /// production caller passes an action today, but the no-action path is
+  /// part of the public contract and covered by the widget's unit tests.
   final String? actionLabel;
 
   /// Action callback. Required when [actionLabel] is non-null; ignored
@@ -284,29 +309,8 @@ class SnackBarCountdown extends StatefulWidget {
   final VoidCallback? onAction;
 
   @override
-  State<SnackBarCountdown> createState() => _SnackBarCountdownState();
-}
-
-class _SnackBarCountdownState extends State<SnackBarCountdown>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final hasAction = widget.actionLabel != null && widget.onAction != null;
+    final hasAction = actionLabel != null && onAction != null;
 
     // Padding values:
     //   * Left 16 dp — Material's standard SnackBar inset for content.
@@ -333,14 +337,14 @@ class _SnackBarCountdownState extends State<SnackBarCountdown>
             children: [
               Expanded(
                 child: Text(
-                  widget.message,
+                  message,
                   // Inherit `SnackBarThemeData.contentTextStyle` — set in
                   // `AppTheme` to `textCream` on `surface2`.
                 ),
               ),
               if (hasAction)
                 TextButton(
-                  onPressed: widget.onAction,
+                  onPressed: onAction,
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.hotViolet,
                     padding: const EdgeInsets.symmetric(
@@ -353,34 +357,49 @@ class _SnackBarCountdownState extends State<SnackBarCountdown>
                     minimumSize: const Size(48, 36),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: Text(widget.actionLabel!),
+                  child: Text(actionLabel!),
                 ),
             ],
           ),
         ),
         // Progress bar hugs the snack's bottom edge, full width.
-        // ColoredBox paints the track (dim violet); the AnimatedBuilder
-        // overlays the draining bar on top. The bar's `widthFactor`
-        // shrinks from 1.0 → 0.0 as the controller advances. The
-        // [SnackBarCountdown.trackKey] anchors the track so widget tests
-        // can measure rendered rect without depending on tree walks.
+        //
+        // Layer cake:
+        //   * Track:   outer ColoredBox (dim violet @ 18% alpha) sized
+        //              by its SizedBox(height: 3, width: infinity) child.
+        //   * Filler:  inner FractionallySizedBox whose widthFactor
+        //              drains 1.0 → 0.0 over `duration`. Holds a
+        //              ColoredBox(hotViolet) keyed for regression
+        //              measurement.
+        //
+        // The SizedBox.width = double.infinity is load-bearing: it
+        // gives the TweenAnimationBuilder's subtree a concrete bounded
+        // parent for FractionallySizedBox to multiply against.
         ColoredBox(
           color: AppColors.hotViolet.withValues(alpha: 0.18),
           child: SizedBox(
-            key: SnackBarCountdown.trackKey,
+            key: trackKey,
             height: 3,
-            // No `width:` — SizedBox inherits its parent Column's
-            // stretched cross-axis width, which IS the snack's full
-            // interior width (the SnackBar passes
-            // `padding: EdgeInsets.zero` so nothing else claims that
-            // width).
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (_, _) {
-                return Align(
+            width: double.infinity,
+            child: TweenAnimationBuilder<double>(
+              // Curves.linear: the bar drains evenly over time — matches
+              // user expectation ("3 s left → 1.5 s left → done"). A
+              // non-linear curve would feel like the bar lies about
+              // remaining time near the start/end.
+              tween: Tween<double>(begin: 1.0, end: 0.0),
+              duration: duration,
+              curve: Curves.linear,
+              builder: (_, value, _) {
+                return FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: (1 - _controller.value).clamp(0.0, 1.0),
-                  child: const ColoredBox(color: AppColors.hotViolet),
+                  // Clamp defensively — TweenAnimationBuilder shouldn't
+                  // produce out-of-range values for a 1.0→0.0 tween,
+                  // but a future tween/curve change could.
+                  widthFactor: value.clamp(0.0, 1.0),
+                  child: const ColoredBox(
+                    key: fillerKey,
+                    color: AppColors.hotViolet,
+                  ),
                 );
               },
             ),

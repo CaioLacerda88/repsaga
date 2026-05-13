@@ -48,7 +48,7 @@ void main() {
         // Locate the call to `showCountdownSnackBar` inside
         // `_onAddExercise`. The call site is the public seam: it
         // dictates duration, l10n key, action. The factory wraps the
-        // SnackBar internals (persist:false, _SnackBarCountdown content)
+        // SnackBar internals (persist:false, SnackBarCountdown content)
         // — those are pinned separately by the scope's own tests.
         final factoryIdx = source.indexOf('showCountdownSnackBar(');
         expect(
