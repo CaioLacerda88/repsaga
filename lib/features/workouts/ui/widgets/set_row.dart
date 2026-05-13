@@ -202,6 +202,16 @@ class _SetRowState extends ConsumerState<SetRow> {
                 AppLocalizations.of(context).setDeleted(deletedSet.setNumber),
               ),
               duration: const Duration(seconds: 10),
+              // persist: false — SnackBar defaults to persistent when an
+              // action is set (Flutter intentional for "wait for user
+              // action"). We want this undo to auto-dismiss at `duration`
+              // even if the user ignores Undo.
+              // showCloseIcon: true — explicit dismiss affordance (UI/UX
+              // 2026-05-13). Material's X icon is the canonical opt-out
+              // when `action:` performs work other than dismiss (here:
+              // UNDO is destructive vs the user's intent).
+              persist: false,
+              showCloseIcon: true,
               action: SnackBarAction(
                 label: AppLocalizations.of(context).undo,
                 onPressed: () {

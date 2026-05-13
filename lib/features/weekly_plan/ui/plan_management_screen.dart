@@ -289,6 +289,18 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         SnackBar(
           content: Text(l10n.routineRemoved),
           duration: const Duration(seconds: 5),
+          // persist: false — SnackBar defaults to persistent when an action
+          // is set (Flutter intentional for "wait for user action"). We
+          // want this undo to auto-dismiss at `duration` even if the user
+          // ignores Undo. `_undoSnackbarActive` is cleared by the `closed`
+          // listener below for ANY close reason, including the timeout
+          // path that this opt-out enables.
+          // showCloseIcon: true — explicit dismiss affordance (UI/UX
+          // 2026-05-13). Material's X icon is the canonical opt-out when
+          // `action:` performs work other than dismiss (here: UNDO is
+          // destructive vs the user's intent).
+          persist: false,
+          showCloseIcon: true,
           action: SnackBarAction(
             label: l10n.undo.toUpperCase(),
             onPressed: () {

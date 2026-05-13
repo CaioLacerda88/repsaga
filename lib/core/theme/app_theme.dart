@@ -205,6 +205,12 @@ class AppTheme {
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: AppColors.surface2,
         contentTextStyle: TextStyle(color: AppColors.textCream),
+        // Material 3's default `closeIconColor` is `onInverseSurface` (a
+        // DARK token intended for a LIGHT inverse-surface backdrop). On our
+        // dark `surface2` snack background that resolves to ~1.4:1 against
+        // the background — invisible. Pin to `textCream` so the X reads
+        // in the same brightness register as the snack content text.
+        closeIconColor: AppColors.textCream,
         behavior: SnackBarBehavior.floating,
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
