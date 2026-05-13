@@ -681,6 +681,31 @@ export const WEEKLY_PLAN = {
    * (which shares the same AOM accessible name "Create new routine").
    */
   createNewRoutineRow: '[flt-semantics-identifier="weekly-plan-create-new-routine"]',
+  /**
+   * 23-P-4 — routine-removed undo SnackBar on PlanManagementScreen.
+   *
+   * Swipe-removing a pending routine fires a 3 s CountdownSnackBar
+   * (`_removeRoutine`, Phase 23 #214) whose message is the l10n key
+   * `routineRemoved` = "Routine removed" (en). Flutter CanvasKit draws
+   * SnackBar text to canvas, so a `text=` selector never resolves; the
+   * AOM exposes the SnackBar content as a `role=group` whose accessible
+   * name is the localized message. Use `.first()` — Flutter renders two
+   * AOM boundaries per SnackBar (per CLAUDE.md E2E Conventions note on
+   * SnackBar text). Locale: en only (full E2E suite runs in English).
+   */
+  routineRemovedUndoSnackBar: 'role=group[name=/Routine removed/i]',
+  /**
+   * 23-P-4 — Undo action button inside the routine-removed SnackBar.
+   *
+   * `SnackBarAction` renders as a TextButton inside the SnackBar —
+   * Flutter exposes it as `role=button` via the AOM. The label is the
+   * l10n key `undo` uppercased at the call site (`l10n.undo.toUpperCase()`)
+   * → "UNDO" DOM text, but AOM name normalization makes it accessible as
+   * "UNDO". Using `role=button[name="UNDO"]` or `role=button[name="Undo"]`
+   * both work because Playwright's role selector matches the accessible
+   * name case-insensitively. Same pattern as `swipeToDeleteUndoButton`.
+   */
+  routineRemovedUndoButton: 'role=button[name="UNDO"]',
 } as const;
 
 // ---------------------------------------------------------------------------

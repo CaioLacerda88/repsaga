@@ -397,4 +397,17 @@ export const TEST_USERS = {
     email: 'e2e-smoke-auto-seed@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // 23-P-4 — E2E dismissal-time assertions for the routine-removed undo snack
+  // -------------------------------------------------------------------------
+  // smokeWeeklyPlanRoutineRemoveUndo: dedicated user for the routine-removed
+  // undo SnackBar auto-dismiss test (23-P-4). Isolated from smokeWeeklyPlan so
+  // the dismissal-time test (which adds then swipe-removes a routine and waits
+  // for the snack to time out) can't race the smokeWeeklyPlan tests that also
+  // manipulate the weekly plan under workers > 1.
+  smokeWeeklyPlanRoutineRemoveUndo: {
+    email: 'e2e-smoke-weekly-plan-remove-undo@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

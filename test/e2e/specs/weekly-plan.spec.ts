@@ -434,3 +434,163 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
     });
   });
 });
+
+// =============================================================================
+// REGRESSION — routine-removed undo SnackBar dismissal time (23-P-4)
+//
+// Pins the 3 s lifetime of the routine-removed undo SnackBar introduced in
+// Phase 23 PR #214 (`_removeRoutine` in `plan_management_screen.dart`). The
+// companion `persist-eats-duration` cluster bug hid for weeks because
+// source-grep widget tests pinned `persist: false` at the call site but
+// nothing asserted the snack actually disappeared at duration. This test
+// closes that gap for the weekly-plan surface.
+//
+// Dedicated user `smokeWeeklyPlanRoutineRemoveUndo` ensures this test, which
+// waits 3 s for a SnackBar to expire, can't race the `smokeWeeklyPlan` plan-
+// manipulation tests under workers > 1 (both navigate to /plan/week and
+// modify the routine list).
+// =============================================================================
+
+test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWeeklyPlanRoutineRemoveUndo').email,
+      getUser('smokeWeeklyPlanRoutineRemoveUndo').password,
+    );
+    await navigateToTab(page, 'Home');
+  });
+
+  test('should auto-dismiss the routine-removed undo SnackBar after 3 s (23-P-4)', async ({
+    page,
+  }) => {
+    // Pins the 3 s lifetime of the routine-removed undo SnackBar. Two
+    // endpoints bracket the duration contract without coupling to the exact
+    // frame the snack closes on:
+    //
+    //   * Visible at ~1.5 s post-fire   — past the 1 s point but well inside
+    //                                      the 3 s window. Guards against
+    //                                      "snack dismissed too early".
+    //   * Dismissed by ~4.5 s post-fire — past 3 s + ~0.4 s Material exit
+    //                                      animation + 1.0 s headroom for
+    //                                      headless jitter. Guards against the
+    //                                      `persist-eats-duration` cluster bug
+    //                                      (`persist: false` dropped or
+    //                                      defaulted to true via action).
+    //
+    // Defensive assertion (c): after the snack times out the routine must
+    // still be absent from the list — confirms the snack expired naturally
+    // rather than being dismissed by a tap-out or Undo during the wait.
+
+    // Navigate to plan management screen.
+    await page.evaluate(() => { window.location.hash = '#/plan/week'; });
+    await page.waitForURL('**/plan/week**', { timeout: 10_000 });
+    await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Ensure the plan is empty so we control which routine gets added.
+    // global-setup clears weekly_plans for this user, but handle re-runs.
+    const popupButton = page.locator(WEEKLY_PLAN.overflowMenuButton);
+    const popupVisible = await popupButton.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (popupVisible) {
+      await popupButton.click();
+      const clearWeek = page.locator(WEEKLY_PLAN.clearWeekOption);
+      const clearVisible = await clearWeek.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (clearVisible) {
+        await clearWeek.click();
+        const clearConfirm = page.locator(WEEKLY_PLAN.clearConfirmButton);
+        const dialogShown = await clearConfirm.isVisible({ timeout: 5_000 }).catch(() => false);
+        if (dialogShown) {
+          await clearConfirm.click();
+          await page.waitForTimeout(2_000);
+          await page.evaluate(() => { window.location.hash = '#/plan/week'; });
+          await page.waitForTimeout(2_000);
+        }
+      } else {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+      }
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Add Push Day to the plan so there is a pending (non-done) routine row
+    // available for swipe-remove. Push Day is a default routine seeded by
+    // seed.sql — available to every user without manual creation.
+    const addBtn = page.locator(WEEKLY_PLAN.addRoutinesButton)
+      .or(page.locator(WEEKLY_PLAN.addRoutineRow));
+    await expect(addBtn.first()).toBeVisible({ timeout: 10_000 });
+    await addBtn.first().click();
+
+    await expect(page.locator(WEEKLY_PLAN.addRoutinesSheetTitle)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // scrollSheetAndClick is defined at the top of this spec file. It handles
+    // Flutter's ListView.builder viewport culling by scrolling until Push Day
+    // becomes visible, then clicking it.
+    await scrollSheetAndClick(page, PUSH_DAY);
+
+    await expect(page.locator(WEEKLY_PLAN.addConfirmButton)).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator(WEEKLY_PLAN.addConfirmButton).click();
+
+    // Confirm Push Day is now in the list.
+    await expect(page.locator(`text=${PUSH_DAY}`).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Swipe-remove the Push Day row (Dismissible direction: endToStart).
+    // The PlanRoutineRow Dismissible is keyed by routine id. We anchor the
+    // horizontal drag on the text label's vertical centre — no dedicated
+    // Semantics identifier exists on the row; the text is the stable anchor.
+    const routineText = page.locator(`text=${PUSH_DAY}`).first();
+    await expect(routineText).toBeVisible({ timeout: 5_000 });
+    const box = await routineText.boundingBox();
+    if (!box) throw new Error('Push Day row bounding box not available');
+
+    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+    const y = box.y + box.height / 2;
+    const startX = viewport.width - 24;
+    const endX = 24;
+
+    await page.mouse.move(startX, y);
+    await page.mouse.down();
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) {
+      const x = startX - ((startX - endX) * i) / steps;
+      await page.mouse.move(x, y, { steps: 2 });
+    }
+    await page.mouse.up();
+
+    // Appearance assertion — snack fires immediately after dismissal.
+    const snackBar = page.locator(WEEKLY_PLAN.routineRemovedUndoSnackBar).first();
+    await expect(snackBar).toBeVisible({ timeout: 5_000 });
+
+    // Endpoint 1 — still visible at ~1.5 s (well inside the 3 s window).
+    await page.waitForTimeout(1_500);
+    await expect(snackBar).toBeVisible({
+      timeout: 1_000, // must already be visible, not "soon will be"
+    });
+
+    // Endpoint 2 — dismissed by ~4.5 s total (1.5 s elapsed + 3 s more).
+    // 3 s duration + ~0.4 s exit animation + 1.0 s headroom = 4.4 s post-fire.
+    await page.waitForTimeout(3_000);
+    await expect(snackBar).toBeHidden({
+      timeout: 1_000,
+    });
+
+    // Defensive assertion (c): Push Day must still be absent from the list —
+    // confirms the snack timed out naturally, not dismissed by Undo. If Undo
+    // had been tapped, Push Day would have been restored and would be visible.
+    await expect(page.locator(`text=${PUSH_DAY}`).first()).toHaveCount(0, {
+      timeout: 2_000,
+    });
+  });
+});
