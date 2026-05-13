@@ -1592,6 +1592,19 @@ function buildRoleSeedRunners(): Record<
       await seedMinimalWorkout(supabase, userId);
     },
 
+    // ── 23-P-4: routine-removed undo SnackBar dismissal-time test ────────
+    // Clean plan state each run so the test starts with an empty plan,
+    // adds a routine inside the test, swipe-removes it, then asserts the
+    // snack auto-dismisses. Isolated from smokeWeeklyPlan so the 3 s wait
+    // in this test can't race the smokeWeeklyPlan plan-manipulation tests.
+    smokeWeeklyPlanRoutineRemoveUndo: async (supabase, userId) => {
+      await supabase.from('weekly_plans').delete().eq('user_id', userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Weekly Plan Tester',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+
     // ── Weekly plan review (completed weekly plan) ──────────────────────
     smokeWeeklyPlanReview: async (supabase, userId) => {
       await seedWeeklyPlanReviewData(supabase, userId);

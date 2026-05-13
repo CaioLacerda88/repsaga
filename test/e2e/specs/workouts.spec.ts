@@ -1869,6 +1869,75 @@ test.describe('Add exercise undo (PR3 — H5)', () => {
     await confirmDiscard.click();
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
+
+  test('should auto-dismiss the add-exercise undo SnackBar after 3.5 s (23-P-4)', async ({
+    page,
+  }) => {
+    // Pins the 3.5 s lifetime of the add-exercise undo SnackBar introduced
+    // in Phase 23 PR #214. Two endpoints bracket the duration contract:
+    //
+    //   * Visible at ~1.5 s post-fire   — past the 1 s point but well
+    //                                      inside the 3.5 s window.
+    //                                      Guards against "snack dismissed
+    //                                      too early" regressions.
+    //   * Dismissed by ~5.0 s post-fire — past 3.5 s duration + the
+    //                                      ~0.4 s Material exit animation +
+    //                                      1.0 s headroom for headless jitter.
+    //                                      Guards against `persist: false`
+    //                                      being dropped (the
+    //                                      `persist-eats-duration` cluster bug).
+    //
+    // Uses waitForTimeout for the "still visible" check because the test
+    // is asserting a wall-clock duration, not a state/network event — there
+    // is no deterministic signal to waitFor. The subsequent "should be
+    // hidden" assertion uses toBeHidden({ timeout }) to absorb any frame-
+    // level jitter in the exit animation without adding extra wall-clock
+    // slack.
+    await startEmptyWorkout(page);
+
+    // Add bench press via the FAB picker so the undo snack fires.
+    await page.click(WORKOUT.addExerciseFab);
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFill(
+      page,
+      EXERCISE_PICKER.searchInput,
+      SEED_EXERCISES.benchPress,
+    );
+    const addBench = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.benchPress))
+      .first();
+    await expect(addBench).toBeVisible({ timeout: 10_000 });
+    await addBench.click();
+
+    // Appearance assertion — snack fires immediately after picker dismisses.
+    const snackBar = page.locator(WORKOUT.addExerciseUndoSnackBar).first();
+    await expect(snackBar).toBeVisible({ timeout: 5_000 });
+
+    // Endpoint 1 — still visible at ~1.5 s (well inside the 3.5 s window).
+    await page.waitForTimeout(1_500);
+    await expect(snackBar).toBeVisible({
+      timeout: 1_000, // must already be visible, not "soon will be"
+    });
+
+    // Endpoint 2 — dismissed by ~5.0 s post-fire.
+    //   1.5 s (endpoint 1 elapsed) + 3.5 s (this wait) = 5.0 s post-fire.
+    //   Snack lifetime: 3.5 s duration + ~0.4 s exit animation ≈ 3.9 s.
+    //   5.0 s lands 1.1 s past close — that's the headroom against headless
+    //   jitter and any frame-level slack in the Material exit transition.
+    await page.waitForTimeout(3_500);
+    await expect(snackBar).toBeHidden({
+      timeout: 1_000,
+    });
+
+    // Cleanup.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 // =============================================================================
