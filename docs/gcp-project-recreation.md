@@ -482,7 +482,7 @@ If the old project's `*-play-api.json` file is still on disk, delete it. Inert o
 
 ## Phase 14 — Update WIP.md checklist
 
-🤖 Claude flips these in `tasks/WIP.md`:
+🤖 Claude flips these in `docs/WIP.md`:
 
 - [x] **GCP project display name** — superseded by fresh-project creation
 - [x] **Pub/Sub topic** — recreated as `repsaga-rtdn`

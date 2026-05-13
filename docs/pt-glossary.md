@@ -275,7 +275,7 @@ The implementer of Stage 3 (tech-lead) follows this:
    - Draft pt-BR `description` and `form_tips` per §5 style rules and §1 term conventions.
 3. Cross-check every drafted row against §1 vocabulary — search-replace any deviation.
 4. Verify spelling with a Portuguese spell-checker pass.
-5. Emit single `INSERT ... SELECT FROM (VALUES ...)` JOINed on `exercises.slug` (pattern in PLAN.md Stage 3).
+5. Emit single `INSERT ... SELECT FROM (VALUES ...)` JOINed on `exercises.slug` (pattern in docs/PROJECT.md §4 Phase 15f).
 6. Commit; orchestrator triggers spec compliance + code quality reviews; user does the 75-min skim during Stage 8 staging verification.
 
 ---

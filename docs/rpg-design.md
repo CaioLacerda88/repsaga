@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-25
 **Status:** Approved (pending writing-plans handoff)
-**Phase:** 18 (PLAN.md)
+**Phase:** 18 (docs/PROJECT.md §4)
 **Author:** orchestrator + product-owner + ui-ux-critic + sports-science research
 
 ---
