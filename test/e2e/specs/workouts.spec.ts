@@ -1921,8 +1921,11 @@ test.describe('Add exercise undo (PR3 — H5)', () => {
       timeout: 1_000, // must already be visible, not "soon will be"
     });
 
-    // Endpoint 2 — dismissed by ~5.0 s total (1.5 s elapsed + 3.5 s more).
-    // 3.5 s duration + ~0.4 s exit animation + 1.0 s headroom = 4.9 s post-fire.
+    // Endpoint 2 — dismissed by ~5.0 s post-fire.
+    //   1.5 s (endpoint 1 elapsed) + 3.5 s (this wait) = 5.0 s post-fire.
+    //   Snack lifetime: 3.5 s duration + ~0.4 s exit animation ≈ 3.9 s.
+    //   5.0 s lands 1.1 s past close — that's the headroom against headless
+    //   jitter and any frame-level slack in the Material exit transition.
     await page.waitForTimeout(3_500);
     await expect(snackBar).toBeHidden({
       timeout: 1_000,

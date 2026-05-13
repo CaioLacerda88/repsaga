@@ -512,6 +512,13 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
         await page.waitForTimeout(500);
       }
     }
+    // Unconditional Escape + 500 ms settle. Empirically required even on
+    // the clean first-run path (global-setup cleared the plan, popup never
+    // opened): without it the second `weekly-plan-title` visibility check
+    // below times out at 10 s on a non-zero fraction of runs. The 500 ms
+    // wait gives the freshly-navigated `/plan/week` overlay tree time to
+    // settle (PR-#217 reviewer-cycle Finding 3: removing this regressed
+    // the test from green to flaky).
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
 
@@ -546,13 +553,37 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
       timeout: 10_000,
     });
 
+    // Wait for the "Saved" confirmation snackbar to fire and dismiss before
+    // measuring the row for the swipe. The Saved snack has a 1 s duration +
+    // ~0.4 s exit animation, fired ~300 ms after upsertPlan resolves. While
+    // it is on-screen the bottom of the viewport reflows and the Push Day
+    // row's element can be detached/reattached mid-frame — that's what
+    // makes `boundingBox()` return null AND `scrollIntoViewIfNeeded()`
+    // fail with "Element is not attached to the DOM". A 2.5 s settle covers
+    // the 1.7 s worst-case Saved lifetime + headroom.
+    await page.waitForTimeout(2_500);
+
     // Swipe-remove the Push Day row (Dismissible direction: endToStart).
     // The PlanRoutineRow Dismissible is keyed by routine id. We anchor the
     // horizontal drag on the text label's vertical centre — no dedicated
     // Semantics identifier exists on the row; the text is the stable anchor.
+    //
+    // boundingBox() can intermittently return null for Flutter Web text
+    // matches: `text=` resolves to an inner element whose DOM layout is
+    // not yet measurable even though the AOM tree reports it visible.
+    // Scroll into view + small settle + retry up to 5× absorbs that
+    // measurement flake without papering over a real regression — if the
+    // row never measures, the test fails with the explicit error below.
     const routineText = page.locator(`text=${PUSH_DAY}`).first();
     await expect(routineText).toBeVisible({ timeout: 5_000 });
-    const box = await routineText.boundingBox();
+    await routineText.scrollIntoViewIfNeeded({ timeout: 5_000 });
+
+    let box: Awaited<ReturnType<typeof routineText.boundingBox>> = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      box = await routineText.boundingBox();
+      if (box && box.width > 0 && box.height > 0) break;
+      await page.waitForTimeout(200);
+    }
     if (!box) throw new Error('Push Day row bounding box not available');
 
     const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
@@ -579,8 +610,11 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
       timeout: 1_000, // must already be visible, not "soon will be"
     });
 
-    // Endpoint 2 — dismissed by ~4.5 s total (1.5 s elapsed + 3 s more).
-    // 3 s duration + ~0.4 s exit animation + 1.0 s headroom = 4.4 s post-fire.
+    // Endpoint 2 — dismissed by ~4.5 s post-fire.
+    //   1.5 s (endpoint 1 elapsed) + 3.0 s (this wait) = 4.5 s post-fire.
+    //   Snack lifetime: 3 s duration + ~0.4 s exit animation ≈ 3.4 s.
+    //   4.5 s lands 1.1 s past close — that's the headroom against headless
+    //   jitter and any frame-level slack in the Material exit transition.
     await page.waitForTimeout(3_000);
     await expect(snackBar).toBeHidden({
       timeout: 1_000,

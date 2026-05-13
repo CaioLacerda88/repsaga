@@ -694,18 +694,6 @@ export const WEEKLY_PLAN = {
    * SnackBar text). Locale: en only (full E2E suite runs in English).
    */
   routineRemovedUndoSnackBar: 'role=group[name=/Routine removed/i]',
-  /**
-   * 23-P-4 — Undo action button inside the routine-removed SnackBar.
-   *
-   * `SnackBarAction` renders as a TextButton inside the SnackBar —
-   * Flutter exposes it as `role=button` via the AOM. The label is the
-   * l10n key `undo` uppercased at the call site (`l10n.undo.toUpperCase()`)
-   * → "UNDO" DOM text, but AOM name normalization makes it accessible as
-   * "UNDO". Using `role=button[name="UNDO"]` or `role=button[name="Undo"]`
-   * both work because Playwright's role selector matches the accessible
-   * name case-insensitively. Same pattern as `swipeToDeleteUndoButton`.
-   */
-  routineRemovedUndoButton: 'role=button[name="UNDO"]',
 } as const;
 
 // ---------------------------------------------------------------------------
