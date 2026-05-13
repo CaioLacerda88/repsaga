@@ -934,8 +934,16 @@ test.describe('Workout history', () => {
 // PR-2 fix: overlays moved INTO the Scaffold body slot. The Scaffold paints
 // the snackbar slot AFTER the body (`_ScaffoldSlot.snackBar`), so SnackBars
 // now render visually + hit-test ABOVE the rest-timer scrim with no extra
-// ScaffoldMessenger hoisting required. Companion change: SnackBar duration
-// 4s → 10s (Material max) so a user mid-rest has time to react.
+// ScaffoldMessenger hoisting required.
+//
+// Companion change history:
+//   * PR-2 C3/Q5 (2026-04) bumped the set-delete snack duration from 4 s to
+//     10 s — the rationale was "a user mid-rest with eyes off the phone
+//     needs more than 4 s to react."
+//   * Phase 23 PR #214 (2026-05) reverted the bump to 5 s after the
+//     countdown progress bar (Phase 23 same PR) makes the remaining time
+//     legible — the extra-wide reaction window became unnecessary visual
+//     debt. The duration assertion below pins the new 5 s contract.
 //
 // Both visibility (#1, #3) and reachability (#2) need E2E coverage per the
 // PR-2 brief — widget tests can't measure z-order or full-screen hit-testing
@@ -1004,10 +1012,11 @@ test.describe('Set deletion during rest timer (PR2 — C3)', () => {
   }) => {
     // Realistic C3 repro: swipe-delete a set FIRST (snackbar fires, no
     // overlay yet → Dismissible owns the gesture), then immediately
-    // complete a sibling set (rest timer fires within the snackbar's 10s
-    // window). Pre-fix, the rest-timer scrim painted ABOVE the snackbar
-    // and ate the Undo tap. Post-fix, the snackbar slot paints above the
-    // overlay (overlays moved INTO the Scaffold body slot).
+    // complete a sibling set (rest timer fires within the snackbar's
+    // 5 s window — Phase 23 #214, down from 10 s). Pre-fix, the
+    // rest-timer scrim painted ABOVE the snackbar and ate the Undo tap.
+    // Post-fix, the snackbar slot paints above the overlay (overlays
+    // moved INTO the Scaffold body slot).
     //
     // Why not "complete first → swipe during rest"? The rest-timer's
     // outer GestureDetector covers the viewport with HitTestBehavior.opaque
@@ -1039,8 +1048,9 @@ test.describe('Set deletion during rest timer (PR2 — C3)', () => {
     const snackBar = page.locator(WORKOUT.swipeToDeleteSnackBar).first();
     await expect(snackBar).toBeVisible({ timeout: 5_000 });
 
-    // Step 2 — within the snackbar's 10s window, complete what is now
-    // set #1 (originally set #2 — the one we set weight on). Setting weight
+    // Step 2 — within the snackbar's 5 s window (Phase 23 #214),
+    // complete what is now set #1 (originally set #2 — the one we set
+    // weight on). Setting weight
     // via the LAST `Weight value` button targets the LAST uncompleted set,
     // which is now at markSetDone index 1 (set #3 was not given values).
     // To trigger rest reliably, complete the set whose weight is non-zero —
@@ -1140,18 +1150,34 @@ test.describe('Set deletion during rest timer (PR2 — C3)', () => {
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('should keep undo SnackBar visible past the original 4s ceiling (PR2 — Q5: 10s duration)', async ({
+  test('should auto-dismiss the set-delete undo SnackBar at its 5 s duration (Phase 23 #214)', async ({
     page,
   }) => {
-    // PR-2 acceptance #3: the SnackBar duration was bumped from 4s to 10s
-    // (Material max). A user mid-rest with eyes off the phone needs more
-    // than 4s to notice an accidental swipe-delete and tap Undo. This test
-    // pins the duration: the SnackBar must still be visible ~6s after it
-    // fires — well past the old 4s ceiling, well inside the new 10s one.
+    // Pins the new set-delete undo SnackBar duration (5 s, down from
+    // PR-2 Q5's 10 s ceiling). The countdown bar that ships in the
+    // same Phase 23 PR makes the remaining time legible, so the
+    // extra-wide reaction window is unnecessary visual debt.
     //
-    // Run WITHOUT a rest-timer trigger so the test isn't bottlenecked on
-    // any other timing. The duration contract is independent of the
-    // overlay restack — they are separate facets of the same fix.
+    // Two endpoints asserted — together they bracket the duration
+    // contract without coupling to the exact frame the snack closes
+    // on:
+    //   * Visible at ~2.5 s post-fire   → past the old 4 s ceiling but
+    //                                     well inside the new 5 s.
+    //                                     Regression guard against
+    //                                     anyone dropping the duration
+    //                                     below ~3 s ("snack feels
+    //                                     rushed").
+    //   * Dismissed by ~6 s post-fire   → past the new 5 s ceiling +
+    //                                     the snack's 250 ms reverse
+    //                                     animation. Regression guard
+    //                                     against anyone bumping the
+    //                                     duration back up to the old
+    //                                     10 s.
+    //
+    // Run WITHOUT a rest-timer trigger so the test isn't bottlenecked
+    // on any other timing — z-order / tap-reachability under the rest
+    // overlay is already pinned by the two preceding tests in this
+    // describe block. This test owns ONLY the duration contract.
     await startEmptyWorkout(page);
     await addExercise(page, SEED_EXERCISES.benchPress);
     await page.locator(WORKOUT.addSetButton).first().click();
@@ -1164,13 +1190,20 @@ test.describe('Set deletion during rest timer (PR2 — C3)', () => {
     const snackBar = page.locator(WORKOUT.swipeToDeleteSnackBar).first();
     await expect(snackBar).toBeVisible({ timeout: 5_000 });
 
-    // Wait 6 seconds — past the old 4s ceiling. The SnackBar must still be
-    // visible (the new 10s duration means we have ~4s of grace remaining).
-    // Using waitForTimeout is acceptable here because the assertion target
-    // is a duration, not a network/state event.
-    await page.waitForTimeout(6_000);
+    // Endpoint 1 — still visible at ~2.5 s. `waitForTimeout` is the
+    // right primitive here because the assertion target is a duration,
+    // not a state/network event.
+    await page.waitForTimeout(2_500);
     await expect(snackBar).toBeVisible({
-      timeout: 1_000, // tight check — must already be visible, not "soon"
+      timeout: 1_000, // tight — must already be visible, not "soon"
+    });
+
+    // Endpoint 2 — dismissed by ~6 s. We're at 2.5 s now; wait another
+    // 3.5 s = 6 s total. Snack's 5 s duration + ~250 ms reverse
+    // animation = ~5.25 s, so 6 s lands comfortably past the close.
+    await page.waitForTimeout(3_500);
+    await expect(snackBar).toBeHidden({
+      timeout: 1_000,
     });
 
     // Clean up.
@@ -1775,7 +1808,9 @@ test.describe('Add exercise undo (PR3 — H5)', () => {
     // Note: addExercise() helper performs a single round-trip and then
     // taps Add Set internally, but the snackbar is shown by the SCREEN
     // (`_onAddExercise`) so it lands BEFORE the helper's Add Set tap.
-    // The snackbar's 4s duration easily covers the helper sequence.
+    // The snackbar's 3.5 s duration (Phase 23 #214) easily covers the
+    // helper sequence — the appearance check below is bounded by the
+    // 5 s Playwright timeout, not by the snack lifetime.
     const snackBar = page.locator(WORKOUT.addExerciseUndoSnackBar).first();
     await expect(snackBar).toBeVisible({ timeout: 5_000 });
 
