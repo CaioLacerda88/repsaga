@@ -343,22 +343,7 @@ class SnackBarCountdown extends StatelessWidget {
                 ),
               ),
               if (hasAction)
-                TextButton(
-                  onPressed: onAction,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.hotViolet,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    // 48 dp minimum width = Material's tap-target floor.
-                    // Not a fixed width — the button grows with longer
-                    // localized labels (e.g. PT "DESFAZER" vs EN "UNDO").
-                    minimumSize: const Size(48, 36),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(actionLabel!),
-                ),
+                _UndoButton(label: actionLabel!, onPressed: onAction!),
             ],
           ),
         ),
@@ -406,6 +391,64 @@ class SnackBarCountdown extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Undo action button embedded inside [SnackBarCountdown]'s content row.
+///
+/// Two responsibilities, one widget:
+///   1. Run the caller's [onPressed] (the restore action — restoreExercise,
+///      restoreSet, etc.).
+///   2. Dismiss the current SnackBar with reason `action`, recreating the
+///      auto-dismiss behaviour Flutter's built-in [SnackBarAction] gets
+///      for free in the `SnackBar.action` slot.
+///
+/// **Why we can't use [SnackBarAction]:** the action lives inside
+/// `SnackBar.content` so the countdown bar can span the full snack
+/// interior (see [SnackBarCountdown] class doc). `SnackBarAction`'s
+/// auto-dismiss is special-cased by `ScaffoldMessengerState` only when
+/// it's wired through the `SnackBar.action` slot.
+///
+/// **Lifecycle parity with `SnackBarAction`:**
+///   * `onPressed` fires synchronously BEFORE `hideCurrentSnackBar` —
+///     matches Flutter's order so any state mutation (restore) is
+///     observable before the snack closes.
+///   * Dismiss uses `SnackBarClosedReason.action` — listeners on the
+///     factory's returned `controller.closed` (e.g. plan-management's
+///     `_undoSnackbarActive` flag clearing) fire the same way they
+///     would for a real `SnackBarAction`.
+///
+/// Extracted as a `StatelessWidget` rather than inlined as a closure so
+/// the build context used for `ScaffoldMessenger.of(...)` is THIS
+/// widget's mount-point context — guaranteed to be inside the route-
+/// scoped messenger that owns the snack (the messenger inserts this
+/// content widget into its own subtree).
+class _UndoButton extends StatelessWidget {
+  const _UndoButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: () {
+        onPressed();
+        ScaffoldMessenger.of(
+          context,
+        ).hideCurrentSnackBar(reason: SnackBarClosedReason.action);
+      },
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.hotViolet,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        // 48 dp minimum width = Material's tap-target floor. Not a
+        // fixed width — the button grows with longer localized labels
+        // (e.g. PT "DESFAZER" vs EN "UNDO").
+        minimumSize: const Size(48, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label),
     );
   }
 }

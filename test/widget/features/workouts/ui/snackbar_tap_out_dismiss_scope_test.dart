@@ -250,5 +250,102 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'should dismiss the snack when UNDO is tapped (2026-05-14 regression: '
+      'embedded TextButton lost Material`s auto-dismiss)',
+      (tester) async {
+        // Regression: when we moved the action INTO `SnackBar.content`
+        // (so the countdown bar could span the full snack width), we
+        // lost Flutter's `SnackBar.action`-slot special-case that
+        // auto-calls `hideCurrentSnackBar` after the user's callback.
+        // The fix recreates that lifecycle inside `_UndoButton`:
+        // `onPressed()` fires synchronously, then
+        // `ScaffoldMessenger.of(context).hideCurrentSnackBar(
+        // reason: SnackBarClosedReason.action)`.
+        //
+        // Two load-bearing assertions:
+        //   * `onUndo` flag flips to true — proves the user's callback
+        //     still runs.
+        //   * Snack widget is gone after pump-and-settle — proves the
+        //     dismiss fires.
+        // Asserted SEPARATELY so a regression in either path fails
+        // with a precise diagnostic.
+        bool undoFired = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ScaffoldMessenger(
+              child: SnackBarTapOutDismissScope(
+                child: Scaffold(
+                  body: Center(
+                    child: Builder(
+                      builder: (innerContext) {
+                        return ElevatedButton(
+                          onPressed: () {
+                            SnackBarTapOutDismissScope.of(
+                              innerContext,
+                            ).showCountdownSnackBar(
+                              context: innerContext,
+                              message: 'Set 1 deleted',
+                              duration: const Duration(seconds: 10),
+                              action: SnackBarAction(
+                                label: 'UNDO',
+                                onPressed: () {
+                                  undoFired = true;
+                                },
+                              ),
+                            );
+                          },
+                          child: const Text('Show snack'),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.text('Show snack'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.byType(SnackBarCountdown),
+          findsOneWidget,
+          reason: 'Pre-condition: snack visible after entrance animation.',
+        );
+
+        // Tap the embedded UNDO button. `find.widgetWithText` scoped to
+        // TextButton avoids matching the message text (which could
+        // also contain 'UNDO' in some locales).
+        await tester.tap(find.widgetWithText(TextButton, 'UNDO'));
+        // Reverse animation takes ~250 ms; pump 400 ms to be safe.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(
+          undoFired,
+          isTrue,
+          reason:
+              'UNDO callback MUST fire when the user taps the button. If '
+              'this fails the `_UndoButton.onPressed` lost its callback '
+              'invocation — the user`s restore action never runs.',
+        );
+        expect(
+          find.byType(SnackBarCountdown),
+          findsNothing,
+          reason:
+              'Snack MUST auto-dismiss after UNDO is tapped — recreates '
+              'Material`s `SnackBarAction` lifecycle. If this fails the '
+              '`hideCurrentSnackBar(reason: action)` call was dropped '
+              'from `_UndoButton.onPressed` and the user is stuck '
+              'staring at a snack until its duration expires (the bug '
+              'reported on-device 2026-05-14).',
+        );
+      },
+    );
   });
 }
