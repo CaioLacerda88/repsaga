@@ -8,7 +8,7 @@
 /// correctly.
 ///
 /// **Locked semantics** (signed off 2026-05-04, full spec in
-/// `PLAN.md` Phase 20 → 5-state row matrix):
+/// `PROJECT.md` Phase 20 → 5-state row matrix):
 ///   - "PR" means *currently standing* — best across all history INCLUDING
 ///     this workout's own earlier sets. A set that briefly held a PR but
 ///     was later superseded mid-workout drops to
@@ -207,7 +207,7 @@ void main() {
       ]);
     });
 
-    test('case 6 — bench-press supersession scenario from PLAN.md (the locked '
+    test('case 6 — bench-press supersession scenario from PROJECT.md (the locked '
         'multi-PR example): prior 60x8; sets 65x8, 70x6, 75x5, 60x5', () {
       // Standing PRs: maxWeight 60 (8 reps), maxReps 8, maxVolume 480.
       //
@@ -239,7 +239,7 @@ void main() {
       //   set 3 = completedStandingPr
       //   set 4 = completedNonPr
       //
-      // NOTE: The PLAN.md example said "set 1 superseded" but that
+      // NOTE: The PROJECT.md example said "set 1 superseded" but that
       // assumed a single-axis (heaviest-weight) view. The locked binary
       // rule explicitly says: "if ANY type still stands, the row stays
       // standing." Set 1's volume was never beaten by sets 2-4 (they all
@@ -421,7 +421,7 @@ void main() {
       },
     );
 
-    // --- Bonus coverage for design corners explicitly called out in PLAN.md
+    // --- Bonus coverage for design corners explicitly called out in PROJECT.md
     // and the PrRowState dartdoc. These aren't in the 10 cases the brief
     // mandated but encode the locked rules so future changes don't drift. ---
 
@@ -841,7 +841,7 @@ void main() {
       ], reason: 'completed at 55x5 < historical 60x5 → completedNonPr');
     });
 
-    test('bench-press cascade (binary rule) from PLAN.md: prior 60x8; '
+    test('bench-press cascade (binary rule) from PROJECT.md: prior 60x8; '
         'sets 65x8, 70x6, 75x5, then a 5th set that supersedes set 3', () {
       // This is the canonical Phase 20 cascade scenario, extended by one
       // more set to verify that set 3 transitions from standing to superseded
@@ -974,7 +974,7 @@ void main() {
           ],
           reason:
               'single-axis cascade: sets 1 and 2 superseded in order, set 3 '
-              'stands — matches the intuitive PLAN.md narrative',
+              'stands — matches the intuitive PROJECT.md narrative',
         );
       },
     );

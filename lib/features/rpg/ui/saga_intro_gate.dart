@@ -274,7 +274,7 @@ Future<void> markSagaIntroSeenForUser(String userId) async {
 // real history. After deleting the gamification feature, the thresholds and
 // localization keys live here — the only consumer is the intro overlay.
 //
-// Threshold table (locked, mirrors PLAN.md §17b):
+// Threshold table (locked, mirrors PROJECT.md §17b):
 //   * 250_000    → DIAMOND
 //   * 125_000    → PLATINUM
 //   *  60_000    → GOLD

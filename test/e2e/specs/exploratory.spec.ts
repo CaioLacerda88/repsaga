@@ -21,8 +21,8 @@
  * Available starting screens via EXPL_LANDING:
  *   home, workout (start a fresh empty workout), routines, exercises, records, profile
  *
- * Plan: tasks/active-workout-exploratory-testplan.md
- * Findings: tasks/active-workout-findings.md
+ * Plan: PROJECT.md §4 Phase 22 (Active Workout Audit Fix Wave)
+ * Findings: PROJECT.md §4 Phase 22 (cluster ledger)
  */
 
 import { test } from '@playwright/test';

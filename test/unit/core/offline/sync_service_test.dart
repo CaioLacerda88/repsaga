@@ -246,7 +246,7 @@ void main() {
 
     // ------------------------------------------------------------------
     // Test: Cold-launch drain fires when app boots already-online with
-    // pre-existing queue items (PLAN.md backlog item — was previously
+    // pre-existing queue items (PROJECT.md backlog item — was previously
     // pinned as buggy "does NOT drain on initial online emission").
     //
     // The bug: `isOnlineProvider` defaults to `true` (optimistic) before

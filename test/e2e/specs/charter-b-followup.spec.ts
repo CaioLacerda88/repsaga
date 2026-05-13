@@ -18,7 +18,7 @@ import { getUser } from '../fixtures/worker-users';
 
 const RUN = process.env['EXPL_CHARTER_B_FU'] === '1';
 const VIEWPORT_PORTRAIT = { width: 393, height: 852 };
-const SS_BASE = 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots';
+const SS_BASE = 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots';
 
 test.describe('Charter B — Follow-up probes', () => {
   test.skip(!RUN, 'Set EXPL_CHARTER_B_FU=1 to run');

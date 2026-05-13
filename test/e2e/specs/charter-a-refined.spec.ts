@@ -63,7 +63,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     findings.push(`[REFINED-01] AOM: ${JSON.stringify(snapshot, null, 2).slice(0, 2000)}`);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-initial.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-initial.png',
     });
   });
 
@@ -106,7 +106,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     findings.push(`[REFINED-02] Tap targets:\n  ${report.join('\n  ')}`);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-tap-targets.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-tap-targets.png',
     });
   });
 
@@ -222,7 +222,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-weight-dialog.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-weight-dialog.png',
     });
   });
 
@@ -270,7 +270,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
       findings.push(`[REFINED-04] AOM after LP1: ${aomAfter1.slice(0, 500)}`);
 
       await page.screenshot({
-        path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-set-type-1.png',
+        path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-set-type-1.png',
       });
 
       // Long-press 2
@@ -305,7 +305,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
       findings.push(`[REFINED-04] AOM after LP4: ${aomAfter4.slice(0, 500)}`);
 
       await page.screenshot({
-        path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-set-type-4.png',
+        path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-set-type-4.png',
       });
     } else {
       findings.push('[REFINED-04] SKIPPED: no set row found');
@@ -332,7 +332,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     findings.push(`[REFINED-05] Before complete: pending_pr=${pendingBefore}, none=${noneBefore}`);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-pre-complete.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-pre-complete.png',
     });
 
     // Complete the set
@@ -355,7 +355,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
       findings.push(`[REFINED-05] After complete (500kg, 1 rep): standing=${standingPr}, non_pr=${completedNonPr}`);
 
       await page.screenshot({
-        path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-post-complete.png',
+        path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-post-complete.png',
       });
 
       // Dismiss rest timer if present
@@ -461,7 +461,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-swipe.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-swipe.png',
     });
   });
 
@@ -482,7 +482,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     await page.waitForTimeout(1000);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-rest-timer.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-rest-timer.png',
     });
 
     // Check what's visible
@@ -527,7 +527,7 @@ test.describe('Charter A — Refined pass (weight dialog + tap targets + PR stat
     findings.push(`[REFINED-08] Final AOM: ${JSON.stringify(finalAom, null, 2).slice(0, 1000)}`);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-refined-final.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-refined-final.png',
     });
 
     // Summary of all errors

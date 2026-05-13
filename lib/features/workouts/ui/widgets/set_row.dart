@@ -402,7 +402,7 @@ class _SetRowFrame extends StatelessWidget {
 
     final tintWidget = _isGoldTint
         // 4% gold for predicted/standing, 2% for superseded — see the
-        // PrRowState matrix in PLAN.md Phase 20.
+        // PrRowState matrix in PROJECT.md Phase 20.
         ? Positioned.fill(
             child: Builder(
               builder: (ctx) {

@@ -9,7 +9,7 @@ import '../../personal_records/models/record_type.dart';
 ///
 /// The state drives Direction B's row chrome (left rune-stripe, background
 /// tint, value text color, done-mark, right bracket) per the locked spec in
-/// `PLAN.md` Phase 20 → 5-state row matrix.
+/// `PROJECT.md` Phase 20 → 5-state row matrix.
 ///
 /// **Standing-vs-superseded semantic.** A "PR" in this enum is a *currently
 /// standing* record — the best across all history INCLUDING this workout's

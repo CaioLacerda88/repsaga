@@ -274,7 +274,7 @@ void main() {
 // Shared fixture helpers (public — used by rpg_backfill_resume_test.dart)
 // ---------------------------------------------------------------------------
 
-/// Tolerance matching the spec parity requirement (PLAN.md: "within 0.01").
+/// Tolerance matching the spec parity requirement (PROJECT.md: "within 0.01").
 const double kBackfillTol = 0.01;
 
 /// Seeds the fixture workout schedule into the database.

@@ -665,7 +665,7 @@ Rationale (from product-owner research):
 - Subscription should gate **advanced analytics, export, coaching** — not the core loop.
 - Free RPG drives the free→paid funnel via differentiation against Strong/Hevy (no RPG) and conversion to premium analytics.
 
-This is documented in PLAN.md Phase 16 as a hard constraint on what subscription can and cannot gate.
+This is documented in PROJECT.md Phase 16 as a hard constraint on what subscription can and cannot gate.
 
 ---
 
@@ -742,4 +742,4 @@ The implementation is done when:
 
 ---
 
-*End of design spec. Next: handoff to writing-plans skill to convert into Phase 18 implementation plan in PLAN.md.*
+*End of design spec. Next: handoff to writing-plans skill to convert into Phase 18 implementation plan in PROJECT.md.*

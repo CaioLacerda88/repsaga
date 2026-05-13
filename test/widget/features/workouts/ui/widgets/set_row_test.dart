@@ -451,7 +451,7 @@ void main() {
       );
     });
 
-    group('bodyweight chrome (PLAN.md backlog 20-P-2)', () {
+    group('bodyweight chrome (PROJECT.md backlog 20-P-2)', () {
       // Bodyweight exercises (push-ups, pull-ups, planks) have no meaningful
       // weight axis. The resolver in `pr_row_state_resolver.dart` already
       // excludes weight from PR detection in this mode (only RecordType.maxReps
@@ -546,7 +546,7 @@ void main() {
       );
     });
 
-    group('Failure micro-label color (PLAN.md backlog 20-P-3)', () {
+    group('Failure micro-label color (PROJECT.md backlog 20-P-3)', () {
       // Audit Finding B: pending failure-set label should be amber (warning),
       // not red (error). Red conflicts with the gym-floor emotional register
       // — the failure label in red on a pending set reads as "something is
@@ -1450,7 +1450,7 @@ void main() {
       });
 
       // -----------------------------------------------------------------
-      // PR #152 fix #3 contract pin — see `tasks/lessons.md`
+      // PR #152 fix #3 contract pin — see `PROJECT.md §0 Cluster Ledger`
       // "Semantics container/explicitChildNodes is needed at EVERY tap-
       // merging boundary, not just one place" + "identifiers must live on
       // the actual tap target, not its container".

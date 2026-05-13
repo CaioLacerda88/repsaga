@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 15f Stage 5 — manual healthcheck for the four schema invariants
 # defined in §14.1 of the design spec
-# (docs/superpowers/specs/2026-04-24-exercise-content-localization-design.md):
+# (docs/PROJECT.md §4 Phase 15f):
 #
 #   1. Every `exercises` row has an `'en'` translation.
 #   2. Every default exercise has a `'pt'` translation.
