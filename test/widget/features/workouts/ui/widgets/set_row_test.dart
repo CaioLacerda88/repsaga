@@ -64,11 +64,16 @@ ProviderContainer makeContainer(ActiveWorkoutState? initialState) {
   return container;
 }
 
-Widget buildTestWidget(Widget child, {ProviderContainer? container}) {
+Widget buildTestWidget(
+  Widget child, {
+  ProviderContainer? container,
+  Locale? locale,
+}) {
   return UncontrolledProviderScope(
     container: container ?? makeContainer(null),
     child: TestMaterialApp(
       theme: AppTheme.dark,
+      locale: locale,
       home: Scaffold(
         body: SizedBox(
           // SetRow has a WeightStepper + RepsStepper side by side inside an
@@ -332,161 +337,12 @@ void main() {
       );
     });
 
-    group('ghost text (previous session hint)', () {
-      testWidgets(
-        'shows ghost text when lastSet is provided and set is not completed',
-        (tester) async {
-          final set = makeSet(isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-        },
-      );
-
-      testWidgets('hides ghost text when set is already completed', (
-        tester,
-      ) async {
-        // Critique Problem 3 wanted the hint to persist post-completion too,
-        // but the first persistence attempt (PR #159) re-triggered the
-        // Phase 20 Flutter Web semantics-engine role-swap bug on standing-PR
-        // rows: adding the hint Text widget on completion caused a subsequent
-        // SemanticsUpdate during GenericRole → SemanticButton, dropping the
-        // row frame's `flt-semantics-identifier` emission. Reverted to the
-        // pre-completion-only hint here; persistence needs a layout-stable
-        // redesign in a follow-up PR (e.g. fixed-height hint slot so the
-        // parent Column doesn't reflow when the Text appears/disappears).
-        final set = makeSet(isCompleted: true);
-        final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
-
-        expect(find.text('Previous: 80kg × 8'), findsNothing);
-      });
-
-      testWidgets('hides ghost text when lastSet is null', (tester) async {
-        final set = makeSet(isCompleted: false);
-
-        await tester.pumpWidget(
-          buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
-        );
-
-        // No hint text should appear when lastSet is null.
-        expect(find.textContaining('Previous:'), findsNothing);
-        expect(find.textContaining('Last:'), findsNothing);
-      });
-
-      testWidgets(
-        'ghost text shows integer weight without decimal when weight is whole number',
-        (tester) async {
-          final set = makeSet(isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 100.0, reps: 5);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          // Whole-number weights should display without a decimal suffix.
-          expect(find.text('Previous: 100kg × 5'), findsOneWidget);
-        },
-      );
-    });
-
-    group('match indicator (Pillar 1)', () {
-      testWidgets(
-        'shows "= last set" affordance when current values exactly equal last session',
-        (tester) async {
-          // Pending set + last session both at 80 kg × 8 → match. Pillar 1
-          // calls for a subtle (non-gold) confirmation signal so the user's
-          // action becomes "edit-then-complete" rather than "enter-then-
-          // complete." This affordance replaces the regular previous-session
-          // hint when matching.
-          final set = makeSet(weight: 80.0, reps: 8, isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('= last set'), findsOneWidget);
-          // The regular hint should NOT also show — the match indicator
-          // is the deliberate replacement.
-          expect(find.textContaining('Previous:'), findsNothing);
-        },
-      );
-
-      testWidgets(
-        'still shows match indicator after the set is completed (matched-and-locked confirmation)',
-        (tester) async {
-          // Confirms the matched state is a legitimate end-state too — a set
-          // the user completed at exactly last session's values reads as
-          // "you matched last session" through the entire row lifecycle.
-          final set = makeSet(weight: 80.0, reps: 8, isCompleted: true);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('= last set'), findsOneWidget);
-        },
-      );
-
-      testWidgets(
-        'does NOT show match indicator on a freshly-added zero-valued set even if last set is also zero',
-        (tester) async {
-          // A new set defaults to weight=0/reps=0 before the user enters
-          // anything. Showing "= last set" in that case would be a lie — the
-          // user hasn't matched anything yet. Last set with weight=0 reps=0
-          // is also exotic but covered for symmetry.
-          final set = makeSet(weight: 0, reps: 0, isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 0, reps: 0);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('= last set'), findsNothing);
-        },
-      );
-
-      testWidgets(
-        'falls back to regular hint when one value matches but the other does not',
-        (tester) async {
-          // Same weight, different reps → not a match. The user is on track
-          // for a rep PR potentially; the regular hint is the right
-          // affordance.
-          final set = makeSet(weight: 80.0, reps: 9, isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('= last set'), findsNothing);
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-        },
-      );
-    });
+    // Phase 23 D4: 'ghost text (previous session hint)' + 'match indicator
+    // (Pillar 1)' groups removed alongside the SetRow `lastSet` field and
+    // the conditional hint slot rendering. Replaced by a single negative
+    // assertion below (`per-row hint removal (Phase 23 D4)`). Pre-fill
+    // now carries the anchor; the yellow PR marker remains the win
+    // signal.
 
     group('set-type micro-label (Phase 20 polish #3)', () {
       // The persistent set-type label below the set number is the visible
@@ -835,72 +691,10 @@ void main() {
       );
     });
 
-    group('hint line suppression', () {
-      testWidgets('hint line is hidden when set values match lastSet exactly', (
-        tester,
-      ) async {
-        // Current set has the same weight/reps as lastSet — hint is redundant.
-        final set = makeSet(weight: 80.0, reps: 8, isCompleted: false);
-        final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
-
-        // Hint should be fully suppressed — neither old nor new label present.
-        expect(find.textContaining('Previous:'), findsNothing);
-        expect(find.textContaining('Last:'), findsNothing);
-      });
-
-      testWidgets(
-        'hint line is shown when current weight differs from lastSet',
-        (tester) async {
-          final set = makeSet(weight: 60.0, reps: 8, isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-        },
-      );
-
-      testWidgets('hint line is shown when current reps differ from lastSet', (
-        tester,
-      ) async {
-        final set = makeSet(weight: 80.0, reps: 10, isCompleted: false);
-        final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
-
-        expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-      });
-
-      testWidgets(
-        'hint line is shown when both weight and reps differ from lastSet',
-        (tester) async {
-          final set = makeSet(weight: 60.0, reps: 10, isCompleted: false);
-          final lastSet = makeSet(id: 'last-set', weight: 80.0, reps: 8);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-            ),
-          );
-
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
-        },
-      );
-    });
+    // Phase 23 D4: 'hint line suppression' group removed alongside the
+    // hint feature itself. Negative coverage lives in the
+    // `per-row hint removal (Phase 23 D4)` group near the end of this
+    // file.
 
     group('dismissible race guard', () {
       testWidgets('confirmDismiss returns false when set was already deleted', (
@@ -2186,142 +1980,14 @@ void main() {
     // entirely when `lastSet.weight == 0`, with no replacement label —
     // empty space is the correct UX.
     // -------------------------------------------------------------------------
-    group('previous-session hint zero-weight suppression (Fix 3)', () {
-      testWidgets('hides hint when lastSet.weight is 0kg', (tester) async {
-        final set = makeSet(isCompleted: false);
-        final lastSet = makeSet(id: 'last-set', weight: 0.0, reps: 5);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
-
-        expect(
-          find.textContaining('Previous:'),
-          findsNothing,
-          reason:
-              'A 0kg "anchor" is noise — the hint must be suppressed entirely '
-              'when lastSet.weight == 0. No replacement label.',
-        );
-      });
-
-      testWidgets('shows hint when lastSet.weight is non-zero', (tester) async {
-        // Sanity counter-test: confirms suppression is gated specifically on
-        // 0kg, not a wholesale removal.
-        final set = makeSet(isCompleted: false);
-        final lastSet = makeSet(id: 'last-set', weight: 20.0, reps: 5);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(set: set, workoutExerciseId: 'we-001', lastSet: lastSet),
-          ),
-        );
-
-        expect(find.text('Previous: 20kg × 5'), findsOneWidget);
-      });
-
-      testWidgets(
-        'standing-PR row STILL emits the row state identifier when last-set '
-        'weight is 0 (hint suppressed) — Phase-20 role-swap regression pin',
-        (tester) async {
-          // Regression pin born from PR #193: a Visibility(maintainSize:true)
-          // attempt to "stabilise the column" actually broke the
-          // `set-row-state-standing-pr` AOM emission on the live web build,
-          // failing three E2E tests deterministically. Reverted to
-          // conditional rendering. This static-pump pin asserts the only
-          // thing that matters at the unit level: when the row is rendered
-          // in PrRowState.completedStandingPr the row frame's
-          // `set-row-state-standing-pr` identifier must be present in the
-          // Semantics tree — regardless of whether the hint slot is shown
-          // or suppressed by Fix 3 (lastSet.weight == 0).
-          //
-          // Note: this pin cannot reproduce the LIVE failure, which only
-          // manifests during a state TRANSITION on the Flutter Web semantics
-          // engine. The E2E suite is the canonical guard for the transition
-          // bug; this pin guards the static-state contract.
-          final set = makeSet(isCompleted: true, weight: 60, reps: 8);
-          final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
-
-          await tester.pumpWidget(
-            buildTestWidget(
-              SetRow(
-                set: set,
-                workoutExerciseId: 'we-001',
-                display: const PrRowDisplay(
-                  state: PrRowState.completedStandingPr,
-                  accentTypes: {RecordType.maxWeight},
-                ),
-                lastSet: lastSet,
-              ),
-            ),
-          );
-
-          expect(
-            find.bySemanticsIdentifier('set-row-state-standing-pr'),
-            findsOneWidget,
-            reason:
-                'Standing-PR row must emit set-row-state-standing-pr '
-                'regardless of hint-slot visibility. A regression here means '
-                'the row frame Semantics structure has broken.',
-          );
-        },
-      );
-
-      testWidgets('standing-PR row with 0-weight last set still emits the row '
-          'identifier — Phase 20 role-swap regression pin', (tester) async {
-        // Important 5 regression pin: the dangerous intersection is
-        // standing-PR (the row state that role-swaps on the Flutter Web
-        // semantics engine) AND 0-weight lastSet (the case where the
-        // hint suppression triggers). The original concern: removing the
-        // hint Padding when transitioning to standing-PR could drop the
-        // row's done-cell identifier as the role swap collided with the
-        // descendant tree change.
-        //
-        // PR #193 attempted a Visibility(maintainSize:true) wrapper to
-        // stabilise the descendant tree, but that broke E2E in a
-        // different way (see _shouldShowHint doc). Reverted to
-        // conditional rendering. This static-pump pin still has value:
-        // it asserts the done-cell identifier survives in completed
-        // standing-PR even when the hint is suppressed; a structural
-        // change to _DoneCell that drops the identifier would fail
-        // here. The TRANSITION case (the actual engine bug) is pinned
-        // by E2E tests in personal-records.spec.ts and
-        // rank-up-celebration.spec.ts.
-        //
-        // We assert the done-cell identifier emits — that's the
-        // identifier-bearing node on the done cell; this pin guards
-        // its survival under the hint-suppressed branch.
-
-        final set = makeSet(isCompleted: true, weight: 60, reps: 8);
-        final lastSet = makeSet(id: 'last-zero', weight: 0.0, reps: 5);
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            SetRow(
-              set: set,
-              workoutExerciseId: 'we-001',
-              display: const PrRowDisplay(
-                state: PrRowState.completedStandingPr,
-                accentTypes: {RecordType.maxWeight},
-              ),
-              lastSet: lastSet,
-            ),
-          ),
-        );
-
-        expect(
-          find.bySemanticsIdentifier('workout-set-completed'),
-          findsOneWidget,
-          reason:
-              'Standing-PR row + 0-weight last set is the Phase-20 role-swap '
-              'intersection. The done-cell identifier (workout-set-completed) '
-              'must still emit even with the hint slot suppressed. A '
-              'regression here means a structural change to _DoneCell '
-              'dropped the identifier.',
-        );
-      });
-    });
+    // Phase 23 D4: 'previous-session hint zero-weight suppression (Fix 3)'
+    // group removed alongside the hint feature itself. The
+    // standing-PR-row identifier-survives-with-hint-suppressed pin
+    // (originally Important 5 / Fix 3) is subsumed by the new
+    // 'per-row hint removal (Phase 23 D4)' group below, which pins the
+    // structural guarantee directly: the row Semantics tree no longer
+    // mutates on completion because there are no longer any descendant
+    // hint nodes that join/leave.
 
     // -------------------------------------------------------------------------
     // Fix 2 — copy-from-previous-set discoverability icon (sets 2+ only,
@@ -2784,135 +2450,298 @@ void main() {
     // by E2E (personal-records.spec.ts:264/309, rank-up-celebration.spec.ts:847).
     // -------------------------------------------------------------------------
 
-    group('H8 — hint slot layout stability (PR-5)', () {
-      testWidgets('row top edge is stable across pending->completed transition '
-          '(no ~18dp collapse) when a previous-session hint was shown', (
+    // Phase 23 D4: 'H8 — hint slot layout stability (PR-5)' group removed.
+    // Pre-Phase-23 the row reserved an 18dp filler ABOVE the frame so
+    // adjacent rows wouldn't shift on completion. With the hint feature
+    // gone the filler is gone too — the row's vertical geometry is fixed
+    // at render time, so there's nothing to stabilise. The standing-PR-
+    // transition AOM-regression pin (originally H8 #2) is replaced by
+    // the Semantics-tree-shape stability test in
+    // 'per-row hint removal (Phase 23 D4)' below.
+
+    group('per-row hint removal (Phase 23 D4)', () {
+      testWidgets(
+        'should not render any previous-session hint text (en locale)',
+        (tester) async {
+          // Pin the negative contract: regardless of prior data, current
+          // values, or completion state, the row MUST NOT render any of
+          // the historical hint strings. Pre-fill carries the anchor;
+          // the row stays bare.
+          final set = makeSet(weight: 60.0, reps: 10, isCompleted: false);
+
+          await tester.pumpWidget(
+            buildTestWidget(SetRow(set: set, workoutExerciseId: 'we-001')),
+          );
+          await tester.pump();
+
+          for (final fragment in const ['Previous:', '= last set']) {
+            expect(
+              find.textContaining(fragment),
+              findsNothing,
+              reason:
+                  'Phase 23 D4: per-row hint text "$fragment" must not '
+                  'render in any state. If this fails, hint logic was '
+                  're-added to SetRow.',
+            );
+          }
+        },
+      );
+
+      testWidgets(
+        'should not render any previous-session hint text (pt locale)',
+        (tester) async {
+          // Same contract on the pt locale: the Portuguese "Anterior:" /
+          // "= série anterior" strings must not appear either. The ARB
+          // keys are deleted so the strings literally cannot resolve —
+          // this test guards against a copy/paste re-add via a hard-
+          // coded Portuguese string.
+          final set = makeSet(weight: 60.0, reps: 10, isCompleted: false);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(set: set, workoutExerciseId: 'we-001'),
+              locale: const Locale('pt'),
+            ),
+          );
+          await tester.pump();
+
+          for (final fragment in const ['Anterior:', 'série anterior']) {
+            expect(
+              find.textContaining(fragment),
+              findsNothing,
+              reason:
+                  'Phase 23 D4: pt hint fragment "$fragment" must not '
+                  'render. ARB keys previousSet + matchedLastSet were '
+                  'deleted; a hit here means a hard-coded re-introduction.',
+            );
+          }
+        },
+      );
+
+      testWidgets('row Semantics tree shape is stable across set completion', (
         tester,
       ) async {
-        // Setup: two rows in a Column. The TOP row will transition
-        // pending->completed; the BOTTOM row's y-coordinate must NOT
-        // shift when the top row's hint slot collapses.
-        //
-        // We measure the bottom row's `localToGlobal` top-edge before
-        // and after re-pumping with the top row completed. Pre-fix the
-        // delta was ~18dp (the bodySmall hint line's vertical
-        // footprint). Post-fix the delta must be ~0 (mobile branch
-        // renders a stable 18dp filler when no hint is shown).
-        //
-        // The SetRow widget only reads `widget.set.isCompleted` for the
-        // hint-suppression rule, so we drive the transition by re-pumping
-        // the widget tree with an updated `ExerciseSet` rather than by
-        // mutating a notifier — the cleanest way to express a static
-        // before/after layout assertion.
-
-        final lastSet = makeSet(id: 'top-last', weight: 80.0, reps: 8);
-        final pendingTop = makeSet(
-          id: 'top-set',
-          setNumber: 1,
+        // Pre-Phase-23 the Semantics tree gained/lost a descendant hint
+        // node on completion — that mutation was the role-swap vector
+        // behind the three previously-fragile E2E specs
+        // (personal-records.spec.ts:264 / :309 ,
+        // rank-up-celebration.spec.ts:847). Removing the hint locks the
+        // tree shape: the pre- and post-completion Semantics labels
+        // must be identical.
+        final pending = makeSet(
+          id: 'shape-row',
+          weight: 60,
+          reps: 8,
           isCompleted: false,
         );
-        final pendingBottom = makeSet(
-          id: 'bottom-set',
-          setNumber: 2,
-          isCompleted: false,
-        );
-        const bottomKey = ValueKey('h8-bottom-row');
+        final completed = pending.copyWith(isCompleted: true);
 
-        Widget tree({required bool topCompleted}) => Column(
-          children: [
-            SetRow(
-              set: pendingTop.copyWith(isCompleted: topCompleted),
-              workoutExerciseId: 'we-001',
-              lastSet: lastSet,
-            ),
-            SetRow(
-              key: bottomKey,
-              set: pendingBottom,
-              workoutExerciseId: 'we-001',
-            ),
-          ],
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: pending, workoutExerciseId: 'we-001')),
         );
-
-        await tester.pumpWidget(buildTestWidget(tree(topCompleted: false)));
         await tester.pump();
+        final preLabels = _collectSemanticsLabels(tester);
 
-        // Sanity: the hint is shown on the top row pre-toggle.
-        expect(
-          find.text('Previous: 80kg × 8'),
-          findsOneWidget,
-          reason: 'top row should show the previous-session hint pre-toggle',
+        await tester.pumpWidget(
+          buildTestWidget(SetRow(set: completed, workoutExerciseId: 'we-001')),
         );
-
-        // Capture the bottom row's top edge BEFORE toggling.
-        final RenderBox bottomBox = tester.renderObject(find.byKey(bottomKey));
-        final Offset beforeTopLeft = bottomBox.localToGlobal(Offset.zero);
-
-        // Drive the transition by re-pumping with the top row completed.
-        await tester.pumpWidget(buildTestWidget(tree(topCompleted: true)));
         await tester.pump();
+        final postLabels = _collectSemanticsLabels(tester);
 
-        // Hint must disappear once the row is completed.
+        // The completion checkbox label flips ('Mark set as done' →
+        // 'Set completed'); everything else MUST be identical. We
+        // compare the symmetric difference excluding the two
+        // checkbox-label states.
+        const checkboxLabels = {'Mark set as done', 'Set completed'};
+        final preFiltered = preLabels
+            .where((l) => !checkboxLabels.contains(l))
+            .toSet();
+        final postFiltered = postLabels
+            .where((l) => !checkboxLabels.contains(l))
+            .toSet();
+
         expect(
-          find.text('Previous: 80kg × 8'),
-          findsNothing,
+          postFiltered,
+          preFiltered,
           reason:
-              'sanity: hint should be hidden post-completion (the '
-              'documented suppression rule lives in _shouldShowHint)',
-        );
-
-        // Capture the bottom row's top edge AFTER toggling.
-        final RenderBox bottomBoxAfter = tester.renderObject(
-          find.byKey(bottomKey),
-        );
-        final Offset afterTopLeft = bottomBoxAfter.localToGlobal(Offset.zero);
-
-        // Layout stability contract: the bottom row's top-edge y-
-        // coordinate must NOT shift by more than 2dp when the top row's
-        // hint slot collapses. The filler is sized to approximate the
-        // hint line's visual footprint (~18dp = 4dp bottom padding +
-        // 2dp top padding + 12dp bodySmall text line); minor sub-pixel
-        // rounding from text baseline math is acceptable. Pre-fix the
-        // delta was ~18dp; post-fix it is ≤2dp.
-        final delta = (afterTopLeft.dy - beforeTopLeft.dy).abs();
-        expect(
-          delta,
-          lessThanOrEqualTo(2.0),
-          reason:
-              'H8 (PR-5): bottom row y-coordinate delta is ${delta}dp — '
-              'must be ≤2dp. Pre-fix the delta was ~18dp (the previous-'
-              'session hint footprint); post-fix the !kIsWeb filler '
-              'keeps the slot present so the geometry never collapses. '
-              'A large delta here means the filler is missing or '
-              'undersized; adjacent rows would shift under the thumb '
-              'mid-tap.',
+              'Phase 23 D4: aside from the checkbox state label, the '
+              'row Semantics tree must be identical pre- and '
+              'post-completion. Differences here mean a descendant '
+              'Semantics node joined/left on completion — re-opening '
+              'the role-swap mutation vector that broke the three '
+              'previously-fragile E2E specs.',
         );
       });
 
       testWidgets(
-        'standing-PR row identifier survives the pendingPredictedPr -> '
-        'completedStandingPr transition (AOM regression pin)',
+        'row Semantics emits the correct identifier across state transitions',
         (tester) async {
-          // This is the static-pump analogue of the E2E pin in
-          // personal-records.spec.ts:264/309 and rank-up-celebration.spec.ts:847.
-          // The H8 hint-slot filler must NOT re-trigger the Flutter Web
-          // semantics-engine role-swap bug that drops the standing-PR
-          // identifier during the transition.
+          // Phase 23 root-cause (2026-05-12) — the three previously-
+          // fragile E2E specs (personal-records.spec.ts:264/:309,
+          // rank-up-celebration.spec.ts:847) all failed for the same
+          // reason: on Flutter Web, when a `Semantics(identifier: X)`
+          // node's identifier value changes WITHOUT a structural / role
+          // change, the engine does not always propagate the new value
+          // via `setAttribute('flt-semantics-identifier', ...)`. The
+          // row's chrome rebuilt correctly (gold stripe + values + green
+          // checkbox visible in the failure screenshot) but the DOM
+          // element retained the pre-completion identifier. The fix is
+          // a `ValueKey(rowStateId)` on the identifier-bearing
+          // Semantics so a fresh SemanticsNode mounts when the
+          // identifier value changes.
           //
-          // We pump the row first in pendingPredictedPr (with a hint
-          // visible) and then rebuild it in completedStandingPr (hint
-          // suppressed → filler activates on mobile, conditional remove
-          // on web). After the second pump the
-          // `set-row-state-standing-pr` identifier must still emit.
+          // This test pins the contract at unit speed: pump the row in
+          // predicted-PR state, capture the identifier-bearing node's
+          // identifier; transition to standing-PR (set completes + the
+          // row's display state advances); the identifier observed in
+          // the Semantics tree MUST be the new value, not the stale one.
+          final pending = makeSet(
+            id: 'identifier-row',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+          final completed = pending.copyWith(isCompleted: true);
 
-          final lastSet = makeSet(id: 'pre-pr', weight: 80.0, reps: 8);
+          // Predicted-PR pre-completion — display.state =
+          // pendingPredictedPr.
+          const pendingDisplay = PrRowDisplay(
+            state: PrRowState.pendingPredictedPr,
+            accentTypes: {RecordType.maxWeight},
+          );
+          // Standing-PR post-completion — display.state =
+          // completedStandingPr.
+          const standingDisplay = PrRowDisplay(
+            state: PrRowState.completedStandingPr,
+            accentTypes: {RecordType.maxWeight},
+          );
 
           await tester.pumpWidget(
             buildTestWidget(
               SetRow(
-                key: const ValueKey('h8-transition-row'),
-                set: makeSet(isCompleted: false, weight: 100, reps: 10),
+                set: pending,
                 workoutExerciseId: 'we-001',
-                lastSet: lastSet,
+                display: pendingDisplay,
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-pending-pr',
+            reason: 'predicted-PR pre-completion must emit pending-pr id',
+          );
+
+          // Transition: set completes, display advances to standing-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: completed,
+                workoutExerciseId: 'we-001',
+                display: standingDisplay,
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-standing-pr',
+            reason:
+                'Phase 23 root-cause: identifier MUST transition to '
+                'standing-pr post-completion. If this assertion stays at '
+                "'set-row-state-pending-pr', the ValueKey on the row's "
+                'identifier-bearing Semantics was dropped — re-opens the '
+                'Flutter Web identifier-propagation hole that broke the '
+                'three previously-fragile E2E specs.',
+          );
+        },
+      );
+
+      // Transition 2: pendingNoPr → completedNoPr.
+      //
+      // The row has no PR projection (PrRowState.none). User marks the
+      // set done; the display advances to completedNonPr. The identifier
+      // must reflect the transition — 'set-row-state-none' →
+      // 'set-row-state-completed'. Pins the ValueKey fix for the
+      // no-PR path (the Cluster B fix is generic to any identifier
+      // change, not just the predicted-PR path).
+      testWidgets(
+        'row Semantics identifier transitions: none → completedNonPr',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+          final pending = makeSet(
+            id: 'no-pr-row',
+            weight: 60,
+            reps: 8,
+            isCompleted: false,
+          );
+          final completed = pending.copyWith(isCompleted: true);
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: pending,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-none',
+            reason: 'no-PR pending row must emit set-row-state-none',
+          );
+
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: completed,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-completed',
+            reason:
+                'Phase 23 Cluster B: identifier MUST transition to '
+                'set-row-state-completed after a non-PR set is completed. '
+                "If still 'set-row-state-none', the ValueKey was dropped.",
+          );
+          handle.dispose();
+        },
+      );
+
+      // Transition 3: pendingPredictedPr → none (mid-set weight edit
+      // drops the PR projection without completing the set).
+      //
+      // User edits the weight field DOWNWARD so it no longer beats the
+      // standing record. The resolver transitions display.state from
+      // pendingPredictedPr → none. The identifier must update:
+      // 'set-row-state-pending-pr' → 'set-row-state-none'. This is the
+      // "mid-set edit" path that the WIP explicitly called out as a
+      // third required transition.
+      testWidgets(
+        'row Semantics identifier transitions: pendingPredictedPr → none '
+        '(mid-set weight edit drops PR projection)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+          final set = makeSet(
+            id: 'pr-drop-row',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+
+          // Start as predicted-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              SetRow(
+                set: set,
+                workoutExerciseId: 'we-001',
                 display: const PrRowDisplay(
                   state: PrRowState.pendingPredictedPr,
                   accentTypes: {RecordType.maxWeight},
@@ -2921,63 +2750,264 @@ void main() {
             ),
           );
           await tester.pump();
-
-          // Sanity: pending state — pending-pr identifier emits, hint shown.
           expect(
-            find.bySemanticsIdentifier('set-row-state-pending-pr'),
-            findsOneWidget,
+            _findRowStateIdentifier(tester),
+            'set-row-state-pending-pr',
+            reason:
+                'pre-edit: predicted-PR row must emit set-row-state-pending-pr',
           );
-          expect(find.text('Previous: 80kg × 8'), findsOneWidget);
 
-          // Re-pump the SAME row key into the post-transition state: the
-          // set is now completed AND the row is in completedStandingPr.
-          // This mirrors the live transition the resolver produces when
-          // the user taps the checkbox on a predicted-PR row.
+          // Simulate weight edit drops below PR threshold → display
+          // reverts to PrRowState.none.
+          final lowWeight = set.copyWith(weight: 80);
           await tester.pumpWidget(
             buildTestWidget(
               SetRow(
-                key: const ValueKey('h8-transition-row'),
-                set: makeSet(isCompleted: true, weight: 100, reps: 10),
+                set: lowWeight,
                 workoutExerciseId: 'we-001',
-                lastSet: lastSet,
-                display: const PrRowDisplay(
-                  state: PrRowState.completedStandingPr,
-                  accentTypes: {RecordType.maxWeight},
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(
+            _findRowStateIdentifier(tester),
+            'set-row-state-none',
+            reason:
+                'Phase 23 Cluster B: after weight edit drops the PR '
+                'projection, identifier MUST transition to '
+                "set-row-state-none. If still 'set-row-state-pending-pr', "
+                'the ValueKey was dropped — reopens the stale-identifier '
+                'hole for the predicted-PR → none path.',
+          );
+          handle.dispose();
+        },
+      );
+
+      // Phase 23 QA REV-4 — multi-row sibling stability.
+      //
+      // The Cluster B fix wraps each row's identifier-bearing Semantics in
+      // a `ValueKey(rowStateId)`. That key must be PER-ROW: if it were
+      // accidentally shared (e.g. derived from a global state instead of
+      // the row's own state), one row transitioning would force its
+      // siblings' SemanticsNodes to re-mount too, churning their
+      // identifiers and re-opening the same Flutter Web propagation hole
+      // (just with the symptom moved one sibling over).
+      //
+      // Pump three rows side by side — one pending-no-pr, one
+      // pending-predicted-pr, one completed-no-pr — record every
+      // `set-row-state-*` identifier in document order, transition the
+      // middle row from pendingPredictedPr → completedStandingPr, then
+      // assert the FIRST and THIRD identifiers are byte-identical to
+      // their pre-transition values. The middle row's identifier
+      // intentionally flips (covered by the sibling tests above); this
+      // test pins that the siblings stay put.
+      testWidgets(
+        'sibling rows keep their identifier when one row transitions state '
+        '(Phase 23 QA REV-4)',
+        (tester) async {
+          final handle = tester.ensureSemantics();
+
+          final pendingNoPr = makeSet(
+            id: 'sibling-no-pr',
+            weight: 60,
+            reps: 8,
+            isCompleted: false,
+          );
+          final pendingPredicted = makeSet(
+            id: 'sibling-pred-pr',
+            weight: 130,
+            reps: 5,
+            isCompleted: false,
+          );
+          final completedNoPr = makeSet(
+            id: 'sibling-completed',
+            weight: 50,
+            reps: 10,
+            isCompleted: true,
+          );
+
+          Widget threeRows({required Widget middle}) => Column(
+            children: [
+              SetRow(
+                set: pendingNoPr,
+                workoutExerciseId: 'we-001',
+                display: const PrRowDisplay.plain(PrRowState.none),
+              ),
+              middle,
+              SetRow(
+                set: completedNoPr,
+                workoutExerciseId: 'we-003',
+                display: const PrRowDisplay.plain(PrRowState.completedNonPr),
+              ),
+            ],
+          );
+
+          // Pre-transition: middle row is predicted-PR.
+          await tester.pumpWidget(
+            buildTestWidget(
+              threeRows(
+                middle: SetRow(
+                  set: pendingPredicted,
+                  workoutExerciseId: 'we-002',
+                  display: const PrRowDisplay(
+                    state: PrRowState.pendingPredictedPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
                 ),
               ),
             ),
           );
           await tester.pump();
 
-          // Hint is suppressed post-completion (existing rule).
-          expect(find.text('Previous: 80kg × 8'), findsNothing);
-
-          // Contract: the new state identifier MUST emit. If the filler
-          // accidentally regressed to a Visibility(maintainSize) shape,
-          // this static-pump pin still passes (Flutter test binding is
-          // not the Web semantics engine) — the live regression is
-          // caught by the three E2E tests referenced above. This pin
-          // guards the static-frame structure: an Element-tree change
-          // that drops the row identifier (e.g. someone refactoring the
-          // _SetRowFrame Semantics wrapper) fails here.
+          final preIds = _collectRowStateIdentifiers(tester);
           expect(
-            find.bySemanticsIdentifier('set-row-state-standing-pr'),
-            findsOneWidget,
+            preIds,
+            [
+              'set-row-state-none',
+              'set-row-state-pending-pr',
+              'set-row-state-completed',
+            ],
             reason:
-                'H8 (PR-5): the standing-PR row identifier must emit after '
-                'the predicted->standing transition. If this fails the '
-                '_SetRowFrame Semantics shape has regressed and the '
-                'three E2E tests (personal-records.spec.ts:264/309, '
-                'rank-up-celebration.spec.ts:847) will follow.',
+                'Pre-transition: three rows must emit none / pending-pr / '
+                'completed identifiers in document order. If this list is '
+                'shorter than 3, the SetRow Semantics(identifier:) wiring '
+                'changed and the rest of the test is invalid.',
           );
-          // And the previous identifier must be gone — sanity that we
-          // actually transitioned, not just appended.
+
+          // Transition: middle row → completedStandingPr.
+          final completedPredicted = pendingPredicted.copyWith(
+            isCompleted: true,
+          );
+          await tester.pumpWidget(
+            buildTestWidget(
+              threeRows(
+                middle: SetRow(
+                  set: completedPredicted,
+                  workoutExerciseId: 'we-002',
+                  display: const PrRowDisplay(
+                    state: PrRowState.completedStandingPr,
+                    accentTypes: {RecordType.maxWeight},
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          final postIds = _collectRowStateIdentifiers(tester);
+          expect(postIds, hasLength(3));
+
+          // Middle row MUST have advanced (covered by sibling tests, but
+          // we re-pin here so a passing assertion below cannot be
+          // accidentally satisfied by all three rows freezing).
           expect(
-            find.bySemanticsIdentifier('set-row-state-pending-pr'),
-            findsNothing,
+            postIds[1],
+            'set-row-state-standing-pr',
+            reason:
+                'Phase 23 QA REV-4 control: the row that actually '
+                'transitioned must flip its identifier. If this fails, the '
+                'sibling-stability claim below is meaningless because no '
+                'transition occurred.',
           );
+
+          // The real assertion: siblings 0 and 2 are unchanged.
+          expect(
+            postIds[0],
+            preIds[0],
+            reason:
+                'Phase 23 QA REV-4: row 0 (pending-no-pr) identifier '
+                'changed when row 1 transitioned — the ValueKey on the '
+                "identifier-bearing Semantics is shared across rows or "
+                "leaked through a global, re-opening the Flutter Web "
+                'propagation hole on siblings.',
+          );
+          expect(
+            postIds[2],
+            preIds[2],
+            reason:
+                'Phase 23 QA REV-4: row 2 (completed-no-pr) identifier '
+                'changed when row 1 transitioned — same root cause as '
+                'row 0 above; the per-row ValueKey scoping is broken.',
+          );
+
+          handle.dispose();
         },
       );
     });
   });
+}
+
+/// Walks the Semantics tree under the current widget and returns the
+/// `identifier` of the first node whose identifier starts with
+/// `set-row-state-`. Used by the Phase 23 root-cause regression test.
+String? _findRowStateIdentifier(WidgetTester tester) {
+  String? found;
+  void visit(SemanticsNode node) {
+    if (found != null) return;
+    final data = node.getSemanticsData();
+    final id = data.identifier;
+    if (id.startsWith('set-row-state-')) {
+      found = id;
+      return;
+    }
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  // ignore: deprecated_member_use
+  final owner = tester.binding.pipelineOwner.semanticsOwner;
+  if (owner == null) return null;
+  visit(owner.rootSemanticsNode!);
+  return found;
+}
+
+/// Walks the Semantics tree and returns every `set-row-state-*` identifier
+/// in document (visit) order. Used by the Phase 23 QA REV-4 sibling-
+/// stability test to assert that one row transitioning does not perturb
+/// its siblings' identifier strings.
+List<String> _collectRowStateIdentifiers(WidgetTester tester) {
+  final ids = <String>[];
+  void visit(SemanticsNode node) {
+    final data = node.getSemanticsData();
+    final id = data.identifier;
+    if (id.startsWith('set-row-state-')) {
+      ids.add(id);
+      // Do not recurse past a row-state node — the identifier is the
+      // boundary; nested identifiers are not expected.
+      return;
+    }
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  // ignore: deprecated_member_use
+  final owner = tester.binding.pipelineOwner.semanticsOwner;
+  if (owner == null) return ids;
+  visit(owner.rootSemanticsNode!);
+  return ids;
+}
+
+/// Walks the Semantics tree under the current widget tree and returns the
+/// set of non-empty labels. Used by the Phase 23 D4 tree-shape test.
+Set<String> _collectSemanticsLabels(WidgetTester tester) {
+  final labels = <String>{};
+  void visit(SemanticsNode node) {
+    final l = node.label;
+    if (l.isNotEmpty) labels.add(l);
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  // ignore: deprecated_member_use
+  final owner = tester.binding.pipelineOwner.semanticsOwner;
+  if (owner == null) return labels;
+  visit(owner.rootSemanticsNode!);
+  return labels;
 }

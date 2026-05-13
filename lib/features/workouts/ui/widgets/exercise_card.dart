@@ -315,8 +315,14 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     final exercise = activeExercise.workoutExercise.exercise;
     final exerciseId = activeExercise.workoutExercise.exerciseId;
 
-    // Fetch previous session sets for this exercise; default weight unit
-    // for equipment-type defaults if no profile has loaded yet.
+    // Fetch previous session sets for this exercise.
+    //
+    // Phase 23 D4: per-row "Previous: …" hint consumption was removed.
+    // The lookup is retained because `_onAddSet` still feeds it into
+    // `_computeNewSetDefaults` for the new-set pre-fill (Phase 22 Q2
+    // warmup-filter + Priority 1 same-position match). The weight unit
+    // below drives the equipment-default fallback when there's no prior
+    // data on the exercise.
     final lastSets =
         ref.watch(lastWorkoutSetsProvider(exerciseId)).value?[exerciseId] ??
         const <ExerciseSet>[];
@@ -400,8 +406,6 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     );
     return activeExercise.sets.indexed.map((entry) {
       final (index, s) = entry;
-      // Match by position: set 1 maps to lastSets[0], etc.
-      final lastSet = index < lastSets.length ? lastSets[index] : null;
       // Fix 2 — discoverability hint requires the previous in-session set
       // (set at index N-1) so the cell can compare weights and decide
       // whether to surface the copy-icon affordance. Null on set #1.
@@ -419,7 +423,6 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
         workoutExerciseId: weId,
         display: display,
         onCompleted: _onSetCompleted,
-        lastSet: lastSet,
         previousSet: previousSet,
         isNew: isNew,
         isBodyweight: isBodyweight,

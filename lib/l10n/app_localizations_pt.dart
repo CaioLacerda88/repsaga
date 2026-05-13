@@ -750,14 +750,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String previousSet(String weight, String unit, int reps) {
-    return 'Anterior: $weight$unit × $reps';
-  }
-
-  @override
-  String get matchedLastSet => '= série anterior';
-
-  @override
   String get discardWorkoutTitle => 'Descartar Sessão?';
 
   @override
@@ -823,9 +815,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get skipRestSemantics => 'Pular descanso';
-
-  @override
-  String get tapToDismiss => 'Toque em qualquer lugar para fechar';
 
   @override
   String get lessThanAnHourAgo => 'há menos de uma hora';
@@ -1392,7 +1381,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String addExerciseUndo(String name) {
-    return 'Exercício adicionado: $name';
+    return '$name adicionado';
   }
 
   @override

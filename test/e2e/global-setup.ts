@@ -222,6 +222,104 @@ async function seedPRData(
 }
 
 /**
+ * Seed a completed prior workout of Barbell Bench Press at 80 kg × 8 for
+ * the Phase 23 D6 auto-seed E2E test.
+ *
+ * The test starts a fresh workout, mid-workout adds Barbell Bench Press,
+ * and asserts the new exercise card opens with set 1 pre-filled at
+ * exactly 80 kg × 8 from this seeded prior session.
+ *
+ * Idempotent: bails if `E2E Auto-seed Prior Workout` already exists.
+ */
+async function seedAutoSeedPriorWorkout(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'E2E Auto-seed Prior Workout')
+    .maybeSingle();
+
+  if (existing) return;
+
+  const { data: exercises, error: exError } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('slug', 'barbell_bench_press')
+    .eq('is_default', true)
+    .limit(1);
+  const exercise = exercises?.[0] ?? null;
+
+  if (exError || !exercise) {
+    console.log(
+      `[global-setup] Warning: could not find Barbell Bench Press for auto-seed: ${exError?.message}`,
+    );
+    return;
+  }
+
+  const now = new Date();
+  const startedAt = new Date(now.getTime() - 60 * 60 * 1000);
+  const finishedAt = new Date(now.getTime() - 30 * 60 * 1000);
+
+  const { data: workout, error: wError } = await supabase
+    .from('workouts')
+    .insert({
+      user_id: userId,
+      name: 'E2E Auto-seed Prior Workout',
+      started_at: startedAt.toISOString(),
+      finished_at: finishedAt.toISOString(),
+      duration_seconds: 1800,
+    })
+    .select('id')
+    .single();
+
+  if (wError || !workout) {
+    console.log(
+      `[global-setup] Warning: could not insert auto-seed workout: ${wError?.message}`,
+    );
+    return;
+  }
+
+  const { data: wx, error: wxError } = await supabase
+    .from('workout_exercises')
+    .insert({
+      workout_id: workout.id,
+      exercise_id: exercise.id,
+      order: 0,
+    })
+    .select('id')
+    .single();
+
+  if (wxError || !wx) {
+    console.log(
+      `[global-setup] Warning: could not insert auto-seed workout_exercise: ${wxError?.message}`,
+    );
+    return;
+  }
+
+  const { error: setError } = await supabase.from('sets').insert({
+    workout_exercise_id: wx.id,
+    set_number: 1,
+    reps: 8,
+    weight: 80,
+    set_type: 'working',
+    is_completed: true,
+  });
+
+  if (setError) {
+    console.log(
+      `[global-setup] Warning: could not insert auto-seed set: ${setError.message}`,
+    );
+  } else {
+    console.log(
+      `[global-setup] Seeded prior workout for smokeAutoSeed user (workout: ${workout.id}, bench 80x8)`,
+    );
+  }
+}
+
+/**
  * Seed a completed weekly plan for the smokeWeeklyPlanReview user.
  *
  * Inserts: profile (frequency 1), workout, weekly_plan with completed routine.
@@ -1420,6 +1518,27 @@ function buildRoleSeedRunners(): Record<
         display_name: 'Gym User',
       });
       await seedMinimalWorkout(supabase, userId);
+    },
+    // Phase 23 D1 — rest-overlay chrome visibility. Lapsed state (one
+    // prior workout) so startEmptyWorkout finds "Quick workout". No
+    // exercise seeds needed; the test adds bench press fresh.
+    smokeRestChrome: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedMinimalWorkout(supabase, userId);
+    },
+    // Phase 23 D6 — addExercise auto-seed. Seeds a completed prior
+    // workout of Barbell Bench Press at 80 kg × 8 so the test can
+    // assert the new exercise card opens with one set pre-filled at
+    // exactly those values when bench press is added mid-workout.
+    smokeAutoSeed: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Gym User',
+      });
+      await seedAutoSeedPriorWorkout(supabase, userId);
     },
     fullWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);

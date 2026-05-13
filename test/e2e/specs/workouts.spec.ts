@@ -773,13 +773,17 @@ test.describe('Workout logging', () => {
     await expect(exerciseTap).toBeVisible({ timeout: 10_000 });
     await exerciseTap.click();
 
-    // Sheet is open — verify via the exercise name text in the sheet heading.
-    // Squat doesn't have ABOUT/FORM TIPS sections, so check the name directly.
-    // The card renders the name inside the group's accessible label (not standalone),
-    // so `text=Barbell Squat` only matches the sheet heading.
-    await expect(
-      page.locator(`text=${SEED_EXERCISES.squat}`),
-    ).toBeVisible({ timeout: 10_000 });
+    // Sheet is open — verify via the ABOUT section, consistent with EX-DETAIL-001/002.
+    //
+    // Original comment said "Squat doesn't have ABOUT/FORM TIPS sections" — that
+    // was incorrect; squat DOES have ABOUT. The original `text=Barbell Squat`
+    // approach broke in Phase 23 Cluster C: after the await-fix the H5 SnackBar
+    // fires reliably, posting "Barbell Squat added" into the ARIA live region.
+    // `text=Barbell Squat` then matches BOTH the live region ("Barbell Squat added")
+    // AND the sheet heading ("Barbell Squat"), causing a strict-mode violation.
+    // Switch to `text=ABOUT` (same as EX-DETAIL-001/002) — deterministic, no
+    // live-region collision.
+    await expect(page.locator('text=ABOUT')).toBeVisible({ timeout: 10_000 });
 
     // Dismiss the sheet by pressing Escape.
     await page.keyboard.press('Escape');
@@ -2457,4 +2461,153 @@ test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () 
     await dismissCelebrationIfPresent(page).catch(() => {});
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
   });
+});
+
+// =============================================================================
+// Phase 23 D1 — rest-overlay chrome visibility (smokeRestChrome user)
+//
+// **Flutter Web back-button convention** (rediscovered 2026-05-12 during
+// Phase 23 root-cause triage):
+//
+// Flutter's `PopScope.onPopInvokedWithResult` fires for `popRoute`
+// system-channel events. On Flutter Web, browser back / `window.history.back()`
+// does NOT produce a `popRoute` message — `MultiEntriesBrowserHistory.onPopState`
+// (which GoRouter relies on) routes browser `popstate` to a `pushRouteInformation`
+// message that the `Router` consumes by changing the route. The PopScope callback
+// of the OUTGOING screen is never invoked. Keyboard `Escape` is unwired entirely.
+//
+// Net effect for E2E: there is NO Flutter-Web-reachable path that fires the
+// active-workout PopScope's `onPopInvokedWithResult`. That callback is
+// Android-hardware-back-only. The deeper PopScope branch chain (D2/D3) is
+// fully owned by `active_workout_back_button_priority_test.dart` via
+// `tester.binding.handlePopRoute()`. The E2E layer here ONLY pins the
+// user-observable chrome contract: that the FAB + Finish bar hide while
+// the rest overlay is visible (D1). Rest dismissal happens via the Skip
+// button on the rest overlay — the user-visible discoverable surface that
+// works on both web and Android.
+// =============================================================================
+test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeRestChrome').email,
+      getUser('smokeRestChrome').password,
+    );
+  });
+
+  test(
+    'should hide add-exercise FAB and finish bar while rest timer is visible',
+    async ({ page }) => {
+      // Drive the workout into the rest-active state, then assert the
+      // FAB + Finish bar are absent. After dismissing the rest timer
+      // via its own Skip button, both surfaces must reappear — pins both
+      // the hide AND the restore halves of the D1 contract.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+      // Phase 23 D6: addExercise auto-seeds set 1. Set a non-zero weight
+      // so the row is meaningful; complete it to fire the rest timer.
+      await setWeight(page, '60');
+      await setReps(page, '8');
+
+      // Pre-condition: chrome is visible while rest is OFF.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Trigger rest by completing set 1. The rest-timer progressbar is
+      // the user-visible sentinel for "rest is active."
+      await page.locator(WORKOUT.markSetDone).first().click();
+      const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
+      await expect(restTimer).toBeVisible({ timeout: 8_000 });
+
+      // Phase 23 D1 contract: both surfaces must be hidden during rest.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeHidden({
+        timeout: 3_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeHidden({
+        timeout: 3_000,
+      });
+
+      // Dismiss the rest timer via its own Skip button — the only
+      // Flutter-Web-reachable dismissal path. Note: browser back /
+      // keyboard Escape do NOT fire PopScope on Flutter Web — see file
+      // header. Skip is the user-visible affordance that works on both
+      // platforms.
+      const skip = page.locator('role=button[name*="Skip"]').first();
+      await skip.click();
+      await expect(restTimer).toBeHidden({ timeout: 5_000 });
+
+      // After dismiss: chrome must reappear immediately. Drives the
+      // "restore" branch of the D1 contract — proves the gate is
+      // reactive, not a one-shot hide.
+      await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Clean up so the next test invocation starts from a clean state.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
+
+  // Phase 23 D2/D3 PopScope priority chain (rest-dismiss vs discard)
+  // is intentionally NOT covered at the E2E level — Flutter Web has no
+  // way to fire `PopScope.onPopInvokedWithResult` (see file header). The
+  // contract is fully pinned at the widget layer:
+  //   * `active_workout_back_button_priority_test.dart` — all 4 priority
+  //     cases (rest-only, no-rest, rest-and-loading, idempotent stop).
+  //   * `active_workout_appbar_discard_during_rest_test.dart` — the
+  //     in-rest AppBar discard affordance.
+});
+
+// =============================================================================
+// Phase 23 D6 — addExercise auto-seeds set 1 (smokeAutoSeed user)
+// =============================================================================
+test.describe('Add exercise auto-seed', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeAutoSeed').email,
+      getUser('smokeAutoSeed').password,
+    );
+  });
+
+  test(
+    'should auto-seed set 1 with last session values when adding an exercise mid-workout',
+    async ({ page }) => {
+      // Phase 23 D6: smokeAutoSeed has a prior completed workout with
+      // Barbell Bench Press @ 80 kg × 8 (seeded in global-setup). Adding
+      // bench press to a fresh workout must produce one set carrying
+      // those exact values.
+      await startEmptyWorkout(page);
+      await addExercise(page, SEED_EXERCISES.benchPress);
+
+      // The weight + reps stepper values must reflect the seeded prior
+      // session. We probe the user-visible Semantics labels — the
+      // stepper renders "Weight value: 80 kg" / "Reps value: 8" — to
+      // avoid coupling to internal Text widget structure.
+      await expect(
+        page.locator('role=button[name*="Weight value: 80"]').first(),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        page.locator('role=button[name*="Reps value: 8"]').first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      // Clean up.
+      await page.locator(WORKOUT.discardButton).click();
+      const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+      await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+      await confirmDiscard.click();
+      await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    },
+  );
 });

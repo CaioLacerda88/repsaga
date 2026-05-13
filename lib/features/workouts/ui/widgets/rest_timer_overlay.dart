@@ -281,32 +281,16 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  // The outer dismiss-scrim Semantics already exposes
-                  // "Dismiss rest timer" to the AOM (see L70). The visual
-                  // hint Text below is for sighted users only — without
-                  // ExcludeSemantics, `explicitChildNodes: true` on the
-                  // outer Semantics promotes this Text to its own AOM node,
-                  // and screen-reader users hear both the outer button
-                  // label AND a redundant "Tap anywhere to dismiss" leaf.
-                  // Same pattern as the exercise-name fix above.
-                  ExcludeSemantics(
-                    // PR-5 — dismiss hint α bumped 0.3 -> 0.6 for readable
-                    // contrast against the near-black abyss scrim
-                    // (`abyss #0D0319 @ 87%`). Pre-fix the hint was
-                    // essentially invisible — users had to discover the
-                    // tap-anywhere dismiss by accident. 0.6 sits below
-                    // body-text full strength so the hint stays a hint
-                    // (not a competing CTA) while clearing the AA floor.
-                    child: Text(
-                      l10n.tapToDismiss,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.6,
-                        ),
-                      ),
-                    ),
-                  ),
+                  // Dismiss hint copy removed 2026-05-12 (Phase 23 UI/UX
+                  // REV-3 — mechanic-instructive filler). The
+                  // `restTimerDismiss` Semantics label on the outer scrim
+                  // already exposes the dismiss affordance to screen
+                  // readers, and the visible -30s / Skip / +30s controls
+                  // (plus the scrim-as-tap-target) carry the affordance
+                  // for sighted users. The trailing SizedBox(24) and the
+                  // hint Text were removed together — the controls row's
+                  // intrinsic spacing on the bottom of the column is
+                  // sufficient.
                 ],
               ),
             ),

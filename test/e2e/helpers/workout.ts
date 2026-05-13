@@ -132,20 +132,20 @@ export async function addExercise(
     timeout: 10_000,
   });
 
-  // The exercise starts with zero sets (ActiveWorkoutNotifier.addExercise
-  // creates with `sets: const []`). Click "Add Set" to create the first set
-  // row so that weight/reps buttons are available for subsequent interactions.
-  // Use .last() to target the newly added exercise's button (when multiple
-  // exercises are present, each has its own "Add Set" button).
-  await expect(page.locator(WORKOUT.addSetButton).last()).toBeVisible({
-    timeout: 10_000,
-  });
-  await page.locator(WORKOUT.addSetButton).last().click();
-
-  // Wait for the set row to render — the weight button confirms it.
-  await expect(
-    page.locator('role=button[name*="Weight value"]').first(),
-  ).toBeVisible({ timeout: 10_000 });
+  // Phase 23 D6: `ActiveWorkoutNotifier.addExercise` now auto-seeds set 1
+  // with prior-session working values (or equipment defaults when there's
+  // no prior data) — no separate `Add Set` click required. We intentionally
+  // do NOT block in this helper on the "Weight value" stepper becoming
+  // visible: callers that need a specific pre-fill value (the auto-seed
+  // E2E test) assert it themselves, and callers that immediately invoke
+  // setWeight / setReps already wait via the Playwright auto-retry on
+  // those steppers' click selectors. Adding a wait here would push the
+  // helper's total runtime past the 4 s addExerciseUndo SnackBar
+  // duration on slow workers and race the H5 Add-Exercise-Undo tests
+  // (workouts.spec.ts:1764 / :1786). The SnackBar is shown synchronously
+  // by `_onAddExercise` right after the picker dismisses, which is the
+  // assertion target of those tests; we must NOT delay the helper
+  // between the picker dismissal and the caller's next action.
 }
 
 /**
@@ -175,10 +175,20 @@ export async function setWeight(page: Page, value: string): Promise<void> {
   const okButton = page.locator('text="OK"');
   await expect(okButton).toBeVisible({ timeout: 5_000 });
 
-  // The dialog TextField focuses automatically. Select all existing content
-  // and type the new value using real keyboard events.
+  // The dialog TextField focuses automatically.
+  //
+  // Phase 23 D6 — auto-seed means the dialog opens with a NON-ZERO value
+  // pre-filled (was 0 pre-Phase-23). Just appending via `keyboard.type` after
+  // `Control+A` is unreliable on Flutter Web — the CanvasKit hidden <input>
+  // proxy may not honour the "select all" if focus didn't propagate from the
+  // semantics-button click. Click the input itself first to guarantee focus,
+  // then clear via the <input>'s native value (visible-element scope) before
+  // typing the new digits via real key events (which Flutter routes correctly).
   await page.waitForTimeout(300);
+  const input = page.locator('input').last();
+  await input.click({ timeout: 5_000 });
   await page.keyboard.press('Control+a');
+  await page.keyboard.press('Delete');
   await page.keyboard.type(value, { delay: 10 });
 
   await okButton.click();
@@ -212,10 +222,14 @@ export async function setReps(page: Page, value: string): Promise<void> {
   const okButton = page.locator('text="OK"');
   await expect(okButton).toBeVisible({ timeout: 5_000 });
 
-  // The dialog TextField focuses automatically. Select all existing content
-  // and type the new value using real keyboard events.
+  // Same Phase 23 D6 rationale as setWeight above: auto-seed pre-fills
+  // the reps so we MUST clear the existing value before typing, otherwise
+  // the new digits append to the seeded value.
   await page.waitForTimeout(300);
+  const input = page.locator('input').last();
+  await input.click({ timeout: 5_000 });
   await page.keyboard.press('Control+a');
+  await page.keyboard.press('Delete');
   await page.keyboard.type(value, { delay: 10 });
 
   await okButton.click();

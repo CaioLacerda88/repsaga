@@ -344,5 +344,94 @@ void main() {
           .sets;
       expect(sets.map((s) => s.setNumber).toList(), [1, 2, 3, 4]);
     });
+
+    // Phase 23 QA REV-5 — routine-start does NOT enter the addExercise
+    // auto-seed path.
+    //
+    // The Phase 23 D6 auto-seed lives in `ActiveWorkoutNotifier.addExercise`
+    // and reads `WorkoutRepository.getLastWorkoutSets`. `startFromRoutine`
+    // has its OWN pre-fill (at notifier ~L322) that also calls
+    // `getLastWorkoutSets`. The two paths are independent; the WIP risk
+    // register entry #2 called out the concern that startFromRoutine could
+    // accidentally fan out into addExercise per-exercise and double-seed
+    // (or, worse, race on the same key). Pin call-site separation in test
+    // form: `getLastWorkoutSets` is invoked EXACTLY ONCE on a routine start
+    // — its own pre-fill — regardless of how many exercises the routine
+    // contains. A future refactor that re-routes routine-start through
+    // addExercise would cause this count to scale with exercise count and
+    // surface here immediately.
+    test(
+      'routine-start path does NOT invoke addExercise auto-seed '
+      '(getLastWorkoutSets called exactly once, Phase 23 QA REV-5)',
+      () async {
+        final (:container, :mockRepo, :mockStorage, :mockAuth) =
+            _makeContainer();
+        addTearDown(container.dispose);
+
+        final createdWorkout = makeWorkout(id: 'workout-no-double-seed');
+        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () => mockRepo.createActiveWorkout(
+            userId: any(named: 'userId'),
+            name: any(named: 'name'),
+          ),
+        ).thenAnswer((_) async => createdWorkout);
+        when(
+          () => mockRepo.getLastWorkoutSets(any()),
+        ).thenAnswer((_) async => {});
+
+        // Three exercises — if the routine path delegated to addExercise
+        // per-exercise, getLastWorkoutSets would be called 1 (own pre-fill)
+        // + 3 (one per addExercise auto-seed) = 4 times.
+        final bench = makeExercise(id: 'ex-bench', name: 'Bench');
+        final ohp = makeExercise(id: 'ex-ohp', name: 'OHP');
+        final row = makeExercise(id: 'ex-row', name: 'Row');
+        final config = RoutineStartConfig(
+          routineName: 'Push',
+          exercises: [
+            RoutineStartExercise(
+              exerciseId: 'ex-bench',
+              exercise: bench,
+              setCount: 3,
+              targetReps: 10,
+            ),
+            RoutineStartExercise(
+              exerciseId: 'ex-ohp',
+              exercise: ohp,
+              setCount: 3,
+              targetReps: 10,
+            ),
+            RoutineStartExercise(
+              exerciseId: 'ex-row',
+              exercise: row,
+              setCount: 3,
+              targetReps: 10,
+            ),
+          ],
+        );
+
+        await container.read(activeWorkoutProvider.future);
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .startFromRoutine(config);
+
+        // The contract: a single batched call for routine pre-fill, no
+        // per-exercise addExercise fan-out.
+        verify(() => mockRepo.getLastWorkoutSets(any())).called(1);
+
+        // Defensive cross-pin: the state must contain exactly the three
+        // routine exercises (no duplicates from a hidden addExercise pass).
+        final state = container.read(activeWorkoutProvider).value!;
+        expect(
+          state.exercises.map((e) => e.workoutExercise.exerciseId).toList(),
+          ['ex-bench', 'ex-ohp', 'ex-row'],
+          reason:
+              'Phase 23 QA REV-5: routine-start should produce exactly the '
+              'three routine exercises in order. A duplicate or extra entry '
+              'here would mean addExercise (or a stray helper) was invoked '
+              'during start, breaking the call-site separation contract.',
+        );
+      },
+    );
   });
 }

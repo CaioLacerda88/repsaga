@@ -454,15 +454,19 @@ void main() {
       );
 
       testWidgets(
-        'tapToDismiss visual hint is excluded from the AOM (reviewer finding — PR #187)',
+        'tap-to-dismiss hint copy is removed (Phase 23 UI/UX REV-3)',
         (tester) async {
-          // The outer Semantics already exposes "Dismiss rest timer" as the
-          // tap-anywhere affordance. Because the outer wrapper sets
-          // `explicitChildNodes: true`, an unwrapped Text underneath would
-          // emit its own AOM node — screen-reader users would hear the
-          // outer button label AND a redundant non-interactive
-          // "Tap anywhere to dismiss" leaf. Pin that the visual hint is
-          // wrapped in ExcludeSemantics so the AOM stays clean.
+          // The visible "Tap anywhere to dismiss" hint Text was removed
+          // 2026-05-12 as mechanic-instructive filler — the outer
+          // `restTimerDismiss` Semantics label still carries the
+          // screen-reader affordance, and the visible -30s / Skip / +30s
+          // controls + scrim-as-tap-target cover the sighted case.
+          //
+          // Pin the deletion at both layers: no visible Text AND no
+          // residual AOM label. If either reappears, the REV-3 fix was
+          // reverted (and the PR-5 contrast pin / PR #187 ExcludeSemantics
+          // pin would re-engage in lockstep, so they don't need their own
+          // separate guard anymore).
           const state = RestTimerState(
             totalSeconds: 60,
             remainingSeconds: 45,
@@ -470,57 +474,26 @@ void main() {
           );
           await tester.pumpWidget(buildOverlay(state));
 
-          // Sanity: the visual Text is rendered for sighted users.
-          expect(find.text('Tap anywhere to dismiss'), findsOneWidget);
-
-          // Negative pin: the same string must NOT surface as an AOM label.
+          expect(
+            find.text('Tap anywhere to dismiss'),
+            findsNothing,
+            reason:
+                'Phase 23 REV-3: the dismiss-hint Text was removed — the '
+                'outer Semantics label + visible controls own the dismiss '
+                'affordance. If this finds a widget, the hint was '
+                're-added.',
+          );
           expect(
             find.bySemanticsLabel('Tap anywhere to dismiss'),
             findsNothing,
             reason:
-                'The tap-to-dismiss hint Text must be wrapped in '
-                'ExcludeSemantics — the outer dismiss-scrim Semantics owns '
-                'the AOM contract for this affordance.',
+                'Phase 23 REV-3: no residual AOM label for the removed '
+                'hint. The canonical affordance lives on the outer scrim '
+                '`restTimerDismiss` label (verified by the sibling pin '
+                'below).',
           );
-
-          // Positive pin (paired): the canonical AOM affordance is still
-          // reachable via the outer Semantics label.
+          // Paired positive: canonical AOM affordance is still reachable.
           expect(find.bySemanticsLabel('Dismiss rest timer'), findsOneWidget);
-        },
-      );
-
-      // -------------------------------------------------------------------
-      // PR-5 — Dismiss hint readable contrast.
-      //
-      // Pre-fix the "Tap anywhere to dismiss" hint rendered at α=0.3 on
-      // the near-black abyss scrim — effectively invisible. Post-fix
-      // α=0.6, lifting the hint above the visibility threshold while
-      // keeping it quieter than the primary affordances.
-      // -------------------------------------------------------------------
-      testWidgets(
-        'PR-5 — tapToDismiss hint renders with alpha >= 0.55 for readable '
-        'contrast on the dark scrim',
-        (tester) async {
-          const state = RestTimerState(
-            totalSeconds: 60,
-            remainingSeconds: 45,
-            isActive: true,
-          );
-          await tester.pumpWidget(buildOverlay(state));
-
-          final hint = tester.widget<Text>(
-            find.text('Tap anywhere to dismiss'),
-          );
-          final alpha = hint.style?.color?.a ?? 0;
-          expect(
-            alpha,
-            greaterThanOrEqualTo(0.55),
-            reason:
-                'PR-5: the dismiss hint must render at alpha ≥ 0.55 (got '
-                '$alpha) so the affordance is readable on the abyss '
-                'scrim. Pre-fix was 0.3 — invisible. Bumping below 0.55 '
-                'regresses the readability fix.',
-          );
         },
       );
     });

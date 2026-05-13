@@ -564,6 +564,82 @@ void main() {
     });
 
     // -----------------------------------------------------------------------
+    // Phase 23 D4 — per-row hint removal (card-level negative coverage).
+    //
+    // Even with prior-session data seeded into `lastWorkoutSetsProvider`,
+    // the ExerciseCard MUST NOT render any of the historical hint strings.
+    // Pre-fill is the only consumer of the lastSets lookup now (see
+    // `_onAddSet` → `_computeNewSetDefaults`); the per-row hint is gone.
+    // -----------------------------------------------------------------------
+    group('Phase 23 D4 — per-row hint removal', () {
+      testWidgets(
+        'should not render any per-row hint text for an exercise with prior data',
+        (tester) async {
+          // Seed prior-session data so the lookup returns a non-empty
+          // list. Pre-Phase-23 this would have rendered "Previous: 100kg
+          // × 8" on set 1. Post-Phase-23 the row stays bare.
+          final prevWorking = ExerciseSet(
+            id: 'prev-work-1',
+            workoutExerciseId: 'we-prev',
+            setNumber: 1,
+            weight: 100,
+            reps: 8,
+            setType: SetType.working,
+            isCompleted: true,
+            createdAt: DateTime(2026, 5, 1),
+          );
+          final widget = ProviderScope(
+            overrides: [
+              activeWorkoutProvider.overrideWith(
+                () => _FixedActiveWorkoutNotifier(
+                  _makeState(_makeActiveExercise(setCount: 1)),
+                ),
+              ),
+              restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+              profileProvider.overrideWith(() => _KgProfileNotifier()),
+              exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
+              lastWorkoutSetsProvider.overrideWith(
+                (ref, _) => Future.value({
+                  'exercise-001': [prevWorking],
+                }),
+              ),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: Scaffold(
+                body: SizedBox(
+                  width: 800,
+                  child: ExerciseCard(
+                    activeExercise: _makeActiveExercise(setCount: 1),
+                    reorderMode: false,
+                    isFirst: true,
+                    isLast: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          await tester.pumpWidget(widget);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+
+          for (final fragment in const ['Previous:', '= last set']) {
+            expect(
+              find.textContaining(fragment),
+              findsNothing,
+              reason:
+                  'Phase 23 D4: ExerciseCard must not render the hint '
+                  'fragment "$fragment" even with prior-session data '
+                  'present. The lastSets lookup feeds only `_onAddSet` '
+                  'pre-fill now.',
+            );
+          }
+        },
+      );
+    });
+
+    // -----------------------------------------------------------------------
     // PR-5 M8 — Info-outline icon size + alpha (header detail affordance)
     //
     // Pre-fix: 14dp at α=0.35 — the icon sat at the visibility threshold,
