@@ -16,7 +16,8 @@ sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
 **Current state (2026-05-13).** No active phase. Phase 23 (active-workout
-chrome + SnackBar fix-wave) shipped in PR #212 + #214. Active Backlog: 5
+chrome + SnackBar fix-wave) shipped in PR #212 + #214; the 23-P-4 E2E
+dismissal-time regression pins shipped in PR #217. Active Backlog: 4
 architectural follow-ups + 2 manual on-device walkthroughs. Phase 16
 subscription parked by choice (RPG retention moat first).
 
@@ -195,16 +196,19 @@ Items in (d) move to the "v2-park" sub-list and don't get worked on without new 
   for v1 — the SnackBar is a tiny surface, and Phase 23 Cluster C already
   documents the regression mode that the E2E tests catch. Revisit if the
   picker grows enough complexity to justify the injection refactor.
-- **23-P-4 — E2E dismissal-time assertions for the three undo SnackBars**
-  (PR #214 follow-up, 2026-05-13). The current E2E suite asserts SnackBar
-  appearance only, never dismissal — which is exactly how the
-  `persist-eats-duration` bug hid for weeks. Add timing assertions to
-  `workouts.spec.ts` (add-exercise 3.5 s, set-delete 5 s) and
-  `weekly-plan.spec.ts` (routine-removed 3 s) so a future regression of
-  `persist: false` or the countdown widget can't slip past CI again. Until
-  added, the source-grep widget-test pins in
-  `test/widget/shared/widgets/snackbar_tap_out_dismiss_scope_drain_test.dart`
-  are the safety net.
+- **23-P-4 — E2E dismissal-time assertions for the three undo SnackBars** —
+  DONE in PR #217 (2026-05-13). Added two-endpoint duration regression pins
+  for the add-exercise undo (3.5 s, `workouts.spec.ts:1873`) and the routine-
+  removed undo (3 s, `weekly-plan.spec.ts:464`) — bracketing each snack with
+  "still visible mid-window" and "hidden post-duration + exit animation + 1 s
+  jitter headroom". Set-delete dismissal was already pinned at
+  `workouts.spec.ts:1153` from PR #214. New `WEEKLY_PLAN.routineRemovedUndoSnackBar`
+  selector + isolated `smokeWeeklyPlanRoutineRemoveUndo` user. Reviewer-cycle
+  surfaced a real preexisting flake (the "Saved" confirmation snack's
+  ~1.4 s lifetime reflows the routine row mid-frame, breaking `boundingBox`
+  / `scrollIntoViewIfNeeded`) — fixed with a 2.5 s settle wait + 5× retry on
+  measurement. Closes the regression gap that let the `persist-eats-duration`
+  cluster bug hide for weeks behind passing source-grep widget tests.
 
 ### v2-park (post-launch telemetry decisions)
 
