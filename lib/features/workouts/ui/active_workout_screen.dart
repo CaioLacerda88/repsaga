@@ -9,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../models/active_workout_state.dart';
 import '../providers/workout_providers.dart';
 import 'coordinators/discard_workout_coordinator.dart';
@@ -181,12 +182,25 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         _discardCoordinator.show(context, ref, displayState);
       },
       child: ScaffoldMessenger(
-        child: _ActiveWorkoutBody(
-          state: displayState,
-          discardCoordinator: _discardCoordinator,
-          finishCoordinator: _finishCoordinator,
-          showLoadingOverlay: loadingActive,
-          showRestTimerOverlay: restActive,
+        // SnackBarTapOutDismissScope sits INSIDE the route-scoped
+        // ScaffoldMessenger so the scope's `showCountdownSnackBar`
+        // factory resolves to the same messenger as direct
+        // `ScaffoldMessenger.of(context).showSnackBar(...)` calls (e.g.
+        // `SetRow`'s swipe-to-delete undo). The scope hosts the
+        // tap-out `Listener` covering the entire body, and provides
+        // the `showCountdownSnackBar` factory to descendants that
+        // need a countdown-bar undo snack. See class doc for the
+        // bounding-box hit-test contract (it prevents stepper / "+
+        // Add set" taps above the snack from silently dismissing
+        // the undo affordance).
+        child: SnackBarTapOutDismissScope(
+          child: _ActiveWorkoutBody(
+            state: displayState,
+            discardCoordinator: _discardCoordinator,
+            finishCoordinator: _finishCoordinator,
+            showLoadingOverlay: loadingActive,
+            showRestTimerOverlay: restActive,
+          ),
         ),
       ),
     );
@@ -331,22 +345,34 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
     if (!mounted) return;
     final l10n = AppLocalizations.of(context);
-    // Hide any prior snackbar so the undo affordance is the most recent
-    // surface — avoids stacking when the user adds several exercises in
-    // quick succession.
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(l10n.addExerciseUndo(exercise.name)),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: l10n.undo,
-          onPressed: () {
-            // Read the notifier fresh — `ref` is still valid even after
-            // an await gap because this State outlives the snackbar.
-            ref.read(activeWorkoutProvider.notifier).restoreExercise(addedId);
-          },
-        ),
+    // 3500 ms duration tuned 2026-05-13 (down from the original 4 s) —
+    // user feedback was that the previous window felt long when waiting
+    // passively. The countdown bar at the bottom of the snack visualises
+    // the remaining time so the duration reads as definite, not vague.
+    //
+    // `SnackBarTapOutDismissScope.showCountdownSnackBar`:
+    //   * wraps the message in a `_SnackBarCountdown` widget (3 dp
+    //     progress bar that drains over the SnackBar's duration);
+    //   * pins `persist: false` (Flutter defaults to `true` when an
+    //     `action:` is set — that broke 4 s auto-dismiss on Android
+    //     release builds before this fix wave);
+    //   * registers the snack with the scope's tap-out listener so
+    //     pointer-down events OUTSIDE the snack's content rect dismiss
+    //     it, while taps INSIDE the snack (Undo, or anywhere on the
+    //     content row) AND taps on unrelated widgets above the snack
+    //     (steppers, "+ Add set") continue to function normally. See
+    //     the scope's class doc for the bounding-box hit-test contract.
+    SnackBarTapOutDismissScope.of(context).showCountdownSnackBar(
+      context: context,
+      message: l10n.addExerciseUndo(exercise.name),
+      duration: const Duration(milliseconds: 3500),
+      action: SnackBarAction(
+        label: l10n.undo,
+        onPressed: () {
+          // Read the notifier fresh — `ref` is still valid even after
+          // an await gap because this State outlives the snackbar.
+          ref.read(activeWorkoutProvider.notifier).restoreExercise(addedId);
+        },
       ),
     );
   }

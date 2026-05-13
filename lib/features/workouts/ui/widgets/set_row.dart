@@ -9,6 +9,7 @@ import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/reps_stepper.dart';
 import '../../../../shared/widgets/reward_accent.dart';
+import '../../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../../../../shared/widgets/weight_stepper.dart';
 import '../../../profile/providers/profile_providers.dart';
 import '../../domain/pr_row_state.dart';
@@ -186,30 +187,38 @@ class _SetRowState extends ConsumerState<SetRow> {
         final notifier = ref.read(activeWorkoutProvider.notifier);
         final deletedSet = set;
         notifier.deleteSet(widget.workoutExerciseId, set.id);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          // PR-2 C3/Q5 — bump duration from 4s to Material's 10s ceiling so
-          // a user mid-rest (eyes off the phone) still has time to react to
-          // an accidental swipe-delete. The companion structural fix in
-          // `active_workout_screen.dart` re-stacks the rest-timer overlay
-          // INSIDE the Scaffold body slot so this SnackBar paints (and
-          // hit-tests) ABOVE the scrim — without the restack, even a 10s
-          // duration would render under the rest-timer scrim and remain
-          // unreachable. Both changes are required.
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).setDeleted(deletedSet.setNumber),
-              ),
-              duration: const Duration(seconds: 10),
-              action: SnackBarAction(
-                label: AppLocalizations.of(context).undo,
-                onPressed: () {
-                  notifier.restoreSet(widget.workoutExerciseId, deletedSet);
-                },
-              ),
-            ),
-          );
+        // PR-2 C3 — rest-timer overlay is re-stacked INSIDE the Scaffold
+        // body slot so this SnackBar paints (and hit-tests) ABOVE the
+        // scrim. Without that restack the undo would render under the
+        // scrim and remain unreachable mid-rest.
+        //
+        // Duration tuned 2026-05-13 from the PR-2 C3/Q5 10 s ceiling to
+        // 5 s — pairing with the countdown bar makes the remaining time
+        // legible, so the extra-wide reaction window is unnecessary
+        // visual debt. Tap-out dismiss (provided by the scope) also
+        // gives the user an instant exit without using Undo.
+        //
+        // The scope's `showCountdownSnackBar` factory pins `persist:
+        // false` (Flutter defaults to `true` when an `action:` is set —
+        // the root-cause bug that broke auto-dismiss before this fix
+        // wave) and threads the duration through to the countdown
+        // widget. See `SnackBarTapOutDismissScope` doc for the
+        // bounding-box hit-test contract that protects stepper / "+
+        // Add set" taps above the snack from silently dismissing the
+        // undo affordance.
+        SnackBarTapOutDismissScope.of(context).showCountdownSnackBar(
+          context: context,
+          message: AppLocalizations.of(
+            context,
+          ).setDeleted(deletedSet.setNumber),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: AppLocalizations.of(context).undo,
+            onPressed: () {
+              notifier.restoreSet(widget.workoutExerciseId, deletedSet);
+            },
+          ),
+        );
       },
       // Phase 23 D4 — per-row previous-session hint removed (2026-05-12).
       //

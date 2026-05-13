@@ -140,12 +140,13 @@ export async function addExercise(
   // E2E test) assert it themselves, and callers that immediately invoke
   // setWeight / setReps already wait via the Playwright auto-retry on
   // those steppers' click selectors. Adding a wait here would push the
-  // helper's total runtime past the 4 s addExerciseUndo SnackBar
-  // duration on slow workers and race the H5 Add-Exercise-Undo tests
-  // (workouts.spec.ts:1764 / :1786). The SnackBar is shown synchronously
-  // by `_onAddExercise` right after the picker dismisses, which is the
-  // assertion target of those tests; we must NOT delay the helper
-  // between the picker dismissal and the caller's next action.
+  // helper's total runtime past the 3.5 s addExerciseUndo SnackBar
+  // duration (Phase 23 #214, down from 4 s) on slow workers and race
+  // the H5 Add-Exercise-Undo tests (workouts.spec.ts:1764 / :1786).
+  // The SnackBar is shown synchronously by `_onAddExercise` right after
+  // the picker dismisses, which is the assertion target of those tests;
+  // we must NOT delay the helper between the picker dismissal and the
+  // caller's next action.
 }
 
 /**
