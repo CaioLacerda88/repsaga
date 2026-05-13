@@ -197,13 +197,34 @@ Cross-session lessons and bug clusters → auto-memory `cluster_*.md` entries in
 
 Do NOT create long-form spec files under `docs/superpowers/`, `tasks/`, or any other nested folder. The May 2026 cleanup removed multiple stray spec files that should have lived as WIP-then-PROJECT.md condensations.
 
+### Library API lookups (Context7)
+
+`tech-lead` has Context7 MCP tools (`mcp__plugin_context7_context7__resolve-library-id` + `query-docs`) for looking up versioned, official docs of third-party packages. Use it deliberately:
+
+**Use Context7 first when:**
+- Writing code that touches a third-party package's API surface (Riverpod 3, Freezed 3, GoRouter 17, `supabase_flutter`, Hive, `in_app_purchase`, `connectivity_plus`, `fl_chart`, `mocktail`, etc.).
+- Migrating to a new major version of a pinned dep (the package's CHANGELOG + Context7 docs together are the canonical source).
+- Adopting a brand-new package — `resolve-library-id` first, then `query-docs` against the version we're considering.
+
+**Read source directly (skip Context7) when:**
+- Debugging Flutter SDK / Dart SDK internals (engine behavior, `RenderObject` constraints, `SemanticsNode` plumbing, animation pipeline). The framework source under `/c/flutter/packages/flutter/lib/...` is the ground truth — Context7 docs cover the public API, not engine internals.
+- Looking at our own RepSaga code — `Grep` and `Read` are faster than any external lookup.
+- Postgres / SQL — official PG docs are still better than Context7's coverage of niche extensions.
+
+**Fallback chain when Context7 has thin coverage:**
+1. Context7 `query-docs` (versioned, official, fast)
+2. Official package README on pub.dev (still authoritative)
+3. Targeted web search (last resort — easy to land on outdated blog content)
+
+The May 2026 SnackBar fix-wave was correctly source-read territory (Flutter framework internals). But Phase 14 offline (`connectivity_plus`, `hive`), Phase 16 paywall (`in_app_purchase`), and any future Riverpod 3 patterns are Context7 territory. See auto-memory `feedback_context7_when_to_use.md`.
+
 ### Debugging Protocol
 
 When ANY non-obvious failure occurs during the pipeline (CI red, E2E failure, unexpected behavior, review-found bugs):
 
 1. **IMMEDIATELY deploy `tech-lead` with `superpowers:systematic-debugging`** — no ad-hoc guessing, no trial-and-error. Non-obvious bugs waste massive time when investigated without systematic analysis.
 2. **Phase 1 (Root Cause):** Read the actual error output. Reproduce. Check what changed. Trace data flow backward from the symptom. **Dispatch the tech-lead agent to investigate architecture-level root causes** — don't just grep and patch.
-3. **Phase 2 (Pattern):** Find working examples in the codebase. Compare broken vs working.
+3. **Phase 2 (Pattern):** Find working examples in the codebase. Compare broken vs working. **If the suspected fault is in third-party package usage** (not framework / engine internals), check Context7 docs for the pinned version BEFORE reading our own codebase — stale training-data assumptions are the slowest path to a wrong hypothesis.
 4. **Phase 3 (Hypothesis):** Form ONE specific theory ("X causes Y because Z"). Test minimally — one variable at a time.
 5. **Phase 4 (Fix):** Fix root cause, not symptom. Verify with tests.
 6. **If 3+ fix attempts fail:** Stop. Question the architecture. Discuss with user before continuing.
