@@ -69,7 +69,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
 
     // Take baseline screenshot
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-baseline.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-baseline.png',
     });
     console.log('[setup] Setup complete');
   });
@@ -157,7 +157,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-stepper-taps.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-stepper-taps.png',
     });
   });
 
@@ -296,7 +296,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-weight-dialog.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-weight-dialog.png',
     });
   });
 
@@ -363,7 +363,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-set-type-cycle.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-set-type-cycle.png',
     });
   });
 
@@ -421,7 +421,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-done-mark.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-done-mark.png',
     });
   });
 
@@ -495,7 +495,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
       findings.push(`[PROBE 06] State 1 (first set complete): standing_pr=${standing1}, non_pr=${nonPr1}`);
 
       await page.screenshot({
-        path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-standing-pr.png',
+        path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-standing-pr.png',
       });
 
       // Add second set with HIGHER weight → first becomes superseded
@@ -532,7 +532,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
           findings.push(`[PROBE 06] State 2 (second set complete, higher): superseded=${superseded}, standing=${standing2}`);
 
           await page.screenshot({
-            path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-superseded-pr.png',
+            path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-superseded-pr.png',
           });
 
           // Add third set with LOWER weight → should be completedNonPr
@@ -569,7 +569,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
               findings.push(`[PROBE 06] State 3 (third lower set): superseded=${superseded3}, standing=${standing3}, non_pr=${completedNonPr}`);
 
               await page.screenshot({
-                path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-all-pr-states.png',
+                path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-all-pr-states.png',
               });
             }
           }
@@ -667,7 +667,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     }
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-swipe-delete.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-swipe-delete.png',
     });
   });
 
@@ -749,7 +749,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
     findings.push(`[PROBE 08] Tap targets:\n  ${findings_08.join('\n  ')}`);
 
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-tap-targets.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-tap-targets.png',
     });
   });
 
@@ -809,7 +809,7 @@ test.describe('Charter A — Brutal set-row workout — BR-1', () => {
 
     // Final complete screenshot
     await page.screenshot({
-      path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-final.png',
+      path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-final.png',
     });
 
     // Dump complete screen semantics for offline analysis

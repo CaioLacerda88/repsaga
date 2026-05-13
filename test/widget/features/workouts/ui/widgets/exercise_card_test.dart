@@ -2,7 +2,7 @@
 /// file: pin the contracts that PREVENT the giant `flt-tappable role="group"`
 /// merge bug — where the header InkWell, the column-header letters
 /// (SET/WEIGHT/REPS), and the per-row Semantics all collapsed into ONE
-/// merged AOM node that intercepted every tap. See `tasks/lessons.md`
+/// merged AOM node that intercepted every tap. See `PROJECT.md §0 Cluster Ledger`
 /// "Semantics container/explicitChildNodes is needed at EVERY tap-merging
 /// boundary, not just one place".
 library;

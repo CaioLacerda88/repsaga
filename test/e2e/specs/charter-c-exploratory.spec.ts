@@ -78,7 +78,7 @@ async function addBodyweightExercise(page: Page, exerciseName: string): Promise<
 
 const VIEWPORT = { width: 360, height: 780 };
 const SS_BASE =
-  'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots';
+  'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots';
 
 // ---------------------------------------------------------------------------
 // Correct exercise names as they appear in the DB (verified from picker UI)

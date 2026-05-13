@@ -329,7 +329,7 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     final weightUnit = WeightUnit.fromString(
       ref.watch(profileProvider).value?.weightUnit ?? 'kg',
     );
-    // Bodyweight chrome predicate (PLAN.md backlog 20-P-2). Computed once
+    // Bodyweight chrome predicate (PROJECT.md backlog 20-P-2). Computed once
     // at build-time so the column header and the per-row build both read
     // from the same source of truth — no risk of drift if the underlying
     // rule ever grows (e.g. a future equipment type that also hides
@@ -477,7 +477,7 @@ class _ExerciseCardHeader extends ConsumerWidget {
           // dialog instead. The two flags create a hard semantic boundary so
           // the header is its OWN tappable region, distinct from siblings.
           //
-          // See `tasks/lessons.md` "Semantics container/explicitChildNodes is
+          // See `PROJECT.md §0 Cluster Ledger` "Semantics container/explicitChildNodes is
           // needed at EVERY tap-merging boundary".
           child: Semantics(
             container: true,
@@ -709,7 +709,7 @@ class _SetColumnHeaders extends StatelessWidget {
   final ThemeData theme;
 
   /// Hide the WEIGHT column header for bodyweight exercises. Mirrors the
-  /// `SetRow.isBodyweight` chrome change (PLAN.md backlog 20-P-2).
+  /// `SetRow.isBodyweight` chrome change (PROJECT.md backlog 20-P-2).
   final bool isBodyweight;
 
   @override

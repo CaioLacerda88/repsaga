@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RepSaga — a gym training app for logging workouts, tracking personal records, and managing exercises.
 
-**On session start:** Read `PLAN.md` Quick Reference (progress table + current state) and `tasks/WIP.md` (in-flight work). Only read full PLAN.md sections relevant to the current task.
+**On session start:** Read `PROJECT.md` Quick Reference (progress table + current state) and `docs/WIP.md` (in-flight work). Only read full PROJECT.md sections relevant to the current task.
 
 ## Commands
 
@@ -32,6 +32,7 @@ flutter run -d chrome        # run on Chrome (for Playwright e2e)
 - No hardcoded colors or text styles — use `AppTheme` from `core/theme/`
 - Extract widgets when build method exceeds ~50 lines
 - Import our exceptions with prefix when Supabase types clash: `import '...' as app;`
+- When fixing a bug that matches a known cluster (see PROJECT.md §0 Cluster Ledger), reference the cluster name in the inline comment so future agents can grep it. If the fix uncovers a NEW recurring pattern, write a 6-line `cluster_*.md` auto-memory entry + add a row to PROJECT.md Cluster Ledger in the same PR.
 - Commit format: `feat|fix|refactor|test|docs|ci|chore(scope): description`
 - Scopes: `auth`, `exercises`, `workouts`, `progress`, `profile`, `core`, `theme`, `ci`, `rpg`, `gamification`, `test`
 
@@ -41,9 +42,21 @@ Post-Phase-15f, exercise display text (`name`, `description`, `form_tips`) lives
 
 Default-exercise INSERTs MUST include the `slug` column in their column list with a literal slug value per tuple — slug is the join key for translations and is `NOT NULL` on the table.
 
-CI enforces this via `scripts/check_exercise_translation_coverage.sh` (recognizes both the canonical `(VALUES (slug, ...)) JOIN exercises e ON e.slug = v.slug` pattern and the implicit `SELECT ... FROM exercises e` backfill pattern). Violation fails the pipeline. See `docs/superpowers/specs/2026-04-24-exercise-content-localization-design.md` §13 for the full contract.
+CI enforces this via `scripts/check_exercise_translation_coverage.sh` (recognizes both the canonical `(VALUES (slug, ...)) JOIN exercises e ON e.slug = v.slug` pattern and the implicit `SELECT ... FROM exercises e` backfill pattern). Violation fails the pipeline.
 
 ## Testing
+
+### Test user-visible behavior, not wiring
+
+Every test must assert a user-perceptible outcome — what the user sees, what dismisses, what stays. "The function was called" is not a behavior; it's a wiring trace. If the only thing that breaks the test is removing the call site, the test isn't pinning the contract.
+
+Examples:
+- WRONG: `verify(() => notifier.showSnackBar()).called(1);`
+- RIGHT: `expect(find.byType(SnackBarCountdown), findsNothing);` (after the duration elapses)
+
+The May 2026 SnackBar fix-wave (PR #214) is the cautionary tale: source-grep + widget tests pinned that `persist: false` was set in the call site, but no test ever asserted the SnackBar actually disappeared at duration, nor that the inner drain rectangle ever had non-zero width. The bug hid until on-device verification. See PROJECT.md §0 Cluster Ledger → `persist-eats-duration` / `pump-duration-masks-forward`.
+
+### Conventions
 
 - Structure: `test/unit/`, `test/widget/`, `test/e2e/`, `test/fixtures/`
 - Mock Supabase with `mocktail` — never hit real backend in unit tests
@@ -141,25 +154,48 @@ FLUTTER_APP_URL= npx playwright test "specs/auth.spec.ts:16"
 
 ### Development Flow
 
-Each PLAN.md step follows this pipeline. **No step is skippable.**
+Each PROJECT.md step follows this pipeline. **No step is skippable.**
 
-1. **Plan** — Read PLAN.md step. Dispatch `product-owner` + `ui-ux-critic` (if user-facing).
-2. **WIP** — Write checklist in `tasks/WIP.md` before any code.
-3. **Implement (TDD)** — `tech-lead` writes code WITH unit/widget tests. Test-first when possible. Run `dart format .` + `dart analyze` after each change.
+1. **Plan** — Read PROJECT.md §0 + the relevant phase section (or §2 Active Backlog if picking up follow-up work). Dispatch `product-owner` + `ui-ux-critic` (if user-facing).
+   - **Boundary-trigger ripple check.** When the change crosses one of: public method signature (sync→async, params, return type) · provider's emitted state shape · RPC, migration, or repository contract · symbol rename/removal · route/guard restructure — dispatch `Explore` BEFORE any code with this template:
+     > *Find every caller / reader / test / l10n key / E2E selector touching `<symbol>` across `lib/`, `supabase/`, `test/`. Group by feature. Flag any provider that re-emits state derived from this, any caller that assumes synchronous behavior, and any E2E test whose selector depends on the symbol.*
+     Output the inventory in `docs/WIP.md` as a "Boundary inventory" section ABOVE the implementation checklist. Implementation can't start until that section is filled. The async-caller-broke-snackbar cluster (PROJECT.md §0) is the canonical motivation.
+   - Small fixes that don't cross those boundaries skip this step.
+2. **WIP** — Write checklist in `docs/WIP.md` before any code.
+3. **Implement (TDD)** — `tech-lead` writes code WITH unit/widget tests. Test-first when possible. Behavior-not-wiring (see Testing section). Run `dart format .` + `dart analyze` after each change.
 4. **Design review** (if UI) — `ui-ux-critic` reviews. Generic → revise.
-5. **QA gate** (before PR) — `qa-engineer`:
-   - Reviews test coverage, flags gaps, adds missing unit/widget cases
-   - **E2E (always):** Verify no selectors/text strings broke; update `helpers/selectors.ts` if needed. New tests go in existing `specs/<feature>.spec.ts` files — follow E2E Conventions above.
-   - **E2E (new/changed user flows):** Write/update E2E tests in the appropriate `specs/` file, run full E2E suite locally — all 145 must pass. **Navigation changes (go↔push, route restructuring) count as flow changes** even if no UI text changed.
-   - **E2E (visual-only / no flow change):** Selector impact assessment is sufficient; skip suite run and new E2E tests. Only applies when zero navigation/routing/provider logic changed.
-   - Removes or updates stale E2E tests affected by the change
-   - Bugs found → back to `tech-lead` → fix → QA re-runs from top
-6. **Verify before PR** — Orchestrator runs `superpowers:verification-before-completion` skill: fresh `make ci` (or format + analyze + test), reads full output, confirms 0 failures. No "should pass" — evidence only. Also re-read PLAN.md acceptance criteria and check each item against the diff.
-7. **Open PR** — only after verification gate passes.
-8. **Code review** — `reviewer` flags issues → `tech-lead` fixes → `qa-engineer` re-validates.
-9. **Ship** — QA OK + CI green → squash merge.
-10. **Apply migrations** — After merge, check if the step added/modified SQL migrations (`supabase/migrations/`). If so, apply them to the hosted Supabase instance with `npx supabase db push` (or link + push). Verify the schema matches what the code expects before moving on. During QA/testing, always confirm that any new migrations have been applied to the environment under test.
-11. **Close WIP** — Remove WIP section, condense step in PLAN.md (see lifecycle below).
+5. **Verify before PR** — Orchestrator runs `superpowers:verification-before-completion` skill: fresh `make ci` (or format + analyze + test), reads full output, confirms 0 failures. No "should pass" — evidence only. Re-read PROJECT.md acceptance criteria against the diff.
+6. **Open PR** — only after verification gate passes. PR body **must** include `**QA pass pending — final coverage + E2E run after code review.**` so reviewer knows not to wait on QA before commenting.
+7. **Code review** — `reviewer` flags issues. Scope: code structure, correctness, anti-patterns, missing edge cases. Reviewer also flags test-coverage holes BUT doesn't dictate the test design — that's QA's call in step 8. `tech-lead` fixes → reviewer re-engages → loop until reviewer signs off.
+8. **QA gate (final)** — `qa-engineer` reviews the post-review article:
+   - Writes the tests for any coverage holes the reviewer flagged (against the post-review code, so no churn).
+   - **E2E (always):** Verify no selectors/text strings broke; update `helpers/selectors.ts` if needed. New tests go in existing `specs/<feature>.spec.ts` files — follow E2E Conventions below.
+   - **E2E (new/changed user flows):** Write/update E2E tests in the appropriate `specs/` file, run full E2E suite locally. **Navigation changes (go↔push, route restructuring) count as flow changes** even if no UI text changed.
+   - **E2E (visual-only / no flow change):** Selector impact assessment only.
+   - Removes or updates stale E2E tests affected by the change.
+   - Bugs found → back to `tech-lead` → reviewer re-engages briefly → QA re-runs from top.
+9. **Verify after QA** — `make ci` + E2E green. Final check before merge.
+10. **Ship** — QA OK + CI green → squash merge.
+11. **Apply migrations** — After merge, check if the phase added/modified SQL migrations (`supabase/migrations/`). If so, apply them to the hosted Supabase instance with `npx supabase db push` (or link + push). Verify the schema matches what the code expects before moving on. During QA/testing, always confirm that any new migrations have been applied to the environment under test.
+12. **Close WIP** — Remove WIP section, condense phase in PROJECT.md §4 (see lifecycle below).
+
+### Pipeline exceptions
+
+- **Docs-only PRs:** no reviewer, no QA. Admin-merge once fast checks pass (existing `docs_only_pr_merge` memory rule).
+- **Tooling / CI / `.claude/` hooks changes:** reviewer reads, QA skipped (no user-visible surface).
+- **Hotfixes for live incidents:** reviewer + QA collapse into one expedited pass, neither skipped.
+
+### Document discipline (no stray files)
+
+Transient agent output (plans, working specs, design notes from superpowers like `writing-plans` or `brainstorming`) → `docs/WIP.md`. Removed when the branch merges.
+
+Shipped + architectural content → `docs/PROJECT.md` (active phase full-spec in §3, post-merge collapsed into §4 Completed Phases — 3-5 bullets).
+
+Long-lived external references that don't fit a phase narrative (legal pages, design subsystems, glossaries, recovery runbooks) → `docs/` flat — no nested `phase/` / `date/` / `superpowers/` folders.
+
+Cross-session lessons and bug clusters → auto-memory `cluster_*.md` entries indexed in MEMORY.md. The in-project grep handle goes into PROJECT.md §0 Cluster Ledger.
+
+Do NOT create long-form spec files under `docs/superpowers/`, `tasks/`, or any other nested folder. The May 2026 cleanup removed multiple stray spec files that should have lived as WIP-then-PROJECT.md condensations.
 
 ### Debugging Protocol
 
@@ -174,12 +210,12 @@ When ANY non-obvious failure occurs during the pipeline (CI red, E2E failure, un
 
 **This applies to the orchestrator, not just agents.** When investigating CI failures, E2E regressions, or review feedback — follow the phases, don't ad-hoc grep around hoping to stumble on the answer. The instinct to "just try something" wastes context window and time. Invest in understanding first.
 
-### PLAN.md Lifecycle
+### PROJECT.md Lifecycle
 
-PLAN.md is the single source of truth for all project specs. It's structured for **token-efficient reading** — agents read the Quick Reference first, then only their relevant section.
+PROJECT.md is the single source of truth for all project specs. It's structured for **token-efficient reading** — agents read the Quick Reference first, then only their relevant section.
 
 **During development** (step is active):
-- The step has a **full detailed spec** in PLAN.md: acceptance criteria, file plans, schema, UX details
+- The step has a **full detailed spec** in PROJECT.md: acceptance criteria, file plans, schema, UX details
 - Agents read the Quick Reference + their active step section — never the entire file
 - WIP.md tracks real-time progress during implementation
 
@@ -189,26 +225,26 @@ PLAN.md is the single source of truth for all project specs. It's structured for
 - Update the progress table status to DONE with PR number(s)
 - Remove the WIP.md section for that step
 
-This prevents PLAN.md from growing unbounded. Completed steps are summaries; only active/future steps have full specs.
+This prevents PROJECT.md from growing unbounded. Completed steps are summaries; only active/future steps have full specs.
 
-### WIP Tracking (`tasks/WIP.md`)
+### WIP Tracking (`docs/WIP.md`)
 
 **Every agent that changes code MUST follow this protocol:**
 
-1. **Before writing code:** Read the relevant PLAN.md step section, then write a checklist in `tasks/WIP.md` with:
+1. **Before writing code:** Read the relevant PROJECT.md step section, then write a checklist in `docs/WIP.md` with:
    - Task name and branch name
-   - Reference to the source definition (e.g., "Per PLAN.md Step 12", "Per PLAN.md Phase 13")
+   - Reference to the source definition (e.g., "Per PROJECT.md Step 12", "Per PROJECT.md Phase 13")
    - Checkable items for each change to make
    - Files to modify/create
 2. **During implementation:** Check off items as they're completed (`- [x]`)
-3. **After merge:** Remove the completed section from `tasks/WIP.md` and condense the PLAN.md step
+3. **After merge:** Remove the completed section from `docs/WIP.md` and condense the PROJECT.md step
 
-This keeps the coordinator (main conversation) informed of progress and ensures agents don't drift from specs. If `tasks/WIP.md` doesn't exist, create it.
+This keeps the coordinator (main conversation) informed of progress and ensures agents don't drift from specs. If `docs/WIP.md` doesn't exist, create it.
 
 ### Handoff Protocol
 
 **When delegating to an agent:**
-- Provide the PLAN.md step number and specific sub-tasks
+- Provide the PROJECT.md step number and specific sub-tasks
 - List files the agent must read before starting
 - State what to build, which existing patterns to follow
 - Include `export PATH="/c/flutter/bin:$PATH"` for Flutter/Dart commands
@@ -230,7 +266,7 @@ Output these as plain text between tool calls. Keep them to one line.
 
 **When reviewing a PR (reviewer / qa-engineer):**
 - Read all changed files, not just the diff summary
-- Check against PLAN.md requirements for that step
+- Check against PROJECT.md requirements for that step
 - Verify tests cover the acceptance criteria
 - Flag real issues only — skip style nitpicks (that's what `make format` and `make analyze` are for)
 
@@ -238,9 +274,9 @@ Output these as plain text between tool calls. Keep them to one line.
 
 The main conversation must stay under 60% context usage. When approaching 60%:
 
-1. **Update `tasks/WIP.md`** with current state: what's done, what's in progress, what's next, any decisions or blockers
+1. **Update `docs/WIP.md`** with current state: what's done, what's in progress, what's next, any decisions or blockers
 2. **Compact** — use `/compact` to free context
-3. After compacting, re-read `tasks/WIP.md` to restore working state
+3. After compacting, re-read `docs/WIP.md` to restore working state
 
 This prevents context rot — losing track of in-flight work after auto-compaction. Agents should also keep context lean: delegate research to sub-agents, avoid reading entire large files when a section suffices.
 

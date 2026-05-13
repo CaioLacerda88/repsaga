@@ -70,7 +70,7 @@ Two families, from `google_fonts`:
 One display family, one body family, one numeric family. Three families
 max. See `AppTextStyles` for the token set.
 
-PressStart2P, Cinzel and Cormorant are explicitly rejected (see PLAN.md
+PressStart2P, Cinzel and Cormorant are explicitly rejected (see PROJECT.md
 §17.0c for rationale).
 
 ## Icons

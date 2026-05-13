@@ -27,7 +27,7 @@ const RUN = process.env['EXPL_CHARTER_B'] === '1';
 
 const VIEWPORT_PORTRAIT = { width: 393, height: 852 };
 const VIEWPORT_LANDSCAPE = { width: 852, height: 393 };
-const SS_BASE = 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots';
+const SS_BASE = 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots';
 
 // ============================================================
 // Charter B — US-1 probes

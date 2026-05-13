@@ -825,7 +825,7 @@ test.describe('PR signal inline display', { tag: '@smoke' }, () => {
   //       smokePR's bench history wiped Worker A's just-completed
   //       set/workout rows out from under the resolver.
   //
-  // The architectural fix (per-worker user isolation) lives in PLAN.md
+  // The architectural fix (per-worker user isolation) lives in PROJECT.md
   // Phase 21. Until then we use the simplest working tactic: pick a
   // weight no other test on smokePR can plausibly leave behind. The
   // `personal-records.spec.ts` ceiling is 999 kg; using 1500 kg gives

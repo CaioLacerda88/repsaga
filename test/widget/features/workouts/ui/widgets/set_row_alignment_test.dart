@@ -3,7 +3,7 @@
 ///
 /// These tests verify the locked design promise: **every set row has
 /// identical `min-height: 56px` and identical baselines for value text
-/// regardless of state** (PLAN.md Phase 20 acceptance criterion A).
+/// regardless of state** (PROJECT.md Phase 20 acceptance criterion A).
 ///
 /// Implementation note: this file does NOT use golden images. The Flutter
 /// test suite runs on multiple host platforms (Windows CI, macOS local) and
@@ -107,7 +107,7 @@ void main() {
     registerFallbackValue(FakeActiveWorkoutState());
   });
 
-  // The 5 states in the canonical display order (PLAN.md Phase 20 matrix).
+  // The 5 states in the canonical display order (PROJECT.md Phase 20 matrix).
   const stateMatrix =
       <({String label, PrRowDisplay display, bool isCompleted})>[
         (
@@ -184,7 +184,7 @@ void main() {
             reason:
                 'state:${entry.label} — must have at least one Container with '
                 'minHeight≥56dp. Regressing this breaks the uniform-height '
-                'alignment promise (PLAN.md Phase 20 acceptance criterion A).',
+                'alignment promise (PROJECT.md Phase 20 acceptance criterion A).',
           );
         }
       },

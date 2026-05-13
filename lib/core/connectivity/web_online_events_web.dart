@@ -22,10 +22,9 @@ import 'package:web/web.dart' as web;
 final webOnlineEventsProvider = Provider<Stream<bool>>((ref) {
   final controller = StreamController<bool>.broadcast();
 
-  // No debounce on browser events: the spec
-  // (`tasks/active-workout-implementation-plan.md` §329) calls out that
-  // Chrome fires online/offline immediately on real disconnect — no
-  // flapping to absorb. Pipe events straight through.
+  // No debounce on browser events: Chrome fires online/offline immediately
+  // on real disconnect — no flapping to absorb. Pipe events straight through.
+  // (Phase 22 audit confirmed; spec file retired May 2026 cleanup.)
   final onlineSub = web.EventStreamProviders.onlineEvent
       .forTarget(web.window)
       .listen((_) {

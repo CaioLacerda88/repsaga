@@ -27,7 +27,7 @@ test.describe('Verify weight helper', () => {
     await page.waitForTimeout(500);
     
     // Take screenshot to visually verify
-    await page.screenshot({ path: 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots/charter-A-BR-1-weight-80.png' });
+    await page.screenshot({ path: 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots/charter-A-BR-1-weight-80.png' });
     
     // Dump all semantics to see weight
     const allSemantics = await page.evaluate(() => {

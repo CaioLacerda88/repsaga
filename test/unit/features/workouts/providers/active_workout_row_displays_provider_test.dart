@@ -6,7 +6,7 @@
 /// They verify:
 ///
 ///   1. **Bench-press cascade scenario** — the canonical 4-set test from
-///      PLAN.md Phase 20 flows correctly through the provider. The binary-rule
+///      PROJECT.md Phase 20 flows correctly through the provider. The binary-rule
 ///      resolver output matches the expected per-row states.
 ///
 ///   2. **State mutation propagates** — adding a 5th set that supersedes the

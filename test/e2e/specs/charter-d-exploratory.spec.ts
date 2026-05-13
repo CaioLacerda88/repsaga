@@ -32,7 +32,7 @@ import { startEmptyWorkout, addExercise, setWeight, setReps, completeSet } from 
 const RUN = process.env['EXPL_CHARTER_D'] === '1';
 
 const VIEWPORT = { width: 393, height: 852 };
-const SS_BASE = 'C:/Users/caiol/Projects/repsaga/tasks/active-workout-findings/screenshots';
+const SS_BASE = 'C:/Users/caiol/Projects/repsaga/test/e2e/test-results/charter-screenshots';
 
 // Fresh user created once; email includes timestamp so reruns don't collide.
 const CHARTER_TS = process.env['EXPL_CHARTER_D_TS'] ?? Date.now().toString();

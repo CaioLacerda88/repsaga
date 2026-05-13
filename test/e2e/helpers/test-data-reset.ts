@@ -11,7 +11,7 @@
  *
  * PR #152's e2e debug cycle CONFIRMED two such pollution paths and the audit
  * at `tasks/e2e-pollution-audit.md` documented five more HIGH-risk pairs.
- * The architectural fix (per-worker user isolation) is parked as PLAN.md
+ * The architectural fix (per-worker user isolation) is parked as PROJECT.md
  * Phase 21 — until then, these helpers let individual describe blocks
  * restore canonical state in their `beforeEach` and stay green regardless
  * of prior-spec mutations.
