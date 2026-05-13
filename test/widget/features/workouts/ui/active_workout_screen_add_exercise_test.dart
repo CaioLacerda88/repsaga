@@ -113,116 +113,118 @@ void main() {
   //     regression guard for the Cluster C fix.
   // ---------------------------------------------------------------------------
   group('ActiveWorkoutScreen — addExercise auto-seeds set 1 (Phase 23 D6)', () {
-    testWidgets(
-      'should render exercise card with one pre-filled set immediately '
-      'after addExercise with prior session data',
-      (tester) async {
-        // Seed the repo with prior-session data for bench press —
-        // 100 kg × 8. Pre-Phase-23 the new exercise card rendered empty;
-        // Post-Phase-23 it MUST render one row with those values.
-        final mockRepo = _MockWorkoutRepository();
-        final mockStorage = _MockWorkoutLocalStorage();
+    testWidgets('should render exercise card with one pre-filled set immediately '
+        'after addExercise with prior session data', (tester) async {
+      // Seed the repo with prior-session data for bench press —
+      // 100 kg × 12. Pre-Phase-23 the new exercise card rendered empty;
+      // Post-Phase-23 it MUST render one row with those values.
+      //
+      // Reps fixture is intentionally `12` (not the more natural `8`):
+      // a single-digit reps value can collide with set-number labels,
+      // rest-timer text, or other unrelated chrome — `find.textContaining('8')`
+      // would then pass vacuously even if the reps field were blank.
+      // Two distinctive digits side-by-side make the assertion meaningful.
+      final mockRepo = _MockWorkoutRepository();
+      final mockStorage = _MockWorkoutLocalStorage();
 
-        when(
-          () => mockStorage.loadActiveWorkout(),
-        ).thenReturn(ActiveWorkoutState(workout: _workout(), exercises: []));
-        when(
-          () => mockStorage.saveActiveWorkout(any()),
-        ).thenAnswer((_) async {});
+      when(
+        () => mockStorage.loadActiveWorkout(),
+      ).thenReturn(ActiveWorkoutState(workout: _workout(), exercises: []));
+      when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
 
-        final prior = ExerciseSet(
-          id: 'prev-1',
-          workoutExerciseId: 'we-prev',
-          setNumber: 1,
-          weight: 100,
-          reps: 8,
-          setType: SetType.working,
-          isCompleted: true,
-          createdAt: DateTime(2026, 5, 1),
-        );
-        when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
-          (_) async => {
-            'exercise-bench': [prior],
-          },
-        );
+      final prior = ExerciseSet(
+        id: 'prev-1',
+        workoutExerciseId: 'we-prev',
+        setNumber: 1,
+        weight: 100,
+        reps: 12,
+        setType: SetType.working,
+        isCompleted: true,
+        createdAt: DateTime(2026, 5, 1),
+      );
+      when(() => mockRepo.getLastWorkoutSets(any())).thenAnswer(
+        (_) async => {
+          'exercise-bench': [prior],
+        },
+      );
 
-        final container = ProviderContainer(
-          overrides: [
-            workoutRepositoryProvider.overrideWithValue(mockRepo),
-            workoutLocalStorageProvider.overrideWithValue(mockStorage),
-            restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
-            profileProvider.overrideWith(() => _KgProfileNotifier()),
-            exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
-            lastWorkoutSetsProvider.overrideWith(
-              (ref, _) => Future.value({
-                'exercise-bench': [prior],
-              }),
-            ),
-            elapsedTimerProvider.overrideWith(
-              (ref, startedAt) => Stream.value(const Duration(minutes: 5)),
-            ),
-          ],
-        );
-        addTearDown(container.dispose);
-
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: TestMaterialApp(
-              theme: AppTheme.dark,
-              home: const ActiveWorkoutScreen(),
-            ),
+      final container = ProviderContainer(
+        overrides: [
+          workoutRepositoryProvider.overrideWithValue(mockRepo),
+          workoutLocalStorageProvider.overrideWithValue(mockStorage),
+          restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+          profileProvider.overrideWith(() => _KgProfileNotifier()),
+          exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
+          lastWorkoutSetsProvider.overrideWith(
+            (ref, _) => Future.value({
+              'exercise-bench': [prior],
+            }),
           ),
-        );
-        await tester.pump();
-        await tester.pump();
+          elapsedTimerProvider.overrideWith(
+            (ref, startedAt) => Stream.value(const Duration(minutes: 5)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-        // Pre-condition: workout has zero exercises so far.
-        expect(find.byType(SetRow), findsNothing);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: TestMaterialApp(
+            theme: AppTheme.dark,
+            home: const ActiveWorkoutScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
 
-        // Drive addExercise — the production code path triggered by
-        // the FAB / picker is exactly `notifier.addExercise(exercise)`.
-        // We invoke it directly to avoid pumping ExercisePickerSheet's
-        // overlay (which would need additional provider stubs and
-        // contributes nothing to the post-add contract pinned here).
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .addExercise(_benchPress);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+      // Pre-condition: workout has zero exercises so far.
+      expect(find.byType(SetRow), findsNothing);
 
-        // Post-condition: exactly one SetRow renders, carrying the
-        // seeded values from the prior session.
-        expect(
-          find.byType(SetRow),
-          findsOneWidget,
-          reason:
-              'Phase 23 D6: addExercise must produce exactly one '
-              'pre-filled set row immediately. If this fails, either '
-              'the auto-seed dropped or the screen does not react to '
-              'the AsyncData change.',
-        );
+      // Drive addExercise — the production code path triggered by
+      // the FAB / picker is exactly `notifier.addExercise(exercise)`.
+      // We invoke it directly to avoid pumping ExercisePickerSheet's
+      // overlay (which would need additional provider stubs and
+      // contributes nothing to the post-add contract pinned here).
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .addExercise(_benchPress);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
-        // The seeded weight + reps should be visible somewhere in the
-        // card. WeightStepper / RepsStepper render the value as plain
-        // Text. We assert on a flexible match — '100' for weight,
-        // '8' for reps — which is the user-visible signal.
-        expect(
-          find.textContaining('100'),
-          findsWidgets,
-          reason:
-              'Phase 23 D6: seeded weight (100 kg from prior session) '
-              'must appear in the rendered SetRow.',
-        );
-        expect(
-          find.textContaining('8'),
-          findsWidgets,
-          reason:
-              'Phase 23 D6: seeded reps (8 from prior session) must '
-              'appear in the rendered SetRow.',
-        );
-      },
-    );
+      // Post-condition: exactly one SetRow renders, carrying the
+      // seeded values from the prior session.
+      expect(
+        find.byType(SetRow),
+        findsOneWidget,
+        reason:
+            'Phase 23 D6: addExercise must produce exactly one '
+            'pre-filled set row immediately. If this fails, either '
+            'the auto-seed dropped or the screen does not react to '
+            'the AsyncData change.',
+      );
+
+      // The seeded weight + reps should be visible somewhere in the
+      // card. WeightStepper / RepsStepper render the value as plain
+      // Text. We assert on a flexible match — '100' for weight,
+      // '12' for reps — both distinctive enough to avoid collision
+      // with set-number labels, timer text, or other chrome.
+      expect(
+        find.textContaining('100'),
+        findsWidgets,
+        reason:
+            'Phase 23 D6: seeded weight (100 kg from prior session) '
+            'must appear in the rendered SetRow.',
+      );
+      expect(
+        find.textContaining('12'),
+        findsWidgets,
+        reason:
+            'Phase 23 D6: seeded reps (12 from prior session) must '
+            'appear in the rendered SetRow.',
+      );
+    });
 
     testWidgets(
       'should render exercise card with equipment-default-filled set when '
