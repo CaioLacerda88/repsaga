@@ -134,36 +134,14 @@ Exercise makeExercise({String id = 'exercise-new', String name = 'Squat'}) {
   return Exercise.fromJson(TestExerciseFactory.create(id: id, name: name));
 }
 
-/// Creates a container with mocked dependencies and a pre-seeded notifier state.
+/// Creates a container with mocked dependencies and a pre-seeded notifier state,
+/// exposing the [MockWorkoutRepository] so tests can stub additional repo
+/// behaviour (e.g. seeding prior workouts for the Phase 23 D6 auto-seed tests).
 ///
 /// Stubs [WorkoutRepository.getLastWorkoutSets] to return an empty map by
 /// default — the Phase 23 D6 auto-seed in `addExercise` reads from this
 /// path on every call, and an unstubbed `when` would throw. Tests that
 /// exercise the auto-seed with prior data override this stub locally.
-ProviderContainer makeContainer(ActiveWorkoutState? initialState) {
-  final mockRepo = MockWorkoutRepository();
-  final mockStorage = MockWorkoutLocalStorage();
-
-  when(() => mockStorage.loadActiveWorkout()).thenReturn(initialState);
-  when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
-  when(
-    () => mockRepo.getLastWorkoutSets(any()),
-  ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
-
-  return ProviderContainer(
-    overrides: [
-      workoutRepositoryProvider.overrideWithValue(mockRepo),
-      workoutLocalStorageProvider.overrideWithValue(mockStorage),
-      analyticsRepositoryProvider.overrideWithValue(
-        const _FakeAnalyticsRepository(),
-      ),
-    ],
-  );
-}
-
-/// Variant of [makeContainer] that exposes the [MockWorkoutRepository] so
-/// tests can stub additional repo behaviour (e.g. seeding prior workouts
-/// for the Phase 23 D6 auto-seed tests).
 ({ProviderContainer container, MockWorkoutRepository mockRepo})
 makeContainerWithRepo(ActiveWorkoutState? initialState) {
   final mockRepo = MockWorkoutRepository();
@@ -186,6 +164,13 @@ makeContainerWithRepo(ActiveWorkoutState? initialState) {
   );
   return (container: container, mockRepo: mockRepo);
 }
+
+/// Thin wrapper over [makeContainerWithRepo] for callers that only need the
+/// container. Delegating here keeps stubs + overrides defined in exactly one
+/// place — future changes (e.g. adding another repo stub) only need to touch
+/// [makeContainerWithRepo].
+ProviderContainer makeContainer(ActiveWorkoutState? initialState) =>
+    makeContainerWithRepo(initialState).container;
 
 /// Creates a container suitable for testing async methods (startWorkout,
 /// finishWorkout, discardWorkout) — includes [MockAuthRepository] so the
