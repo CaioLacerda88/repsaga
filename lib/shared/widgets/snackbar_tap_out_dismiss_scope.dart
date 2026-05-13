@@ -133,7 +133,7 @@ class SnackBarTapOutDismissScopeState
         // lives inside `_SnackBarCountdown`), so the default `persist`
         // would be `false` anyway; explicit `false` documents intent.
         persist: false,
-        content: _SnackBarCountdown(
+        content: SnackBarCountdown._(
           key: contentKey,
           message: message,
           duration: duration,
@@ -248,14 +248,29 @@ class _SnackBarTapOutDismissInherited extends InheritedWidget {
 /// **Countdown lifecycle:** the controller is `vsync`-driven via
 /// `SingleTickerProviderStateMixin` so the framework auto-pauses ticks
 /// when the app is backgrounded. No `Timer`, no wall-clock arithmetic.
-class _SnackBarCountdown extends StatefulWidget {
-  const _SnackBarCountdown({
+/// SnackBar content widget owning the full snack interior: message row +
+/// optional action button + bottom-edge countdown progress bar.
+///
+/// Public type with a **private constructor** — instantiation is reserved
+/// to [SnackBarTapOutDismissScopeState.showCountdownSnackBar]. The class
+/// is public so widget tests can locate it via `find.byType(...)`
+/// without depending on the library's private GlobalKey lookup. The
+/// private constructor prevents call sites from bypassing the factory
+/// and dropping the persist:false + tap-out wiring.
+class SnackBarCountdown extends StatefulWidget {
+  const SnackBarCountdown._({
     super.key,
     required this.message,
     required this.duration,
     this.actionLabel,
     this.onAction,
   });
+
+  /// Key on the track [SizedBox] (the 3 dp container that holds both the
+  /// dim background and the draining bar). Exposed so widget tests can
+  /// measure the bar's rendered rect without coupling to private state
+  /// or walking the descendant tree by type.
+  static const trackKey = ValueKey('snackbar-countdown-track');
 
   final String message;
   final Duration duration;
@@ -269,10 +284,10 @@ class _SnackBarCountdown extends StatefulWidget {
   final VoidCallback? onAction;
 
   @override
-  State<_SnackBarCountdown> createState() => _SnackBarCountdownState();
+  State<SnackBarCountdown> createState() => _SnackBarCountdownState();
 }
 
-class _SnackBarCountdownState extends State<_SnackBarCountdown>
+class _SnackBarCountdownState extends State<SnackBarCountdown>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
@@ -346,10 +361,13 @@ class _SnackBarCountdownState extends State<_SnackBarCountdown>
         // Progress bar hugs the snack's bottom edge, full width.
         // ColoredBox paints the track (dim violet); the AnimatedBuilder
         // overlays the draining bar on top. The bar's `widthFactor`
-        // shrinks from 1.0 → 0.0 as the controller advances.
+        // shrinks from 1.0 → 0.0 as the controller advances. The
+        // [SnackBarCountdown.trackKey] anchors the track so widget tests
+        // can measure rendered rect without depending on tree walks.
         ColoredBox(
           color: AppColors.hotViolet.withValues(alpha: 0.18),
           child: SizedBox(
+            key: SnackBarCountdown.trackKey,
             height: 3,
             // No `width:` — SizedBox inherits its parent Column's
             // stretched cross-axis width, which IS the snack's full
