@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/device/platform_info.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../../analytics/data/analytics_repository.dart';
 import '../../analytics/data/models/analytics_event.dart';
 import '../../analytics/providers/analytics_providers.dart';
@@ -195,56 +196,74 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _bucketRoutines.isEmpty
-                ? PlanEmptyState(
-                    onAddRoutines: () => _showAddSheet(allRoutines),
-                    onAutoFill: () => _autoFill(allRoutines, trainingFrequency),
-                  )
-                : ReorderableListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    itemCount: _bucketRoutines.length + 1,
-                    onReorder: _onReorder,
-                    buildDefaultDragHandles: false,
-                    itemBuilder: (context, index) {
-                      if (index == _bucketRoutines.length) {
-                        // Add routine row.
-                        return PlanAddRoutineRow(
-                          key: const ValueKey('add-routine'),
-                          atSoftCap: atSoftCap,
-                          bucketCount: _bucketRoutines.length,
-                          trainingFrequency: trainingFrequency,
-                          onTap: () => _showAddSheet(allRoutines),
+      // SnackBarTapOutDismissScope hosts the screen-level Listener that
+      // dismisses the routine-removed undo snack when the user taps
+      // outside it. The bounding-box hit-test (see scope class doc)
+      // means taps on routine rows or the add-routine row still
+      // function normally — only "empty body" taps dismiss the snack.
+      body: SnackBarTapOutDismissScope(
+        child: Column(
+          children: [
+            Expanded(
+              child: _bucketRoutines.isEmpty
+                  ? PlanEmptyState(
+                      onAddRoutines: () => _showAddSheet(allRoutines),
+                      onAutoFill: () =>
+                          _autoFill(allRoutines, trainingFrequency),
+                    )
+                  : ReorderableListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount: _bucketRoutines.length + 1,
+                      onReorder: _onReorder,
+                      buildDefaultDragHandles: false,
+                      itemBuilder: (context, index) {
+                        if (index == _bucketRoutines.length) {
+                          // Add routine row.
+                          return PlanAddRoutineRow(
+                            key: const ValueKey('add-routine'),
+                            atSoftCap: atSoftCap,
+                            bucketCount: _bucketRoutines.length,
+                            trainingFrequency: trainingFrequency,
+                            onTap: () => _showAddSheet(allRoutines),
+                          );
+                        }
+
+                        final bucket = _bucketRoutines[index];
+                        final routine = routineMap[bucket.routineId];
+                        final isDone = bucket.completedWorkoutId != null;
+                        final name = routine?.name ?? l10n.unknownRoutine;
+                        final exerciseCount = routine?.exercises.length ?? 0;
+
+                        // `context` here is the itemBuilder's context,
+                        // which Flutter resolves to an element INSIDE the
+                        // `ReorderableListView` — and therefore inside our
+                        // `SnackBarTapOutDismissScope`. We thread it
+                        // through `_removeRoutine` so the scope's
+                        // InheritedWidget is reachable. The State's own
+                        // `this.context` would NOT work — it resolves to
+                        // the mount point of `PlanManagementScreen`,
+                        // ABOVE the scope.
+                        final rowContext = context;
+                        return PlanRoutineRow(
+                          key: ValueKey(bucket.routineId),
+                          index: index,
+                          routineId: bucket.routineId,
+                          sequenceNumber: bucket.order,
+                          name: name,
+                          exerciseCount: exerciseCount,
+                          isDone: isDone,
+                          onDismissed: isDone
+                              ? null
+                              : () => _removeRoutine(rowContext, index),
                         );
-                      }
-
-                      final bucket = _bucketRoutines[index];
-                      final routine = routineMap[bucket.routineId];
-                      final isDone = bucket.completedWorkoutId != null;
-                      final name = routine?.name ?? l10n.unknownRoutine;
-                      final exerciseCount = routine?.exercises.length ?? 0;
-
-                      return PlanRoutineRow(
-                        key: ValueKey(bucket.routineId),
-                        index: index,
-                        routineId: bucket.routineId,
-                        sequenceNumber: bucket.order,
-                        name: name,
-                        exerciseCount: exerciseCount,
-                        isDone: isDone,
-                        onDismissed: isDone
-                            ? null
-                            : () => _removeRoutine(index),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -272,7 +291,7 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         .toList();
   }
 
-  void _removeRoutine(int index) {
+  void _removeRoutine(BuildContext rowContext, int index) {
     final removed = _bucketRoutines[index];
     setState(() {
       _dirty = true;
@@ -281,41 +300,46 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
     });
     _savePlan(usedAutofill: false, replacedExisting: false);
 
-    // Undo snackbar.
-    if (mounted) {
-      final l10n = AppLocalizations.of(context);
+    // Undo snackbar. `rowContext` is from the ReorderableListView's
+    // itemBuilder, which sits INSIDE our `SnackBarTapOutDismissScope`
+    // — required for `SnackBarTapOutDismissScope.of(...)` to resolve
+    // the InheritedWidget. The State's own `context` is above the
+    // scope and would throw an assert here.
+    if (rowContext.mounted) {
+      final l10n = AppLocalizations.of(rowContext);
       _undoSnackbarActive = true;
-      final controller = ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.routineRemoved),
-          duration: const Duration(seconds: 5),
-          // persist: false — SnackBar defaults to persistent when an action
-          // is set (Flutter intentional for "wait for user action"). We
-          // want this undo to auto-dismiss at `duration` even if the user
-          // ignores Undo. `_undoSnackbarActive` is cleared by the `closed`
-          // listener below for ANY close reason, including the timeout
-          // path that this opt-out enables.
-          // showCloseIcon: true — explicit dismiss affordance (UI/UX
-          // 2026-05-13). Material's X icon is the canonical opt-out when
-          // `action:` performs work other than dismiss (here: UNDO is
-          // destructive vs the user's intent).
-          persist: false,
-          showCloseIcon: true,
-          action: SnackBarAction(
-            label: l10n.undo.toUpperCase(),
-            onPressed: () {
-              setState(() {
-                // Clamp to current list length in case reorders or other
-                // removals happened between remove and undo.
-                final safeIndex = index.clamp(0, _bucketRoutines.length);
-                _bucketRoutines.insert(safeIndex, removed);
-                _renumber();
-              });
-              _savePlan(usedAutofill: false, replacedExisting: false);
-            },
-          ),
-        ),
-      );
+      // Duration tuned 2026-05-13 from 5 s to 3 s — pairing with the
+      // countdown bar makes the remaining time legible, so the previous
+      // wider reaction window is unnecessary visual debt. Tap-out
+      // dismiss (provided by `SnackBarTapOutDismissScope`) also gives
+      // the user an instant exit without using Undo.
+      //
+      // The scope's `showCountdownSnackBar` factory pins `persist:
+      // false` (Flutter defaults to `true` when an `action:` is set —
+      // the root-cause bug that broke auto-dismiss before this fix
+      // wave) and threads the duration through to the countdown
+      // widget. `_undoSnackbarActive` is still cleared by the
+      // `closed` listener below for ANY close reason (timeout,
+      // tap-out, action, user dismiss).
+      final controller = SnackBarTapOutDismissScope.of(rowContext)
+          .showCountdownSnackBar(
+            context: rowContext,
+            message: l10n.routineRemoved,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: l10n.undo.toUpperCase(),
+              onPressed: () {
+                setState(() {
+                  // Clamp to current list length in case reorders or other
+                  // removals happened between remove and undo.
+                  final safeIndex = index.clamp(0, _bucketRoutines.length);
+                  _bucketRoutines.insert(safeIndex, removed);
+                  _renumber();
+                });
+                _savePlan(usedAutofill: false, replacedExisting: false);
+              },
+            ),
+          );
       // Clear the flag when the snackbar closes (timeout, user dismiss,
       // or another snack replaces it). Without this, a subsequent edit
       // long after the undo expired would silently suppress its Saved
