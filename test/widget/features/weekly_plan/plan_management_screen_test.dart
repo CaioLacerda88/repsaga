@@ -567,13 +567,24 @@ void main() {
       // edits in a row would fire three week_plan_saved events; under
       // the debounced implementation they all roll up to one.
       await tester.drag(find.text('Push Day'), const Offset(-500, 0));
-      await tester.pumpAndSettle();
+      // Granular pumps — DO NOT use pumpAndSettle here. The
+      // routine-removed undo snack now embeds a `_SnackBarCountdown`
+      // whose AnimationController schedules vsync frames continuously
+      // over its 3 s window. pumpAndSettle would pump the full 3 s of
+      // frames and the snack would auto-dismiss before we could tap
+      // UNDO. Pump only enough frames for the dismiss animation and the
+      // snack entrance to complete.
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 300));
 
       // Undo the remove. Snackbar action label is "UNDO".
       final undoFinder = find.text('UNDO');
       if (undoFinder.evaluate().isNotEmpty) {
         await tester.tap(undoFinder);
-        await tester.pumpAndSettle();
+        // Granular pump — countdown bar still animating until snack
+        // closes.
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300));
       }
 
       // So far: no analytics event should have been inserted — everything
@@ -717,8 +728,20 @@ void main() {
 
       // Trigger remove via swipe-dismiss.
       await tester.drag(find.text('Push Day'), const Offset(-500, 0));
-      await tester.pumpAndSettle();
-      // The undo snackbar should be visible.
+      // Granular pumps — DO NOT use pumpAndSettle here. The
+      // routine-removed undo snack now embeds a `_SnackBarCountdown`
+      // whose AnimationController schedules vsync frames continuously
+      // over its 3 s window; pumpAndSettle would pump the full 3 s and
+      // the snack would auto-dismiss before this assertion runs. Pump
+      // 100 ms increments through the dismiss + entrance window
+      // (~750 ms total) so the Dismissible's resize animation, the
+      // microtask after `confirmDismiss`, the `onDismissed` callback,
+      // and the SnackBar's 250 ms entrance all complete with
+      // intermediate frames rendered.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // The undo snackbar should be visible (countdown bar at ~1 s of 3 s).
       expect(find.text('UNDO'), findsOneWidget);
 
       // Now advance past the save debounce. The Saved snackbar must NOT
