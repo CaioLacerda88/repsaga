@@ -15,16 +15,20 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-14).** Phase 24 in progress. **24a shipped**
-in PR #222: `exercises.difficulty_mult` (0.85–1.25) wired through
-Dart + SQL + Python parity sim, 150 default exercises curated against
-the framework, snapshot into `xp_events.payload`, applied to hosted
-Supabase. **24b PENDING** (~30–50 new default exercises), **24c
-PENDING** (bodyweight-as-load semantics), **24d PENDING** (six-profile
-simulation calibration gate). Then **Phase 25 — RPE** (research-first),
-then the **Launch Phase** (un-numbered; subscription + Play Store +
-any pre-launch scope expansion, formerly Phase 16). XP difficulty
-framework permanent reference: `docs/xp-difficulty-framework.md`.
+**Current state (2026-05-14).** Phase 24 in progress. **24a + 24b
+shipped** (PRs #222, #224). 24a wired `exercises.difficulty_mult`
+(0.85–1.25) through Dart + SQL + Python parity sim and curated all 150
+existing defaults. 24b expanded the library to **200 defaults** —
+Olympic platform (T1), bodyweight progressions (T2), specialty barbell
+(T2), variant T3, cable/machine T4, accessory T5, and cardio
+placeholders — with full en+pt translations and 28/50 demo images
+(yuhonas-sourced + uploaded to hosted `exercise-media`). Both applied
+to hosted Supabase. **24c PENDING** (bodyweight-as-load semantics),
+**24d PENDING** (six-profile simulation calibration gate). Then
+**Phase 25 — RPE** (research-first), then the **Launch Phase**
+(un-numbered; subscription + Play Store + any pre-launch scope
+expansion, formerly Phase 16). XP difficulty framework permanent
+reference: `docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -37,6 +41,7 @@ framework permanent reference: `docs/xp-difficulty-framework.md`.
 | 22 | Active Workout Audit Fix Wave (7 PRs) | DONE | #195–#208 |
 | 23 | Active Workout: rest-overlay + hint removal + auto-seed + SnackBar fix-wave | DONE | #212, #214 |
 | 24a | XP Balancing — difficulty multiplier infrastructure | DONE | #222 |
+| 24b | New default exercises (50 additions; 150 → 200) | DONE | #224 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -289,7 +294,7 @@ phase; Phase 24d is the final calibration sign-off.
 | Sub-phase | Status | Scope |
 |---|---|---|
 | 24a — Difficulty multiplier infrastructure | DONE (PR #222) | See §4 condensed entry. |
-| 24b — New default exercises | PENDING | ~30–50 new defaults covering Olympic variants, bodyweight progressions, specialty lifts, cable / machine gaps. Each new exercise ships slug + en+pt translations (CLAUDE.md rule, CI-gated) + muscle_group + `secondary_muscle_groups` (capped at honest count) + `xp_attribution` summing to 1.0 ± 0.01 + curated `difficulty_mult`. |
+| 24b — New default exercises | DONE (PR #224) | See §4 condensed entry. |
 | 24c — Bodyweight load semantics | PENDING | Bodyweight exercises (pull-up, dip, push-up, pistol squat, etc.) use `effective_load = profile.bodyweight + added_weight` instead of bare external weight. Schema flag on exercises, UI prompt change, calculator update, profile bodyweight prompt if not set. Forward-only attribution. |
 | 24d — Balance simulation gate | PENDING | Dedicated test phase, no production code. Six user profiles × 12 simulated weeks against the Python simulator. Validates that the new formula produces sensible XP progression curves across the profile spectrum; calibration sign-off before declaring Phase 24 done. Tune constants if any pass criterion fails. |
 
@@ -711,6 +716,18 @@ Wires `exercises.difficulty_mult` (numeric 0.85–1.25) through every XP write s
 - **Parity:** `tasks/rpg-xp-simulation.py` recreated (was deleted in PR #215) with `DIFFICULTY_MULT_BY_SLUG` dict mirroring 00053. Fixture regenerated with 11 set_xp scenarios incl. 0.85 and 1.25 boundary cases. 4 new XpEvent unit tests pin promotion / legacy null / idempotency / empty-payload semantics.
 - **Verification:** 2622 → 2630 unit/widget tests (+8: 4 XpEvent + 4 difficulty_mult parameter semantics), 35/35 integration, Android debug APK clean, E2E smoke 119/119 (13.2 min — zero selector/text drift, as expected for backend phase), `npx supabase db reset` clean through 00054. Reviewer cycle: 1 Blocker (always-null XpEvent.difficultyMult) + 2 Warnings + 2 Nits — all fixed in same cycle, no deferrals. Hosted Supabase migrated cleanly via `npx supabase db push` post-merge.
 - **Out of scope (24b/c/d):** ~30–50 new default exercises (24b), bodyweight `effective_load = bodyweight + added` (24c), six-profile × 12-week calibration sign-off (24d).
+
+### Phase 24b: New Default Exercises — 50 additions, 150 → 200 (PR #224)
+
+> Built on Phase 24a's `difficulty_mult` infrastructure. Each new exercise ships with the full content surface a default needs: slug + en/pt translations (name + description + form_tips) + muscle_group + equipment_type + xp_attribution (sums to 1.0) + curated difficulty_mult.
+
+- **Coverage by tier:** T1 Olympic platform (14: power_clean, snatch, hang_clean, hang_snatch, clean_and_jerk, push_jerk, split_jerk, kettlebell_snatch, dumbbell_snatch, medicine_ball_slam, broad_jump, depth_jump, lateral_box_jump, single_leg_box_jump). T2 bodyweight (8: pistol_squat, archer_push_up, ring_dip, handstand_push_up, l_sit, muscle_up, hanging_windshield_wiper, single_leg_glute_bridge_eccentric) + specialty barbell (7: atlas_stone, zercher_squat, safety_bar_squat, snatch_grip_deadlift, deficit_deadlift, paused_squat, paused_bench_press). T3 variants (7: larsen_press, neutral_grip_pull_up, mixed_grip_deadlift, single_arm_landmine_press/row, kettlebell_clean, kettlebell_high_pull, dumbbell_clean). T4 cable/machine (5: belt_squat, pendulum_squat, glute_ham_raise, cable_pullover, cable_overhead_extension). T5 accessory (7: copenhagen_plank, suitcase_carry, fat_grip_curl, single_leg_calf_raise, seated_dumbbell_calf_raise, etc.). Cardio (3: assault_bike, sled_push, sled_drag — T5 placeholder per Phase 24a precedent; cardio = Phase 19 v2 deferral).
+- **Migration (00055, ~1003 lines):** single transaction with PART A (50 exercise INSERTs idempotent via `WHERE NOT EXISTS slug`) + PART B/C (50 en + 50 pt translations joined by slug; eponyms preserved English in pt per `docs/pt-glossary.md` §2) + PART D (3 sanity DO-blocks: row count = 50, paired translations = 100, no slug at literal 1.0). All 50 difficulty_mult values curated per Phase 24a framework `clamp(tier_mult + min(secondary_count, 3) × 0.02, 0.85, 1.25)` with inline `-- T<N> + <sec> sec → <value>` audit comments.
+- **Images: 28/50 sourced** from yuhonas/free-exercise-db (CC0) and uploaded to hosted Supabase Storage `exercise-media/<slug>_{start,end}.jpg` via service-role REST API. The other 22 ship with `image_start_url = NULL` — matches existing `cable_chest_press` / `pec_deck` precedent in the original 150 defaults; UI tolerates absence. Follow-up image-sourcing task can backfill those 22 from alt providers.
+- **Reviewer cycle (commit 6d02701):** 3 Blockers (muscle_group fields didn't match dominant `xp_attribution` body part — atlas_stone chest→back, larsen_press shoulders→chest, medicine_ball_slam chest→core; pure discoverability inversions) + 2 Warnings (atlas_stone audit comment showed wrong terminal value; 5× pt-tips `e explode em` → `e exploda em` imperative) + 1 Suggestion (paused_squat / paused_bench_press audit comments now name non-paused T3 counterpart). All fixed in same cycle.
+- **CI fix-cycle (commit f5207d3):** Local @smoke (119 tests) passed but CI's full regression (302 tests) caught `exercises-localization.spec.ts` "should show en exercise names…" — alphabetical list pushed `Barbell Bench Press` below the fold once Ab Rollout / Archer Push-Up / Arnold Press / Assault Bike / Atlas Stone / Back Extension / Band Face Pull landed alphabetically prior. Flutter virtualizes the list — off-screen items aren't in the DOM. Fixed by adding `flutterFillByInput('Search exercises', 'Barbell Bench')` before the visibility assertion (same pattern every other test in the file uses). Verification gap surfaced: orchestrator should run the full regression locally (or trust CI) for data-shape changes that affect exercise enumeration order — relying solely on @smoke missed this.
+- **Verification:** unit/widget 2630/2630, integration 35/35, Android debug APK clean, db reset clean through 00055 (3 sentinels did not trip), E2E full regression green on CI after the fix. Hosted spot-check confirms 200 defaults + reviewer fixes applied (atlas_stone=back, larsen_press=chest).
+- **Out of scope (24c/d):** bodyweight `effective_load = bodyweight + added` semantics (24c); six-profile × 12-week calibration sign-off (24d). Image backfill for the 22 NULL slugs is a separate follow-up task (alt providers like exrx, musclewiki, custom stock).
 
 ---
 
