@@ -15,11 +15,13 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-13).** No active phase. Phase 23 (active-workout
-chrome + SnackBar fix-wave) shipped in PR #212 + #214; the 23-P-4 E2E
-dismissal-time regression pins shipped in PR #217. No architectural
-follow-ups outstanding. Phase 16 subscription parked by choice (RPG
-retention moat first).
+**Current state (2026-05-13).** No active phase. Phase 23 closed with
+PR #214; 23-P-4 E2E regression pins shipped in PR #217. Next up:
+**Phase 24 — XP Balancing** (difficulty multiplier + library expansion
++ bodyweight load semantics + simulation gate), then **Phase 25 — RPE**
+(research-first), then the **Launch Phase** (un-numbered; subscription
++ Play Store + any pre-launch scope expansion, formerly Phase 16). XP
+difficulty framework already researched — see `docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -116,7 +118,7 @@ Key relationships — read migration files in `supabase/migrations/` for full DD
 
 - **Localized exercise content:** `exercises` carries `slug` + structural fields; display strings live in `exercise_translations(exercise_id, locale)`. Fallback cascade `p_locale → 'en' → any`. See Phase 15f for the contract and CLAUDE.md → Exercise content translation coverage rule for the CI gate.
 - **RPG:** `body_part_progress` is current state per (user, body_part); `xp_events` is the immutable per-set ledger; `character_state` view derives Character Level + dominant rank + class.
-- **Subscriptions:** `entitlements` view derives state from `subscriptions` row; client reads view only, all writes go through Edge Functions using service role. See Phase 16 (parked) for the full lifecycle.
+- **Subscriptions:** `entitlements` view derives state from `subscriptions` row; client reads view only, all writes go through Edge Functions using service role. See the Launch Phase entry in §5 (formerly Phase 16) for the full lifecycle.
 - **RLS:** All user data scoped by `user_id = auth.uid()`. Default exercises/templates readable by all. Subscription tables SELECT-only for clients.
 
 ### Project Structure
@@ -202,34 +204,42 @@ _None outstanding._ Recently closed:
 
 ### v1.1 feature gaps
 
-- Edit custom exercises (deferred — workaround: delete + recreate)
-- Per-exercise notes inside a workout (placeholder model exists, no UI)
-- RPE tracking (widget exists, hidden by default)
-- Reorder exercises in routine builder (mid-workout reorder shipped)
-- Edit workout post-hoc (history is read-only today)
-- PRs in bottom nav (currently buried under Profile)
-- 1RM estimation (Epley formula on exercise detail + PR cards — Phase 13 deferred)
-- Push notifications for workout reminders
-- Data export (CSV / JSON)
-- App icon redesign (post-launch direction decision)
+_Most v1.1 items dropped 2026-05-13_ after a current-state audit
+against the codebase. The roadmap reorganized around Phase 24 (XP
+balancing) → Phase 25 (RPE) → Launch Phase. Surviving / promoted items:
 
-### Manual / external — needs the user (not autonomous)
+- **RPE tracking** — promoted to **Phase 25** (research-first; the
+  PROJECT.md claim that "widget exists, hidden by default" was wrong —
+  only the model field exists, no widget. Full spec lives in §3
+  In-flight when Phase 25 opens).
 
-These items can't be driven by Claude on the codebase — they need human
-eyes on a device, manual dashboard configuration, or external
-coordination.
+Dropped (with rationale):
 
-- **Supabase project display name** — Dashboard → Project Settings →
-  General → rename to "RepSaga" (cosmetic; not blocking anything).
-- **Auth redirect URLs allowlist** — Dashboard → Authentication → URL
-  Configuration → add `io.supabase.repsaga://login-callback/` **when
-  Google Sign-In is enabled** (Phase 16b dep, not before).
-- **Brand assets** — register `repsaga.com` / `repsaga.app` /
-  `repsaga.com.br`; lock `@repsaga` on Instagram, X/Twitter, TikTok.
-- **(Phase 16 dep) Play Console subscription product `repsaga_premium`** —
-  blocked on signed-AAB upload (keystore generation + Internal Testing
-  release). Full handling on the Phase 16 resume checklist in §5; do NOT
-  act on this independently.
+- ~~Edit custom exercises~~ — superseded by Phase 24b default-library
+  expansion. The workaround (delete + recreate) is acceptable for the
+  rare case, and editing `muscle_group` on an exercise with prior XP
+  events creates a confusing snapshot/forward asymmetry that's worse
+  than recreate.
+- ~~Per-exercise notes inside a workout~~ — workout-level notes already
+  ship (finish dialog `_notesController`). Per-exercise demand
+  unproven; no signal user wants it.
+- ~~Reorder exercises in routine builder~~ — speculative polish. No user
+  signal. Mid-workout reorder already shipped.
+- ~~Edit workout post-hoc~~ — history-mutation surface adds significant
+  data-integrity complexity (XP replay, PR re-detection) without proven
+  demand. Defer to post-launch when telemetry shows whether users want it.
+- ~~PRs in bottom nav~~ — IA change without user signal. PRs are
+  reachable via Profile in two taps; that's adequate for v1.
+- ~~1RM estimation~~ — **already shipped**. Epley formula lives in
+  `lib/features/exercises/utils/e1rm.dart`, used by progress chart +
+  RPG peak-loads + stats provider. The PROJECT.md "Phase 13 deferred"
+  note was outdated.
+- ~~Push notifications~~ — no signal it's needed for launch. Could be
+  revived in the Launch Phase if scope expands.
+- ~~Data export~~ — no demand signal. Could be revived in the Launch
+  Phase if scope expands.
+- ~~App icon redesign~~ — moved into the Launch Phase scope (final
+  brand sweep is a launch-gate decision, not v1.1 polish).
 
 ### Known flaky e2e tests
 
@@ -251,16 +261,131 @@ one passes reliably in normal CI single-run mode.
 
 ## §3 In-flight
 
-> No active phase as of 2026-05-13.
->
-> Phase 23 (rest-overlay chrome + hint removal + auto-seed + SnackBar fix-wave)
-> closed with PR #214. Next phase TBD — pick from §2 Active Backlog
-> follow-ups, the v1.1 feature gaps, or define a Phase 24 brief.
->
-> When a new phase opens, its full spec lives in this section (acceptance
-> criteria, file plan, schema if relevant, UX details) and `docs/WIP.md`
-> tracks the implementation checklist. Post-merge, the spec collapses
-> into a 3–5 bullet summary in §4 Completed Phases.
+> No phase has started implementation as of 2026-05-13. The three phases
+> below are the locked roadmap to public release. When a sub-phase opens,
+> its full implementation spec gets written here (acceptance criteria,
+> file plan, schema if relevant, UX details) and `docs/WIP.md` tracks the
+> running checklist. Post-merge, the spec collapses into §4 Completed
+> Phases.
+
+### Phase 24 — XP Balancing
+
+Refines the XP-per-set formula so total set XP reflects real-world
+exercise difficulty within a defensible 0.85–1.25 cap. Expands the
+default exercise library to fill identified gaps. Validates the
+recalibration against simulated user profiles before declaring done.
+
+Permanent reference for the curation framework + tier assignments +
+formula constants: `docs/xp-difficulty-framework.md`. Citations to
+NSCA, ACSM, Schoenfeld, McGill, Verkhoshansky & Siff, Garhammer,
+Schwanbeck — see that file. Future tuning of tier multipliers,
+secondary-muscle bumps, or floor/ceiling constants requires a new
+phase; Phase 24d is the final calibration sign-off.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| 24a — Difficulty multiplier infrastructure | PENDING | Schema migration adding `exercises.difficulty_mult` + curate all ~150 existing defaults against the tier framework + `XpCalculator` formula update + `record_set_xp` RPC + Python sim parity + integration fixtures. **Forward-only:** `xp_events` snapshot the multiplier at write time; past events are not replayed. |
+| 24b — New default exercises | PENDING | ~30–50 new defaults covering Olympic variants, bodyweight progressions, specialty lifts, cable / machine gaps. Each new exercise ships slug + en+pt translations (CLAUDE.md rule, CI-gated) + muscle_group + `secondary_muscle_groups` (capped at honest count) + `xp_attribution` summing to 1.0 ± 0.01 + curated `difficulty_mult`. |
+| 24c — Bodyweight load semantics | PENDING | Bodyweight exercises (pull-up, dip, push-up, pistol squat, etc.) use `effective_load = profile.bodyweight + added_weight` instead of bare external weight. Schema flag on exercises, UI prompt change, calculator update, profile bodyweight prompt if not set. Forward-only attribution. |
+| 24d — Balance simulation gate | PENDING | Dedicated test phase, no production code. Six user profiles × 12 simulated weeks against the Python simulator. Validates that the new formula produces sensible XP progression curves across the profile spectrum; calibration sign-off before declaring Phase 24 done. Tune constants if any pass criterion fails. |
+
+#### 24d acceptance criteria (the calibration gate)
+
+Six user profiles each simulated for 12 weeks of training. Each profile
+captures a realistic training pattern from the user spectrum:
+
+| Profile | Training pattern | What it stress-tests |
+|---|---|---|
+| Beginner | 3×/wk, light weights, all working sets, progressive overload | Steady rank-up, no early ceiling |
+| Intermediate compound-focused | 4×/wk, 5×5 style, mostly T2/T3 exercises | Baseline expected progression curve |
+| Advanced powerlifter | 3×/wk, low reps (1-5), heavy T2 lifts near 90% 1RM | `strength_mult` floor keeps user productive near ceiling |
+| Hypertrophy bodybuilder | 5-6×/wk, high volume, T3 + T5 mix, isolation-heavy | `cap_mult` bites; `novelty_mult` diminishes; still feels rewarding |
+| Bodyweight-only | 4×/wk, T2/T3 bodyweight only | Bodyweight load + tier_mult keeps them competitive with weighted lifters |
+| Machine-only | 4×/wk, T4/T5 machine work only | Ranks slower than free-weight lifters but not punitively |
+
+Pass criteria (all must hold):
+
+- Every profile reaches a reasonable character level by week 12; no
+  profile is impossible to rank up.
+- Spread between fastest and slowest profile ≤ ~25% in total XP earned.
+- Bodyweight-only profile is competitive (within ~20%) with the
+  intermediate-compound profile.
+- Machine-only profile ranks meaningfully slower than the free-weight
+  profile but earns enough to feel progress (no "machines are useless").
+- Powerlifter doesn't grossly underperform the bodybuilder despite
+  lower volume — `strength_mult` should compensate.
+- No exercise produces an XP "lottery ticket" — outliers in `set_xp`
+  must be explained.
+
+Deliverables:
+
+- Python simulator extension at `tasks/rpg-xp-simulation.py` with the
+  six profile scenarios.
+- Results table at `docs/xp-balance-baseline.md` showing per-profile
+  week-12 XP totals, rank, body-part progression.
+- If any criterion fails, retune constants and rerun. The PR for 24d
+  is the calibration sign-off.
+- Snapshot of `difficulty_mult` values + tier table + secondary-muscle
+  bump + all formula constants as the **launch baseline**. Future
+  tuning is a new phase.
+
+### Phase 25 — RPE
+
+Research-first. Decisions land before implementation.
+
+**Research questions:**
+- How is RPE used in real strength training? (RIR scale, Borg scale,
+  autoregulation principles, RPE-based load prescription)
+- How do competitor apps (Hevy, Strong, Boostcamp) surface RPE? Always
+  visible / opt-in / setting-gated?
+- Does RPE feed XP? Options to evaluate:
+  - Token bonus per RPE-tagged set (encourage tracking)
+  - Multiplier shape (additive to formula, vs replace `strength_mult`,
+    vs separate effort signal)
+  - Tracking-only (no XP impact, opt-in field)
+- Localization: RPE / RIR vocabulary in pt-BR. Brazilian gym culture
+  uses RPE less than US gyms — does the field need explanation copy?
+
+**Implementation scope (depends on research outcome):**
+- Widget: stepper or chip selector inside the set row.
+- Storage: `ExerciseSet.rpe` already exists on the model and notifier
+  accepts the field — only the UI is missing.
+- L10n strings.
+- Tests: unit, widget, E2E selector(s).
+- If RPE feeds XP: calculator + RPC + Python sim + fixtures parity
+  (same pattern as Phase 24a).
+
+Full implementation spec lands here when research closes.
+
+### Launch Phase
+
+**No phase number** — final phase before public release. Scope is
+deliberately open so we can fold in any last-minute work without
+renumbering.
+
+**Core scope (locked):**
+- Subscription / paywall — was Phase 16. Full spec lives in §5 Parked /
+  Archived. Pulls in:
+  - 16b paywall UI + onboarding rewire
+  - 16c hard gate
+  - 16d analytics + launch gate
+- Play Console product `repsaga_premium` setup.
+- Signed-AAB upload + Play App Signing enrollment + Internal Testing.
+- Manual / external prerequisites (run before / during this phase):
+  - Supabase project display name → "RepSaga"
+  - Auth redirect URLs allowlist (`io.supabase.repsaga://login-callback/`)
+    when Google Sign-In is enabled.
+  - Brand assets — register `repsaga.com` / `.app` / `.com.br`; lock
+    `@repsaga` on Instagram, X/Twitter, TikTok.
+
+**Scope expansion candidates** (decide closer to launch):
+- App icon redesign — direction decision was deferred from v1.1.
+- Push notifications — if telemetry / product direction calls for it.
+- Data export (CSV / JSON) — if competitive / regulatory pressure
+  appears.
+- Security review pass — penetration / RLS audit before public release.
+- Store assets — screenshots, feature graphic, listing copy in pt-BR
+  + en.
 
 ---
 
@@ -573,7 +698,23 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 
 ## §5 Parked / Archived
 
-### Phase 16: Subscription Monetization — PARKED
+### Phase 16: Subscription Monetization — RENAMED to "Launch Phase" backbone
+
+> Reframed 2026-05-13 (PR #220-era roadmap restructure). Phase 16's
+> locked business model, architecture, and resume checklist below are
+> now the backbone of the un-numbered **Launch Phase** (see §3
+> In-flight). The Launch Phase deliberately has no number so we can
+> fold in additional pre-launch scope (app icon redesign, push
+> notifications, data export, security review, store assets, etc.)
+> without renumbering. The Phase 16 spec itself is unchanged — the
+> rename is positioning only.
+>
+> Implementation deps from 16a (server-side validation, RTDN webhook,
+> entitlements view, GCP `repsaga-prod` migration) are already shipped
+> in PR #93 + PR #99. What's still to do: 16b/c/d (paywall UI, hard
+> gate, analytics + launch gate) + the manual / external items listed
+> in §3 → Launch Phase.
+
 
 > Trial-to-paywall model. No free tier — users get full app during 14-day trial, then subscribe to continue. Gamification progress (Phase 17-18) becomes the retention lever via loss aversion: letting the sub lapse freezes accumulated XP, levels, and streaks behind the paywall.
 
