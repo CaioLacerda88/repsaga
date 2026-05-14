@@ -107,33 +107,76 @@ def fx_cap_mult() -> list[dict]:
 
 
 def fx_set_xp_examples() -> list[dict]:
-    """End-to-end set_xp examples (no attribution applied — just total set_xp)."""
+    """End-to-end set_xp examples (no attribution applied — just total set_xp).
+
+    Phase 24a: every scenario carries a `difficulty_mult` input. We exercise
+    both ends of the [0.85, 1.25] range explicitly (clamp boundaries) plus a
+    mix of real per-exercise values from `DIFFICULTY_MULT_BY_SLUG` so the
+    fixture covers the multipliers that actually ship in the migration. The
+    `slug` field is informational (documents which migration row the value
+    came from) and is not consumed by the Dart parity test — Dart asserts
+    against the `inputs.difficulty_mult` numeric value directly.
+    """
     cases = []
     scenarios = [
-        # Bench at peak, fresh session, low weekly volume
+        # Bench at peak, fresh session, low weekly volume — barbell_bench_press = 1.09
         {'name': 'bench_peak_fresh', 'weight': 100, 'reps': 5, 'peak': 100,
-         'session_volume_bp': 0, 'weekly_volume_bp': 0},
-        # Same set, late in session (10 sets in already)
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'barbell_bench_press',
+         'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
+        # Same set, late in session (10 sets in already) — same exercise
         {'name': 'bench_peak_late_session', 'weight': 100, 'reps': 5, 'peak': 100,
-         'session_volume_bp': 10, 'weekly_volume_bp': 0},
-        # Deload at 70%
+         'session_volume_bp': 10, 'weekly_volume_bp': 0,
+         'slug': 'barbell_bench_press',
+         'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
+        # Deload at 70% — same exercise
         {'name': 'bench_deload_70', 'weight': 70, 'reps': 5, 'peak': 100,
-         'session_volume_bp': 0, 'weekly_volume_bp': 0},
-        # Junk volume — past weekly cap
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'barbell_bench_press',
+         'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
+        # Junk volume — past weekly cap. Use deadlift (1.21) so cap × ceiling
+        # interaction is exercised end-to-end.
         {'name': 'past_weekly_cap', 'weight': 100, 'reps': 5, 'peak': 100,
-         'session_volume_bp': 0, 'weekly_volume_bp': 25},
-        # High-rep endurance
-        {'name': 'high_rep_endurance', 'weight': 60, 'reps': 20, 'peak': 100,
-         'session_volume_bp': 0, 'weekly_volume_bp': 0},
-        # 1RM attempt
-        {'name': 'one_rm', 'weight': 140, 'reps': 1, 'peak': 130,
-         'session_volume_bp': 0, 'weekly_volume_bp': 0},
-        # Bodyweight floor (volume_load floored at 1.0)
+         'session_volume_bp': 0, 'weekly_volume_bp': 25,
+         'slug': 'deadlift',
+         'difficulty_mult': sim.difficulty_mult_for_slug('deadlift')},
+        # High-rep endurance — leg_curl (0.85) hits the FLOOR exactly.
+        {'name': 'high_rep_endurance_floor', 'weight': 60, 'reps': 20, 'peak': 100,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'leg_curl',
+         'difficulty_mult': sim.difficulty_mult_for_slug('leg_curl')},
+        # 1RM attempt — push_press (1.25) hits the CEILING exactly.
+        {'name': 'one_rm_ceiling', 'weight': 140, 'reps': 1, 'peak': 130,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'push_press',
+         'difficulty_mult': sim.difficulty_mult_for_slug('push_press')},
+        # Bodyweight floor — push_up (1.11), volume_load floored at 1.0.
         {'name': 'bodyweight_floor', 'weight': 0, 'reps': 8, 'peak': 0,
-         'session_volume_bp': 0, 'weekly_volume_bp': 0},
-        # Stagnant lifter at very light weight
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'push_up',
+         'difficulty_mult': sim.difficulty_mult_for_slug('push_up')},
+        # Stagnant lifter at very light weight — barbell_curl (0.87).
         {'name': 'stagnant_curl', 'weight': 5, 'reps': 12, 'peak': 5,
-         'session_volume_bp': 5, 'weekly_volume_bp': 8},
+         'session_volume_bp': 5, 'weekly_volume_bp': 8,
+         'slug': 'barbell_curl',
+         'difficulty_mult': sim.difficulty_mult_for_slug('barbell_curl')},
+        # User-created / unmapped exercise — defaults to 1.0 (no-op multiplier;
+        # asserts that the column DEFAULT 1.0 path still produces sensible XP).
+        {'name': 'user_created_default_1_0', 'weight': 80, 'reps': 8, 'peak': 80,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': None,
+         'difficulty_mult': sim.difficulty_mult_for_slug('not_a_real_slug')},
+        # Explicit clamp boundaries — pin the literal 0.85 / 1.25 values
+        # independent of any single exercise so a future re-tier doesn't
+        # accidentally break the boundary contract.
+        {'name': 'explicit_floor_0_85', 'weight': 100, 'reps': 8, 'peak': 100,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': None,
+         'difficulty_mult': sim.DIFFICULTY_MULT_FLOOR},
+        {'name': 'explicit_ceiling_1_25', 'weight': 100, 'reps': 8, 'peak': 100,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': None,
+         'difficulty_mult': sim.DIFFICULTY_MULT_CEILING},
     ]
     for s in scenarios:
         vl = max(1.0, s['weight'] * s['reps'])
@@ -147,7 +190,8 @@ def fx_set_xp_examples() -> list[dict]:
                                 min(1.0, s['weight'] / peak if peak > 0 else 1.0))
         novelty = math.exp(-s['session_volume_bp'] / sim.NOVELTY_DENOMINATOR)
         cap = sim.OVER_CAP_MULTIPLIER if s['weekly_volume_bp'] >= sim.WEEKLY_CAP_SETS else 1.0
-        set_xp = base * intensity * strength_mult * novelty * cap
+        diff_mult = s['difficulty_mult']
+        set_xp = base * intensity * strength_mult * novelty * cap * diff_mult
         cases.append({
             'name': s['name'],
             'inputs': {
@@ -156,6 +200,8 @@ def fx_set_xp_examples() -> list[dict]:
                 'peak_load': s['peak'],
                 'session_volume_for_body_part': s['session_volume_bp'],
                 'weekly_volume_for_body_part': s['weekly_volume_bp'],
+                'difficulty_mult': diff_mult,
+                'slug': s['slug'],
             },
             'components': {
                 'volume_load': vl,
@@ -164,6 +210,11 @@ def fx_set_xp_examples() -> list[dict]:
                 'strength_mult': strength_mult,
                 'novelty_mult': novelty,
                 'cap_mult': cap,
+                # Field name + position mirror Dart's `SetXpComponents.toJson()`
+                # (between cap_mult and set_xp). JSON output is sort_keys=True
+                # so on-disk ordering is alphabetical anyway — name match is
+                # the load-bearing contract.
+                'difficulty_mult': diff_mult,
             },
             'set_xp': set_xp,
         })
@@ -306,11 +357,19 @@ def fx_backfill_replay() -> dict:
             session_set_index = 0
             for exercise, n_sets, reps in sim.DAY_TEMPLATES[day]:
                 w = weights.get(exercise, 1)
+                # Phase 24a: each set carries the multiplier its real-slug
+                # analog would use in the live save path. The alias resolver
+                # maps simulator short names ('bench', 'squat', etc.) onto
+                # the actual `exercises.difficulty_mult` value that ships in
+                # the migration, so the regenerated final ranks reflect the
+                # exact per-exercise weighting users will experience.
+                diff_mult = sim.difficulty_mult_for_alias(exercise)
                 for _ in range(n_sets):
                     set_index += 1
                     session_set_index += 1
                     awarded, vol = sim.compute_set_xp(
                         exercise, w, reps, novelty_count, weekly_count, peak_loads,
+                        difficulty_mult=diff_mult,
                     )
                     for bp, xp in awarded.items():
                         xp_pool[bp] += xp
@@ -322,6 +381,7 @@ def fx_backfill_replay() -> dict:
                         'exercise': exercise,
                         'weight_kg': w,
                         'reps': reps,
+                        'difficulty_mult': diff_mult,
                         'awarded': dict(awarded),
                     })
         rate = sim.progression_rate(archetype, week)
@@ -350,6 +410,8 @@ def main() -> None:
             'weekly_cap_sets': sim.WEEKLY_CAP_SETS,
             'over_cap_multiplier': sim.OVER_CAP_MULTIPLIER,
             'strength_mult_floor': sim.STRENGTH_MULT_FLOOR,
+            'difficulty_mult_floor': sim.DIFFICULTY_MULT_FLOOR,
+            'difficulty_mult_ceiling': sim.DIFFICULTY_MULT_CEILING,
             'xp_base': sim.XP_BASE,
             'xp_growth': sim.XP_GROWTH,
             'char_level_denominator': sim.CHAR_LEVEL_DENOMINATOR,

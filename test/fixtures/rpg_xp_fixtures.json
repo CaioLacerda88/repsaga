@@ -205,21 +205,21 @@
     "archetype": "intermediate",
     "final_ranks": {
       "arms": 37,
-      "back": 36,
+      "back": 37,
       "cardio": 1,
-      "chest": 30,
-      "core": 26,
-      "legs": 37,
-      "shoulders": 30
+      "chest": 31,
+      "core": 28,
+      "legs": 38,
+      "shoulders": 31
     },
     "final_xp_pool": {
-      "arms": 18995.434894641843,
-      "back": 16987.10235748577,
+      "arms": 19304.522891212284,
+      "back": 19336.014779249344,
       "cardio": 0.0,
-      "chest": 9690.873846623992,
-      "core": 6542.855964336082,
-      "legs": 18817.89048147839,
-      "shoulders": 9717.137955674167
+      "chest": 10563.052492820148,
+      "core": 7428.579647599457,
+      "legs": 20614.353697459446,
+      "shoulders": 10784.296752284552
     },
     "total_sets": 1590,
     "weeks_simulated": 30
@@ -375,6 +375,8 @@
   ],
   "meta": {
     "char_level_denominator": 4,
+    "difficulty_mult_ceiling": 1.25,
+    "difficulty_mult_floor": 0.85,
     "novelty_denominator": 15,
     "over_cap_multiplier": 0.5,
     "strength_mult_floor": 0.4,
@@ -641,153 +643,243 @@
       "components": {
         "base_xp": 56.797667740331384,
         "cap_mult": 1.0,
+        "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
         "novelty_mult": 1.0,
         "strength_mult": 1.0,
         "volume_load": 500
       },
       "inputs": {
+        "difficulty_mult": 1.09,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
+        "slug": "barbell_bench_press",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
       "name": "bench_peak_fresh",
-      "set_xp": 68.15720128839766
+      "set_xp": 74.29134940435345
     },
     {
       "components": {
         "base_xp": 56.797667740331384,
         "cap_mult": 1.0,
+        "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
         "novelty_mult": 0.513417119032592,
         "strength_mult": 1.0,
         "volume_load": 500
       },
       "inputs": {
+        "difficulty_mult": 1.09,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 10,
+        "slug": "barbell_bench_press",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
       "name": "bench_peak_late_session",
-      "set_xp": 34.993073926813594
+      "set_xp": 38.14245058022682
     },
     {
       "components": {
         "base_xp": 45.04475496986848,
         "cap_mult": 1.0,
+        "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
         "novelty_mult": 1.0,
         "strength_mult": 0.7,
         "volume_load": 350
       },
       "inputs": {
+        "difficulty_mult": 1.09,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
+        "slug": "barbell_bench_press",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 70
       },
       "name": "bench_deload_70",
-      "set_xp": 37.837594174689514
+      "set_xp": 41.242977650411575
     },
     {
       "components": {
         "base_xp": 56.797667740331384,
         "cap_mult": 0.5,
+        "difficulty_mult": 1.21,
         "intensity_mult": 1.2,
         "novelty_mult": 1.0,
         "strength_mult": 1.0,
         "volume_load": 500
       },
       "inputs": {
+        "difficulty_mult": 1.21,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
+        "slug": "deadlift",
         "weekly_volume_for_body_part": 25,
         "weight_kg": 100
       },
       "name": "past_weekly_cap",
-      "set_xp": 34.07860064419883
+      "set_xp": 41.23510677948058
     },
     {
       "components": {
         "base_xp": 100.33854750857574,
         "cap_mult": 1.0,
+        "difficulty_mult": 0.85,
         "intensity_mult": 0.8,
         "novelty_mult": 1.0,
         "strength_mult": 0.6,
         "volume_load": 1200
       },
       "inputs": {
+        "difficulty_mult": 0.85,
         "peak_load": 100,
         "reps": 20,
         "session_volume_for_body_part": 0,
+        "slug": "leg_curl",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 60
       },
-      "name": "high_rep_endurance",
-      "set_xp": 48.16250280411636
+      "name": "high_rep_endurance_floor",
+      "set_xp": 40.9381273834989
     },
     {
       "components": {
         "base_xp": 24.83037183640355,
         "cap_mult": 1.0,
+        "difficulty_mult": 1.25,
         "intensity_mult": 1.3,
         "novelty_mult": 1.0,
         "strength_mult": 1.0,
         "volume_load": 140
       },
       "inputs": {
+        "difficulty_mult": 1.25,
         "peak_load": 130,
         "reps": 1,
         "session_volume_for_body_part": 0,
+        "slug": "push_press",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 140
       },
-      "name": "one_rm",
-      "set_xp": 32.27948338732462
+      "name": "one_rm_ceiling",
+      "set_xp": 40.34935423415577
     },
     {
       "components": {
         "base_xp": 1.0,
         "cap_mult": 1.0,
+        "difficulty_mult": 1.11,
         "intensity_mult": 1.0,
         "novelty_mult": 1.0,
         "strength_mult": 1.0,
         "volume_load": 1.0
       },
       "inputs": {
+        "difficulty_mult": 1.11,
         "peak_load": 0,
         "reps": 8,
         "session_volume_for_body_part": 0,
+        "slug": "push_up",
         "weekly_volume_for_body_part": 0,
         "weight_kg": 0
       },
       "name": "bodyweight_floor",
-      "set_xp": 1.0
+      "set_xp": 1.11
     },
     {
       "components": {
         "base_xp": 14.315229426830216,
         "cap_mult": 1.0,
+        "difficulty_mult": 0.87,
         "intensity_mult": 0.95,
         "novelty_mult": 0.7165313105737893,
         "strength_mult": 1.0,
         "volume_load": 60
       },
       "inputs": {
+        "difficulty_mult": 0.87,
         "peak_load": 5,
         "reps": 12,
         "session_volume_for_body_part": 5,
+        "slug": "barbell_curl",
         "weekly_volume_for_body_part": 8,
         "weight_kg": 5
       },
       "name": "stagnant_curl",
-      "set_xp": 9.74444459725257
+      "set_xp": 8.477666799609736
+    },
+    {
+      "components": {
+        "base_xp": 66.68328452080326,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.0,
+        "intensity_mult": 1.0,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 640
+      },
+      "inputs": {
+        "difficulty_mult": 1.0,
+        "peak_load": 80,
+        "reps": 8,
+        "session_volume_for_body_part": 0,
+        "slug": null,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 80
+      },
+      "name": "user_created_default_1_0",
+      "set_xp": 66.68328452080326
+    },
+    {
+      "components": {
+        "base_xp": 77.09185423052514,
+        "cap_mult": 1.0,
+        "difficulty_mult": 0.85,
+        "intensity_mult": 1.0,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 800
+      },
+      "inputs": {
+        "difficulty_mult": 0.85,
+        "peak_load": 100,
+        "reps": 8,
+        "session_volume_for_body_part": 0,
+        "slug": null,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 100
+      },
+      "name": "explicit_floor_0_85",
+      "set_xp": 65.52807609594637
+    },
+    {
+      "components": {
+        "base_xp": 77.09185423052514,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.25,
+        "intensity_mult": 1.0,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 800
+      },
+      "inputs": {
+        "difficulty_mult": 1.25,
+        "peak_load": 100,
+        "reps": 8,
+        "session_volume_for_body_part": 0,
+        "slug": null,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 100
+      },
+      "name": "explicit_ceiling_1_25",
+      "set_xp": 96.36481778815643
     }
   ],
   "strength_mult": [

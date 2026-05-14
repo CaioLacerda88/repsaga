@@ -8,7 +8,8 @@ import 'dart:math' as math;
 /// `record_set_xp` RPC in the same PR.** All three paths are checked for
 /// parity by the integration tests.
 ///
-/// Formula (spec §4):
+/// Formula (spec §4 + Phase 24a difficulty_mult — see
+/// `docs/xp-difficulty-framework.md` §6):
 ///
 /// ```
 /// set_xp = volume_load^0.65
@@ -16,7 +17,15 @@ import 'dart:math' as math;
 ///        × strength_mult(weight, peak)
 ///        × novelty_mult(session_volume)
 ///        × cap_mult(weekly_volume)
+///        × difficulty_mult(exercise)
 /// ```
+///
+/// `difficulty_mult` is per-exercise data sourced from
+/// `exercises.difficulty_mult` (numeric, range [0.85, 1.25] enforced by a
+/// SQL CHECK constraint). The Dart calculator does NOT compute the
+/// composite (tier_mult + secondary bump); it receives the pre-clamped
+/// composite value from the caller and multiplies. User-created exercises
+/// without an explicit assignment default to 1.0 at the column level.
 ///
 /// This is the **total** XP for the set, before per-body-part attribution.
 /// Distribution to body parts happens in `xp_distribution.dart`.
@@ -41,6 +50,20 @@ class XpCalculator {
   /// Multiplier applied to set_xp once `weekly_volume_for_body_part`
   /// crosses [weeklyCapSets].
   static const double overCapMultiplier = 0.5;
+
+  /// Floor of the per-exercise `difficulty_mult` range.
+  ///
+  /// Documented for parity with the migration's CHECK constraint
+  /// (`difficulty_mult BETWEEN 0.85 AND 1.25`). The calculator does NOT
+  /// enforce this clamp itself — the source-of-truth is the SQL constraint
+  /// and the Phase 24a curated UPDATE block. If a value outside this range
+  /// reaches `computeSetXp`, that's a data-integrity bug to fix upstream,
+  /// not silently clip here.
+  static const double difficultyMultFloor = 0.85;
+
+  /// Ceiling of the per-exercise `difficulty_mult` range. See
+  /// [difficultyMultFloor] for enforcement notes.
+  static const double difficultyMultCeiling = 1.25;
 
   /// Floor for the strength multiplier. A 50 % deload still earns
   /// `0.5 × set_xp`; below 40 % we floor to 0.4 — recovery sets still count,
@@ -149,8 +172,17 @@ class XpCalculator {
   /// callers can persist the breakdown for analytics / debugging while
   /// staying pure (no IO).
   ///
-  /// The integration test asserts that the SQL `record_set_xp` RPC produces
-  /// a row whose breakdown matches this struct within 0.0001 absolute.
+  /// The integration tests assert per-body-part XP totals match within
+  /// 1e-4 absolute (i.e. `body_part_progress.total_xp` and
+  /// `xp_events.attribution[bp]` agree with the Dart computation per
+  /// slug per body part). The payload JSON shape (`toJson`) carries
+  /// `novelty_mult` and `cap_mult` for completeness, but the SQL RPCs
+  /// (migration 00054) intentionally OMIT those two keys from the
+  /// top-level `payload` JSONB — `novelty_mult` and `cap_mult` are
+  /// per-body-part and live in `xp_events.attribution` rather than
+  /// being denormalized to the set-level payload. This is a documented
+  /// asymmetry between Dart's in-memory breakdown shape and the SQL
+  /// storage shape.
   ///
   /// All fields are in the same order as the formula multiplication chain.
   static SetXpComponents computeSetXp({
@@ -159,6 +191,7 @@ class XpCalculator {
     required double peakLoad,
     required double sessionVolumeForBodyPart,
     required double weeklyVolumeForBodyPart,
+    required double difficultyMult,
   }) {
     final vl = volumeLoad(weightKg: weightKg, reps: reps);
     final base = baseXp(vl);
@@ -166,7 +199,7 @@ class XpCalculator {
     final strength = strengthMult(weightKg: weightKg, peakLoad: peakLoad);
     final novelty = noveltyMult(sessionVolumeForBodyPart);
     final cap = capMult(weeklyVolumeForBodyPart);
-    final setXp = base * intensity * strength * novelty * cap;
+    final setXp = base * intensity * strength * novelty * cap * difficultyMult;
     return SetXpComponents(
       volumeLoad: vl,
       baseXp: base,
@@ -174,6 +207,7 @@ class XpCalculator {
       strengthMult: strength,
       noveltyMult: novelty,
       capMult: cap,
+      difficultyMult: difficultyMult,
       setXp: setXp,
     );
   }
@@ -193,6 +227,7 @@ class SetXpComponents {
     required this.strengthMult,
     required this.noveltyMult,
     required this.capMult,
+    required this.difficultyMult,
     required this.setXp,
   });
 
@@ -202,13 +237,15 @@ class SetXpComponents {
   final double strengthMult;
   final double noveltyMult;
   final double capMult;
+  final double difficultyMult;
 
   /// The total XP for this set, **before** distribution to body parts.
   final double setXp;
 
   /// Serialized for `xp_events.payload`. Mirrors the field set the SQL RPC
   /// stores so a Dart-driven backfill produces byte-identical rows to the
-  /// live save path.
+  /// live save path. Keys appear in formula-chain order so the JSON shape
+  /// reads top-to-bottom like the multiplication chain.
   Map<String, dynamic> toJson() => {
     'volume_load': volumeLoad,
     'base_xp': baseXp,
@@ -216,6 +253,7 @@ class SetXpComponents {
     'strength_mult': strengthMult,
     'novelty_mult': noveltyMult,
     'cap_mult': capMult,
+    'difficulty_mult': difficultyMult,
     'set_xp': setXp,
   };
 }

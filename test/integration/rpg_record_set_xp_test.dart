@@ -38,6 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/domain/xp_calculator.dart';
 import 'package:repsaga/features/rpg/domain/xp_distribution.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/xp_event.dart';
 
 import 'rpg_integration_setup.dart';
 
@@ -98,6 +99,10 @@ void main() {
           numSets: 1,
         );
 
+        // Phase 24a Phase F: read the curated per-exercise multiplier from
+        // the same exercises row the SQL RPC reads (mirror the SQL side).
+        final difficulty = await difficultyMultForSlug(adminClient, slug);
+
         // Dart: fresh first set, no prior peak → strength_mult = 1.0
         final dartComps = XpCalculator.computeSetXp(
           weightKg: weight,
@@ -105,6 +110,7 @@ void main() {
           peakLoad: 0,
           sessionVolumeForBodyPart: 0,
           weeklyVolumeForBodyPart: 0,
+          difficultyMult: difficulty,
         );
         final dartXp = XpDistribution.distribute(
           setXp: dartComps.setXp,
@@ -142,12 +148,60 @@ void main() {
           );
         }
 
-        // xp_events: exactly one row.
+        // xp_events: exactly one row + payload carries `difficulty_mult` key.
+        // We select the FULL row shape (not just `id, payload`) so we can
+        // also exercise XpEvent.fromJson's payload-promotion (PR #222
+        // reviewer Blocker): difficulty_mult is snapshotted INSIDE
+        // payload, not as a top-level column, so the model's custom
+        // factory must promote it for `event.difficultyMult` to be
+        // non-null. Without the promotion this assertion fails.
         final events = await userClient
             .from('xp_events')
-            .select('id')
+            .select()
             .eq('set_id', seed.setIds.first);
         expect(events, hasLength(1));
+        final eventRow = (events as List).first as Map<String, dynamic>;
+        final payload = eventRow['payload'] as Map<String, dynamic>;
+        expect(
+          payload.containsKey('difficulty_mult'),
+          isTrue,
+          reason:
+              'xp_events.payload must include difficulty_mult key '
+              '(Phase 24a Phase D / Dart SetXpComponents.toJson contract)',
+        );
+        expect(
+          (payload['difficulty_mult'] as num).toDouble(),
+          closeTo(difficulty, 1e-9),
+          reason:
+              'payload.difficulty_mult must equal exercises.difficulty_mult '
+              'for the seeded slug ($slug, expected $difficulty)',
+        );
+
+        // PR #222 Blocker regression: XpEvent.fromJson must promote
+        // payload.difficulty_mult to the top-level `difficultyMult`
+        // field. The generated `_$XpEventFromJson` reads
+        // `json['difficulty_mult']` (top-level), but the SQL RPC writes
+        // it INSIDE payload — without the custom factory's promotion,
+        // event.difficultyMult would always be null for every event
+        // ever written.
+        final event = XpEvent.fromJson(eventRow);
+        expect(
+          event.difficultyMult,
+          isNotNull,
+          reason:
+              'XpEvent.difficultyMult must be non-null after fromJson '
+              'round-trip (payload-promotion contract). Raw payload '
+              'value: ${payload['difficulty_mult']}',
+        );
+        expect(
+          event.difficultyMult,
+          closeTo(difficulty, 1e-9),
+          reason:
+              'event.difficultyMult ($event.difficultyMult) must equal '
+              'exercises.difficulty_mult ($difficulty) — proves the '
+              'fromJson factory correctly promoted payload.difficulty_mult '
+              'to the model field, not just left it as a payload entry.',
+        );
       },
     );
 
@@ -178,12 +232,15 @@ void main() {
         numSets: 1,
       );
 
+      // Phase 24a Phase F: read curated multiplier; SQL RPC reads the same.
+      final difficulty = await difficultyMultForSlug(adminClient, slug);
       final dartComps = XpCalculator.computeSetXp(
         weightKg: weight,
         reps: reps,
         peakLoad: 0,
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
+        difficultyMult: difficulty,
       );
       final dartXp = XpDistribution.distribute(
         setXp: dartComps.setXp,
@@ -242,12 +299,15 @@ void main() {
         numSets: 1,
       );
 
+      // Phase 24a Phase F: read curated multiplier; SQL RPC reads the same.
+      final difficulty = await difficultyMultForSlug(adminClient, slug);
       final dartComps = XpCalculator.computeSetXp(
         weightKg: weight,
         reps: reps,
         peakLoad: 0,
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
+        difficultyMult: difficulty,
       );
       final dartXp = XpDistribution.distribute(
         setXp: dartComps.setXp,
@@ -283,6 +343,159 @@ void main() {
           reason: '${bp.dbValue}: PG=$pgXp vs Dart=$dartXpBp',
         );
       }
+    });
+
+    /// Phase 24a Phase F: a user-created exercise has `is_default = false`
+    /// and reads the `exercises.difficulty_mult` column default (1.0). The
+    /// SQL RPC's `COALESCE(difficulty_mult, 1.0)` returns 1.0 and
+    /// `payload.difficulty_mult` must equal exactly 1.0 — confirming both
+    /// the COALESCE path and the no-effect-at-1.0 invariant.
+    ///
+    /// We construct a minimal user-owned exercise inline so the test does
+    /// not depend on any default-exercise side-effect changes.
+    test('user-created exercise reads difficulty_mult column default 1.0 '
+        '(COALESCE path)', () async {
+      const weight = 80.0;
+      const reps = 8;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      // Create a user-owned, non-default exercise via the production RPC
+      // (`fn_insert_user_exercise`) — same path the create-exercise screen
+      // uses. The RPC leaves `xp_attribution` NULL for user exercises, so
+      // the SQL chain's NULL-fallback assigns 1.0 share to the primary
+      // muscle_group (chest). Critically, the RPC inserts NO
+      // difficulty_mult — the column DEFAULT (1.0, migration 00053) applies.
+      final createdRows =
+          await userClient.rpc(
+                'fn_insert_user_exercise',
+                params: {
+                  'p_user_id': user.userId,
+                  'p_locale': 'en',
+                  'p_name': 'Custom Bench Phase24a $runId',
+                  'p_muscle_group': 'chest',
+                  'p_equipment_type': 'barbell',
+                },
+              )
+              as List;
+      final customExerciseId =
+          (createdRows.first as Map<String, dynamic>)['id'] as String;
+
+      // Confirm column DEFAULT 1.0 applied + xp_attribution is NULL (so the
+      // SQL NULL-fallback at the per-bp loop assigns 1.0 share to chest).
+      final customRow = await adminClient
+          .from('exercises')
+          .select('difficulty_mult, xp_attribution')
+          .eq('id', customExerciseId)
+          .single();
+      expect(
+        (customRow['difficulty_mult'] as num).toDouble(),
+        equals(1.0),
+        reason:
+            'User-created exercises must read difficulty_mult = 1.0 '
+            'from the column DEFAULT (migration 00053).',
+      );
+      expect(
+        customRow['xp_attribution'],
+        isNull,
+        reason:
+            'fn_insert_user_exercise leaves xp_attribution NULL — '
+            'SQL chain falls back to primary muscle_group at 1.0 share.',
+      );
+
+      // Seed a workout containing one set of the custom exercise. We use
+      // adminClient INSERTs directly (mirroring seedWorkout's shape) since
+      // seedWorkout requires a default-exercise slug and we need a
+      // user-owned custom exercise here.
+      final ts = DateTime.now().toUtc();
+      final workoutRow = await adminClient
+          .from('workouts')
+          .insert({
+            'user_id': user.userId,
+            'name': 'Integration Test Workout (custom ex)',
+            'started_at': ts.toIso8601String(),
+            'finished_at': ts.add(const Duration(hours: 1)).toIso8601String(),
+            'is_active': false,
+          })
+          .select('id')
+          .single();
+      final workoutId = workoutRow['id'] as String;
+      final weRow = await adminClient
+          .from('workout_exercises')
+          .insert({
+            'workout_id': workoutId,
+            'exercise_id': customExerciseId,
+            'order': 1,
+          })
+          .select('id')
+          .single();
+      final weId = weRow['id'] as String;
+      final setRow = await adminClient
+          .from('sets')
+          .insert({
+            'workout_exercise_id': weId,
+            'set_number': 1,
+            'reps': reps,
+            'weight': weight,
+            'is_completed': true,
+            'set_type': 'working',
+          })
+          .select('id')
+          .single();
+      final setId = setRow['id'] as String;
+
+      // Drive XP via record_set_xp directly (the same code path the
+      // production save_workout chain ends up taking).
+      await userClient.rpc('record_set_xp', params: {'p_set_id': setId});
+
+      // Dart reference: difficulty_mult = 1.0 (column default).
+      final dartComps = XpCalculator.computeSetXp(
+        weightKg: weight,
+        reps: reps,
+        peakLoad: 0,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.0,
+      );
+
+      final pgRow = await userClient
+          .from('body_part_progress')
+          .select('total_xp')
+          .eq('body_part', 'chest')
+          .single();
+      final pgChest = (pgRow['total_xp'] as num).toDouble();
+      // attribution chest=1.0 → entire setXp lands on chest.
+      expect(
+        (pgChest - dartComps.setXp).abs(),
+        lessThanOrEqualTo(_kTol),
+        reason:
+            'User-created exercise XP must match Dart with '
+            'difficulty_mult=1.0. PG=$pgChest, Dart=${dartComps.setXp}',
+      );
+
+      // Payload key contract: difficulty_mult present and exactly 1.0.
+      final events = await userClient
+          .from('xp_events')
+          .select('payload')
+          .eq('set_id', setId);
+      expect(events, hasLength(1));
+      final payload =
+          ((events as List).first as Map<String, dynamic>)['payload']
+              as Map<String, dynamic>;
+      expect(
+        payload.containsKey('difficulty_mult'),
+        isTrue,
+        reason: 'payload must include difficulty_mult key',
+      );
+      expect(
+        (payload['difficulty_mult'] as num).toDouble(),
+        closeTo(1.0, 1e-9),
+        reason:
+            'User-created exercise payload must record difficulty_mult=1.0 '
+            'from the COALESCE(NULL, 1.0) → DEFAULT path',
+      );
     });
 
     /// Novelty diminishing returns: 5 back-to-back bench sets. The session
@@ -322,6 +535,11 @@ void main() {
           .single();
       final pgChestTotal = (pgRow['total_xp'] as num).toDouble();
 
+      // Phase 24a Phase F: read curated multiplier (bench is T3 + 2 sec → 1.09
+      // per migration 00053). The 5×-bound stays valid regardless of the
+      // multiplier value because both sides scale by the same constant; we
+      // still mirror what record_set_xp uses for completeness.
+      final difficulty = await difficultyMultForSlug(adminClient, slug);
       // Single set XP at 80kg×8 (strength_mult=1.0 for first set).
       final singleComps = XpCalculator.computeSetXp(
         weightKg: weight,
@@ -329,6 +547,7 @@ void main() {
         peakLoad: 0,
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
+        difficultyMult: difficulty,
       );
       final singleChestXp = singleComps.setXp * 0.70;
 

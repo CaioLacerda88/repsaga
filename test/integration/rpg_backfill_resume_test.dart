@@ -44,6 +44,10 @@ void main() {
   // Small enough that chunk_size=5 creates 3 deterministic chunks.
   // ---------------------------------------------------------------------------
 
+  // Phase 24a Phase F: each ExerciseDef carries the curated difficulty_mult
+  // from migration 00053 so the Dart reference (computeDartReference shared
+  // with rpg_backfill_test.dart) mirrors what `_rpg_backfill_chunk` reads
+  // from `exercises.difficulty_mult` per set.
   const kSmallFixture = BackfillFixture(
     exercises: [
       ExerciseDef(
@@ -51,18 +55,21 @@ void main() {
         weightKg: 80.0,
         reps: 8,
         attribution: {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.10},
+        difficultyMult: 1.09,
       ),
       ExerciseDef(
         slug: 'lat_pulldown',
         weightKg: 60.0,
         reps: 10,
         attribution: {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+        difficultyMult: 0.99,
       ),
       ExerciseDef(
         slug: 'barbell_squat',
         weightKg: 100.0,
         reps: 5,
         attribution: {'legs': 0.80, 'core': 0.10, 'back': 0.10},
+        difficultyMult: 1.19,
       ),
     ],
     weeksCount: 5,
