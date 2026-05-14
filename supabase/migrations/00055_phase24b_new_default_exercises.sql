@@ -116,7 +116,7 @@ INSERT INTO exercises (
  '[]'::jsonb, '{"shoulders":0.4,"back":0.25,"legs":0.2,"core":0.15}'::jsonb, 1.25),
 -- T1 + 3 sec → 1.27 → clamp 1.25 (analog: KB snatch ballistic). Image: yuhonas no_match — Phase 24b followup.
 
-('medicine_ball_slam', 'chest', 'bodyweight', true, NULL,
+('medicine_ball_slam', 'core', 'bodyweight', true, NULL,
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/medicine_ball_slam_start.jpg',
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/medicine_ball_slam_end.jpg',
  '[]'::jsonb, '{"core":0.4,"shoulders":0.25,"back":0.2,"chest":0.1,"arms":0.05}'::jsonb, 1.25),
@@ -193,7 +193,7 @@ INSERT INTO exercises (
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/paused_squat_start.jpg',
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/paused_squat_end.jpg',
  '[]'::jsonb, '{"legs":0.7,"core":0.15,"back":0.15}'::jsonb, 1.19),
--- T2 + 2 sec → 1.19 (analog: §3 back squat, pause kills stretch reflex)
+-- T2 + 2 sec → 1.19 — T2 bump from T3 (non-paused barbell_squat → 1.21 in 00053; pause removes stretch reflex, adding neural demand at the same load)
 
 ('pistol_squat', 'legs', 'bodyweight', true, NULL,
  NULL,
@@ -223,13 +223,13 @@ INSERT INTO exercises (
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/paused_bench_press_start.jpg',
  'https://dgcueqvqfyuedclkxixz.supabase.co/storage/v1/object/public/exercise-media/paused_bench_press_end.jpg',
  '[]'::jsonb, '{"chest":0.65,"shoulders":0.2,"arms":0.15}'::jsonb, 1.19),
--- T2 + 2 sec → 1.19 (powerlifting-spec, bumped from T3 standard bench)
+-- T2 + 2 sec → 1.19 — T2 bump from T3 (non-paused barbell_bench_press → 1.09 in 00053; pause removes stretch reflex)
 
-('atlas_stone', 'chest', 'barbell', true, NULL,
+('atlas_stone', 'back', 'barbell', true, NULL,
  NULL,
  NULL,
  '[]'::jsonb, '{"back":0.35,"legs":0.3,"chest":0.15,"arms":0.1,"core":0.1}'::jsonb, 1.21),
--- T2 + 4 sec → 1.23 (§3 named, strongman lift, equipment_type=barbell closest enum). Image: no yuhonas folder — Phase 24b followup.
+-- T2 + 4 sec → 1.21 (cap-3 bumps; raw 1.23 → cap → 1.21) (§3 named, strongman lift, equipment_type=barbell closest enum). Image: no yuhonas folder — Phase 24b followup.
 
 ('l_sit', 'core', 'bodyweight', true, NULL,
  NULL,
@@ -274,7 +274,7 @@ INSERT INTO exercises (
  '[]'::jsonb, '{"back":0.4,"legs":0.35,"shoulders":0.15,"arms":0.1}'::jsonb, 1.11),
 -- T3 + 3 sec → 1.11 (sub-Olympic ballistic, DB lower skill than barbell)
 
-('larsen_press', 'shoulders', 'barbell', true, NULL,
+('larsen_press', 'chest', 'barbell', true, NULL,
  NULL,
  NULL,
  '[]'::jsonb, '{"chest":0.6,"shoulders":0.25,"arms":0.1,"core":0.05}'::jsonb, 1.11),
@@ -650,12 +650,12 @@ FROM (VALUES
   ('power_clean',
    'Power Clean',
    'Puxada olímpica do chão até o apoio em meio agachamento na posição frontal — extensão tripla explosiva e rack rápido.',
-   E'Posicione-se sobre a barra, quadril entre joelhos e ombros, com a coluna travada antes de subir.\nPasse a barra do joelho e explode em extensão total de quadril e joelho.\nPuxe-se PARA BAIXO da barra — não tente subir só com os braços.\nReceba alto (acima da paralela) com cotovelos rápidos e à frente no rack.'),
+   E'Posicione-se sobre a barra, quadril entre joelhos e ombros, com a coluna travada antes de subir.\nPasse a barra do joelho e exploda em extensão total de quadril e joelho.\nPuxe-se PARA BAIXO da barra — não tente subir só com os braços.\nReceba alto (acima da paralela) com cotovelos rápidos e à frente no rack.'),
 
   ('hang_clean',
    'Hang Clean',
    'Power Clean iniciado a partir do hang (acima do joelho) — treina a segunda puxada e a inversão sem a puxada do chão.',
-   E'Comece em pé com a barra em hang, logo acima do joelho.\nFlexione o quadril com a barra colada e explode em extensão tripla.\nPuxe-se rápido para baixo da barra — não suba como uma rosca.\nReceba em meio agachamento no rack frontal com cotovelos à frente.'),
+   E'Comece em pé com a barra em hang, logo acima do joelho.\nFlexione o quadril com a barra colada e exploda em extensão tripla.\nPuxe-se rápido para baixo da barra — não suba como uma rosca.\nReceba em meio agachamento no rack frontal com cotovelos à frente.'),
 
   ('power_snatch',
    'Power Snatch',
@@ -665,7 +665,7 @@ FROM (VALUES
   ('hang_snatch',
    'Hang Snatch',
    'Snatch iniciado a partir do hang (acima do joelho) — treina a segunda puxada e a inversão sem a puxada do chão.',
-   E'Fique em pé com a barra em hang, pegada aberta na altura da coxa.\nFlexione o quadril com a barra colada e explode em extensão tripla.\nProjete a barra overhead e desça rápido em meio agachamento.\nTrave os cotovelos com a barra alinhada sobre o meio do pé.'),
+   E'Fique em pé com a barra em hang, pegada aberta na altura da coxa.\nFlexione o quadril com a barra colada e exploda em extensão tripla.\nProjete a barra overhead e desça rápido em meio agachamento.\nTrave os cotovelos com a barra alinhada sobre o meio do pé.'),
 
   ('clean_and_jerk',
    'Clean and Jerk',
@@ -690,7 +690,7 @@ FROM (VALUES
   ('dumbbell_snatch',
    'Dumbbell Snatch',
    'Puxada do halter do chão até o lockout overhead em um só movimento — mesmo padrão do Kettlebell Snatch com outro implemento.',
-   E'Posicione o halter no chão entre os pés.\nFlexione o quadril para pegá-lo e explode em extensão de quadril e joelho.\nPuxe o halter alto e empurre-se sob ele enquanto gira overhead.\nTrave o cotovelo com o halter alinhado sobre o ombro.'),
+   E'Posicione o halter no chão entre os pés.\nFlexione o quadril para pegá-lo e exploda em extensão de quadril e joelho.\nPuxe o halter alto e empurre-se sob ele enquanto gira overhead.\nTrave o cotovelo com o halter alinhado sobre o ombro.'),
 
   ('medicine_ball_slam',
    'Medicine Ball Slam',
@@ -820,7 +820,7 @@ FROM (VALUES
   ('dumbbell_clean',
    'Dumbbell Clean',
    'Clean balístico com halter até o ombro — mais fácil de aprender que a versão de barra e ótimo para circuitos de potência.',
-   E'Posicione o halter no chão entre os pés.\nFlexione o quadril para pegá-lo e explode em extensão de quadril e joelho.\nPuxe o halter colado ao corpo e gire o cotovelo para baixo rapidamente.\nReceba o halter no ombro em meio agachamento.'),
+   E'Posicione o halter no chão entre os pés.\nFlexione o quadril para pegá-lo e exploda em extensão de quadril e joelho.\nPuxe o halter colado ao corpo e gire o cotovelo para baixo rapidamente.\nReceba o halter no ombro em meio agachamento.'),
 
   ('larsen_press',
    'Larsen Press',
