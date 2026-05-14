@@ -17,8 +17,8 @@ trial-to-paywall subscription via Google Play Billing.
 
 **Current state (2026-05-13).** No active phase. Phase 23 (active-workout
 chrome + SnackBar fix-wave) shipped in PR #212 + #214; the 23-P-4 E2E
-dismissal-time regression pins shipped in PR #217. Active Backlog: 3
-architectural follow-ups. Phase 16 subscription parked by choice (RPG
+dismissal-time regression pins shipped in PR #217. No architectural
+follow-ups outstanding. Phase 16 subscription parked by choice (RPG
 retention moat first).
 
 ### Progress snapshot — latest 7 phases (full history in §4)
@@ -164,49 +164,25 @@ Items in (d) move to the "v2-park" sub-list and don't get worked on without new 
 
 ### Architectural follow-ups (parked, no urgency)
 
-- **20-P-1 — post-completion hint persistence** (Phase 20 critique Problem 3).
-  Goal: keep the `Previous: Xkg × Y` line visible after the user completes a
-  set so they can confirm retrospectively. **Blocked on a layout-stable
-  redesign** — the first attempt (PR #159) re-triggered Phase 20's Flutter
-  Web semantics-engine role-swap bug (a sibling Text appearing on completion
-  drops the row's `flt-semantics-identifier`). Fix needs a fixed-height hint
-  slot so adding/removing the visible Text never reflows the parent Column.
-  Diagnosis: `set_row.dart` `_shouldShowHint` doc + `set_row_test.dart` revert
-  note. Superseded for v1 by the Phase 23 hint-removal verdict — the entire
-  hint mechanic is gone. Entry stays parked in case future telemetry justifies
-  bringing it back with the layout-stable design. See cluster
-  `flutter-web-aom-role-swap`.
-- **23-P-1 — seeded-set provenance cue** (Phase 23 UI/UX-critic IMPORTANT #2,
-  deferred 2026-05-12). After Phase 23 D6 auto-seeds set 1 with prior-
-  session values, a user adding an exercise they have NEVER trained still
-  sees a pre-filled set — but the values come from equipment defaults, not
-  "your last session." UI/UX-critic accepts ship-as-is because the seeded
-  values are correct and the experience matches Hevy/Strong. Future v1.1
-  cue: a 150 ms slot-machine slide on the first render of a seeded row
-  (reuse `_slotMachineSlideTransition` already wired into
-  `_WeightStepperCell`) so the user reads "values just appeared" rather
-  than "values were pre-typed by me." No text, no chip. Triggered when the
-  user moves the rep/weight stepper, the slide is a one-shot per row.
-- **23-P-2 — H5 add-exercise undo SnackBar widget coverage** (Phase 23 QA
-  risk #3, deferred 2026-05-12). The H5 undo SnackBar is pinned by the E2E
-  tests in `workouts.spec.ts:1764 / :1786`. A unit-level widget test is
-  architecturally blocked because `ExercisePickerSheet.show` is a static
-  method that returns a future and cannot be mocked without a library-level
-  refactor (extract to an injectable picker). The E2E coverage is sufficient
-  for v1 — the SnackBar is a tiny surface, and Phase 23 Cluster C already
-  documents the regression mode that the E2E tests catch. Revisit if the
-  picker grows enough complexity to justify the injection refactor.
-- **23-P-4 — E2E dismissal-time assertions for the three undo SnackBars** —
+_None outstanding._ Recently closed:
+
+- **20-P-1** — post-completion hint persistence — dropped 2026-05-13. The
+  entire per-row hint mechanic was removed in Phase 23 D4 (`set_row.dart:223`);
+  this follow-up was a v1 patch against a deleted feature.
+- **23-P-1** — seeded-set provenance cue — dropped 2026-05-13. Polish only;
+  no user signal that the silent auto-seed reads as confusing.
+- **23-P-2** — H5 add-exercise undo widget test — dropped 2026-05-13.
+  Architecturally blocked on `ExercisePickerSheet.show` being static, and
+  PR #217 strengthened the E2E coverage of the same flow — the case for
+  ever fixing this collapsed.
+- **23-P-4** — E2E dismissal-time assertions for the three undo SnackBars —
   DONE in PR #217 (2026-05-13). Added two-endpoint duration regression pins
   for the add-exercise undo (3.5 s, `workouts.spec.ts:1873`) and the routine-
-  removed undo (3 s, `weekly-plan.spec.ts:464`) — bracketing each snack with
-  "still visible mid-window" and "hidden post-duration + exit animation + 1 s
-  jitter headroom". Set-delete dismissal was already pinned at
-  `workouts.spec.ts:1153` from PR #214. New `WEEKLY_PLAN.routineRemovedUndoSnackBar`
-  selector + isolated `smokeWeeklyPlanRoutineRemoveUndo` user. Reviewer-cycle
-  surfaced a real preexisting flake (the "Saved" confirmation snack's
-  ~1.4 s lifetime reflows the routine row mid-frame, breaking `boundingBox`
-  / `scrollIntoViewIfNeeded`) — fixed with a 2.5 s settle wait + 5× retry on
+  removed undo (3 s, `weekly-plan.spec.ts:464`); set-delete already pinned
+  at `workouts.spec.ts:1153` from PR #214. Reviewer-cycle surfaced a
+  preexisting flake (the "Saved" confirmation snack's ~1.4 s lifetime
+  reflows the routine row mid-frame, breaking `boundingBox` /
+  `scrollIntoViewIfNeeded`) — fixed with a 2.5 s settle wait + 5× retry on
   measurement. Closes the regression gap that let the `persist-eats-duration`
   cluster bug hide for weeks behind passing source-grep widget tests.
 
