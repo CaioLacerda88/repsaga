@@ -232,6 +232,12 @@ test.describe('Exercise list en locale', () => {
     const cards = page.locator('role=button[name*="Exercise:"]');
     await expect(cards.first()).toBeVisible({ timeout: 15_000 });
 
+    // Filter to the bench card so it's in the visible viewport regardless of
+    // library size (the alphabetical list is virtualized — Phase 24b additions
+    // pushed Barbell Bench Press below the initial fold).
+    await flutterFillByInput(page, 'Search exercises', 'Barbell Bench');
+    await page.waitForTimeout(800);
+
     // The en name must appear in the list.
     await expect(
       page.locator(EXERCISE_LOC.exerciseCard(enBenchName, 'en')).first(),
