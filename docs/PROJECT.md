@@ -15,13 +15,16 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-13).** No active phase. Phase 23 closed with
-PR #214; 23-P-4 E2E regression pins shipped in PR #217. Next up:
-**Phase 24 — XP Balancing** (difficulty multiplier + library expansion
-+ bodyweight load semantics + simulation gate), then **Phase 25 — RPE**
-(research-first), then the **Launch Phase** (un-numbered; subscription
-+ Play Store + any pre-launch scope expansion, formerly Phase 16). XP
-difficulty framework already researched — see `docs/xp-difficulty-framework.md`.
+**Current state (2026-05-14).** Phase 24 in progress. **24a shipped**
+in PR #222: `exercises.difficulty_mult` (0.85–1.25) wired through
+Dart + SQL + Python parity sim, 150 default exercises curated against
+the framework, snapshot into `xp_events.payload`, applied to hosted
+Supabase. **24b PENDING** (~30–50 new default exercises), **24c
+PENDING** (bodyweight-as-load semantics), **24d PENDING** (six-profile
+simulation calibration gate). Then **Phase 25 — RPE** (research-first),
+then the **Launch Phase** (un-numbered; subscription + Play Store +
+any pre-launch scope expansion, formerly Phase 16). XP difficulty
+framework permanent reference: `docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -33,6 +36,7 @@ difficulty framework already researched — see `docs/xp-difficulty-framework.md
 | 21 | E2E per-worker isolation + parallelism bump | DONE | #154, #156, #157 |
 | 22 | Active Workout Audit Fix Wave (7 PRs) | DONE | #195–#208 |
 | 23 | Active Workout: rest-overlay + hint removal + auto-seed + SnackBar fix-wave | DONE | #212, #214 |
+| 24a | XP Balancing — difficulty multiplier infrastructure | DONE | #222 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -284,7 +288,7 @@ phase; Phase 24d is the final calibration sign-off.
 
 | Sub-phase | Status | Scope |
 |---|---|---|
-| 24a — Difficulty multiplier infrastructure | PENDING | Schema migration adding `exercises.difficulty_mult` + curate all ~150 existing defaults against the tier framework + `XpCalculator` formula update + `record_set_xp` RPC + Python sim parity + integration fixtures. **Forward-only:** `xp_events` snapshot the multiplier at write time; past events are not replayed. |
+| 24a — Difficulty multiplier infrastructure | DONE (PR #222) | See §4 condensed entry. |
 | 24b — New default exercises | PENDING | ~30–50 new defaults covering Olympic variants, bodyweight progressions, specialty lifts, cable / machine gaps. Each new exercise ships slug + en+pt translations (CLAUDE.md rule, CI-gated) + muscle_group + `secondary_muscle_groups` (capped at honest count) + `xp_attribution` summing to 1.0 ± 0.01 + curated `difficulty_mult`. |
 | 24c — Bodyweight load semantics | PENDING | Bodyweight exercises (pull-up, dip, push-up, pistol squat, etc.) use `effective_load = profile.bodyweight + added_weight` instead of bare external weight. Schema flag on exercises, UI prompt change, calculator update, profile bodyweight prompt if not set. Forward-only attribution. |
 | 24d — Balance simulation gate | PENDING | Dedicated test phase, no production code. Six user profiles × 12 simulated weeks against the Python simulator. Validates that the new formula produces sensible XP progression curves across the profile spectrum; calibration sign-off before declaring Phase 24 done. Tune constants if any pass criterion fails. |
@@ -693,6 +697,20 @@ Per-worker user pool (`{role}_w{N}@test.local`) eliminates cross-worker DB races
 - **Phase 23 root-caused incidents:** Cluster A (`flutter-web-popscope-unreachable`), Cluster B (`flutter-web-identifier-transition-stale`), Cluster C (`async-caller-broke-snackbar`). All landed in PR #212.
 - **PR #214 SnackBar fix-wave:** Three undo SnackBars persisted indefinitely on Android — Flutter `persist = persist ?? action != null` footgun (cluster `persist-eats-duration`). Fixed `persist: false` + custom `SnackBarCountdown` widget with `TweenAnimationBuilder` drain bar (3 dp, `Curves.linear`) + bounding-box hit-test tap-out dismiss + factory-shape entry via `SnackBarTapOutDismissScope.showCountdownSnackBar`. New `lib/shared/widgets/snackbar_tap_out_dismiss_scope.dart`. Durations dropped: add-exercise 4 s → 3.5 s, routine-remove 5 s → 3 s, set-delete 10 s → 5 s — countdown bar makes definite intent legible. Four named clusters captured: `persist-eats-duration`, `action-not-snackbaraction`, `align-widthfactor-zerofill`, `pump-duration-masks-forward`.
 - **Test corpus growth:** 2595 → 2622 unit/widget tests. Phase 23 review cycle: 5 in-cycle revisions (REV-1..REV-5). PR #214 review: 2 reviewer-cycle FIXes + 5 follow-on bug-cycle fixes (layout, animation drain, action-dismiss, stale E2E duration).
+
+### Phase 24a: XP Balancing — Difficulty Multiplier Infrastructure (PR #222)
+
+> Permanent framework reference: `docs/xp-difficulty-framework.md`. Tier table, composite formula, and source citations live there; future tuning is a new phase.
+
+Wires `exercises.difficulty_mult` (numeric 0.85–1.25) through every XP write site so total set XP reflects real-world exercise difficulty within a defensible cap. Ships the schema column with curated values for all 150 default exercises, the SQL RPC chain extension (`base × intensity × strength × novelty × cap × difficulty_mult × attribution_share`), Dart formula extension, Python parity sim recreation, and a CI gate. Forward-only — `xp_events.payload` snapshots `difficulty_mult` at write time; past events are not replayed.
+
+- **Schema (00053):** `ALTER TABLE exercises ADD COLUMN difficulty_mult numeric(4,2) NOT NULL DEFAULT 1.0` + per-slug UPDATE for 150 defaults with inline `-- T<N> + <sec> sec → <value>` audit comments + `CHECK BETWEEN 0.85 AND 1.25` + DO-block sanity assert (any `is_default=true` row at literal 1.0 trips it; the proof that 1.0 is unreachable from `tier_mult ∈ {0.85,0.95,1.05,1.15,1.25} + bump ∈ {0,0.02,0.04,0.06}` lives in the migration comment). Phase B used `jsonb_object_keys(xp_attribution) - 1` as the secondary-count source because `secondary_muscle_groups` is `[]` on every default — the more honest signal.
+- **RPCs (00054, CREATE OR REPLACE — does not mutate 00040/00050/00052):** `record_set_xp` / `record_session_xp_batch` / `_rpg_backfill_chunk` fetch `COALESCE(exercises.difficulty_mult, 1.0)` (defensive even though the column is `NOT NULL`), apply in chain, snapshot to `payload` JSONB. Hot path discipline preserved — `record_session_xp_batch` carries the multiplier in the batch CTE, not per-row sub-select. All prior fixes (`AND s.weight > 0` from 00050; `IF v_weight > 0` writer-site guards from 00051/00052) preserved verbatim.
+- **Dart:** `XpCalculator.computeSetXp` adds required `difficultyMult` named param applied as final multiplier; `SetXpComponents` gains field + `'difficulty_mult'` JSON key. `XpEvent.fromJson` is a custom factory that promotes `payload.difficulty_mult` to top-level (the model field is nullable for legacy events; without the promotion, the field would always deserialize as null because Freezed reads the row's top-level key but the value is nested in payload — caught by reviewer in cycle 1).
+- **CI gates:** new `scripts/check_exercise_difficulty_mult_coverage.sh` analogous to translation coverage — fails if any future migration adds `is_default=true` exercises without paired `difficulty_mult` assignment in the same PR. Self-tested via `--self-test` mode + 3 fixture files. Wired into `analyze`'s `needs` symmetric with translation gate.
+- **Parity:** `tasks/rpg-xp-simulation.py` recreated (was deleted in PR #215) with `DIFFICULTY_MULT_BY_SLUG` dict mirroring 00053. Fixture regenerated with 11 set_xp scenarios incl. 0.85 and 1.25 boundary cases. 4 new XpEvent unit tests pin promotion / legacy null / idempotency / empty-payload semantics.
+- **Verification:** 2622 → 2630 unit/widget tests (+8: 4 XpEvent + 4 difficulty_mult parameter semantics), 35/35 integration, Android debug APK clean, E2E smoke 119/119 (13.2 min — zero selector/text drift, as expected for backend phase), `npx supabase db reset` clean through 00054. Reviewer cycle: 1 Blocker (always-null XpEvent.difficultyMult) + 2 Warnings + 2 Nits — all fixed in same cycle, no deferrals. Hosted Supabase migrated cleanly via `npx supabase db push` post-merge.
+- **Out of scope (24b/c/d):** ~30–50 new default exercises (24b), bodyweight `effective_load = bodyweight + added` (24c), six-profile × 12-week calibration sign-off (24d).
 
 ---
 
