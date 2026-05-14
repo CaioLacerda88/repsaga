@@ -36,9 +36,13 @@ import 'rpg_integration_setup.dart';
 // strength_mult = 1.0 throughout after the first set.
 //
 // Exercises chosen to cover multi-attribution paths:
-//   barbell_bench_press : chest 0.70, shoulders 0.20, arms 0.10
-//   lat_pulldown        : back  0.75, arms   0.20, core  0.05
-//   barbell_squat       : legs  0.80, core   0.10, back  0.10
+//   barbell_bench_press : chest 0.70, shoulders 0.20, arms 0.10  (mult 1.09)
+//   lat_pulldown        : back  0.75, arms   0.20, core  0.05    (mult 0.99)
+//   barbell_squat       : legs  0.80, core   0.10, back  0.10    (mult 1.19)
+//
+// Phase 24a Phase F: each ExerciseDef carries the curated difficulty_mult
+// from migration 00053 so the Dart reference (computeDartReference) mirrors
+// what `_rpg_backfill_chunk` reads from `exercises.difficulty_mult` per set.
 
 /// Public fixture — shared with `rpg_backfill_resume_test.dart`.
 const kBackfillFixture = BackfillFixture(
@@ -48,18 +52,21 @@ const kBackfillFixture = BackfillFixture(
       weightKg: 80.0,
       reps: 8,
       attribution: {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.10},
+      difficultyMult: 1.09,
     ),
     ExerciseDef(
       slug: 'lat_pulldown',
       weightKg: 60.0,
       reps: 10,
       attribution: {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+      difficultyMult: 0.99,
     ),
     ExerciseDef(
       slug: 'barbell_squat',
       weightKg: 100.0,
       reps: 5,
       attribution: {'legs': 0.80, 'core': 0.10, 'back': 0.10},
+      difficultyMult: 1.19,
     ),
   ],
   weeksCount: 4,
@@ -397,6 +404,11 @@ Map<String, double> computeDartReference(BackfillFixture fixture) {
             peakLoad: effectivePeak,
             sessionVolumeForBodyPart: svBp,
             weeklyVolumeForBodyPart: wvBp,
+            // Phase 24a Phase F: mirror what `_rpg_backfill_chunk` does
+            // — read the per-exercise curated multiplier from the fixture
+            // (which holds the values from migration 00053). Default 1.0
+            // covers any future fixture exercise that omits the field.
+            difficultyMult: ex.difficultyMult,
           );
           final xpForBp = comps.setXp * share;
 
@@ -435,10 +447,17 @@ class ExerciseDef {
     required this.weightKg,
     required this.reps,
     required this.attribution,
+    this.difficultyMult = 1.0,
   });
 
   final String slug;
   final double weightKg;
   final int reps;
   final Map<String, double> attribution;
+
+  /// Phase 24a Phase F: curated per-exercise multiplier from migration
+  /// 00053 (`exercises.difficulty_mult`). Defaults to 1.0 to keep the
+  /// constructor non-breaking; real fixtures must pass the actual value
+  /// for the slug so the Dart reference matches `_rpg_backfill_chunk`.
+  final double difficultyMult;
 }

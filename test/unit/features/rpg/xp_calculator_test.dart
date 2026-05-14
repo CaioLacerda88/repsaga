@@ -230,6 +230,12 @@ void main() {
               (inputs['session_volume_for_body_part'] as num).toDouble(),
           weeklyVolumeForBodyPart:
               (inputs['weekly_volume_for_body_part'] as num).toDouble(),
+          // Phase 24a Phase F: read the per-scenario difficulty_mult from the
+          // regenerated fixture. Each scenario in `set_xp_examples` carries
+          // its own multiplier (per-exercise curated values from migration
+          // 00053, plus explicit floor/ceiling and user-created defaults).
+          // The expected `set_xp` already accounts for it.
+          difficultyMult: (inputs['difficulty_mult'] as num).toDouble(),
         );
 
         final name = c['name'] as String;
@@ -284,6 +290,7 @@ void main() {
           peakLoad: 100, // stale peak — RPC would advance to 110 first
           sessionVolumeForBodyPart: 0,
           weeklyVolumeForBodyPart: 0,
+          difficultyMult: 1.0,
         );
         // 110/100 = 1.1, clamped to 1.0
         expect(r.strengthMult, 1.0);
@@ -299,6 +306,7 @@ void main() {
           peakLoad: 100,
           sessionVolumeForBodyPart: 0,
           weeklyVolumeForBodyPart: 0,
+          difficultyMult: 1.0,
         );
         final json = r.toJson();
         expect(json.keys.toSet(), {
@@ -308,16 +316,18 @@ void main() {
           'strength_mult',
           'novelty_mult',
           'cap_mult',
+          'difficulty_mult',
           'set_xp',
         });
         expect(json['set_xp'], r.setXp);
+        expect(json['difficulty_mult'], r.difficultyMult);
       },
     );
   });
 
   group('Boundary + edge cases', () {
     test(
-      'zero weight + zero reps → set_xp = 1.0^0.65 × 1 × 1 × 1 × 1 = 1.0',
+      'zero weight + zero reps → set_xp = 1.0^0.65 × 1 × 1 × 1 × 1 × 1 = 1.0',
       () {
         final r = XpCalculator.computeSetXp(
           weightKg: 0,
@@ -325,10 +335,11 @@ void main() {
           peakLoad: 0,
           sessionVolumeForBodyPart: 0,
           weeklyVolumeForBodyPart: 0,
+          difficultyMult: 1.0,
         );
         expect(r.volumeLoad, 1.0);
         expect(r.baseXp, 1.0);
-        expect(r.setXp, 1.0); // 1 × 1 × 1 × 1 × 1
+        expect(r.setXp, 1.0); // 1 × 1 × 1 × 1 × 1 × 1
       },
     );
 
@@ -339,6 +350,7 @@ void main() {
         peakLoad: 9999,
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.0,
       );
       expect(r.setXp.isFinite, isTrue);
       expect(r.setXp, greaterThan(0));
@@ -351,6 +363,7 @@ void main() {
         peakLoad: 100,
         sessionVolumeForBodyPart: 30, // deep into novelty decay
         weeklyVolumeForBodyPart: 30, // past cap
+        difficultyMult: 1.0,
       );
       // novelty = exp(-2) ≈ 0.1353, cap = 0.5 → set_xp << base
       final base = XpCalculator.baseXp(
@@ -366,12 +379,142 @@ void main() {
         peakLoad: 100,
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.0,
       );
       expect(r.intensityMult, 1.0);
       expect(r.strengthMult, 1.0);
       expect(r.noveltyMult, 1.0);
       expect(r.capMult, 1.0);
+      expect(r.difficultyMult, 1.0);
       expect(r.setXp, closeTo(r.baseXp, _eps));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 24a — difficulty_mult parameter semantics
+  //
+  // These tests are NOT fixture-driven: they pin the multiplier contract
+  // independent of the fixture. They are the canary that catches a Phase D
+  // (SQL RPC) or Phase E (Python sim + fixture regen) drift later.
+  // ---------------------------------------------------------------------------
+  group('difficultyMult — parameter semantics', () {
+    /// Same inputs at all three difficulty values must scale linearly:
+    /// set_xp(d) / set_xp(1.0) == d. This pins difficulty_mult as the final,
+    /// purely-multiplicative factor in the chain (no clamp inside
+    /// `computeSetXp`, no interaction with other multipliers).
+    test('at ceiling (1.25) produces 1.25× the XP of the same set at 1.0', () {
+      final baseline = XpCalculator.computeSetXp(
+        weightKg: 100,
+        reps: 8,
+        peakLoad: 100,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.0,
+      );
+      final ceiling = XpCalculator.computeSetXp(
+        weightKg: 100,
+        reps: 8,
+        peakLoad: 100,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.25,
+      );
+      expect(ceiling.difficultyMult, 1.25);
+      expect(
+        ceiling.setXp,
+        closeTo(baseline.setXp * 1.25, _eps),
+        reason:
+            'difficulty_mult must apply as a final linear scalar; '
+            'baseline=${baseline.setXp}, ceiling=${ceiling.setXp}, '
+            'expected ratio 1.25, got ${ceiling.setXp / baseline.setXp}',
+      );
+      // Other components unchanged — the multiplier touches setXp only.
+      expect(ceiling.volumeLoad, baseline.volumeLoad);
+      expect(ceiling.baseXp, baseline.baseXp);
+      expect(ceiling.intensityMult, baseline.intensityMult);
+      expect(ceiling.strengthMult, baseline.strengthMult);
+      expect(ceiling.noveltyMult, baseline.noveltyMult);
+      expect(ceiling.capMult, baseline.capMult);
+    });
+
+    test('at floor (0.85) produces 0.85× the XP of the same set at 1.0', () {
+      final baseline = XpCalculator.computeSetXp(
+        weightKg: 100,
+        reps: 8,
+        peakLoad: 100,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: 1.0,
+      );
+      final floor = XpCalculator.computeSetXp(
+        weightKg: 100,
+        reps: 8,
+        peakLoad: 100,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: 0.85,
+      );
+      expect(floor.difficultyMult, 0.85);
+      expect(
+        floor.setXp,
+        closeTo(baseline.setXp * 0.85, _eps),
+        reason:
+            'baseline=${baseline.setXp}, floor=${floor.setXp}, '
+            'expected ratio 0.85, got ${floor.setXp / baseline.setXp}',
+      );
+    });
+
+    /// Default-1.0 invariant: a user-created exercise (or any unmapped
+    /// default before Phase B's curated UPDATE) reads the column default
+    /// 1.0 and must produce the **same** set_xp the formula would
+    /// produce without difficulty_mult ever existing. This is the
+    /// "no behavior change for unmapped exercises" pin.
+    test(
+      'difficultyMult: 1.0 produces XP byte-identical to the pre-24a chain',
+      () {
+        // Hand-compute the pre-24a chain explicitly so this test does NOT
+        // delegate to computeSetXp itself (which would tautologically pass
+        // even if difficulty_mult silently broke).
+        const weight = 80.0;
+        const reps = 5;
+        const peak = 100.0;
+        const sessionVol = 2.5;
+        const weeklyVol = 8.0;
+
+        final vl = XpCalculator.volumeLoad(weightKg: weight, reps: reps);
+        final base = XpCalculator.baseXp(vl);
+        final intensity = XpCalculator.intensityForReps(reps);
+        final strength = XpCalculator.strengthMult(
+          weightKg: weight,
+          peakLoad: peak,
+        );
+        final novelty = XpCalculator.noveltyMult(sessionVol);
+        final cap = XpCalculator.capMult(weeklyVol);
+        final pre24aSetXp = base * intensity * strength * novelty * cap;
+
+        final r = XpCalculator.computeSetXp(
+          weightKg: weight,
+          reps: reps,
+          peakLoad: peak,
+          sessionVolumeForBodyPart: sessionVol,
+          weeklyVolumeForBodyPart: weeklyVol,
+          difficultyMult: 1.0,
+        );
+
+        expect(r.difficultyMult, 1.0);
+        expect(
+          r.setXp,
+          closeTo(pre24aSetXp, _eps),
+          reason:
+              'difficulty_mult: 1.0 must be a no-op; '
+              'pre-24a chain = $pre24aSetXp, computeSetXp = ${r.setXp}',
+        );
+      },
+    );
+
+    test('floor and ceiling constants match the migration CHECK range', () {
+      expect(XpCalculator.difficultyMultFloor, 0.85);
+      expect(XpCalculator.difficultyMultCeiling, 1.25);
     });
   });
 }

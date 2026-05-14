@@ -30,6 +30,12 @@ abstract class XpEvent with _$XpEvent {
     required Map<String, dynamic> payload, // breakdown components
     required Map<String, dynamic> attribution, // {chest: xp_to_chest, ...}
     required double totalXp,
+    // Per-exercise difficulty composite snapshotted at write time
+    // (Phase 24a). Nullable because legacy events written before the
+    // 24a migration don't carry this field; the SQL RPC populates it
+    // for every set written under the new function. Consumers that
+    // need the value should fall back to 1.0 when null.
+    double? difficultyMult,
     required DateTime occurredAt,
     required DateTime createdAt,
   }) = _XpEvent;

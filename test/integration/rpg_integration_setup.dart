@@ -175,6 +175,30 @@ Future<String> exerciseIdForSlug(
   return row['id'] as String;
 }
 
+/// Looks up `exercises.difficulty_mult` for [slug]. Mirrors the per-set
+/// `COALESCE(difficulty_mult, 1.0)` discipline used by `record_set_xp` /
+/// `record_session_xp_batch` / `_rpg_backfill_chunk` (see migration 00054)
+/// so the Dart-side parity helpers can pass the same value as the SQL side.
+///
+/// Phase 24a Phase F: integration tests previously hardcoded `1.0` for every
+/// computeSetXp call site. Once Phase D shipped, the SQL chain reads real
+/// curated values from `exercises.difficulty_mult`; the Dart side must mirror.
+Future<double> difficultyMultForSlug(
+  supabase.SupabaseClient adminClient,
+  String slug,
+) async {
+  final row = await adminClient
+      .from('exercises')
+      .select('difficulty_mult')
+      .eq('slug', slug)
+      .single();
+  // Defensive: column is NOT NULL DEFAULT 1.0 (migration 00053), but follow
+  // the same COALESCE discipline as the SQL RPCs.
+  final raw = row['difficulty_mult'];
+  if (raw == null) return 1.0;
+  return (raw as num).toDouble();
+}
+
 /// Inserts a completed workout with [sets] completed working sets of
 /// [exerciseSlug], each at [weightKg] × [reps], for [user].
 ///
