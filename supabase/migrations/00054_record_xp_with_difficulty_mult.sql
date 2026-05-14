@@ -98,7 +98,7 @@
 -- Mirrors lib/features/rpg/domain/xp_calculator.dart::computeSetXp.
 -- The Dart formula chain, the SQL chain here, and tasks/rpg-xp-simulation.py
 -- must change in lockstep — parity tests in test/integration/rpg_*_test.dart
--- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #TBD) added difficulty_mult.
+-- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #222) added difficulty_mult.
 -- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.record_set_xp(p_set_id uuid)
@@ -378,7 +378,7 @@ GRANT  EXECUTE ON FUNCTION public.record_set_xp(uuid) TO authenticated;
 -- Mirrors lib/features/rpg/domain/xp_calculator.dart::computeSetXp.
 -- The Dart formula chain, the SQL chain here, and tasks/rpg-xp-simulation.py
 -- must change in lockstep — parity tests in test/integration/rpg_*_test.dart
--- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #TBD) added difficulty_mult.
+-- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #222) added difficulty_mult.
 -- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.record_session_xp_batch(p_workout_id uuid)
@@ -721,7 +721,7 @@ GRANT  EXECUTE ON FUNCTION public.record_session_xp_batch(uuid) TO authenticated
 -- Mirrors lib/features/rpg/domain/xp_calculator.dart::computeSetXp.
 -- The Dart formula chain, the SQL chain here, and tasks/rpg-xp-simulation.py
 -- must change in lockstep — parity tests in test/integration/rpg_*_test.dart
--- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #TBD) added difficulty_mult.
+-- enforce ≤ 1e-4 absolute drift. Phase 24a (PR #222) added difficulty_mult.
 --
 -- Note: the wrapper `backfill_rpg_v1(uuid, int)` is intentionally NOT replaced
 -- in this migration. It manages the cursor, advisory lock, and checkpoint —

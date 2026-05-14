@@ -139,7 +139,7 @@ UPDATE public.exercises SET difficulty_mult = 0.87 WHERE slug = 'donkey_kick';  
 UPDATE public.exercises SET difficulty_mult = 1.07 WHERE slug = 'bodyweight_squat';             -- T3 + 1 sec → 1.07 (§3 named)
 UPDATE public.exercises SET difficulty_mult = 0.87 WHERE slug = 'wall_sit';                     -- T5 + 1 sec → 0.87 (isometric leg hold, analog: plank for legs)
 -- Plyometrics — §3 lists box jump at T1 ballistic.
-UPDATE public.exercises SET difficulty_mult = 1.25 WHERE slug = 'box_jump';                     -- T1 + 1 sec → 1.27, clamped → 1.25 (§3 named)
+UPDATE public.exercises SET difficulty_mult = 1.25 WHERE slug = 'box_jump';                     -- T1 → 1.27+ (clamped to 1.25 regardless of secondary count) (§3 named)
 -- Machine compound — T4 by §3 (leg press), T3 by §3 (hack squat loaded plate-style).
 UPDATE public.exercises SET difficulty_mult = 0.97 WHERE slug = 'leg_press';                    -- T4 + 1 sec → 0.97 (§3 named)
 UPDATE public.exercises SET difficulty_mult = 0.97 WHERE slug = 'single_leg_leg_press';         -- T4 + 1 sec → 0.97 (analog: leg press)
@@ -283,6 +283,17 @@ ALTER TABLE public.exercises
 --    literal default value. 1.0 is intentionally OUTSIDE every per-slug
 --    curated value (no curated row uses 1.0 — they all bake in a tier+sec
 --    bump that produces a non-1.0 value), so this signal is reliable.
+--
+--    Why 1.0 cannot be produced by any valid (tier_mult + secondary_bump)
+--    combination: the framework's tier_mult enum is {0.85, 0.95, 1.05, 1.15,
+--    1.25} and the secondary bump is 0.02 per secondary muscle (capped at
+--    0.06 = 3 secondaries). The cartesian sum has 5 × 4 = 20 possible
+--    values: 0.85, 0.87, 0.89, 0.91, 0.95, 0.97, 0.99, 1.01, 1.05, 1.07,
+--    1.09, 1.11, 1.15, 1.17, 1.19, 1.21, 1.25, 1.27 (1.27 clamps to 1.25),
+--    plus T2 + various bumps. No sum lands exactly on 1.00 — so any row
+--    still at the literal column default 1.0 is provably an unmapped miss
+--    (typo / new slug forgotten), not a coincidental match against a real
+--    curated value. Hence this DO-block is a reliable miss-sentinel.
 -- ---------------------------------------------------------------------------
 
 DO $$

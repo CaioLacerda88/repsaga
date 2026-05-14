@@ -35,11 +35,47 @@ abstract class XpEvent with _$XpEvent {
     // 24a migration don't carry this field; the SQL RPC populates it
     // for every set written under the new function. Consumers that
     // need the value should fall back to 1.0 when null.
+    //
+    // Storage shape: this field is NOT a top-level column on
+    // `xp_events` — it's snapshotted INSIDE `payload` as
+    // `payload.difficulty_mult` by `record_set_xp` /
+    // `record_session_xp_batch` / `_rpg_backfill_chunk` (migration
+    // 00054). The `fromJson` factory below promotes that nested key to
+    // the top level so the generated deserializer reads it where it
+    // expects. See the factory's docstring for promotion rules.
     double? difficultyMult,
     required DateTime occurredAt,
     required DateTime createdAt,
   }) = _XpEvent;
 
-  factory XpEvent.fromJson(Map<String, dynamic> json) =>
-      _$XpEventFromJson(json);
+  /// Deserialize from a raw `xp_events` row.
+  ///
+  /// Promotes `payload.difficulty_mult` to the top-level
+  /// `difficulty_mult` key before delegating to the generated
+  /// deserializer, because the SQL RPCs (migration 00054) snapshot
+  /// the multiplier INSIDE the `payload` JSONB sub-object — not as a
+  /// top-level column. Without this promotion, the generated
+  /// `_$XpEventFromJson` would read `json['difficulty_mult']` and
+  /// always get `null` for every event (defeating the snapshot's
+  /// purpose).
+  ///
+  /// Promotion rules:
+  /// 1. If `difficulty_mult` is already at the top level (defensive
+  ///    — shouldn't happen against a real DB row), use it as-is.
+  /// 2. Else if `payload.difficulty_mult` exists, promote it to the
+  ///    top level for the generated deserializer.
+  /// 3. Else (legacy events written before Phase 24a, or payloads
+  ///    without the key), leave it null — `XpEvent.difficultyMult`
+  ///    will be null and consumers should fall back to 1.0.
+  factory XpEvent.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('difficulty_mult')) {
+      return _$XpEventFromJson(json);
+    }
+    final payload = json['payload'] as Map<String, dynamic>?;
+    final promoted = <String, dynamic>{
+      ...json,
+      'difficulty_mult': payload?['difficulty_mult'],
+    };
+    return _$XpEventFromJson(promoted);
+  }
 }

@@ -172,8 +172,17 @@ class XpCalculator {
   /// callers can persist the breakdown for analytics / debugging while
   /// staying pure (no IO).
   ///
-  /// The integration test asserts that the SQL `record_set_xp` RPC produces
-  /// a row whose breakdown matches this struct within 0.0001 absolute.
+  /// The integration tests assert per-body-part XP totals match within
+  /// 1e-4 absolute (i.e. `body_part_progress.total_xp` and
+  /// `xp_events.attribution[bp]` agree with the Dart computation per
+  /// slug per body part). The payload JSON shape (`toJson`) carries
+  /// `novelty_mult` and `cap_mult` for completeness, but the SQL RPCs
+  /// (migration 00054) intentionally OMIT those two keys from the
+  /// top-level `payload` JSONB — `novelty_mult` and `cap_mult` are
+  /// per-body-part and live in `xp_events.attribution` rather than
+  /// being denormalized to the set-level payload. This is a documented
+  /// asymmetry between Dart's in-memory breakdown shape and the SQL
+  /// storage shape.
   ///
   /// All fields are in the same order as the formula multiplication chain.
   static SetXpComponents computeSetXp({

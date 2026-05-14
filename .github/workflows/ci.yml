@@ -58,7 +58,12 @@ jobs:
 
   analyze:
     runs-on: ubuntu-latest
-    needs: exercise-translation-coverage-check
+    # Both content-coverage gates must pass before we spend cycles on
+    # analyze/test/build. PR #222 reviewer Warning: keep symmetry with the
+    # `ci` aggregator's `needs` list so a failing difficulty-mult gate
+    # short-circuits the pipeline at the same point as a failing
+    # translation gate.
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check]
     steps:
       - uses: actions/checkout@v6
         with:

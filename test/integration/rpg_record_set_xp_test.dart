@@ -38,6 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/domain/xp_calculator.dart';
 import 'package:repsaga/features/rpg/domain/xp_distribution.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/xp_event.dart';
 
 import 'rpg_integration_setup.dart';
 
@@ -148,14 +149,19 @@ void main() {
         }
 
         // xp_events: exactly one row + payload carries `difficulty_mult` key.
+        // We select the FULL row shape (not just `id, payload`) so we can
+        // also exercise XpEvent.fromJson's payload-promotion (PR #222
+        // reviewer Blocker): difficulty_mult is snapshotted INSIDE
+        // payload, not as a top-level column, so the model's custom
+        // factory must promote it for `event.difficultyMult` to be
+        // non-null. Without the promotion this assertion fails.
         final events = await userClient
             .from('xp_events')
-            .select('id, payload')
+            .select()
             .eq('set_id', seed.setIds.first);
         expect(events, hasLength(1));
-        final payload =
-            ((events as List).first as Map<String, dynamic>)['payload']
-                as Map<String, dynamic>;
+        final eventRow = (events as List).first as Map<String, dynamic>;
+        final payload = eventRow['payload'] as Map<String, dynamic>;
         expect(
           payload.containsKey('difficulty_mult'),
           isTrue,
@@ -169,6 +175,32 @@ void main() {
           reason:
               'payload.difficulty_mult must equal exercises.difficulty_mult '
               'for the seeded slug ($slug, expected $difficulty)',
+        );
+
+        // PR #222 Blocker regression: XpEvent.fromJson must promote
+        // payload.difficulty_mult to the top-level `difficultyMult`
+        // field. The generated `_$XpEventFromJson` reads
+        // `json['difficulty_mult']` (top-level), but the SQL RPC writes
+        // it INSIDE payload — without the custom factory's promotion,
+        // event.difficultyMult would always be null for every event
+        // ever written.
+        final event = XpEvent.fromJson(eventRow);
+        expect(
+          event.difficultyMult,
+          isNotNull,
+          reason:
+              'XpEvent.difficultyMult must be non-null after fromJson '
+              'round-trip (payload-promotion contract). Raw payload '
+              'value: ${payload['difficulty_mult']}',
+        );
+        expect(
+          event.difficultyMult,
+          closeTo(difficulty, 1e-9),
+          reason:
+              'event.difficultyMult ($event.difficultyMult) must equal '
+              'exercises.difficulty_mult ($difficulty) — proves the '
+              'fromJson factory correctly promoted payload.difficulty_mult '
+              'to the model field, not just left it as a payload entry.',
         );
       },
     );
