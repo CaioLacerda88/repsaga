@@ -17,9 +17,9 @@ trial-to-paywall subscription via Google Play Billing.
 
 **Current state (2026-05-13).** No active phase. Phase 23 (active-workout
 chrome + SnackBar fix-wave) shipped in PR #212 + #214; the 23-P-4 E2E
-dismissal-time regression pins shipped in PR #217. Active Backlog: 4
-architectural follow-ups + 2 manual on-device walkthroughs. Phase 16
-subscription parked by choice (RPG retention moat first).
+dismissal-time regression pins shipped in PR #217. Active Backlog: 3
+architectural follow-ups. Phase 16 subscription parked by choice (RPG
+retention moat first).
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -243,21 +243,6 @@ These items can't be driven by Claude on the codebase — they need human
 eyes on a device, manual dashboard configuration, or external
 coordination.
 
-- **20-P-4 — Phase 20 on-device walkthrough.** Real Brazilian-mid-market
-  360 dp hardware sweep: pixel-perfect spacing, haptic timing, celebration
-  animation curves, real-thumb misfire under sweat. The autonomous code-state
-  half landed in PR #161. The remaining visual half needs human eyes on a
-  device — not catchable from code review or Playwright headless.
-- **23-P-3 — Phase 23 on-device walkthrough** (Samsung S25 Ultra, Android 16).
-  Validate the rest-overlay chrome cleanup (FAB + FinishBottomBar hidden,
-  AppBar merged into abyss scrim), the Android-native back-press priority
-  chain (rest → dismiss; loading → discard; else → discard), the
-  auto-seed set 1 behavior, AND the PR #214 SnackBar surfaces (countdown
-  drain bar visible, tap-out dismiss working without swallowing legitimate
-  stepper taps) on a real device under real thumbs. Widget + E2E coverage
-  is comprehensive but Flutter Web's PopScope hole means the Android-native
-  back-press path is widget-tested only, not E2E-reachable. See cluster
-  `flutter-web-popscope-unreachable`.
 - **Supabase project display name** — Dashboard → Project Settings →
   General → rename to "RepSaga" (cosmetic; not blocking anything).
 - **Auth redirect URLs allowlist** — Dashboard → Authentication → URL
