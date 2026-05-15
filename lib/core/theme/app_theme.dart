@@ -98,13 +98,13 @@ class AppColors {
   // is "vitality HP-drain", not "success" or "error". Used by the new
   // [VitalityStateStyles.vitalityRampColorFor] helper.
 
-  /// Vitality HP-drain — high band (66–100%). Alias of [success].
+  /// High band (66–100%). Alias of [success].
   static const vitalityHigh = success;
 
-  /// Vitality HP-drain — mid band (34–65%). Alias of [warning].
+  /// Mid band (34–65%). Alias of [warning].
   static const vitalityMid = warning;
 
-  /// Vitality HP-drain — low band (0–33%). Alias of [error].
+  /// Low band (0–33%). Alias of [error].
   static const vitalityLow = error;
 
   /// Hairline for dividers and card borders. A low-alpha violet so borders
