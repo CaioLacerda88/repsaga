@@ -54,6 +54,14 @@ fi
 ALLOWED_PATHS=(
   "lib/core/theme/app_theme.dart"
   "lib/shared/widgets/reward_accent.dart"
+  # Phase 26d will introduce these widgets. They legitimately render
+  # heroGold (the equipped title card uses a gold gradient as a flex
+  # surface; cross-build cards in Titles "Próximos" use a gold accent
+  # because cross-builds are rare achievements). Both are explicit
+  # exceptions to the reward-scarcity rule. See docs/PROJECT.md §3
+  # Phase 26 → "heroGold scarcity-rule exceptions".
+  "lib/features/rpg/ui/widgets/equipped_title_card.dart"
+  "lib/features/rpg/ui/widgets/cross_build_card.dart"
 )
 
 # heroGold symbol, the RewardAccent.color static alias, and the three
