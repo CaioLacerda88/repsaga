@@ -61,6 +61,7 @@ class AppColors {
   /// Error / destructive action.
   static const error = Color(0xFFFF6B6B);
 
+  // ─── Body-part identity (Phase 26a) ──────────────────────────────────
   /// Pink — chest body-part identity (Phase 26a). Anatomical fit (pec/heart)
   /// and distinct from every other body-part hue + the brand violet stack.
   /// Frees [hotViolet] to be the pure brand-primary (gradients, accents,
@@ -76,7 +77,7 @@ class AppColors {
   ///
   /// **Infrastructure-only for v1.** Token shipped so v1.1+ can introduce
   /// cardio as an active stat without re-touching the palette. NOT exposed
-  /// on any UI surface in Phase 26 (rank rail, Saga, Stats, Engajamento
+  /// on any UI surface in Phase 26 (rank rail, Saga, Stats, `Engajamento`
   /// all hide cardio).
   static const bodyPartCardio = Color(0xFFFB923C);
 
