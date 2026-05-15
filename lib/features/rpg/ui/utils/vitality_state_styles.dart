@@ -134,8 +134,8 @@ class VitalityStateStyles {
   /// reward token reserved for the `radiant` state and §13.2 rank-up
   /// celebrations.
   static const Map<BodyPart, Color> bodyPartColor = {
-    BodyPart.chest: AppColors.bodyPartChest, // was hotViolet (Phase 26a)
-    BodyPart.back: AppColors.bodyPartBack, // was primaryViolet (Phase 26a)
+    BodyPart.chest: AppColors.bodyPartChest,
+    BodyPart.back: AppColors.bodyPartBack,
     BodyPart.legs: AppColors.success,
     BodyPart.shoulders: AppColors.warning,
     BodyPart.arms: AppColors.error,
