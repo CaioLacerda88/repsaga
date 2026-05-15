@@ -37,12 +37,15 @@ import 'rpg_integration_setup.dart';
 //
 // Exercises chosen to cover multi-attribution paths:
 //   barbell_bench_press : chest 0.70, shoulders 0.20, arms 0.10  (mult 1.09)
-//   lat_pulldown        : back  0.75, arms   0.20, core  0.05    (mult 0.99)
+//   lat_pulldown        : back  0.75, arms   0.20, core  0.05    (mult 0.94)
 //   barbell_squat       : legs  0.80, core   0.10, back  0.10    (mult 1.19)
 //
 // Phase 24a Phase F: each ExerciseDef carries the curated difficulty_mult
 // from migration 00053 so the Dart reference (computeDartReference) mirrors
 // what `_rpg_backfill_chunk` reads from `exercises.difficulty_mult` per set.
+// Phase 24d propagation (migration 00059): `lat_pulldown` shifted from 0.99
+// to 0.94 (T4 + 2 sec, minus 0.05). The other two are NOT in the curated
+// T4 set, so their values stay at the 24a baseline.
 
 /// Public fixture — shared with `rpg_backfill_resume_test.dart`.
 const kBackfillFixture = BackfillFixture(
@@ -59,7 +62,7 @@ const kBackfillFixture = BackfillFixture(
       weightKg: 60.0,
       reps: 10,
       attribution: {'back': 0.75, 'arms': 0.20, 'core': 0.05},
-      difficultyMult: 0.99,
+      difficultyMult: 0.94,
     ),
     ExerciseDef(
       slug: 'barbell_squat',

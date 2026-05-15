@@ -34,10 +34,10 @@ void main() {
   });
 
   group('Constants parity with Python sim', () {
-    test('volume_exponent == 0.65', () {
+    test('volume_exponent == 0.60 (Phase 24d propagation)', () {
       final meta = fixtures['meta'] as Map<String, dynamic>;
       expect(XpCalculator.volumeExponent, meta['volume_exponent']);
-      expect(XpCalculator.volumeExponent, 0.65);
+      expect(XpCalculator.volumeExponent, 0.60);
     });
 
     test('novelty_denominator == 15', () {
@@ -45,10 +45,13 @@ void main() {
       expect(XpCalculator.noveltyDenominator, meta['novelty_denominator']);
     });
 
-    test('weekly_cap_sets == 20 with 0.5 over-cap multiplier', () {
+    test('weekly_cap_sets == 15 with 0.3 over-cap multiplier '
+        '(Phase 24d propagation)', () {
       final meta = fixtures['meta'] as Map<String, dynamic>;
       expect(XpCalculator.weeklyCapSets, meta['weekly_cap_sets']);
       expect(XpCalculator.overCapMultiplier, meta['over_cap_multiplier']);
+      expect(XpCalculator.weeklyCapSets, 15.0);
+      expect(XpCalculator.overCapMultiplier, 0.3);
     });
 
     test('strength_mult_floor == 0.40', () {
@@ -207,10 +210,10 @@ void main() {
       }
     });
 
-    test('exactly 20 sets triggers the cap (>= boundary)', () {
-      expect(XpCalculator.capMult(20.0), 0.5);
+    test('exactly 15 sets triggers the cap (>= boundary, Phase 24d)', () {
+      expect(XpCalculator.capMult(15.0), 0.3);
       // Just below the boundary stays at 1.0
-      expect(XpCalculator.capMult(19.999), 1.0);
+      expect(XpCalculator.capMult(14.999), 1.0);
     });
   });
 
@@ -365,7 +368,7 @@ void main() {
         weeklyVolumeForBodyPart: 30, // past cap
         difficultyMult: 1.0,
       );
-      // novelty = exp(-2) ≈ 0.1353, cap = 0.5 → set_xp << base
+      // novelty = exp(-2) ≈ 0.1353, cap = 0.3 (Phase 24d) → set_xp << base
       final base = XpCalculator.baseXp(
         XpCalculator.volumeLoad(weightKg: 100, reps: 5),
       );

@@ -47,7 +47,8 @@ void main() {
   // Phase 24a Phase F: each ExerciseDef carries the curated difficulty_mult
   // from migration 00053 so the Dart reference (computeDartReference shared
   // with rpg_backfill_test.dart) mirrors what `_rpg_backfill_chunk` reads
-  // from `exercises.difficulty_mult` per set.
+  // from `exercises.difficulty_mult` per set. Phase 24d propagation
+  // (migration 00059): `lat_pulldown` shifted from 0.99 to 0.94 (T4 -0.05).
   const kSmallFixture = BackfillFixture(
     exercises: [
       ExerciseDef(
@@ -62,7 +63,7 @@ void main() {
         weightKg: 60.0,
         reps: 10,
         attribution: {'back': 0.75, 'arms': 0.20, 'core': 0.05},
-        difficultyMult: 0.99,
+        difficultyMult: 0.94,
       ),
       ExerciseDef(
         slug: 'barbell_squat',

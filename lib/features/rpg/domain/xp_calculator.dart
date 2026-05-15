@@ -8,17 +8,27 @@ import 'dart:math' as math;
 /// `record_set_xp` RPC in the same PR.** All three paths are checked for
 /// parity by the integration tests.
 ///
-/// Formula (spec §4 + Phase 24a difficulty_mult — see
-/// `docs/xp-difficulty-framework.md` §6):
+/// Formula (spec §4 + Phase 24a difficulty_mult + Phase 24d calibration
+/// sign-off — see `docs/xp-difficulty-framework.md` §6 and
+/// `docs/xp-balance-baseline.md`):
 ///
 /// ```
-/// set_xp = volume_load^0.65
+/// set_xp = volume_load^0.60
 ///        × intensity_mult(reps)
 ///        × strength_mult(weight, peak)
 ///        × novelty_mult(session_volume)
 ///        × cap_mult(weekly_volume)
 ///        × difficulty_mult(exercise)
 /// ```
+///
+/// Phase 24d calibration tuned three constants from their pre-launch values
+/// after the 6-archetype × 12-week balance simulation: `volumeExponent`
+/// 0.65 → 0.60 (more sub-linear), `weeklyCapSets` 20 → 15 (tighter ceiling),
+/// `overCapMultiplier` 0.5 → 0.3 (stronger over-cap penalty). See
+/// `docs/xp-balance-baseline.md` for the full pass-criteria analysis. The
+/// migration `00059_phase24d_calibration_propagation.sql` carries the
+/// matching SQL constants and the per-slug T4 `-0.05` `difficulty_mult`
+/// adjustments to 28 curated slugs.
 ///
 /// `difficulty_mult` is per-exercise data sourced from
 /// `exercises.difficulty_mult` (numeric, range [0.85, 1.25] enforced by a
@@ -34,9 +44,13 @@ class XpCalculator {
 
   // ---- tunable constants ---------------------------------------------------
 
-  /// Sub-linear volume exponent. 10× volume produces ~4.5× XP, not 10×.
+  /// Sub-linear volume exponent. 10× volume produces ~4.0× XP, not 10×.
   /// Empirically chosen so a junk-volume session can't outrun a heavy session.
-  static const double volumeExponent = 0.65;
+  /// Phase 24d calibration: tightened from 0.65 to 0.60 to compress the
+  /// upper-tail volume_load credit (see `docs/xp-balance-baseline.md`
+  /// iter-3 sign-off; resolves the machine_only > intermediate inversion
+  /// surfaced by criterion C4 in the launch-baseline simulation).
+  static const double volumeExponent = 0.60;
 
   /// τ for novelty diminishing returns within a session, in attributed sets.
   /// After ~15 sets attributed to a body part, the next set earns e^-1 ≈ 37 %
@@ -44,12 +58,17 @@ class XpCalculator {
   static const double noveltyDenominator = 15.0;
 
   /// Effective sets per body part in a 7-day rolling window before the cap
-  /// halves further XP for that body part.
-  static const double weeklyCapSets = 20.0;
+  /// applies an over-cap multiplier to further XP for that body part.
+  /// Phase 24d calibration: tightened from 20.0 to 15.0 (asymmetric
+  /// effect: bites high-frequency / high-volume profiles like the
+  /// hypertrophy bodybuilder; powerlifter never hits cap, intermediate
+  /// barely does).
+  static const double weeklyCapSets = 15.0;
 
   /// Multiplier applied to set_xp once `weekly_volume_for_body_part`
-  /// crosses [weeklyCapSets].
-  static const double overCapMultiplier = 0.5;
+  /// crosses [weeklyCapSets]. Phase 24d calibration: lowered from 0.5
+  /// to 0.3 to strengthen the diminishing-returns signal past the cap.
+  static const double overCapMultiplier = 0.3;
 
   /// Floor of the per-exercise `difficulty_mult` range.
   ///
@@ -120,7 +139,9 @@ class XpCalculator {
     return raw < volumeLoadFloor ? volumeLoadFloor : raw;
   }
 
-  /// `base_xp = volume_load^0.65`.
+  /// `base_xp = volume_load^0.60` (Phase 24d). The exponent is exposed via
+  /// [volumeExponent]; the doc-string lists the literal so a curious reader
+  /// doesn't have to scroll for the canonical value.
   static double baseXp(double volumeLoad) {
     return math.pow(volumeLoad, volumeExponent).toDouble();
   }
@@ -157,7 +178,8 @@ class XpCalculator {
 
   // ---- cap -----------------------------------------------------------------
 
-  /// `cap_mult = 0.5 if weekly_volume >= 20 else 1.0`. (Strict `>=`.)
+  /// `cap_mult = 0.3 if weekly_volume >= 15 else 1.0` (Phase 24d). Strict
+  /// `>=`. Constants exposed via [weeklyCapSets] and [overCapMultiplier].
   ///
   /// `weeklyVolumeForBodyPart` is the rolling 7-day sum of
   /// `attribution[bp]` over completed sets — same fractional semantics as
