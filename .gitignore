@@ -7,6 +7,10 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 
+# Python (sim + fixture generator)
+__pycache__/
+*.pyc
+
 # IDE
 .idea/
 .vscode/

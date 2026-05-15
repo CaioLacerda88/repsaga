@@ -205,22 +205,22 @@
     "archetype": "intermediate",
     "bodyweight_kg": 75.0,
     "final_ranks": {
-      "arms": 37,
-      "back": 37,
+      "arms": 34,
+      "back": 34,
       "cardio": 1,
-      "chest": 31,
-      "core": 28,
-      "legs": 39,
-      "shoulders": 31
+      "chest": 28,
+      "core": 25,
+      "legs": 35,
+      "shoulders": 28
     },
     "final_xp_pool": {
-      "arms": 19304.522891212284,
-      "back": 19336.014779249344,
+      "arms": 13980.253855928451,
+      "back": 13870.52571269603,
       "cardio": 0.0,
-      "chest": 10563.052492820148,
-      "core": 7860.230122331328,
-      "legs": 23021.086870951018,
-      "shoulders": 10784.296752284552
+      "chest": 7618.768123801844,
+      "core": 5704.566302177427,
+      "legs": 16105.805911412685,
+      "shoulders": 7954.8881887489415
     },
     "total_sets": 1590,
     "weeks_simulated": 30
@@ -235,27 +235,27 @@
       "weekly_volume_for_body_part": 10
     },
     {
-      "cap_mult": 1.0,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 19
     },
     {
-      "cap_mult": 1.0,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 19.99
     },
     {
-      "cap_mult": 0.5,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 20
     },
     {
-      "cap_mult": 0.5,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 20.5
     },
     {
-      "cap_mult": 0.5,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 30
     },
     {
-      "cap_mult": 0.5,
+      "cap_mult": 0.3,
       "weekly_volume_for_body_part": 50
     }
   ],
@@ -401,10 +401,10 @@
     "difficulty_mult_ceiling": 1.25,
     "difficulty_mult_floor": 0.85,
     "novelty_denominator": 15,
-    "over_cap_multiplier": 0.5,
+    "over_cap_multiplier": 0.3,
     "strength_mult_floor": 0.4,
-    "volume_exponent": 0.65,
-    "weekly_cap_sets": 20,
+    "volume_exponent": 0.6,
+    "weekly_cap_sets": 15,
     "xp_base": 60,
     "xp_growth": 1.1
   },
@@ -664,7 +664,7 @@
   "set_xp_examples": [
     {
       "components": {
-        "base_xp": 56.797667740331384,
+        "base_xp": 41.62766037009365,
         "cap_mult": 1.0,
         "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
@@ -686,11 +686,11 @@
         "weight_kg": 100
       },
       "name": "bench_peak_fresh",
-      "set_xp": 74.29134940435345
+      "set_xp": 54.4489797640825
     },
     {
       "components": {
-        "base_xp": 56.797667740331384,
+        "base_xp": 41.62766037009365,
         "cap_mult": 1.0,
         "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
@@ -712,11 +712,11 @@
         "weight_kg": 100
       },
       "name": "bench_peak_late_session",
-      "set_xp": 38.14245058022682
+      "set_xp": 27.95503832473914
     },
     {
       "components": {
-        "base_xp": 45.04475496986848,
+        "base_xp": 33.607857462825464,
         "cap_mult": 1.0,
         "difficulty_mult": 1.09,
         "intensity_mult": 1.2,
@@ -738,12 +738,12 @@
         "weight_kg": 70
       },
       "name": "bench_deload_70",
-      "set_xp": 41.242977650411575
+      "set_xp": 30.771354292962993
     },
     {
       "components": {
-        "base_xp": 56.797667740331384,
-        "cap_mult": 0.5,
+        "base_xp": 41.62766037009365,
+        "cap_mult": 0.3,
         "difficulty_mult": 1.21,
         "intensity_mult": 1.2,
         "novelty_mult": 1.0,
@@ -764,11 +764,11 @@
         "weight_kg": 100
       },
       "name": "past_weekly_cap",
-      "set_xp": 41.23510677948058
+      "set_xp": 18.133008857212793
     },
     {
       "components": {
-        "base_xp": 100.33854750857574,
+        "base_xp": 70.38964057871044,
         "cap_mult": 1.0,
         "difficulty_mult": 0.85,
         "intensity_mult": 0.8,
@@ -790,11 +790,11 @@
         "weight_kg": 60
       },
       "name": "high_rep_endurance_floor",
-      "set_xp": 40.9381273834989
+      "set_xp": 28.718973356113864
     },
     {
       "components": {
-        "base_xp": 24.83037183640355,
+        "base_xp": 19.394421119744536,
         "cap_mult": 1.0,
         "difficulty_mult": 1.25,
         "intensity_mult": 1.3,
@@ -816,7 +816,7 @@
         "weight_kg": 140
       },
       "name": "one_rm_ceiling",
-      "set_xp": 40.34935423415577
+      "set_xp": 31.515934319584872
     },
     {
       "components": {
@@ -846,7 +846,7 @@
     },
     {
       "components": {
-        "base_xp": 14.315229426830216,
+        "base_xp": 11.66516134976123,
         "cap_mult": 1.0,
         "difficulty_mult": 0.87,
         "intensity_mult": 0.95,
@@ -868,11 +868,11 @@
         "weight_kg": 5
       },
       "name": "stagnant_curl",
-      "set_xp": 8.477666799609736
+      "set_xp": 6.908261693774277
     },
     {
       "components": {
-        "base_xp": 66.68328452080326,
+        "base_xp": 48.273410692361296,
         "cap_mult": 1.0,
         "difficulty_mult": 1.0,
         "intensity_mult": 1.0,
@@ -894,11 +894,11 @@
         "weight_kg": 80
       },
       "name": "user_created_default_1_0",
-      "set_xp": 66.68328452080326
+      "set_xp": 48.273410692361296
     },
     {
       "components": {
-        "base_xp": 77.09185423052514,
+        "base_xp": 55.18918645844858,
         "cap_mult": 1.0,
         "difficulty_mult": 0.85,
         "intensity_mult": 1.0,
@@ -920,11 +920,11 @@
         "weight_kg": 100
       },
       "name": "explicit_floor_0_85",
-      "set_xp": 65.52807609594637
+      "set_xp": 46.910808489681294
     },
     {
       "components": {
-        "base_xp": 77.09185423052514,
+        "base_xp": 55.18918645844858,
         "cap_mult": 1.0,
         "difficulty_mult": 1.25,
         "intensity_mult": 1.0,
@@ -946,11 +946,11 @@
         "weight_kg": 100
       },
       "name": "explicit_ceiling_1_25",
-      "set_xp": 96.36481778815643
+      "set_xp": 68.98648307306073
     },
     {
       "components": {
-        "base_xp": 61.13954713533037,
+        "base_xp": 44.5566792727406,
         "cap_mult": 1.0,
         "difficulty_mult": 1.21,
         "intensity_mult": 1.0,
@@ -972,11 +972,11 @@
         "weight_kg": 70
       },
       "name": "bodyweight_load_pure_bw",
-      "set_xp": 73.97885203374975
+      "set_xp": 53.91358192001613
     },
     {
       "components": {
-        "base_xp": 53.03812151130148,
+        "base_xp": 39.077566270460274,
         "cap_mult": 1.0,
         "difficulty_mult": 1.21,
         "intensity_mult": 1.2,
@@ -998,11 +998,11 @@
         "weight_kg": 90
       },
       "name": "bodyweight_load_weighted",
-      "set_xp": 77.01135243440974
+      "set_xp": 56.740626224708315
     },
     {
       "components": {
-        "base_xp": 66.68328452080326,
+        "base_xp": 48.273410692361296,
         "cap_mult": 1.0,
         "difficulty_mult": 1.09,
         "intensity_mult": 1.0,
@@ -1024,11 +1024,11 @@
         "weight_kg": 80
       },
       "name": "bodyweight_load_not_bw_exercise",
-      "set_xp": 58.14782410214045
+      "set_xp": 42.09441412373906
     },
     {
       "components": {
-        "base_xp": 12.715413939166092,
+        "base_xp": 10.45639552591273,
         "cap_mult": 1.0,
         "difficulty_mult": 1.21,
         "intensity_mult": 1.2,
@@ -1050,7 +1050,7 @@
         "weight_kg": 10
       },
       "name": "bodyweight_load_null_bodyweight",
-      "set_xp": 18.462781039669164
+      "set_xp": 15.182686303625283
     }
   ],
   "strength_mult": [
@@ -1371,37 +1371,37 @@
       "weight_kg": 1
     },
     {
-      "base_xp": 8.103282983463814,
+      "base_xp": 6.898648307306074,
       "reps": 5,
       "volume_load": 25,
       "weight_kg": 5
     },
     {
-      "base_xp": 27.081828824463557,
+      "base_xp": 21.012222435230136,
       "reps": 8,
       "volume_load": 160,
       "weight_kg": 20
     },
     {
-      "base_xp": 40.750112830372316,
+      "base_xp": 30.63887062800405,
       "reps": 5,
       "volume_load": 300,
       "weight_kg": 60
     },
     {
-      "base_xp": 77.09185423052514,
+      "base_xp": 55.18918645844858,
       "reps": 8,
       "volume_load": 800,
       "weight_kg": 100
     },
     {
-      "base_xp": 50.71215179891399,
+      "base_xp": 37.49294668053551,
       "reps": 3,
       "volume_load": 420,
       "weight_kg": 140
     },
     {
-      "base_xp": 31.309021669144823,
+      "base_xp": 24.022488679628623,
       "reps": 1,
       "volume_load": 200,
       "weight_kg": 200

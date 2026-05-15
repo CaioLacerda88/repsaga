@@ -83,11 +83,20 @@ Five tiers, multiplier range 0.85–1.25 (within the hard 0.80–1.25 cap).
 | **T1** | **Olympic / ballistic** | **1.25** | Triple extension, peak power, full-body coordination, highest skill ceiling |
 | **T2** | **Foundational compound (free weight, axial load)** | **1.15** | Multi-joint, spine bears load, large stabilizer demand, moderate-to-high skill |
 | **T3** | **Standard compound (free weight or supported)** | **1.05** | Multi-joint, lower spinal load OR partial support, moderate stabilizer recruitment |
-| **T4** | **Machine compound / cable multi-joint** | **0.95** | Multi-joint but fixed path, low stabilizer demand, low skill ceiling |
+| **T4** | **Machine compound / cable multi-joint** | **0.90** | Multi-joint but fixed path, low stabilizer demand, low skill ceiling |
 | **T5** | **Single-joint isolation** | **0.85** | One articulation, minimal coordination, low skill ceiling |
 
 Spread: 1.25 / 0.85 = 1.47× at equal volume_load before any secondary-muscle
 adjustment. Within the "no exercise earns >50% more than another" cap.
+
+> **Phase 24d calibration update (2026-05-15):** T4 was 0.95 in Phase 24a.
+> The 6-archetype balance simulation found this too generous — the
+> machine_only profile out-earned the intermediate-compound profile at the
+> archetype-totals level (criterion C4 inversion in `docs/xp-balance-baseline.md`).
+> Dropped to 0.90 (a uniform `-0.05` per-slug propagation applied to the 28
+> curated T4 default exercises in migration 00059). The T4 < T3 ordering
+> is preserved (T3 1.05 > T4 0.90 by 0.15), and the spread (T1 1.25 / T5
+> 0.85 = 1.47×) is unchanged because T1/T5 didn't move.
 
 Bodyweight strength movements (strict pull-up, dip, pistol squat) are
 handled separately in §4 — they get assigned to T2 or T3 by character,
@@ -115,7 +124,7 @@ dumbbell lunge, goblet squat, dumbbell Romanian deadlift, hack squat
 (loaded, plate-style), kettlebell swing, farmers walk, walking lunge,
 push-up*, bodyweight squat*, hanging leg raise*.
 
-**T4 (0.95) — Machine compound / cable multi-joint**
+**T4 (0.90) — Machine compound / cable multi-joint**
 Leg press, Smith-machine squat, chest press machine, seated row, lat
 pulldown, assisted pull-up machine, cable row, cable fly (when used
 as a multi-joint chest movement), tricep pushdown, face pull, cable
@@ -219,7 +228,7 @@ difficulty_mult = clamp(
 ```
 
 Constants:
-- tier_mult ∈ {0.85, 0.95, 1.05, 1.15, 1.25}
+- tier_mult ∈ {0.85, 0.90, 1.05, 1.15, 1.25}
 - bump_per_muscle = 0.02
 - max_bumped_muscles = 3 (effective cap of +0.06)
 - floor = 0.85, ceiling = 1.25
@@ -232,24 +241,28 @@ Constants:
 | Bicep curl | T5 | 0.85 | 0 | 0 | 0.85 | **0.85** |
 | Strict pull-up | T2 | 1.15 | 4 | +0.06 (capped) | 1.21 | **1.21** |
 | Power clean | T1 | 1.25 | 5 | +0.06 (capped) | 1.31 | **1.25** |
+| Lat pulldown (post-24d) | T4 | 0.90 | 3 | +0.06 (capped) | 0.96 | **0.94** (rounded down by the migration `-0.05` propagation; see §2 Phase 24d note) |
+| Leg press (post-24d) | T4 | 0.90 | 2 | +0.04 | 0.94 | **0.92** (post-24d delta) |
 
 ## 7. Calibration sanity checks
 
 Ratios at equal `weight × reps`, using `set_xp ∝ volume_load ×
 difficulty_mult`. Secondary counts approximate typical catalog tagging.
 
-**Deadlift (T2, 4 secondaries → 1.21) vs leg press (T4, 2 secondaries → 0.99)**
-Ratio: 1.21 / 0.99 = **1.22×**. Deadlift earns 22% more at equal
-volume_load. Matches Schoenfeld (2020) and McGill (2016) framing of the
+**Deadlift (T2, 4 secondaries → 1.21) vs leg press (T4, 2 secondaries → 0.92 post-24d)**
+Ratio: 1.21 / 0.92 = **1.32×**. Deadlift earns 32% more at equal
+volume_load (a wider gap than the pre-Phase-24d 1.22×, reflecting the
+calibration sign-off that machines should rank meaningfully slower than
+free weights). Matches Schoenfeld (2020) and McGill (2016) framing of the
 deadlift as the higher-demand movement. Feels right.
 
-**Strict pull-up @ bodyweight (T2, 4 secondaries → 1.21, load = bodyweight) vs lat pulldown (T4, 3 secondaries → 1.01)**
+**Strict pull-up @ bodyweight (T2, 4 secondaries → 1.21, load = bodyweight) vs lat pulldown (T4, 3 secondaries → 0.94 post-24d)**
 At a 70 kg lifter doing 8 reps with bodyweight as load: 70 × 8 × 1.21 =
-678. Lat pulldown at 50 kg × 8 × 1.01 = 404. Pull-up earns ~1.68× the
-XP — which captures both the harder movement (1.20× from multipliers)
-and the heavier effective load (1.40×). Aligns with coaching intuition
-that pull-ups are categorically harder. Cossey, Wilson et al. (2017) on
-lat activation patterns supports the directionality.
+678. Lat pulldown at 50 kg × 8 × 0.94 = 376. Pull-up earns ~1.80× the
+XP — which captures both the harder movement (~1.29× from multipliers,
+post-24d) and the heavier effective load (1.40×). Aligns with coaching
+intuition that pull-ups are categorically harder. Cossey, Wilson et al.
+(2017) on lat activation patterns supports the directionality.
 
 **Power clean (T1, 5+ secondaries → 1.25 clamped) vs barbell bench press (T3, 2 secondaries → 1.09)**
 Ratio: 1.25 / 1.09 = **1.15×**. Clean earns 15% more at equal volume_load.
