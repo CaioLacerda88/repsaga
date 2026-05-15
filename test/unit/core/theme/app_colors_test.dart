@@ -15,5 +15,12 @@ void main() {
     test('bodyPartCardio is Tailwind Orange 400 (#FB923C)', () {
       expect(AppColors.bodyPartCardio, const Color(0xFFFB923C));
     });
+
+    test('xpTrack is violet-tinted 10% alpha (#1AB36DFF)', () {
+      // 0x1AB36DFF: 10% alpha (0x1A = 26 ≈ 10.2% of 255) on the
+      // hotViolet base color (#B36DFF). Replaces the rgba(255,255,255,0.06)
+      // neutral white-alpha track currently used across XP/progress bars.
+      expect(AppColors.xpTrack, const Color(0x1AB36DFF));
+    });
   });
 }

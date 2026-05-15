@@ -81,6 +81,16 @@ class AppColors {
   /// all hide cardio).
   static const bodyPartCardio = Color(0xFFFB923C);
 
+  // ─── Progress infrastructure (Phase 26a) ─────────────────────────────
+  /// Violet-tinted XP/progress bar track (Phase 26a).
+  ///
+  /// 10% alpha on [hotViolet]. Replaces the generic
+  /// `rgba(255,255,255,0.06)` neutral white-alpha track that progress
+  /// bars used pre-Phase-26. Keeps progress infrastructure inside the
+  /// Arcane Ascent palette rather than borrowing from a neutral design
+  /// system.
+  static const xpTrack = Color(0x1AB36DFF);
+
   /// Hairline for dividers and card borders. A low-alpha violet so borders
   /// feel like they belong to the palette rather than gray plate.
   static const hair = Color(0x24B36DFF); // rgba(179,109,255,0.14)
