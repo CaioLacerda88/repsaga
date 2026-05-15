@@ -61,6 +61,25 @@ class AppColors {
   /// Error / destructive action.
   static const error = Color(0xFFFF6B6B);
 
+  /// Pink — chest body-part identity (Phase 26a). Anatomical fit (pec/heart)
+  /// and distinct from every other body-part hue + the brand violet stack.
+  /// Frees [hotViolet] to be the pure brand-primary (gradients, accents,
+  /// character XP) without bleeding into the chest body-part identity.
+  static const bodyPartChest = Color(0xFFF472B6);
+
+  /// Sky-blue — back body-part identity (Phase 26a). Replaces the old
+  /// [primaryViolet] mapping in `VitalityStateStyles.bodyPartColor[back]`
+  /// to resolve the chest/back "two purples" hue collision.
+  static const bodyPartBack = Color(0xFF38BDF8);
+
+  /// Orange — cardio body-part identity (Phase 26a).
+  ///
+  /// **Infrastructure-only for v1.** Token shipped so v1.1+ can introduce
+  /// cardio as an active stat without re-touching the palette. NOT exposed
+  /// on any UI surface in Phase 26 (rank rail, Saga, Stats, Engajamento
+  /// all hide cardio).
+  static const bodyPartCardio = Color(0xFFFB923C);
+
   /// Hairline for dividers and card borders. A low-alpha violet so borders
   /// feel like they belong to the palette rather than gray plate.
   static const hair = Color(0x24B36DFF); // rgba(179,109,255,0.14)
