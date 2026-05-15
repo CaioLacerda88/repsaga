@@ -15,20 +15,22 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-14).** Phase 24 in progress. **24a + 24b
-shipped** (PRs #222, #224). 24a wired `exercises.difficulty_mult`
-(0.85–1.25) through Dart + SQL + Python parity sim and curated all 150
-existing defaults. 24b expanded the library to **200 defaults** —
-Olympic platform (T1), bodyweight progressions (T2), specialty barbell
-(T2), variant T3, cable/machine T4, accessory T5, and cardio
-placeholders — with full en+pt translations and 28/50 demo images
-(yuhonas-sourced + uploaded to hosted `exercise-media`). Both applied
-to hosted Supabase. **24c PENDING** (bodyweight-as-load semantics),
-**24d PENDING** (six-profile simulation calibration gate). Then
-**Phase 25 — RPE** (research-first), then the **Launch Phase**
-(un-numbered; subscription + Play Store + any pre-launch scope
-expansion, formerly Phase 16). XP difficulty framework permanent
-reference: `docs/xp-difficulty-framework.md`.
+**Current state (2026-05-15).** Phase 24 nearly complete. **24a + 24b
++ 24c shipped** (PRs #222, #224, #227). 24a wired
+`exercises.difficulty_mult` (0.85–1.25) through Dart + SQL + Python
+parity sim and curated all 150 existing defaults. 24b expanded the
+library to **200 defaults** with full en+pt translations and 28/50
+demo images on hosted Storage. 24c added **bodyweight-as-load
+semantics**: 20 curated bodyweight exercises now use `effective_load
+= profile.bodyweight_kg + sets.weight`; new `bodyweight_kg` profile
+column + lazy in-workout prompt; `xp_events.payload` snapshots
+`effective_load` and `bodyweight_used` for audit trail. All applied
+to hosted Supabase. **24d PENDING** (six-profile simulation
+calibration gate — final calibration sign-off). Then **Phase 25 —
+RPE** (research-first), then the **Launch Phase** (un-numbered;
+subscription + Play Store + any pre-launch scope expansion, formerly
+Phase 16). XP difficulty framework permanent reference:
+`docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -42,6 +44,7 @@ reference: `docs/xp-difficulty-framework.md`.
 | 23 | Active Workout: rest-overlay + hint removal + auto-seed + SnackBar fix-wave | DONE | #212, #214 |
 | 24a | XP Balancing — difficulty multiplier infrastructure | DONE | #222 |
 | 24b | New default exercises (50 additions; 150 → 200) | DONE | #224 |
+| 24c | Bodyweight-as-load semantics (20 curated slugs) | DONE | #227 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -295,7 +298,7 @@ phase; Phase 24d is the final calibration sign-off.
 |---|---|---|
 | 24a — Difficulty multiplier infrastructure | DONE (PR #222) | See §4 condensed entry. |
 | 24b — New default exercises | DONE (PR #224) | See §4 condensed entry. |
-| 24c — Bodyweight load semantics | PENDING | Bodyweight exercises (pull-up, dip, push-up, pistol squat, etc.) use `effective_load = profile.bodyweight + added_weight` instead of bare external weight. Schema flag on exercises, UI prompt change, calculator update, profile bodyweight prompt if not set. Forward-only attribution. |
+| 24c — Bodyweight load semantics | DONE (PR #227) | See §4 condensed entry. |
 | 24d — Balance simulation gate | PENDING | Dedicated test phase, no production code. Six user profiles × 12 simulated weeks against the Python simulator. Validates that the new formula produces sensible XP progression curves across the profile spectrum; calibration sign-off before declaring Phase 24 done. Tune constants if any pass criterion fails. |
 
 #### 24d acceptance criteria (the calibration gate)
@@ -728,6 +731,22 @@ Wires `exercises.difficulty_mult` (numeric 0.85–1.25) through every XP write s
 - **CI fix-cycle (commit f5207d3):** Local @smoke (119 tests) passed but CI's full regression (302 tests) caught `exercises-localization.spec.ts` "should show en exercise names…" — alphabetical list pushed `Barbell Bench Press` below the fold once Ab Rollout / Archer Push-Up / Arnold Press / Assault Bike / Atlas Stone / Back Extension / Band Face Pull landed alphabetically prior. Flutter virtualizes the list — off-screen items aren't in the DOM. Fixed by adding `flutterFillByInput('Search exercises', 'Barbell Bench')` before the visibility assertion (same pattern every other test in the file uses). Verification gap surfaced: orchestrator should run the full regression locally (or trust CI) for data-shape changes that affect exercise enumeration order — relying solely on @smoke missed this.
 - **Verification:** unit/widget 2630/2630, integration 35/35, Android debug APK clean, db reset clean through 00055 (3 sentinels did not trip), E2E full regression green on CI after the fix. Hosted spot-check confirms 200 defaults + reviewer fixes applied (atlas_stone=back, larsen_press=chest).
 - **Out of scope (24c/d):** bodyweight `effective_load = bodyweight + added` semantics (24c); six-profile × 12-week calibration sign-off (24d). Image backfill for the 22 NULL slugs is a separate follow-up task (alt providers like exrx, musclewiki, custom stock).
+
+### Phase 24c: Bodyweight-as-Load Semantics (PR #227)
+
+> Builds on Phase 24a (`difficulty_mult` infrastructure + payload promotion) and 24b (200 defaults). Per `docs/xp-difficulty-framework.md` §4 (the bodyweight question).
+
+For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, walking lunges, hanging leg raises, plus 24b additions: muscle_up, ring_dip, handstand_push_up, archer/wide/incline/decline/diamond/close-grip push-up variants, inverted_row, nordic_curl), the XP formula now uses `effective_load = profile.bodyweight_kg + sets.weight` instead of bare entered weight. Forward-only — past `xp_events` stay frozen.
+
+- **Schema (00056):** `profiles.bodyweight_kg numeric(5,2) NULL` with 25–250 kg sanity CHECK; `exercises.uses_bodyweight_load BOOLEAN NOT NULL DEFAULT FALSE`; UPDATE 20 curated slugs; DO-block sanity assert (`v_expected = 20`).
+- **RPCs (00057, CREATE OR REPLACE × 3 — does not mutate 00040/50/52/54):** `record_set_xp` / `record_session_xp_batch` / `_rpg_backfill_chunk` pre-fetch `profiles.bodyweight_kg` once per user, carry `uses_bodyweight_load` in the batch CTE (no per-row sub-select), compute `v_effective_weight = CASE WHEN uses_bodyweight_load THEN COALESCE(weight,0)+COALESCE(bw,0) ELSE COALESCE(weight,0) END` per set, snapshot `effective_load` and `bodyweight_used` to `payload`. Hot-path discipline preserved. Graceful NULL-bodyweight fallback (degrades to entered-weight-only). All prior fixes (00050 weight>0; 00051/52 writer-site guards) preserved.
+- **Bug-cycle fix (00058, DROP+CREATE × 4):** the 4 exercise RPCs from 00034 (`fn_exercises_localized`, `fn_search_exercises_localized`, `fn_insert_user_exercise`, `fn_update_user_exercise`) had RETURNS TABLE shapes that stripped `uses_bodyweight_load`, defeating the prompt coordinator (Dart received `usesBodyweightLoad: false` from the picker). Caught by the full E2E regression. DROP+CREATE required because RETURNS TABLE shape changes disallow `CREATE OR REPLACE`.
+- **Dart:** `Profile.bodyweightKg` + `Exercise.usesBodyweightLoad` Freezed fields; `ProfileRepository.upsertProfile(bodyweightKg:)` extension; `XpEvent.fromJson` factory promotes 2 new payload keys (Phase 24a precedent); Hive cache schema bump v1 (clears stale Exercise cache lacking the new field; preserves `userPrefs` + `offlineQueue`); new `BodyweightPromptCoordinator` (one-shot session prompt, dismissable forever via Hive flag); reusable `showBodyweightEditorSheet` from `lib/features/profile/ui/widgets/bodyweight_row.dart` (deep-linked from active workout prompt).
+- **UI:** Profile settings gains a "Body weight" row + edit bottom sheet (en+pt l10n; lbs unit conversion; 25–250 kg validation); active workout shows a lazy SnackBar prompt on first qualifying set when bodyweight not set ("Set now" / "Skip" actions). Reviewer cycle added the `container: true + explicitChildNodes: true` pair-rule properties to 3 `Semantics(identifier:)` nodes per `cluster_semantics_identifier_pair_rule`.
+- **Bug-cycle fix #2 (`active_workout_screen.dart`):** the `ref.listen` for the prompt was at screen-state level (above `SnackBarTapOutDismissScope`), so `scope.maybeOf(context)` always returned null and the coordinator's defensive branch silently swallowed every fire. Moved listener into `_ActiveWorkoutBody` (descendant of scope). Added regression-guard widget test that mounts the full `ActiveWorkoutScreen` and verifies the SnackBar surfaces through the production wiring path. New cluster: `cluster_inherited_widget_context_above_scope` (worth adding to MEMORY.md ledger).
+- **Verification:** unit/widget 2689/2689 (was 2622 pre-24c; +67 new across xp_event factory promotion, profile model, exercise model, hive service, bodyweight_row, prompt coordinator); integration 39/39 (was 35; +4 bodyweight payload cases — pure BW, BW+belt, flag-off, NULL-BW graceful fallback); Android debug APK clean; `npx supabase db reset` clean through 00058 (DO-blocks did not trip); E2E full regression 241/241 passed (29.3 min), 62 skipped, 0 failures, 0 flaky after both bug-cycle fixes. Hosted spot-check confirms 20 bodyweight slugs + `fn_exercises_localized` surfaces `uses_bodyweight_load: true` for `pull_up`.
+- **Python parity:** `USES_BODYWEIGHT_LOAD_BY_SLUG` (20 slugs) + `effective_weight` helper in `tasks/rpg-xp-simulation.py`; 4 new fixture boundary scenarios in `set_xp_examples`; `backfill_replay` legs rank 38→39, +5.8% legs XP from `walking_lunges` bodyweight load.
+- **Out of scope (24d):** Six-profile × 12-week calibration sign-off (24d). Onboarding bodyweight prompt deferred to Launch Phase. Backfill of historical xp_events explicitly forward-only.
 
 ---
 
