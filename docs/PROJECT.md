@@ -418,13 +418,13 @@ Six-screen surgical revamp for launch readiness. User flagged the visual of four
 
 **Acceptance:**
 - `flutter analyze` clean.
-- All XP/progress bar tracks (Saga, Stats, Home, plan editor) read from `AppColors.xpTrack`.
+- `AppColors.xpTrack` token defined. Widget wiring (Saga, Stats, Home, plan editor) lands progressively in 26b–f as each surface is rewritten.
 - **Chest body-part hue is pink (`#F472B6`)** everywhere chest appears (Saga body-part-row dot, Saga radar chest vertex, vitality table dot, vitality trend chart line, Volume & pico chest block dot, Titles screen chest dots, Engajamento chest bar, Home expanded chest stat row, Home dominant-body-part rank when chest is dominant). `hotViolet` is reserved for brand accents only after this sub-phase.
 - Back body-part hue is sky (`#38BDF8`) everywhere it appears today (Saga radar, body-part-rank-row sigil, vitality table dot, vitality trend chart line, peak-loads bar — though peak-loads removed in 26c).
 - Cardio token defined but unused on UI surfaces.
 - `VitalityStateStyles.vitalityRampColorFor(double percentage)` helper introduced — returns `vitalityHigh` (>= 0.66) / `vitalityMid` (>= 0.34) / `vitalityLow` (< 0.34) / `textDim` (untested).
 - `check_reward_accent.sh` accepts heroGold on `EquippedTitleCard` + `CrossBuildCard` widgets; rejects new heroGold uses elsewhere.
-- L10n diff: `vitalityCopyDormant` rewritten; new keys for `vitalityStateBandActive`, `vitalityStateBandEsmorecendo`, `vitalityStateBandDormente`; new key `withinRankXpSuffix = "para o próximo rank"`.
+- L10n diff: `vitalityCopyDormant` rewritten; new keys `vitalityStateBandActive` (Active / Ativo), `vitalityStateBandWaning` (Waning / Esmorecendo), `vitalityStateBandDormant` (Dormant / Dormente); new key `withinRankXpSuffix` (to next rank / para o próximo rank).
 
 **Files:**
 - `lib/core/theme/app_theme.dart`

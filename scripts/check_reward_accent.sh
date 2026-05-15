@@ -112,8 +112,8 @@ done
 HITS=""
 # EDIT_WITH_CARE: no regression test covers the whitelist loop below.
 # Changes to ALLOWED_PATHS matching, ignore-marker handling, or the
-# comment-line filter should be hand-verified against fixtures via
-# a temporary scratch heroGold reference before merging.
+# comment-line filter should be hand-verified by manually adding a
+# temporary scratch heroGold reference before merging.
 if [[ -n "$RAW_HITS" ]]; then
   while IFS= read -r hit; do
     file="${hit%%:*}"

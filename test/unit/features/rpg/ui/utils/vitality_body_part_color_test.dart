@@ -21,6 +21,8 @@ void main() {
         );
       });
 
+      // core and cardio regressions are covered in
+      // vitality_state_styles_test.dart's "all 7 body parts present in map" test.
       // Regression: the other entries should still match their existing
       // tokens. If a later sub-phase rebinds legs/shoulders/arms/core,
       // these expectations get updated then — not now.
