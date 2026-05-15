@@ -144,6 +144,31 @@ class VitalityStateStyles {
   };
 
   // ---------------------------------------------------------------------------
+  // Vitality ramp color (Phase 26a)
+  // ---------------------------------------------------------------------------
+
+  /// Resolves a vitality percentage to its band color on the HP-drain
+  /// ramp (Phase 26a).
+  ///
+  /// Bands:
+  ///   * 66%–100%  → [AppColors.vitalityHigh]
+  ///   * 34%–65%   → [AppColors.vitalityMid]
+  ///   * 0%–33%    → [AppColors.vitalityLow]
+  ///   * null or out of [0,1] → [AppColors.textDim] (untested / malformed)
+  ///
+  /// Used on the Stats deep-dive vitality table percentage column
+  /// (Phase 26c) and any other surface that needs to communicate
+  /// conditioning state via color.
+  static Color vitalityRampColorFor(double? percentage) {
+    if (percentage == null || percentage < 0.0 || percentage > 1.0) {
+      return AppColors.textDim;
+    }
+    if (percentage >= 0.66) return AppColors.vitalityHigh;
+    if (percentage >= 0.34) return AppColors.vitalityMid;
+    return AppColors.vitalityLow;
+  }
+
+  // ---------------------------------------------------------------------------
   // Localized copy (l10n)
   // ---------------------------------------------------------------------------
 
