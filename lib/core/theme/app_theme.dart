@@ -89,7 +89,7 @@ class AppColors {
   /// bars used pre-Phase-26. Keeps progress infrastructure inside the
   /// Arcane Ascent palette rather than borrowing from a neutral design
   /// system.
-  static const xpTrack = Color(0x1AB36DFF);
+  static const xpTrack = Color(0x1AB36DFF); // unfilled track behind XP fill
 
   /// Hairline for dividers and card borders. A low-alpha violet so borders
   /// feel like they belong to the palette rather than gray plate.
