@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepSaga · Phase 26 mockups (final)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --abyss: #0D0319;
+      --surface: #1A0F2E;
+      --surface2: #241640;
+      --primary-violet: #6A2FA8;
+      --hot-violet: #B36DFF;
+      --hero-gold: #FFB800;
+      --text-cream: #EEE7FA;
+      --text-dim: #9C8DB8;
+      --success: #62C46D;
+      --warning: #FFB84D;
+      --error: #FF6B6B;
+      --bp-chest: #F472B6;
+      --bp-back: #38BDF8;
+      --bp-core: #94A3B8;
+      --bp-cardio: #FB923C;
+      --vitality-high: #62C46D;
+      --vitality-mid: #FFB84D;
+      --vitality-low: #FF6B6B;
+      --hair: rgba(179,109,255,0.14);
+      --xp-track: rgba(179,109,255,0.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px 24px 64px;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: radial-gradient(ellipse at top, #1a0930 0%, #0a0114 60%);
+      color: var(--text-cream); min-height: 100vh;
+    }
+
+    /* PAGE HEADER + NAV */
+    .page-head { max-width: 1200px; margin: 0 auto 32px; }
+    .page-head h1 {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 36px; margin: 0 0 8px; letter-spacing: 0.04em;
+    }
+    .page-head .lead {
+      color: var(--text-dim); margin: 0; font-size: 14px; max-width: 760px; line-height: 1.6;
+    }
+    .page-head .lead strong { color: var(--text-cream); }
+    .page-head .lead code {
+      background: var(--surface2); padding: 1px 6px; border-radius: 3px;
+      font-size: 12px; color: var(--hot-violet); font-family: 'Rajdhani', sans-serif;
+    }
+    .top-nav {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      margin-top: 18px;
+      padding: 8px 0;
+      border-top: 1px solid var(--hair);
+      border-bottom: 1px solid var(--hair);
+    }
+    .top-nav a {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-dim); text-decoration: none;
+      padding: 6px 12px; border-radius: 4px;
+    }
+    .top-nav a:hover { color: var(--hot-violet); background: var(--surface); }
+
+    /* SECTION SHELL */
+    section.screen {
+      max-width: 1200px; margin: 56px auto 0;
+      padding-top: 28px;
+      border-top: 1px solid var(--hair);
+    }
+    section.screen > h2 {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 26px; margin: 0 0 4px; letter-spacing: 0.04em;
+    }
+    section.screen > .caption {
+      color: var(--text-dim); margin: 0 0 20px; font-size: 13px; max-width: 760px; line-height: 1.55;
+    }
+    section.screen > .caption code {
+      background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+      font-size: 11px; color: var(--hot-violet); font-family: 'Rajdhani', sans-serif;
+    }
+    .screen-body {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    .screen-body.two-phones { grid-template-columns: 360px 360px 1fr; }
+    @media (max-width: 900px) {
+      .screen-body, .screen-body.two-phones { grid-template-columns: 1fr; }
+    }
+    .phone-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .phone-label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--hot-violet);
+    }
+    .decisions {
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      border-left: 3px solid var(--hot-violet);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .decisions h3 {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 13px; margin: 0 0 8px;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--hot-violet);
+    }
+    .decisions ul { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: 12px; line-height: 1.65; }
+    .decisions li { margin-bottom: 4px; }
+    .decisions strong { color: var(--text-cream); }
+    .decisions code {
+      background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+      font-size: 11px; color: var(--hot-violet); font-family: 'Rajdhani', sans-serif;
+    }
+
+    /* TOKEN TABLE */
+    .tokens-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      max-width: 1200px; margin: 0 auto;
+    }
+    @media (max-width: 700px) { .tokens-grid { grid-template-columns: 1fr; } }
+    .token-card {
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: center;
+    }
+    .token-swatch {
+      width: 28px; height: 28px; border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .token-meta .token-name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 13px; color: var(--text-cream);
+      letter-spacing: 0.02em;
+    }
+    .token-meta .token-hex {
+      font-family: 'Rajdhani', sans-serif; font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .token-meta .token-desc {
+      font-size: 11px; color: var(--text-dim); margin-top: 3px; line-height: 1.4;
+    }
+
+    /* ════════════════════════════════
+       PHONE FRAME — shared
+       ════════════════════════════════ */
+    .phone {
+      background: var(--abyss);
+      border: 1px solid var(--hair);
+      border-radius: 18px;
+      overflow: hidden;
+      width: 360px;
+      padding: 14px 12px 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .mock-appbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 0 12px;
+    }
+    .mock-appbar .left { display: flex; align-items: center; gap: 12px; }
+    .mock-appbar .back { color: var(--text-dim); font-size: 18px; }
+    .mock-appbar-title { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 18px; letter-spacing: 0.02em; }
+    .mock-appbar-gear { color: var(--text-dim); font-size: 16px; }
+
+    /* Section header inside phones */
+    .ph-section {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--hot-violet);
+      padding: 14px 4px 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ph-section:first-of-type { padding-top: 4px; }
+    .ph-section .info-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 1px solid var(--text-dim);
+      color: var(--text-dim);
+      font-size: 9px; font-weight: 700;
+      font-family: 'Inter', sans-serif; font-style: italic;
+    }
+    .ph-section .count {
+      color: var(--text-dim); font-weight: 600; margin-left: auto;
+      letter-spacing: 0.06em;
+    }
+    .ph-section .count strong { color: var(--text-cream); }
+
+    /* ════════════════════════════════
+       SAGA — Option B v4
+       ════════════════════════════════ */
+    .b-header {
+      display: grid;
+      grid-template-columns: 36px 1fr 120px;
+      column-gap: 10px;
+      align-items: end;
+      padding: 8px 4px 8px;
+    }
+    .b-rune {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(179,109,255,0.35);
+    }
+    .b-rune .glyph {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 18px; color: var(--hot-violet);
+    }
+    .b-lvl-stack { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+    .b-lvl-big {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 54px; line-height: 0.85; color: var(--text-cream);
+    }
+    .b-lvl-tag {
+      font-size: 11px; color: var(--text-dim); font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase;
+    }
+    .b-meta { text-align: right; align-self: end; max-width: 120px; overflow: hidden; }
+    .b-class {
+      font-size: 10px; letter-spacing: 0.18em;
+      color: var(--hot-violet); text-transform: uppercase; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .b-title { font-size: 11px; color: var(--text-dim); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .b-char-xp {
+      margin: 6px 4px 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--hair);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .char-track {
+      height: 6px; background: var(--xp-track); border-radius: 3px; overflow: hidden;
+    }
+    .char-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-violet), var(--hot-violet));
+      border-radius: 3px;
+    }
+    .char-label {
+      display: flex; justify-content: space-between;
+      font-size: 9px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      letter-spacing: 0.05em; color: var(--text-dim);
+    }
+    .char-label .right { color: var(--hot-violet); }
+
+    .b-stat-row {
+      min-height: 48px;
+      padding: 8px 4px 9px;
+      border-bottom: 1px solid var(--hair);
+      display: flex; flex-direction: column; gap: 5px; justify-content: center;
+    }
+    .b-stat-row:last-child { border-bottom: none; }
+    .b-stat-top { display: flex; align-items: center; gap: 8px; }
+    .b-stat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .b-stat-name {
+      flex: 1;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-cream);
+    }
+    .b-stat-num {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 20px; color: var(--text-cream); line-height: 1;
+      font-feature-settings: "tnum";
+      min-width: 24px; text-align: right;
+    }
+    .b-stat-bar-track { height: 4px; background: var(--xp-track); border-radius: 2px; overflow: hidden; }
+    .b-stat-bar-fill { height: 100%; border-radius: 2px; }
+    .b-stat-label {
+      display: flex; justify-content: space-between;
+      font-size: 9px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      letter-spacing: 0.05em; color: var(--text-dim);
+    }
+
+    /* ════════════════════════════════
+       STATS DEEP-DIVE
+       ════════════════════════════════ */
+    .trend-card {
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
+      padding: 12px 12px 8px;
+      margin-bottom: 4px;
+    }
+    .trend-chart { width: 100%; height: 140px; position: relative; }
+    .trend-y-axis {
+      position: absolute; left: 0; top: 0; bottom: 14px; width: 24px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      font-size: 8px; color: var(--text-dim);
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      text-align: right; padding-right: 4px;
+    }
+    .trend-svg {
+      position: absolute; left: 26px; right: 0; top: 0; bottom: 14px;
+      width: calc(100% - 26px);
+    }
+    .trend-x-axis {
+      position: absolute; left: 26px; right: 0; bottom: 0; height: 12px;
+      display: flex; justify-content: space-between;
+      font-size: 8px; color: var(--text-dim);
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+    }
+    .trend-toggles {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      padding: 8px 0 2px;
+      border-top: 1px solid var(--hair);
+      margin-top: 4px;
+    }
+    .trend-chip {
+      padding: 4px 8px; border-radius: 12px;
+      font-size: 9px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      background: var(--surface2);
+      color: var(--text-dim);
+      border: 1px solid transparent;
+    }
+    .trend-chip.active { color: var(--text-cream); }
+
+    .vitality-row {
+      display: grid;
+      grid-template-columns: 8px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 4px;
+      border-bottom: 1px solid var(--hair);
+    }
+    .vitality-row:last-child { border-bottom: none; }
+    .vitality-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .vitality-name {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-cream);
+    }
+    .vitality-pct {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 20px; line-height: 1; font-feature-settings: "tnum";
+      min-width: 50px; text-align: right;
+    }
+    .vitality-state {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+    }
+
+    .vp-block {
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .vp-block-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .vp-block-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .vp-block-name {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-cream);
+    }
+    .vp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .vp-col-label {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+      margin-bottom: 3px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .vp-col-value {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 18px; color: var(--text-cream);
+      line-height: 1.1; font-feature-settings: "tnum";
+    }
+    .vp-col-value .secondary { font-size: 12px; color: var(--text-dim); margin-left: 2px; }
+    .vp-col-delta {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.04em; margin-top: 3px;
+      font-family: 'Rajdhani', sans-serif;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .vp-col-delta.up { color: var(--vitality-high); }
+    .vp-col-delta.down { color: var(--vitality-low); }
+    .vp-col-delta.over { color: var(--warning); }
+    .vp-col-delta.flat { color: var(--text-dim); }
+    .vp-col-delta .badge {
+      font-size: 8px; font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-dim);
+    }
+    .vp-col-label .info { font-size: 10px; color: var(--text-dim); cursor: pointer; }
+
+    /* ════════════════════════════════
+       VITALITY EXPLAINER (bottom sheet)
+       ════════════════════════════════ */
+    .sheet-mock {
+      background: var(--surface);
+      border-radius: 14px 14px 0 0;
+      width: 100%;
+      padding: 18px 18px 22px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+      border-top: 1px solid var(--hair);
+    }
+    .sheet-handle {
+      width: 36px; height: 3px; background: var(--text-dim); opacity: 0.5;
+      border-radius: 2px; margin: 0 auto 14px;
+    }
+    .sheet-title {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 20px; letter-spacing: 0.02em; margin: 0 0 12px;
+    }
+    .sheet-body { font-size: 12.5px; line-height: 1.55; color: var(--text-cream); }
+    .sheet-body p { margin: 0 0 10px; }
+    .sheet-body p:last-child { margin-bottom: 0; }
+    .sheet-body .ramp-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; background: var(--surface2); border-radius: 6px;
+      font-size: 11px; margin-bottom: 4px;
+    }
+    .sheet-body .ramp-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .sheet-body .ramp-label { flex: 1; color: var(--text-cream); font-weight: 600; letter-spacing: 0.04em; }
+    .sheet-body .ramp-pct {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 13px; min-width: 64px; text-align: right;
+    }
+    .sheet-body .guarantee {
+      margin-top: 10px; padding: 10px 12px;
+      background: rgba(255,184,0,0.08);
+      border-left: 3px solid var(--hero-gold);
+      border-radius: 4px; font-size: 12px; color: var(--text-cream);
+    }
+    .sheet-body .guarantee strong { color: var(--hero-gold); font-weight: 700; }
+
+    /* ════════════════════════════════
+       TITLES
+       ════════════════════════════════ */
+    .counter-pill {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.1em; text-transform: uppercase;
+      background: var(--surface2);
+      padding: 4px 10px; border-radius: 12px;
+    }
+    .counter-pill .count { color: var(--text-cream); font-weight: 700; }
+
+    .equipped-card {
+      background: linear-gradient(135deg, rgba(255,184,0,0.10), rgba(255,184,0,0.02));
+      border: 1px solid rgba(255,184,0,0.4);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .equipped-card .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      box-shadow: 0 0 6px currentColor;
+    }
+    .equipped-card .body { flex: 1; min-width: 0; }
+    .equipped-card .name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 16px; color: var(--text-cream);
+      letter-spacing: 0.02em; line-height: 1.1;
+    }
+    .equipped-card .meta {
+      font-size: 10px; color: var(--text-dim);
+      letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+      margin-top: 3px;
+    }
+    .equipped-card .tag {
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--hero-gold);
+      padding: 3px 8px; border-radius: 10px;
+      background: rgba(255,184,0,0.12);
+      border: 1px solid rgba(255,184,0,0.4);
+    }
+
+    .earned-row {
+      display: grid;
+      grid-template-columns: 10px 1fr auto;
+      gap: 12px; align-items: center;
+      padding: 10px 4px;
+      border-bottom: 1px solid var(--hair);
+    }
+    .earned-row:last-child { border-bottom: none; }
+    .earned-row .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .earned-row .name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 15px; color: var(--text-cream); letter-spacing: 0.02em;
+    }
+    .earned-row .meta {
+      font-size: 10px; color: var(--text-dim);
+      letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+      margin-top: 2px;
+    }
+    .earned-row .equip-cta {
+      font-size: 9px; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--hot-violet);
+      padding: 4px 8px; border-radius: 10px;
+      border: 1px solid rgba(179,109,255,0.4);
+    }
+
+    .next-row {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 4px;
+      border-bottom: 1px solid var(--hair);
+    }
+    .next-row:last-child { border-bottom: none; }
+    .next-row-top { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; align-items: center; }
+    .next-row .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .next-row .name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 14px; color: var(--text-dim); letter-spacing: 0.02em;
+    }
+    .next-row .progress-num {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 13px; color: var(--text-cream); font-feature-settings: "tnum";
+    }
+    .next-row .progress-num .denom { color: var(--text-dim); font-weight: 600; }
+    .next-row .bar-track {
+      height: 3px; background: var(--xp-track);
+      border-radius: 2px; overflow: hidden;
+      margin-left: 18px;
+    }
+    .next-row .bar-fill { height: 100%; border-radius: 2px; }
+    .next-row .sub {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.06em; font-weight: 600;
+      margin-left: 18px;
+    }
+
+    .cross-build-row {
+      background: linear-gradient(135deg, rgba(255,184,0,0.06), rgba(255,184,0,0.01));
+      border: 1px solid rgba(255,184,0,0.30);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .cb-header { display: grid; grid-template-columns: 10px 1fr auto; column-gap: 10px; align-items: center; margin-bottom: 10px; }
+    .cb-header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--hero-gold); box-shadow: 0 0 8px rgba(255,184,0,0.7); }
+    .cb-header .name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; color: var(--text-cream); letter-spacing: 0.02em; }
+    .cb-header .badge {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--hero-gold);
+      padding: 3px 8px; border-radius: 10px;
+      background: rgba(255,184,0,0.10); border: 1px solid rgba(255,184,0,0.4);
+    }
+    .cb-conditions { display: flex; flex-direction: column; gap: 7px; }
+    .cb-condition {
+      display: grid; grid-template-columns: 8px 60px 1fr 50px; column-gap: 8px; align-items: center;
+    }
+    .cb-condition .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .cb-condition .name { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+    .cb-condition .bar-track { height: 3px; background: var(--xp-track); border-radius: 2px; overflow: hidden; }
+    .cb-condition .bar-fill { height: 100%; border-radius: 2px; }
+    .cb-condition .num { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; color: var(--text-cream); text-align: right; }
+    .cb-condition.met .name { color: var(--hero-gold); }
+    .cb-condition.met .num::after { content: '  ✓'; color: var(--hero-gold); font-weight: 700; }
+    .cross-build-row .sub { font-size: 9px; color: var(--hero-gold); letter-spacing: 0.14em; font-weight: 600; margin-top: 10px; text-transform: uppercase; }
+
+    /* ════════════════════════════════
+       PLAN EDITOR — pure bucket
+       ════════════════════════════════ */
+    .week-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 4px 12px;
+    }
+    .week-head .left {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 16px; letter-spacing: 0.04em;
+      color: var(--text-dim); text-transform: uppercase;
+    }
+
+    .routine-row {
+      display: grid; grid-template-columns: 20px 1fr auto;
+      column-gap: 10px; align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      min-height: 48px;
+    }
+    .status-icon {
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .status-icon.planned { background: transparent; border: 1.5px solid var(--hot-violet); }
+    .status-icon.done {
+      background: var(--success); color: var(--abyss);
+      font-size: 11px; font-weight: 800;
+    }
+    .status-icon.done.spontaneous { background: var(--hot-violet); }
+    .routine-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+    .routine-name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 15px; color: var(--text-cream); letter-spacing: 0.02em;
+    }
+    .routine-name.pending { color: var(--text-dim); font-weight: 600; }
+    .completion-meta {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    .spontaneous-tag {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 8px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--hot-violet);
+      padding: 2px 6px; border-radius: 8px;
+      background: rgba(179,109,255,0.10); border: 1px solid rgba(179,109,255,0.35);
+    }
+    .more-icon {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 14px;
+    }
+    .add-cta {
+      display: flex; align-items: center; justify-content: center;
+      padding: 12px; border-radius: 8px;
+      border: 1px dashed rgba(179,109,255,0.3);
+      color: var(--hot-violet);
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .eng-section {
+      margin-top: 18px; padding-top: 14px;
+      border-top: 1px solid var(--hair);
+    }
+    .eng-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 4px 10px;
+    }
+    .eng-header .label {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--hot-violet);
+    }
+    .eng-header .info-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 1px solid var(--text-dim);
+      color: var(--text-dim);
+      font-size: 8px; font-weight: 700;
+      font-family: 'Inter', sans-serif; font-style: italic;
+      margin-left: 6px;
+    }
+    .muscle-bars { display: flex; flex-direction: column; gap: 6px; padding: 0 4px; }
+    .muscle-bar {
+      display: grid; grid-template-columns: 8px 60px 1fr 44px;
+      column-gap: 8px; align-items: center;
+    }
+    .muscle-bar .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .muscle-bar .name {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-cream);
+    }
+    .muscle-bar .track {
+      height: 4px; background: var(--xp-track);
+      border-radius: 2px; overflow: hidden;
+      position: relative;
+    }
+    .muscle-bar .done-fill {
+      position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px;
+    }
+    .muscle-bar .planned-fill {
+      position: absolute; top: 0; height: 100%; border-radius: 2px;
+      opacity: 0.4;
+    }
+    .muscle-bar .num {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 12px; color: var(--text-cream);
+      text-align: right; font-feature-settings: "tnum";
+    }
+    .muscle-bar .num .planned { color: var(--text-dim); font-weight: 600; font-size: 10px; }
+    .muscle-bar.abandoned .name { color: var(--text-dim); }
+    .muscle-bar.abandoned .num { color: var(--text-dim); }
+    .eng-legend {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.05em;
+      margin: 8px 4px 0;
+      display: flex; gap: 12px; align-items: center;
+      font-family: 'Rajdhani', sans-serif; font-weight: 500;
+    }
+    .legend-swatch {
+      display: inline-block; width: 14px; height: 4px; border-radius: 2px;
+      vertical-align: middle; margin-right: 4px;
+    }
+
+    /* ════════════════════════════════
+       HOME — char card + bucket chips
+       ════════════════════════════════ */
+    .h-greeting { padding: 0 4px 14px; }
+    .h-greeting .date {
+      font-size: 10px; color: var(--text-dim);
+      letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+    }
+    .h-greeting .name {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      font-size: 22px; color: var(--text-cream);
+      letter-spacing: 0.02em; margin-top: 2px;
+    }
+
+    .char-card {
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      border-radius: 12px;
+      padding: 12px 14px 10px;
+      margin-bottom: 12px;
+    }
+    .char-card.expanded { border-color: rgba(179,109,255,0.5); }
+    .cc-header {
+      display: grid; grid-template-columns: 40px 1fr auto;
+      column-gap: 12px; align-items: center;
+    }
+    .cc-rune {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid rgba(179,109,255,0.35);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cc-rune .glyph {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 20px; color: var(--hot-violet);
+    }
+    .cc-lvl-line { display: flex; align-items: baseline; gap: 6px; }
+    .cc-lvl-num {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 28px; line-height: 0.9; color: var(--text-cream);
+    }
+    .cc-lvl-tag {
+      font-size: 10px; color: var(--text-dim); letter-spacing: 0.18em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .cc-class-name {
+      font-size: 10px; color: var(--hot-violet); letter-spacing: 0.16em;
+      text-transform: uppercase; font-weight: 600;
+      margin-top: 2px;
+    }
+    .cc-title-pill {
+      font-size: 9px; color: var(--text-dim); letter-spacing: 0.14em;
+      text-transform: uppercase; font-weight: 600;
+      padding: 3px 8px; background: var(--surface2); border-radius: 10px;
+      margin-top: 4px; display: inline-block;
+    }
+    .cc-dom { text-align: right; }
+    .cc-dom-label {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+    }
+    .cc-dom-rank {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 26px; line-height: 0.9; margin-top: 2px;
+    }
+    .cc-dom-name {
+      font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      font-weight: 600; margin-top: 2px;
+    }
+    .cc-closest {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 10px; margin-top: 10px;
+      border-top: 1px solid var(--hair);
+    }
+    .cc-closest .indicator {
+      font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.04em;
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+    }
+    .cc-closest .indicator strong { color: var(--text-cream); }
+    .cc-chevron {
+      width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--hot-violet); font-size: 14px;
+    }
+    .char-card.expanded .cc-chevron { transform: rotate(90deg); }
+    .cc-expanded-body { padding-top: 0; margin-top: 14px; }
+    .cc-char-xp {
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--hair);
+    }
+    .cc-stat-row {
+      min-height: 48px;
+      padding: 8px 0 9px;
+      border-bottom: 1px solid var(--hair);
+      display: flex; flex-direction: column; gap: 5px; justify-content: center;
+    }
+    .cc-stat-row:last-child { border-bottom: none; }
+
+    .nudge {
+      font-size: 11px; color: var(--text-dim);
+      letter-spacing: 0.04em; line-height: 1.4;
+      padding: 4px 4px 12px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 500;
+    }
+    .nudge strong { color: var(--success); font-weight: 700; }
+
+    .action-hero {
+      background: linear-gradient(135deg, var(--primary-violet), #4a1e85);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 4px 12px rgba(106,47,168,0.25);
+    }
+    .action-hero .ah-meta { flex: 1; min-width: 0; }
+    .action-hero .ah-eyebrow {
+      font-size: 9px; color: rgba(255,255,255,0.7);
+      letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+    }
+    .action-hero .ah-title {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 20px; color: var(--text-cream);
+      letter-spacing: 0.02em; line-height: 1.1; margin-top: 2px;
+    }
+    .action-hero .ah-sub {
+      font-size: 11px; color: rgba(255,255,255,0.7);
+      margin-top: 4px; font-weight: 500;
+    }
+    .action-hero .ah-arrow {
+      width: 36px; height: 36px; border-radius: 18px;
+      background: rgba(255,255,255,0.15);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-cream); font-size: 18px;
+    }
+
+    .week-section { margin-top: 4px; }
+    .week-section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 4px 10px;
+    }
+    .week-section-header .label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--hot-violet);
+    }
+    .week-section-header .progress {
+      font-size: 10px; color: var(--text-dim);
+      letter-spacing: 0.06em; font-weight: 600;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    .week-section-header .progress strong { color: var(--text-cream); }
+    .bucket-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+    .bucket-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--hair);
+      font-size: 11px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .bucket-chip .icon {
+      width: 14px; height: 14px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 800;
+    }
+    .bucket-chip .icon.planned { background: transparent; border: 1.5px solid var(--hot-violet); }
+    .bucket-chip .icon.done { background: var(--success); color: var(--abyss); }
+    .bucket-chip .icon.done.spontaneous { background: var(--hot-violet); }
+    .bucket-chip .nm { color: var(--text-cream); }
+    .bucket-chip .nm.pending { color: var(--text-dim); }
+    .bucket-chip .meta {
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600;
+    }
+    .bucket-chip .star { color: var(--hot-violet); font-size: 9px; margin-left: 2px; }
+    .bucket-chip.done { border-color: rgba(98,196,109,0.30); }
+    .bucket-chip.spontaneous { border-color: rgba(179,109,255,0.30); }
+    .week-footer { display: flex; align-items: center; justify-content: flex-end; padding: 10px 4px 0; }
+    .edit-plan-link {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--hot-violet); text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="page-head">
+    <h1>RepSaga · Phase 26 — Pre-launch UI/UX Revamp</h1>
+    <p class="lead">Final design references for the six-screen revamp. <strong>Authoritative spec</strong> lives in <code>docs/PROJECT.md §3 Phase 26</code>. This file is for visual reference — color tokens, screen-level mockups, and the decisions that landed for each surface.</p>
+    <nav class="top-nav">
+      <a href="#tokens">Tokens</a>
+      <a href="#saga">Saga</a>
+      <a href="#stats">Stats</a>
+      <a href="#vitality-explainer">Vitality ⓘ</a>
+      <a href="#titles">Titles</a>
+      <a href="#plan">Plan</a>
+      <a href="#home">Home</a>
+    </nav>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════
+       TOKENS — new AppColors introduced in 26a
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="tokens">
+    <h2>Design tokens — new in 26a</h2>
+    <p class="caption">Four additions to <code>AppColors</code>. Plus three semantic aliases for self-documenting call sites. Cardio token ships but is hidden from every UI surface in this phase.</p>
+    <div class="tokens-grid">
+      <div class="token-card">
+        <div class="token-swatch" style="background: rgba(179,109,255,0.10);"></div>
+        <div class="token-meta">
+          <div class="token-name">AppColors.xpTrack</div>
+          <div class="token-hex">Color(0x1AB36DFF) · violet-tinted 10% α</div>
+          <div class="token-desc">Replaces the white-alpha neutral wash on every XP/progress bar track. Keeps progress infrastructure inside the Arcane Ascent palette.</div>
+        </div>
+      </div>
+      <div class="token-card">
+        <div class="token-swatch" style="background: #F472B6;"></div>
+        <div class="token-meta">
+          <div class="token-name">AppColors.bodyPartChest</div>
+          <div class="token-hex">#F472B6 · pink (Tailwind Pink 400)</div>
+          <div class="token-desc">New chest body-part identity. Frees <code>hotViolet</code> to be the pure brand-primary (gradients, accents, character XP) without bleeding into chest.</div>
+        </div>
+      </div>
+      <div class="token-card">
+        <div class="token-swatch" style="background: #38BDF8;"></div>
+        <div class="token-meta">
+          <div class="token-name">AppColors.bodyPartBack</div>
+          <div class="token-hex">#38BDF8 · sky blue (Tailwind Sky 400)</div>
+          <div class="token-desc">Replaces <code>primaryViolet</code> for the back body-part identity. Resolves chest/back hue collision.</div>
+        </div>
+      </div>
+      <div class="token-card">
+        <div class="token-swatch" style="background: #FB923C;"></div>
+        <div class="token-meta">
+          <div class="token-name">AppColors.bodyPartCardio</div>
+          <div class="token-hex">#FB923C · orange · INFRASTRUCTURE ONLY</div>
+          <div class="token-desc">Defined for cardio rank-up readiness (v1.1+). NOT exposed on any UI surface in this phase.</div>
+        </div>
+      </div>
+      <div class="token-card">
+        <div class="token-swatch" style="background: linear-gradient(90deg, #62C46D 0%, #62C46D 33%, #FFB84D 33%, #FFB84D 66%, #FF6B6B 66%, #FF6B6B 100%);"></div>
+        <div class="token-meta">
+          <div class="token-name">vitalityHigh / vitalityMid / vitalityLow</div>
+          <div class="token-hex">aliases of success / warning / error</div>
+          <div class="token-desc">Semantic aliases for the HP-drain ramp. <code>vitalityRampColorFor(pct)</code> resolves to: 100–66% high, 65–34% mid, 33–0% low.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       SAGA — Option B v4
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="saga">
+    <h2>Saga screen (26b) — Option B v4</h2>
+    <p class="caption">Type-dominant header: 36dp rune left · 54sp level numeral center · class + title meta right. Active-state glow removed. Each body-part row is a 48dp mini XP-block: dot + name + 20sp tabular rank num + 4dp body-part-hue bar + within-rank XP label.</p>
+
+    <div class="screen-body">
+      <div class="phone-col">
+        <span class="phone-label">360dp</span>
+        <div class="phone">
+          <div class="mock-appbar">
+            <span class="mock-appbar-title">Saga</span>
+            <span class="mock-appbar-gear">⚙</span>
+          </div>
+          <div class="b-header">
+            <div class="b-rune"><span class="glyph">⏃</span></div>
+            <div class="b-lvl-stack"><span class="b-lvl-big">14</span><span class="b-lvl-tag">LVL</span></div>
+            <div class="b-meta">
+              <div class="b-class">Iron Vanguard</div>
+              <div class="b-title">Plate-Bearer</div>
+            </div>
+          </div>
+          <div class="b-char-xp">
+            <div class="char-track"><div class="char-fill" style="width: 70%;"></div></div>
+            <div class="char-label"><span>8.420 XP</span><span class="right">3.580 para LVL 15</span></div>
+          </div>
+
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--bp-chest);"></span>
+              <span class="b-stat-name">Peito</span>
+              <span class="b-stat-num">16</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-chest); width: 71%;"></div></div>
+            <div class="b-stat-label"><span>1.420 XP</span><span>580 para o próximo rank</span></div>
+          </div>
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--bp-back);"></span>
+              <span class="b-stat-name">Costas</span>
+              <span class="b-stat-num">11</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-back); width: 21%;"></div></div>
+            <div class="b-stat-label"><span>320 XP</span><span>1.180 para o próximo rank</span></div>
+          </div>
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--success);"></span>
+              <span class="b-stat-name">Pernas</span>
+              <span class="b-stat-num">9</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--success); width: 82%;"></div></div>
+            <div class="b-stat-label"><span>980 XP</span><span>220 para o próximo rank</span></div>
+          </div>
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--warning);"></span>
+              <span class="b-stat-name">Ombros</span>
+              <span class="b-stat-num">7</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--warning); width: 27%;"></div></div>
+            <div class="b-stat-label"><span>240 XP</span><span>660 para o próximo rank</span></div>
+          </div>
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--error);"></span>
+              <span class="b-stat-name">Braços</span>
+              <span class="b-stat-num">6</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--error); width: 82%;"></div></div>
+            <div class="b-stat-label"><span>660 XP</span><span>140 para o próximo rank</span></div>
+          </div>
+          <div class="b-stat-row">
+            <div class="b-stat-top">
+              <span class="b-stat-dot" style="background: var(--bp-core);"></span>
+              <span class="b-stat-name">Core</span>
+              <span class="b-stat-num">3</span>
+            </div>
+            <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-core); width: 27%;"></div></div>
+            <div class="b-stat-label"><span>110 XP</span><span>290 para o próximo rank</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li>Header band: <strong>36dp rune</strong> + 54sp level numeral + class/title meta. Right-meta column max 120dp + ellipsis on overflow.</li>
+          <li><strong>Active-state glow removed</strong>. Only radiant state keeps a sweep arc.</li>
+          <li>Each stat row: 48dp min-height, 6dp dot, 20sp Rajdhani 700 tabular rank num, 4dp body-part-hue bar, "X XP · Y para o próximo rank" label.</li>
+          <li>All 6 body parts visible (cardio omitted entirely).</li>
+          <li><strong>Stat rows tappable</strong> → routes to <code>/saga/stats</code> with body part pre-selected.</li>
+          <li><strong>Dot pulse on rank-up</strong> — 24h glow-ring on the body-part's dot after a rank threshold crosses.</li>
+          <li>Character XP bar: 6dp height, violet gradient, label "X XP · Y para LVL N".</li>
+          <li>Untrained body parts render at 0.4 opacity with "—" rank.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       STATS DEEP-DIVE
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="stats">
+    <h2>Stats deep-dive (26c)</h2>
+    <p class="caption">Three sections — vitality trend chart, vitality table (HP-drain coloring), Volume &amp; pico per-body-part. Peak Loads section dropped. Vitality copy retired; ⓘ tooltip opens the vitality explainer.</p>
+
+    <div class="screen-body">
+      <div class="phone-col">
+        <span class="phone-label">360dp</span>
+        <div class="phone">
+          <div class="mock-appbar">
+            <div class="left"><span class="back">←</span><span class="mock-appbar-title">Stats</span></div>
+          </div>
+
+          <div class="ph-section">Vitalidade — últimos 90 dias <span class="info-icon">i</span></div>
+          <div class="trend-card">
+            <div class="trend-chart">
+              <div class="trend-y-axis"><span>100%</span><span>50%</span><span>0%</span></div>
+              <svg class="trend-svg" viewBox="0 0 280 126" preserveAspectRatio="none">
+                <line x1="0" y1="0" x2="280" y2="0" stroke="rgba(179,109,255,0.08)" stroke-width="0.5"/>
+                <line x1="0" y1="63" x2="280" y2="63" stroke="rgba(179,109,255,0.08)" stroke-width="0.5"/>
+                <line x1="0" y1="126" x2="280" y2="126" stroke="rgba(179,109,255,0.08)" stroke-width="0.5"/>
+                <polyline fill="none" stroke="#F472B6" stroke-width="2.5" stroke-linejoin="round"
+                  points="0,30 30,28 60,35 90,30 120,28 150,25 180,22 210,18 240,18 280,15"/>
+                <polyline fill="none" stroke="#38BDF8" stroke-width="1" stroke-opacity="0.35" stroke-linejoin="round"
+                  points="0,80 30,75 60,70 90,55 120,60 150,55 180,48 210,42 240,38 280,30"/>
+                <polyline fill="none" stroke="#62C46D" stroke-width="1" stroke-opacity="0.35" stroke-linejoin="round"
+                  points="0,40 30,42 60,38 90,40 120,42 150,38 180,45 210,42 240,40 280,38"/>
+                <polyline fill="none" stroke="#FFB84D" stroke-width="1" stroke-opacity="0.35" stroke-linejoin="round"
+                  points="0,55 30,60 60,65 90,68 120,72 150,75 180,78 210,82 240,85 280,90"/>
+                <polyline fill="none" stroke="#FF6B6B" stroke-width="1" stroke-opacity="0.35" stroke-linejoin="round"
+                  points="0,50 30,48 60,52 90,50 120,48 150,52 180,50 210,52 240,50 280,52"/>
+                <polyline fill="none" stroke="#94A3B8" stroke-width="1" stroke-opacity="0.35" stroke-linejoin="round"
+                  points="0,90 30,92 60,94 90,96 120,98 150,100 180,102 210,105 240,108 280,110"/>
+              </svg>
+              <div class="trend-x-axis"><span>90d</span><span>60d</span><span>30d</span><span>Hoje</span></div>
+            </div>
+            <div class="trend-toggles">
+              <span class="trend-chip active" style="background: rgba(244,114,182,0.15); border-color: #F472B6; color: #F472B6;">Peito</span>
+              <span class="trend-chip">Costas</span><span class="trend-chip">Pernas</span><span class="trend-chip">Ombros</span><span class="trend-chip">Braços</span><span class="trend-chip">Core</span>
+            </div>
+          </div>
+
+          <div class="ph-section">Vitalidade atual <span class="info-icon">i</span></div>
+          <div class="vitality-row"><span class="vitality-dot" style="background: var(--bp-chest);"></span><span class="vitality-name">Peito</span><span class="vitality-pct" style="color: var(--vitality-high);">100%</span><span></span></div>
+          <div class="vitality-row"><span class="vitality-dot" style="background: var(--bp-back);"></span><span class="vitality-name">Costas</span><span class="vitality-pct" style="color: var(--vitality-high);">76%</span><span></span></div>
+          <div class="vitality-row"><span class="vitality-dot" style="background: var(--success);"></span><span class="vitality-name">Pernas</span><span class="vitality-pct" style="color: var(--vitality-mid);">52%</span><span></span></div>
+          <div class="vitality-row"><span class="vitality-dot" style="background: var(--warning);"></span><span class="vitality-name">Ombros</span><span class="vitality-pct" style="color: var(--vitality-low);">28%</span><span></span></div>
+          <div class="vitality-row"><span class="vitality-dot" style="background: var(--error);"></span><span class="vitality-name">Braços</span><span class="vitality-pct" style="color: var(--vitality-high);">80%</span><span></span></div>
+          <div class="vitality-row" style="opacity: 0.55;"><span class="vitality-dot" style="background: var(--bp-core);"></span><span class="vitality-name">Core</span><span class="vitality-pct" style="color: var(--text-dim); font-size: 14px; min-width: 50px; text-align: right;">—</span><span class="vitality-state">sem dados</span></div>
+
+          <div class="ph-section">Volume &amp; pico — esta semana</div>
+          <div class="vp-block">
+            <div class="vp-block-header"><span class="vp-block-dot" style="background: var(--bp-chest);"></span><span class="vp-block-name">Peito</span></div>
+            <div class="vp-cols">
+              <div>
+                <div class="vp-col-label">Volume</div>
+                <div class="vp-col-value">12 <span class="secondary">/ 16 séries</span></div>
+                <div class="vp-col-delta down">▼ 4 vs média (4 sem)</div>
+              </div>
+              <div>
+                <div class="vp-col-label">Carga pico</div>
+                <div class="vp-col-value">105 <span class="secondary">kg</span></div>
+                <div class="vp-col-delta up"><span class="badge">30D</span> ▲ +3,2 kg</div>
+              </div>
+            </div>
+          </div>
+          <div class="vp-block">
+            <div class="vp-block-header"><span class="vp-block-dot" style="background: var(--warning);"></span><span class="vp-block-name">Ombros</span></div>
+            <div class="vp-cols">
+              <div>
+                <div class="vp-col-label">Volume</div>
+                <div class="vp-col-value">9 <span class="secondary">/ 6 séries</span></div>
+                <div class="vp-col-delta over">▲ +3 acima da meta</div>
+              </div>
+              <div>
+                <div class="vp-col-label">Carga pico</div>
+                <div class="vp-col-value">42 <span class="secondary">kg</span></div>
+                <div class="vp-col-delta up"><span class="badge">30D</span> ▲ +1,5 kg</div>
+              </div>
+            </div>
+          </div>
+          <div class="vp-block">
+            <div class="vp-block-header"><span class="vp-block-dot" style="background: var(--error);"></span><span class="vp-block-name">Braços</span></div>
+            <div class="vp-cols">
+              <div>
+                <div class="vp-col-label">Volume</div>
+                <div class="vp-col-value">— <span class="secondary">séries</span></div>
+                <div class="vp-col-delta flat">sem histórico</div>
+              </div>
+              <div>
+                <div class="vp-col-label">Referência <span class="info">ⓘ</span></div>
+                <div class="vp-col-value">10 <span class="secondary">séries</span></div>
+                <div class="vp-col-delta flat">estimado</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li><strong>Trend chart</strong>: selected line 2.5dp/100%, others 1dp/35%. 180ms linear tween on tap. Lines colored by body-part identity (not vitality state). Section-header padding fixes overlap.</li>
+          <li><strong>Vitality table</strong>: percentages in HP-drain ramp (high green / mid amber / low red). No "Path mastered" or "caminho esfriando" copy on active/fading rows. Only <em>untested</em> keeps "sem dados".</li>
+          <li><strong>ⓘ icons</strong> on both vitality section headers → same bottom sheet (definition · 3-state ramp · rank-safety guarantee in heroGold).</li>
+          <li><strong>Volume &amp; pico</strong>: per-body-part two-column block. Left = Volume (X/Y séries) with weekly delta. Right = Carga pico (kg/lbs) with 30D delta badge.</li>
+          <li>Delta adapts to history: weeks 2–4 → "vs semana passada"; weeks 5+ → "vs média (4 sem)". Under-target red, over-target <strong>amber</strong> (not green), goal-met green bullet <code>●</code>.</li>
+          <li>Generic-tip fallback: right column becomes "REFERÊNCIA" + 10 séries + "ⓘ estimado" → bottom-sheet explainer (Schoenfeld 2019 maintenance floor).</li>
+          <li>Peak Loads horizontal-bar section <strong>deleted</strong>. Peak data lives in V&amp;P right column.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       VITALITY EXPLAINER bottom sheet
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="vitality-explainer">
+    <h2>Vitality ⓘ bottom sheet</h2>
+    <p class="caption">Opens from the ⓘ on either vitality section header (trend or table). Same content from both entry points. Three parts: definition, three-state ramp, rank-safety guarantee in heroGold-bordered box.</p>
+
+    <div class="screen-body">
+      <div class="phone-col">
+        <span class="phone-label">bottom sheet</span>
+        <div class="phone" style="padding: 0;">
+          <div class="sheet-mock">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title">Vitalidade</div>
+            <div class="sheet-body">
+              <p>Vitalidade reflete o quão recente é seu treino para cada grupo muscular. É um indicador de <strong>quanto sua jornada está ativa</strong>, não da sua força.</p>
+              <p style="margin-bottom: 8px;"><strong style="color: var(--text-cream);">Como ela se move:</strong></p>
+              <div class="ramp-row">
+                <span class="ramp-dot" style="background: var(--vitality-high);"></span>
+                <span class="ramp-label">Ativo</span>
+                <span class="ramp-pct" style="color: var(--vitality-high);">66–100%</span>
+              </div>
+              <div class="ramp-row">
+                <span class="ramp-dot" style="background: var(--vitality-mid);"></span>
+                <span class="ramp-label">Esmorecendo</span>
+                <span class="ramp-pct" style="color: var(--vitality-mid);">34–65%</span>
+              </div>
+              <div class="ramp-row" style="margin-bottom: 10px;">
+                <span class="ramp-dot" style="background: var(--vitality-low);"></span>
+                <span class="ramp-label">Dormente</span>
+                <span class="ramp-pct" style="color: var(--vitality-low);">0–33%</span>
+              </div>
+              <p>Sobe a cada treino do grupo. Desce gradualmente nos dias sem treino — quanto mais tempo, menor fica.</p>
+              <div class="guarantee">
+                <strong>Seu rank nunca cai.</strong> Vitalidade só sinaliza atividade recente — o progresso conquistado no rank de cada grupo fica permanente.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li>State band labels in pt-BR: <strong>Ativo</strong> / <strong>Esmorecendo</strong> / <strong>Dormente</strong>. Single-word RPG-flavored triad.</li>
+          <li><strong>Rank-safety guarantee</strong> boxed in heroGold-bordered callout — load-bearing copy to prevent users reading red vitality as "I lost my rank."</li>
+          <li>Same bottom sheet entry from both vitality section headers (trend + table) — one source of truth.</li>
+          <li>L10n fix in 26a: <code>vitalityCopyDormant</code> currently says "Aguarda seu primeiro passo" (which describes Untested) — repurpose for the actual Dormant state.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       TITLES (26d)
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="titles">
+    <h2>Titles screen (26d)</h2>
+    <p class="caption">Three regions — Equipado (heroGold), Conquistados (earned), Próximos (next milestones with progress bar). Locked titles hidden entirely. Cross-build titles surface as special heroGold cards when within 1 rank of every condition.</p>
+
+    <div class="screen-body">
+      <div class="phone-col">
+        <span class="phone-label">360dp</span>
+        <div class="phone">
+          <div class="mock-appbar">
+            <div class="left"><span class="back">←</span><span class="mock-appbar-title">Títulos</span></div>
+            <span class="counter-pill"><span class="count">8</span> / 90 conquistados</span>
+          </div>
+
+          <div class="ph-section">Equipado</div>
+          <div class="equipped-card">
+            <span class="dot" style="background: var(--bp-back); color: var(--bp-back);"></span>
+            <div class="body">
+              <div class="name">Portador-da-Placa</div>
+              <div class="meta">Costas · Rank 5</div>
+            </div>
+            <span class="tag">Em uso</span>
+          </div>
+
+          <div class="ph-section">Conquistados</div>
+          <div class="earned-row"><span class="dot" style="background: var(--bp-chest);"></span><div><div class="name">Coração-de-Mármore</div><div class="meta">Peito · Rank 10</div></div><span class="equip-cta">Equipar</span></div>
+          <div class="earned-row"><span class="dot" style="background: var(--bp-back);"></span><div><div class="name">Asa-de-Aço</div><div class="meta">Costas · Rank 10</div></div><span class="equip-cta">Equipar</span></div>
+          <div class="earned-row"><span class="dot" style="background: var(--primary-violet);"></span><div><div class="name">Caminho-Trilhado</div><div class="meta">Personagem · Nível 10</div></div><span class="equip-cta">Equipar</span></div>
+          <div class="earned-row"><span class="dot" style="background: var(--bp-chest);"></span><div><div class="name">Iniciado-da-Forja</div><div class="meta">Peito · Rank 5</div></div><span class="equip-cta">Equipar</span></div>
+
+          <div class="ph-section">Próximos</div>
+
+          <div class="cross-build-row">
+            <div class="cb-header">
+              <span class="dot"></span>
+              <span class="name">Atlante</span>
+              <span class="badge">Especial</span>
+            </div>
+            <div class="cb-conditions">
+              <div class="cb-condition met">
+                <span class="dot" style="background: var(--bp-back);"></span>
+                <span class="name">Costas</span>
+                <div class="bar-track"><div class="bar-fill" style="background: var(--bp-back); width: 100%;"></div></div>
+                <span class="num">11/10</span>
+              </div>
+              <div class="cb-condition">
+                <span class="dot" style="background: var(--warning);"></span>
+                <span class="name">Ombros</span>
+                <div class="bar-track"><div class="bar-fill" style="background: var(--warning); width: 88%;"></div></div>
+                <span class="num">7/8</span>
+              </div>
+            </div>
+            <div class="sub">◆ Falta 1 rank em Ombros</div>
+          </div>
+
+          <div class="next-row">
+            <div class="next-row-top">
+              <span class="dot" style="background: var(--bp-chest);"></span>
+              <span class="name">Titã-do-Peitoral</span>
+              <span class="progress-num">16 <span class="denom">/ 20</span></span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="background: var(--bp-chest); width: 80%;"></div></div>
+            <div class="sub">Peito · faltam 4 ranks</div>
+          </div>
+          <div class="next-row">
+            <div class="next-row-top">
+              <span class="dot" style="background: var(--success);"></span>
+              <span class="name">Cariátide-Viva</span>
+              <span class="progress-num">9 <span class="denom">/ 10</span></span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="background: var(--success); width: 90%;"></div></div>
+            <div class="sub">Pernas · falta 1 rank</div>
+          </div>
+          <div class="next-row">
+            <div class="next-row-top">
+              <span class="dot" style="background: var(--primary-violet);"></span>
+              <span class="name">Caminho-Jurado</span>
+              <span class="progress-num">14 <span class="denom">/ 25</span></span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="background: var(--primary-violet); width: 56%;"></div></div>
+            <div class="sub">Personagem · faltam 11 níveis</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li><strong>Three regions</strong>: Equipado (heroGold card) → Conquistados (earned, Equipar CTA) → Próximos (next per body-part track + character + cross-build).</li>
+          <li><strong>Locked titles hidden</strong> — no "Ver todos" link. Keeps the mystery.</li>
+          <li>Cross-build cards surface only <strong>within 1 rank of every condition</strong>. Special heroGold treatment: gold dot + faint gradient + ESPECIAL badge.</li>
+          <li>heroGold scarcity-rule exceptions: only Equipado card + cross-build card. Both whitelisted in <code>check_reward_accent.sh</code> in 26a.</li>
+          <li><strong>Bug fix (data integrity)</strong>: <code>earned_titles</code> INSERT moves from equip-time to detection-time in the RPC. Equip becomes a pure <code>is_active</code> toggle. One-shot backfill RPC for existing users walks <code>xp_events</code> history.</li>
+          <li>Title names in <code>titles_v1.json</code> stay unchanged for this phase.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       PLAN EDITOR (26e)
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="plan">
+    <h2>Plan editor (26e) — pure bucket</h2>
+    <p class="caption">Phase 12 bucket model preserved with one addition: <code>isSpontaneous: bool</code>. No day binding, no rest slots. Workouts auto-absorb on save (find-or-create entry). Engajamento section shows weekly muscle-group volume; cardio hidden.</p>
+
+    <div class="screen-body">
+      <div class="phone-col">
+        <span class="phone-label">360dp</span>
+        <div class="phone">
+          <div class="mock-appbar">
+            <div class="left"><span class="back">←</span><span class="mock-appbar-title">Plano da semana</span></div>
+          </div>
+          <div class="week-head">
+            <span class="left">Esta semana</span>
+            <span class="counter-pill"><span class="count">2</span> dias treinados</span>
+          </div>
+
+          <div class="routine-row">
+            <div class="status-icon done">✓</div>
+            <div class="routine-body"><span class="routine-name">Push</span><span class="completion-meta">Seg</span></div>
+            <span class="more-icon">⋯</span>
+          </div>
+          <div class="routine-row">
+            <div class="status-icon planned"></div>
+            <div class="routine-body"><span class="routine-name pending">Push</span></div>
+            <span class="more-icon">⋯</span>
+          </div>
+          <div class="routine-row">
+            <div class="status-icon planned"></div>
+            <div class="routine-body"><span class="routine-name pending">Pull</span></div>
+            <span class="more-icon">⋯</span>
+          </div>
+          <div class="routine-row">
+            <div class="status-icon planned"></div>
+            <div class="routine-body"><span class="routine-name pending">Legs</span></div>
+            <span class="more-icon">⋯</span>
+          </div>
+          <div class="routine-row">
+            <div class="status-icon done spontaneous">✓</div>
+            <div class="routine-body"><span class="routine-name">Push</span><span class="spontaneous-tag">★ Espontâneo</span><span class="completion-meta">Qua</span></div>
+            <span class="more-icon">⋯</span>
+          </div>
+          <div class="add-cta">+ Adicionar treino</div>
+
+          <div class="eng-section">
+            <div class="eng-header"><span class="label">Engajamento da semana<span class="info-icon">i</span></span></div>
+            <div class="muscle-bars">
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--bp-chest);"></span><span class="name">Peito</span>
+                <div class="track"><div class="planned-fill" style="background: var(--bp-chest); width: 100%;"></div><div class="done-fill" style="background: var(--bp-chest); width: 67%;"></div></div>
+                <span class="num">28 <span class="planned">/42</span></span>
+              </div>
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--bp-back);"></span><span class="name">Costas</span>
+                <div class="track"><div class="planned-fill" style="background: var(--bp-back); width: 100%;"></div></div>
+                <span class="num">0 <span class="planned">/14</span></span>
+              </div>
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--success);"></span><span class="name">Pernas</span>
+                <div class="track"><div class="planned-fill" style="background: var(--success); width: 100%;"></div></div>
+                <span class="num">0 <span class="planned">/15</span></span>
+              </div>
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--warning);"></span><span class="name">Ombros</span>
+                <div class="track"><div class="planned-fill" style="background: var(--warning); width: 100%;"></div><div class="done-fill" style="background: var(--warning); width: 67%;"></div></div>
+                <span class="num">6 <span class="planned">/9</span></span>
+              </div>
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--error);"></span><span class="name">Braços</span>
+                <div class="track"><div class="planned-fill" style="background: var(--error); width: 100%;"></div><div class="done-fill" style="background: var(--error); width: 67%;"></div></div>
+                <span class="num">4 <span class="planned">/6</span></span>
+              </div>
+              <div class="muscle-bar">
+                <span class="dot" style="background: var(--bp-core);"></span><span class="name">Core</span>
+                <div class="track"><div class="planned-fill" style="background: var(--bp-core); width: 100%;"></div></div>
+                <span class="num">0 <span class="planned">/3</span></span>
+              </div>
+            </div>
+            <div class="eng-legend">
+              <span><span class="legend-swatch" style="background: var(--hot-violet);"></span>feito</span>
+              <span><span class="legend-swatch" style="background: var(--hot-violet); opacity: 0.4;"></span>planejado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li><strong>Schema:</strong> existing <code>BucketRoutine</code> + one field — <code>isSpontaneous: bool</code> (default false). No nullable routineId, no length constraint.</li>
+          <li><strong>Auto-absorb on save_workout:</strong> match uncompleted bucket entry by routineId → set <code>completedWorkoutId</code>. No match → create new entry with <code>isSpontaneous = true</code>, order appended.</li>
+          <li><strong>Status icons:</strong> ○ violet outline ring (planned) · ✓ green filled (planned + done) · ✓ violet filled + ★ tag (spontaneous + done).</li>
+          <li><strong>Counter:</strong> unique completion days (two workouts same day = 1 day).</li>
+          <li><strong>Multi-workout per day naturally supported</strong> — second workout just creates another entry.</li>
+          <li><strong>Week rollover:</strong> copy entries where <code>isSpontaneous == false</code>; clear completion state. Spontaneous entries don't carry forward.</li>
+          <li><strong>Engajamento section:</strong> 6 body-part bars in canonical order (cardio hidden). Done-fill + 40%-opacity planned-fill stacked on same track. ⓘ → set-counting rule explainer. No total counter (compound double-counting would mislead).</li>
+          <li>Set-counting rule (locked): primary by max XP share, ties at max count for all tied body parts. Single source: <code>exercises.xp_attribution</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       HOME (26f)
+       ═══════════════════════════════════════════════ -->
+  <section class="screen" id="home">
+    <h2>Home (26f)</h2>
+    <p class="caption">Two structural changes: tappable expanding character card (replaces body-part chip rail) + bucket chip row (replaces 7-day timeline). ActionHero + greeting preserved. Shown in both states — collapsed and expanded.</p>
+
+    <div class="screen-body two-phones">
+      <div class="phone-col">
+        <span class="phone-label">Recolhido</span>
+        <div class="phone">
+          <div class="h-greeting">
+            <div class="date">Quarta-feira · 13 Nov</div>
+            <div class="name">Caio</div>
+          </div>
+
+          <div class="char-card">
+            <div class="cc-header">
+              <div class="cc-rune"><span class="glyph">⏃</span></div>
+              <div>
+                <div class="cc-lvl-line"><span class="cc-lvl-num">14</span><span class="cc-lvl-tag">LVL</span></div>
+                <div class="cc-class-name">Iron Vanguard</div>
+                <span class="cc-title-pill">Portador-da-Placa</span>
+              </div>
+              <div class="cc-dom">
+                <div class="cc-dom-label">Dominante</div>
+                <div class="cc-dom-rank" style="color: var(--bp-chest);">16</div>
+                <div class="cc-dom-name" style="color: var(--bp-chest);">Peito</div>
+              </div>
+            </div>
+            <div class="cc-closest">
+              <span class="indicator"><span style="color: var(--error);">◆</span> <strong>Braços</strong> · 140 XP para rank 7</span>
+              <div class="cc-chevron">›</div>
+            </div>
+          </div>
+
+          <div class="nudge">◆ <strong>Faltam 3 treinos</strong> para fechar a semana</div>
+
+          <div class="action-hero">
+            <div class="ah-meta">
+              <div class="ah-eyebrow">Próximo treino</div>
+              <div class="ah-title">Iniciar Push</div>
+              <div class="ah-sub">5 exercícios · ~45 min</div>
+            </div>
+            <div class="ah-arrow">▶</div>
+          </div>
+
+          <div class="week-section">
+            <div class="week-section-header"><span class="label">Esta semana</span><span class="progress"><strong>2</strong> dias treinados</span></div>
+            <div class="bucket-chips">
+              <div class="bucket-chip done"><div class="icon done">✓</div><span class="nm">Push</span><span class="meta">Seg</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Push</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Pull</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Legs</span></div>
+              <div class="bucket-chip done spontaneous"><div class="icon done spontaneous">✓</div><span class="nm">Push</span><span class="star">★</span><span class="meta">Qua</span></div>
+            </div>
+            <div class="week-footer"><span class="edit-plan-link">Editar plano →</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-col">
+        <span class="phone-label">Expandido (após tap)</span>
+        <div class="phone">
+          <div class="h-greeting">
+            <div class="date">Quarta-feira · 13 Nov</div>
+            <div class="name">Caio</div>
+          </div>
+
+          <div class="char-card expanded">
+            <div class="cc-header">
+              <div class="cc-rune"><span class="glyph">⏃</span></div>
+              <div>
+                <div class="cc-lvl-line"><span class="cc-lvl-num">14</span><span class="cc-lvl-tag">LVL</span></div>
+                <div class="cc-class-name">Iron Vanguard</div>
+                <span class="cc-title-pill">Portador-da-Placa</span>
+              </div>
+              <div class="cc-dom">
+                <div class="cc-dom-label">Dominante</div>
+                <div class="cc-dom-rank" style="color: var(--bp-chest);">16</div>
+                <div class="cc-dom-name" style="color: var(--bp-chest);">Peito</div>
+              </div>
+            </div>
+            <!-- Closest-rank-up HIDDEN when expanded (per user decision) -->
+            <div class="cc-expanded-body">
+              <div class="cc-char-xp">
+                <div class="char-track"><div class="char-fill" style="width: 70%;"></div></div>
+                <div class="char-label"><span>8.420 XP</span><span class="right">3.580 para LVL 15</span></div>
+              </div>
+
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--bp-chest);"></span><span class="b-stat-name">Peito</span><span class="b-stat-num">16</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-chest); width: 71%;"></div></div>
+                <div class="b-stat-label"><span>1.420 XP</span><span>580 para o próximo rank</span></div>
+              </div>
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--bp-back);"></span><span class="b-stat-name">Costas</span><span class="b-stat-num">11</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-back); width: 21%;"></div></div>
+                <div class="b-stat-label"><span>320 XP</span><span>1.180 para o próximo rank</span></div>
+              </div>
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--success);"></span><span class="b-stat-name">Pernas</span><span class="b-stat-num">9</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--success); width: 82%;"></div></div>
+                <div class="b-stat-label"><span>980 XP</span><span>220 para o próximo rank</span></div>
+              </div>
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--warning);"></span><span class="b-stat-name">Ombros</span><span class="b-stat-num">7</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--warning); width: 27%;"></div></div>
+                <div class="b-stat-label"><span>240 XP</span><span>660 para o próximo rank</span></div>
+              </div>
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--error);"></span><span class="b-stat-name">Braços</span><span class="b-stat-num">6</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--error); width: 82%;"></div></div>
+                <div class="b-stat-label"><span>660 XP</span><span>140 para o próximo rank</span></div>
+              </div>
+              <div class="cc-stat-row">
+                <div class="b-stat-top"><span class="b-stat-dot" style="background: var(--bp-core);"></span><span class="b-stat-name">Core</span><span class="b-stat-num">3</span></div>
+                <div class="b-stat-bar-track"><div class="b-stat-bar-fill" style="background: var(--bp-core); width: 27%;"></div></div>
+                <div class="b-stat-label"><span>110 XP</span><span>290 para o próximo rank</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="nudge">◆ <strong>Faltam 3 treinos</strong> para fechar a semana</div>
+
+          <div class="action-hero">
+            <div class="ah-meta">
+              <div class="ah-eyebrow">Próximo treino</div>
+              <div class="ah-title">Iniciar Push</div>
+              <div class="ah-sub">5 exercícios · ~45 min</div>
+            </div>
+            <div class="ah-arrow">▶</div>
+          </div>
+
+          <div class="week-section">
+            <div class="week-section-header"><span class="label">Esta semana</span><span class="progress"><strong>2</strong> dias treinados</span></div>
+            <div class="bucket-chips">
+              <div class="bucket-chip done"><div class="icon done">✓</div><span class="nm">Push</span><span class="meta">Seg</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Push</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Pull</span></div>
+              <div class="bucket-chip"><div class="icon planned"></div><span class="nm pending">Legs</span></div>
+              <div class="bucket-chip done spontaneous"><div class="icon done spontaneous">✓</div><span class="nm">Push</span><span class="star">★</span><span class="meta">Qua</span></div>
+            </div>
+            <div class="week-footer"><span class="edit-plan-link">Editar plano →</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="decisions">
+        <h3>Locked decisions</h3>
+        <ul>
+          <li><strong>Tappable expanding character card.</strong> Collapsed (~118dp): header + closest-rank-up indicator + chevron <code>›</code>. Expanded (~480dp): header + char XP bar + 6 stat rows (Saga Option B v4 spec).</li>
+          <li>Closest-rank-up: smallest absolute "XP to next rank" gap. Diamond <code>◆</code> in body-part color. <strong>Hidden when expanded</strong>.</li>
+          <li><strong>Stat rows in expanded state tappable</strong> → routes to <code>/saga/stats</code> with body part pre-selected.</li>
+          <li>Expanded state <strong>not persisted</strong> across app launches. Always opens collapsed.</li>
+          <li><strong>Body-part rank chip rail dropped</strong> (the <code>● Peito 16 · ● Costas 11 …</code> row). Replaced by the expand-on-tap pattern.</li>
+          <li><strong>Bucket chip row</strong> replaces the 7-day timeline. Wraps to multiple rows; respects <code>BucketRoutine.order</code>; status icon + name + completion-day meta. Tap → routine preview.</li>
+          <li>"Editar plano →" link always visible (even with empty bucket).</li>
+          <li>Rotating encouragement nudge priority: cross-build → body-part title → weekly plan → streak → first-step.</li>
+          <li>ActionHero adaptive: "Iniciar {next}" / "Iniciar treino livre" / "Criar primeira rotina".</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

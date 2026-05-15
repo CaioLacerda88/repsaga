@@ -369,6 +369,251 @@ Deliverables:
   bump + all formula constants as the **launch baseline**. Future
   tuning is a new phase.
 
+### Phase 26 — Pre-launch UI/UX Revamp
+
+Six-screen surgical revamp for launch readiness. User flagged the visual of four screens (Saga, Stats deep-dive, Titles, Home) as "not good enough" during on-device assessment. A real data-integrity bug surfaced in the titles awarding pipeline. Plus an opportunity to evolve Phase 12's weekly bucket into a model that honestly absorbs spontaneous training. Last numbered phase before the un-numbered Launch Phase.
+
+**Mission framing.** The user explicitly said "the color scheme and design direction are very good." This is **per-screen surgery**, not a redesign: lock the visual language tokens, push the RPG identity to the surface, fix the awarding bug, give the plan editor an honest data layer. Visual reference for every locked surface lives at `docs/phase-26-mockups.html` (tracked) — the spec text below is the authoritative source; the mockup file is the visual companion.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| 26a — Color system foundation | NOT STARTED | 4 new `AppColors` tokens (`xpTrack`, `bodyPartBack` = Sky, `bodyPartCardio` infrastructure-only, `vitalityHigh/Mid/Low` aliases). Vitality copy l10n fixes. heroGold whitelist for Titles screen. |
+| 26b — Saga screen revamp | NOT STARTED | Option B v4 — type-dominant header (level numeral 56sp), 36dp rune without active-state glow, full-width per-stat XP bars with within-rank progress, dot pulse on rank-up (24h). Stat rows tappable → Stats deep-dive. |
+| 26c — Stats deep-dive | NOT STARTED | HP-drain vitality ramp (3 bands), trend chart selected-line emphasis, "Path mastered" + "caminho esfriando" copy removed, ⓘ tooltip for vitality concept, Volume & pico restructure (weekly volume delta + 30D peak delta). Peak Loads section dropped. |
+| 26d — Titles screen + awarding fix | NOT STARTED | Three-region UI (Equipado / Conquistados / Próximos), cross-build "Especial" cards in heroGold, locked titles hidden. **Server-side INSERT into `earned_titles` at detection time** + one-shot backfill RPC. |
+| 26e — Plan editor + bucket model | NOT STARTED | Add `isSpontaneous` to `BucketRoutine`; auto-absorb workouts on save into bucket entries; compact bucket list (no day binding); new Engajamento section (6 body-part bars). |
+| 26f — Home redesign | NOT STARTED | Replace 7-day-timeline → bucket chip row. Replace body-part chip rail → tappable **expanding character card** (collapsed: closest-rank-up indicator; expanded: char XP bar + 6 stat rows mirroring Saga Option B v4). |
+
+**Scope estimate:** ~17–22 dev days. By far the largest UI work since Phase 18.
+
+#### Locked decisions (apply across all sub-phases)
+
+**Color system** (introduced 26a, propagates everywhere):
+- `AppColors.xpTrack` = `Color(0x1AB36DFF)` — violet-tinted track at ~10% alpha. Replaces `rgba(255,255,255,0.06)` neutral wash on every XP/progress bar. Keeps progress infrastructure inside the Arcane Ascent palette.
+- `AppColors.bodyPartChest` = `Color(0xFFF472B6)` (pink, Tailwind Pink 400). **New chest identity** — frees `hotViolet` to be the pure brand-primary (gradients, taps, character XP, generic accent) without bleeding into the chest body-part. Anatomical fit (pec/heart), distinct from every other body-part hue.
+- `AppColors.bodyPartBack` = `Color(0xFF38BDF8)` (sky-blue, Tailwind Sky 400). Replaces `primaryViolet` for the back body-part identity. Resolves the chest/back "two purples" hue collision.
+- `AppColors.bodyPartCardio` = `Color(0xFFFB923C)` (orange). **Infrastructure-only for v1** — added so cardio rank-up can ship without re-touching the palette, but NOT shown on any UI surface this phase (rank rail, Saga, Stats, Engajamento all hide cardio). Cardio surfacing deferred to v1.1+.
+- `AppColors.vitalityHigh / vitalityMid / vitalityLow` — semantic aliases of `success / warning / error`. Same hex; named for self-documenting call sites.
+
+**Cross-cutting copy / l10n** (handled in 26a):
+- Fix `vitalityCopyDormant` — currently "Aguarda seu primeiro passo" / "Awaits your first stride" which actually describes the **Untested** state. Repurpose to "Dormente" + appropriate dormant copy.
+- Drop row-level fading-state copy ("caminho esfriando" / "Condicionamento perdido"). Color carries the signal.
+- Drop "Path mastered" / "Caminho dominado" for active state. Halo + rank carry it.
+- New vitality state band triad (pt-BR): **Ativo** / **Esmorecendo** / **Dormente**. Used inside the ⓘ explainer bottom sheet for the vitality concept.
+- Within-rank XP label copy (pt-BR): **"para o próximo rank"** (long form). Used on every per-stat row across Saga, Stats deep-dive, Home expanded card, Titles próximos rows.
+
+**Volume counting rule** (used by 26c Volume & pico AND 26e Engajamento):
+- A set counts toward the body part(s) with the **maximum XP-attribution share** from `exercises.xp_attribution`.
+- Ties at the max count toward **all tied body parts** (deadlift `back:0.40 + legs:0.40` → 1 set toward back AND 1 toward legs).
+- Strict equality for ties — curated data has intentional exact ties.
+- NULL fallback: 100% to `primary_muscle_group`.
+
+**heroGold scarcity-rule exceptions** (registered in `scripts/check_reward_accent.sh`):
+- Equipped title card on Titles screen (gradient + gold border + "Em uso" tag) — identity flex.
+- Cross-build "Próximos" cards on Titles (gold dot + faint gradient + "Especial" badge) — surfaces only when within 1 rank of every condition; typical user sees 0–1 instances.
+
+#### 26a acceptance criteria — Color system foundation
+
+**Scope.** Add the four new tokens to `AppColors`, update `VitalityStateStyles.bodyPartColor` to use `bodyPartBack` (sky), introduce vitality-ramp lookup function, update `scripts/check_reward_accent.sh` whitelist, fix l10n copy.
+
+**Acceptance:**
+- `flutter analyze` clean.
+- All XP/progress bar tracks (Saga, Stats, Home, plan editor) read from `AppColors.xpTrack`.
+- **Chest body-part hue is pink (`#F472B6`)** everywhere chest appears (Saga body-part-row dot, Saga radar chest vertex, vitality table dot, vitality trend chart line, Volume & pico chest block dot, Titles screen chest dots, Engajamento chest bar, Home expanded chest stat row, Home dominant-body-part rank when chest is dominant). `hotViolet` is reserved for brand accents only after this sub-phase.
+- Back body-part hue is sky (`#38BDF8`) everywhere it appears today (Saga radar, body-part-rank-row sigil, vitality table dot, vitality trend chart line, peak-loads bar — though peak-loads removed in 26c).
+- Cardio token defined but unused on UI surfaces.
+- `VitalityStateStyles.vitalityRampColorFor(double percentage)` helper introduced — returns `vitalityHigh` (>= 0.66) / `vitalityMid` (>= 0.34) / `vitalityLow` (< 0.34) / `textDim` (untested).
+- `check_reward_accent.sh` accepts heroGold on `EquippedTitleCard` + `CrossBuildCard` widgets; rejects new heroGold uses elsewhere.
+- L10n diff: `vitalityCopyDormant` rewritten; new keys for `vitalityStateBandActive`, `vitalityStateBandEsmorecendo`, `vitalityStateBandDormente`; new key `withinRankXpSuffix = "para o próximo rank"`.
+
+**Files:**
+- `lib/core/theme/app_theme.dart`
+- `lib/features/rpg/ui/utils/vitality_state_styles.dart`
+- `scripts/check_reward_accent.sh`
+- `lib/l10n/app_en.arb` + `app_pt.arb`
+
+**Tests:** unit tests for `vitalityRampColorFor` boundary cases (0.0, 0.33, 0.34, 0.65, 0.66, 1.0, null); golden tests for the four tokens on `AppColors.abyss` (contrast assertion).
+
+#### 26b acceptance criteria — Saga screen revamp
+
+**Scope.** Restructure `CharacterSheetScreen` to the Option B v4 design: top-band three-column header (36dp rune left · level numeral 56sp center · class/title meta right) + character XP bar (6dp gradient) + 6 body-part rows. Drop the centered RuneHalo + 56sp LVL composition currently in production. Body-part rows become full-width XP-bar blocks with rank num on the right and "X XP · Y para o próximo rank" labels below.
+
+**Acceptance:**
+- Header band ≤ 80dp tall on 360dp viewport. "Iron Vanguard" + "Plate-Bearer" right-column meta truncates with ellipsis at 360dp; doesn't squeeze the level numeral.
+- Active-state `RuneHalo` glow REMOVED (no `boxShadow` in the active state — only in radiant). The 36dp rune renders flat with the existing 1px rgba(179,109,255,0.35) stroke.
+- Each body-part row: 48dp min-height (Material tap-target floor), 6dp colored dot, UPPERCASE 10sp body-part name, 20sp Rajdhani-700 tabular rank num right-aligned, 4dp colored XP bar (within-rank fill), 9sp Rajdhani-600 textDim "X XP" + "Y para o próximo rank" label row.
+- Untrained body parts render at 0.4 opacity with no bar and `—` instead of rank num (existing `_CompressedRow` pattern).
+- **Stat rows tappable** → routes to `/saga/stats` with the tapped body part pre-selected in the trend chart.
+- **Dot pulse animation on rank-up**: after a rank-up celebration completes, the affected body part's dot animates to a glowing ring (~1.5x scale + outer glow) for 24h. State stored in Hive (`rank_up_pulse_until` map per body part).
+- Existing CodexNavRow + DormantCardioRow stay below the body-part rows, unchanged.
+- Skeleton/loading state adapts to the new shape.
+
+**Files:**
+- `lib/features/rpg/ui/character_sheet_screen.dart`
+- `lib/features/rpg/ui/widgets/body_part_rank_row.dart` (significant rewrite)
+- `lib/features/rpg/ui/widgets/rune_halo.dart` (drop active glow; new sizing)
+- New: `lib/features/rpg/ui/widgets/rank_up_pulse.dart`
+- `lib/features/rpg/data/rank_up_pulse_repository.dart` (Hive-backed, simple)
+- E2E: `test/e2e/specs/rpg-saga.spec.ts` — selector updates for new structure
+
+**Tests:** widget tests for header layout at 320/360/412dp (golden); body-part-row state variants (untrained, trained, just-rank-up'd); rank-up pulse animation timing (24h expiry); tappable row routing.
+
+#### 26c acceptance criteria — Stats deep-dive
+
+**Scope.** Three sections only — Vitality trend chart, Vitality table, Volume & pico. Peak Loads section removed. ⓘ tooltips added to both vitality section headers (same modal). Vitality table uses the new HP-drain ramp tokens. Trend chart adopts selected-line-dominant treatment (2.5dp/100% selected, 1dp/35% non-selected, 180ms linear tap-tween between).
+
+**Acceptance:**
+- Section header `_SectionHeader` gets explicit 12dp bottom padding — fixes the overlap reported on the trend chart.
+- `VitalityTrendChart` lines colored by **body-part identity** (not vitality state). Selected line 2.5dp / opacity 1; non-selected 1dp / opacity 0.35. Tap a body-part row in `VitalityTable` → trend chart selection updates with 180ms tween on both stroke-width and opacity.
+- `VitalityTable` percentage column reads `vitalityRampColorFor(pct)` from 26a. 100% green, 76% green, 52% amber, 28% red. Untested row reads "—" in textDim with "sem dados" subtitle.
+- ⓘ icon (14dp circle outline) added to **both** section headers ("Vitalidade — últimos 90 dias" and "Vitalidade atual"). Both open the same bottom sheet — three-part content (definition · 3-state band ramp · rank-safety guarantee in heroGold-bordered box).
+- Volume & pico restructure: one `.vp-block` per body part. Left column "Volume" = current week sets `X / Y séries`; right column "Carga pico" = EWMA value with kg/lbs suffix.
+- Volume delta line adapts to history depth: weeks 0–1 → no delta; weeks 2–4 → "X vs semana passada"; weeks 5+ → "X vs média (4 sem)".
+- Peak-load delta is **always monthly** with explicit `30D` badge before the delta value.
+- Delta state colors: under-target → `vitalityLow`; over-target → `warning` (amber, NOT green — amber says "noted, you decide"); exactly met → `vitalityHigh` with filled bullet `●` ("no ritmo"); flat → textDim.
+- Generic-tip fallback (no personal history for that body part): right column label flips to `REFERÊNCIA`, value = 10 sets (Schoenfeld 2019 hypertrophy maintenance floor), `ⓘ estimado` inline badge tied to a bottom-sheet explainer ("Baseado em recomendações de volume para hipertrofia (10–20 séries/semana por grupo muscular)…").
+- **Peak Loads section deleted** (no horizontal bar chart). The widget `peak_loads_table.dart` is removed.
+
+**Files:**
+- `lib/features/rpg/ui/stats_deep_dive_screen.dart`
+- `lib/features/rpg/ui/widgets/vitality_trend_chart.dart`
+- `lib/features/rpg/ui/widgets/vitality_table.dart`
+- New: `lib/features/rpg/ui/widgets/volume_peak_block.dart`
+- New: `lib/features/rpg/ui/widgets/vitality_explainer_sheet.dart`
+- Delete: `lib/features/rpg/ui/widgets/peak_loads_table.dart`
+- `lib/features/rpg/providers/stats_provider.dart` — extend with weekly volume + delta + EWMA-month-delta math; tie to `exercises.xp_attribution` for set counting (locked rule)
+- L10n: new keys for ⓘ bottom-sheet copy
+
+**Tests:** widget tests for vitality table coloring (boundary %s); trend chart line emphasis; volume/peak block edge cases (zero history, under-target, over-target amber, goal met bullet, generic-tip fallback); ⓘ tap opens sheet.
+
+#### 26d acceptance criteria — Titles screen + awarding pipeline fix
+
+**Scope.** Two-part: UI redesign + data-integrity fix. The bug today: `earned_titles` is only INSERTed when the user taps **"EQUIP TITLE"** in the celebration overlay. Dismissing the overlay = title permanently lost (the threshold has already crossed; the client-side `TitleUnlockDetector` won't re-fire). Fix is to write at detection time (server-side or client-side in `CelebrationEventBuilder`) plus a one-shot backfill RPC for existing users.
+
+**Acceptance — bug fix:**
+- New SQL migration adds `INSERT INTO earned_titles … ON CONFLICT DO NOTHING` to both `record_set_xp` and `record_session_xp_batch` at the point a rank-up crosses a title threshold. Title rows land in DB independent of UI flow.
+- `TitlesRepository.equipTitle(slug)` becomes a pure `is_active` toggle (the row exists from the RPC; equip just flips the flag).
+- One-shot backfill RPC `backfill_earned_titles(user_id uuid)` — walks `xp_events` history per user, identifies rank thresholds crossed, INSERTs missing `earned_titles` rows. Idempotent. Called automatically on first app open post-deploy for every active user via a feature-flag-gated bootstrap hook.
+- Regression test: workout → dismiss celebration overlay without tapping EQUIP → re-open Titles screen → earned row visible.
+- `CelebrationOrchestrator` flow unchanged from user POV (still shows celebration; tapping EQUIP still works; dismiss no longer loses the title).
+
+**Acceptance — UI redesign:**
+- Three regions in order: **Equipado** (1 row, heroGold gradient card) → **Conquistados** (earned-but-not-equipped, most recent first, body-part-color dot, "Equipar" CTA) → **Próximos** (single next title per body-part track + character-level + nearest cross-build, with rank progress bar in body-part hue).
+- Counter pill top-right: `N / 90 conquistados`.
+- Locked titles **hidden entirely** — no "Ver todos" link. The catalog still backs the detector; hiding is UI-only.
+- Cross-build titles surface in Próximos only when **within 1 rank of every condition**. Special "Especial" card treatment: heroGold dot + faint gold gradient background + 1px gold border + ESPECIAL badge top-right. Two condition rows inside, each in its own body-part hue; met conditions show a gold ✓; bottom sub-line names the bottleneck ("◆ Falta 1 rank em Ombros").
+- Tap a row → bottom sheet with title lore + (for earned) "Equipar" / "Desequipar" / (for próximos) deep-link to the bottleneck body-part's deep-dive.
+
+**Files:**
+- `lib/features/rpg/ui/titles_screen.dart` (significant rewrite)
+- New: `lib/features/rpg/ui/widgets/equipped_title_card.dart` (heroGold gradient)
+- New: `lib/features/rpg/ui/widgets/earned_title_row.dart`
+- New: `lib/features/rpg/ui/widgets/next_title_row.dart` (with progress bar)
+- New: `lib/features/rpg/ui/widgets/cross_build_card.dart` (heroGold treatment)
+- `lib/features/rpg/data/titles_repository.dart` — `equipTitle` simplifies; no INSERT path
+- `supabase/migrations/00060_titles_award_at_detection.sql`
+- `supabase/migrations/00061_backfill_earned_titles.sql`
+- `lib/features/workouts/ui/coordinators/celebration_orchestrator.dart` — verify no behavior change beyond removing the equip-time INSERT
+- E2E: `test/e2e/specs/titles.spec.ts` — dismiss-then-reopen regression
+
+**Tests:** integration test for the new RPC INSERT path; backfill idempotency test; titles screen widget tests for each section (empty / one-earned / many-earned / no-cross-build-near / cross-build-near); cross-build card visual variants.
+
+#### 26e acceptance criteria — Plan editor + bucket model evolution
+
+**Scope.** Keep Phase 12's bucket model (ordered list of `BucketRoutine`, no day binding). Add `isSpontaneous: bool` to distinguish auto-appended entries. Extend `save_workout` RPC to find-or-create the appropriate bucket entry. Redesign the plan editor as a compact ordered list (~42dp rows). Add **Engajamento** section showing weekly muscle-group volume — 6 body-part bars in canonical order (cardio hidden).
+
+**Acceptance — data model:**
+- `BucketRoutine` gains `@Default(false) bool isSpontaneous`. Freezed regen, no schema migration needed beyond JSONB tolerance.
+- `save_workout` RPC logic:
+  - If the workout's `routineId` matches an uncompleted bucket entry → set that entry's `completedWorkoutId` (state 2 / planned-done).
+  - If no match → create a new bucket entry with `routineId` = actual workout's source routine, `completedWorkoutId` set, `isSpontaneous = true`, order appended (state 4 / spontaneous).
+  - First-completion-wins: if a matching uncompleted entry exists but a duplicate spontaneous would also match, prefer filling the planned entry.
+- Week rollover (existing auto-populate on first app open of new week) copies entries where `isSpontaneous == false`, clears completion state. Spontaneous entries don't carry forward.
+- Backfill: walk existing `weekly_plans` rows, set `is_spontaneous = false` on all entries.
+
+**Acceptance — UI:**
+- Plan editor is a vertical ordered list of bucket entries. Each row: status icon (○ planned outline ring / ✓ green filled / ✓ violet filled + ★ Espontâneo tag) + routine name (textCream when done; textDim when pending) + completion day if done + ⋯ overflow menu.
+- Counter pill: `N dias treinados` — count of unique completion dates (two workouts same day = 1 day).
+- "+ Adicionar treino" CTA at the bottom of the list. Soft-cap warning when adding past `training_frequency_per_week` (existing Phase 12 inline text, retained).
+- **Engajamento section** below the bucket list (separated by hairline). 6 bars in canonical order (Peito · Costas · Pernas · Ombros · Braços · Core). Each bar: 6dp body-part dot + UPPERCASE 10sp name + stacked done-fill (100% opacity) and planned-fill (40% opacity) on the same 4dp track + tabular "X / Y" sets number on the right. Total counter REMOVED from section header (would mislead due to compound-attribution double-counting).
+- ⓘ icon on Engajamento header → bottom sheet explaining the volume counting rule (primary by max share, ties counted).
+- Set-counting math: live read from `exercises.xp_attribution` JSONB via the locked rule. Provider: `weeklyEngagementProvider` with parameter `{ includePlanned: bool }` — plan editor passes true; future Stats deep-dive Volume & pico passes false.
+
+**Files:**
+- `lib/features/weekly_plan/data/models/weekly_plan.dart`
+- `lib/features/weekly_plan/data/weekly_plan_repository.dart`
+- `lib/features/weekly_plan/ui/week_plan_screen.dart` (rewrite)
+- New: `lib/features/weekly_plan/ui/widgets/bucket_routine_row.dart`
+- New: `lib/features/weekly_plan/ui/widgets/engajamento_section.dart`
+- New: `lib/features/weekly_plan/providers/weekly_engagement_provider.dart`
+- `supabase/migrations/00062_weekly_plan_is_spontaneous_backfill.sql`
+- `supabase/migrations/00063_save_workout_bucket_update.sql` — extend save_workout RPC
+- E2E: `test/e2e/specs/weekly-plan.spec.ts` — major updates for new layout + spontaneous flow
+
+**Tests:** unit tests for the find-or-create logic in save_workout (planned hit, no match, duplicate route, multi-workout-same-day); widget tests for status-icon states; integration test for save_workout → bucket entry creation; weekly engagement math edge cases (zero history, all-completed week, abandoned body part, compound tie counting).
+
+#### 26f acceptance criteria — Home redesign
+
+**Scope.** Two structural changes: (1) replace the 7-day-timeline `WeekBucketSection` with a **bucket chip row** (one chip per bucket entry, wraps); (2) replace the body-part rank chip rail with a **tappable expanding character card** (collapsed: header + closest-rank-up indicator; expanded: + character XP bar + 6 stat rows like Saga Option B v4). Greeting + ActionHero preserved.
+
+**Acceptance — character card:**
+- Collapsed (~118dp): existing 3-column header (40dp rune left + level/class/title center + dominant rank right) + closest-rank-up indicator row at the bottom + chevron `›`.
+- Closest-rank-up indicator: `◆ <body-part> · <N> XP p/ rank <K+1>` where body part is the one with the smallest absolute "XP to next rank" gap. Diamond `◆` icon colored in the body-part hue. Falls back to "Comece sua jornada — primeiro set aguarda" if zero history everywhere.
+- Tap → 250ms easeOut expand. Chevron rotates 90° to `⌄`. Closest-rank-up indicator **hidden** during expanded state (redundant with the stat rows visible below).
+- Expanded body adds: character XP bar (6dp gradient track + label `X XP · Y para LVL N` with right side in hotViolet) + 6 stat rows in canonical order using the Saga Option B v4 row spec (48dp min-height, 20sp tabular rank num, body-part-hue 4dp bar, "X XP · Y para o próximo rank" label).
+- Each expanded stat row **tappable** → routes to `/saga/stats` with that body part pre-selected.
+- State NOT persisted across app launches — always opens collapsed. Home is glanceable; expansion is intentional.
+- Tap card again (any tap target outside an inner tap) → collapses.
+
+**Acceptance — bucket chip row:**
+- Section "Esta semana" below the ActionHero. Header label + progress text `<N> dias treinados` (unique completion days).
+- Each chip ~96–130dp wide, wraps to multiple rows as needed. Layout: status-icon (14dp, ○ outline ring / ✓ green / ✓ violet + ★) + routine name (textCream done; textDim pending) + completion-day meta if done (e.g., "Seg").
+- Tap a chip → opens routine preview (the existing pre-workout preview sheet). Does NOT auto-start the workout — the ActionHero is the one-tap-to-start CTA.
+- Chip order respects `BucketRoutine.order` (bucket order). Spontaneous entries appear at the end in their completion order.
+- "Editar plano →" link at the bottom-right of the section, routes to `/plan/week`. Always visible (even when bucket empty — empty-bucket users should discover the plan editor).
+- Empty bucket: section hidden entirely (greeting → char card → nudge → ActionHero "Iniciar treino livre" → routine list).
+
+**Acceptance — what's dropped:**
+- `WeekBucketSection` (7-day chip row from Phase 12.2c) — DELETED.
+- The body-part rank chip rail (the `● Peito 16 · ● Costas 11 · …` horizontal scroll) — DELETED.
+- "Próximo depois de hoje" affordance — DELETED. ActionHero adapts.
+- `HomeStatusLine` (display-name section) — REPLACED by the closest-rank-up indicator. The greeting at the top of Home already shows the user name.
+
+**ActionHero adaptation:**
+- Bucket has uncompleted entries → "Iniciar <next-routine-name>" + subtitle (exercise count + duration). The "next" = first uncompleted entry in `order`.
+- Bucket fully completed → "Iniciar treino livre" + subtitle "Semana completa".
+- No bucket / no routines → "Criar primeira rotina" (existing brand-new state).
+
+**Rotating encouragement nudge** (single line above ActionHero, ~24dp): priority order — cross-build within 1 rank → body-part title within 1 rank → weekly plan partial ("Faltam N treinos para fechar a semana") → streak ("N dias de sequência") → first-step. Updates daily, not real-time.
+
+**Files:**
+- `lib/features/workouts/ui/home_screen.dart` (significant rewrite)
+- New: `lib/features/workouts/ui/widgets/character_card.dart` (collapsed + expanded)
+- New: `lib/features/workouts/ui/widgets/bucket_chip_row.dart`
+- New: `lib/features/workouts/ui/widgets/encouragement_nudge.dart` (rotating priority logic)
+- Delete: `lib/features/workouts/ui/widgets/week_bucket_section.dart` (the 7-day chip row)
+- Delete: `lib/features/workouts/ui/widgets/home_status_line.dart`
+- E2E: `test/e2e/specs/home.spec.ts` — selector updates throughout
+
+**Tests:** character-card expand/collapse widget test; closest-rank-up logic boundary tests; bucket chip row state variants; rotating nudge priority test; stat-row tap routing in expanded state.
+
+#### Out of scope (deferred to v1.1 or v2)
+
+- **Cardio as a visible body part** on rank surfaces (Saga, Stats deep-dive, Home rank rail, Engajamento). Infrastructure (`AppColors.bodyPartCardio`, enum entry) ships in 26a so v1.1 only adds the rendering.
+- **Parity ⓘ tooltips on `Volume & pico` header and Saga character XP bar.** Both noted but skipped this phase. Engajamento and Vitality ⓘ tooltips ship; the others can follow in a small light-touch follow-up.
+- **Auto-reflow algorithm** for missed planned routines — user explicitly rejected. Bucket has no day binding, so "missed past planned" isn't even a state.
+- **"Mover" CTA on past-planned-not-done slots** — same; the bucket has no day binding.
+- **Stat-rows-tappable in Stats deep-dive** beyond just the vitality table → trend chart selection (existing). The volume/peak blocks aren't tappable in v1.
+- **Persisting char card expanded state** across app launches.
+
+#### Reference
+
+- Visual mockup reference (tracked): `docs/phase-26-mockups.html`. Six-screen final-design HTML — tokens, Saga, Stats deep-dive, vitality ⓘ sheet, Titles, Plan editor, Home (collapsed + expanded states). Spec text above is authoritative; mockup is the visual companion.
+- `docs/xp-difficulty-framework.md` — XP attribution canon (volume counting rule references it).
+- `docs/xp-balance-baseline.md` — calibration baseline (untouched by this phase).
+- PROJECT.md §4 Phase 18 / Phase 18.5 — RPG v1 + audit cycle (provides the rank/title/class context this phase polishes).
+- PROJECT.md §4 Phase 12 (and 12.2/12.3) — weekly plan bucket model 26e extends.
+
 ### Launch Phase
 
 **No phase number** — final phase before public release. Scope is
