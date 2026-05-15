@@ -115,10 +115,10 @@ class VitalityStateStyles {
   /// surfaces.
   ///
   /// Color choices (from AppTheme palette + spec §3 metaphors):
-  ///   * `chest`     → [AppColors.hotViolet]    — bright primary, anchors the
-  ///                   pressing identity at the top of the radar.
-  ///   * `back`      → [AppColors.primaryViolet]— deep base violet, the
-  ///                   pulling foundation that mirrors chest across the body.
+  ///   * `chest`     → [AppColors.bodyPartChest] — pink (Phase 26a). Anatomical
+  ///                   fit (pec/heart) + frees [hotViolet] from chest identity.
+  ///   * `back`      → [AppColors.bodyPartBack]  — sky-blue (Phase 26a).
+  ///                   Resolves the chest/back "two purples" hue collision.
   ///   * `legs`      → [AppColors.success]      — the green of foundation /
   ///                   ground-stride; lower-body roots the saga.
   ///   * `shoulders` → [AppColors.warning]      — warm yellow-amber, the
@@ -134,8 +134,8 @@ class VitalityStateStyles {
   /// reward token reserved for the `radiant` state and §13.2 rank-up
   /// celebrations.
   static const Map<BodyPart, Color> bodyPartColor = {
-    BodyPart.chest: AppColors.hotViolet,
-    BodyPart.back: AppColors.primaryViolet,
+    BodyPart.chest: AppColors.bodyPartChest, // was hotViolet (Phase 26a)
+    BodyPart.back: AppColors.bodyPartBack, // was primaryViolet (Phase 26a)
     BodyPart.legs: AppColors.success,
     BodyPart.shoulders: AppColors.warning,
     BodyPart.arms: AppColors.error,
