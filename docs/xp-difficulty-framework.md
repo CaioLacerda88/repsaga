@@ -124,7 +124,7 @@ dumbbell lunge, goblet squat, dumbbell Romanian deadlift, hack squat
 (loaded, plate-style), kettlebell swing, farmers walk, walking lunge,
 push-up*, bodyweight squat*, hanging leg raise*.
 
-**T4 (0.95) — Machine compound / cable multi-joint**
+**T4 (0.90) — Machine compound / cable multi-joint**
 Leg press, Smith-machine squat, chest press machine, seated row, lat
 pulldown, assisted pull-up machine, cable row, cable fly (when used
 as a multi-joint chest movement), tricep pushdown, face pull, cable
@@ -228,7 +228,7 @@ difficulty_mult = clamp(
 ```
 
 Constants:
-- tier_mult ∈ {0.85, 0.95, 1.05, 1.15, 1.25}
+- tier_mult ∈ {0.85, 0.90, 1.05, 1.15, 1.25}
 - bump_per_muscle = 0.02
 - max_bumped_muscles = 3 (effective cap of +0.06)
 - floor = 0.85, ceiling = 1.25

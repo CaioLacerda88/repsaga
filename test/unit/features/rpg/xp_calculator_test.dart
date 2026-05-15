@@ -20,7 +20,7 @@ Map<String, dynamic> _loadFixtures() {
   return json.decode(file.readAsStringSync()) as Map<String, dynamic>;
 }
 
-/// Tolerance for double parity. Volume_load^0.65 with strength_mult and
+/// Tolerance for double parity. Volume_load^0.60 with strength_mult and
 /// novelty introduces some float rounding; 1e-9 absolute is far tighter
 /// than anything user-observable but loose enough that x86_64 vs ARM
 /// double-rounding doesn't false-fail.
@@ -330,7 +330,7 @@ void main() {
 
   group('Boundary + edge cases', () {
     test(
-      'zero weight + zero reps → set_xp = 1.0^0.65 × 1 × 1 × 1 × 1 × 1 = 1.0',
+      'zero weight + zero reps → set_xp = 1.0^0.60 × 1 × 1 × 1 × 1 × 1 = 1.0',
       () {
         final r = XpCalculator.computeSetXp(
           weightKg: 0,

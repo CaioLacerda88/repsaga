@@ -262,14 +262,14 @@ SIM_ALIAS_TO_DEFAULT_SLUG = {
     'incline_bench':   'incline_barbell_bench_press', # 1.09
     'overhead_press':  'overhead_press',              # 1.19
     'lateral_raise':   'lateral_raise',               # 0.89
-    'tricep_pushdown': 'tricep_pushdown',             # 0.97
+    'tricep_pushdown': 'tricep_pushdown',             # 0.92
     'row':             'barbell_bent_over_row',       # 1.19
-    'pulldown':        'lat_pulldown',                # 0.99
+    'pulldown':        'lat_pulldown',                # 0.94
     'pullup':          'pull_up',                     # 1.19
     'curl':            'barbell_curl',                # 0.87
     'squat':           'barbell_squat',               # 1.19
     'deadlift':        'deadlift',                    # 1.21
-    'leg_press':       'leg_press',                   # 0.97
+    'leg_press':       'leg_press',                   # 0.92
     'lunge':           'walking_lunges',              # 1.07
     'plank':           'plank',                       # 0.89
     'leg_raise':       'leg_raise',                   # 0.85
@@ -860,7 +860,7 @@ _CALIBRATION_REAL_SLUG_IDENTITY = {
     # barbell_bent_over_row, lat_pulldown, pull_up, barbell_curl, barbell_squat,
     # deadlift, leg_press, walking_lunges, plank, leg_raise.
     'archer_push_up':           'archer_push_up',           # 1.21 (T2 bodyweight)
-    'cable_crossover':          'cable_crossover',          # 0.99 (T4)
+    'cable_crossover':          'cable_crossover',          # 0.94 (T4)
     'cable_curl':               'cable_curl',               # 0.87 (T5)
     'cable_lateral_raise':      'cable_lateral_raise',      # 0.89 (T5)
     'calf_raise':               'calf_raise',               # 0.85 (T5)
@@ -878,9 +878,9 @@ _CALIBRATION_REAL_SLUG_IDENTITY = {
     'leg_adductor':             'leg_adductor',             # 0.85 (T5)
     'leg_curl':                 'leg_curl',                 # 0.85 (T5)
     'leg_extension':            'leg_extension',            # 0.85 (T5)
-    'machine_chest_press':      'machine_chest_press',      # 0.99 (T4)
-    'machine_row':              'machine_row',              # 0.99 (T4)
-    'machine_shoulder_press':   'machine_shoulder_press',   # 0.99 (T4)
+    'machine_chest_press':      'machine_chest_press',      # 0.94 (T4)
+    'machine_row':              'machine_row',              # 0.94 (T4)
+    'machine_shoulder_press':   'machine_shoulder_press',   # 0.94 (T4)
     'pendlay_row':              'pendlay_row',              # 1.19 (T2)
     'pistol_squat':             'pistol_squat',             # 1.17 (T2 bodyweight)
     'push_up':                  'push_up',                  # 1.11 (T3 bodyweight)
@@ -1594,7 +1594,7 @@ def write_baseline_doc(path: str) -> None:
     lines.append('| T1 | Olympic / ballistic | 1.25 | Triple extension, peak power, highest skill ceiling |')
     lines.append('| T2 | Foundational compound (free weight, axial load) | 1.15 | Multi-joint, spine bears load, large stabilizer demand |')
     lines.append('| T3 | Standard compound (free weight or supported) | 1.05 | Multi-joint, lower spinal load OR partial support |')
-    lines.append('| T4 | Machine compound / cable multi-joint | 0.95 | Fixed path, low stabilizer demand |')
+    lines.append('| T4 | Machine compound / cable multi-joint | 0.90 | Fixed path, low stabilizer demand |')
     lines.append('| T5 | Single-joint isolation | 0.85 | One articulation, minimal coordination |')
     lines.append('')
     lines.append(

@@ -78,7 +78,7 @@ Intensity-by-reps table (lower reps = heavier load):
 | T1 | Olympic / ballistic | 1.25 | Triple extension, peak power, highest skill ceiling |
 | T2 | Foundational compound (free weight, axial load) | 1.15 | Multi-joint, spine bears load, large stabilizer demand |
 | T3 | Standard compound (free weight or supported) | 1.05 | Multi-joint, lower spinal load OR partial support |
-| T4 | Machine compound / cable multi-joint | 0.95 | Fixed path, low stabilizer demand |
+| T4 | Machine compound / cable multi-joint | 0.90 | Fixed path, low stabilizer demand |
 | T5 | Single-joint isolation | 0.85 | One articulation, minimal coordination |
 
 Composite: `difficulty_mult = clamp(tier_mult + min(secondary_count, 3) × 0.02, 0.85, 1.25)`. Secondary bump = +0.02 per secondary, capped at +0.06 (i.e. first 3 secondaries count).
