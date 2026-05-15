@@ -24,10 +24,16 @@ propagated the tuned constants (`VOLUME_EXPONENT 0.65→0.60`,
 `WEEKLY_CAP_SETS 20→15`, `OVER_CAP_MULTIPLIER 0.5→0.3`, T4 multipliers
 −0.05 across 28 slugs) to all 4 production sites. All applied to hosted
 Supabase. Calibration baseline locked in `docs/xp-balance-baseline.md`;
-future tuning is a new phase. Next: **Phase 25 — RPE** (research-first),
-then the **Launch Phase** (un-numbered; subscription + Play Store + any
-pre-launch scope expansion, formerly Phase 16). XP difficulty framework
-permanent reference: `docs/xp-difficulty-framework.md`.
+future tuning is a new phase. **Phase 25 (RPE) dropped 2026-05-15** —
+PO + UX research found <10% adoption signal in the Brazilian
+recreational-lifter target market, set-row real estate is full on 360 dp,
+and the XP formula already captures effort objectively via
+`intensity_mult × strength_mult` (RPE would only add subjective variance
+useful for autoregulation power-users, who aren't the v1 audience).
+RPE parked as v1.1 opt-in (see §2). Next: a TBD pre-launch phase
+(planning underway), then the **Launch Phase** (un-numbered; subscription
++ Play Store + any pre-launch scope expansion, formerly Phase 16). XP
+difficulty framework permanent reference: `docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -216,12 +222,36 @@ _None outstanding._ Recently closed:
 
 _Most v1.1 items dropped 2026-05-13_ after a current-state audit
 against the codebase. The roadmap reorganized around Phase 24 (XP
-balancing) → Phase 25 (RPE) → Launch Phase. Surviving / promoted items:
+balancing) → Launch Phase. Surviving / parked items:
 
-- **RPE tracking** — promoted to **Phase 25** (research-first; the
-  PROJECT.md claim that "widget exists, hidden by default" was wrong —
-  only the model field exists, no widget. Full spec lives in §3
-  In-flight when Phase 25 opens).
+- **RPE tracking — v1.1 opt-in (parked 2026-05-15)** — Phase 25 was
+  dropped after PO + UX research. Findings: <10% adoption signal in the
+  Brazilian recreational-lifter target (competitors Hevy/Strong/FitNotes
+  all gate RPE behind opt-in; only Boostcamp ships always-visible to its
+  Sheiko/5-3-1 power-user audience); set-row real estate is full on
+  360 dp Brazilian-mid-market screens (would force shrinking weight or
+  reps stepper below 40 dp tap-floor); `intensity_mult × strength_mult`
+  in the Phase 24 formula already captures effort objectively (RPE only
+  adds subjective variance useful for autoregulation, not the v1
+  audience); shipping it would trade RepSaga's distinctive XP/RPG
+  position for parity with stronger incumbents.
+
+  **`ExerciseSet.rpe` model field stays** (already wired; notifier
+  accepts; zero cost to leave). When v1.1 reopens, design constraints
+  baked in:
+  - **Post-set bottom sheet**, NOT inline in the set row (set row
+    layout is full + reflective task breaks gym-floor "log → done →
+    rest" flow + anti-pattern 22 "overlays that block logging")
+  - **Brazilian-friendly qualitative scale** ("Fácil / Moderado /
+    Difícil" or similar 3-point chip row), NOT American "RPE 1-10" or
+    "RIR 0-5" jargon (no native pt-BR coaching vocabulary; explanation
+    copy adds onboarding burden)
+  - **Tracking-only by default** — does NOT feed XP unless post-launch
+    telemetry shows widespread autoregulation use. Layering subjective
+    RPE on top of `intensity_mult × strength_mult` would double-count
+    and amplify self-report bias.
+  - **Off by default**, behind a Profile Settings toggle (Hevy/Strong
+    pattern). Most v1 users never see it.
 
 Dropped (with rationale):
 
@@ -338,34 +368,6 @@ Deliverables:
 - Snapshot of `difficulty_mult` values + tier table + secondary-muscle
   bump + all formula constants as the **launch baseline**. Future
   tuning is a new phase.
-
-### Phase 25 — RPE
-
-Research-first. Decisions land before implementation.
-
-**Research questions:**
-- How is RPE used in real strength training? (RIR scale, Borg scale,
-  autoregulation principles, RPE-based load prescription)
-- How do competitor apps (Hevy, Strong, Boostcamp) surface RPE? Always
-  visible / opt-in / setting-gated?
-- Does RPE feed XP? Options to evaluate:
-  - Token bonus per RPE-tagged set (encourage tracking)
-  - Multiplier shape (additive to formula, vs replace `strength_mult`,
-    vs separate effort signal)
-  - Tracking-only (no XP impact, opt-in field)
-- Localization: RPE / RIR vocabulary in pt-BR. Brazilian gym culture
-  uses RPE less than US gyms — does the field need explanation copy?
-
-**Implementation scope (depends on research outcome):**
-- Widget: stepper or chip selector inside the set row.
-- Storage: `ExerciseSet.rpe` already exists on the model and notifier
-  accepts the field — only the UI is missing.
-- L10n strings.
-- Tests: unit, widget, E2E selector(s).
-- If RPE feeds XP: calculator + RPC + Python sim + fixtures parity
-  (same pattern as Phase 24a).
-
-Full implementation spec lands here when research closes.
 
 ### Launch Phase
 
@@ -750,13 +752,13 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 
 > Closes Phase 24. Six-archetype × 12-week balance simulation against the 6 acceptance criteria; iter-3 sign-off propagated to all 4 production sites in lockstep. **Constants snapshot is the launch baseline** — future tuning is a new phase. Permanent reference: `docs/xp-balance-baseline.md`.
 
-- **Sim methodology:** 6 archetypes per spec (Beginner, Intermediate compound, Advanced powerlifter, Hypertrophy bodybuilder, Bodyweight only, Machine only) × 12 weeks each. Existing 6 CONSISTENCY archetypes (beginner/intermediate/advanced/stagnant/comeback/vacationer) preserved alongside for future calibration phases. Sim-only iter 1 surfaced 1 hard fail (machine_only outranking intermediate, 1.088×) + 3 borderlines. Iter 2 (V=0.60, cap=15) narrowed everything; iter 3 (added over_cap=0.3 + T4 −0.05 across 28 slugs) cleared the hard fail and the powerlifter ratio. Final verdict: 4/6 PASS, 0 hard fail, 2 borderlines (C2 spread 31% / target 25%; C3 BW overshoot 23.4% / target 20%) explicitly accepted as documented deviations — both move in safe directions and both are structural (closing C2 needs a Phase 25+ intensity bonus the framework doesn't have; closing C3 partially undoes 24c's competitive-bodyweight intent).
+- **Sim methodology:** 6 archetypes per spec (Beginner, Intermediate compound, Advanced powerlifter, Hypertrophy bodybuilder, Bodyweight only, Machine only) × 12 weeks each. Existing 6 CONSISTENCY archetypes (beginner/intermediate/advanced/stagnant/comeback/vacationer) preserved alongside for future calibration phases. Sim-only iter 1 surfaced 1 hard fail (machine_only outranking intermediate, 1.088×) + 3 borderlines. Iter 2 (V=0.60, cap=15) narrowed everything; iter 3 (added over_cap=0.3 + T4 −0.05 across 28 slugs) cleared the hard fail and the powerlifter ratio. Final verdict: 4/6 PASS, 0 hard fail, 2 borderlines (C2 spread 31% / target 25%; C3 BW overshoot 23.4% / target 20%) explicitly accepted as documented deviations — both move in safe directions and both are structural (closing C2 needs an intensity-bonus formula extension the framework doesn't have — defer to a future calibration phase if post-launch telemetry warrants; closing C3 partially undoes 24c's competitive-bodyweight intent).
 - **Mid-phase instrumentation bug caught:** sim's `_CALIBRATION_ATTRIBUTION` had 6 silently-empty entries + 15 drifted from migration 00053 — surfaced by criterion 6 outlier scan before any tuning landed. Fixed all 21; iter-1 numbers re-baselined +18% to +131% per archetype before iter-2 tuning began. Without this catch, every "FAIL" verdict would have been a measurement artifact and tuning would have chased phantoms.
 - **Constants tuned (forward-only — past xp_events stay frozen):** `VOLUME_EXPONENT 0.65→0.60` (more sub-linear), `WEEKLY_CAP_SETS 20→15` (tighter ceiling), `OVER_CAP_MULTIPLIER 0.5→0.3` (stronger penalty past cap), 28 T4 slugs `difficulty_mult −0.05` each (resolves machine-vs-free-weight inversion; preserves T4 < T3 ordering — framework §2 updated to T4=0.90 baseline).
 - **Sites updated atomically (4 production sites in lockstep):** Dart `XpCalculator` constants; SQL migration 00059 with `rpg_base_xp` helper update so all 3 RPCs centralize via one place; Python sim canonical (`_CALIBRATION_*` override scaffolding deleted); fixture regenerated. The 28-slug T4 list lives in both the migration UPDATE block and the sim's `DIFFICULTY_MULT_BY_SLUG` (sim mirror is partial — 23 of 28 in mirror; the 5 Phase-24b T4 additions stay absent from the partial mirror per the dict's documented invariant; production reads from the column).
 - **Reviewer cycle:** 0 Blockers, 2 Warnings (stale T4 inline comments in sim; framework §3 T4 header still showing 0.95) + 2 Nits (stale 0.65 in test labels; baseline doc tier-table snapshot still 0.95) — all pure doc/comment integrity, no production logic touched. All fixed in cycle + 2 same-cluster preventive fixes (tier-table emitter; tier_mult set definition).
 - **Verification:** unit/widget 2689/2689; integration 39/39; Android debug APK clean; `npx supabase db reset` clean through 00059 (DO-block: 28 T4 slugs at <=0.96 difficulty_mult); psql spot-checks pre + post hosted (leg_press 0.92 was 0.97; lat_pulldown 0.94 was 0.99; rpg_base_xp(100,8) = 55.19 was 79.43); E2E full regression 241/241 passed (30.2 min), 62 skipped, 0 failures, 0 flaky.
-- **Phase 24 closed.** Library at 200 defaults; XP economy calibrated; baseline locked. Next: Phase 25 (RPE, research-first), then the Launch Phase.
+- **Phase 24 closed.** Library at 200 defaults; XP economy calibrated; baseline locked. Phase 25 (RPE) was dropped on 2026-05-15 after PO + UX research (parked as v1.1 opt-in — see §2). Next: a TBD pre-launch phase (planning underway), then the Launch Phase.
 
 ---
 
