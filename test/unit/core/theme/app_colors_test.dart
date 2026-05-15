@@ -25,4 +25,18 @@ void main() {
       expect(AppColors.xpTrack, const Color(0x1AB36DFF));
     });
   });
+
+  group('AppColors vitality ramp aliases (Phase 26a)', () {
+    test('vitalityHigh aliases success', () {
+      expect(AppColors.vitalityHigh, AppColors.success);
+    });
+
+    test('vitalityMid aliases warning', () {
+      expect(AppColors.vitalityMid, AppColors.warning);
+    });
+
+    test('vitalityLow aliases error', () {
+      expect(AppColors.vitalityLow, AppColors.error);
+    });
+  });
 }

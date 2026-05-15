@@ -91,6 +91,22 @@ class AppColors {
   /// system.
   static const xpTrack = Color(0x1AB36DFF); // unfilled track behind XP fill
 
+  // ─── Vitality ramp (Phase 26a) ───────────────────────────────────────
+  //
+  // Semantic aliases over success / warning / error. Same hex values;
+  // named for self-documenting call sites where the rendered semantic
+  // is "vitality HP-drain", not "success" or "error". Used by the new
+  // [VitalityStateStyles.vitalityRampColorFor] helper.
+
+  /// Vitality HP-drain — high band (66–100%). Alias of [success].
+  static const vitalityHigh = success;
+
+  /// Vitality HP-drain — mid band (34–65%). Alias of [warning].
+  static const vitalityMid = warning;
+
+  /// Vitality HP-drain — low band (0–33%). Alias of [error].
+  static const vitalityLow = error;
+
   /// Hairline for dividers and card borders. A low-alpha violet so borders
   /// feel like they belong to the palette rather than gray plate.
   static const hair = Color(0x24B36DFF); // rgba(179,109,255,0.14)
