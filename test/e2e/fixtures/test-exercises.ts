@@ -21,6 +21,12 @@ export const SEED_EXERCISES = {
   squat: 'Barbell Squat',
   deadlift: 'Deadlift',
   overheadPress: 'Overhead Press',
+  // Phase 24c-8 — bodyweight prompt E2E uses Pull-Up because it's one of
+  // the 20 curated `uses_bodyweight_load = TRUE` exercises (per
+  // `00056_add_bodyweight_load_semantics.sql`). Picking pull-up keeps
+  // the test surface aligned with what real users will most commonly
+  // hit the prompt on (the move is in nearly every routine library).
+  pullUp: 'Pull-Up',
 } as const;
 
 /**

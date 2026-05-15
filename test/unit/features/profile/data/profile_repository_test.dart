@@ -283,6 +283,41 @@ void main() {
         expect(builder.capturedUpsert!.containsKey('locale'), isFalse);
       });
 
+      // ---------------------------------------------------------------
+      // Phase 24c — bodyweight_kg parameter
+      //
+      // Same omit-on-null discipline as the other optional params: a
+      // missing arg must NOT clobber the row's existing bodyweight.
+      // The SQL `record_xp` RPC tolerates a null/missing column (falls
+      // back to a zero bodyweight contribution) but the upsert payload
+      // would write null, overwriting any stored value, if we forwarded
+      // the param unconditionally.
+      // ---------------------------------------------------------------
+      test('includes bodyweight_kg in upsert payload when provided', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(userId: 'user-1', bodyweightKg: 70.5);
+
+        expect(builder.capturedUpsert, isNotNull);
+        expect(builder.capturedUpsert!['bodyweight_kg'], 70.5);
+      });
+
+      test('omits bodyweight_kg from payload when null', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(userId: 'user-1', displayName: 'Bob');
+
+        expect(
+          builder.capturedUpsert!.containsKey('bodyweight_kg'),
+          isFalse,
+          reason:
+              'Forwarding null would clobber the stored bodyweight on every '
+              'unrelated profile update; the key must be omitted entirely.',
+        );
+      });
+
       test('maps Supabase exception to AppException', () async {
         final repo = _makeRepo(
           error: const supabase.PostgrestException(message: 'unique violation'),

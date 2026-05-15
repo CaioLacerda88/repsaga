@@ -166,6 +166,162 @@ void main() {
       });
     });
 
+    // ---------------------------------------------------------------
+    // Phase 24c — cache schema migration
+    //
+    // Pins the contract that bumping `currentCacheSchemaVersion` wipes the
+    // model-shape-dependent caches once on next app launch and stamps the
+    // new version into `userPrefs` so subsequent launches no-op.
+    // `userPrefs` and `offlineQueue` MUST survive the wipe — losing user
+    // settings or pending offline mutations is unacceptable.
+    // ---------------------------------------------------------------
+    group('migrateCacheSchema', () {
+      Future<void> openAllBoxes() async {
+        for (final name in HiveService.allBoxNames) {
+          await Hive.openBox<dynamic>(name);
+        }
+      }
+
+      Future<void> seedAllBoxes() async {
+        for (final name in HiveService.allBoxNames) {
+          await Hive.box<dynamic>(name).put('seeded_key', 'seeded_value');
+        }
+      }
+
+      test('clears cacheSchemaBoxes when no version key is persisted yet '
+          '(fresh install upgrade path)', () async {
+        await openAllBoxes();
+        await seedAllBoxes();
+
+        // No version key persisted — represents a user upgrading from a
+        // pre-Phase-24c install. The migration MUST wipe the affected
+        // boxes so legacy serialized rows are repopulated under the new
+        // model shape.
+        expect(
+          Hive.box<dynamic>(HiveService.userPrefs).get('cache_schema_version'),
+          isNull,
+        );
+
+        await const HiveService().migrateCacheSchema();
+
+        for (final name in HiveService.cacheSchemaBoxes) {
+          expect(
+            Hive.box<dynamic>(name).isEmpty,
+            isTrue,
+            reason: 'Box "$name" must be wiped on version mismatch',
+          );
+        }
+      });
+
+      test('preserves userPrefs and offlineQueue across the wipe', () async {
+        await openAllBoxes();
+        await seedAllBoxes();
+
+        await const HiveService().migrateCacheSchema();
+
+        expect(
+          Hive.box<dynamic>(HiveService.userPrefs).get('seeded_key'),
+          'seeded_value',
+          reason:
+              'userPrefs must survive — locale, opt-in flags, and the '
+              'cache_schema_version key itself live there.',
+        );
+        expect(
+          Hive.box<dynamic>(HiveService.offlineQueue).get('seeded_key'),
+          'seeded_value',
+          reason:
+              'offlineQueue must survive — pending offline mutations would '
+              'cause silent user-data loss if wiped.',
+        );
+      });
+
+      test(
+        'stamps currentCacheSchemaVersion into userPrefs after wiping',
+        () async {
+          await openAllBoxes();
+
+          await const HiveService().migrateCacheSchema();
+
+          expect(
+            Hive.box<dynamic>(
+              HiveService.userPrefs,
+            ).get('cache_schema_version'),
+            HiveService.currentCacheSchemaVersion,
+          );
+        },
+      );
+
+      test('is idempotent — second call no-ops and does not re-wipe data '
+          'written between calls', () async {
+        await openAllBoxes();
+
+        // First call stamps the version and (vacuously) wipes the empty
+        // boxes.
+        await const HiveService().migrateCacheSchema();
+
+        // Simulate normal post-migration cache writes happening during
+        // app use.
+        await Hive.box<dynamic>(
+          HiveService.exerciseCache,
+        ).put('post_migrate', 'should_survive');
+
+        // Second call must short-circuit on version match and leave the
+        // newly-written data intact.
+        await const HiveService().migrateCacheSchema();
+
+        expect(
+          Hive.box<dynamic>(HiveService.exerciseCache).get('post_migrate'),
+          'should_survive',
+        );
+      });
+
+      test(
+        'wipes when persisted version is older than currentCacheSchemaVersion',
+        () async {
+          await openAllBoxes();
+          await seedAllBoxes();
+
+          // Pretend the user is on an older cache version (currentVersion - 1
+          // or 0 if current is 1). The migration must still fire because the
+          // condition is "differs from current", not "less than current".
+          await Hive.box<dynamic>(
+            HiveService.userPrefs,
+          ).put('cache_schema_version', 0);
+
+          await const HiveService().migrateCacheSchema();
+
+          for (final name in HiveService.cacheSchemaBoxes) {
+            expect(
+              Hive.box<dynamic>(name).isEmpty,
+              isTrue,
+              reason: 'Box "$name" must be wiped when persisted version=0',
+            );
+          }
+          expect(
+            Hive.box<dynamic>(
+              HiveService.userPrefs,
+            ).get('cache_schema_version'),
+            HiveService.currentCacheSchemaVersion,
+          );
+        },
+      );
+
+      test('cacheSchemaBoxes excludes userPrefs and offlineQueue by '
+          'construction (defence-in-depth)', () {
+        // Belt-and-braces check: even if a future maintainer accidentally
+        // loops over `cacheSchemaBoxes` for another wipe, userPrefs and
+        // offlineQueue are off-limits and must not appear in the list.
+        expect(
+          HiveService.cacheSchemaBoxes,
+          isNot(contains(HiveService.userPrefs)),
+        );
+        expect(
+          HiveService.cacheSchemaBoxes,
+          isNot(contains(HiveService.offlineQueue)),
+        );
+      });
+    });
+
     group('clearAll', () {
       test('clears all 8 boxes', () async {
         // Open all boxes and put some data in each.

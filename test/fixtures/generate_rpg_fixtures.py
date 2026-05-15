@@ -116,6 +116,16 @@ def fx_set_xp_examples() -> list[dict]:
     `slug` field is informational (documents which migration row the value
     came from) and is not consumed by the Dart parity test — Dart asserts
     against the `inputs.difficulty_mult` numeric value directly.
+
+    Phase 24c: 4 new boundary scenarios exercise the bodyweight-as-load
+    semantics (pure bodyweight, weighted bodyweight, non-bodyweight ignored,
+    NULL bodyweight graceful fallback). The Dart calculator is bodyweight-
+    AGNOSTIC — production callers pre-convert to `effective_load` before
+    invoking `computeSetXp`. To keep the existing fixture-driven Dart parity
+    tests passing without code change, the fixture stores the
+    already-converted `effective_load` as `inputs.weight_kg`, plus
+    informational `bodyweight_kg` / `uses_bodyweight_load` / `effective_load`
+    keys so SQL parity tests can assert the pre-conversion contract end-to-end.
     """
     cases = []
     scenarios = [
@@ -177,31 +187,127 @@ def fx_set_xp_examples() -> list[dict]:
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': None,
          'difficulty_mult': sim.DIFFICULTY_MULT_CEILING},
+        # ---- Phase 24c — bodyweight-as-load boundary scenarios -------------
+        # Pure bodyweight: 70 kg user, 0 kg added → effective = 70.
+        # Mirrors 00057's CASE WHEN uses_bodyweight_load THEN COALESCE(w,0) +
+        # COALESCE(bw,0). Peak stays 0 (writer-site guard skips entered=0)
+        # so strength_mult short-circuits to 1.0. difficulty_mult = 1.21
+        # (from DIFFICULTY_MULT_BY_SLUG['pull_up'], hand-mirrored as 1.19 in
+        # 00053; the framework's 24a tier puts pull_up at 1.19 — using 1.21
+        # here matches the WIP example exactly so the boundary contract is
+        # explicit; the per-slug 1.19 lookup is exercised by the existing
+        # bench/deadlift scenarios above).
+        {'name': 'bodyweight_load_pure_bw', 'weight': 0, 'reps': 8, 'peak': 0,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'pull_up',
+         'difficulty_mult': 1.21,
+         'bodyweight_kg': 70,
+         'uses_bodyweight_load': True},
+        # Weighted bodyweight: 70 kg user, +20 kg belt → effective = 90.
+        # Peak ratchets to entered weight (20) per the writer-site guard;
+        # strength_mult numerator = effective (90), so ratio = 90/25 > 1 →
+        # clamps to 1.0. This is the documented "favorable but consistent"
+        # behavior for weighted bodyweight (see 00057 header).
+        {'name': 'bodyweight_load_weighted', 'weight': 20, 'reps': 5, 'peak': 25,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'ring_dip',
+         'difficulty_mult': 1.21,
+         'bodyweight_kg': 70,
+         'uses_bodyweight_load': True},
+        # Non-bodyweight exercise: bodyweight kept on input but IGNORED by
+        # the formula because uses_bodyweight_load = False. Asserts the
+        # CASE branch elision contract — a stale `bodyweight_kg` value
+        # carried through the call site does NOT contaminate non-curated
+        # exercises. effective = entered (80).
+        {'name': 'bodyweight_load_not_bw_exercise', 'weight': 80, 'reps': 8, 'peak': 100,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'barbell_bench_press',
+         'difficulty_mult': 1.09,
+         'bodyweight_kg': 70,
+         'uses_bodyweight_load': False},
+        # NULL bodyweight (graceful fallback): user hasn't set their
+        # bodyweight yet but the exercise IS curated as bodyweight-load.
+        # 00057's COALESCE(bw, 0) keeps math defined → effective = entered
+        # (10). bodyweight_used flag stays TRUE for audit-trail clarity —
+        # the active-workout UI (Phase 24c-8) lazy-prompts on this exact
+        # condition. Strength_mult numerator = effective (10), peak = 10
+        # (entered), ratio = 1.0.
+        {'name': 'bodyweight_load_null_bodyweight', 'weight': 10, 'reps': 5, 'peak': 10,
+         'session_volume_bp': 0, 'weekly_volume_bp': 0,
+         'slug': 'pull_up',
+         'difficulty_mult': 1.21,
+         'bodyweight_kg': None,
+         'uses_bodyweight_load': True},
     ]
     for s in scenarios:
-        vl = max(1.0, s['weight'] * s['reps'])
+        # Phase 24c: compute effective_weight via the canonical sim helper.
+        # `uses_bodyweight_load` defaults to whatever the curation set says
+        # for the slug; explicit `uses_bodyweight_load` keys on the scenario
+        # override (used by `bodyweight_load_not_bw_exercise` to assert the
+        # FALSE branch even though the slug isn't curated). For backward-
+        # compat with the pre-24c scenarios that don't carry bodyweight,
+        # `bodyweight_kg=None + slug not in curation set` makes
+        # effective_weight() degrade to entered weight — pre-24c semantics.
+        bodyweight_kg = s.get('bodyweight_kg')  # None if absent
+        # Resolve the curation flag. Pre-24c scenarios pass slug=None and
+        # have no `uses_bodyweight_load` key — sim.uses_bodyweight_load(None)
+        # would be False, but we short-circuit on slug=None to keep that
+        # path explicit.
+        if 'uses_bodyweight_load' in s:
+            uses_bw = s['uses_bodyweight_load']
+        elif s['slug'] is None:
+            uses_bw = False
+        else:
+            uses_bw = sim.uses_bodyweight_load(s['slug'])
+        # When uses_bw is True, mimic 00057's CASE; when False, effective ==
+        # entered. Direct inline computation (not sim.effective_weight) so
+        # the explicit override on `uses_bodyweight_load` (used by the
+        # not-bw scenario) takes effect — sim.effective_weight only consults
+        # the curation set, ignoring the override.
+        if uses_bw:
+            eff_weight = (s['weight'] or 0) + (bodyweight_kg or 0)
+        else:
+            eff_weight = s['weight'] or 0
+
+        vl = max(1.0, eff_weight * s['reps'])
         base = vl ** sim.VOLUME_EXPONENT
         intensity = sim.intensity_for_reps(s['reps'])
+        # Peak still tracks ENTERED weight (matches 00057 writer-site guard).
+        # If entered == 0, peak stays 0 → strength_mult = 1.0 short-circuit.
         peak = s['peak'] if s['peak'] > 0 else s['weight']
         if peak <= 0:
             strength_mult = 1.0
         else:
+            # Phase 24c: numerator is effective weight, not entered.
             strength_mult = max(sim.STRENGTH_MULT_FLOOR,
-                                min(1.0, s['weight'] / peak if peak > 0 else 1.0))
+                                min(1.0, eff_weight / peak))
         novelty = math.exp(-s['session_volume_bp'] / sim.NOVELTY_DENOMINATOR)
         cap = sim.OVER_CAP_MULTIPLIER if s['weekly_volume_bp'] >= sim.WEEKLY_CAP_SETS else 1.0
         diff_mult = s['difficulty_mult']
         set_xp = base * intensity * strength_mult * novelty * cap * diff_mult
+        # Dart parity: the Dart calculator is bodyweight-agnostic, so the
+        # fixture must store the already-converted effective_load as
+        # `weight_kg` (the value the calculator consumes). Pre-24c scenarios
+        # have eff_weight == entered, so this is a no-op for them; new 24c
+        # scenarios store the bodyweight-aware value. Informational
+        # bodyweight_kg / uses_bodyweight_load / effective_load keys are
+        # carried alongside for SQL parity tests + audit-trail clarity.
         cases.append({
             'name': s['name'],
             'inputs': {
-                'weight_kg': s['weight'],
+                'weight_kg': eff_weight,
                 'reps': s['reps'],
                 'peak_load': s['peak'],
                 'session_volume_for_body_part': s['session_volume_bp'],
                 'weekly_volume_for_body_part': s['weekly_volume_bp'],
                 'difficulty_mult': diff_mult,
                 'slug': s['slug'],
+                # Phase 24c informational keys. None for `bodyweight_kg`
+                # means "no bodyweight value provided" (graceful fallback).
+                'bodyweight_kg': bodyweight_kg,
+                'uses_bodyweight_load': uses_bw,
+                'entered_weight_kg': s['weight'],
+                'effective_load': eff_weight,
             },
             'components': {
                 'volume_load': vl,
@@ -335,10 +441,24 @@ def fx_backfill_replay() -> dict:
     The Dart + PG backfill tests must produce the same final state when fed
     the same chronological set log.
 
+    Phase 24c: archetype carries bodyweight_kg = 75 (from the Archetype
+    dataclass field default 70 — overridden here to 75 to make the parity
+    contract numerically distinct from the per-scenario 70 above). Each set
+    is replayed with the alias-resolved real slug so `compute_set_xp` can
+    consult `USES_BODYWEIGHT_LOAD_BY_SLUG`. The intermediate archetype's
+    legs day uses 'lunge' which resolves to 'walking_lunges' — that IS in
+    the curated set, so legs ranks WILL shift versus pre-24c. None of the
+    other intermediate exercises (bench, row, overhead_press, lateral_raise,
+    tricep_pushdown, pulldown, curl, plank, squat, deadlift, leg_press)
+    are in the curated set, so non-leg ranks stay identical.
+
     NOTE: emits the per-set log too so integration tests can replay it.
     """
     archetype = sim.ARCHETYPES['intermediate']
     weeks = 30  # ~1500 sets at 4 sessions × 12-15 sets each
+    # Phase 24c: explicit bodyweight for the replay. 75 kg matches the
+    # docs/PROJECT.md §3 24c boundary inventory example.
+    bodyweight_kg = 75.0
 
     # We need to instrument the sim to emit per-set events. Re-run inline
     # here (mirrors `simulate` but logs).
@@ -364,12 +484,21 @@ def fx_backfill_replay() -> dict:
                 # the migration, so the regenerated final ranks reflect the
                 # exact per-exercise weighting users will experience.
                 diff_mult = sim.difficulty_mult_for_alias(exercise)
+                # Phase 24c: resolve alias → real slug so compute_set_xp can
+                # consult USES_BODYWEIGHT_LOAD_BY_SLUG. Synthetic aliases
+                # without an analog fall through to the alias itself
+                # (uses_bodyweight_load returns False — no behavior change).
+                real_slug = sim.SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+                uses_bw = sim.uses_bodyweight_load(real_slug)
+                eff_weight = sim.effective_weight(real_slug, w, bodyweight_kg)
                 for _ in range(n_sets):
                     set_index += 1
                     session_set_index += 1
                     awarded, vol = sim.compute_set_xp(
                         exercise, w, reps, novelty_count, weekly_count, peak_loads,
                         difficulty_mult=diff_mult,
+                        bodyweight_kg=bodyweight_kg,
+                        slug=real_slug,
                     )
                     for bp, xp in awarded.items():
                         xp_pool[bp] += xp
@@ -382,6 +511,12 @@ def fx_backfill_replay() -> dict:
                         'weight_kg': w,
                         'reps': reps,
                         'difficulty_mult': diff_mult,
+                        # Phase 24c: per-set audit fields so integration
+                        # tests can verify the replay's bodyweight-aware
+                        # branch without re-deriving from the alias map.
+                        'slug': real_slug,
+                        'uses_bodyweight_load': uses_bw,
+                        'effective_load': eff_weight,
                         'awarded': dict(awarded),
                     })
         rate = sim.progression_rate(archetype, week)
@@ -392,6 +527,7 @@ def fx_backfill_replay() -> dict:
     return {
         'archetype': 'intermediate',
         'weeks_simulated': weeks,
+        'bodyweight_kg': bodyweight_kg,
         'total_sets': set_index,
         'final_xp_pool': xp_pool,
         'final_ranks': final_ranks,
@@ -415,6 +551,12 @@ def main() -> None:
             'xp_base': sim.XP_BASE,
             'xp_growth': sim.XP_GROWTH,
             'char_level_denominator': sim.CHAR_LEVEL_DENOMINATOR,
+            # Phase 24c: canonical 20-slug curation set for
+            # `exercises.uses_bodyweight_load = TRUE` (mirrors migration
+            # 00056). Sorted for stable on-disk diffs. Integration parity
+            # tests can read this to assert the SQL UPDATE list and the
+            # Python sim's USES_BODYWEIGHT_LOAD_BY_SLUG agree.
+            'bodyweight_load_slugs': sorted(sim.USES_BODYWEIGHT_LOAD_BY_SLUG),
         },
         'intensity_lookup': fx_intensity_lookup(),
         'volume_load': fx_volume_load(),

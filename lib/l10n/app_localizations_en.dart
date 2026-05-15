@@ -1083,6 +1083,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'How many times per week do you want to train?';
 
   @override
+  String get profileBodyweightLabel => 'Body weight';
+
+  @override
+  String get profileBodyweightNotSet => 'Not set';
+
+  @override
+  String get profileBodyweightHelper =>
+      'Used to compute XP for bodyweight exercises like pull-ups, dips, push-ups.';
+
+  @override
+  String profileBodyweightInvalidRange(String min, String max, String unit) {
+    return 'Enter a value between $min and $max $unit';
+  }
+
+  @override
+  String get bodyweightPromptTitle => 'Set your body weight for accurate XP';
+
+  @override
+  String get bodyweightPromptBody =>
+      'Bodyweight exercises like pull-ups and dips count your weight as part of the load.';
+
+  @override
+  String get bodyweightPromptSetNow => 'Set now';
+
+  @override
+  String get bodyweightPromptSkip => 'Skip';
+
+  @override
   String get pleaseTryAgain => 'Please try again.';
 
   @override

@@ -226,5 +226,115 @@ void main() {
         'Keep elbows at 45 degrees\nDrive through heels',
       );
     });
+
+    // -----------------------------------------------------------------
+    // Phase 24c — usesBodyweightLoad
+    //
+    // The 20 curated bodyweight exercises (pull-ups, dips, push-ups,
+    // pistol squats, etc.) get `uses_bodyweight_load = TRUE` server-side.
+    // Every other exercise (loaded barbell/dumbbell, isolation, cardio,
+    // isometrics) stays FALSE. The Dart default is FALSE so legacy cache
+    // rows that pre-date the column deserialize safely until the next
+    // network fetch repopulates with the authoritative server flag.
+    // -----------------------------------------------------------------
+    group('usesBodyweightLoad (Phase 24c)', () {
+      test(
+        'defaults to false when uses_bodyweight_load is absent from JSON',
+        () {
+          final json = TestExerciseFactory.create()
+            ..remove('uses_bodyweight_load');
+
+          final exercise = Exercise.fromJson(json);
+
+          expect(exercise.usesBodyweightLoad, isFalse);
+        },
+      );
+
+      test('defaults to false when uses_bodyweight_load is null in JSON', () {
+        final json = TestExerciseFactory.create()
+          ..['uses_bodyweight_load'] = null;
+
+        final exercise = Exercise.fromJson(json);
+
+        expect(exercise.usesBodyweightLoad, isFalse);
+      });
+
+      test('parses true value from JSON', () {
+        final json = TestExerciseFactory.create(
+          name: 'Pull-up',
+          muscleGroup: 'back',
+          equipmentType: 'bodyweight',
+          slug: 'pull_up',
+          usesBodyweightLoad: true,
+        );
+
+        final exercise = Exercise.fromJson(json);
+
+        expect(exercise.usesBodyweightLoad, isTrue);
+      });
+
+      test('parses false value from JSON', () {
+        final json = TestExerciseFactory.create(usesBodyweightLoad: false);
+
+        final exercise = Exercise.fromJson(json);
+
+        expect(exercise.usesBodyweightLoad, isFalse);
+      });
+
+      test('toJson includes uses_bodyweight_load when true', () {
+        final json = TestExerciseFactory.create(usesBodyweightLoad: true);
+        final exercise = Exercise.fromJson(json);
+
+        final out = exercise.toJson();
+
+        expect(out['uses_bodyweight_load'], isTrue);
+      });
+
+      test('toJson includes uses_bodyweight_load when false', () {
+        final json = TestExerciseFactory.create(usesBodyweightLoad: false);
+        final exercise = Exercise.fromJson(json);
+
+        final out = exercise.toJson();
+
+        expect(out['uses_bodyweight_load'], isFalse);
+      });
+
+      test('toJson round-trip preserves usesBodyweightLoad=true', () {
+        final json = TestExerciseFactory.create(
+          name: 'Dips',
+          muscleGroup: 'chest',
+          equipmentType: 'bodyweight',
+          slug: 'dips',
+          usesBodyweightLoad: true,
+        );
+        final exercise = Exercise.fromJson(json);
+        final roundTripped = Exercise.fromJson(exercise.toJson());
+
+        expect(roundTripped.usesBodyweightLoad, isTrue);
+        expect(roundTripped, exercise);
+      });
+
+      test('toJson round-trip preserves usesBodyweightLoad=false', () {
+        final json = TestExerciseFactory.create();
+        final exercise = Exercise.fromJson(json);
+        final roundTripped = Exercise.fromJson(exercise.toJson());
+
+        expect(roundTripped.usesBodyweightLoad, isFalse);
+      });
+
+      test(
+        'two exercises differing only in usesBodyweightLoad are not equal',
+        () {
+          final loaded = Exercise.fromJson(
+            TestExerciseFactory.create(usesBodyweightLoad: false),
+          );
+          final bodyweight = Exercise.fromJson(
+            TestExerciseFactory.create(usesBodyweightLoad: true),
+          );
+
+          expect(loaded, isNot(equals(bodyweight)));
+        },
+      );
+    });
   });
 }

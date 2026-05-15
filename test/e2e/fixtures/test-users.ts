@@ -399,6 +399,25 @@ export const TEST_USERS = {
   },
 
   // -------------------------------------------------------------------------
+  // Phase 24c-8 — bodyweight prompt E2E (specs/bodyweight-prompt.spec.ts)
+  // -------------------------------------------------------------------------
+  // smokeBodyweightPrompt: lapsed user (one prior workout for "Quick workout"
+  // CTA) with profile.bodyweight_kg = NULL and NO pre-existing dismissal flag.
+  // The test starts a workout, adds Pull-Up (uses_bodyweight_load=TRUE),
+  // completes the first set, asserts the prompt SnackBar appears, taps Set
+  // now, enters 70 in the bottom sheet, saves, and finally asserts via REST
+  // that profile.bodyweight_kg = 70 AND that subsequent xp_events for
+  // bodyweight exercises carry effective_load = 70.
+  //
+  // Isolated from every other smokeWorkout user so the bodyweight column
+  // stays NULL across runs (other tests don't touch it but isolation is
+  // cheap and defensive).
+  smokeBodyweightPrompt: {
+    email: 'e2e-smoke-bodyweight-prompt@test.local',
+    password: 'TestPassword123!',
+  },
+
+  // -------------------------------------------------------------------------
   // 23-P-4 — E2E dismissal-time assertions for the routine-removed undo snack
   // -------------------------------------------------------------------------
   // smokeWeeklyPlanRoutineRemoveUndo: dedicated user for the routine-removed

@@ -44,38 +44,83 @@ abstract class XpEvent with _$XpEvent {
     // the top level so the generated deserializer reads it where it
     // expects. See the factory's docstring for promotion rules.
     double? difficultyMult,
+    // Effective load (kg) actually plugged into the volume / strength
+    // formulas at write time (Phase 24c). Equals
+    // `entered_weight + profile.bodyweight_kg` when the exercise is
+    // flagged `uses_bodyweight_load = TRUE` and the user's bodyweight
+    // is known; equals the entered weight otherwise. Snapshotted so
+    // future re-reads (audit, replay, analytics) see the exact load
+    // the formula used — even if the user later edits their
+    // bodyweight or the exercise flag flips. Nullable for legacy
+    // events written before Phase 24c.
+    //
+    // Storage shape: same as `difficultyMult` — snapshotted INSIDE
+    // `payload` as `payload.effective_load` by the SQL RPCs in
+    // migration 00057. Promoted to top level by `fromJson`.
+    double? effectiveLoad,
+    // Whether the exercise's `uses_bodyweight_load` flag was TRUE at
+    // the moment this event was written (Phase 24c). Distinct from
+    // "did we add bodyweight" because the flag may be true while the
+    // user's `profile.bodyweight_kg` is still null (in which case
+    // effective_load == entered_weight via the COALESCE fallback in
+    // the SQL RPC). Carries audit-trail clarity even when bodyweight
+    // was unknown. Nullable for legacy events.
+    //
+    // Storage shape: same as `difficultyMult` — snapshotted INSIDE
+    // `payload` as `payload.bodyweight_used` by the SQL RPCs in
+    // migration 00057. Promoted to top level by `fromJson`.
+    bool? bodyweightUsed,
     required DateTime occurredAt,
     required DateTime createdAt,
   }) = _XpEvent;
 
   /// Deserialize from a raw `xp_events` row.
   ///
-  /// Promotes `payload.difficulty_mult` to the top-level
-  /// `difficulty_mult` key before delegating to the generated
-  /// deserializer, because the SQL RPCs (migration 00054) snapshot
-  /// the multiplier INSIDE the `payload` JSONB sub-object — not as a
-  /// top-level column. Without this promotion, the generated
-  /// `_$XpEventFromJson` would read `json['difficulty_mult']` and
-  /// always get `null` for every event (defeating the snapshot's
-  /// purpose).
+  /// Promotes payload-nested snapshot keys to the top level before
+  /// delegating to the generated deserializer, because the SQL RPCs
+  /// snapshot these values INSIDE the `payload` JSONB sub-object —
+  /// not as top-level columns. Without this promotion, the generated
+  /// `_$XpEventFromJson` would read each key from the top level and
+  /// always get `null`, defeating the snapshots' purpose.
   ///
-  /// Promotion rules:
-  /// 1. If `difficulty_mult` is already at the top level (defensive
-  ///    — shouldn't happen against a real DB row), use it as-is.
-  /// 2. Else if `payload.difficulty_mult` exists, promote it to the
-  ///    top level for the generated deserializer.
-  /// 3. Else (legacy events written before Phase 24a, or payloads
-  ///    without the key), leave it null — `XpEvent.difficultyMult`
-  ///    will be null and consumers should fall back to 1.0.
+  /// Promoted keys:
+  /// - `payload.difficulty_mult` → top-level `difficulty_mult`
+  ///   (Phase 24a — migration 00054 RPCs).
+  /// - `payload.effective_load` → top-level `effective_load`
+  ///   (Phase 24c — migration 00057 RPCs).
+  /// - `payload.bodyweight_used` → top-level `bodyweight_used`
+  ///   (Phase 24c — migration 00057 RPCs).
+  ///
+  /// Promotion rules (per key, applied independently):
+  /// 1. If the key is already at the top level (defensive — shouldn't
+  ///    happen against a real DB row), use it as-is. This is the
+  ///    idempotency / future-proofing path: if a future migration
+  ///    promotes any of these to a real top-level column, the
+  ///    factory still works without changes.
+  /// 2. Else if `payload.<key>` exists, promote it to the top level
+  ///    for the generated deserializer.
+  /// 3. Else (legacy events written before the relevant migration,
+  ///    or payloads without the key), leave it null — the
+  ///    corresponding model field will be null and consumers should
+  ///    apply their own fallback semantics (e.g. `difficultyMult`
+  ///    falls back to 1.0; `bodyweightUsed == null` means "we don't
+  ///    know" and is distinct from `false`).
   factory XpEvent.fromJson(Map<String, dynamic> json) {
-    if (json.containsKey('difficulty_mult')) {
-      return _$XpEventFromJson(json);
+    final missingDifficulty = !json.containsKey('difficulty_mult');
+    final missingEffectiveLoad = !json.containsKey('effective_load');
+    final missingBodyweightUsed = !json.containsKey('bodyweight_used');
+
+    if (missingDifficulty || missingEffectiveLoad || missingBodyweightUsed) {
+      final payload = json['payload'] as Map<String, dynamic>?;
+      final promoted = <String, dynamic>{
+        ...json,
+        if (missingDifficulty) 'difficulty_mult': payload?['difficulty_mult'],
+        if (missingEffectiveLoad) 'effective_load': payload?['effective_load'],
+        if (missingBodyweightUsed)
+          'bodyweight_used': payload?['bodyweight_used'],
+      };
+      return _$XpEventFromJson(promoted);
     }
-    final payload = json['payload'] as Map<String, dynamic>?;
-    final promoted = <String, dynamic>{
-      ...json,
-      'difficulty_mult': payload?['difficulty_mult'],
-    };
-    return _$XpEventFromJson(promoted);
+    return _$XpEventFromJson(json);
   }
 }

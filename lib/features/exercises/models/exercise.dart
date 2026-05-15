@@ -89,6 +89,15 @@ abstract class Exercise with _$Exercise {
     String? userId,
     DateTime? deletedAt,
     required DateTime createdAt,
+    // Phase 24c — `true` for the 20 curated bodyweight exercises (pull-ups,
+    // dips, push-ups, pistol squats, etc.) where `effective_load =
+    // profile.bodyweight_kg + sets.weight`. `false` for every other exercise
+    // (loaded barbell/dumbbell, isolation, cardio, isometrics) so the XP
+    // calculator carries set weight through unchanged. Defaults to false so
+    // legacy cache rows that pre-date this column deserialize safely; the
+    // Hive cache version bump in HiveService forces a one-shot wipe so the
+    // first post-upgrade fetch repopulates with authoritative server values.
+    @Default(false) bool usesBodyweightLoad,
   }) = _Exercise;
 
   factory Exercise.fromJson(Map<String, dynamic> json) =>

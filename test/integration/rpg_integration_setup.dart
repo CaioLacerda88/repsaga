@@ -199,6 +199,30 @@ Future<double> difficultyMultForSlug(
   return (raw as num).toDouble();
 }
 
+/// Looks up `exercises.uses_bodyweight_load` for [slug]. Mirrors the per-set
+/// `COALESCE(uses_bodyweight_load, FALSE)` discipline used by `record_set_xp` /
+/// `record_session_xp_batch` / `_rpg_backfill_chunk` (see migration 00057) so
+/// integration tests can assert the same boolean the SQL chain consumed.
+///
+/// Phase 24c Phase E: companion to [difficultyMultForSlug]. The 20 curated
+/// bodyweight slugs (migration 00056) return `true`; every other default
+/// exercise + every user-created exercise returns `false`.
+Future<bool> bodyweightLoadForSlug(
+  supabase.SupabaseClient adminClient,
+  String slug,
+) async {
+  final row = await adminClient
+      .from('exercises')
+      .select('uses_bodyweight_load')
+      .eq('slug', slug)
+      .single();
+  // Defensive: column is NOT NULL DEFAULT FALSE (migration 00056), but follow
+  // the same COALESCE discipline as the SQL RPCs.
+  final raw = row['uses_bodyweight_load'];
+  if (raw == null) return false;
+  return raw as bool;
+}
+
 /// Inserts a completed workout with [sets] completed working sets of
 /// [exerciseSlug], each at [weightKg] × [reps], for [user].
 ///

@@ -27,6 +27,7 @@ class ProfileRepository extends BaseRepository {
     String? weightUnit,
     int? trainingFrequencyPerWeek,
     String? locale,
+    double? bodyweightKg,
   }) {
     return mapException(() async {
       final updates = <String, dynamic>{
@@ -42,6 +43,11 @@ class ProfileRepository extends BaseRepository {
           'training_frequency_per_week': trainingFrequencyPerWeek,
         // ignore: use_null_aware_elements
         if (locale != null) 'locale': locale,
+        // Phase 24c — only forward when the caller supplied a value. Omitting
+        // the key from the upsert payload preserves any prior bodyweight on
+        // the row (writing null would clobber it on every unrelated update).
+        // ignore: use_null_aware_elements
+        if (bodyweightKg != null) 'bodyweight_kg': bodyweightKg,
       };
       final data = await _client
           .from('profiles')

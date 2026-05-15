@@ -16,6 +16,7 @@ class TestExerciseFactory {
     String? description,
     String? formTips,
     String? slug,
+    bool? usesBodyweightLoad,
   }) {
     return {
       'id': id ?? 'exercise-001',
@@ -34,6 +35,11 @@ class TestExerciseFactory {
       // NOT NULL on the table. Default to a stable value for tests; override
       // when a test needs a specific slug.
       'slug': slug ?? 'bench_press',
+      // Phase 24c: defaults to FALSE so existing tests built around loaded
+      // exercises (bench, squat, deadlift) keep their existing semantics.
+      // Override with `true` only for the 20 curated bodyweight exercises
+      // (pull-ups, dips, push-ups, pistol squats, etc.).
+      'uses_bodyweight_load': usesBodyweightLoad ?? false,
     };
   }
 }
@@ -72,6 +78,7 @@ class TestProfileFactory {
     String? avatarUrl,
     String? fitnessLevel,
     String? createdAt,
+    double? bodyweightKg,
   }) {
     return {
       'id': id ?? 'user-001',
@@ -80,6 +87,11 @@ class TestProfileFactory {
       'avatar_url': avatarUrl,
       'fitness_level': fitnessLevel ?? 'beginner',
       'created_at': createdAt ?? '2026-01-01T00:00:00Z',
+      // Phase 24c: bodyweight is opt-in. Tests that exercise the
+      // bodyweight-load math should pass an explicit value; tests that don't
+      // care leave it null so the schema reflects the "user has not entered
+      // a bodyweight yet" baseline.
+      'bodyweight_kg': bodyweightKg,
     };
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/l10n/locale_provider.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/profile_providers.dart';
+import 'widgets/bodyweight_row.dart';
 import 'widgets/crash_reports_toggle.dart';
 import 'widgets/identity_card.dart';
 import 'widgets/legal_tile.dart';
@@ -88,6 +89,21 @@ class ProfileSettingsScreen extends ConsumerWidget {
                     WeightUnitToggle(weightUnit: profile?.weightUnit ?? 'kg'),
                 loading: () => const WeightUnitToggle(weightUnit: 'kg'),
                 error: (_, _) => const WeightUnitToggle(weightUnit: 'kg'),
+              ),
+              const SizedBox(height: 24),
+              // Body weight section (Phase 24c — XP load multiplier for
+              // bodyweight exercises like pull-ups, dips, push-ups).
+              Text(
+                l10n.profileBodyweightLabel,
+                style: theme.textTheme.titleMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              profileAsync.when(
+                data: (profile) => BodyweightRow(profile: profile),
+                loading: () => const BodyweightRow(profile: null),
+                error: (_, _) => const BodyweightRow(profile: null),
               ),
               const SizedBox(height: 24),
               // Weekly goal section

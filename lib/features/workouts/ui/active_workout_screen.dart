@@ -12,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../models/active_workout_state.dart';
 import '../providers/workout_providers.dart';
+import 'coordinators/bodyweight_prompt_coordinator.dart';
 import 'coordinators/discard_workout_coordinator.dart';
 import 'coordinators/finish_workout_coordinator.dart';
 import 'widgets/active_workout_app_bar_title.dart';
@@ -52,12 +53,24 @@ class ActiveWorkoutScreen extends ConsumerStatefulWidget {
 class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   late final DiscardWorkoutCoordinator _discardCoordinator;
   late final FinishWorkoutCoordinator _finishCoordinator;
+  late final BodyweightPromptCoordinator _bodyweightPromptCoordinator;
 
   @override
   void initState() {
     super.initState();
     _discardCoordinator = DiscardWorkoutCoordinator();
     _finishCoordinator = FinishWorkoutCoordinator();
+    // Phase 24c-8 — owned at the screen-state level so its session-shot
+    // flag (at most one bodyweight prompt per active-workout screen
+    // lifetime) is reset implicitly on every fresh workout. Disposed
+    // alongside the screen state below.
+    _bodyweightPromptCoordinator = BodyweightPromptCoordinator();
+  }
+
+  @override
+  void dispose() {
+    _bodyweightPromptCoordinator.dispose();
+    super.dispose();
   }
 
   @override
@@ -69,8 +82,20 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // completes (sometimes unbounded), silently no-op'ing every subsequent
     // discard tap. The listener fires synchronously on every Riverpod
     // state notification, which is exactly the window we need.
+    //
+    // The discard coordinator does NOT need the SnackBarTapOutDismissScope —
+    // it shows a Material dialog, not a snack — so its listener stays at the
+    // screen level above the scope. The bodyweight-prompt coordinator's
+    // listener lives INSIDE `_ActiveWorkoutBody` instead (it must show a
+    // countdown SnackBar via `SnackBarTapOutDismissScope.maybeOf(context)`,
+    // which requires a context that is a DESCENDANT of the scope).
+    // See cluster `cluster_inherited_widget_context_above_scope` —
+    // resolving an InheritedWidget from above-the-scope returns null
+    // because `dependOnInheritedWidgetOfExactType` only walks UP. The
+    // coordinator's `if (scope == null) return;` defensive branch then
+    // silently ate every prompt fire (Phase 24c bug fix #2 / 2026-05-15).
     ref.listen<AsyncValue<ActiveWorkoutState?>>(activeWorkoutProvider, (
-      _,
+      previous,
       next,
     ) {
       _discardCoordinator.notifyStateChanged(next);
@@ -198,6 +223,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             state: displayState,
             discardCoordinator: _discardCoordinator,
             finishCoordinator: _finishCoordinator,
+            bodyweightPromptCoordinator: _bodyweightPromptCoordinator,
             showLoadingOverlay: loadingActive,
             showRestTimerOverlay: restActive,
           ),
@@ -212,6 +238,7 @@ class _ActiveWorkoutBody extends ConsumerStatefulWidget {
     required this.state,
     required this.discardCoordinator,
     required this.finishCoordinator,
+    required this.bodyweightPromptCoordinator,
     required this.showLoadingOverlay,
     required this.showRestTimerOverlay,
   });
@@ -219,6 +246,7 @@ class _ActiveWorkoutBody extends ConsumerStatefulWidget {
   final ActiveWorkoutState state;
   final DiscardWorkoutCoordinator discardCoordinator;
   final FinishWorkoutCoordinator finishCoordinator;
+  final BodyweightPromptCoordinator bodyweightPromptCoordinator;
 
   /// PR-2 C3 — overlays are now passed in as flags so they can be stacked
   /// INSIDE this Scaffold's `body` slot. See the comment on the parent
@@ -443,6 +471,32 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
 
   @override
   Widget build(BuildContext context) {
+    // Phase 24c-8 — bodyweight-prompt listener lives HERE (inside the body,
+    // a descendant of `SnackBarTapOutDismissScope`) rather than at the
+    // screen level. The coordinator's `_showPromptSnackBar` calls
+    // `SnackBarTapOutDismissScope.maybeOf(context)`; `dependOnInheritedWidgetOfExactType`
+    // only walks UP the tree, so passing the screen-State's context
+    // (which is ABOVE the scope) resolves to `null` and the coordinator's
+    // defensive branch silently swallows every fire. Wiring the listener
+    // here gives the coordinator a context that is BELOW the scope.
+    //
+    // Cluster: `cluster_inherited_widget_context_above_scope`. The pre-fix
+    // widget tests pinned the coordinator's behaviour via a synthetic
+    // in-scope context — they passed even while production was broken.
+    // See `should fire the bodyweight prompt via the production ref.listen
+    // wiring` test for the regression guard that pins THIS wiring.
+    ref.listen<AsyncValue<ActiveWorkoutState?>>(activeWorkoutProvider, (
+      previous,
+      next,
+    ) {
+      widget.bodyweightPromptCoordinator.maybeShow(
+        context: context,
+        ref: ref,
+        previous: previous?.value,
+        next: next.value,
+      );
+    });
+
     final l10n = AppLocalizations.of(context);
     final hasExercises = widget.state.exercises.isNotEmpty;
 

@@ -203,13 +203,14 @@
   ],
   "backfill_replay": {
     "archetype": "intermediate",
+    "bodyweight_kg": 75.0,
     "final_ranks": {
       "arms": 37,
       "back": 37,
       "cardio": 1,
       "chest": 31,
       "core": 28,
-      "legs": 38,
+      "legs": 39,
       "shoulders": 31
     },
     "final_xp_pool": {
@@ -217,8 +218,8 @@
       "back": 19336.014779249344,
       "cardio": 0.0,
       "chest": 10563.052492820148,
-      "core": 7428.579647599457,
-      "legs": 20614.353697459446,
+      "core": 7860.230122331328,
+      "legs": 23021.086870951018,
       "shoulders": 10784.296752284552
     },
     "total_sets": 1590,
@@ -374,6 +375,28 @@
     }
   ],
   "meta": {
+    "bodyweight_load_slugs": [
+      "archer_push_up",
+      "bodyweight_squat",
+      "chin_up",
+      "close_grip_push_up",
+      "decline_push_up",
+      "diamond_push_up",
+      "dips",
+      "handstand_push_up",
+      "hanging_leg_raise",
+      "incline_push_up",
+      "inverted_row",
+      "muscle_up",
+      "nordic_curl",
+      "pistol_squat",
+      "pull_up",
+      "push_up",
+      "ring_dip",
+      "walking_lunges",
+      "wide_grip_pull_up",
+      "wide_push_up"
+    ],
     "char_level_denominator": 4,
     "difficulty_mult_ceiling": 1.25,
     "difficulty_mult_floor": 0.85,
@@ -650,11 +673,15 @@
         "volume_load": 500
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.09,
+        "effective_load": 100,
+        "entered_weight_kg": 100,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
         "slug": "barbell_bench_press",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
@@ -672,11 +699,15 @@
         "volume_load": 500
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.09,
+        "effective_load": 100,
+        "entered_weight_kg": 100,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 10,
         "slug": "barbell_bench_press",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
@@ -694,11 +725,15 @@
         "volume_load": 350
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.09,
+        "effective_load": 70,
+        "entered_weight_kg": 70,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
         "slug": "barbell_bench_press",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 70
       },
@@ -716,11 +751,15 @@
         "volume_load": 500
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.21,
+        "effective_load": 100,
+        "entered_weight_kg": 100,
         "peak_load": 100,
         "reps": 5,
         "session_volume_for_body_part": 0,
         "slug": "deadlift",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 25,
         "weight_kg": 100
       },
@@ -738,11 +777,15 @@
         "volume_load": 1200
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 0.85,
+        "effective_load": 60,
+        "entered_weight_kg": 60,
         "peak_load": 100,
         "reps": 20,
         "session_volume_for_body_part": 0,
         "slug": "leg_curl",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 60
       },
@@ -760,11 +803,15 @@
         "volume_load": 140
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.25,
+        "effective_load": 140,
+        "entered_weight_kg": 140,
         "peak_load": 130,
         "reps": 1,
         "session_volume_for_body_part": 0,
         "slug": "push_press",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 140
       },
@@ -782,11 +829,15 @@
         "volume_load": 1.0
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.11,
+        "effective_load": 0,
+        "entered_weight_kg": 0,
         "peak_load": 0,
         "reps": 8,
         "session_volume_for_body_part": 0,
         "slug": "push_up",
+        "uses_bodyweight_load": true,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 0
       },
@@ -804,11 +855,15 @@
         "volume_load": 60
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 0.87,
+        "effective_load": 5,
+        "entered_weight_kg": 5,
         "peak_load": 5,
         "reps": 12,
         "session_volume_for_body_part": 5,
         "slug": "barbell_curl",
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 8,
         "weight_kg": 5
       },
@@ -826,11 +881,15 @@
         "volume_load": 640
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.0,
+        "effective_load": 80,
+        "entered_weight_kg": 80,
         "peak_load": 80,
         "reps": 8,
         "session_volume_for_body_part": 0,
         "slug": null,
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 80
       },
@@ -848,11 +907,15 @@
         "volume_load": 800
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 0.85,
+        "effective_load": 100,
+        "entered_weight_kg": 100,
         "peak_load": 100,
         "reps": 8,
         "session_volume_for_body_part": 0,
         "slug": null,
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
@@ -870,16 +933,124 @@
         "volume_load": 800
       },
       "inputs": {
+        "bodyweight_kg": null,
         "difficulty_mult": 1.25,
+        "effective_load": 100,
+        "entered_weight_kg": 100,
         "peak_load": 100,
         "reps": 8,
         "session_volume_for_body_part": 0,
         "slug": null,
+        "uses_bodyweight_load": false,
         "weekly_volume_for_body_part": 0,
         "weight_kg": 100
       },
       "name": "explicit_ceiling_1_25",
       "set_xp": 96.36481778815643
+    },
+    {
+      "components": {
+        "base_xp": 61.13954713533037,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.21,
+        "intensity_mult": 1.0,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 560
+      },
+      "inputs": {
+        "bodyweight_kg": 70,
+        "difficulty_mult": 1.21,
+        "effective_load": 70,
+        "entered_weight_kg": 0,
+        "peak_load": 0,
+        "reps": 8,
+        "session_volume_for_body_part": 0,
+        "slug": "pull_up",
+        "uses_bodyweight_load": true,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 70
+      },
+      "name": "bodyweight_load_pure_bw",
+      "set_xp": 73.97885203374975
+    },
+    {
+      "components": {
+        "base_xp": 53.03812151130148,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.21,
+        "intensity_mult": 1.2,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 450
+      },
+      "inputs": {
+        "bodyweight_kg": 70,
+        "difficulty_mult": 1.21,
+        "effective_load": 90,
+        "entered_weight_kg": 20,
+        "peak_load": 25,
+        "reps": 5,
+        "session_volume_for_body_part": 0,
+        "slug": "ring_dip",
+        "uses_bodyweight_load": true,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 90
+      },
+      "name": "bodyweight_load_weighted",
+      "set_xp": 77.01135243440974
+    },
+    {
+      "components": {
+        "base_xp": 66.68328452080326,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.09,
+        "intensity_mult": 1.0,
+        "novelty_mult": 1.0,
+        "strength_mult": 0.8,
+        "volume_load": 640
+      },
+      "inputs": {
+        "bodyweight_kg": 70,
+        "difficulty_mult": 1.09,
+        "effective_load": 80,
+        "entered_weight_kg": 80,
+        "peak_load": 100,
+        "reps": 8,
+        "session_volume_for_body_part": 0,
+        "slug": "barbell_bench_press",
+        "uses_bodyweight_load": false,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 80
+      },
+      "name": "bodyweight_load_not_bw_exercise",
+      "set_xp": 58.14782410214045
+    },
+    {
+      "components": {
+        "base_xp": 12.715413939166092,
+        "cap_mult": 1.0,
+        "difficulty_mult": 1.21,
+        "intensity_mult": 1.2,
+        "novelty_mult": 1.0,
+        "strength_mult": 1.0,
+        "volume_load": 50
+      },
+      "inputs": {
+        "bodyweight_kg": null,
+        "difficulty_mult": 1.21,
+        "effective_load": 10,
+        "entered_weight_kg": 10,
+        "peak_load": 10,
+        "reps": 5,
+        "session_volume_for_body_part": 0,
+        "slug": "pull_up",
+        "uses_bodyweight_load": true,
+        "weekly_volume_for_body_part": 0,
+        "weight_kg": 10
+      },
+      "name": "bodyweight_load_null_bodyweight",
+      "set_xp": 18.462781039669164
     }
   ],
   "strength_mult": [

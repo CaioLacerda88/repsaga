@@ -385,9 +385,9 @@ void main() {
       await tester.pumpWidget(buildTestWidget(profile: profile));
       await tester.pump();
 
-      // Weekly Goal, Language, Manage Data, Privacy Policy, and Terms of
-      // Service rows each render a chevron icon.
-      expect(find.byIcon(Icons.chevron_right), findsNWidgets(5));
+      // Body Weight (Phase 24c), Weekly Goal, Language, Manage Data, Privacy
+      // Policy, and Terms of Service rows each render a chevron icon.
+      expect(find.byIcon(Icons.chevron_right), findsNWidgets(6));
     });
 
     // PO-039: The display name must show an edit icon and be tappable, opening
