@@ -15,22 +15,19 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-15).** Phase 24 nearly complete. **24a + 24b
-+ 24c shipped** (PRs #222, #224, #227). 24a wired
-`exercises.difficulty_mult` (0.85–1.25) through Dart + SQL + Python
-parity sim and curated all 150 existing defaults. 24b expanded the
-library to **200 defaults** with full en+pt translations and 28/50
-demo images on hosted Storage. 24c added **bodyweight-as-load
-semantics**: 20 curated bodyweight exercises now use `effective_load
-= profile.bodyweight_kg + sets.weight`; new `bodyweight_kg` profile
-column + lazy in-workout prompt; `xp_events.payload` snapshots
-`effective_load` and `bodyweight_used` for audit trail. All applied
-to hosted Supabase. **24d PENDING** (six-profile simulation
-calibration gate — final calibration sign-off). Then **Phase 25 —
-RPE** (research-first), then the **Launch Phase** (un-numbered;
-subscription + Play Store + any pre-launch scope expansion, formerly
-Phase 16). XP difficulty framework permanent reference:
-`docs/xp-difficulty-framework.md`.
+**Current state (2026-05-15).** **Phase 24 COMPLETE.** All four
+sub-phases shipped: 24a (PR #222) wired `exercises.difficulty_mult`
+(0.85–1.25); 24b (PR #224) expanded library 150 → 200; 24c (PR #227)
+added bodyweight-as-load semantics; 24d (PR #229) ran the six-archetype
+× 12-week calibration sim, identified the launch baseline, and
+propagated the tuned constants (`VOLUME_EXPONENT 0.65→0.60`,
+`WEEKLY_CAP_SETS 20→15`, `OVER_CAP_MULTIPLIER 0.5→0.3`, T4 multipliers
+−0.05 across 28 slugs) to all 4 production sites. All applied to hosted
+Supabase. Calibration baseline locked in `docs/xp-balance-baseline.md`;
+future tuning is a new phase. Next: **Phase 25 — RPE** (research-first),
+then the **Launch Phase** (un-numbered; subscription + Play Store + any
+pre-launch scope expansion, formerly Phase 16). XP difficulty framework
+permanent reference: `docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -45,6 +42,7 @@ Phase 16). XP difficulty framework permanent reference:
 | 24a | XP Balancing — difficulty multiplier infrastructure | DONE | #222 |
 | 24b | New default exercises (50 additions; 150 → 200) | DONE | #224 |
 | 24c | Bodyweight-as-load semantics (20 curated slugs) | DONE | #227 |
+| 24d | Calibration sign-off + production propagation | DONE | #229 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -299,7 +297,7 @@ phase; Phase 24d is the final calibration sign-off.
 | 24a — Difficulty multiplier infrastructure | DONE (PR #222) | See §4 condensed entry. |
 | 24b — New default exercises | DONE (PR #224) | See §4 condensed entry. |
 | 24c — Bodyweight load semantics | DONE (PR #227) | See §4 condensed entry. |
-| 24d — Balance simulation gate | PENDING | Dedicated test phase, no production code. Six user profiles × 12 simulated weeks against the Python simulator. Validates that the new formula produces sensible XP progression curves across the profile spectrum; calibration sign-off before declaring Phase 24 done. Tune constants if any pass criterion fails. |
+| 24d — Balance simulation gate | DONE (PR #229) | See §4 condensed entry. Constants snapshot locked in `docs/xp-balance-baseline.md`. |
 
 #### 24d acceptance criteria (the calibration gate)
 
@@ -747,6 +745,18 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **Verification:** unit/widget 2689/2689 (was 2622 pre-24c; +67 new across xp_event factory promotion, profile model, exercise model, hive service, bodyweight_row, prompt coordinator); integration 39/39 (was 35; +4 bodyweight payload cases — pure BW, BW+belt, flag-off, NULL-BW graceful fallback); Android debug APK clean; `npx supabase db reset` clean through 00058 (DO-blocks did not trip); E2E full regression 241/241 passed (29.3 min), 62 skipped, 0 failures, 0 flaky after both bug-cycle fixes. Hosted spot-check confirms 20 bodyweight slugs + `fn_exercises_localized` surfaces `uses_bodyweight_load: true` for `pull_up`.
 - **Python parity:** `USES_BODYWEIGHT_LOAD_BY_SLUG` (20 slugs) + `effective_weight` helper in `tasks/rpg-xp-simulation.py`; 4 new fixture boundary scenarios in `set_xp_examples`; `backfill_replay` legs rank 38→39, +5.8% legs XP from `walking_lunges` bodyweight load.
 - **Out of scope (24d):** Six-profile × 12-week calibration sign-off (24d). Onboarding bodyweight prompt deferred to Launch Phase. Backfill of historical xp_events explicitly forward-only.
+
+### Phase 24d: Calibration Sign-off + Production Propagation (PR #229)
+
+> Closes Phase 24. Six-archetype × 12-week balance simulation against the 6 acceptance criteria; iter-3 sign-off propagated to all 4 production sites in lockstep. **Constants snapshot is the launch baseline** — future tuning is a new phase. Permanent reference: `docs/xp-balance-baseline.md`.
+
+- **Sim methodology:** 6 archetypes per spec (Beginner, Intermediate compound, Advanced powerlifter, Hypertrophy bodybuilder, Bodyweight only, Machine only) × 12 weeks each. Existing 6 CONSISTENCY archetypes (beginner/intermediate/advanced/stagnant/comeback/vacationer) preserved alongside for future calibration phases. Sim-only iter 1 surfaced 1 hard fail (machine_only outranking intermediate, 1.088×) + 3 borderlines. Iter 2 (V=0.60, cap=15) narrowed everything; iter 3 (added over_cap=0.3 + T4 −0.05 across 28 slugs) cleared the hard fail and the powerlifter ratio. Final verdict: 4/6 PASS, 0 hard fail, 2 borderlines (C2 spread 31% / target 25%; C3 BW overshoot 23.4% / target 20%) explicitly accepted as documented deviations — both move in safe directions and both are structural (closing C2 needs a Phase 25+ intensity bonus the framework doesn't have; closing C3 partially undoes 24c's competitive-bodyweight intent).
+- **Mid-phase instrumentation bug caught:** sim's `_CALIBRATION_ATTRIBUTION` had 6 silently-empty entries + 15 drifted from migration 00053 — surfaced by criterion 6 outlier scan before any tuning landed. Fixed all 21; iter-1 numbers re-baselined +18% to +131% per archetype before iter-2 tuning began. Without this catch, every "FAIL" verdict would have been a measurement artifact and tuning would have chased phantoms.
+- **Constants tuned (forward-only — past xp_events stay frozen):** `VOLUME_EXPONENT 0.65→0.60` (more sub-linear), `WEEKLY_CAP_SETS 20→15` (tighter ceiling), `OVER_CAP_MULTIPLIER 0.5→0.3` (stronger penalty past cap), 28 T4 slugs `difficulty_mult −0.05` each (resolves machine-vs-free-weight inversion; preserves T4 < T3 ordering — framework §2 updated to T4=0.90 baseline).
+- **Sites updated atomically (4 production sites in lockstep):** Dart `XpCalculator` constants; SQL migration 00059 with `rpg_base_xp` helper update so all 3 RPCs centralize via one place; Python sim canonical (`_CALIBRATION_*` override scaffolding deleted); fixture regenerated. The 28-slug T4 list lives in both the migration UPDATE block and the sim's `DIFFICULTY_MULT_BY_SLUG` (sim mirror is partial — 23 of 28 in mirror; the 5 Phase-24b T4 additions stay absent from the partial mirror per the dict's documented invariant; production reads from the column).
+- **Reviewer cycle:** 0 Blockers, 2 Warnings (stale T4 inline comments in sim; framework §3 T4 header still showing 0.95) + 2 Nits (stale 0.65 in test labels; baseline doc tier-table snapshot still 0.95) — all pure doc/comment integrity, no production logic touched. All fixed in cycle + 2 same-cluster preventive fixes (tier-table emitter; tier_mult set definition).
+- **Verification:** unit/widget 2689/2689; integration 39/39; Android debug APK clean; `npx supabase db reset` clean through 00059 (DO-block: 28 T4 slugs at <=0.96 difficulty_mult); psql spot-checks pre + post hosted (leg_press 0.92 was 0.97; lat_pulldown 0.94 was 0.99; rpg_base_xp(100,8) = 55.19 was 79.43); E2E full regression 241/241 passed (30.2 min), 62 skipped, 0 failures, 0 flaky.
+- **Phase 24 closed.** Library at 200 defaults; XP economy calibrated; baseline locked. Next: Phase 25 (RPE, research-first), then the Launch Phase.
 
 ---
 
