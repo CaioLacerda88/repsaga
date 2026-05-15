@@ -54,12 +54,17 @@ fi
 ALLOWED_PATHS=(
   "lib/core/theme/app_theme.dart"
   "lib/shared/widgets/reward_accent.dart"
-  # Phase 26d will introduce these widgets. They legitimately render
+
+  # ─── Phase 26d widget exceptions ─────────────────────────────────────
+  # Phase 26d title-screen widgets. They legitimately render
   # heroGold (the equipped title card uses a gold gradient as a flex
   # surface; cross-build cards in Titles "Próximos" use a gold accent
   # because cross-builds are rare achievements). Both are explicit
   # exceptions to the reward-scarcity rule. See docs/PROJECT.md §3
   # Phase 26 → "heroGold scarcity-rule exceptions".
+  # Note: the path match is a substring check (see ALLOWED_PATHS loop
+  # below) — test files like `equipped_title_card_test.dart` that share
+  # the leaf name are covered by the same exemption.
   "lib/features/rpg/ui/widgets/equipped_title_card.dart"
   "lib/features/rpg/ui/widgets/cross_build_card.dart"
 )
@@ -105,6 +110,10 @@ for f in $(grep -rln --include='*.dart' 'ignore: reward_accent' -- "$SCAN_DIR" 2
 done
 
 HITS=""
+# EDIT_WITH_CARE: no regression test covers the whitelist loop below.
+# Changes to ALLOWED_PATHS matching, ignore-marker handling, or the
+# comment-line filter should be hand-verified against fixtures via
+# a temporary scratch heroGold reference before merging.
 if [[ -n "$RAW_HITS" ]]; then
   while IFS= read -r hit; do
     file="${hit%%:*}"
