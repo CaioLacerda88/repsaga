@@ -2018,6 +2018,54 @@ abstract class AppLocalizations {
   /// **'How many times per week do you want to train?'**
   String get frequencyQuestion;
 
+  /// Phase 24c — settings row label for the user's optional body weight (used to compute XP for bodyweight exercises).
+  ///
+  /// In en, this message translates to:
+  /// **'Body weight'**
+  String get profileBodyweightLabel;
+
+  /// Phase 24c — settings row subtitle shown when the user has not yet entered a bodyweight.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get profileBodyweightNotSet;
+
+  /// Phase 24c — bottom-sheet helper text explaining what the bodyweight value is used for.
+  ///
+  /// In en, this message translates to:
+  /// **'Used to compute XP for bodyweight exercises like pull-ups, dips, push-ups.'**
+  String get profileBodyweightHelper;
+
+  /// Phase 24c — inline validation error when the entered bodyweight falls outside the allowed range. min/max are pre-formatted integers for the unit; unit is 'kg' or 'lbs'.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value between {min} and {max} {unit}'**
+  String profileBodyweightInvalidRange(String min, String max, String unit);
+
+  /// Phase 24c-8 — non-blocking SnackBar title shown the first time a user completes a set on a bodyweight exercise (pull-up, dip, push-up, etc.) when their profile has no bodyweight set. The XP for those exercises is computed from `effective_load = bodyweight + entered weight`; without bodyweight, the load undercounts. Voice: declarative, no exclamation, no preachy CTA — matches the rest of the in-workout snackbar copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Set your body weight for accurate XP'**
+  String get bodyweightPromptTitle;
+
+  /// Phase 24c-8 — explanatory body copy paired with `bodyweightPromptTitle`. Reserved for extended surfaces (future tooltip / onboarding card / settings hint) where the SnackBar's single-line constraint isn't binding. The active-workout SnackBar renders only the title to keep the bar at one line + two actions; this string is wired so post-launch UX revisions can add an info icon → tooltip without an l10n PR.
+  ///
+  /// In en, this message translates to:
+  /// **'Bodyweight exercises like pull-ups and dips count your weight as part of the load.'**
+  String get bodyweightPromptBody;
+
+  /// Phase 24c-8 — primary action on the bodyweight prompt SnackBar. Tapping opens the bodyweight editor bottom sheet (reusing the profile-settings sheet from 24c-7). Short, imperative, parallel structure with `bodyweightPromptSkip`.
+  ///
+  /// In en, this message translates to:
+  /// **'Set now'**
+  String get bodyweightPromptSetNow;
+
+  /// Phase 24c-8 — dismissive action on the bodyweight prompt SnackBar. Tapping records a forever-dismissal in Hive (`bodyweight_prompt_dismissed_at`); the prompt never re-appears. Distinct from the existing top-level `skip` key so this surface can be re-copied independently if voice review changes the wording.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get bodyweightPromptSkip;
+
   /// Generic retry message
   ///
   /// In en, this message translates to:

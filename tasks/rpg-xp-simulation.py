@@ -20,15 +20,21 @@ identical. Any change to a constant, multiplier order, or floor/ceiling here
 must land in the same PR as the matching change in:
 
   1. lib/features/rpg/domain/xp_calculator.dart
-     (Dart `XpCalculator.computeSetXp` — live save path)
+     (Dart `XpCalculator.computeSetXp` — live save path; the Dart calculator
+     is bodyweight-agnostic — production callers pre-convert sets.weight to
+     `effective_load` before invoking computeSetXp)
   2. test/fixtures/generate_rpg_fixtures.py
      (regenerate `rpg_xp_fixtures.json` so Dart parity tests stay green)
-  3. supabase/migrations/00040_*.sql, 00050_*.sql, 00052_*.sql, and
-     00054_record_xp_with_difficulty_mult.sql
+  3. supabase/migrations/00040_*.sql, 00050_*.sql, 00052_*.sql,
+     00054_record_xp_with_difficulty_mult.sql, and
+     00057_record_xp_with_bodyweight_load.sql
      (PL/pgSQL `record_set_xp` / `record_session_xp_batch` /
      `_rpg_backfill_chunk` — live persist path; per-exercise difficulty_mult
      fetched from `exercises.difficulty_mult` and applied at the same
-     position in the chain)
+     position in the chain; per-exercise `uses_bodyweight_load` from
+     `exercises.uses_bodyweight_load` (00056) drives effective_weight =
+     COALESCE(weight,0) + COALESCE(bodyweight,0) when TRUE — applied to
+     volume_load + strength_mult numerator BEFORE the chain in 00057)
 
 Integration parity tests assert all four agree to 1e-4 absolute. If you only
 change one site you'll get a build that compiles but produces silently
@@ -254,6 +260,86 @@ def difficulty_mult_for_alias(alias: str) -> float:
 
 
 # ============================================================================
+# Bodyweight-as-load semantics (Phase 24c)
+# ============================================================================
+#
+# Mirrors `exercises.uses_bodyweight_load` populated by
+# `supabase/migrations/00056_add_bodyweight_load_semantics.sql`. The 20-element
+# list is the canonical curation source — Python sim, SQL RPCs (00057), and
+# Dart Exercise model must agree.
+#
+# For exercises in this set, the live persist path (00057) computes:
+#
+#   effective_weight = COALESCE(sets.weight, 0) + COALESCE(profiles.bodyweight_kg, 0)
+#
+# which feeds `volume_load` and `strength_mult`'s numerator. For all other
+# exercises, effective_weight degrades to `COALESCE(sets.weight, 0)` —
+# pre-Phase-24c semantics. NULL bodyweight degrades gracefully to entered-only.
+#
+# Note: the Dart `XpCalculator.computeSetXp` is bodyweight-AGNOSTIC. Production
+# callers pre-convert and pass `effective_load` as `weight_kg`. The fixture
+# generator does the same — it computes `effective_load` here and feeds it
+# into `weight_kg` slots so the existing fixture-driven Dart parity tests
+# stay green without code change.
+
+USES_BODYWEIGHT_LOAD_BY_SLUG = frozenset({
+    # Pull family (T2)
+    "pull_up", "chin_up", "wide_grip_pull_up",
+    # Dip family (T2)
+    "dips", "ring_dip", "muscle_up",
+    # Push-up family (T3 + archer T2)
+    "push_up", "wide_push_up", "incline_push_up", "decline_push_up",
+    "diamond_push_up", "close_grip_push_up", "archer_push_up",
+    # Squat family
+    "bodyweight_squat", "pistol_squat",
+    # Lunge
+    "walking_lunges",
+    # Hanging
+    "hanging_leg_raise",
+    # Olympic gymnastics
+    "handstand_push_up",
+    # Body pull
+    "inverted_row",
+    # Eccentric (judgment call — telemetry-flagged post-launch)
+    "nordic_curl",
+})
+
+
+def uses_bodyweight_load(slug: str) -> bool:
+    """Mirrors `exercises.uses_bodyweight_load` from migration 00056. The
+    20-element list is the canonical source; Python sim, SQL RPCs (00057),
+    and Dart helpers must agree.
+
+    Slugs not in the curated set return False (matches the column DEFAULT
+    FALSE for user-created and non-curated exercises)."""
+    return slug in USES_BODYWEIGHT_LOAD_BY_SLUG
+
+
+def effective_weight(
+    slug: str,
+    entered_weight: float,
+    bodyweight_kg: float | None,
+) -> float:
+    """Compute effective load for the volume + strength formula.
+
+    Mirrors `00057_record_xp_with_bodyweight_load.sql`'s `v_effective_weight`
+    CASE expression byte-for-byte:
+
+        effective_weight = CASE WHEN uses_bodyweight_load
+                                THEN COALESCE(weight, 0) + COALESCE(bw, 0)
+                                ELSE COALESCE(weight, 0)
+                           END
+
+    NULL bodyweight degrades to entered-weight-only (graceful fallback) — a
+    user who hasn't set their bodyweight yet still earns XP, just slightly
+    under-counted until they enter their mass.
+    """
+    if uses_bodyweight_load(slug):
+        return (entered_weight or 0.0) + (bodyweight_kg or 0.0)
+    return entered_weight or 0.0
+
+
+# ============================================================================
 # Day templates — weekly split layouts
 # ============================================================================
 
@@ -284,6 +370,14 @@ class Archetype:
     # Optional layoff schedule: list of (start_week, end_week) inclusive
     # ranges where the user does NO training. Used for detraining scenarios.
     layoffs: list[tuple[int, int]] = field(default_factory=list)
+
+    # Phase 24c: user bodyweight in kg. Default 70 kg (framework example).
+    # Bodyweight is held constant across the simulation — gym training
+    # does not meaningfully shift bodyweight on a 5-year horizon for the
+    # archetypes we model (advanced lifters fluctuate ±2-3 kg around a
+    # set point). If we add cut/bulk archetypes later, this becomes a
+    # callable. NULL semantics live in the fixture generator, not here.
+    bodyweight_kg: float = 70.0
 
 
 ARCHETYPES = {
@@ -422,6 +516,8 @@ def compute_set_xp(
     weekly_count: dict[str, float],
     peak_loads: dict[str, float],
     difficulty_mult: float,
+    bodyweight_kg: float | None = None,
+    slug: str | None = None,
 ) -> tuple[dict[str, float], float]:
     """Returns (xp_per_body_part, total_volume_load_for_vitality).
 
@@ -434,16 +530,43 @@ def compute_set_xp(
 
         set_xp = base × intensity × strength × novelty × cap × difficulty_mult
         per_bp_xp = set_xp × attribution[bp]
+
+    Phase 24c bodyweight-as-load: if `slug` is curated in
+    `USES_BODYWEIGHT_LOAD_BY_SLUG`, `effective_weight = entered_weight +
+    (bodyweight_kg or 0)` is used for both `volume_load` and the
+    `strength_mult` numerator (mirrors 00057). Peak_loads still tracks
+    ENTERED weight only — see migration 00057 header for the rationale.
+    Default args (`bodyweight_kg=None, slug=None`) keep backward compat
+    for callers that don't yet thread bodyweight; in that case effective
+    weight degrades to entered weight (pre-24c semantics).
     """
-    volume_load = max(1.0, weight * reps)
+    # Phase 24c: resolve slug. If not provided, fall back to `exercise` (the
+    # simulator's short alias). uses_bodyweight_load() returns False for the
+    # short aliases (they're not in the 20-slug curation set), which matches
+    # the desired backward-compat behavior — the simulator's archetype
+    # playback uses 'pullup' (alias) NOT 'pull_up' (real slug), so passing
+    # `slug=SIM_ALIAS_TO_DEFAULT_SLUG[exercise]` is the responsibility of
+    # the simulator caller (see `simulate()`).
+    resolved_slug = slug if slug is not None else exercise
+    eff_weight = effective_weight(resolved_slug, weight, bodyweight_kg)
+
+    # Phase 24c: volume_load + base_xp consume effective_weight.
+    volume_load = max(1.0, eff_weight * reps)
     base_xp = volume_load ** VOLUME_EXPONENT
     intensity = intensity_for_reps(reps)
 
+    # Phase 24c: peak_loads tracks ENTERED weight (not effective) — matches
+    # the 00057 writer-site guard. The strength_mult numerator is still
+    # effective_weight (favorable for weighted bodyweight, neutral for pure
+    # bodyweight since peak stays 0 → short-circuit returns 1.0).
     peak_load = peak_loads.get(exercise, weight)
     if weight > peak_load:
         peak_loads[exercise] = weight
         peak_load = weight
-    strength_mult = max(STRENGTH_MULT_FLOOR, min(1.0, weight / peak_load if peak_load > 0 else 1.0))
+    if peak_load > 0:
+        strength_mult = max(STRENGTH_MULT_FLOOR, min(1.0, eff_weight / peak_load))
+    else:
+        strength_mult = 1.0
 
     distribution = ATTRIBUTION.get(exercise, {})
 
@@ -531,10 +654,20 @@ def simulate(archetype: Archetype, weeks: int) -> list[dict]:
                     w = weights.get(exercise, 1)
                     distribution = ATTRIBUTION.get(exercise, {})
                     diff_mult = difficulty_mult_for_alias(exercise)
+                    # Phase 24c: resolve simulator alias → real slug so
+                    # uses_bodyweight_load() consults the same 20-slug
+                    # curation set as the SQL RPCs (00057). For aliases
+                    # not in SIM_ALIAS_TO_DEFAULT_SLUG (synthetic, no
+                    # real-world analog) the resolved slug is the alias
+                    # itself — uses_bodyweight_load() returns False, so
+                    # behavior matches pre-24c.
+                    real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
                     for _ in range(n_sets):
                         awarded, vol = compute_set_xp(
                             exercise, w, reps, novelty_count, weekly_count, peak_loads,
                             difficulty_mult=diff_mult,
+                            bodyweight_kg=archetype.bodyweight_kg,
+                            slug=real_slug,
                         )
                         for bp, xp in awarded.items():
                             xp_pool[bp] += xp

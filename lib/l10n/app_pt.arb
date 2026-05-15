@@ -351,6 +351,15 @@
   "prsLabel": "PRs",
   "perWeekLabel": "{count}x por semana",
   "frequencyQuestion": "Quantas vezes por semana você quer treinar?",
+
+  "profileBodyweightLabel": "Peso corporal",
+  "profileBodyweightNotSet": "Não definido",
+  "profileBodyweightHelper": "Usado para calcular XP em exercícios de peso corporal como barra fixa, paralelas e flexões.",
+  "profileBodyweightInvalidRange": "Digite um valor entre {min} e {max} {unit}",
+  "bodyweightPromptTitle": "Defina seu peso corporal para XP preciso",
+  "bodyweightPromptBody": "Exercícios como barra fixa e paralelas contam seu peso como parte da carga.",
+  "bodyweightPromptSetNow": "Definir agora",
+  "bodyweightPromptSkip": "Pular",
   "pleaseTryAgain": "Tente novamente.",
 
   "personalRecordsTitle": "Recordes Pessoais",

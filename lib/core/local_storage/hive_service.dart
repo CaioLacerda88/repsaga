@@ -21,6 +21,54 @@ class HiveService {
   static const String workoutHistoryCache = 'workout_history_cache';
   static const String lastSetsCache = 'last_sets_cache';
 
+  /// Bundled schema version for the model-shape-dependent caches
+  /// (`exerciseCache`, `routineCache`, `prCache`, `workoutHistoryCache`,
+  /// `lastSetsCache`, `activeWorkout`). Bump by 1 in the same PR as any
+  /// breaking change to a model that gets serialized into one of those
+  /// boxes — adding a required field, renaming a JSON key, changing the
+  /// type of an enum's underlying string, etc.
+  ///
+  /// Bumping this constant causes [migrateCacheSchema] to wipe the affected
+  /// boxes once on next app launch for users whose persisted version differs.
+  /// `userPrefs` (settings + this very version key) and `offlineQueue`
+  /// (pending mutations that haven't drained yet) are deliberately preserved.
+  ///
+  /// Version log:
+  /// - 1: initial baseline (Phase 24c — first PR to introduce the mechanism;
+  ///   accompanies the addition of `Exercise.usesBodyweightLoad`. Pre-existing
+  ///   installs have no version key and are treated as needing the wipe.)
+  ///
+  /// Adding `usesBodyweightLoad` with `@Default(false)` is technically
+  /// backward-compatible at the Freezed level (legacy rows deserialize as
+  /// `false`), but we still wipe so the next read repopulates from the
+  /// authoritative server flags — leaving stale `false`s in cache would let
+  /// the 20 curated bodyweight exercises miss their effective-load math
+  /// until the cache TTL fires.
+  static const int currentCacheSchemaVersion = 1;
+
+  /// Hive boxes whose contents are model-serialized payloads from Supabase
+  /// reads. These are wiped on cache schema version mismatch — the cost is
+  /// one extra network round-trip per cache miss, which is negligible.
+  ///
+  /// `userPrefs` is excluded because it stores user preferences (locale,
+  /// crash-report opt-in, the schema version key itself) that must survive.
+  /// `offlineQueue` is excluded because it stores pending mutations whose
+  /// loss would cause silent data loss on the user's last unsynced session.
+  @visibleForTesting
+  static const List<String> cacheSchemaBoxes = [
+    activeWorkout,
+    exerciseCache,
+    routineCache,
+    prCache,
+    workoutHistoryCache,
+    lastSetsCache,
+  ];
+
+  /// Hive key (in [userPrefs]) where the persisted cache schema version
+  /// lives. Reading the key before any cache-fetching code runs is what
+  /// makes the migration idempotent across app launches.
+  static const String _cacheSchemaVersionKey = 'cache_schema_version';
+
   /// Canonical list of every Hive box the app uses.
   ///
   /// Public ([visibleForTesting]) so tests can iterate the same set
@@ -84,6 +132,45 @@ class HiveService {
   Future<void> init() async {
     await Hive.initFlutter();
     await Future.wait(allBoxNames.map(openWithRecovery));
+    // Cache schema migration runs AFTER every box is open: it reads the
+    // persisted version from `userPrefs` and wipes [cacheSchemaBoxes] in
+    // place when the version differs. The wipe is idempotent on subsequent
+    // launches because we stamp the bumped version into `userPrefs` once
+    // the wipe completes — version-equal launches no-op.
+    await migrateCacheSchema();
+  }
+
+  /// Compare persisted cache schema version against
+  /// [currentCacheSchemaVersion]; clear [cacheSchemaBoxes] and stamp the
+  /// new version when they differ.
+  ///
+  /// Public for tests so the migration contract can be pinned without
+  /// standing up the full Flutter binding harness `init()` requires.
+  /// Production callers go through [init].
+  ///
+  /// Idempotent — calling repeatedly with the version stamped no-ops.
+  /// Safe to call before any cache reads happen because [init] sequences
+  /// `openWithRecovery` ahead of this method (the boxes are guaranteed
+  /// open when this runs).
+  @visibleForTesting
+  Future<void> migrateCacheSchema() async {
+    final prefs = Hive.box<dynamic>(userPrefs);
+    final persisted = prefs.get(_cacheSchemaVersionKey) as int?;
+    if (persisted == currentCacheSchemaVersion) return;
+
+    developer.log(
+      'Cache schema version mismatch (persisted=$persisted, '
+      'current=$currentCacheSchemaVersion) — clearing model-shape-dependent '
+      'caches. Pending offline mutations and user preferences are preserved.',
+      name: 'HiveService',
+    );
+
+    for (final boxName in cacheSchemaBoxes) {
+      if (Hive.isBoxOpen(boxName)) {
+        await Hive.box<dynamic>(boxName).clear();
+      }
+    }
+    await prefs.put(_cacheSchemaVersionKey, currentCacheSchemaVersion);
   }
 
   /// Open one box, recovering by deleting+reopening on `Error`.

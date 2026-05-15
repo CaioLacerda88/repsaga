@@ -990,6 +990,393 @@ void main() {
       );
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Phase 24c — bodyweight load semantics (PR #TBD)
+  //
+  // Validates the migration 00057 contract for the four boundary scenarios
+  // captured in the regenerated rpg_xp_fixtures.json (set_xp_examples block):
+  //
+  //   1. pure bodyweight       — pull_up, weight=0, bodyweight=70
+  //   2. weighted bodyweight   — pull_up, weight=20 (belt), bodyweight=70
+  //   3. flag off (negative)   — bench press, weight=80, bodyweight=70 (ignored)
+  //   4. null bodyweight       — pull_up, weight=20, bodyweight=NULL (graceful
+  //                              fallback: effective = entered, flag still on)
+  //
+  // For each scenario we assert:
+  //   * payload.effective_load matches the SQL CASE expression
+  //   * payload.bodyweight_used matches exercises.uses_bodyweight_load
+  //   * payload.volume_load = effective_load × reps (re-derived from
+  //     effective_weight per migration 00057's snapshot rule)
+  //   * XpEvent.bodyweightUsed matches payload.bodyweight_used after the
+  //     fromJson factory promotes the payload-nested key (Phase 24c-3
+  //     contract validated end-to-end against a live SQL row).
+  //
+  // Each test seeds the workout with adminClient + calls record_set_xp
+  // directly (skipping save_workout's record_session_xp_batch path) so the
+  // assertion targets the per-set RPC's payload writer specifically. The
+  // batch RPC is exercised by the existing PG/Dart parity group above and
+  // by the wider save_workout integration tests.
+  // ---------------------------------------------------------------------------
+
+  group('Phase 24c — bodyweight load semantics', () {
+    /// Pure bodyweight: pull-up with NO added weight on a lifter with a
+    /// known bodyweight. The SQL CASE adds bodyweight (70) to entered
+    /// weight (0) → effective_load = 70. volume_load = 70 × 8 = 560.
+    /// Without Phase 24c the bare entered weight (0) would zero out
+    /// volume_load to GREATEST(1.0, 0) = 1.0 — silently under-counting
+    /// every bodyweight set ever logged.
+    test('pull-up with bodyweight=70, weight=0 (pure bodyweight): payload '
+        'effective_load=70, volume_load=560, bodyweight_used=true', () async {
+      const slug = 'pull_up';
+      const enteredWeight = 0.0;
+      const reps = 8;
+      const bodyweight = 70.0;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      // Set bodyweight on the user's profile BEFORE seeding the workout.
+      // record_set_xp pre-fetches profiles.bodyweight_kg once at Step 1.5;
+      // setting it here ensures the SQL chain reads 70 for this user.
+      await adminClient.from('profiles').upsert({
+        'id': user.userId,
+        'bodyweight_kg': bodyweight,
+      }, onConflict: 'id');
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: enteredWeight,
+        reps: reps,
+        numSets: 1,
+      );
+      await userClient.rpc(
+        'record_set_xp',
+        params: {'p_set_id': seed.setIds.first},
+      );
+
+      // Sanity: the curated 20-slug list (migration 00056) marked pull_up.
+      final usesBw = await bodyweightLoadForSlug(adminClient, slug);
+      expect(
+        usesBw,
+        isTrue,
+        reason:
+            'pull_up must be flagged uses_bodyweight_load=TRUE per the '
+            '20-slug curation in migration 00056. If this fails, the '
+            'curation list drifted.',
+      );
+
+      final events = await userClient
+          .from('xp_events')
+          .select()
+          .eq('set_id', seed.setIds.first);
+      expect(
+        events,
+        hasLength(1),
+        reason: 'record_set_xp must produce exactly one xp_events row',
+      );
+      final eventRow = (events as List).first as Map<String, dynamic>;
+      final payload = eventRow['payload'] as Map<String, dynamic>;
+
+      expect(
+        (payload['effective_load'] as num).toDouble(),
+        closeTo(bodyweight, 1e-9),
+        reason:
+            'payload.effective_load must equal bodyweight ($bodyweight) when '
+            'entered weight is 0 and uses_bodyweight_load=TRUE. Got '
+            '${payload['effective_load']}.',
+      );
+      expect(
+        payload['bodyweight_used'],
+        isTrue,
+        reason:
+            'payload.bodyweight_used must be true for a uses_bodyweight_load '
+            'exercise regardless of entered weight.',
+      );
+      expect(
+        (payload['volume_load'] as num).toDouble(),
+        closeTo(bodyweight * reps, 1e-9),
+        reason:
+            'payload.volume_load must be re-derived from effective_load × '
+            'reps ($bodyweight × $reps = ${bodyweight * reps}), NOT from '
+            'entered weight. This is the bug Phase 24c fixes — without it, '
+            'pure-bodyweight sets had volume_load=1.0 forever.',
+      );
+
+      // End-to-end: XpEvent.fromJson must promote payload.bodyweight_used
+      // and payload.effective_load to top-level model fields. This validates
+      // the Phase 24c-3 factory promotion against a real SQL-emitted row
+      // (the 24c-3 unit tests cover synthetic rows; this exercises the
+      // promotion against authentic migration 00057 output).
+      final event = XpEvent.fromJson(eventRow);
+      expect(
+        event.bodyweightUsed,
+        isTrue,
+        reason:
+            'XpEvent.bodyweightUsed must equal payload.bodyweight_used after '
+            'the fromJson factory promotes the payload-nested key. If this '
+            'fails, the 24c-3 promotion is broken end-to-end.',
+      );
+      expect(
+        event.effectiveLoad,
+        closeTo(bodyweight, 1e-9),
+        reason:
+            'XpEvent.effectiveLoad must equal payload.effective_load after '
+            'fromJson promotion (live integration parity).',
+      );
+    });
+
+    /// Weighted bodyweight: pull-up with a 20kg weight belt on a 70kg lifter.
+    /// SQL CASE: effective_load = COALESCE(20, 0) + COALESCE(70, 0) = 90.
+    /// volume_load = 90 × 8 = 720. Same flag semantics as scenario 1 — the
+    /// bodyweight contribution applies on top of the entered (belt) weight.
+    test('pull-up with bodyweight=70, weight=20 (belt-weighted): payload '
+        'effective_load=90, volume_load=720, bodyweight_used=true', () async {
+      const slug = 'pull_up';
+      const enteredWeight = 20.0; // belt weight
+      const reps = 8;
+      const bodyweight = 70.0;
+      const expectedEffective = enteredWeight + bodyweight; // 90.0
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      await adminClient.from('profiles').upsert({
+        'id': user.userId,
+        'bodyweight_kg': bodyweight,
+      }, onConflict: 'id');
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: enteredWeight,
+        reps: reps,
+        numSets: 1,
+      );
+      await userClient.rpc(
+        'record_set_xp',
+        params: {'p_set_id': seed.setIds.first},
+      );
+
+      final events = await userClient
+          .from('xp_events')
+          .select()
+          .eq('set_id', seed.setIds.first);
+      expect(events, hasLength(1));
+      final eventRow = (events as List).first as Map<String, dynamic>;
+      final payload = eventRow['payload'] as Map<String, dynamic>;
+
+      expect(
+        (payload['effective_load'] as num).toDouble(),
+        closeTo(expectedEffective, 1e-9),
+        reason:
+            'payload.effective_load must equal entered ($enteredWeight) + '
+            'bodyweight ($bodyweight) = $expectedEffective for a '
+            'uses_bodyweight_load exercise with both inputs non-null.',
+      );
+      expect(payload['bodyweight_used'], isTrue);
+      expect(
+        (payload['volume_load'] as num).toDouble(),
+        closeTo(expectedEffective * reps, 1e-9),
+        reason:
+            'payload.volume_load must be re-derived from effective_load × '
+            'reps ($expectedEffective × $reps = ${expectedEffective * reps}).',
+      );
+
+      final event = XpEvent.fromJson(eventRow);
+      expect(event.bodyweightUsed, isTrue);
+      expect(
+        event.effectiveLoad,
+        closeTo(expectedEffective, 1e-9),
+        reason: 'XpEvent.effectiveLoad must promote to $expectedEffective.',
+      );
+    });
+
+    /// Flag-off scenario: bench press has uses_bodyweight_load=FALSE per the
+    /// curation in migration 00056, so the SQL CASE picks the ELSE branch:
+    /// effective_load = COALESCE(weight, 0) = 80. The user's bodyweight is
+    /// IGNORED — proves the flag (not the profile column) gates the
+    /// behavior. Without this guard, every weighted exercise would
+    /// double-count bodyweight, breaking 180 of the 200 default exercises.
+    test('bench press with bodyweight=70, weight=80 (uses_bodyweight_load='
+        'FALSE): payload effective_load=80, bodyweight_used=false (BW '
+        'ignored)', () async {
+      const slug = 'barbell_bench_press';
+      const enteredWeight = 80.0;
+      const reps = 5;
+      const bodyweight = 70.0;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      // Set bodyweight even though bench press shouldn't use it — this is
+      // the load-bearing case: a known bodyweight that MUST be ignored
+      // because the exercise's flag is FALSE.
+      await adminClient.from('profiles').upsert({
+        'id': user.userId,
+        'bodyweight_kg': bodyweight,
+      }, onConflict: 'id');
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: enteredWeight,
+        reps: reps,
+        numSets: 1,
+      );
+      await userClient.rpc(
+        'record_set_xp',
+        params: {'p_set_id': seed.setIds.first},
+      );
+
+      // Sanity: bench is NOT in the curated 20-slug list.
+      final usesBw = await bodyweightLoadForSlug(adminClient, slug);
+      expect(
+        usesBw,
+        isFalse,
+        reason:
+            'barbell_bench_press must NOT be flagged uses_bodyweight_load. '
+            'If this fails, the curation drifted to include barbells.',
+      );
+
+      final events = await userClient
+          .from('xp_events')
+          .select()
+          .eq('set_id', seed.setIds.first);
+      expect(events, hasLength(1));
+      final eventRow = (events as List).first as Map<String, dynamic>;
+      final payload = eventRow['payload'] as Map<String, dynamic>;
+
+      expect(
+        (payload['effective_load'] as num).toDouble(),
+        closeTo(enteredWeight, 1e-9),
+        reason:
+            'payload.effective_load must equal entered weight only '
+            '($enteredWeight) when uses_bodyweight_load=FALSE — bodyweight '
+            'must be IGNORED. Got ${payload['effective_load']}; if this '
+            'is 150 ($enteredWeight + $bodyweight), the SQL CASE branched '
+            'incorrectly and every weighted exercise will double-count.',
+      );
+      expect(
+        payload['bodyweight_used'],
+        isFalse,
+        reason:
+            'payload.bodyweight_used must be false for a non-bodyweight '
+            'exercise — the audit trail must reflect the flag, not the '
+            'presence of the bodyweight value.',
+      );
+      expect(
+        (payload['volume_load'] as num).toDouble(),
+        closeTo(enteredWeight * reps, 1e-9),
+        reason:
+            'payload.volume_load = $enteredWeight × $reps = '
+            '${enteredWeight * reps} (entered-only).',
+      );
+
+      final event = XpEvent.fromJson(eventRow);
+      expect(event.bodyweightUsed, isFalse);
+      expect(event.effectiveLoad, closeTo(enteredWeight, 1e-9));
+    });
+
+    /// Null-bodyweight graceful fallback: the user logs a weighted pull-up
+    /// (entered = 20kg, e.g. with a belt or vest) but has NOT set their
+    /// profile bodyweight. The SQL CASE WHEN branch fires (flag is TRUE)
+    /// but COALESCE(NULL, 0) keeps the math defined: effective_load =
+    /// COALESCE(20, 0) + COALESCE(NULL, 0) = 20. Critically,
+    /// bodyweight_used STAYS true — the flag was on for this exercise,
+    /// the profile data was just incomplete. This audit-trail clarity is
+    /// what lets the Phase 24c-8 lazy prompt distinguish "user dismissed
+    /// the prompt" from "exercise didn't qualify" downstream.
+    test('pull-up with bodyweight=NULL, weight=20 (graceful fallback): '
+        'payload effective_load=20, bodyweight_used=true (flag stays on '
+        'even when value is missing)', () async {
+      const slug = 'pull_up';
+      const enteredWeight = 20.0;
+      const reps = 8;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      // Explicitly DO NOT upsert the profile — leave bodyweight_kg NULL.
+      // (The auth trigger created the profiles row at user creation; we
+      // need to make sure no lingering bodyweight slipped in. Force-clear
+      // for safety in case a future fixture or trigger seeds one.)
+      await adminClient.from('profiles').upsert({
+        'id': user.userId,
+        'bodyweight_kg': null,
+      }, onConflict: 'id');
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: enteredWeight,
+        reps: reps,
+        numSets: 1,
+      );
+      await userClient.rpc(
+        'record_set_xp',
+        params: {'p_set_id': seed.setIds.first},
+      );
+
+      final events = await userClient
+          .from('xp_events')
+          .select()
+          .eq('set_id', seed.setIds.first);
+      expect(events, hasLength(1));
+      final eventRow = (events as List).first as Map<String, dynamic>;
+      final payload = eventRow['payload'] as Map<String, dynamic>;
+
+      expect(
+        (payload['effective_load'] as num).toDouble(),
+        closeTo(enteredWeight, 1e-9),
+        reason:
+            'payload.effective_load must gracefully degrade to entered '
+            'weight ($enteredWeight) when bodyweight_kg is NULL. The '
+            'COALESCE(NULL, 0) in the CASE WHEN branch produces 0 + 20 = '
+            '20, which preserves volume_load math without poisoning the '
+            'multiplication chain. Got ${payload['effective_load']}.',
+      );
+      expect(
+        payload['bodyweight_used'],
+        isTrue,
+        reason:
+            'payload.bodyweight_used MUST stay true even when bodyweight '
+            'value is NULL — the flag tracks the EXERCISE, not the '
+            'profile data. Audit trails must distinguish "this exercise '
+            'qualifies for bodyweight loading but the user has not set '
+            'their bodyweight yet" from "this exercise does not use '
+            'bodyweight loading at all". Confusing the two would let the '
+            'Phase 24c-8 lazy prompt fire on bench press sets.',
+      );
+      expect(
+        (payload['volume_load'] as num).toDouble(),
+        closeTo(enteredWeight * reps, 1e-9),
+        reason:
+            'payload.volume_load = effective_load × reps = $enteredWeight '
+            '× $reps = ${enteredWeight * reps} (graceful-fallback path).',
+      );
+
+      final event = XpEvent.fromJson(eventRow);
+      expect(
+        event.bodyweightUsed,
+        isTrue,
+        reason:
+            'XpEvent.bodyweightUsed must promote to true even on the '
+            'NULL-bodyweight path — the SQL emits true, the model must '
+            'reflect it. The Phase 24c-8 prompt logic depends on this.',
+      );
+      expect(event.effectiveLoad, closeTo(enteredWeight, 1e-9));
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

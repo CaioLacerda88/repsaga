@@ -103,6 +103,7 @@ class SnackBarTapOutDismissScopeState
     required String message,
     required Duration duration,
     SnackBarAction? action,
+    SnackBarAction? secondaryAction,
   }) {
     final messenger = ScaffoldMessenger.of(context);
     // Cancel any prior countdown snack so the bar restarts cleanly
@@ -119,6 +120,13 @@ class SnackBarTapOutDismissScopeState
     // both. The action's `label` and `onPressed` are the only fields we
     // surface — colour, etc. flow from `AppTheme` defaults at the
     // button level inside the widget.
+    //
+    // [secondaryAction] is opt-in (Phase 24c-8 — bodyweight prompt).
+    // When provided, it renders as a quieter (text-only, dim) button to
+    // the LEFT of the primary action so the user reads "Skip | Set now"
+    // left-to-right. Most snack call sites are single-action (Undo /
+    // Save now / Retry) so this stays additive — null-secondary
+    // preserves the original layout byte-for-byte.
     final controller = messenger.showSnackBar(
       SnackBar(
         // padding: zero — widget owns all inner padding so the progress
@@ -139,6 +147,8 @@ class SnackBarTapOutDismissScopeState
           duration: duration,
           actionLabel: action?.label,
           onAction: action?.onPressed,
+          secondaryActionLabel: secondaryAction?.label,
+          onSecondaryAction: secondaryAction?.onPressed,
         ),
         // action: null — see the doc above. Embedding the button inside
         // `content` is what lets the progress bar span the full snack
@@ -279,6 +289,8 @@ class SnackBarCountdown extends StatelessWidget {
     required this.duration,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   /// Key on the track widget — the dim-violet [ColoredBox] that holds
@@ -308,9 +320,26 @@ class SnackBarCountdown extends StatelessWidget {
   /// otherwise.
   final VoidCallback? onAction;
 
+  /// Secondary, dismissive-style action label (e.g. `l10n.bodyweightPromptSkip`).
+  /// Renders to the LEFT of the primary action as a quieter
+  /// (`onSurfaceVariant`-tinted) text button so the visual hierarchy
+  /// reads "Skip | Set now" left-to-right. Optional — null hides the
+  /// secondary slot entirely (no layout shift; the Row collapses).
+  ///
+  /// Phase 24c-8 — bodyweight prompt is the first multi-action snack
+  /// in the app. Kept additive so existing single-action callers
+  /// (Undo, Save now, Retry) render unchanged.
+  final String? secondaryActionLabel;
+
+  /// Secondary action callback. Required when [secondaryActionLabel] is
+  /// non-null; ignored otherwise.
+  final VoidCallback? onSecondaryAction;
+
   @override
   Widget build(BuildContext context) {
     final hasAction = actionLabel != null && onAction != null;
+    final hasSecondaryAction =
+        secondaryActionLabel != null && onSecondaryAction != null;
 
     // Padding values:
     //   * Left 16 dp — Material's standard SnackBar inset for content.
@@ -323,7 +352,7 @@ class SnackBarCountdown extends StatelessWidget {
     final messageRowPadding = EdgeInsets.fromLTRB(
       16,
       14,
-      hasAction ? 8 : 16,
+      (hasAction || hasSecondaryAction) ? 8 : 16,
       12,
     );
 
@@ -342,6 +371,14 @@ class SnackBarCountdown extends StatelessWidget {
                   // `AppTheme` to `textCream` on `surface2`.
                 ),
               ),
+              // Secondary (dismissive) action renders LEFT of the primary
+              // so the eye reads "Skip | Set now" — Material convention
+              // for paired affirmative/dismissive choices.
+              if (hasSecondaryAction)
+                _SecondaryActionButton(
+                  label: secondaryActionLabel!,
+                  onPressed: onSecondaryAction!,
+                ),
               if (hasAction)
                 _UndoButton(label: actionLabel!, onPressed: onAction!),
             ],
@@ -445,6 +482,48 @@ class _UndoButton extends StatelessWidget {
         // 48 dp minimum width = Material's tap-target floor. Not a
         // fixed width — the button grows with longer localized labels
         // (e.g. PT "DESFAZER" vs EN "UNDO").
+        minimumSize: const Size(48, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+/// Quieter, dismissive secondary action paired with [_UndoButton] in
+/// multi-action snacks (Phase 24c-8 — bodyweight prompt's "Skip" sits
+/// next to "Set now"). Same structural responsibilities as [_UndoButton]
+/// — fire the caller's [onPressed] then dismiss the snack with reason
+/// `action` so `controller.closed` listeners run the same way they
+/// would for a real `SnackBarAction`.
+///
+/// **Visual treatment:** `onSurfaceVariant` foreground (theme-driven
+/// dim cream over `surface2`) instead of [_UndoButton]'s `hotViolet` —
+/// the secondary slot is dismissive (Skip/Cancel/Not now), the primary
+/// is affirmative (Set now/Undo/Save). Material spec for paired action
+/// buttons: dismissive < affirmative in visual weight.
+///
+/// Padding mirrors [_UndoButton] so the two buttons line up and the
+/// 48 dp Material tap-target floor is preserved per button.
+class _SecondaryActionButton extends StatelessWidget {
+  const _SecondaryActionButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TextButton(
+      onPressed: () {
+        onPressed();
+        ScaffoldMessenger.of(
+          context,
+        ).hideCurrentSnackBar(reason: SnackBarClosedReason.action);
+      },
+      style: TextButton.styleFrom(
+        foregroundColor: theme.colorScheme.onSurfaceVariant,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         minimumSize: const Size(48, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),

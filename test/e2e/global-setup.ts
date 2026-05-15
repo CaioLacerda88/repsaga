@@ -1610,6 +1610,40 @@ function buildRoleSeedRunners(): Record<
       await seedWeeklyPlanReviewData(supabase, userId);
     },
 
+    // ── Phase 24c-8: bodyweight prompt E2E ───────────────────────────────
+    // Lapsed user (one prior workout for "Quick workout" CTA) with
+    // profile.bodyweight_kg explicitly set to NULL. The test will:
+    //   1. Start a workout via the home CTA
+    //   2. Add Pull-Up (uses_bodyweight_load = TRUE)
+    //   3. Complete the first set
+    //   4. Assert the bodyweight prompt SnackBar appears
+    //   5. Tap "Set now" → enter 70 kg in the bottom sheet → save
+    //   6. Finish the workout
+    //   7. Verify via REST that profile.bodyweight_kg = 70 AND that the
+    //      pull-up xp_event payload carries effective_load = 70 (proving
+    //      the prompt + save round-trip actually fed the SQL math).
+    //
+    // We force `bodyweight_kg = NULL` here even though new profiles
+    // default to NULL — defence in depth against a future ensureProfile
+    // change that pre-fills it.
+    smokeBodyweightPrompt: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Bodyweight Prompt User',
+      });
+      // Force NULL bodyweight even if upsertProfile defaults change.
+      const { error: bwError } = await supabase
+        .from('profiles')
+        .update({ bodyweight_kg: null })
+        .eq('id', userId);
+      if (bwError) {
+        console.log(
+          `[global-setup] Warning: could not reset bodyweight_kg for ${userId}: ${bwError.message}`,
+        );
+      }
+      await seedMinimalWorkout(supabase, userId);
+    },
+
     // ── Exercise progress chart (P1) ─────────────────────────────────────
     smokeExerciseProgress: async (supabase, userId) => {
       await ensureProfile(supabase, userId, {

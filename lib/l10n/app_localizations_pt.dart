@@ -1088,6 +1088,35 @@ class AppLocalizationsPt extends AppLocalizations {
   String get frequencyQuestion => 'Quantas vezes por semana você quer treinar?';
 
   @override
+  String get profileBodyweightLabel => 'Peso corporal';
+
+  @override
+  String get profileBodyweightNotSet => 'Não definido';
+
+  @override
+  String get profileBodyweightHelper =>
+      'Usado para calcular XP em exercícios de peso corporal como barra fixa, paralelas e flexões.';
+
+  @override
+  String profileBodyweightInvalidRange(String min, String max, String unit) {
+    return 'Digite um valor entre $min e $max $unit';
+  }
+
+  @override
+  String get bodyweightPromptTitle =>
+      'Defina seu peso corporal para XP preciso';
+
+  @override
+  String get bodyweightPromptBody =>
+      'Exercícios como barra fixa e paralelas contam seu peso como parte da carga.';
+
+  @override
+  String get bodyweightPromptSetNow => 'Definir agora';
+
+  @override
+  String get bodyweightPromptSkip => 'Pular';
+
+  @override
   String get pleaseTryAgain => 'Tente novamente.';
 
   @override
