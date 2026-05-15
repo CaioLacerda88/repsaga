@@ -60,8 +60,30 @@ void main() {
     });
 
     test('returns textDim for values above 1.0 (defensive)', () {
-      // Same defensive guard for the upper bound.
       expect(VitalityStateStyles.vitalityRampColorFor(1.5), AppColors.textDim);
+    });
+
+    test('returns vitalityHigh at 0.83 (interior of high band)', () {
+      // Smoke for the interior of the high band so future readers
+      // see the band's coverage is not only its boundary values.
+      expect(
+        VitalityStateStyles.vitalityRampColorFor(0.83),
+        AppColors.vitalityHigh,
+      );
+    });
+
+    test('returns vitalityMid at 0.50 (interior of mid band)', () {
+      expect(
+        VitalityStateStyles.vitalityRampColorFor(0.50),
+        AppColors.vitalityMid,
+      );
+    });
+
+    test('returns vitalityLow at 0.17 (interior of low band)', () {
+      expect(
+        VitalityStateStyles.vitalityRampColorFor(0.17),
+        AppColors.vitalityLow,
+      );
     });
   });
 }
