@@ -165,6 +165,8 @@ void main() {
       await tester.pump();
 
       // Retired marginalia strings must not appear anywhere on screen.
+      // (Negative-only guards: pinned in case a future copy edit ever
+      // reintroduces these literal strings as a "zombie paste".)
       expect(find.text('Path mastered.'), findsNothing);
       expect(find.text('On the path.'), findsNothing);
       expect(
@@ -176,6 +178,30 @@ void main() {
       expect(
         find.text('Dormant. Train this group to reawaken its path.'),
         findsOneWidget,
+      );
+
+      // Positive assertion (in addition to the negative-only guards
+      // above): the five retired-state rows (radiant×2 + active×2 +
+      // fading×1) each render `Text('')` for their marginalia slot, so
+      // exactly five Text widgets with empty `data` exist. If a future
+      // copy edit ever reintroduces non-empty marginalia for any of
+      // those states, this count drops below 5 and the test fails —
+      // catching the regression that pure negative guards on retired
+      // exact strings would miss.
+      //
+      // (`localizedCopy` returns '' for the retired states; the row's
+      // bodySmall Text widget is rendered unconditionally, so each
+      // collapsed row contributes one `Text(data: '')` instance.)
+      final emptyTextCount = tester
+          .widgetList<Text>(find.byType(Text))
+          .where((t) => t.data == '')
+          .length;
+      expect(
+        emptyTextCount,
+        5,
+        reason:
+            'Phase 26 collapse: 5 retired-state rows must each render an '
+            'empty marginalia Text slot.',
       );
     });
 
@@ -284,10 +310,23 @@ void main() {
         // (radiant + dormant) to cover both ends of the state range.
         //
         // Phase 26: radiant marginalia retired → the Chest row's semantic
-        // label ends with an empty copy slot ("Chest, 92%, "). The
-        // dormant row still carries its (rewritten) copy.
+        // label opens with the composed `'$name, $pct, $copy'` string
+        // from `_VitalityTableRow.build`. With marginalia empty for the
+        // radiant state, that composed prefix is exactly `"Chest, 92%, "`
+        // (trailing space + empty copy slot), followed by a `\n` and the
+        // descendant Text nodes that the row's Semantics container
+        // merges in (name + percentage). The composed prefix is what we
+        // care about; the merged-descendant tail is a Flutter-semantics
+        // artifact orthogonal to the marginalia retirement.
+        //
+        // Anchored with `^` + the trailing `\n` so a future regression
+        // that re-injects content into the empty copy slot — e.g.
+        // `"Chest, 92%, Path mastered.\nChest\n92%"` — cannot pass by
+        // merely containing the prefix substring. The `\n` boundary
+        // structurally pins "nothing between `, ` and the merged-
+        // descendant block".
         expect(
-          find.bySemanticsLabel(RegExp('Chest, 92%, ')),
+          find.bySemanticsLabel(RegExp(r'^Chest, 92%, \n')),
           findsOneWidget,
         );
         expect(

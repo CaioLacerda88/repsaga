@@ -78,7 +78,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get vitalityCopyDormant =>
-      'Dormente. Treine este grupo para reacender o caminho.';
+      'Dormente. Treine este grupo para retomar o caminho.';
 
   @override
   String get statsDeepDiveTitle => 'Estatísticas';
