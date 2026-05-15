@@ -48,6 +48,8 @@ class BodyweightRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(kRadiusMd),
         onTap: () => showBodyweightEditorSheet(context, profile: profile),
         child: Semantics(
+          container: true,
+          explicitChildNodes: true,
           identifier: 'profile-bodyweight-row',
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -81,9 +83,18 @@ class BodyweightRow extends StatelessWidget {
 
 /// Public entrypoint for the bodyweight editor bottom sheet.
 ///
-/// Returns the new bodyweight in **kg** if the user saved (null on cancel /
-/// dismiss). Phase 24c-8 (active-workout lazy prompt) reuses this entrypoint
-/// without duplicating the form logic.
+/// Returns the saved bodyweight in **kg**, or null if the user cancelled or
+/// dismissed the sheet without saving.
+///
+/// Callers may safely ignore the return value: the sheet's internal save
+/// handler invalidates `profileProvider` on success, so any consumer
+/// watching the profile re-renders automatically. The return value exists
+/// for callers that need the value synchronously after the await (e.g., to
+/// perform an immediate computation against it without re-reading the
+/// provider).
+///
+/// Phase 24c-8 (active-workout lazy prompt) reuses this entrypoint without
+/// duplicating the form logic.
 Future<double?> showBodyweightEditorSheet(
   BuildContext context, {
   required Profile? profile,
@@ -224,6 +235,7 @@ class _BodyweightEditorSheetState extends ConsumerState<BodyweightEditorSheet> {
 
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: 'profile-bodyweight-sheet',
       child: SafeArea(
         child: Padding(
@@ -250,6 +262,8 @@ class _BodyweightEditorSheetState extends ConsumerState<BodyweightEditorSheet> {
               ),
               const SizedBox(height: 16),
               Semantics(
+                container: true,
+                explicitChildNodes: true,
                 identifier: 'profile-bodyweight-input',
                 child: TextField(
                   controller: _controller,
