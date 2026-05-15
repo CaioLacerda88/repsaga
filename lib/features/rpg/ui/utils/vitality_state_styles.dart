@@ -178,6 +178,14 @@ class VitalityStateStyles {
   /// the character sheet stays number-free and copy-free, the rune state
   /// alone is the signal there.
   ///
+  /// **Phase 26 retirement.** Marginalia copy is now retained only for the
+  /// `untested` and `dormant` states (where the dim/grey color alone is
+  /// ambiguous and a copy line carries the differentiation). For
+  /// `fading`, `active`, and `radiant` the vitality table renders state
+  /// via color only — these branches return an empty string. The non-null
+  /// `String` contract is preserved so `Text(stateCopy)` consumers keep
+  /// rendering safely; the row simply collapses the marginalia line.
+  ///
   /// **Single source of truth.** This helper owns the
   /// [VitalityState] → [AppLocalizations] string association; consumers
   /// just provide the [AppLocalizations] instance from their `BuildContext`
@@ -193,11 +201,11 @@ class VitalityStateStyles {
       case VitalityState.dormant:
         return l10n.vitalityCopyDormant;
       case VitalityState.fading:
-        return l10n.vitalityCopyFading;
       case VitalityState.active:
-        return l10n.vitalityCopyActive;
       case VitalityState.radiant:
-        return l10n.vitalityCopyRadiant;
+        // Phase 26: marginalia retired for these three states; state is
+        // now communicated via color only on the stats deep-dive screen.
+        return '';
     }
   }
 }

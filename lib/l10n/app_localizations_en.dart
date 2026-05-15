@@ -75,16 +75,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vitalityCopyUntested => 'Uncharted — log a set to begin.';
 
   @override
-  String get vitalityCopyDormant => 'Awaits your first stride.';
-
-  @override
-  String get vitalityCopyFading => 'Conditioning lost — return to the path.';
-
-  @override
-  String get vitalityCopyActive => 'On the path.';
-
-  @override
-  String get vitalityCopyRadiant => 'Path mastered.';
+  String get vitalityCopyDormant =>
+      'Dormant. Train this group to reawaken its path.';
 
   @override
   String get statsDeepDiveTitle => 'Stats';

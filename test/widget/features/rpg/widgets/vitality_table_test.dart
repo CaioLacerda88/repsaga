@@ -149,6 +149,12 @@ void main() {
     });
 
     testWidgets('renders the localized state copy per row', (tester) async {
+      // Phase 26: marginalia copy was retired for fading/active/radiant —
+      // those states are now communicated via color only. Only untested
+      // and dormant retain a copy line (their dim/grey palette alone is
+      // ambiguous; the copy carries the differentiation). The retired
+      // states return an empty string from `localizedCopy`, which collapses
+      // visually inside the row's bodySmall Text slot.
       await tester.pumpWidget(
         _wrap(
           rows: _sixCanonicalRows(),
@@ -158,17 +164,19 @@ void main() {
       );
       await tester.pump();
 
-      // Two radiant rows (Chest + Core) → two "Path mastered." instances.
-      expect(find.text('Path mastered.'), findsNWidgets(2));
-      // Two active rows (Back + Arms) → two "On the path." instances.
-      expect(find.text('On the path.'), findsNWidgets(2));
-      // One fading row (Legs).
+      // Retired marginalia strings must not appear anywhere on screen.
+      expect(find.text('Path mastered.'), findsNothing);
+      expect(find.text('On the path.'), findsNothing);
       expect(
         find.text('Conditioning lost — return to the path.'),
+        findsNothing,
+      );
+
+      // One dormant row (Shoulders) still renders the dormant copy.
+      expect(
+        find.text('Dormant. Train this group to reawaken its path.'),
         findsOneWidget,
       );
-      // One dormant row (Shoulders).
-      expect(find.text('Awaits your first stride.'), findsOneWidget);
     });
 
     testWidgets('tapping a row fires onSelect with that row\'s body part', (
@@ -274,13 +282,19 @@ void main() {
         // each child row carries its per-body-part identifier composed of
         // localized name + percentage + state copy. We sample two rows
         // (radiant + dormant) to cover both ends of the state range.
+        //
+        // Phase 26: radiant marginalia retired → the Chest row's semantic
+        // label ends with an empty copy slot ("Chest, 92%, "). The
+        // dormant row still carries its (rewritten) copy.
         expect(
-          find.bySemanticsLabel(RegExp('Chest, 92%, Path mastered.')),
+          find.bySemanticsLabel(RegExp('Chest, 92%, ')),
           findsOneWidget,
         );
         expect(
           find.bySemanticsLabel(
-            RegExp('Shoulders, 0%, Awaits your first stride.'),
+            RegExp(
+              'Shoulders, 0%, Dormant\\. Train this group to reawaken its path\\.',
+            ),
           ),
           findsOneWidget,
         );
@@ -331,9 +345,13 @@ void main() {
     //
     //   * peak == 0  → state = untested → readout `—` + "Uncharted — log a set
     //                  to begin." copy.
-    //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + "Awaits your
-    //                              first stride." copy unchanged. (Regression
-    //                              pin: peak > 0 must NOT route to untested.)
+    //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + the dormant
+    //                              copy "Dormant. Train this group to reawaken
+    //                              its path." (rewritten in Phase 26 — the
+    //                              original copy "Awaits your first stride."
+    //                              was Untested-state copy mislabeled as
+    //                              Dormant). Regression pin: peak > 0 must NOT
+    //                              route to untested.
     testWidgets('renders `—` (em-dash) and untested copy for an untested row', (
       tester,
     ) async {
@@ -383,7 +401,10 @@ void main() {
 
       expect(find.text('0%'), findsOneWidget);
       expect(find.text('—'), findsNothing);
-      expect(find.text('Awaits your first stride.'), findsOneWidget);
+      expect(
+        find.text('Dormant. Train this group to reawaken its path.'),
+        findsOneWidget,
+      );
       expect(find.text('Uncharted — log a set to begin.'), findsNothing);
     });
   });

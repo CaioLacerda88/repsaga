@@ -77,17 +77,8 @@ class AppLocalizationsPt extends AppLocalizations {
       'Inexplorado — registre uma série para começar.';
 
   @override
-  String get vitalityCopyDormant => 'Aguarda seu primeiro passo.';
-
-  @override
-  String get vitalityCopyFading =>
-      'Condicionamento perdido — retorne ao caminho.';
-
-  @override
-  String get vitalityCopyActive => 'No caminho.';
-
-  @override
-  String get vitalityCopyRadiant => 'Caminho dominado.';
+  String get vitalityCopyDormant =>
+      'Dormente. Treine este grupo para reacender o caminho.';
 
   @override
   String get statsDeepDiveTitle => 'Estatísticas';

@@ -230,29 +230,11 @@ abstract class AppLocalizations {
   /// **'Uncharted — log a set to begin.'**
   String get vitalityCopyUntested;
 
-  /// Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch.
+  /// Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0–33% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch.
   ///
   /// In en, this message translates to:
-  /// **'Awaits your first stride.'**
+  /// **'Dormant. Train this group to reawaken its path.'**
   String get vitalityCopyDormant;
-
-  /// Marginalia copy for a body-part rune in the Fading state (1-30% of peak).
-  ///
-  /// In en, this message translates to:
-  /// **'Conditioning lost — return to the path.'**
-  String get vitalityCopyFading;
-
-  /// Marginalia copy for a body-part rune in the Active state (31-70% of peak) — the default 'doing the work' read.
-  ///
-  /// In en, this message translates to:
-  /// **'On the path.'**
-  String get vitalityCopyActive;
-
-  /// Marginalia copy for a body-part rune in the Radiant state (71-100% of peak) — peak conditioning.
-  ///
-  /// In en, this message translates to:
-  /// **'Path mastered.'**
-  String get vitalityCopyRadiant;
 
   /// AppBar title for the /saga/stats deep-dive screen (Phase 18d.2). Distinct from `statsDeepDiveLabel` because the codex nav row uses 'Stats deep-dive' but the screen header uses the shorter 'Stats'.
   ///
