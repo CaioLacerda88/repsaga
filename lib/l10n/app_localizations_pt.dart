@@ -81,6 +81,18 @@ class AppLocalizationsPt extends AppLocalizations {
       'Dormente. Treine este grupo para retomar o caminho.';
 
   @override
+  String get vitalityStateBandActive => 'Ativo';
+
+  @override
+  String get vitalityStateBandWaning => 'Esmorecendo';
+
+  @override
+  String get vitalityStateBandDormant => 'Dormente';
+
+  @override
+  String get withinRankXpSuffix => 'para o próximo rank';
+
+  @override
   String get statsDeepDiveTitle => 'Estatísticas';
 
   @override

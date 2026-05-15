@@ -236,6 +236,30 @@ abstract class AppLocalizations {
   /// **'Dormant. Train this group to reawaken its path.'**
   String get vitalityCopyDormant;
 
+  /// Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get vitalityStateBandActive;
+
+  /// Label for the mid band (34–65%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Waning'**
+  String get vitalityStateBandWaning;
+
+  /// Label for the low band (0–33%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Dormant'**
+  String get vitalityStateBandDormant;
+
+  /// Trailing copy on per-stat XP labels across Saga, Stats deep-dive, Home expanded card, Titles próximos rows. Rendered as 'N XP · M {withinRankXpSuffix}' (e.g., '1,420 XP · 580 to next rank').
+  ///
+  /// In en, this message translates to:
+  /// **'to next rank'**
+  String get withinRankXpSuffix;
+
   /// AppBar title for the /saga/stats deep-dive screen (Phase 18d.2). Distinct from `statsDeepDiveLabel` because the codex nav row uses 'Stats deep-dive' but the screen header uses the shorter 'Stats'.
   ///
   /// In en, this message translates to:

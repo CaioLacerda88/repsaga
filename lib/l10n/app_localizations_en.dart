@@ -79,6 +79,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Dormant. Train this group to reawaken its path.';
 
   @override
+  String get vitalityStateBandActive => 'Active';
+
+  @override
+  String get vitalityStateBandWaning => 'Waning';
+
+  @override
+  String get vitalityStateBandDormant => 'Dormant';
+
+  @override
+  String get withinRankXpSuffix => 'to next rank';
+
+  @override
   String get statsDeepDiveTitle => 'Stats';
 
   @override
