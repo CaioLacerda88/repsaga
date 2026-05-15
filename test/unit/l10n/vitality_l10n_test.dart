@@ -7,22 +7,25 @@ Future<AppLocalizations> _load(Locale locale) async {
 }
 
 void main() {
-  group('Phase 26a — new l10n keys', () {
-    test('en: all four new keys return non-empty strings', () async {
+  group('Vitality l10n — band labels + dormant copy', () {
+    test('en: all four new keys return their canonical English copy', () async {
       final l10n = await _load(const Locale('en'));
-      expect(l10n.vitalityStateBandActive, isNotEmpty);
-      expect(l10n.vitalityStateBandWaning, isNotEmpty);
-      expect(l10n.vitalityStateBandDormant, isNotEmpty);
-      expect(l10n.withinRankXpSuffix, isNotEmpty);
+      expect(l10n.vitalityStateBandActive, equals('Active'));
+      expect(l10n.vitalityStateBandWaning, equals('Waning'));
+      expect(l10n.vitalityStateBandDormant, equals('Dormant'));
+      expect(l10n.withinRankXpSuffix, equals('to next rank'));
     });
 
-    test('pt: all four new keys return non-empty strings', () async {
-      final l10n = await _load(const Locale('pt'));
-      expect(l10n.vitalityStateBandActive, 'Ativo');
-      expect(l10n.vitalityStateBandWaning, 'Esmorecendo');
-      expect(l10n.vitalityStateBandDormant, 'Dormente');
-      expect(l10n.withinRankXpSuffix, 'para o próximo rank');
-    });
+    test(
+      'pt: all four new keys return their canonical Portuguese copy',
+      () async {
+        final l10n = await _load(const Locale('pt'));
+        expect(l10n.vitalityStateBandActive, equals('Ativo'));
+        expect(l10n.vitalityStateBandWaning, equals('Esmorecendo'));
+        expect(l10n.vitalityStateBandDormant, equals('Dormente'));
+        expect(l10n.withinRankXpSuffix, equals('para o próximo rank'));
+      },
+    );
 
     test(
       'en: vitalityCopyDormant has been rewritten (no longer Untested copy)',
