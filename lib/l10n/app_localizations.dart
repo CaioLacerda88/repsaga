@@ -230,29 +230,35 @@ abstract class AppLocalizations {
   /// **'Uncharted — log a set to begin.'**
   String get vitalityCopyUntested;
 
-  /// Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch.
+  /// Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0–33% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch.
   ///
   /// In en, this message translates to:
-  /// **'Awaits your first stride.'**
+  /// **'Dormant. Train this group to reawaken its path.'**
   String get vitalityCopyDormant;
 
-  /// Marginalia copy for a body-part rune in the Fading state (1-30% of peak).
+  /// Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c).
   ///
   /// In en, this message translates to:
-  /// **'Conditioning lost — return to the path.'**
-  String get vitalityCopyFading;
+  /// **'Active'**
+  String get vitalityStateBandActive;
 
-  /// Marginalia copy for a body-part rune in the Active state (31-70% of peak) — the default 'doing the work' read.
+  /// Label for the mid band (34–65%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet.
   ///
   /// In en, this message translates to:
-  /// **'On the path.'**
-  String get vitalityCopyActive;
+  /// **'Waning'**
+  String get vitalityStateBandWaning;
 
-  /// Marginalia copy for a body-part rune in the Radiant state (71-100% of peak) — peak conditioning.
+  /// Label for the low band (0–33%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet.
   ///
   /// In en, this message translates to:
-  /// **'Path mastered.'**
-  String get vitalityCopyRadiant;
+  /// **'Dormant'**
+  String get vitalityStateBandDormant;
+
+  /// Trailing copy on per-stat XP labels across Saga, Stats deep-dive, Home expanded card, Titles próximos rows. Rendered as 'N XP · M {withinRankXpSuffix}' (e.g., '1,420 XP · 580 to next rank').
+  ///
+  /// In en, this message translates to:
+  /// **'to next rank'**
+  String get withinRankXpSuffix;
 
   /// AppBar title for the /saga/stats deep-dive screen (Phase 18d.2). Distinct from `statsDeepDiveLabel` because the codex nav row uses 'Stats deep-dive' but the screen header uses the shorter 'Stats'.
   ///

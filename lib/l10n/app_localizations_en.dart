@@ -75,16 +75,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vitalityCopyUntested => 'Uncharted — log a set to begin.';
 
   @override
-  String get vitalityCopyDormant => 'Awaits your first stride.';
+  String get vitalityCopyDormant =>
+      'Dormant. Train this group to reawaken its path.';
 
   @override
-  String get vitalityCopyFading => 'Conditioning lost — return to the path.';
+  String get vitalityStateBandActive => 'Active';
 
   @override
-  String get vitalityCopyActive => 'On the path.';
+  String get vitalityStateBandWaning => 'Waning';
 
   @override
-  String get vitalityCopyRadiant => 'Path mastered.';
+  String get vitalityStateBandDormant => 'Dormant';
+
+  @override
+  String get withinRankXpSuffix => 'to next rank';
 
   @override
   String get statsDeepDiveTitle => 'Stats';

@@ -147,8 +147,17 @@ void main() {
     // l10n once via a Builder, run the assertions inside it, and return a
     // SizedBox.shrink() — no rendering needed.
 
-    testWidgets('returns distinct strings per state', (tester) async {
-      String? collected;
+    testWidgets('untested and dormant return distinct non-empty strings; '
+        'fading/active/radiant return empty (Phase 26 retirement)', (
+      tester,
+    ) async {
+      // Phase 26 retired the marginalia copy for fading/active/radiant —
+      // those three states are now communicated via color only on the
+      // vitality table. Only untested and dormant keep their copy
+      // (their dim/grey color alone is ambiguous; the copy carries the
+      // differentiation). The non-null `String` contract is preserved
+      // so `Text(stateCopy)` consumers stay safe.
+      bool ran = false;
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -156,17 +165,37 @@ void main() {
           home: Builder(
             builder: (ctx) {
               final l10n = AppLocalizations.of(ctx);
-              final lines = VitalityState.values
-                  .map((s) => VitalityStateStyles.localizedCopy(s, l10n))
-                  .toSet();
-              expect(
-                lines.length,
-                VitalityState.values.length,
-                reason:
-                    'Each VitalityState must map to a unique copy line — '
-                    'collisions would silently merge two visual states.',
+              final untested = VitalityStateStyles.localizedCopy(
+                VitalityState.untested,
+                l10n,
               );
-              collected = lines.join('|');
+              final dormant = VitalityStateStyles.localizedCopy(
+                VitalityState.dormant,
+                l10n,
+              );
+              expect(untested, isNotEmpty);
+              expect(dormant, isNotEmpty);
+              expect(
+                untested,
+                isNot(dormant),
+                reason:
+                    'Untested vs Dormant must stay distinguishable by '
+                    'copy alone — both render in the dim/grey palette.',
+              );
+              for (final s in const [
+                VitalityState.fading,
+                VitalityState.active,
+                VitalityState.radiant,
+              ]) {
+                expect(
+                  VitalityStateStyles.localizedCopy(s, l10n),
+                  '',
+                  reason:
+                      'Phase 26: $s marginalia retired — state is now '
+                      'communicated via color only.',
+                );
+              }
+              ran = true;
               return const SizedBox.shrink();
             },
           ),
@@ -174,7 +203,7 @@ void main() {
       );
       // Sanity: Builder ran (catches the case where the test passes
       // vacuously because the inner expects never executed).
-      expect(collected, isNotNull);
+      expect(ran, isTrue);
     });
 
     testWidgets('returns the canonical English copy per state', (tester) async {
@@ -183,6 +212,11 @@ void main() {
       // rather than silently shipping the wrong text. Trailing periods
       // come straight from app_en.arb and matter — design wants the
       // marginalia to read as full sentences.
+      //
+      // Phase 26: fading/active/radiant marginalia retired (state is
+      // communicated via color only on the vitality table) — those
+      // branches return empty strings; only untested + dormant carry
+      // copy.
       bool ran = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -197,19 +231,19 @@ void main() {
               );
               expect(
                 VitalityStateStyles.localizedCopy(VitalityState.dormant, l10n),
-                'Awaits your first stride.',
+                'Dormant. Train this group to reawaken its path.',
               );
               expect(
                 VitalityStateStyles.localizedCopy(VitalityState.fading, l10n),
-                'Conditioning lost — return to the path.',
+                '',
               );
               expect(
                 VitalityStateStyles.localizedCopy(VitalityState.active, l10n),
-                'On the path.',
+                '',
               );
               expect(
                 VitalityStateStyles.localizedCopy(VitalityState.radiant, l10n),
-                'Path mastered.',
+                '',
               );
               ran = true;
               return const SizedBox.shrink();

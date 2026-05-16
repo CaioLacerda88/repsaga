@@ -115,10 +115,10 @@ class VitalityStateStyles {
   /// surfaces.
   ///
   /// Color choices (from AppTheme palette + spec §3 metaphors):
-  ///   * `chest`     → [AppColors.hotViolet]    — bright primary, anchors the
-  ///                   pressing identity at the top of the radar.
-  ///   * `back`      → [AppColors.primaryViolet]— deep base violet, the
-  ///                   pulling foundation that mirrors chest across the body.
+  ///   * `chest`     → [AppColors.bodyPartChest] — pink (Phase 26a). Anatomical
+  ///                   fit (pec/heart) + frees [hotViolet] from chest identity.
+  ///   * `back`      → [AppColors.bodyPartBack]  — sky-blue (Phase 26a).
+  ///                   Resolves the chest/back "two purples" hue collision.
   ///   * `legs`      → [AppColors.success]      — the green of foundation /
   ///                   ground-stride; lower-body roots the saga.
   ///   * `shoulders` → [AppColors.warning]      — warm yellow-amber, the
@@ -134,14 +134,40 @@ class VitalityStateStyles {
   /// reward token reserved for the `radiant` state and §13.2 rank-up
   /// celebrations.
   static const Map<BodyPart, Color> bodyPartColor = {
-    BodyPart.chest: AppColors.hotViolet,
-    BodyPart.back: AppColors.primaryViolet,
+    BodyPart.chest: AppColors.bodyPartChest,
+    BodyPart.back: AppColors.bodyPartBack,
     BodyPart.legs: AppColors.success,
     BodyPart.shoulders: AppColors.warning,
     BodyPart.arms: AppColors.error,
     BodyPart.core: AppColors.textDim,
     BodyPart.cardio: AppColors.hair,
   };
+
+  // ---------------------------------------------------------------------------
+  // Vitality ramp color (Phase 26a)
+  // ---------------------------------------------------------------------------
+
+  /// Resolves a vitality fraction (0.0–1.0) to its band color on the
+  /// HP-drain ramp (Phase 26a).
+  ///
+  /// Bands (lower edge inclusive):
+  ///   * [0.66, 1.0]  → [AppColors.vitalityHigh]
+  ///   * [0.34, 0.66) → [AppColors.vitalityMid]
+  ///   * [0.0, 0.34)  → [AppColors.vitalityLow]
+  ///   * null or outside [0.0, 1.0] → [AppColors.textDim]
+  ///     (untested / malformed)
+  ///
+  /// Used on the Stats deep-dive vitality table percentage column
+  /// (Phase 26c) and any other surface that needs to communicate
+  /// conditioning state via color.
+  static Color vitalityRampColorFor(double? percentage) {
+    if (percentage == null || percentage < 0.0 || percentage > 1.0) {
+      return AppColors.textDim;
+    }
+    if (percentage >= 0.66) return AppColors.vitalityHigh;
+    if (percentage >= 0.34) return AppColors.vitalityMid;
+    return AppColors.vitalityLow;
+  }
 
   // ---------------------------------------------------------------------------
   // Localized copy (l10n)
@@ -151,6 +177,14 @@ class VitalityStateStyles {
   /// §13.3. These copy lines render ONLY on the stats deep-dive screen —
   /// the character sheet stays number-free and copy-free, the rune state
   /// alone is the signal there.
+  ///
+  /// **Phase 26 retirement.** Marginalia copy is now retained only for the
+  /// `untested` and `dormant` states (where the dim/grey color alone is
+  /// ambiguous and a copy line carries the differentiation). For
+  /// `fading`, `active`, and `radiant` the vitality table renders state
+  /// via color only — these branches return an empty string. The non-null
+  /// `String` contract is preserved so `Text(stateCopy)` consumers keep
+  /// rendering safely; the row simply collapses the marginalia line.
   ///
   /// **Single source of truth.** This helper owns the
   /// [VitalityState] → [AppLocalizations] string association; consumers
@@ -167,11 +201,11 @@ class VitalityStateStyles {
       case VitalityState.dormant:
         return l10n.vitalityCopyDormant;
       case VitalityState.fading:
-        return l10n.vitalityCopyFading;
       case VitalityState.active:
-        return l10n.vitalityCopyActive;
       case VitalityState.radiant:
-        return l10n.vitalityCopyRadiant;
+        // Phase 26: marginalia retired for these three states; state is
+        // now communicated via color only on the stats deep-dive screen.
+        return '';
     }
   }
 }

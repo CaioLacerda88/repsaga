@@ -149,6 +149,12 @@ void main() {
     });
 
     testWidgets('renders the localized state copy per row', (tester) async {
+      // Phase 26: marginalia copy was retired for fading/active/radiant —
+      // those states are now communicated via color only. Only untested
+      // and dormant retain a copy line (their dim/grey palette alone is
+      // ambiguous; the copy carries the differentiation). The retired
+      // states return an empty string from `localizedCopy`, which collapses
+      // visually inside the row's bodySmall Text slot.
       await tester.pumpWidget(
         _wrap(
           rows: _sixCanonicalRows(),
@@ -158,17 +164,45 @@ void main() {
       );
       await tester.pump();
 
-      // Two radiant rows (Chest + Core) → two "Path mastered." instances.
-      expect(find.text('Path mastered.'), findsNWidgets(2));
-      // Two active rows (Back + Arms) → two "On the path." instances.
-      expect(find.text('On the path.'), findsNWidgets(2));
-      // One fading row (Legs).
+      // Retired marginalia strings must not appear anywhere on screen.
+      // (Negative-only guards: pinned in case a future copy edit ever
+      // reintroduces these literal strings as a "zombie paste".)
+      expect(find.text('Path mastered.'), findsNothing);
+      expect(find.text('On the path.'), findsNothing);
       expect(
         find.text('Conditioning lost — return to the path.'),
+        findsNothing,
+      );
+
+      // One dormant row (Shoulders) still renders the dormant copy.
+      expect(
+        find.text('Dormant. Train this group to reawaken its path.'),
         findsOneWidget,
       );
-      // One dormant row (Shoulders).
-      expect(find.text('Awaits your first stride.'), findsOneWidget);
+
+      // Positive assertion (in addition to the negative-only guards
+      // above): the five retired-state rows (radiant×2 + active×2 +
+      // fading×1) each render `Text('')` for their marginalia slot, so
+      // exactly five Text widgets with empty `data` exist. If a future
+      // copy edit ever reintroduces non-empty marginalia for any of
+      // those states, this count drops below 5 and the test fails —
+      // catching the regression that pure negative guards on retired
+      // exact strings would miss.
+      //
+      // (`localizedCopy` returns '' for the retired states; the row's
+      // bodySmall Text widget is rendered unconditionally, so each
+      // collapsed row contributes one `Text(data: '')` instance.)
+      final emptyTextCount = tester
+          .widgetList<Text>(find.byType(Text))
+          .where((t) => t.data == '')
+          .length;
+      expect(
+        emptyTextCount,
+        5,
+        reason:
+            'Phase 26 collapse: 5 retired-state rows must each render an '
+            'empty marginalia Text slot.',
+      );
     });
 
     testWidgets('tapping a row fires onSelect with that row\'s body part', (
@@ -274,13 +308,32 @@ void main() {
         // each child row carries its per-body-part identifier composed of
         // localized name + percentage + state copy. We sample two rows
         // (radiant + dormant) to cover both ends of the state range.
+        //
+        // Phase 26: radiant marginalia retired → the Chest row's semantic
+        // label opens with the composed `'$name, $pct, $copy'` string
+        // from `_VitalityTableRow.build`. With marginalia empty for the
+        // radiant state, that composed prefix is exactly `"Chest, 92%, "`
+        // (trailing space + empty copy slot), followed by a `\n` and the
+        // descendant Text nodes that the row's Semantics container
+        // merges in (name + percentage). The composed prefix is what we
+        // care about; the merged-descendant tail is a Flutter-semantics
+        // artifact orthogonal to the marginalia retirement.
+        //
+        // Anchored with `^` + the trailing `\n` so a future regression
+        // that re-injects content into the empty copy slot — e.g.
+        // `"Chest, 92%, Path mastered.\nChest\n92%"` — cannot pass by
+        // merely containing the prefix substring. The `\n` boundary
+        // structurally pins "nothing between `, ` and the merged-
+        // descendant block".
         expect(
-          find.bySemanticsLabel(RegExp('Chest, 92%, Path mastered.')),
+          find.bySemanticsLabel(RegExp(r'^Chest, 92%, \n')),
           findsOneWidget,
         );
         expect(
           find.bySemanticsLabel(
-            RegExp('Shoulders, 0%, Awaits your first stride.'),
+            RegExp(
+              'Shoulders, 0%, Dormant\\. Train this group to reawaken its path\\.',
+            ),
           ),
           findsOneWidget,
         );
@@ -331,9 +384,13 @@ void main() {
     //
     //   * peak == 0  → state = untested → readout `—` + "Uncharted — log a set
     //                  to begin." copy.
-    //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + "Awaits your
-    //                              first stride." copy unchanged. (Regression
-    //                              pin: peak > 0 must NOT route to untested.)
+    //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + the dormant
+    //                              copy "Dormant. Train this group to reawaken
+    //                              its path." (rewritten in Phase 26 — the
+    //                              original copy "Awaits your first stride."
+    //                              was Untested-state copy mislabeled as
+    //                              Dormant). Regression pin: peak > 0 must NOT
+    //                              route to untested.
     testWidgets('renders `—` (em-dash) and untested copy for an untested row', (
       tester,
     ) async {
@@ -383,7 +440,10 @@ void main() {
 
       expect(find.text('0%'), findsOneWidget);
       expect(find.text('—'), findsNothing);
-      expect(find.text('Awaits your first stride.'), findsOneWidget);
+      expect(
+        find.text('Dormant. Train this group to reawaken its path.'),
+        findsOneWidget,
+      );
       expect(find.text('Uncharted — log a set to begin.'), findsNothing);
     });
   });

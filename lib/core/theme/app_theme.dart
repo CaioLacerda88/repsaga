@@ -61,6 +61,52 @@ class AppColors {
   /// Error / destructive action.
   static const error = Color(0xFFFF6B6B);
 
+  // ─── Body-part identity (Phase 26a) ──────────────────────────────────
+  /// Pink — chest body-part identity (Phase 26a). Anatomical fit (pec/heart)
+  /// and distinct from every other body-part hue + the brand violet stack.
+  /// Frees [hotViolet] to be the pure brand-primary (gradients, accents,
+  /// character XP) without bleeding into the chest body-part identity.
+  static const bodyPartChest = Color(0xFFF472B6);
+
+  /// Sky-blue — back body-part identity (Phase 26a). Replaces the old
+  /// [primaryViolet] mapping in `VitalityStateStyles.bodyPartColor[back]`
+  /// to resolve the chest/back "two purples" hue collision.
+  static const bodyPartBack = Color(0xFF38BDF8);
+
+  /// Orange — cardio body-part identity (Phase 26a).
+  ///
+  /// **Infrastructure-only for v1.** Token shipped so v1.1+ can introduce
+  /// cardio as an active stat without re-touching the palette. NOT exposed
+  /// on any UI surface in Phase 26 (rank rail, Saga, Stats, `Engajamento`
+  /// all hide cardio).
+  static const bodyPartCardio = Color(0xFFFB923C);
+
+  // ─── Progress infrastructure (Phase 26a) ─────────────────────────────
+  /// Violet-tinted XP/progress bar track (Phase 26a).
+  ///
+  /// 10% alpha on [hotViolet]. Replaces the generic
+  /// `rgba(255,255,255,0.06)` neutral white-alpha track that progress
+  /// bars used pre-Phase-26. Keeps progress infrastructure inside the
+  /// Arcane Ascent palette rather than borrowing from a neutral design
+  /// system.
+  static const xpTrack = Color(0x1AB36DFF); // unfilled track behind XP fill
+
+  // ─── Vitality ramp (Phase 26a) ───────────────────────────────────────
+  //
+  // Semantic aliases over success / warning / error. Same hex values;
+  // named for self-documenting call sites where the rendered semantic
+  // is "vitality HP-drain", not "success" or "error". Used by the new
+  // [VitalityStateStyles.vitalityRampColorFor] helper.
+
+  /// High band (66–100%). Alias of [success].
+  static const vitalityHigh = success;
+
+  /// Mid band (34–65%). Alias of [warning].
+  static const vitalityMid = warning;
+
+  /// Low band (0–33%). Alias of [error].
+  static const vitalityLow = error;
+
   /// Hairline for dividers and card borders. A low-alpha violet so borders
   /// feel like they belong to the palette rather than gray plate.
   static const hair = Color(0x24B36DFF); // rgba(179,109,255,0.14)
