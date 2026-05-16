@@ -187,3 +187,96 @@ extension StatsActiveBodyPartCount on StatsDeepDiveState {
   int get activeBodyPartCount =>
       vitalityRows.where((r) => r.pct > 0 || r.rank > 1).length;
 }
+
+/// Encodes the renderable state of a body-part's weekly-volume delta line
+/// for `VolumePeakBlock` (Phase 26c). The widget switches on [state] and
+/// renders the matching string + color; this type centralizes the rule so
+/// the widget stays pure presentation.
+///
+/// Phase 26c locked decisions:
+///   * `0–1 weeks` of history → suppressed (no delta line rendered).
+///   * `2–4 weeks` → compare against `previousWeekVolumeSets`.
+///   * `5+ weeks` → compare against `fourWeekMeanVolumeSets`.
+///   * Under-target → red (`vitalityLow`).
+///   * Over-target → amber (`warning`) — explicitly NOT green; amber says
+///     "noted, you decide" without prescribing more volume.
+///   * Exactly met → green (`vitalityHigh`) with a filled `●` bullet.
+enum VolumeDeltaState { suppressed, underTarget, met, overTarget }
+
+/// Which historical basis the volume delta was computed against. Drives
+/// the localized "vs semana passada" / "vs média (4 sem)" string in the
+/// widget.
+enum VolumeDeltaBasis { previousWeek, fourWeekMean }
+
+@freezed
+abstract class VolumeDeltaView with _$VolumeDeltaView {
+  const factory VolumeDeltaView({
+    required VolumeDeltaState state,
+
+    /// Signed delta: `weeklyVolumeSets - basisValue`. Negative for
+    /// under-target, positive for over-target, 0 for met. Always 0 for
+    /// [VolumeDeltaState.suppressed].
+    @Default(0) double delta,
+
+    /// Which basis was used. Null for [VolumeDeltaState.suppressed].
+    VolumeDeltaBasis? basis,
+  }) = _VolumeDeltaView;
+
+  const VolumeDeltaView._();
+
+  /// Compute the view-state for [row]. Pure function — no l10n / no
+  /// widget tree access. Localized strings are picked at the widget
+  /// layer using [basis] as the discriminator.
+  factory VolumeDeltaView.fromRow(VolumePeakRow row) {
+    if (row.weeksOfHistory < 2) {
+      return const VolumeDeltaView(state: VolumeDeltaState.suppressed);
+    }
+    final useFourWeekMean = row.weeksOfHistory >= 5;
+    final basis = useFourWeekMean
+        ? VolumeDeltaBasis.fourWeekMean
+        : VolumeDeltaBasis.previousWeek;
+    final basisValue = useFourWeekMean
+        ? (row.fourWeekMeanVolumeSets ?? 0)
+        : (row.previousWeekVolumeSets ?? 0).toDouble();
+    final delta = row.weeklyVolumeSets - basisValue;
+    final state = delta == 0
+        ? VolumeDeltaState.met
+        : delta < 0
+        ? VolumeDeltaState.underTarget
+        : VolumeDeltaState.overTarget;
+    return VolumeDeltaView(state: state, delta: delta, basis: basis);
+  }
+}
+
+/// Encodes the renderable state of a body-part's monthly peak-EWMA delta
+/// line for `VolumePeakBlock` (Phase 26c). Always-monthly with the `30D`
+/// badge in the rendered widget.
+enum PeakDeltaState { suppressed, up, flat }
+
+@freezed
+abstract class PeakDeltaView with _$PeakDeltaView {
+  const factory PeakDeltaView({
+    required PeakDeltaState state,
+    @Default(0) double delta,
+  }) = _PeakDeltaView;
+
+  const PeakDeltaView._();
+
+  /// Compute the view-state for [row]. Pure function.
+  ///
+  /// Peak EWMA is documented monotonic-non-decreasing in the model — it's
+  /// a lifetime peak watermark. A negative delta indicates data drift
+  /// (clock skew, manual fixup); render as flat (no arrow) rather than
+  /// down. Zero delta also flattens — no monthly movement to surface.
+  factory PeakDeltaView.fromRow(VolumePeakRow row) {
+    final prior = row.peakEwma30dAgo;
+    if (prior == null) {
+      return const PeakDeltaView(state: PeakDeltaState.suppressed);
+    }
+    final delta = row.peakEwma - prior;
+    if (delta <= 0) {
+      return const PeakDeltaView(state: PeakDeltaState.flat);
+    }
+    return PeakDeltaView(state: PeakDeltaState.up, delta: delta);
+  }
+}
