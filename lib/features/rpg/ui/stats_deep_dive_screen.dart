@@ -35,7 +35,13 @@ import 'widgets/vitality_trend_chart.dart';
 /// from a fresh account. The empty-state copy is communicated through the
 /// data shape (zero %, dormant copy, flat trend lines, empty peaks).
 class StatsDeepDiveScreen extends ConsumerStatefulWidget {
-  const StatsDeepDiveScreen({super.key});
+  const StatsDeepDiveScreen({super.key, this.initialBodyPart});
+
+  /// Pre-selected body part for the trend chart. When non-null, the screen
+  /// opens with this body part highlighted; when null, defaults to
+  /// [BodyPart.chest] per the legacy behavior. Source: the `body_part`
+  /// query parameter on `/saga/stats` (set by `BodyPartRankRow` tap in 26b).
+  final BodyPart? initialBodyPart;
 
   @override
   ConsumerState<StatsDeepDiveScreen> createState() =>
@@ -43,11 +49,19 @@ class StatsDeepDiveScreen extends ConsumerStatefulWidget {
 }
 
 class _StatsDeepDiveScreenState extends ConsumerState<StatsDeepDiveScreen> {
-  /// Currently-selected body part for the trend chart. Defaults to chest —
-  /// the canonical first body part in [activeBodyParts]. Re-defaults if the
-  /// data shape changes such that `chest` isn't a valid pick (defensive —
-  /// shouldn't happen because the provider always emits all six rows).
-  BodyPart _selectedBodyPart = BodyPart.chest;
+  /// Currently-selected body part for the trend chart. Initialized from
+  /// [StatsDeepDiveScreen.initialBodyPart] in [initState], or defaults to
+  /// chest — the canonical first body part in [activeBodyParts]. Re-defaults
+  /// if the data shape changes such that `chest` isn't a valid pick
+  /// (defensive — shouldn't happen because the provider always emits all six
+  /// rows).
+  late BodyPart _selectedBodyPart;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedBodyPart = widget.initialBodyPart ?? BodyPart.chest;
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -111,7 +111,11 @@ StatsDeepDiveState _canonicalState({
   );
 }
 
-Widget _wrap({required StatsDeepDiveState state, String weightUnit = 'kg'}) {
+Widget _wrap({
+  required StatsDeepDiveState state,
+  String weightUnit = 'kg',
+  BodyPart? initialBodyPart,
+}) {
   final stubProfile = Profile(
     id: 'test-user',
     weightUnit: weightUnit,
@@ -123,7 +127,9 @@ Widget _wrap({required StatsDeepDiveState state, String weightUnit = 'kg'}) {
       statsProvider.overrideWith((ref) async => state),
       profileProvider.overrideWith(() => _StubProfileNotifier(stubProfile)),
     ],
-    child: const TestMaterialApp(home: StatsDeepDiveScreen()),
+    child: TestMaterialApp(
+      home: StatsDeepDiveScreen(initialBodyPart: initialBodyPart),
+    ),
   );
 }
 
@@ -262,6 +268,54 @@ void main() {
       // The 90-day heading is shown when earliestActivity is null
       // (useNarrowWindow returns false on null earliestActivity).
       expect(find.text('90-DAY VITALITY TREND'), findsOneWidget);
+    });
+
+    group('initialBodyPart constructor arg', () {
+      testWidgets(
+        'opens with the trend chart pre-selected to initialBodyPart',
+        (tester) async {
+          await tester.pumpWidget(
+            _wrap(state: _canonicalState(), initialBodyPart: BodyPart.back),
+          );
+          await tester.pumpAndSettle();
+
+          // Back is the vivid line, not chest — same assertion shape as the
+          // "tapping a vitality row drives the trend chart" test above.
+          final chart = tester.widget<LineChart>(find.byType(LineChart));
+          final backVivid = chart.data.lineBarsData
+              .where(
+                (b) =>
+                    b.color == VitalityStateStyles.bodyPartColor[BodyPart.back],
+              )
+              .length;
+          expect(backVivid, 1);
+          final chestVivid = chart.data.lineBarsData
+              .where(
+                (b) =>
+                    b.color ==
+                    VitalityStateStyles.bodyPartColor[BodyPart.chest],
+              )
+              .length;
+          expect(chestVivid, 0);
+        },
+      );
+
+      testWidgets('falls back to chest when initialBodyPart is null', (
+        tester,
+      ) async {
+        // No initialBodyPart → legacy default of BodyPart.chest.
+        await tester.pumpWidget(_wrap(state: _canonicalState()));
+        await tester.pumpAndSettle();
+
+        final chart = tester.widget<LineChart>(find.byType(LineChart));
+        final chestVivid = chart.data.lineBarsData
+            .where(
+              (b) =>
+                  b.color == VitalityStateStyles.bodyPartColor[BodyPart.chest],
+            )
+            .length;
+        expect(chestVivid, 1);
+      });
     });
 
     testWidgets('exposes saga-stats-screen Semantics identifier', (
