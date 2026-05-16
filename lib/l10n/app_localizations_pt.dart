@@ -2540,4 +2540,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String workoutDefaultName(String date) {
     return 'Treino — $date';
   }
+
+  @override
+  String get volumePeakBlockVolumeLabel => 'Volume';
+
+  @override
+  String get volumePeakBlockCargaPicoLabel => 'Carga pico';
+
+  @override
+  String get volumePeakBlockReferenciaLabel => 'Referência';
+
+  @override
+  String get volumePeakBlockSeries => 'séries';
+
+  @override
+  String get volumePeakBlockDeltaVsPrevWeek => 'vs semana passada';
+
+  @override
+  String get volumePeakBlockDeltaVsFourWeekMean => 'vs média (4 sem)';
+
+  @override
+  String get volumePeakBlockDeltaNoHistory => 'sem histórico';
+
+  @override
+  String get volumePeakBlockDeltaEstimated => 'estimado';
+
+  @override
+  String get volumePeakBlockDeltaAboveTarget => 'acima da meta';
+
+  @override
+  String get volumePeakBlockBadge30D => '30D';
 }

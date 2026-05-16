@@ -4433,6 +4433,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Workout — {date}'**
   String workoutDefaultName(String date);
+
+  /// Volume column header in VolumePeakBlock (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get volumePeakBlockVolumeLabel;
+
+  /// Carga pico (peak load) column header in VolumePeakBlock (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Peak load'**
+  String get volumePeakBlockCargaPicoLabel;
+
+  /// Generic-tip fallback label when the user has no personal history for this body part (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Reference'**
+  String get volumePeakBlockReferenciaLabel;
+
+  /// Plural unit for weekly volume in VolumePeakBlock (matches the existing weeklyVolumeUnit pattern; Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'sets'**
+  String get volumePeakBlockSeries;
+
+  /// Delta-basis copy for the previous-week comparison (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'vs last week'**
+  String get volumePeakBlockDeltaVsPrevWeek;
+
+  /// Delta-basis copy for the 4-week-mean comparison (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'vs 4-week avg'**
+  String get volumePeakBlockDeltaVsFourWeekMean;
+
+  /// Suppressed-delta copy for users with insufficient history (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'no history'**
+  String get volumePeakBlockDeltaNoHistory;
+
+  /// Footer copy under the Referência generic-tip block (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'estimated'**
+  String get volumePeakBlockDeltaEstimated;
+
+  /// Over-target delta tail copy ('▲ +N above target') — locked decision rules this as amber, not green (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'above target'**
+  String get volumePeakBlockDeltaAboveTarget;
+
+  /// Tiny pill badge next to the monthly peak EWMA delta (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'30D'**
+  String get volumePeakBlockBadge30D;
 }
 
 class _AppLocalizationsDelegate

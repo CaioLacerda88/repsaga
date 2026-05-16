@@ -1975,5 +1975,35 @@
     "placeholders": {
       "date": { "type": "String", "example": "Wed May 7" }
     }
-  }
+  },
+
+  "volumePeakBlockVolumeLabel": "Volume",
+  "@volumePeakBlockVolumeLabel": { "description": "Volume column header in VolumePeakBlock (Phase 26c)." },
+
+  "volumePeakBlockCargaPicoLabel": "Peak load",
+  "@volumePeakBlockCargaPicoLabel": { "description": "Carga pico (peak load) column header in VolumePeakBlock (Phase 26c)." },
+
+  "volumePeakBlockReferenciaLabel": "Reference",
+  "@volumePeakBlockReferenciaLabel": { "description": "Generic-tip fallback label when the user has no personal history for this body part (Phase 26c)." },
+
+  "volumePeakBlockSeries": "sets",
+  "@volumePeakBlockSeries": { "description": "Plural unit for weekly volume in VolumePeakBlock (matches the existing weeklyVolumeUnit pattern; Phase 26c)." },
+
+  "volumePeakBlockDeltaVsPrevWeek": "vs last week",
+  "@volumePeakBlockDeltaVsPrevWeek": { "description": "Delta-basis copy for the previous-week comparison (Phase 26c)." },
+
+  "volumePeakBlockDeltaVsFourWeekMean": "vs 4-week avg",
+  "@volumePeakBlockDeltaVsFourWeekMean": { "description": "Delta-basis copy for the 4-week-mean comparison (Phase 26c)." },
+
+  "volumePeakBlockDeltaNoHistory": "no history",
+  "@volumePeakBlockDeltaNoHistory": { "description": "Suppressed-delta copy for users with insufficient history (Phase 26c)." },
+
+  "volumePeakBlockDeltaEstimated": "estimated",
+  "@volumePeakBlockDeltaEstimated": { "description": "Footer copy under the Referência generic-tip block (Phase 26c)." },
+
+  "volumePeakBlockDeltaAboveTarget": "above target",
+  "@volumePeakBlockDeltaAboveTarget": { "description": "Over-target delta tail copy ('▲ +N above target') — locked decision rules this as amber, not green (Phase 26c)." },
+
+  "volumePeakBlockBadge30D": "30D",
+  "@volumePeakBlockBadge30D": { "description": "Tiny pill badge next to the monthly peak EWMA delta (Phase 26c)." }
 }

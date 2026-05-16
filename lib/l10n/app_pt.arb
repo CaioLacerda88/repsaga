@@ -802,5 +802,16 @@
   "repsValueSemantics": "Valor das repetições: {value}. Toque para inserir as repetições.",
   "restTimerDismiss": "Dispensar timer de descanso",
   "workoutNameTapToRenameSemantics": "{name}. Toque para renomear o treino.",
-  "workoutDefaultName": "Treino — {date}"
+  "workoutDefaultName": "Treino — {date}",
+
+  "volumePeakBlockVolumeLabel": "Volume",
+  "volumePeakBlockCargaPicoLabel": "Carga pico",
+  "volumePeakBlockReferenciaLabel": "Referência",
+  "volumePeakBlockSeries": "séries",
+  "volumePeakBlockDeltaVsPrevWeek": "vs semana passada",
+  "volumePeakBlockDeltaVsFourWeekMean": "vs média (4 sem)",
+  "volumePeakBlockDeltaNoHistory": "sem histórico",
+  "volumePeakBlockDeltaEstimated": "estimado",
+  "volumePeakBlockDeltaAboveTarget": "acima da meta",
+  "volumePeakBlockBadge30D": "30D"
 }
