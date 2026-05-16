@@ -71,16 +71,12 @@ abstract class CharacterSheetState with _$CharacterSheetState {
     required int characterLevel,
     required double lifetimeXp,
 
-    /// Numerator for the Phase 26b character XP bar — equals [lifetimeXp].
-    /// Carried as a separate field (rather than computed at the widget) so
-    /// the bar widget can stay pure-presentation and the provider owns the
-    /// derivation logic.
-    required double xpInLevel,
-
-    /// Denominator for the Phase 26b character XP bar. See
-    /// `characterXpInLevel()` in `domain/character_xp_calculator.dart` for
-    /// the single-body-part approximation it uses. Invariant:
-    /// `xpForNextLevel >= xpInLevel`.
+    /// Denominator for the Phase 26b character XP bar. The numerator is
+    /// [lifetimeXp] — the bar fill ratio is `lifetimeXp / xpForNextLevel`.
+    /// See `xpForNextCharacterLevel()` in `domain/character_xp_calculator.dart`
+    /// for the single-body-part approximation it uses. Invariant (enforced
+    /// as a documented contract — Freezed factories can't host asserts):
+    /// `xpForNextLevel >= lifetimeXp`.
     required double xpForNextLevel,
     required List<BodyPartSheetEntry> bodyPartProgress,
     String? activeTitle,

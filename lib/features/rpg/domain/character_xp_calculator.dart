@@ -1,36 +1,19 @@
 import 'rank_curve.dart';
 
-/// Result shape for [characterXpInLevel].
-///
-/// `xpInLevel` is the numerator (always equals current lifetimeXp — the bar
-/// fills the entire spent lifetime, not a within-band slice — because the
-/// "level" boundary is rank-derived, not XP-derived). `xpForNextLevel` is
-/// `xpInLevel + cheapestAdditionalXp`, where the cheapest path advances ONE
-/// body part by `ranksToNextLevel` ranks. The bar renders fill =
-/// `xpInLevel / xpForNextLevel`.
-class CharacterXpBand {
-  const CharacterXpBand({
-    required this.xpInLevel,
-    required this.xpForNextLevel,
-  });
-
-  final double xpInLevel;
-  final double xpForNextLevel;
-}
-
 /// Active body parts contributing to character level. v1 = the 6 strength
 /// tracks (cardio excluded — matches `activeBodyParts` in
 /// `models/body_part.dart` but kept as `List<String>` here so the helper is
 /// model-import-free and testable in pure Dart).
 const _activeKeys = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 
-/// Character XP band for the Saga header bar (Phase 26b).
+/// Denominator for the Phase 26b character XP bar.
 ///
-/// Computes how much *additional* XP the user needs to earn — in a single
-/// body part — to advance character level by one. The denominator returned
-/// is `lifetimeXp + cheapestAdditionalXp`, so the bar's fill ratio
-/// `xpInLevel / xpForNextLevel` reads "lifetime XP as a fraction of where
-/// it would be if the user took the cheapest path to next character level."
+/// Returns `lifetimeXp + cheapestAdditionalXp`, where `cheapestAdditionalXp`
+/// is the XP needed for ONE body part to advance by `ranksToNextLevel` ranks.
+/// The bar widget reads `lifetimeXp` (already in `CharacterSheetState`) as
+/// the numerator and divides by this return value to produce fill =
+/// "lifetime XP as a fraction of where it would be if the user took the
+/// cheapest single-body-part path to next character level."
 ///
 /// **Approximation contract.** This DOES NOT solve the optimal multi-body-
 /// part advancement (where partial rank-ups in different body parts could
@@ -67,7 +50,7 @@ const _activeKeys = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 /// the assertion below will fire — fix the producer (record_set_xp /
 /// the projection that builds the provider state), do NOT relax the
 /// guard here.
-CharacterXpBand characterXpInLevel({
+double xpForNextCharacterLevel({
   required Map<String, int> ranks,
   required double lifetimeXp,
   required Map<String, double> perBodyPartTotalXp,
@@ -81,10 +64,7 @@ CharacterXpBand characterXpInLevel({
     nActive += 1;
   }
   if (nActive == 0) {
-    return CharacterXpBand(
-      xpInLevel: lifetimeXp,
-      xpForNextLevel: lifetimeXp + 1,
-    );
+    return lifetimeXp + 1;
   }
   // Character level = floor((sumRanks - nActive) / 4) + 1 per RankCurve.
   // So advancing to the next level requires sumRanks to reach the next
@@ -123,10 +103,7 @@ CharacterXpBand characterXpInLevel({
     // All body parts are maxed out beyond what ranksToNextLevel can reach.
     // Render the bar at 100% with a denominator = lifetimeXp (no further
     // progression possible).
-    return CharacterXpBand(xpInLevel: lifetimeXp, xpForNextLevel: lifetimeXp);
+    return lifetimeXp;
   }
-  return CharacterXpBand(
-    xpInLevel: lifetimeXp,
-    xpForNextLevel: lifetimeXp + cheapestExtraXp,
-  );
+  return lifetimeXp + cheapestExtraXp;
 }

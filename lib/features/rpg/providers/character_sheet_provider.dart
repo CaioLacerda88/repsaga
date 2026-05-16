@@ -63,18 +63,18 @@ CharacterSheetState _composeSheet({
       })
       .toList(growable: false);
 
-  // Phase 26b character XP bar: derive the band once at provider time so the
-  // bar widget stays pure-presentation. The helper enforces a curve-consistent
-  // input contract (totalXp must lie within the current rank's threshold band)
-  // — feeding it `entry.totalXp` directly satisfies that because both rank and
-  // totalXp come from the same persisted row.
+  // Phase 26b character XP bar: derive the denominator once at provider time
+  // so the bar widget stays pure-presentation. The helper enforces a curve-
+  // consistent input contract (totalXp must lie within the current rank's
+  // threshold band) — feeding it `entry.totalXp` directly satisfies that
+  // because both rank and totalXp come from the same persisted row.
   final ranks = <String, int>{
     for (final e in entries) e.bodyPart.dbValue: e.rank,
   };
   final perBodyPartTotalXp = <String, double>{
     for (final e in entries) e.bodyPart.dbValue: e.totalXp,
   };
-  final xpBand = characterXpInLevel(
+  final xpForNextLevel = xpForNextCharacterLevel(
     ranks: ranks,
     lifetimeXp: snapshot.characterState.lifetimeXp,
     perBodyPartTotalXp: perBodyPartTotalXp,
@@ -83,8 +83,7 @@ CharacterSheetState _composeSheet({
   return CharacterSheetState(
     characterLevel: snapshot.characterState.characterLevel,
     lifetimeXp: snapshot.characterState.lifetimeXp,
-    xpInLevel: xpBand.xpInLevel,
-    xpForNextLevel: xpBand.xpForNextLevel,
+    xpForNextLevel: xpForNextLevel,
     bodyPartProgress: entries,
     activeTitle: activeTitle,
     characterClass: characterClass,
