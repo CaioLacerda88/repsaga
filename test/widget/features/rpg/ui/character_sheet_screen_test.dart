@@ -28,7 +28,6 @@ import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
 import 'package:repsaga/features/rpg/ui/widgets/codex_nav_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/dormant_cardio_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/saga_header.dart';
-import 'package:repsaga/features/rpg/ui/widgets/vitality_radar.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 // Hive-free stand-in: constructing the real RankUpPulseLocalStorage in a
@@ -299,12 +298,11 @@ void main() {
     });
 
     testWidgets(
-      'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows (no VitalityRadar)',
+      'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows',
       (tester) async {
-        // Phase 26b Option B v4 pins the post-refactor composition: the
-        // legacy VitalityRadar is gone, SagaHeader + CharacterXpBar are
-        // composed at the top, and the six body-part rows + cardio row +
-        // three codex nav rows are preserved.
+        // Phase 26b Option B v4 pins the post-refactor composition:
+        // SagaHeader + CharacterXpBar at the top, six body-part rows,
+        // a dormant cardio row, and three codex nav rows.
         tester.view.physicalSize = const Size(800, 2400);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
@@ -319,8 +317,6 @@ void main() {
         expect(find.byType(BodyPartRankRow), findsNWidgets(6));
         expect(find.byType(DormantCardioRow), findsOneWidget);
         expect(find.byType(CodexNavRow), findsNWidgets(3));
-        // VitalityRadar is removed from the composition entirely.
-        expect(find.byType(VitalityRadar), findsNothing);
       },
     );
 

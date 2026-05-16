@@ -19,8 +19,7 @@ import 'package:google_fonts/google_fonts.dart';
 /// DirectWrite). For those tests, install `TolerantGoldenFileComparator`
 /// per-file via `setUpAll`/`tearDownAll`. See
 /// `test/helpers/tolerant_golden_comparator.dart`. Pure-shape goldens
-/// (e.g. `vitality_radar_golden_test.dart`) keep the default zero-tolerance
-/// comparator.
+/// keep the default zero-tolerance comparator.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
