@@ -10,6 +10,7 @@ import '../models/stats_deep_dive_state.dart';
 import '../providers/stats_provider.dart';
 import 'widgets/body_part_localization.dart';
 import 'widgets/peak_loads_table.dart';
+import 'widgets/vitality_explainer_sheet.dart';
 import 'widgets/vitality_table.dart';
 import 'widgets/vitality_trend_chart.dart';
 
@@ -113,7 +114,11 @@ class _Body extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
       children: [
         // ─── Trend chart ──────────────────────────────────────────────────
-        _SectionHeader(label: trendHeading),
+        _SectionHeader(
+          label: trendHeading,
+          infoIconKey: const ValueKey('vitality-trend-info-icon'),
+          onInfoTap: () => _showVitalityExplainer(context),
+        ),
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -131,7 +136,11 @@ class _Body extends StatelessWidget {
         // Section header anchors the chart→table junction. Without it the
         // table reads as the chart's legend; with it the table claims its
         // own register as the live current-state surface.
-        _SectionHeader(label: l10n.liveVitalitySectionHeading),
+        _SectionHeader(
+          label: l10n.liveVitalitySectionHeading,
+          infoIconKey: const ValueKey('vitality-table-info-icon'),
+          onInfoTap: () => _showVitalityExplainer(context),
+        ),
         const SizedBox(height: 8),
         VitalityTable(
           rows: state.vitalityRows,
@@ -155,18 +164,68 @@ class _Body extends StatelessWidget {
   }
 }
 
+/// Opens [VitalityExplainerSheet] as a modal bottom sheet. The sheet paints
+/// its own surface (rounded top edge + scrim-friendly background) so this
+/// scaffold passes a transparent background and lets `isScrollControlled`
+/// give the sheet room to size to its own content.
+void _showVitalityExplainer(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const VitalityExplainerSheet(),
+  );
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
+  const _SectionHeader({required this.label, this.onInfoTap, this.infoIconKey});
 
   final String label;
+
+  /// Optional handler — when non-null, a 14dp ⓘ info icon renders at the
+  /// trailing edge of the header. Currently used by the trend chart and the
+  /// live-vitality table headers to open [VitalityExplainerSheet]. The
+  /// Volume & peak / Peak loads headers leave this null per the 26c spec
+  /// (no explainer surface for those sections).
+  final VoidCallback? onInfoTap;
+
+  /// Optional `Key` for the icon's tap target. Tests anchor onto this rather
+  /// than walking the widget tree by type — keeps the test resilient to
+  /// future icon-shape changes (e.g. swapping `Icons.info_outline` for a
+  /// custom glyph).
+  final Key? infoIconKey;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Text(
-        label.toUpperCase(),
-        style: AppTextStyles.sectionHeader.copyWith(color: AppColors.hotViolet),
+      // 26c: explicit 12dp bottom padding fixes the trend chart's top label
+      // clipping against this header (previously fromLTRB(16, 8, 16, 0)).
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              style: AppTextStyles.sectionHeader.copyWith(
+                color: AppColors.hotViolet,
+              ),
+            ),
+          ),
+          if (onInfoTap != null)
+            InkWell(
+              key: infoIconKey,
+              onTap: onInfoTap,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: AppColors.textDim,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

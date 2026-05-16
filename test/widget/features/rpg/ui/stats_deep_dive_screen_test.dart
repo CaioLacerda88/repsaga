@@ -25,6 +25,7 @@ import 'package:repsaga/features/rpg/providers/stats_provider.dart';
 import 'package:repsaga/features/rpg/ui/stats_deep_dive_screen.dart';
 import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
 import 'package:repsaga/features/rpg/ui/widgets/peak_loads_table.dart';
+import 'package:repsaga/features/rpg/ui/widgets/vitality_explainer_sheet.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_table.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_trend_chart.dart';
 
@@ -330,6 +331,62 @@ void main() {
           .where((s) => s.properties.identifier == 'saga-stats-screen')
           .toList();
       expect(semantics.length, 1);
+    });
+
+    group('vitality explainer icons', () {
+      testWidgets(
+        'should open the explainer sheet when the trend-section ⓘ is tapped',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          final icon = find.byKey(const ValueKey('vitality-trend-info-icon'));
+          expect(icon, findsOneWidget);
+
+          await tester.tap(icon);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(VitalityExplainerSheet), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'should open the same explainer sheet when the live-vitality ⓘ is tapped',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          final icon = find.byKey(const ValueKey('vitality-table-info-icon'));
+          expect(icon, findsOneWidget);
+
+          await tester.tap(icon);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(VitalityExplainerSheet), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'should NOT render an info icon on the Volume & peak section header',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const ValueKey('volume-peak-info-icon')),
+            findsNothing,
+          );
+        },
+      );
     });
   });
 }
