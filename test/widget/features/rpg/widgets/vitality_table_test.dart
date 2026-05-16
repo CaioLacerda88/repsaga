@@ -181,27 +181,29 @@ void main() {
       );
 
       // Positive assertion (in addition to the negative-only guards
-      // above): the five retired-state rows (radiant×2 + active×2 +
-      // fading×1) each render `Text('')` for their marginalia slot, so
-      // exactly five Text widgets with empty `data` exist. If a future
-      // copy edit ever reintroduces non-empty marginalia for any of
-      // those states, this count drops below 5 and the test fails —
-      // catching the regression that pure negative guards on retired
-      // exact strings would miss.
-      //
-      // (`localizedCopy` returns '' for the retired states; the row's
-      // bodySmall Text widget is rendered unconditionally, so each
-      // collapsed row contributes one `Text(data: '')` instance.)
+      // above): 5 retired-state rows (radiant×2 + active×2 + fading×1)
+      // have NO marginalia Text slot at all (Task 6 collapsed the empty
+      // render — the row's bodySmall Text widget is now conditionally
+      // rendered only when `localizedCopy` returns a non-empty string).
+      // Only the dormant row keeps its non-empty subtitle Text. The
+      // collapsed rows contribute zero `Text(data: '')` instances; the
+      // dormant row contributes a non-empty Text. So the empty-data
+      // Text count is exactly zero. If a future copy edit ever
+      // reintroduces non-empty marginalia for any retired state, that
+      // doesn't change this count (the new Text would have non-empty
+      // data) — the negative-only guards above plus the regex
+      // anchoring in the Semantics-identifier test are the
+      // belt-and-suspenders against re-injection.
       final emptyTextCount = tester
           .widgetList<Text>(find.byType(Text))
           .where((t) => t.data == '')
           .length;
       expect(
         emptyTextCount,
-        5,
+        0,
         reason:
-            'Phase 26 collapse: 5 retired-state rows must each render an '
-            'empty marginalia Text slot.',
+            'Task 6 collapse: retired-state rows must NOT render an empty '
+            'marginalia Text slot — the subtitle is omitted entirely.',
       );
     });
 
@@ -309,26 +311,22 @@ void main() {
         // localized name + percentage + state copy. We sample two rows
         // (radiant + dormant) to cover both ends of the state range.
         //
-        // Phase 26: radiant marginalia retired → the Chest row's semantic
-        // label opens with the composed `'$name, $pct, $copy'` string
-        // from `_VitalityTableRow.build`. With marginalia empty for the
-        // radiant state, that composed prefix is exactly `"Chest, 92%, "`
-        // (trailing space + empty copy slot), followed by a `\n` and the
-        // descendant Text nodes that the row's Semantics container
-        // merges in (name + percentage). The composed prefix is what we
-        // care about; the merged-descendant tail is a Flutter-semantics
-        // artifact orthogonal to the marginalia retirement.
+        // Phase 26 + Task 6: radiant marginalia retired → the Chest
+        // row's semantic label uses the conditional formatting from
+        // `_VitalityTableRow.build`: when `stateCopy` is empty (as for
+        // radiant/active/fading rows after Phase 26), the trailing
+        // `, $stateCopy` is omitted entirely, so the composed prefix is
+        // exactly `"Chest, 92%"` — no trailing `, `. That prefix is
+        // followed by a `\n` and the descendant Text nodes that the
+        // row's Semantics container merges in (name + percentage).
         //
         // Anchored with `^` + the trailing `\n` so a future regression
-        // that re-injects content into the empty copy slot — e.g.
-        // `"Chest, 92%, Path mastered.\nChest\n92%"` — cannot pass by
-        // merely containing the prefix substring. The `\n` boundary
-        // structurally pins "nothing between `, ` and the merged-
-        // descendant block".
-        expect(
-          find.bySemanticsLabel(RegExp(r'^Chest, 92%, \n')),
-          findsOneWidget,
-        );
+        // that re-injects content where the empty copy slot used to be
+        // — e.g. `"Chest, 92%, Path mastered.\nChest\n92%"` — cannot
+        // pass by merely containing the prefix substring. The `\n`
+        // boundary structurally pins "nothing between `92%` and the
+        // merged-descendant block".
+        expect(find.bySemanticsLabel(RegExp(r'^Chest, 92%\n')), findsOneWidget);
         expect(
           find.bySemanticsLabel(
             RegExp(
@@ -445,6 +443,135 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Uncharted — log a set to begin.'), findsNothing);
+    });
+
+    group('HP-drain ramp percentage coloring (Task 6)', () {
+      testWidgets('should color the 100% numeral in vitalityHigh', (
+        tester,
+      ) async {
+        const high = VitalityTableRow(
+          bodyPart: BodyPart.chest,
+          pct: 1.0,
+          state: VitalityState.active,
+          rank: 6,
+        );
+        await tester.pumpWidget(
+          _wrap(rows: const [high], selected: BodyPart.chest, onSelect: (_) {}),
+        );
+        await tester.pump();
+
+        final pctText = tester.widget<Text>(find.text('100%'));
+        expect(pctText.style?.color, AppColors.vitalityHigh);
+      });
+
+      testWidgets('should color the 52% numeral in vitalityMid', (
+        tester,
+      ) async {
+        const mid = VitalityTableRow(
+          bodyPart: BodyPart.back,
+          pct: 0.52,
+          state: VitalityState.active,
+          rank: 3,
+        );
+        await tester.pumpWidget(
+          _wrap(rows: const [mid], selected: BodyPart.back, onSelect: (_) {}),
+        );
+        await tester.pump();
+
+        final pctText = tester.widget<Text>(find.text('52%'));
+        expect(pctText.style?.color, AppColors.vitalityMid);
+      });
+
+      testWidgets('should color the 28% numeral in vitalityLow', (
+        tester,
+      ) async {
+        const low = VitalityTableRow(
+          bodyPart: BodyPart.legs,
+          pct: 0.28,
+          state: VitalityState.fading,
+          rank: 2,
+        );
+        await tester.pumpWidget(
+          _wrap(rows: const [low], selected: BodyPart.legs, onSelect: (_) {}),
+        );
+        await tester.pump();
+
+        final pctText = tester.widget<Text>(find.text('28%'));
+        expect(pctText.style?.color, AppColors.vitalityLow);
+      });
+
+      testWidgets('should color the untested em-dash in textDim', (
+        tester,
+      ) async {
+        const untested = VitalityTableRow(
+          bodyPart: BodyPart.shoulders,
+          pct: 0,
+          state: VitalityState.untested,
+          rank: 1,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [untested],
+            selected: BodyPart.shoulders,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        final pctText = tester.widget<Text>(find.text('—'));
+        expect(pctText.style?.color, AppColors.textDim);
+      });
+
+      testWidgets(
+        'should OMIT the subtitle Text entirely for active-state rows '
+        '(no empty-line gap)',
+        (tester) async {
+          const active = VitalityTableRow(
+            bodyPart: BodyPart.chest,
+            pct: 0.55,
+            state: VitalityState.active,
+            rank: 4,
+          );
+          await tester.pumpWidget(
+            _wrap(
+              rows: const [active],
+              selected: BodyPart.chest,
+              onSelect: (_) {},
+            ),
+          );
+          await tester.pump();
+
+          // No Text widget with empty `data` exists in the row.
+          final emptyTexts = tester
+              .widgetList<Text>(find.byType(Text))
+              .where((t) => t.data == '')
+              .toList();
+          expect(emptyTexts, isEmpty);
+        },
+      );
+
+      testWidgets('should KEEP the subtitle Text for dormant-state rows '
+          '(non-empty copy line)', (tester) async {
+        const dormant = VitalityTableRow(
+          bodyPart: BodyPart.shoulders,
+          pct: 0,
+          state: VitalityState.dormant,
+          rank: 1,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [dormant],
+            selected: BodyPart.shoulders,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.text('Dormant. Train this group to reawaken its path.'),
+          findsOneWidget,
+        );
+      });
     });
   });
 }
