@@ -49,6 +49,7 @@ difficulty framework permanent reference: `docs/xp-difficulty-framework.md`.
 | 24b | New default exercises (50 additions; 150 → 200) | DONE | #224 |
 | 24c | Bodyweight-as-load semantics (20 curated slugs) | DONE | #227 |
 | 24d | Calibration sign-off + production propagation | DONE | #229 |
+| 26a | Pre-launch UI/UX revamp — color system foundation | DONE | #232 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -377,7 +378,7 @@ Six-screen surgical revamp for launch readiness. User flagged the visual of four
 
 | Sub-phase | Status | Scope |
 |---|---|---|
-| 26a — Color system foundation | NOT STARTED | 4 new `AppColors` tokens (`xpTrack`, `bodyPartBack` = Sky, `bodyPartCardio` infrastructure-only, `vitalityHigh/Mid/Low` aliases). Vitality copy l10n fixes. heroGold whitelist for Titles screen. |
+| 26a — Color system foundation | DONE (PR #232) | 4 new `AppColors` tokens (`xpTrack`, `bodyPartChest` = Pink, `bodyPartBack` = Sky, `bodyPartCardio` infrastructure-only) + `vitalityHigh/Mid/Low` aliases. `vitalityRampColorFor` helper. `bodyPartColor[chest/back]` rebound. Vitality copy l10n fixes. heroGold whitelist for Titles screen. |
 | 26b — Saga screen revamp | NOT STARTED | Option B v4 — type-dominant header (level numeral 56sp), 36dp rune without active-state glow, full-width per-stat XP bars with within-rank progress, dot pulse on rank-up (24h). Stat rows tappable → Stats deep-dive. |
 | 26c — Stats deep-dive | NOT STARTED | HP-drain vitality ramp (3 bands), trend chart selected-line emphasis, "Path mastered" + "caminho esfriando" copy removed, ⓘ tooltip for vitality concept, Volume & pico restructure (weekly volume delta + 30D peak delta). Peak Loads section dropped. |
 | 26d — Titles screen + awarding fix | NOT STARTED | Three-region UI (Equipado / Conquistados / Próximos), cross-build "Especial" cards in heroGold, locked titles hidden. **Server-side INSERT into `earned_titles` at detection time** + one-shot backfill RPC. |
@@ -412,27 +413,9 @@ Six-screen surgical revamp for launch readiness. User flagged the visual of four
 - Equipped title card on Titles screen (gradient + gold border + "Em uso" tag) — identity flex.
 - Cross-build "Próximos" cards on Titles (gold dot + faint gradient + "Especial" badge) — surfaces only when within 1 rank of every condition; typical user sees 0–1 instances.
 
-#### 26a acceptance criteria — Color system foundation
+#### 26a — Color system foundation ✅ DONE (PR #232)
 
-**Scope.** Add the four new tokens to `AppColors`, update `VitalityStateStyles.bodyPartColor` to use `bodyPartBack` (sky), introduce vitality-ramp lookup function, update `scripts/check_reward_accent.sh` whitelist, fix l10n copy.
-
-**Acceptance:**
-- `flutter analyze` clean.
-- `AppColors.xpTrack` token defined. Widget wiring (Saga, Stats, Home, plan editor) lands progressively in 26b–f as each surface is rewritten.
-- **Chest body-part hue is pink (`#F472B6`)** everywhere chest appears (Saga body-part-row dot, Saga radar chest vertex, vitality table dot, vitality trend chart line, Volume & pico chest block dot, Titles screen chest dots, Engajamento chest bar, Home expanded chest stat row, Home dominant-body-part rank when chest is dominant). `hotViolet` is reserved for brand accents only after this sub-phase.
-- Back body-part hue is sky (`#38BDF8`) everywhere it appears today (Saga radar, body-part-rank-row sigil, vitality table dot, vitality trend chart line, peak-loads bar — though peak-loads removed in 26c).
-- Cardio token defined but unused on UI surfaces.
-- `VitalityStateStyles.vitalityRampColorFor(double percentage)` helper introduced — returns `vitalityHigh` (>= 0.66) / `vitalityMid` (>= 0.34) / `vitalityLow` (< 0.34) / `textDim` (untested).
-- `check_reward_accent.sh` accepts heroGold on `EquippedTitleCard` + `CrossBuildCard` widgets; rejects new heroGold uses elsewhere.
-- L10n diff: `vitalityCopyDormant` rewritten; new keys `vitalityStateBandActive` (Active / Ativo), `vitalityStateBandWaning` (Waning / Esmorecendo), `vitalityStateBandDormant` (Dormant / Dormente); new key `withinRankXpSuffix` (to next rank / para o próximo rank).
-
-**Files:**
-- `lib/core/theme/app_theme.dart`
-- `lib/features/rpg/ui/utils/vitality_state_styles.dart`
-- `scripts/check_reward_accent.sh`
-- `lib/l10n/app_en.arb` + `app_pt.arb`
-
-**Tests:** unit tests for `vitalityRampColorFor` boundary cases (0.0, 0.33, 0.34, 0.65, 0.66, 1.0, null); golden tests for the four tokens on `AppColors.abyss` (contrast assertion).
+Full retrospective in §4 Completed Phases. The token set established here (`bodyPartChest/Back/Cardio`, `xpTrack`, `vitalityHigh/Mid/Low` aliases) + the `vitalityRampColorFor` helper + the rebound `bodyPartColor[chest/back]` entries + the four new l10n keys (`vitalityStateBand*`, `withinRankXpSuffix`) are what 26b–f consume.
 
 #### 26b acceptance criteria — Saga screen revamp
 
@@ -1004,6 +987,18 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **Reviewer cycle:** 0 Blockers, 2 Warnings (stale T4 inline comments in sim; framework §3 T4 header still showing 0.95) + 2 Nits (stale 0.65 in test labels; baseline doc tier-table snapshot still 0.95) — all pure doc/comment integrity, no production logic touched. All fixed in cycle + 2 same-cluster preventive fixes (tier-table emitter; tier_mult set definition).
 - **Verification:** unit/widget 2689/2689; integration 39/39; Android debug APK clean; `npx supabase db reset` clean through 00059 (DO-block: 28 T4 slugs at <=0.96 difficulty_mult); psql spot-checks pre + post hosted (leg_press 0.92 was 0.97; lat_pulldown 0.94 was 0.99; rpg_base_xp(100,8) = 55.19 was 79.43); E2E full regression 241/241 passed (30.2 min), 62 skipped, 0 failures, 0 flaky.
 - **Phase 24 closed.** Library at 200 defaults; XP economy calibrated; baseline locked. Phase 25 (RPE) was dropped on 2026-05-15 after PO + UX research (parked as v1.1 opt-in — see §2). Next: a TBD pre-launch phase (planning underway), then the Launch Phase.
+
+### Phase 26a: Pre-launch UI/UX Revamp — Color System Foundation (PR #232)
+
+> First of six sub-phases in the Pre-launch UI/UX Revamp. **Strictly additive token foundation** — no production widget surfaces rewritten. Sub-phases 26b–f consume what landed here as they rewrite individual surfaces. Visual companion: `docs/phase-26-mockups.html`.
+
+- **`AppColors` additions** (4 tokens + 3 aliases, organized into three new section markers — body-part identity, progress infrastructure, vitality ramp): `bodyPartChest = #F472B6` (pink — frees `hotViolet` from chest identity), `bodyPartBack = #38BDF8` (sky — resolves the chest/back "two purples" hue collision), `bodyPartCardio = #FB923C` (orange — infrastructure-only for v1, surfaces in v1.1+), `xpTrack = 0x1AB36DFF` (violet-tinted 10%-alpha track replacing the generic `rgba(255,255,255,0.06)`), and `vitalityHigh/Mid/Low` semantic aliases over `success/warning/error` for self-documenting call sites.
+- **`VitalityStateStyles` changes** (the single-source-of-truth helper): new `vitalityRampColorFor(double? percentage)` with band thresholds `>= 0.66` / `>= 0.34` / `< 0.34` plus defensive null/OOB → `textDim` fallback (12 boundary + interior + defensive tests). `bodyPartColor[chest]` rebound to `bodyPartChest`; `bodyPartColor[back]` rebound to `bodyPartBack`. Other 5 body-part entries untouched. **2756 existing tests passed through the rebind with zero regressions** — confirms the map is the genuine single source of truth and no consumer pinned the old colors at the widget layer.
+- **L10n diff:** `vitalityCopyDormant` rewritten in en + pt (previously carried Untested-state copy by mistake — "Awaits your first stride." now reads "Dormant. Train this group to reawaken its path." / "Dormente. Treine este grupo para retomar o caminho."). Three retired marginalia keys (`vitalityCopyFading/Active/Radiant`) — Phase 26 stats table renders state via color only. Four new keys for 26b–f consumption: `vitalityStateBandActive/Waning/Dormant` (Active/Waning/Dormant — Ativo/Esmorecendo/Dormente) + `withinRankXpSuffix` ("to next rank" / "para o próximo rank"). `localizedCopy` switch updated to return empty string for retired states.
+- **CI whitelist:** `scripts/check_reward_accent.sh` `ALLOWED_PATHS` extended with `equipped_title_card.dart` + `cross_build_card.dart` (Phase 26d widgets that legitimately use heroGold outside `RewardAccent`). Section-divider comment + `EDIT_WITH_CARE` banner flagging the absent regression test on the whitelist loop. Self-test mode + fixture directory deferred (own feature, not in 26a acceptance).
+- **xpTrack contrast against `abyss` is 1.111:1** (alpha-composited perceived `#1E0E30` vs `#0D0319`) — well below WCAG SC 1.4.11's 3:1 graphical-object threshold. By design: xpTrack is the unfilled track meant to recede behind the bright XP fill; visual signal comes from fill vs track contrast, not track vs background. Test relaxed to `> 1.0:1` with explanatory comment; body-part tokens (chest/back/cardio) all clear 3:1.
+- **Reviewer cycle:** 9 task implementations × 2-stage review (spec compliance + code quality) + 1 final whole-branch review + 1 re-engagement on the polish commit. Every finding (Important / Minor / Nit) addressed in-cycle per `feedback_no_deferring_review_findings`. Two memory entries written from this PR's drift patterns: `feedback_plan_unused_imports.md` (test boilerplate carries `flutter/material.dart` unused → `--fatal-infos` fail) + `feedback_phase_agnostic_test_names.md` (phase-stamped test names age poorly; reviewers flagged independently 3 times).
+- **Verification:** `make ci` clean (format, gen-l10n, build_runner, `check_reward_accent.sh`, `dart analyze --fatal-infos`, `check_hardcoded_colors.sh`, 2756 unit/widget tests, android debug APK build). All 8 GitHub Actions green including full E2E suite (34m32s, 0 selector regressions). QA APPROVED with no blockers — note for 26b/c: extend `test/unit/l10n/vitality_l10n_test.dart` for Active/Waning/withinRankXpSuffix wiring when those widgets land; `vitality_radar_golden_test.dart` will need regen if 26b changes radar segment fills.
 
 ---
 
