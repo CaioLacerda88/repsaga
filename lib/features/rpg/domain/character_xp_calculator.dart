@@ -57,6 +57,16 @@ const _activeKeys = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 ///   * Maxed-out user (a body part hits rank 99): the helper falls back to
 ///     picking from the remaining 5. If all 6 are maxed, returns a denominator
 ///     equal to lifetimeXp (bar reads 100%, no further progression possible).
+///
+/// **Caller contract.** `perBodyPartTotalXp[key]` MUST be curve-consistent
+/// with `ranks[key]` — i.e. it must lie within
+/// `[cumulativeXpForRank(rank), cumulativeXpForRank(rank + 1))`. The Saga
+/// pipeline guarantees this: `xp_attribution` rows are written by
+/// `record_set_xp` server-side, and `ranks[key]` is derived from
+/// `cumulativeXpForRank` on the same totalXp. If those two ever drift,
+/// the assertion below will fire — fix the producer (record_set_xp /
+/// the projection that builds the provider state), do NOT relax the
+/// guard here.
 CharacterXpBand characterXpInLevel({
   required Map<String, int> ranks,
   required double lifetimeXp,
@@ -76,6 +86,10 @@ CharacterXpBand characterXpInLevel({
       xpForNextLevel: lifetimeXp + 1,
     );
   }
+  // Character level = floor((sumRanks - nActive) / 4) + 1 per RankCurve.
+  // So advancing to the next level requires sumRanks to reach the next
+  // multiple of 4 above (sumRanks - nActive). modulo == 0 means we just
+  // crossed a boundary — the NEXT one is a full 4 ranks away, not zero.
   final modulo = (sumRanks - nActive) % 4;
   final ranksToNextLevel = modulo == 0 ? 4 : 4 - modulo;
 
@@ -91,10 +105,15 @@ CharacterXpBand characterXpInLevel({
     }
     final totalXpAtTarget = RankCurve.cumulativeXpForRank(targetRank);
     final extra = totalXpAtTarget - totalXpForPart;
-    if (extra <= 0) {
-      // defensive — shouldn't happen if curve is monotonic
-      continue;
-    }
+    assert(
+      extra > 0,
+      'cumulativeXpForRank($targetRank) ($totalXpAtTarget) should exceed '
+      'perBodyPartTotalXp[$key] ($totalXpForPart). If this fires, the caller '
+      'passed inconsistent input — likely a totalXp value that overshoots '
+      'the recorded rank. The character XP bar reads from `xp_attribution` '
+      'state populated server-side by record_set_xp; if that pipeline is '
+      'producing drift, fix it there rather than silently masking here.',
+    );
     if (cheapestExtraXp == null || extra < cheapestExtraXp) {
       cheapestExtraXp = extra;
     }

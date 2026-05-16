@@ -62,6 +62,14 @@ void main() {
       );
       expect(result.xpInLevel, lifetimeXp);
       expect(result.xpForNextLevel, greaterThan(result.xpInLevel));
+
+      // Pin the exact denominator so a curve-constant regression is caught.
+      // Cheapest path: chest at rank 3 → 6 needs cumXp(6) - cum3. Core's path
+      // (rank 4 → 7) costs cumXp(7) - cum4, which is more expensive — so the
+      // helper picks chest's path.
+      final cum6 = RankCurve.cumulativeXpForRank(6);
+      final expectedExtra = cum6 - cum3;
+      expect(result.xpForNextLevel, closeTo(lifetimeXp + expectedExtra, 0.01));
     });
 
     test(
@@ -94,6 +102,38 @@ void main() {
         );
         expect(result.xpInLevel, lifetimeXp);
         expect(result.xpForNextLevel, greaterThan(result.xpInLevel));
+      },
+    );
+
+    test(
+      'all body parts at maxRank — denominator equals numerator (100% fill)',
+      () {
+        // Every body part at rank 99. Sum = 594. ranksToNextLevel = 4. Every
+        // target = 103 > maxRank → all paths skipped → fallback returns
+        // (lifetimeXp, lifetimeXp). Bar reads 100% with no further progression.
+        final maxCumXp = RankCurve.cumulativeXpForRank(RankCurve.maxRank);
+        final lifetimeXp = 6 * maxCumXp;
+        final result = characterXpInLevel(
+          ranks: {
+            'chest': RankCurve.maxRank,
+            'back': RankCurve.maxRank,
+            'legs': RankCurve.maxRank,
+            'shoulders': RankCurve.maxRank,
+            'arms': RankCurve.maxRank,
+            'core': RankCurve.maxRank,
+          },
+          lifetimeXp: lifetimeXp,
+          perBodyPartTotalXp: {
+            'chest': maxCumXp,
+            'back': maxCumXp,
+            'legs': maxCumXp,
+            'shoulders': maxCumXp,
+            'arms': maxCumXp,
+            'core': maxCumXp,
+          },
+        );
+        expect(result.xpInLevel, lifetimeXp);
+        expect(result.xpForNextLevel, lifetimeXp);
       },
     );
   });
