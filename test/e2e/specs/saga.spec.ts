@@ -565,7 +565,19 @@ test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
     await loginFoundationAndGoToCharacterSheet(page);
   });
 
-  test('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
+  // TODO(26-tap-routing-e2e): Skipped per PR #234 user decision after
+  // 4 fix attempts. Production code is correct (widget test pins the
+  // contract in body_part_rank_row_test.dart; Playwright trace shows
+  // the destination Stats screen rendering on tap). The friction is
+  // in proving the navigation via Flutter web's AOM in CI — neither
+  // `toHaveURL` nor `aria-selected="true"` reliably reflects the
+  // post-tap state in headless runs. Revisit when 26c lands a similar
+  // tap surface and we can build a shared helper, OR when Flutter
+  // web's AOM-for-navigation diagnostic tooling improves. The widget
+  // test gives us functional coverage; this E2E was an extra smoke
+  // layer. See cluster memory: flutter-web-url-assertion +
+  // semantics-button-missing.
+  test.skip('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
     // Tap the BACK row (not chest — chest is the screen's default
     // pre-selection, so a chest landing would be observationally identical
     // whether or not the `body_part` query param was consumed). Tapping a

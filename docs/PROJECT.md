@@ -208,6 +208,32 @@ _None outstanding._ Recently closed:
   measurement. Closes the regression gap that let the `persist-eats-duration`
   cluster bug hide for weeks behind passing source-grep widget tests.
 
+### Saga tap-routing E2E gap (deferred from 26b)
+
+The Phase 26b spec required an E2E smoke proving that tapping a
+`BodyPartRankRow` routes to `/saga/stats?body_part=<X>` with the
+target body part pre-selected. Four fix attempts during PR #234
+landed the production code correctly (widget test passes; Playwright
+trace shows destination screen rendered) but couldn't get the
+Playwright assertion to match in CI:
+
+- `expect(page).toHaveURL(...)` — Flutter web hash routing doesn't
+  reliably update `window.location.hash` post `context.push` in
+  headless CI (see cluster `flutter-web-url-assertion`).
+- `expect(page.locator('[flt-semantics-identifier="vitality-row-back"][aria-selected="true"]')).toBeVisible()`
+  — `Semantics(selected:)` doesn't appear to emit `aria-selected="true"` on Flutter web's AOM.
+
+**Revisit conditions:**
+- 26c, 26d, 26e, or 26f introduces a similar tap-routing surface AND
+  we can find a working AOM assertion pattern. At that point, extract
+  a shared helper + unskip the saga test using the same pattern.
+- Flutter web's AOM-for-navigation diagnostic tooling improves
+  (Chrome DevTools' a11y panel for `flt-semantics-*` elements).
+- Manual product-decision: drop the test entirely if no clean
+  E2E assertion materializes by Launch Phase.
+
+The test stays in `saga.spec.ts` as `test.skip` with a `TODO(26-tap-routing-e2e)` marker so future authors can find it.
+
 ### v2-park (post-launch telemetry decisions)
 
 - **"Add set" button visual weight** — `_AddSetButton` border at
