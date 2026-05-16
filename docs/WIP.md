@@ -16,30 +16,10 @@ the phase summary in PROJECT.md §4.
 **Reference:** `docs/PROJECT.md §3 Phase 26` (authoritative spec) +
 `docs/phase-26-mockups.html` (visual companion).
 
-**State:** Spec written. Awaiting user review before handing off to
-`writing-plans` for the implementation-plan generation. Six sub-phases
-locked; ~17–22 dev days estimated total. Six sub-phase branches will be
-opened in dependency order (26a first, since it adds the tokens everything
-else consumes).
-
-### 26a — Color system foundation
-
-Branch: `feature/26a-color-system-foundation`
-
-- [ ] Add `AppColors.xpTrack` = `Color(0x1AB36DFF)` to `lib/core/theme/app_theme.dart`
-- [ ] Add `AppColors.bodyPartChest` = `Color(0xFFF472B6)` (pink-400) — frees hotViolet from chest identity
-- [ ] Add `AppColors.bodyPartBack` = `Color(0xFF38BDF8)` (sky)
-- [ ] Add `AppColors.bodyPartCardio` = `Color(0xFFFB923C)` (orange, infrastructure-only)
-- [ ] Add `AppColors.vitalityHigh / vitalityMid / vitalityLow` semantic aliases
-- [ ] Update `VitalityStateStyles.bodyPartColor[BodyPart.chest]` to read `bodyPartChest`
-- [ ] Update `VitalityStateStyles.bodyPartColor[BodyPart.back]` to read `bodyPartBack`
-- [ ] Add `VitalityStateStyles.vitalityRampColorFor(double pct)` helper
-- [ ] Whitelist heroGold on `EquippedTitleCard` + `CrossBuildCard` in `scripts/check_reward_accent.sh`
-- [ ] Fix `vitalityCopyDormant` l10n (en + pt) — currently describes Untested state, repurpose for Dormant
-- [ ] Add l10n keys: `vitalityStateBandActive` ("Ativo" / "Active"), `vitalityStateBandEsmorecendo` ("Esmorecendo"), `vitalityStateBandDormente` ("Dormente"), `withinRankXpSuffix` ("para o próximo rank")
-- [ ] Drop unused vitality-state row-level marginalia copy keys (caminho esfriando / Path mastered)
-- [ ] Unit tests for `vitalityRampColorFor` boundary cases (0.0, 0.33, 0.34, 0.65, 0.66, 1.0, null)
-- [ ] Golden tests for the four new tokens on `AppColors.abyss` (contrast assertion)
+**State:** 26a shipped (PR #232 — see PROJECT.md §4 for retrospective). Five
+sub-phases remain (26b–f). Each gets its own plan written via
+`superpowers:writing-plans` just before that sub-phase starts, so each plan
+reflects the actual landed state of prior sub-phases.
 
 ### 26b — Saga screen revamp
 
@@ -146,24 +126,6 @@ Branch: `feature/26f-home-character-card`
 - ⓘ parity tooltips on Volume & pico header + Saga character XP bar
 - Auto-reflow algorithm for missed planned routines (rejected — bucket has no day binding)
 
-### Resume context (post-compact) — 2026-05-15
+### Next step
 
-**Where we are:**
-- Phase 26 brainstorming complete. Spec in `docs/PROJECT.md §3 Phase 26`. Visual reference in `docs/phase-26-mockups.html`. Scratch dir `.superpowers/brainstorm/` emptied.
-- **Phase 26a plan written** to `docs/phase-26a-plan.md` (9 tasks, TDD bite-size). User said "be very cautious" — plan reflects that.
-- **26b–26f plans NOT YET WRITTEN** — by design, one plan per sub-phase, written before each sub-phase starts (so plans reflect actual landed state of prior sub-phases).
-- Memory updated with 4 new entries: `project_rpg_thesis`, `project_phase_progression`, `project_design_language_brand_vs_identity`, `user_visual_iteration_style`. MEMORY.md gained Project + User sections.
-
-**Open question to ask user after resume:**
-Which execution mode for 26a?
-1. **Subagent-Driven** (recommended for "be very cautious" — fresh subagent per task, review between tasks)
-2. **Inline Execution** (executing-plans skill, batched checkpoints)
-
-**Next steps when resumed:**
-1. Ask user execution mode → 1 or 2.
-2. Branch: `feature/26a-color-system-foundation` (per the 26a plan header).
-3. Execute Task 1 → Task 9 per `docs/phase-26a-plan.md`.
-4. PR → reviewer → QA → merge per CLAUDE.md pipeline.
-5. After merge: condense 26a in PROJECT.md §4, remove from WIP, re-invoke `superpowers:writing-plans` for 26b plan.
-
-**Critical real bug discovered during brainstorming** (now in 26d scope, not 26a): `earned_titles` is INSERTed only at equip-time, so dismissing the celebration overlay permanently loses the title. Fix is server-side INSERT at detection-time + one-shot backfill RPC. Don't lose track of this.
+Re-invoke `superpowers:writing-plans` to draft 26b's plan against the up-to-date codebase (now that 26a's tokens + helper + map rebind are live on `main`).
