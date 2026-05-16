@@ -113,9 +113,19 @@ class _CharacterSheetBody extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             for (final entry in sheet.bodyPartProgress)
+              // `button: true` is load-bearing: Flutter web's AOM exposes the
+              // wrapper as an interactable node only when the Semantics flags
+              // include button/link/etc. Without it the `flt-semantics-
+              // identifier` element renders as a passive container and
+              // Playwright clicks on it don't dispatch to the inner InkWell's
+              // pointer handler — the tap-routing E2E fails even though the
+              // widget test (pure Flutter, direct InkWell hit-test) passes.
+              // Mirrors the proven-working `vitality-row-<slug>` pattern in
+              // VitalityTable. Cluster: semantics-identifier-pair-rule.
               Semantics(
                 container: true,
                 identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+                button: true,
                 child: BodyPartRankRow(entry: entry),
               ),
             const SizedBox(height: 16),

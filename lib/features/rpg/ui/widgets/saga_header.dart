@@ -61,9 +61,17 @@ class SagaHeader extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           // Column 2: 56sp level numeral + 10sp LVL tag.
+          //
+          // Explicit `label: 'Lvl $characterLevel'` is required so the AOM
+          // exposes a single, parseable accessible name. Without it Flutter
+          // merges the two child Texts as "$N\nLVL" — breaking both the
+          // Phase 18b `readLvlFromCharacterSheet` helper (regex `/Lvl (\d+)/`)
+          // and the saga.spec.ts S2 parser (`.replace(/^Lvl\s*/, '')`).
+          // Pattern mirrors `saga-settings-btn` in character_sheet_screen.dart.
           Semantics(
             container: true,
             identifier: 'character-level',
+            label: 'Lvl $characterLevel',
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
