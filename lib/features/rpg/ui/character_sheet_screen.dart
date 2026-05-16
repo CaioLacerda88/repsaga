@@ -98,16 +98,20 @@ class _CharacterSheetBody extends StatelessWidget {
               activeTitle: sheet.activeTitle,
             ),
             const SizedBox(height: 12),
+            // Day-zero ordering: welcoming banner sits between header and bar
+            // so the user reads "welcome → first set will awaken → your goal
+            // (the bar)". On non-zero history the banner is omitted and the
+            // bar follows the header directly.
+            if (sheet.isZeroHistory) ...[
+              const _FirstSetAwakensBanner(),
+              const SizedBox(height: 12),
+            ],
             CharacterXpBar(
               lifetimeXp: sheet.lifetimeXp,
               xpForNextLevel: sheet.xpForNextLevel,
               characterLevel: sheet.characterLevel,
             ),
             const SizedBox(height: 16),
-            if (sheet.isZeroHistory) ...[
-              const _FirstSetAwakensBanner(),
-              const SizedBox(height: 12),
-            ],
             for (final entry in sheet.bodyPartProgress)
               Semantics(
                 container: true,
@@ -216,36 +220,38 @@ class _CharacterSheetSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        // Bottom padding matches the live body's trailing SizedBox so the
+        // skeleton placeholder rows don't sit flush against the viewport
+        // edge during the loading flash.
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           children: [
-            const SizedBox(height: 24),
             // Phase 26b: SagaHeader's three-column footprint ~64dp tall.
-            Container(
-              height: 64,
+            DecoratedBox(
               decoration: BoxDecoration(
                 color: AppColors.surface2,
                 borderRadius: BorderRadius.circular(kRadiusMd),
               ),
+              child: const SizedBox(height: 64),
             ),
             const SizedBox(height: 16),
             // CharacterXpBar placeholder (6dp bar + ~10dp label row).
-            Container(
-              height: 16,
+            DecoratedBox(
               decoration: BoxDecoration(
                 color: AppColors.surface2,
                 borderRadius: BorderRadius.circular(kRadiusSm),
               ),
+              child: const SizedBox(height: 16),
             ),
             const SizedBox(height: 24),
             // Six body-part-row placeholders (mirroring the new composition).
             for (var i = 0; i < 6; i++) ...[
-              Container(
-                height: 56,
+              DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppColors.surface2,
                   borderRadius: BorderRadius.circular(kRadiusSm),
                 ),
+                child: const SizedBox(height: 56),
               ),
               const SizedBox(height: 8),
             ],

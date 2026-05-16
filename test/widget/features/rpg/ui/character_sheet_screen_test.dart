@@ -268,6 +268,36 @@ void main() {
       },
     );
 
+    testWidgets('day-zero renders banner above the XP bar', (tester) async {
+      // Phase 26b reorder: on day-zero the user must read the welcoming
+      // banner BEFORE the empty XP bar so the narrative is "welcome →
+      // first set will awaken → goal (the bar)" rather than seeing the
+      // empty 0-XP track first. Pinned via getCenter.dy comparison so the
+      // ordering survives layout refactors that swap explicit positions
+      // for IntrinsicHeight / Wrap-style containers.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp(_dayZeroState()));
+      await tester.pump();
+      await tester.pump();
+
+      final bannerCenter = tester.getCenter(
+        find.text('Your first set awakens this path.'),
+      );
+      final barCenter = tester.getCenter(find.byType(CharacterXpBar));
+
+      expect(
+        bannerCenter.dy,
+        lessThan(barCenter.dy),
+        reason:
+            'Day-zero: welcoming banner must render above the XP bar so '
+            'the user reads the message before the empty progress indicator.',
+      );
+    });
+
     testWidgets(
       'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows (no VitalityRadar)',
       (tester) async {
