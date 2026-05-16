@@ -13,6 +13,14 @@ import '../../../../core/theme/app_theme.dart';
 /// underlying fraction uses the single-body-part approximation owned by
 /// `domain/character_xp_calculator.dart` (`xpForNextCharacterLevel`) — this
 /// widget is pure presentation.
+///
+/// **Numerator is `lifetimeXp` (not a level-scoped `xpInLevel`).** Character
+/// level is rank-derived (not XP-derived), so there's no natural "XP within
+/// this level" quantity — `lifetimeXp` is the only XP accumulator the data
+/// model carries. The bar fills `lifetimeXp / xpForNextLevel`, where the
+/// denominator advances forward as the user's rank-sum approaches the next
+/// `/4` boundary. See `lib/features/rpg/domain/character_xp_calculator.dart`
+/// for the band derivation.
 class CharacterXpBar extends StatelessWidget {
   const CharacterXpBar({
     super.key,
@@ -34,7 +42,18 @@ class CharacterXpBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(
+      xpForNextLevel >= lifetimeXp,
+      'CharacterXpBar invariant violated: xpForNextLevel ($xpForNextLevel) '
+      'must be >= lifetimeXp ($lifetimeXp). The xpForNextCharacterLevel '
+      'helper guarantees this; if this fires the caller bypassed the helper.',
+    );
     final theme = Theme.of(context);
+    // MaterialApp guarantees a Localizations ancestor everywhere this widget
+    // is composed (Saga screen, Home expanded card in 26f). If the widget is
+    // ever previewed outside a full MaterialApp (e.g. a Storybook harness),
+    // localeOf will throw — that's the right behavior to surface the missing
+    // setup loudly rather than silently rendering with a default locale.
     final locale = Localizations.localeOf(context).languageCode;
     final fraction = xpForNextLevel <= lifetimeXp
         ? 1.0

@@ -45,6 +45,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.textContaining('0 para LVL 100'), findsOneWidget);
+      final fill = tester.widget<FractionallySizedBox>(
+        find.byKey(const ValueKey('character-xp-bar-fill')),
+      );
+      expect(fill.widthFactor, 1.0);
     });
 
     testWidgets('empty bar when lifetimeXp == 0 (day-zero)', (tester) async {
