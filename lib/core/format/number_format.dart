@@ -42,6 +42,12 @@ class AppNumberFormat {
     return NumberFormat('#,##0', locale).format(value.round());
   }
 
+  /// Locale-aware thousand-separator integer formatting. Semantically
+  /// equivalent to [volume]; named for callsites that aren't formatting
+  /// set-volume specifically (XP counts, rank thresholds, etc.).
+  static String integer(double value, {required String locale}) =>
+      volume(value, locale: locale);
+
   /// Format a compact volume (e.g. `1.2k` for volumes >= 1000, `1234` below).
   /// Uses locale-appropriate decimal separator for the fractional part.
   static String compactVolume(double value, {required String locale}) {

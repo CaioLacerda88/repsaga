@@ -13,6 +13,11 @@ import '../utils/vitality_state_styles.dart';
 import 'body_part_localization.dart';
 import 'rank_up_pulse.dart';
 
+/// Letter-spacing for the uppercase body-part name across trained +
+/// untrained rows. Phase 26b Option B v4 type token; matches the 12%
+/// tracking used by other UPPERCASE labels in `AppTextStyles.label`.
+const double _nameLetterSpacing = 1.2;
+
 /// Single body-part row on the Saga character sheet (Phase 26b Option B v4).
 ///
 /// 48dp min-height tap target. Two-row layout inside:
@@ -39,10 +44,13 @@ class BodyPartRankRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Always read the provider first — Riverpod convention is to watch
+    // unconditionally so the subscription set is stable across rebuilds.
+    // The untrained branch ignores the result (untrained rows never pulse).
+    final pulseStorage = ref.watch(rankUpPulseLocalStorageProvider);
     if (entry.isUntrained) {
       return _UntrainedRow(entry: entry);
     }
-    final pulseStorage = ref.watch(rankUpPulseLocalStorageProvider);
     final isPulsing = pulseStorage.isPulsing(entry.bodyPart);
     return _TrainedRow(entry: entry, isPulsing: isPulsing);
   }
@@ -88,7 +96,7 @@ class _TrainedRow extends StatelessWidget {
                     _localizedName(entry.bodyPart, l10n).toUpperCase(),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: AppColors.textCream,
-                      letterSpacing: 1.2,
+                      letterSpacing: _nameLetterSpacing,
                     ),
                   ),
                   const Spacer(),
@@ -124,7 +132,7 @@ class _TrainedRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${AppNumberFormat.volume(entry.xpInRank, locale: locale)} XP',
+                    '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
                     style: GoogleFonts.rajdhani(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -132,7 +140,7 @@ class _TrainedRow extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '${AppNumberFormat.volume(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
+                    '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
                     style: GoogleFonts.rajdhani(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -176,37 +184,40 @@ class _UntrainedRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    // Element-level alpha (0.4) instead of an Opacity wrapper — Opacity
+    // creates a compositing layer that the InkWell splash paints THROUGH
+    // at full alpha, which reads as a visual defect on tap. Applying alpha
+    // per-color lets the splash render at theme strength while the dimmed
+    // text + dot stay at 40% saturation.
+    final dimmedTextDim = AppColors.textDim.withValues(alpha: 0.4);
     return InkWell(
       onTap: () =>
           context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
-      child: Opacity(
-        opacity: 0.4,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.textDim,
-                  ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: dimmedTextDim,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _localizedName(entry.bodyPart, l10n).toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textDim,
-                    letterSpacing: 1.2,
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _localizedName(entry.bodyPart, l10n).toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: dimmedTextDim,
+                  letterSpacing: _nameLetterSpacing,
                 ),
-                const Spacer(),
-                const Text('—', style: TextStyle(color: AppColors.textDim)),
-              ],
-            ),
+              ),
+              const Spacer(),
+              Text('—', style: TextStyle(color: dimmedTextDim)),
+            ],
           ),
         ),
       ),

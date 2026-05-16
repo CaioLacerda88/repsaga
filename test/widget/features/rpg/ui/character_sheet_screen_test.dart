@@ -212,7 +212,15 @@ void main() {
         // RankStamp; rank glyph collapses to "—" inside the row).
         expect(find.byType(BodyPartRankRow), findsNWidgets(6));
         // Untrained rows show the em-dash placeholder instead of a rank num.
-        expect(find.text('—'), findsAtLeastNWidgets(6));
+        // Scope to BodyPartRankRow descendants so stray em-dashes elsewhere
+        // on the screen don't bleed into the count.
+        expect(
+          find.descendant(
+            of: find.byType(BodyPartRankRow),
+            matching: find.text('—'),
+          ),
+          findsNWidgets(6),
+        );
       },
     );
 

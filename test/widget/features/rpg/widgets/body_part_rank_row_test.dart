@@ -113,7 +113,7 @@ void main() {
     });
 
     testWidgets(
-      'untrained row renders at 0.4 opacity with "—" rank and no bar',
+      'untrained row renders at 0.4 element alpha with "—" rank and no bar',
       (tester) async {
         final storage = _MockPulseStorage();
         when(
@@ -138,9 +138,13 @@ void main() {
 
         expect(find.text('—'), findsOneWidget);
         expect(find.byKey(const ValueKey('body-part-row-bar')), findsNothing);
-        // The whole row should be wrapped in Opacity(0.4).
-        final opacities = tester.widgetList<Opacity>(find.byType(Opacity));
-        expect(opacities.any((o) => (o.opacity - 0.4).abs() < 0.01), isTrue);
+        // Element-level alpha contract: the em-dash Text renders with
+        // textDim * 0.4 — NOT wrapped in an Opacity widget (which would
+        // create a compositing layer the InkWell splash paints through).
+        final dashText = tester.widget<Text>(find.text('—'));
+        final alpha = dashText.style?.color?.a;
+        expect(alpha, isNotNull);
+        expect(alpha!, closeTo(0.4, 0.01));
       },
     );
 
@@ -197,6 +201,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        // Pin that there's exactly one InkWell — if a future change adds a
+        // child InkWell (e.g. a nested tap target on the dot), this assertion
+        // breaks first instead of the tap finding an ambiguous target.
+        expect(find.byType(InkWell), findsOneWidget);
         await tester.tap(find.byType(InkWell));
         await tester.pumpAndSettle();
         // After tap, we should have landed on the /saga/stats route placeholder.
