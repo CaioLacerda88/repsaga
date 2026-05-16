@@ -102,7 +102,14 @@ class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final containerSize = widget.size + 60;
+    // Phase 26b: when the halo is used as the 36dp Saga-header sigil the
+    // legacy +60dp glow-padding is visually disruptive. The static states
+    // (active, dormant, untested) don't need outer glow room; the animated
+    // states (fading, radiant) keep the legacy padding so their
+    // breathing/sweep beats don't clip.
+    final isCompact = widget.size < 48;
+    final glowPad = isCompact ? 12 : 60;
+    final containerSize = widget.size + glowPad;
     return SizedBox(
       width: containerSize,
       height: containerSize,
@@ -202,24 +209,15 @@ class _ActiveHalo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Phase 26b: active-state glow REMOVED. The previous two-layer
+    // boxShadow read as "this is a special moment" but active is the
+    // *steady state* — the user is on the path, not crossing a threshold.
+    // Reserving glow for radiant (the reward state) restores the contrast
+    // that made the four halo states distinguishable at a glance.
     return Container(
-      width: size + 32,
-      height: size + 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.hotViolet.withValues(alpha: 0.45),
-            blurRadius: 28,
-            spreadRadius: 2,
-          ),
-          BoxShadow(
-            color: AppColors.primaryViolet.withValues(alpha: 0.25),
-            blurRadius: 12,
-            spreadRadius: 4,
-          ),
-        ],
-      ),
+      width: size + 8,
+      height: size + 8,
+      decoration: const BoxDecoration(shape: BoxShape.circle),
       child: Center(
         child: AppIcons.render(
           AppIcons.hero,
