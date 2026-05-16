@@ -17,6 +17,8 @@ class RankUpPulse extends StatefulWidget {
   /// signal.
   final Color color;
 
+  /// The dot (or other small content) wrapped by the pulse ring. Rendered
+  /// above the ring in the Stack so the dot stays the primary signal.
   final Widget child;
 
   @override
@@ -41,7 +43,14 @@ class _RankUpPulseState extends State<RankUpPulse>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        // 0..1 → ease in/out via sine.
+        // Sine ease-in-out cycle. NOTE: v=0 yields t=0.5 (sine midpoint),
+        // NOT t=0 (rest state). The ring opens at scale=1.25 / alpha=0.25 on
+        // first paint and reaches rest (t=0 → scale=1.0 / alpha=0.15) at
+        // v=0.75. The perceptual difference is sub-second — using cosine
+        // `(1 - cos(2π v)) / 2` would start at rest, but the ring is only
+        // ever mounted post-rank-up where the user just saw a celebration
+        // overlay, so the mid-pulse entry reads as a continuation rather
+        // than a jump. Sine is kept for symmetry across the cycle.
         final t = (math.sin(_controller.value * 2 * math.pi) + 1) / 2;
         final scale = 1.0 + 0.5 * t;
         final alpha = 0.15 + 0.20 * t;
@@ -58,6 +67,12 @@ class _RankUpPulseState extends State<RankUpPulse>
                     width: 1.5,
                   ),
                 ),
+                // 16dp = 6dp body-part dot + ~5dp clearance each side at rest
+                // (scale=1.0). At peak scale (1.5) the ring grows to ~24dp. The
+                // ring is decoupled from the wrapped child's actual size; this
+                // widget assumes the child is the 6dp body-part dot from
+                // BodyPartRankRow. Don't reuse with a different child size
+                // without updating this constant.
                 child: const SizedBox(width: 16, height: 16),
               ),
             ),
