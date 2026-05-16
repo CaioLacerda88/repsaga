@@ -90,6 +90,31 @@ class AppLocalizationsPt extends AppLocalizations {
   String get vitalityStateBandDormant => 'Dormente';
 
   @override
+  String get vitalityExplainerTitle => 'Vitalidade';
+
+  @override
+  String get vitalityExplainerDefinition =>
+      'Vitalidade reflete o quão recente é seu treino para cada grupo muscular. É um indicador de quanto sua jornada está ativa, não da sua força.';
+
+  @override
+  String get vitalityExplainerHowItMoves => 'Como ela se move:';
+
+  @override
+  String get vitalityExplainerBandActive =>
+      '66–100% — treino recente, no caminho.';
+
+  @override
+  String get vitalityExplainerBandWaning =>
+      '34–65% — esmorecendo, o caminho se apaga.';
+
+  @override
+  String get vitalityExplainerBandDormant => '0–33% — o caminho silenciou.';
+
+  @override
+  String get vitalityExplainerRankSafety =>
+      'Vitalidade NÃO afeta seu rank ou XP — esses são permanentes. Vitalidade é apenas um sinal de consistência.';
+
+  @override
   String get withinRankXpSuffix => 'para o próximo rank';
 
   @override

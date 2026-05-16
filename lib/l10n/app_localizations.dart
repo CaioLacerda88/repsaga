@@ -254,6 +254,48 @@ abstract class AppLocalizations {
   /// **'Dormant'**
   String get vitalityStateBandDormant;
 
+  /// Title of the vitality explainer bottom sheet (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality'**
+  String get vitalityExplainerTitle;
+
+  /// First-paragraph definition copy in the vitality explainer bottom sheet (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality reflects how recent your training is for each muscle group. It\'s a measure of how active your saga is, not a measure of strength.'**
+  String get vitalityExplainerDefinition;
+
+  /// Sub-heading above the three-state band ramp in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'How it moves:'**
+  String get vitalityExplainerHowItMoves;
+
+  /// High-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'66–100% — recent training, on the path.'**
+  String get vitalityExplainerBandActive;
+
+  /// Mid-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'34–65% — slowing down, the path is fading.'**
+  String get vitalityExplainerBandWaning;
+
+  /// Low-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'0–33% — the path has gone silent.'**
+  String get vitalityExplainerBandDormant;
+
+  /// heroGold-bordered safety guarantee in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality does NOT affect your rank or XP — those are permanent. Vitality is purely a consistency signal.'**
+  String get vitalityExplainerRankSafety;
+
   /// Trailing copy on per-stat XP labels across Saga, Stats deep-dive, Home expanded card, Titles próximos rows. Rendered as 'N XP · M {withinRankXpSuffix}' (e.g., '1,420 XP · 580 to next rank').
   ///
   /// In en, this message translates to:
