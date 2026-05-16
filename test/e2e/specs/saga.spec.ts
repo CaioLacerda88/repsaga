@@ -149,11 +149,20 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
     // the character-level Semantics wrapper (canvaskit renders the numeral
     // on a canvas, but the Semantics(identifier:'character-level') wrapper
     // exposes the text via the accessibility tree).
-    const lvlText = await page
-      .locator(SAGA.characterLevel)
-      .first()
-      .textContent();
-    const lvl = Number(lvlText?.replace(/^Lvl\s*/, '').trim());
+    // Phase 26b: `SagaHeader` renders the level as a "<N>" + "LVL" stack
+    // (was a single "Lvl <N>" line). The Semantics wrapper still exposes
+    // `label: 'Lvl <N>'` for the AOM, but `textContent()` now returns the
+    // concatenated visible text (e.g. "3 3 LVL" — once for the aria-label
+    // shadow, once for the visible numeral, once for the LVL tag).
+    //
+    // Read the aria-label first (canonical "Lvl <N>" contract) and fall
+    // back to the first digit-run in textContent if the label is absent.
+    // Matches the working pattern in `rpg-foundation.spec.ts:readLvlFromCharacterSheet`.
+    const lvlEl = page.locator(SAGA.characterLevel).first();
+    const ariaLabel = await lvlEl.getAttribute('aria-label');
+    const rawText = ariaLabel ?? (await lvlEl.textContent()) ?? '';
+    const match = rawText.match(/\d+/);
+    const lvl = match ? Number(match[0]) : NaN;
     expect(lvl).toBeGreaterThan(1);
   });
 
@@ -557,18 +566,43 @@ test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
   });
 
   test('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
-    // Tap the chest row — rpgFoundationUser has trained chest (rank > 0).
-    const chestRow = page.locator(SAGA.bodyPartRow('chest')).first();
-    await chestRow.scrollIntoViewIfNeeded();
-    await expect(chestRow).toBeVisible({ timeout: 10_000 });
-    await chestRow.click();
+    // Tap the BACK row (not chest — chest is the screen's default
+    // pre-selection, so a chest landing would be observationally identical
+    // whether or not the `body_part` query param was consumed). Tapping a
+    // non-default slug means the test fails if the deep-link routing
+    // contract is broken — the trend chart + vitality table would default
+    // to chest instead of back.
+    const backRow = page.locator(SAGA.bodyPartRow('back')).first();
+    await backRow.scrollIntoViewIfNeeded();
+    await expect(backRow).toBeVisible({ timeout: 10_000 });
+    await backRow.click();
 
-    // Confirm we landed on /saga/stats with body_part=chest in the query.
-    await expect(page).toHaveURL(/\/saga\/stats\?body_part=chest/, { timeout: 10_000 });
-
-    // Stats screen content visible.
+    // Stats screen content visible (saga-stats-screen Semantics identifier).
+    //
+    // We do NOT assert on `page.toHaveURL(...)` here. GoRouter on Flutter
+    // web uses hash routing (HashUrlStrategy by default), and `context.push`
+    // from inside a `ShellRoute` does not always reflect the new path in
+    // `window.location.hash` within Playwright's poll window — the trace
+    // for this test on CI showed `location.hash == '#/profile'` even
+    // though the Stats screen was already mounted and visible. The same
+    // pattern is documented in S3 above ("URL update via context.push is
+    // unreliable in Flutter web — assert on element visibility"). Element
+    // visibility + the body_part-pre-selection assertion below cover the
+    // routing contract without depending on URL timing.
     await expect(page.locator(SAGA.statsDeepDiveScreen).first()).toBeVisible({
       timeout: 10_000,
     });
+
+    // Pre-selection proof: the VitalityTable row for `back` must be marked
+    // selected. `vitalityTable.dart` sets `Semantics(selected: isSelected)`
+    // on the row whose body part equals `_selectedBodyPart`, which is
+    // initialised from `widget.initialBodyPart` — the value derived from
+    // the `body_part` query param in the route builder. If the query param
+    // did not reach the screen, chest (the default) would be selected
+    // instead and `[aria-selected="true"]` on `vitality-row-back` would
+    // never appear.
+    await expect(
+      page.locator(`${SAGA.vitalityRow('back')}[aria-selected="true"]`).first(),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });
