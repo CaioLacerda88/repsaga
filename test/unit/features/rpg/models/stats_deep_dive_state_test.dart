@@ -93,12 +93,32 @@ void main() {
       expect(view.state, VolumeDeltaState.met);
       expect(view.delta, 0);
     });
+
+    test(
+      'should return met state on the four-week-mean path even with tiny float drift',
+      () {
+        // Provider's `sum / 4.0` produces IEEE754 doubles. A user whose
+        // mean is "exactly 14" can come through as 14.0 or
+        // 14.000000000000002 in practice — the half-set tolerance catches
+        // both as met.
+        const row = VolumePeakRow(
+          weeklyVolumeSets: 14,
+          peakEwma: 0,
+          fourWeekMeanVolumeSets: 14.000000000000002, // simulated drift
+          weeksOfHistory: 8,
+        );
+        final view = VolumeDeltaView.fromRow(row);
+        expect(view.state, VolumeDeltaState.met);
+      },
+    );
   });
 
   group('PeakDeltaView.fromRow', () {
     test('should return suppressed state when peakEwma30dAgo is null', () {
+      // Use a non-zero weeklyVolumeSets so the trigger is unambiguously
+      // peakEwma30dAgo == null, not "zero sets".
       const row = VolumePeakRow(
-        weeklyVolumeSets: 0,
+        weeklyVolumeSets: 12,
         peakEwma: 105,
         weeksOfHistory: 8,
       );

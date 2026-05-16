@@ -239,7 +239,14 @@ abstract class VolumeDeltaView with _$VolumeDeltaView {
         ? (row.fourWeekMeanVolumeSets ?? 0)
         : (row.previousWeekVolumeSets ?? 0).toDouble();
     final delta = row.weeklyVolumeSets - basisValue;
-    final state = delta == 0
+    // Half-set tolerance: sets are integer-valued from the source, but the
+    // four-week-mean basis is a `sum / 4.0` division that can produce
+    // IEEE754 drift (e.g. `14.000000000000002` for what should be exactly
+    // 14). A strict `delta == 0` flips `met` to `underTarget` on a tiny
+    // negative drift — the user sees a red delta on a week they exactly
+    // matched the mean. Half-set tolerance is invisible to the user (no
+    // rendered delta is sub-set anyway) and immune to the drift.
+    final state = delta.abs() < 0.5
         ? VolumeDeltaState.met
         : delta < 0
         ? VolumeDeltaState.underTarget
@@ -257,6 +264,11 @@ enum PeakDeltaState { suppressed, up, flat }
 abstract class PeakDeltaView with _$PeakDeltaView {
   const factory PeakDeltaView({
     required PeakDeltaState state,
+
+    /// Signed delta. Always 0 for [PeakDeltaState.suppressed] (no prior
+    /// EWMA to compare against) AND [PeakDeltaState.flat] (the raw
+    /// negative-drift or zero-movement value is discarded — only positive
+    /// deltas carry through to [PeakDeltaState.up]).
     @Default(0) double delta,
   }) = _PeakDeltaView;
 
