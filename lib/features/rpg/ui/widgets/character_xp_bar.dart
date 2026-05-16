@@ -59,51 +59,59 @@ class CharacterXpBar extends StatelessWidget {
         ? 1.0
         : (lifetimeXp / xpForNextLevel).clamp(0.0, 1.0);
     final remaining = (xpForNextLevel - lifetimeXp).clamp(0.0, double.infinity);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Container(
-              height: 6,
-              color: AppColors.xpTrack,
-              child: FractionallySizedBox(
-                key: const ValueKey('character-xp-bar-fill'),
-                alignment: Alignment.centerLeft,
-                widthFactor: fraction,
-                child: const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.primaryViolet, AppColors.hotViolet],
+    // Semantics identifier for E2E tap-target smoke tests. The ValueKey on
+    // the fill (character-xp-bar-fill) is the widget-test anchor; this outer
+    // wrapper gives E2E a stable container reference without touching the
+    // internal fill structure.
+    return Semantics(
+      container: true,
+      identifier: 'character-xp-bar',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: Container(
+                height: 6,
+                color: AppColors.xpTrack,
+                child: FractionallySizedBox(
+                  key: const ValueKey('character-xp-bar-fill'),
+                  alignment: Alignment.centerLeft,
+                  widthFactor: fraction,
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.primaryViolet, AppColors.hotViolet],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${AppNumberFormat.volume(lifetimeXp, locale: locale)} XP',
-                style: theme.textTheme.bodySmall,
-              ),
-              Text(
-                // Suffix "para LVL N" is identical across en + pt in spec
-                // text for this transitional release. If localization grows,
-                // swap to an AppLocalizations entry.
-                '${AppNumberFormat.volume(remaining, locale: locale)} '
-                'para LVL ${characterLevel + 1}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.hotViolet,
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${AppNumberFormat.volume(lifetimeXp, locale: locale)} XP',
+                  style: theme.textTheme.bodySmall,
                 ),
-              ),
-            ],
-          ),
-        ],
+                Text(
+                  // Suffix "para LVL N" is identical across en + pt in spec
+                  // text for this transitional release. If localization grows,
+                  // swap to an AppLocalizations entry.
+                  '${AppNumberFormat.volume(remaining, locale: locale)} '
+                  'para LVL ${characterLevel + 1}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.hotViolet,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

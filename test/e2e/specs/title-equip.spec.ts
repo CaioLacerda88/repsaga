@@ -18,7 +18,7 @@
  *   - Describe: feature name only ("Title equip"), no "smoke"/"full" suffix.
  *   - Tests: "should ..." naming.
  *   - Selectors: CELEBRATION.titleLibraryButton, CELEBRATION.titleLibrarySheet,
- *     CELEBRATION.titleRow(slug), CELEBRATION.equippedTitleLabel, SAGA.activeTitlePill.
+ *     CELEBRATION.titleRow(slug), CELEBRATION.equippedTitleLabel, SAGA.sagaHeaderTitle.
  *   - Text input: flutterFill() — not used here (no text fields).
  *   - SnackBar text: .first() selector.
  */
@@ -165,9 +165,10 @@ test.describe('Title equip', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 20_000 });
 
-    // The active-title-pill renders when activeTitle != null && isNotEmpty.
+    // The saga-header-title renders when activeTitle != null && isNotEmpty.
     // equippedTitleSlugProvider watch fires on the character sheet rebuild.
-    await expect(page.locator(SAGA.activeTitlePill).first()).toBeVisible({
+    // Phase 26b: sagaHeaderTitle replaces the legacy activeTitlePill selector.
+    await expect(page.locator(SAGA.sagaHeaderTitle).first()).toBeVisible({
       timeout: 15_000,
     });
   });

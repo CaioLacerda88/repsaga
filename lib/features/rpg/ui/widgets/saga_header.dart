@@ -110,28 +110,41 @@ class SagaHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    classLabel,
-                    key: const ValueKey('saga-header-class'),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: classTextColor(characterClass),
-                      fontStyle: isStubClass
-                          ? FontStyle.italic
-                          : FontStyle.normal,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (hasTitle) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      activeTitle!,
-                      key: const ValueKey('saga-header-title'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textDim,
+                  // ValueKey for widget tests; Semantics identifier for E2E
+                  // selectors — both serve as stable anchors so neither has
+                  // to be duplicated into the other test layer.
+                  Semantics(
+                    container: true,
+                    identifier: 'saga-header-class',
+                    child: Text(
+                      classLabel,
+                      key: const ValueKey('saga-header-class'),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: classTextColor(characterClass),
+                        fontStyle: isStubClass
+                            ? FontStyle.italic
+                            : FontStyle.normal,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (hasTitle) ...[
+                    const SizedBox(height: 2),
+                    // ValueKey for widget tests; Semantics identifier for E2E.
+                    // Replaces the legacy ActiveTitlePill identifier.
+                    Semantics(
+                      container: true,
+                      identifier: 'saga-header-title',
+                      child: Text(
+                        activeTitle!,
+                        key: const ValueKey('saga-header-title'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textDim,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ],

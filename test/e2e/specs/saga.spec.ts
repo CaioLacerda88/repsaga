@@ -78,8 +78,8 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
   }) => {
     // Core structural elements must be present.
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.vitalityRadar).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(SAGA.characterLevel).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({ timeout: 10_000 });
 
     // Zero-history onboarding banner must appear.
     await expect(page.locator(SAGA.firstSetAwakensBanner).first()).toBeVisible({
@@ -117,13 +117,14 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
     // Zero-history banner must NOT be visible for a user with history.
     await expect(page.locator(SAGA.firstSetAwakensBanner)).not.toBeVisible({ timeout: 5_000 });
 
-    // Halo and radar must be present.
+    // Halo and class label must be present — both confirm the data state rendered
+    // (not loading skeleton). Phase 26b replaces the radar with the SagaHeader.
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.vitalityRadar).first()).toBeVisible({ timeout: 10_000 });
 
-    // Class badge must be visible — even if class is null (placeholder shows).
-    // The presence of the badge confirms the data state rendered (not loading skeleton).
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({ timeout: 15_000 });
+    // Class label (sagaHeaderClass) must be visible — even if class is null
+    // (placeholder "The iron will name you." shows). Presence confirms the
+    // rpgProgressProvider has emitted data (not loading state).
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({ timeout: 15_000 });
 
     // Multiple body-part rows must be present.
     for (const slug of ['chest', 'back', 'legs'] as const) {
@@ -462,8 +463,9 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 20_000 });
 
-    // Confirm the class badge slot is rendered (whether loading placeholder or Initiate).
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({
+    // Confirm the class label slot is rendered (whether loading placeholder or Initiate).
+    // Phase 26b: sagaHeaderClass replaces the legacy classBadge selector.
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({
       timeout: 15_000,
     });
 
@@ -501,16 +503,54 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 20_000 });
 
-    // The class badge must be visible after the rank-up. The exact text depends
+    // The class label must be visible after the rank-up. The exact text depends
     // on AppLocalizations (locale-sensitive), so we assert visibility rather than
     // text content. The resolver contract is pinned by class_provider_test.dart S12.
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({
+    // Phase 26b: sagaHeaderClass replaces the legacy classBadge selector.
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({
       timeout: 15_000,
     });
 
     // Additional check: the character sheet body-part row for chest must also
     // be visible (confirms the provider data refreshed and the sheet re-rendered).
     await expect(page.locator(SAGA.bodyPartRow('chest')).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S13: Body-part row tap → /saga/stats?body_part=<slug> (Phase 26b Task 8)
+//
+// Both _TrainedRow and _UntrainedRow have InkWell tap targets wired to
+// context.push('/saga/stats', extra: {'body_part': slug}). The StatsDeepDive
+// screen appends the body_part as a query parameter. This smoke test verifies
+// the routing contract end-to-end using rpgFoundationUser (has trained rows).
+//
+// Not tagged @smoke: the body-part routing is a regression test for Phase 26b
+// Task 8's InkWell wiring. The existing smoke gate already covers navigation
+// to /saga/stats via the codex nav row (S5).
+// ---------------------------------------------------------------------------
+
+test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
+    await navigateToTab(page, 'Profile');
+    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+  });
+
+  test('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
+    // Tap the chest row — rpgFoundationUser has trained chest (rank > 0).
+    const chestRow = page.locator(SAGA.bodyPartRow('chest')).first();
+    await chestRow.scrollIntoViewIfNeeded();
+    await expect(chestRow).toBeVisible({ timeout: 10_000 });
+    await chestRow.click();
+
+    // Confirm we landed on /saga/stats with body_part=chest in the query.
+    await expect(page).toHaveURL(/\/saga\/stats\?body_part=chest/, { timeout: 10_000 });
+
+    // Stats screen content visible.
+    await expect(page.locator(SAGA.statsDeepDiveScreen).first()).toBeVisible({
       timeout: 10_000,
     });
   });
