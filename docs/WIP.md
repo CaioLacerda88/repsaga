@@ -16,26 +16,10 @@ the phase summary in PROJECT.md §4.
 **Reference:** `docs/PROJECT.md §3 Phase 26` (authoritative spec) +
 `docs/phase-26-mockups.html` (visual companion).
 
-**State:** 26a shipped (PR #232 — see PROJECT.md §4 for retrospective). Five
-sub-phases remain (26b–f). Each gets its own plan written via
-`superpowers:writing-plans` just before that sub-phase starts, so each plan
-reflects the actual landed state of prior sub-phases.
-
-### 26b — Saga screen revamp
-
-Branch: `feature/26b-saga-option-b-v4`
-
-- [ ] Restructure `lib/features/rpg/ui/character_sheet_screen.dart` to Option B v4 layout
-- [ ] Rewrite `lib/features/rpg/ui/widgets/body_part_rank_row.dart` (full-width XP bar + within-rank label)
-- [ ] Update `lib/features/rpg/ui/widgets/rune_halo.dart` — drop active-state glow, 36dp sizing for header
-- [ ] New: `lib/features/rpg/ui/widgets/rank_up_pulse.dart` (24h dot pulse animation)
-- [ ] New: `lib/features/rpg/data/rank_up_pulse_repository.dart` (Hive-backed map<bodyPart, dateUntil>)
-- [ ] Stat-row tap → routes to `/saga/stats` with `?body_part=X` query
-- [ ] Body-part-row visual states: untrained / trained / just-rank-up'd
-- [ ] Header at 320/360/412dp: ellipsis on `b-meta` for long class/title
-- [ ] Update `_CharacterSheetSkeleton` shape for the new layout
-- [ ] Update `test/e2e/specs/rpg-saga.spec.ts` selectors for new structure
-- [ ] Widget tests: header layout (3 breakpoints golden); body-part-row state variants; rank-up pulse 24h expiry; stat-row tap routing
+**State:** 26a + 26b shipped (PRs #232, #234 — see PROJECT.md §4 for
+retrospectives). Four sub-phases remain (26c–f). Each gets its own plan
+written via `superpowers:writing-plans` just before that sub-phase starts,
+so each plan reflects the actual landed state of prior sub-phases.
 
 ### 26c — Stats deep-dive
 
@@ -128,4 +112,7 @@ Branch: `feature/26f-home-character-card`
 
 ### Next step
 
-Re-invoke `superpowers:writing-plans` to draft 26b's plan against the up-to-date codebase (now that 26a's tokens + helper + map rebind are live on `main`).
+Re-invoke `superpowers:writing-plans` to draft 26c's plan against the
+up-to-date codebase (now that 26b's `SagaHeader` / `CharacterXpBar` /
+`vitalityRampColorFor` consumer / `RankUpPulse` / `body-part-row InkWell
+routing` are live on `main`).
