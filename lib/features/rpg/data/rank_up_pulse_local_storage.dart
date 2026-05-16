@@ -8,6 +8,10 @@ import '../models/body_part.dart';
 /// trigger timestamp; `BodyPartRankRow` reads via [isPulsing] to decide
 /// whether to render the glow-ring on the body-part dot.
 ///
+/// Named `LocalStorage` (not `Repository`) to match the `WorkoutLocalStorage`
+/// precedent for Hive-only persistence — there's no Supabase surface for
+/// this data; everything stays on-device.
+///
 /// **Why Hive (not Riverpod state):** the pulse must survive an app
 /// restart — the user may dismiss a celebration overlay, force-quit the
 /// app, and re-open the next morning to see the after-glow. An in-memory
@@ -22,8 +26,8 @@ import '../models/body_part.dart';
 /// **NOT in `cacheSchemaBoxes`:** pulse timestamps are durable user state,
 /// not server-cached data. A schema-version bump should NOT wipe the active
 /// pulse window. (Same lifetime contract as `offlineQueue`.)
-class RankUpPulseRepository {
-  RankUpPulseRepository({Box<dynamic>? box})
+class RankUpPulseLocalStorage {
+  RankUpPulseLocalStorage({Box<dynamic>? box})
     : _box = box ?? Hive.box<dynamic>(boxName);
 
   static const String boxName = 'rank_up_pulse';
@@ -36,9 +40,15 @@ class RankUpPulseRepository {
   bool isPulsing(BodyPart bodyPart, {DateTime? now}) {
     final at = _box.get(bodyPart.dbValue);
     if (at == null) return false;
-    final triggeredAt = DateTime.parse(at as String);
-    final expiresAt = triggeredAt.add(pulseDuration);
-    return (now ?? DateTime.now()).isBefore(expiresAt);
+    try {
+      final triggeredAt = DateTime.parse(at as String);
+      final expiresAt = triggeredAt.add(pulseDuration);
+      return (now ?? DateTime.now()).isBefore(expiresAt);
+    } on FormatException {
+      // Corrupted Hive entry (truncated write, manual edit, future-migration
+      // drift). Treat as "no pulse" — calling from build() must never throw.
+      return false;
+    }
   }
 
   /// Mark [bodyPart] as having just ranked up. Subsequent [isPulsing]
@@ -58,8 +68,16 @@ class RankUpPulseRepository {
     for (final key in _box.keys.cast<String>()) {
       final at = _box.get(key);
       if (at == null) continue;
-      final triggeredAt = DateTime.parse(at as String);
-      if (ref.isAfter(triggeredAt.add(pulseDuration))) {
+      try {
+        final triggeredAt = DateTime.parse(at as String);
+        if (ref.isAfter(triggeredAt.add(pulseDuration))) {
+          keysToDelete.add(key);
+        }
+      } on FormatException {
+        // Corrupted entry — delete it as part of the sweep. Unlike
+        // isPulsing's "treat as no-pulse" tolerance, sweepExpired is
+        // explicit cleanup and a malformed timestamp can never become
+        // valid again.
         keysToDelete.add(key);
       }
     }

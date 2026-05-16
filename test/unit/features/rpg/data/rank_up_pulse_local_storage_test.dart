@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:repsaga/features/rpg/data/rank_up_pulse_repository.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 
 void main() {
@@ -14,8 +14,8 @@ void main() {
     // the host VM (matches the pattern used in hive_service_test.dart).
     tempDir = await Directory.systemTemp.createTemp('rank_up_pulse_test_');
     Hive.init(tempDir.path);
-    await Hive.openBox<dynamic>(RankUpPulseRepository.boxName);
-    await Hive.box<dynamic>(RankUpPulseRepository.boxName).clear();
+    await Hive.openBox<dynamic>(RankUpPulseLocalStorage.boxName);
+    await Hive.box<dynamic>(RankUpPulseLocalStorage.boxName).clear();
   });
 
   tearDown(() async {
@@ -23,9 +23,9 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  group('RankUpPulseRepository', () {
+  group('RankUpPulseLocalStorage', () {
     test('isPulsing returns false when no entry exists', () {
-      final repo = RankUpPulseRepository();
+      final repo = RankUpPulseLocalStorage();
       expect(
         repo.isPulsing(BodyPart.chest, now: DateTime(2026, 5, 15)),
         isFalse,
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('isPulsing returns true within the 24h window', () async {
-      final repo = RankUpPulseRepository();
+      final repo = RankUpPulseLocalStorage();
       final triggeredAt = DateTime(2026, 5, 15, 10, 0);
       await repo.recordRankUp(BodyPart.chest, at: triggeredAt);
       expect(
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('isPulsing returns false after the 24h window expires', () async {
-      final repo = RankUpPulseRepository();
+      final repo = RankUpPulseLocalStorage();
       final triggeredAt = DateTime(2026, 5, 15, 10, 0);
       await repo.recordRankUp(BodyPart.chest, at: triggeredAt);
       expect(
@@ -59,7 +59,7 @@ void main() {
     });
 
     test('isPulsing checks each body part independently', () async {
-      final repo = RankUpPulseRepository();
+      final repo = RankUpPulseLocalStorage();
       final now = DateTime(2026, 5, 15);
       await repo.recordRankUp(BodyPart.chest, at: now);
       expect(repo.isPulsing(BodyPart.chest, now: now), isTrue);
@@ -69,7 +69,7 @@ void main() {
     test(
       'recordRankUp overwrites the prior entry for the same body part',
       () async {
-        final repo = RankUpPulseRepository();
+        final repo = RankUpPulseLocalStorage();
         final first = DateTime(2026, 5, 14, 10, 0);
         final second = DateTime(2026, 5, 15, 10, 0);
         await repo.recordRankUp(BodyPart.chest, at: first);
@@ -85,7 +85,7 @@ void main() {
     );
 
     test('sweepExpired removes only entries past their 24h window', () async {
-      final repo = RankUpPulseRepository();
+      final repo = RankUpPulseLocalStorage();
       final now = DateTime(2026, 5, 15, 10, 0);
       // Chest: well within the window (just-triggered).
       await repo.recordRankUp(BodyPart.chest, at: now);
@@ -98,5 +98,25 @@ void main() {
       expect(repo.isPulsing(BodyPart.chest, now: now), isTrue);
       expect(repo.isPulsing(BodyPart.back, now: now), isFalse);
     });
+
+    test(
+      'isPulsing returns false at the exact 24h boundary (strict <)',
+      () async {
+        // Pin the strict-less-than semantic: at the exact moment
+        // triggeredAt + 24h, the pulse has expired. A future dev flipping
+        // to isAtSameTimeOrBefore would silently double the effective
+        // pulse window — this test catches it.
+        final repo = RankUpPulseLocalStorage();
+        final triggeredAt = DateTime(2026, 5, 15, 10, 0);
+        await repo.recordRankUp(BodyPart.chest, at: triggeredAt);
+        expect(
+          repo.isPulsing(
+            BodyPart.chest,
+            now: triggeredAt.add(const Duration(hours: 24)),
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }
