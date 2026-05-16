@@ -139,6 +139,30 @@ abstract class VolumePeakRow with _$VolumePeakRow {
 
     /// Lifetime peak EWMA — never decreases. Rendered with tabular figures.
     required double peakEwma,
+
+    /// Set count for the body part during the 7 days BEFORE the current
+    /// week. Used by `VolumePeakBlock` to render the "vs semana passada"
+    /// delta when the user has 2–4 weeks of history. Null when the user
+    /// has < 2 weeks of history (the delta string is suppressed).
+    int? previousWeekVolumeSets,
+
+    /// Rolling 4-week mean of weekly set counts (excluding the current
+    /// in-progress week). Used by `VolumePeakBlock` to render the "vs média
+    /// (4 sem)" delta when the user has 5+ weeks of history. Null when the
+    /// user has < 5 weeks of history.
+    double? fourWeekMeanVolumeSets,
+
+    /// Persisted EWMA value as of 30 days ago. Used by `VolumePeakBlock`
+    /// to render the monthly peak delta with the `30D` badge. Null when
+    /// the user has < 30 days of history.
+    double? peakEwma30dAgo,
+
+    /// Distinct ISO-week count covered by the user's xp_events for this
+    /// body part. Drives the volume-delta string choice:
+    ///   * 0–1 weeks → no delta line (suppressed)
+    ///   * 2–4 weeks → "X vs semana passada" (uses [previousWeekVolumeSets])
+    ///   * 5+ weeks  → "X vs média (4 sem)"  (uses [fourWeekMeanVolumeSets])
+    @Default(0) int weeksOfHistory,
   }) = _VolumePeakRow;
 }
 
