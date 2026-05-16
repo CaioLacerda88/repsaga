@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/character_xp_calculator.dart';
 import '../domain/rank_curve.dart';
 import '../models/body_part.dart';
 import '../models/body_part_progress.dart';
@@ -62,9 +63,28 @@ CharacterSheetState _composeSheet({
       })
       .toList(growable: false);
 
+  // Phase 26b character XP bar: derive the band once at provider time so the
+  // bar widget stays pure-presentation. The helper enforces a curve-consistent
+  // input contract (totalXp must lie within the current rank's threshold band)
+  // — feeding it `entry.totalXp` directly satisfies that because both rank and
+  // totalXp come from the same persisted row.
+  final ranks = <String, int>{
+    for (final e in entries) e.bodyPart.dbValue: e.rank,
+  };
+  final perBodyPartTotalXp = <String, double>{
+    for (final e in entries) e.bodyPart.dbValue: e.totalXp,
+  };
+  final xpBand = characterXpInLevel(
+    ranks: ranks,
+    lifetimeXp: snapshot.characterState.lifetimeXp,
+    perBodyPartTotalXp: perBodyPartTotalXp,
+  );
+
   return CharacterSheetState(
     characterLevel: snapshot.characterState.characterLevel,
     lifetimeXp: snapshot.characterState.lifetimeXp,
+    xpInLevel: xpBand.xpInLevel,
+    xpForNextLevel: xpBand.xpForNextLevel,
     bodyPartProgress: entries,
     activeTitle: activeTitle,
     characterClass: characterClass,

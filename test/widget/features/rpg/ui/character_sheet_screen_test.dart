@@ -52,6 +52,8 @@ CharacterSheetState _dayZeroState() {
   return CharacterSheetState(
     characterLevel: 1,
     lifetimeXp: 0,
+    xpInLevel: 0,
+    xpForNextLevel: 1,
     bodyPartProgress: activeBodyParts.map((bp) => _entry(bp: bp)).toList(),
     activeTitle: null,
     characterClass: null,
@@ -62,6 +64,8 @@ CharacterSheetState _highRankState() {
   return CharacterSheetState(
     characterLevel: 12,
     lifetimeXp: 5400,
+    xpInLevel: 0,
+    xpForNextLevel: 1,
     bodyPartProgress: [
       _entry(
         bp: BodyPart.chest,
