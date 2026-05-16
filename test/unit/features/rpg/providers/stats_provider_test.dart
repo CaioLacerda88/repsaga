@@ -635,6 +635,12 @@ void main() {
         expect(chestRow.fourWeekMeanVolumeSets, closeTo(14.0, 0.01));
         expect(chestRow.weeksOfHistory, 8);
         expect(chestRow.peakEwma30dAgo, isNotNull);
+        // Lower-bound sanity check: with vitalityPeak=100 and earliest well
+        // past the 30-day window, the closest-date sample × peak must be > 0.
+        // The exact value depends on the trend reconstruction's
+        // interpolation, but non-zero is the guarantee the assertion existing
+        // was meant to pin.
+        expect(chestRow.peakEwma30dAgo, greaterThan(0));
       },
     );
 

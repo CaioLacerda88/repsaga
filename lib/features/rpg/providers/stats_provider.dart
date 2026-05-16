@@ -155,6 +155,11 @@ StatsDeepDiveState assembleStatsState({
   // 4. Volume + Peak per body part. Phase 26c: extended with history-aware
   //    weekly delta (previousWeekVolumeSets / fourWeekMeanVolumeSets /
   //    weeksOfHistory) + the monthly peak delta (peakEwma30dAgo).
+  //
+  //    Three passes per body part over `sorted` (the existing 7-day rolling
+  //    count, the new per-ISO-week bucket, and the trend reconstruction
+  //    above) — O(n×|bp|) where n = ~450 events for a 90-day power user.
+  //    ~8k ops total; intentional for readability over micro-optimisation.
   // ---------------------------------------------------------------------------
   final volumePeak = <BodyPart, VolumePeakRow>{};
   final weekAgo = today.subtract(const Duration(days: 7));
@@ -195,6 +200,11 @@ StatsDeepDiveState assembleStatsState({
     // Four-week mean over the 4 buckets BEFORE currentWeekStart (NOT
     // including the in-progress week — comparing against a partial week
     // would mislead). Null when weeksOfHistory < 5.
+    //
+    // Note: weeksOfHistory >= 5 is a proxy for "has 4 prior weeks of data" —
+    // the individual weekly buckets may still be 0 (a user with activity in
+    // weeks -7 and 0 only would qualify; the mean would be 0.0). Acceptable
+    // per spec; the consuming UI's delta state handles 0/met-target gracefully.
     double? fourWeekMeanVolumeSets;
     if (weeksOfHistory >= 5) {
       var sum = 0;
