@@ -574,6 +574,185 @@ void main() {
     );
   });
 
+  group('assembleStatsState — VolumePeakRow extended delta fields', () {
+    test(
+      'should populate previousWeekVolumeSets / fourWeekMean / peakEwma30dAgo / weeksOfHistory for 8-week history',
+      () {
+        // Anchor: April 30, 2026 (a Thursday). Current ISO-week starts Mon Apr 27.
+        // Build 8 distinct weeks of chest events. Spec says fourWeekMean uses
+        // the 4 weeks BEFORE the current in-progress week, i.e. weeks -4..-1.
+        //   week -7 (Mon Mar 9):    12 events
+        //   week -6 (Mon Mar 16):   14 events
+        //   week -5 (Mon Mar 23):   16 events
+        //   week -4 (Mon Mar 30):   14 events   ← in 4-week-mean window
+        //   week -3 (Mon Apr 6):    12 events   ← in 4-week-mean window
+        //   week -2 (Mon Apr 13):   14 events   ← in 4-week-mean window
+        //   week -1 (Mon Apr 20):   16 events   ← previousWeekVolumeSets
+        //   week 0  (Mon Apr 27):    8 events   ← current week
+        //
+        // Expected: weeklyVolumeSets=8, previousWeek=16,
+        //   fourWeekMean=(14+12+14+16)/4 = 14.0, weeksOfHistory=8.
+        final events = [
+          for (final entry in {
+            DateTime.utc(2026, 3, 9): 12,
+            DateTime.utc(2026, 3, 16): 14,
+            DateTime.utc(2026, 3, 23): 16,
+            DateTime.utc(2026, 3, 30): 14,
+            DateTime.utc(2026, 4, 6): 12,
+            DateTime.utc(2026, 4, 13): 14,
+            DateTime.utc(2026, 4, 20): 16,
+            DateTime.utc(2026, 4, 27): 8,
+          }.entries)
+            for (var i = 0; i < entry.value; i++)
+              _event(
+                occurredAt: entry.key.add(Duration(hours: i)),
+                attribution: const {'chest': 1.0},
+                setId: 'set-${entry.key.toIso8601String()}-$i',
+              ),
+        ];
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.chest: _progress(
+              bp: BodyPart.chest,
+              rank: 5,
+              totalXp: 1000,
+              vitalityEwma: 80.0,
+              vitalityPeak: 100.0,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+          peaks: const [],
+          exercisesById: const {},
+        );
+        final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
+        expect(chestRow.weeklyVolumeSets, 8);
+        expect(chestRow.previousWeekVolumeSets, 16);
+        expect(chestRow.fourWeekMeanVolumeSets, closeTo(14.0, 0.01));
+        expect(chestRow.weeksOfHistory, 8);
+        expect(chestRow.peakEwma30dAgo, isNotNull);
+      },
+    );
+
+    test(
+      'should leave previousWeek / fourWeekMean / peakEwma30dAgo null for 1-week history',
+      () {
+        // Single-week history for back: just this week's events.
+        final events = [
+          for (var i = 0; i < 5; i++)
+            _event(
+              occurredAt: DateTime.utc(2026, 4, 27).add(Duration(hours: i)),
+              attribution: const {'back': 1.0},
+              setId: 'back-set-$i',
+            ),
+        ];
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.back: _progress(
+              bp: BodyPart.back,
+              rank: 2,
+              totalXp: 100,
+              vitalityEwma: 30.0,
+              vitalityPeak: 40.0,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+          peaks: const [],
+          exercisesById: const {},
+        );
+        final backRow = state.volumePeakByBodyPart[BodyPart.back]!;
+        expect(backRow.weeksOfHistory, 1);
+        expect(backRow.previousWeekVolumeSets, isNull);
+        expect(backRow.fourWeekMeanVolumeSets, isNull);
+        expect(backRow.peakEwma30dAgo, isNull, reason: 'history < 30 days');
+      },
+    );
+
+    test(
+      'should return all-null delta fields for body part with zero history',
+      () {
+        // No events at all. All body parts untrained, peak == 0.
+        final state = assembleStatsState(
+          now: now,
+          snapshot: RpgProgressSnapshot.empty,
+          events: const [],
+          peaks: const [],
+          exercisesById: const {},
+        );
+        final legsRow = state.volumePeakByBodyPart[BodyPart.legs]!;
+        expect(legsRow.weeksOfHistory, 0);
+        expect(legsRow.previousWeekVolumeSets, isNull);
+        expect(legsRow.fourWeekMeanVolumeSets, isNull);
+        expect(legsRow.peakEwma30dAgo, isNull);
+        expect(legsRow.weeklyVolumeSets, 0);
+        expect(legsRow.peakEwma, 0);
+      },
+    );
+
+    test(
+      'should fill 4-week-mean using weeks immediately before the current week (off-by-one guard)',
+      () {
+        // Off-by-one regression guard. Exactly 5 weeks of chest activity:
+        //   weeks -4, -3, -2, -1 (each 10 sets) + week 0 (5 sets).
+        // weeksOfHistory = 5 → fourWeekMean = (10+10+10+10)/4 = 10.0.
+        // If the impl uses weeks -5..-1 or -3..0, the mean diverges. This
+        // pins the documented "4 weeks BEFORE current" semantic.
+        final events = [
+          for (final wkStart in [
+            DateTime.utc(2026, 3, 30), // -4
+            DateTime.utc(2026, 4, 6), // -3
+            DateTime.utc(2026, 4, 13), // -2
+            DateTime.utc(2026, 4, 20), // -1
+          ])
+            for (var i = 0; i < 10; i++)
+              _event(
+                occurredAt: wkStart.add(Duration(hours: i)),
+                attribution: const {'chest': 1.0},
+                setId: 'set-${wkStart.toIso8601String()}-$i',
+              ),
+          for (var i = 0; i < 5; i++)
+            _event(
+              occurredAt: DateTime.utc(2026, 4, 27).add(Duration(hours: i)),
+              attribution: const {'chest': 1.0},
+              setId: 'curr-$i',
+            ),
+        ];
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.chest: _progress(
+              bp: BodyPart.chest,
+              rank: 3,
+              totalXp: 500,
+              vitalityEwma: 50,
+              vitalityPeak: 60,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+          peaks: const [],
+          exercisesById: const {},
+        );
+        final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
+        expect(chestRow.weeksOfHistory, 5);
+        expect(chestRow.previousWeekVolumeSets, 10);
+        expect(chestRow.fourWeekMeanVolumeSets, closeTo(10.0, 0.01));
+      },
+    );
+  });
+
   group('StatsDeepDiveState.empty', () {
     test('produces a renderable laid-out state with no nulls', () {
       final empty = StatsDeepDiveState.empty();

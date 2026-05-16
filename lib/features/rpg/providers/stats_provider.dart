@@ -152,11 +152,17 @@ StatsDeepDiveState assembleStatsState({
   );
 
   // ---------------------------------------------------------------------------
-  // 4. Volume + Peak per body part.
+  // 4. Volume + Peak per body part. Phase 26c: extended with history-aware
+  //    weekly delta (previousWeekVolumeSets / fourWeekMeanVolumeSets /
+  //    weeksOfHistory) + the monthly peak delta (peakEwma30dAgo).
   // ---------------------------------------------------------------------------
   final volumePeak = <BodyPart, VolumePeakRow>{};
   final weekAgo = today.subtract(const Duration(days: 7));
+  final thirtyDaysAgo = today.subtract(const Duration(days: 30));
+  final currentWeekStart = _isoWeekStart(today);
+
   for (final bp in activeBodyParts) {
+    // Existing weekly volume count (last 7 days, not ISO-week-aligned).
     final setsLast7d = sorted
         .where(
           (e) =>
@@ -164,9 +170,76 @@ StatsDeepDiveState assembleStatsState({
               (e.attribution[bp.dbValue] as num? ?? 0) > 0,
         )
         .length;
+
+    // Per-ISO-week bucket counts for this body part. Drives both the
+    // previousWeek and fourWeekMean fields below.
+    final perWeek = <DateTime, int>{};
+    for (final e in sorted) {
+      final attr = (e.attribution[bp.dbValue] as num? ?? 0);
+      if (attr <= 0) continue;
+      final wStart = _isoWeekStart(e.occurredAt);
+      perWeek[wStart] = (perWeek[wStart] ?? 0) + 1;
+    }
+    final weeksOfHistory = perWeek.length;
+
+    // Previous-week count (the ISO-week immediately before currentWeekStart).
+    // Null when there's only one week of history — comparison wouldn't be
+    // meaningful and the UI hides the delta row entirely.
+    final previousWeekStart = currentWeekStart.subtract(
+      const Duration(days: 7),
+    );
+    final previousWeekVolumeSets = weeksOfHistory >= 2
+        ? (perWeek[previousWeekStart] ?? 0)
+        : null;
+
+    // Four-week mean over the 4 buckets BEFORE currentWeekStart (NOT
+    // including the in-progress week — comparing against a partial week
+    // would mislead). Null when weeksOfHistory < 5.
+    double? fourWeekMeanVolumeSets;
+    if (weeksOfHistory >= 5) {
+      var sum = 0;
+      for (var w = 1; w <= 4; w++) {
+        final ws = currentWeekStart.subtract(Duration(days: 7 * w));
+        sum += (perWeek[ws] ?? 0);
+      }
+      fourWeekMeanVolumeSets = sum / 4.0;
+    }
+
+    // Peak EWMA 30 days ago — sample from the daily trend reconstruction by
+    // closest-date lookup. Null when (a) untrained body part (peak == 0),
+    // (b) earliest activity is within the 30-day window (no "30 days ago"
+    // baseline yet), or (c) the trend is empty (defensive).
+    final peak = snapshot.progressFor(bp).vitalityPeak;
+    double? peakEwma30dAgo;
+    if (peak > 0 && earliest != null && !earliest.isAfter(thirtyDaysAgo)) {
+      final trend = trendByBp[bp] ?? const <TrendPoint>[];
+      if (trend.isNotEmpty) {
+        TrendPoint? closest;
+        var bestDistance = double.infinity;
+        for (final p in trend) {
+          final dist = p.date
+              .difference(thirtyDaysAgo)
+              .inMilliseconds
+              .abs()
+              .toDouble();
+          if (dist < bestDistance) {
+            bestDistance = dist;
+            closest = p;
+          }
+        }
+        if (closest != null) {
+          peakEwma30dAgo = closest.pct * peak;
+        }
+      }
+    }
+
     volumePeak[bp] = VolumePeakRow(
       weeklyVolumeSets: setsLast7d,
-      peakEwma: snapshot.progressFor(bp).vitalityPeak,
+      peakEwma: peak,
+      previousWeekVolumeSets: previousWeekVolumeSets,
+      fourWeekMeanVolumeSets: fourWeekMeanVolumeSets,
+      peakEwma30dAgo: peakEwma30dAgo,
+      weeksOfHistory: weeksOfHistory,
     );
   }
 
@@ -317,6 +390,18 @@ DateTime _interpDate(DateTime start, DateTime end, int i, int count) {
   final t = count <= 1 ? 0.0 : i / (count - 1);
   final spanMs = end.difference(start).inMilliseconds;
   return start.add(Duration(milliseconds: (spanMs * t).round()));
+}
+
+/// Returns the Monday-00:00-UTC start of the ISO week containing [d].
+///
+/// `DateTime.weekday` is 1 (Monday) through 7 (Sunday). Subtracting
+/// `(weekday - 1)` days lands on Monday; the additional `DateTime.utc`
+/// truncation strips the time component so the bucket key is stable
+/// across same-week events at different hours.
+DateTime _isoWeekStart(DateTime d) {
+  final utc = DateTime.utc(d.year, d.month, d.day);
+  final daysFromMonday = (utc.weekday - DateTime.monday) % 7;
+  return utc.subtract(Duration(days: daysFromMonday));
 }
 
 /// Group `exercise_peak_loads` rows by body part using the `MuscleGroup` of
