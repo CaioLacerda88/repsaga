@@ -19,7 +19,7 @@
  * wrappers. The SAGA.* selectors in helpers/selectors.ts map to these.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
 import { SAGA, NAV, HISTORY, CELEBRATION } from '../helpers/selectors';
@@ -37,6 +37,19 @@ import {
   getUserIdByEmail,
   resetRpgStateForUser,
 } from '../helpers/test-data-reset';
+
+// ---------------------------------------------------------------------------
+// Shared helper: login as rpgFoundationUser and land on the character sheet.
+// Used by the three describe blocks whose beforeEach is identical:
+//   "foundation user character sheet", "navigation", "body-part row tap".
+// Blocks with unique preambles (DB reset, codex-nav drill, S12 Home nav)
+// keep their own inline beforeEach.
+// ---------------------------------------------------------------------------
+async function loginFoundationAndGoToCharacterSheet(page: Page): Promise<void> {
+  await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
+  await navigateToTab(page, 'Profile');
+  await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+}
 
 // ---------------------------------------------------------------------------
 // S1–S2: Character sheet renders (smoke)
@@ -100,9 +113,7 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
 
 test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await loginFoundationAndGoToCharacterSheet(page);
   });
 
   // S2: Foundation user — no zero-history banner, has XP and level > 1.
@@ -145,6 +156,16 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
     const lvl = Number(lvlText?.replace(/^Lvl\s*/, '').trim());
     expect(lvl).toBeGreaterThan(1);
   });
+
+  test('should render CharacterXpBar on the character sheet', async ({ page }) => {
+    // The bar is unconditional once the screen has loaded — it renders even
+    // on day-zero (showing 0 XP toward LVL 2). This smoke catches a missing
+    // SagaHeader → CharacterXpBar composition regression without asserting on
+    // math (widget tests already pin the math).
+    await expect(page.locator(SAGA.characterXpBar).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -154,9 +175,7 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
 
 test.describe('Saga — navigation', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await loginFoundationAndGoToCharacterSheet(page);
   });
 
   // S3: Gear icon → profile settings.
@@ -534,9 +553,7 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
 
 test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await loginFoundationAndGoToCharacterSheet(page);
   });
 
   test('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
