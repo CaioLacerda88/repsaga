@@ -19,9 +19,18 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/character_sheet_screen.dart';
-import 'package:repsaga/features/rpg/ui/widgets/rank_stamp.dart';
+import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+// Hive-free stand-in: constructing the real RankUpPulseLocalStorage in a
+// widget test would crash because the 'rank_up_pulse' Hive box is never
+// opened in the test harness. The mock always returns false for isPulsing,
+// so rows never spawn RankUpPulse (which would also hang pumpAndSettle).
+class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 BodyPartSheetEntry _entry({
   required BodyPart bp,
@@ -146,8 +155,15 @@ GoRouter _router() {
 }
 
 Widget _buildApp(CharacterSheetState state) {
+  final pulseStorage = _MockPulseStorage();
+  when(
+    () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
   return ProviderScope(
-    overrides: [characterSheetProvider.overrideWith((_) => AsyncData(state))],
+    overrides: [
+      characterSheetProvider.overrideWith((_) => AsyncData(state)),
+      rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+    ],
     child: MaterialApp.router(
       theme: AppTheme.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -158,6 +174,12 @@ Widget _buildApp(CharacterSheetState state) {
 }
 
 void main() {
+  setUpAll(() {
+    // any()/any(named:) for BodyPart needs a registered fallback so mocktail
+    // can build matchers for the positional arg in isPulsing(BodyPart).
+    registerFallbackValue(BodyPart.chest);
+  });
+
   group('CharacterSheetScreen', () {
     testWidgets(
       'day-0 state renders six body-part rows and the first-set-awakens banner',
@@ -178,11 +200,19 @@ void main() {
         // Class slot placeholder.
         expect(find.text('The iron will name you.'), findsOneWidget);
 
-        // Six body-part rows. Use Semantics(identifier: ...) selector.
-        expect(find.bySemanticsLabel(RegExp('Chest')), findsAtLeastNWidgets(1));
+        // Six body-part rows. Option B v4 upper-cases the label inline; use
+        // a case-insensitive regex so the test stays robust to display-case
+        // tweaks at the row layer.
+        expect(
+          find.bySemanticsLabel(RegExp('chest', caseSensitive: false)),
+          findsAtLeastNWidgets(1),
+        );
 
-        // No RankStamp on day-0 (all six rows are compressed/untrained).
-        expect(find.byType(RankStamp), findsNothing);
+        // Six untrained body-part rows render (Option B v4 — no per-row
+        // RankStamp; rank glyph collapses to "—" inside the row).
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+        // Untrained rows show the em-dash placeholder instead of a rank num.
+        expect(find.text('—'), findsAtLeastNWidgets(6));
       },
     );
 
@@ -204,8 +234,9 @@ void main() {
         // No first-set-awakens banner when the user has lifetime XP.
         expect(find.text('Your first set awakens this path.'), findsNothing);
 
-        // Six expanded rows → six RankStamps.
-        expect(find.byType(RankStamp), findsNWidgets(6));
+        // Six trained rows (Option B v4 — each row owns its 20sp rank
+        // numeral inline; no separate RankStamp widget).
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
       },
     );
 
