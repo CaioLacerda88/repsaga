@@ -929,11 +929,12 @@ export const SAGA = {
    */
   sagaStubScreen: '[flt-semantics-identifier="saga-stub-screen"]',
   // -----------------------------------------------------------------------
-  // Phase 18d.2 — /saga/stats deep-dive screen
+  // Phase 18d.2 + 26c — /saga/stats deep-dive screen
   //
-  // The deep-dive replaces SagaStubScreen at /saga/stats. It composes four
-  // sub-widgets, each wrapped in its own Semantics(identifier: ...) so E2E
-  // can target them independently.
+  // The deep-dive replaces SagaStubScreen at /saga/stats. Phase 26c
+  // restructured the screen into three sections: VitalityTrendChart,
+  // VitalityTable, and a column of per-body-part VolumePeakBlocks
+  // (replacing the legacy _VolumePeakTable + PeakLoadsTable).
   // -----------------------------------------------------------------------
   /** StatsDeepDiveScreen root — Semantics(identifier: 'saga-stats-screen') */
   statsDeepDiveScreen: '[flt-semantics-identifier="saga-stats-screen"]',
@@ -948,10 +949,34 @@ export const SAGA = {
     `[flt-semantics-identifier="vitality-row-${slug}"]`,
   /** VitalityTrendChart container — Semantics(identifier: 'vitality-trend-chart') */
   vitalityTrendChart: '[flt-semantics-identifier="vitality-trend-chart"]',
-  /** _VolumePeakTable container — Semantics(identifier: 'volume-peak-table') */
-  volumePeakTable: '[flt-semantics-identifier="volume-peak-table"]',
-  /** PeakLoadsTable container — Semantics(identifier: 'peak-loads-table') */
-  peakLoadsTable: '[flt-semantics-identifier="peak-loads-table"]',
+  /**
+   * Phase 26c — VitalityExplainerSheet (bottom sheet content opened by
+   * the ⓘ icon on either vitality section header).
+   */
+  vitalityExplainerSheet:
+    '[flt-semantics-identifier="vitality-explainer-sheet"]',
+  /**
+   * Phase 26c — ⓘ icon on the vitality trend section header. Tapping it
+   * opens VitalityExplainerSheet. The Semantics wrapper is added at the
+   * widget level (lib/features/rpg/ui/stats_deep_dive_screen.dart
+   * → _InfoIconButton).
+   */
+  vitalityTrendInfoIcon:
+    '[flt-semantics-identifier="vitality-trend-info-icon"]',
+  /**
+   * Phase 26c — ⓘ icon on the live-vitality table section header.
+   * Opens the same VitalityExplainerSheet.
+   */
+  vitalityTableInfoIcon:
+    '[flt-semantics-identifier="vitality-table-info-icon"]',
+  /**
+   * Phase 26c — Per-body-part VolumePeakBlock. Slug = BodyPart.dbValue.
+   * Replaces the legacy `volumePeakTable` + `peakLoadsTable` selectors
+   * (both widgets were deleted in 26c).
+   */
+  volumePeakBlock: (
+    slug: 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core',
+  ) => `[flt-semantics-identifier="volume-peak-block-${slug}"]`,
 } as const;
 
 // ---------------------------------------------------------------------------

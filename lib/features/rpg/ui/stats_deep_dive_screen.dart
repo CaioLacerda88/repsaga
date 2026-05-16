@@ -115,6 +115,7 @@ class _Body extends StatelessWidget {
         _SectionHeader(
           label: trendHeading,
           infoIconKey: const ValueKey('vitality-trend-info-icon'),
+          infoIconIdentifier: 'vitality-trend-info-icon',
           onInfoTap: () => _showVitalityExplainer(context),
         ),
         const SizedBox(height: 8),
@@ -137,6 +138,7 @@ class _Body extends StatelessWidget {
         _SectionHeader(
           label: l10n.liveVitalitySectionHeading,
           infoIconKey: const ValueKey('vitality-table-info-icon'),
+          infoIconIdentifier: 'vitality-table-info-icon',
           onInfoTap: () => _showVitalityExplainer(context),
         ),
         const SizedBox(height: 8),
@@ -193,7 +195,12 @@ void _showVitalityExplainer(BuildContext context) {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, this.onInfoTap, this.infoIconKey});
+  const _SectionHeader({
+    required this.label,
+    this.onInfoTap,
+    this.infoIconKey,
+    this.infoIconIdentifier,
+  });
 
   final String label;
 
@@ -204,11 +211,18 @@ class _SectionHeader extends StatelessWidget {
   /// (no explainer surface for those sections).
   final VoidCallback? onInfoTap;
 
-  /// Optional `Key` for the icon's tap target. Tests anchor onto this rather
-  /// than walking the widget tree by type — keeps the test resilient to
-  /// future icon-shape changes (e.g. swapping `Icons.info_outline` for a
+  /// Optional `Key` for the icon's tap target. Widget tests anchor onto this
+  /// rather than walking the widget tree by type — keeps the test resilient
+  /// to future icon-shape changes (e.g. swapping `Icons.info_outline` for a
   /// custom glyph).
   final Key? infoIconKey;
+
+  /// Optional Semantics identifier for the icon's tap target. Flutter web's
+  /// AOM does not expose `ValueKey` reliably across Flutter 3.41.6 versions
+  /// (data-flt-key is unstable), so E2E tests target the icon via
+  /// `flt-semantics-identifier`. The ValueKey stays in place for widget-test
+  /// targeting — both production code and tests must satisfy each path.
+  final String? infoIconIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -227,21 +241,50 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
           if (onInfoTap != null)
-            InkWell(
-              key: infoIconKey,
-              onTap: onInfoTap,
-              borderRadius: BorderRadius.circular(8),
-              child: const Padding(
-                padding: EdgeInsets.all(2),
-                child: Icon(
-                  Icons.info_outline,
-                  size: 14,
-                  color: AppColors.textDim,
-                ),
-              ),
+            _InfoIconButton(
+              identifier: infoIconIdentifier,
+              iconKey: infoIconKey,
+              onTap: onInfoTap!,
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 14dp ⓘ info-icon tap target used in [_SectionHeader]. Wraps the inner
+/// [InkWell] in a `Semantics(container: true, button: true, identifier:)`
+/// shell when an identifier is supplied so Flutter web's AOM exposes a
+/// targetable `flt-semantics-identifier` attribute for E2E. The ValueKey
+/// remains on the InkWell so widget tests can keep using `find.byKey(...)`.
+class _InfoIconButton extends StatelessWidget {
+  const _InfoIconButton({
+    required this.identifier,
+    required this.iconKey,
+    required this.onTap,
+  });
+
+  final String? identifier;
+  final Key? iconKey;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = InkWell(
+      key: iconKey,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: const Padding(
+        padding: EdgeInsets.all(2),
+        child: Icon(Icons.info_outline, size: 14, color: AppColors.textDim),
+      ),
+    );
+    if (identifier == null) return button;
+    return Semantics(
+      container: true,
+      button: true,
+      identifier: identifier,
+      child: button,
     );
   }
 }

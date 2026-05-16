@@ -317,30 +317,49 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
       .waitFor({ state: 'visible', timeout: 15_000 });
   });
 
-  // S8: Composition — all four sub-widgets render.
+  // S8: Composition — the three deep-dive sections render.
   //
-  // The screen is pure presentation; the four sub-widget identifiers are
-  // wrapped in Semantics by the widgets themselves. If any one is missing,
-  // a refactor likely dropped its identifier or the widget itself.
-  test('should compose the four deep-dive sub-widgets (S8)', async ({ page }) => {
+  // Phase 26c restructured the screen: VitalityTrendChart + VitalityTable
+  // + per-body-part VolumePeakBlocks (replacing the legacy single
+  // _VolumePeakTable + PeakLoadsTable). Chest sits at the top of the
+  // VolumePeakBlock column (canonical activeBodyParts order) and serves
+  // as the section-rendered sentinel.
+  test('should compose the 3 deep-dive sub-widgets (S8)', async ({ page }) => {
     await expect(page.locator(SAGA.vitalityTable).first()).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.locator(SAGA.vitalityTrendChart).first()).toBeVisible({
       timeout: 10_000,
     });
-    // The volume-peak and peak-loads tables sit below the fold on small
-    // viewports. Scroll them into view before asserting visibility — the
-    // identifiers are emitted regardless, but visibility requires layout
+    // The volume-peak blocks sit below the fold on small viewports. Scroll
+    // the chest block into view before asserting visibility — the
+    // identifier is emitted regardless, but visibility requires layout
     // overlap with the viewport.
-    await page.locator(SAGA.volumePeakTable).first().scrollIntoViewIfNeeded();
-    await expect(page.locator(SAGA.volumePeakTable).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.locator(SAGA.peakLoadsTable).first().scrollIntoViewIfNeeded();
-    await expect(page.locator(SAGA.peakLoadsTable).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await page
+      .locator(SAGA.volumePeakBlock('chest'))
+      .first()
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.locator(SAGA.volumePeakBlock('chest')).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  // S8b (Phase 26c): the ⓘ on the trend section header opens
+  // VitalityExplainerSheet. Same sheet from the table-section ⓘ — this
+  // test pins the trend-section entry point. Inherits @smoke from the
+  // enclosing describe block's tag.
+  test('should open vitality explainer sheet when tapping the trend section info icon', async ({
+    page,
+  }) => {
+    await page
+      .locator(SAGA.vitalityTrendInfoIcon)
+      .first()
+      .scrollIntoViewIfNeeded();
+    await page.locator(SAGA.vitalityTrendInfoIcon).first().click();
+
+    await expect(
+      page.locator(SAGA.vitalityExplainerSheet).first(),
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   // S9: Tapping a vitality row drives the trend chart's selected line.
