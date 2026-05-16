@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
@@ -11,27 +10,26 @@ import '../models/character_sheet_state.dart';
 import '../models/vitality_state.dart';
 import '../providers/character_sheet_provider.dart';
 import 'utils/vitality_state_styles.dart';
-import 'widgets/active_title_pill.dart';
 import 'widgets/body_part_rank_row.dart';
-import 'widgets/class_badge.dart';
+import 'widgets/character_xp_bar.dart';
 import 'widgets/codex_nav_row.dart';
 import 'widgets/dormant_cardio_row.dart';
-import 'widgets/rune_halo.dart';
-import 'widgets/vitality_radar.dart';
+import 'widgets/saga_header.dart';
 
 /// `/profile` (the "Saga" tab) character sheet.
 ///
-/// Replaces the legacy profile screen with the v1 RPG identity surface per
-/// spec §13.1. Account/preferences settings move to `/profile/settings`,
-/// reachable via the gear icon in the app bar.
+/// Phase 26b Option B v4 composition: a tight three-column header plus a
+/// 6dp character XP bar collapse the rune face into ~80dp of chrome, freeing
+/// the screen for six trainable body-part rows + a dormant cardio row.
+/// Account/preferences settings move to `/profile/settings`, reachable via
+/// the gear icon in the app bar.
 ///
 /// **Composition (top-down):**
 ///   1. AppBar — "Saga" title + gear icon → `/profile/settings`.
-///   2. Header — [RuneHalo] + Lvl numeral + [ClassBadge] + [ActiveTitlePill].
-///   3. Onboarding hint — [firstSetAwakensCopy] banner when `lifetimeXp == 0`.
-///   4. [VitalityRadar] — 320 dp hex radar.
-///   5. Six [BodyPartRankRow]s — asymmetric (expanded for trained,
-///      compressed for untrained).
+///   2. [SagaHeader] — rune halo (36dp) · LVL numeral · class + title meta.
+///   3. [CharacterXpBar] — 6dp violet gradient track + remaining-to-LVL+1.
+///   4. Onboarding hint — first-set-awakens banner when `isZeroHistory`.
+///   5. Six [BodyPartRankRow]s — Option B v4 inline rank + mini XP bar.
 ///   6. [DormantCardioRow] — single distinct row.
 ///   7. Three [CodexNavRow]s — Stats / Titles / History.
 ///
@@ -92,22 +90,30 @@ class _CharacterSheetBody extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 16),
-            _SheetHeader(sheet: sheet),
+            const SizedBox(height: 8),
+            SagaHeader(
+              haloState: sheet.haloState,
+              characterLevel: sheet.characterLevel,
+              characterClass: sheet.characterClass,
+              activeTitle: sheet.activeTitle,
+            ),
+            const SizedBox(height: 12),
+            CharacterXpBar(
+              lifetimeXp: sheet.lifetimeXp,
+              xpForNextLevel: sheet.xpForNextLevel,
+              characterLevel: sheet.characterLevel,
+            ),
             const SizedBox(height: 16),
             if (sheet.isZeroHistory) ...[
               const _FirstSetAwakensBanner(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
             ],
-            Center(
-              child: Semantics(
+            for (final entry in sheet.bodyPartProgress)
+              Semantics(
                 container: true,
-                identifier: 'vitality-radar',
-                child: VitalityRadar(entries: sheet.bodyPartProgress),
+                identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+                child: BodyPartRankRow(entry: entry),
               ),
-            ),
-            const SizedBox(height: 24),
-            _BodyPartRows(entries: sheet.bodyPartProgress),
             const SizedBox(height: 16),
             Semantics(
               container: true,
@@ -119,60 +125,6 @@ class _CharacterSheetBody extends StatelessWidget {
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.sheet});
-
-  final CharacterSheetState sheet;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          Semantics(
-            container: true,
-            identifier: 'rune-halo',
-            child: RuneHalo(state: sheet.haloState),
-          ),
-          const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            identifier: 'character-level',
-            child: Text(
-              'Lvl ${sheet.characterLevel}',
-              style: GoogleFonts.rajdhani(
-                fontSize: 56,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textCream,
-                height: 1,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-          // Phase 18e UX-critic pass: 12 → 16dp gives the (now larger,
-          // titleMedium) class badge breathing room beneath the 56sp LVL
-          // numeral so the hierarchy reads LVL > class > title pill.
-          const SizedBox(height: 16),
-          Semantics(
-            container: true,
-            identifier: 'class-badge',
-            child: ClassBadge(characterClass: sheet.characterClass),
-          ),
-          if (sheet.activeTitle != null && sheet.activeTitle!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Semantics(
-              container: true,
-              identifier: 'active-title-pill',
-              child: ActiveTitlePill(title: sheet.activeTitle),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -224,26 +176,6 @@ class _FirstSetAwakensBanner extends StatelessWidget {
   }
 }
 
-class _BodyPartRows extends StatelessWidget {
-  const _BodyPartRows({required this.entries});
-
-  final List<BodyPartSheetEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final entry in entries)
-          Semantics(
-            container: true,
-            identifier: 'body-part-row-${entry.bodyPart.dbValue}',
-            child: BodyPartRankRow(entry: entry),
-          ),
-      ],
-    );
-  }
-}
-
 class _CodexNavSection extends StatelessWidget {
   const _CodexNavSection();
 
@@ -284,29 +216,38 @@ class _CharacterSheetSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           children: [
-            const SizedBox(height: 32),
-            // Halo placeholder.
+            const SizedBox(height: 24),
+            // Phase 26b: SagaHeader's three-column footprint ~64dp tall.
             Container(
-              width: 156,
-              height: 156,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
+              height: 64,
+              decoration: BoxDecoration(
                 color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(kRadiusMd),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // CharacterXpBar placeholder (6dp bar + ~10dp label row).
+            Container(
+              height: 16,
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(kRadiusSm),
               ),
             ),
             const SizedBox(height: 24),
-            for (var i = 0; i < 4; i++) ...[
+            // Six body-part-row placeholders (mirroring the new composition).
+            for (var i = 0; i < 6; i++) ...[
               Container(
-                height: 48,
+                height: 56,
                 decoration: BoxDecoration(
                   color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(kRadiusMd),
+                  borderRadius: BorderRadius.circular(kRadiusSm),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
           ],
         ),

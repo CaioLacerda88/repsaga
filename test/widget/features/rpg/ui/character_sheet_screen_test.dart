@@ -24,6 +24,11 @@ import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/character_sheet_screen.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
+import 'package:repsaga/features/rpg/ui/widgets/codex_nav_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/dormant_cardio_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/saga_header.dart';
+import 'package:repsaga/features/rpg/ui/widgets/vitality_radar.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 // Hive-free stand-in: constructing the real RankUpPulseLocalStorage in a
@@ -236,8 +241,23 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Level numeral.
-        expect(find.text('Lvl 12'), findsOneWidget);
+        // Phase 26b Option B v4: SagaHeader splits the level into a bare
+        // 56sp numeral + a separate 10sp "LVL" tag (rather than the legacy
+        // "Lvl 12" single text). Assert on the numeral inside SagaHeader.
+        expect(
+          find.descendant(
+            of: find.byType(SagaHeader),
+            matching: find.text('12'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(SagaHeader),
+            matching: find.text('LVL'),
+          ),
+          findsOneWidget,
+        );
 
         // No first-set-awakens banner when the user has lifetime XP.
         expect(find.text('Your first set awakens this path.'), findsNothing);
@@ -245,6 +265,32 @@ void main() {
         // Six trained rows (Option B v4 — each row owns its 20sp rank
         // numeral inline; no separate RankStamp widget).
         expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+      },
+    );
+
+    testWidgets(
+      'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows (no VitalityRadar)',
+      (tester) async {
+        // Phase 26b Option B v4 pins the post-refactor composition: the
+        // legacy VitalityRadar is gone, SagaHeader + CharacterXpBar are
+        // composed at the top, and the six body-part rows + cardio row +
+        // three codex nav rows are preserved.
+        tester.view.physicalSize = const Size(800, 2400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(_buildApp(_highRankState()));
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(SagaHeader), findsOneWidget);
+        expect(find.byType(CharacterXpBar), findsOneWidget);
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+        expect(find.byType(DormantCardioRow), findsOneWidget);
+        expect(find.byType(CodexNavRow), findsNWidgets(3));
+        // VitalityRadar is removed from the composition entirely.
+        expect(find.byType(VitalityRadar), findsNothing);
       },
     );
 
