@@ -19,9 +19,22 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/character_sheet_screen.dart';
-import 'package:repsaga/features/rpg/ui/widgets/rank_stamp.dart';
+import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
+import 'package:repsaga/features/rpg/ui/widgets/codex_nav_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/dormant_cardio_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/saga_header.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+// Hive-free stand-in: constructing the real RankUpPulseLocalStorage in a
+// widget test would crash because the 'rank_up_pulse' Hive box is never
+// opened in the test harness. The mock always returns false for isPulsing,
+// so rows never spawn RankUpPulse (which would also hang pumpAndSettle).
+class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 BodyPartSheetEntry _entry({
   required BodyPart bp,
@@ -52,6 +65,7 @@ CharacterSheetState _dayZeroState() {
   return CharacterSheetState(
     characterLevel: 1,
     lifetimeXp: 0,
+    xpForNextLevel: 1,
     bodyPartProgress: activeBodyParts.map((bp) => _entry(bp: bp)).toList(),
     activeTitle: null,
     characterClass: null,
@@ -62,6 +76,7 @@ CharacterSheetState _highRankState() {
   return CharacterSheetState(
     characterLevel: 12,
     lifetimeXp: 5400,
+    xpForNextLevel: 6000,
     bodyPartProgress: [
       _entry(
         bp: BodyPart.chest,
@@ -144,8 +159,15 @@ GoRouter _router() {
 }
 
 Widget _buildApp(CharacterSheetState state) {
+  final pulseStorage = _MockPulseStorage();
+  when(
+    () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
   return ProviderScope(
-    overrides: [characterSheetProvider.overrideWith((_) => AsyncData(state))],
+    overrides: [
+      characterSheetProvider.overrideWith((_) => AsyncData(state)),
+      rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+    ],
     child: MaterialApp.router(
       theme: AppTheme.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -156,6 +178,12 @@ Widget _buildApp(CharacterSheetState state) {
 }
 
 void main() {
+  setUpAll(() {
+    // any()/any(named:) for BodyPart needs a registered fallback so mocktail
+    // can build matchers for the positional arg in isPulsing(BodyPart).
+    registerFallbackValue(BodyPart.chest);
+  });
+
   group('CharacterSheetScreen', () {
     testWidgets(
       'day-0 state renders six body-part rows and the first-set-awakens banner',
@@ -176,11 +204,27 @@ void main() {
         // Class slot placeholder.
         expect(find.text('The iron will name you.'), findsOneWidget);
 
-        // Six body-part rows. Use Semantics(identifier: ...) selector.
-        expect(find.bySemanticsLabel(RegExp('Chest')), findsAtLeastNWidgets(1));
+        // Six body-part rows. Option B v4 upper-cases the label inline; use
+        // a case-insensitive regex so the test stays robust to display-case
+        // tweaks at the row layer.
+        expect(
+          find.bySemanticsLabel(RegExp('chest', caseSensitive: false)),
+          findsAtLeastNWidgets(1),
+        );
 
-        // No RankStamp on day-0 (all six rows are compressed/untrained).
-        expect(find.byType(RankStamp), findsNothing);
+        // Six untrained body-part rows render (Option B v4 — no per-row
+        // RankStamp; rank glyph collapses to "—" inside the row).
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+        // Untrained rows show the em-dash placeholder instead of a rank num.
+        // Scope to BodyPartRankRow descendants so stray em-dashes elsewhere
+        // on the screen don't bleed into the count.
+        expect(
+          find.descendant(
+            of: find.byType(BodyPartRankRow),
+            matching: find.text('—'),
+          ),
+          findsNWidgets(6),
+        );
       },
     );
 
@@ -196,14 +240,83 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Level numeral.
-        expect(find.text('Lvl 12'), findsOneWidget);
+        // Phase 26b Option B v4: SagaHeader splits the level into a bare
+        // 56sp numeral + a separate 10sp "LVL" tag (rather than the legacy
+        // "Lvl 12" single text). Assert on the numeral inside SagaHeader.
+        expect(
+          find.descendant(
+            of: find.byType(SagaHeader),
+            matching: find.text('12'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(SagaHeader),
+            matching: find.text('LVL'),
+          ),
+          findsOneWidget,
+        );
 
         // No first-set-awakens banner when the user has lifetime XP.
         expect(find.text('Your first set awakens this path.'), findsNothing);
 
-        // Six expanded rows → six RankStamps.
-        expect(find.byType(RankStamp), findsNWidgets(6));
+        // Six trained rows (Option B v4 — each row owns its 20sp rank
+        // numeral inline; no separate RankStamp widget).
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+      },
+    );
+
+    testWidgets('day-zero renders banner above the XP bar', (tester) async {
+      // Phase 26b reorder: on day-zero the user must read the welcoming
+      // banner BEFORE the empty XP bar so the narrative is "welcome →
+      // first set will awaken → goal (the bar)" rather than seeing the
+      // empty 0-XP track first. Pinned via getCenter.dy comparison so the
+      // ordering survives layout refactors that swap explicit positions
+      // for IntrinsicHeight / Wrap-style containers.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp(_dayZeroState()));
+      await tester.pump();
+      await tester.pump();
+
+      final bannerCenter = tester.getCenter(
+        find.text('Your first set awakens this path.'),
+      );
+      final barCenter = tester.getCenter(find.byType(CharacterXpBar));
+
+      expect(
+        bannerCenter.dy,
+        lessThan(barCenter.dy),
+        reason:
+            'Day-zero: welcoming banner must render above the XP bar so '
+            'the user reads the message before the empty progress indicator.',
+      );
+    });
+
+    testWidgets(
+      'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows',
+      (tester) async {
+        // Phase 26b Option B v4 pins the post-refactor composition:
+        // SagaHeader + CharacterXpBar at the top, six body-part rows,
+        // a dormant cardio row, and three codex nav rows.
+        tester.view.physicalSize = const Size(800, 2400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(_buildApp(_highRankState()));
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(SagaHeader), findsOneWidget);
+        expect(find.byType(CharacterXpBar), findsOneWidget);
+        expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+        expect(find.byType(DormantCardioRow), findsOneWidget);
+        expect(find.byType(CodexNavRow), findsNWidgets(3));
       },
     );
 

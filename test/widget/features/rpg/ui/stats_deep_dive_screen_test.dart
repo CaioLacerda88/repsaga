@@ -111,7 +111,11 @@ StatsDeepDiveState _canonicalState({
   );
 }
 
-Widget _wrap({required StatsDeepDiveState state, String weightUnit = 'kg'}) {
+Widget _wrap({
+  required StatsDeepDiveState state,
+  String weightUnit = 'kg',
+  BodyPart? initialBodyPart,
+}) {
   final stubProfile = Profile(
     id: 'test-user',
     weightUnit: weightUnit,
@@ -123,7 +127,9 @@ Widget _wrap({required StatsDeepDiveState state, String weightUnit = 'kg'}) {
       statsProvider.overrideWith((ref) async => state),
       profileProvider.overrideWith(() => _StubProfileNotifier(stubProfile)),
     ],
-    child: const TestMaterialApp(home: StatsDeepDiveScreen()),
+    child: TestMaterialApp(
+      home: StatsDeepDiveScreen(initialBodyPart: initialBodyPart),
+    ),
   );
 }
 
@@ -262,6 +268,50 @@ void main() {
       // The 90-day heading is shown when earliestActivity is null
       // (useNarrowWindow returns false on null earliestActivity).
       expect(find.text('90-DAY VITALITY TREND'), findsOneWidget);
+    });
+
+    group('initialBodyPart constructor arg', () {
+      testWidgets('preselects the body part from the constructor arg', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrap(state: _canonicalState(), initialBodyPart: BodyPart.back),
+        );
+        await tester.pumpAndSettle();
+
+        final lineChart = tester.widget<LineChart>(find.byType(LineChart));
+        final bars = lineChart.data.lineBarsData;
+
+        // Exactly one bar is the selected line (barWidth 2.5dp). The rest
+        // are ghost lines (1.0dp). Stroke width is the selection contract;
+        // this assertion stays stable across future color-treatment changes
+        // (e.g. 26c may render ghosts as same-hue + reduced alpha).
+        final selectedBars = bars.where((b) => b.barWidth > 2.0).toList();
+        expect(selectedBars, hasLength(1));
+
+        // The selected bar's color is bodyPartColor[BodyPart.back].
+        expect(
+          selectedBars.single.color,
+          VitalityStateStyles.bodyPartColor[BodyPart.back],
+        );
+      });
+
+      testWidgets('falls back to chest when initialBodyPart is null', (
+        tester,
+      ) async {
+        // No initialBodyPart → legacy default of BodyPart.chest.
+        await tester.pumpWidget(_wrap(state: _canonicalState()));
+        await tester.pumpAndSettle();
+
+        final lineChart = tester.widget<LineChart>(find.byType(LineChart));
+        final bars = lineChart.data.lineBarsData;
+        final selectedBars = bars.where((b) => b.barWidth > 2.0).toList();
+        expect(selectedBars, hasLength(1));
+        expect(
+          selectedBars.single.color,
+          VitalityStateStyles.bodyPartColor[BodyPart.chest],
+        );
+      });
     });
 
     testWidgets('exposes saga-stats-screen Semantics identifier', (

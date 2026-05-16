@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../models/character_class.dart';
 
@@ -89,4 +92,21 @@ String localizedClassName(CharacterClass cls, AppLocalizations l10n) {
     CharacterClass.anchor => l10n.classAnchor,
     CharacterClass.ascendant => l10n.classAscendant,
   };
+}
+
+/// Phase 26b: shared text-color resolution for class labels across the
+/// saga header and the class badge. Two-tier prestige rule (Phase 18e):
+///
+///   * `null` (day-1 placeholder, "The iron will name you.") → `textDim`
+///   * [CharacterClass.initiate] (still-on-the-way) → `primaryViolet`
+///   * all other earned classes → `hotViolet`
+///
+/// Only TEXT COLOR is shared. The badge layers tier-specific border + fill
+/// alphas on top (see `ClassBadgeStyle` in `class_badge.dart`); the saga
+/// header renders text-only with no decoration. Extracting the tier rule
+/// here means a future palette rebalance touches one place instead of two.
+Color classTextColor(CharacterClass? cls) {
+  if (cls == null) return AppColors.textDim;
+  if (cls == CharacterClass.initiate) return AppColors.primaryViolet;
+  return AppColors.hotViolet;
 }

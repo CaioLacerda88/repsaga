@@ -103,18 +103,18 @@ class ClassBadge extends StatelessWidget {
         ? l10n.classSlotPlaceholder
         : localizedClassName(cls, l10n);
 
-    final Color textColor;
+    // Text color comes from the shared two-tier helper so the saga header
+    // and the badge stay in lockstep on a future palette rebalance.
+    final textColor = classTextColor(cls);
     final Color borderColor;
     final Color fillColor;
     if (isStub) {
-      textColor = AppColors.textDim;
       borderColor = AppColors.hair;
       fillColor = AppColors.surface;
     } else if (isInitiate) {
-      // Quieter "still on the way" palette: primaryViolet text + initiate-
-      // tier border/fill alphas. Keeps Initiate legibly Arcane-Ascent-branded
+      // Quieter "still on the way" palette: initiate-tier border/fill alphas
+      // on primaryViolet. Keeps Initiate legibly Arcane-Ascent-branded
       // without competing with the seven earned classes for visual prestige.
-      textColor = AppColors.primaryViolet;
       borderColor = AppColors.primaryViolet.withValues(
         alpha: ClassBadgeStyle.initiateBorderAlpha,
       );
@@ -122,10 +122,9 @@ class ClassBadge extends StatelessWidget {
         alpha: ClassBadgeStyle.initiateFillAlpha,
       );
     } else {
-      // Earned-class palette: hotViolet text + earned-tier border + 18%
-      // primaryViolet fill. Reserved for the seven classes a user unlocks
-      // after crossing rank 5 in some body part.
-      textColor = AppColors.hotViolet;
+      // Earned-class palette: earned-tier border + 18% primaryViolet fill.
+      // Reserved for the seven classes a user unlocks after crossing rank 5
+      // in some body part.
       borderColor = AppColors.hotViolet.withValues(
         alpha: ClassBadgeStyle.earnedBorderAlpha,
       );

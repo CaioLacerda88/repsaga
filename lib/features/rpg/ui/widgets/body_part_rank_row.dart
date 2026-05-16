@@ -1,179 +1,254 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../core/theme/app_icons.dart';
-import '../../../../core/theme/app_muscle_icons.dart';
+import '../../../../core/format/number_format.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../models/body_part.dart';
 import '../../models/character_sheet_state.dart';
-// Pulled in for the `VitalityStateColor.borderColor` extension
-// (state-driven rank-stamp tint). Extension lives in ui/utils/ post-
-// BUG-035 so models/vitality_state.dart stays Flutter-agnostic.
+import '../../providers/rank_up_pulse_provider.dart';
 import '../utils/vitality_state_styles.dart';
 import 'body_part_localization.dart';
-import 'rank_stamp.dart';
-import 'xp_progress_hairline.dart';
+import 'rank_up_pulse.dart';
 
-/// One body-part codex row on the character sheet — composes the rune sigil,
-/// localized name, [RankStamp], and [XpProgressHairline].
+/// Letter-spacing for the uppercase body-part name across trained +
+/// untrained rows. Phase 26b Option B v4 type token; matches the 12%
+/// tracking used by other UPPERCASE labels in `AppTextStyles.label`.
+const double _nameLetterSpacing = 1.2;
+
+/// Single body-part row on the Saga character sheet (Phase 26b Option B v4).
 ///
-/// **Asymmetric awakening (kickoff lock):** rows that are fully untrained
-/// (rank 1, 0 XP, peak 0) collapse to a compressed-height variant — sigil
-/// ghosted, no rank stamp, no hairline, just the muscle-group label and a
-/// dormant-rune sigil. Rows with any progress (rank > 1 OR vitality_peak > 0
-/// OR totalXp > 0) render the full expanded variant. This keeps day-1 from
-/// reading as "five empty stats waiting to be filled" — instead it reads as
-/// "one path opening, five paths still asleep".
-class BodyPartRankRow extends StatelessWidget {
+/// 48dp min-height tap target. Two-row layout inside:
+///   * Top row: 6dp body-part-hue dot · UPPERCASE 10sp name · 20sp
+///     Rajdhani-700 tabular rank num (right-aligned).
+///   * Middle: 4dp body-part-hue progress bar (within-rank fill on
+///     [AppColors.xpTrack] background).
+///   * Bottom: 9sp Rajdhani-600 textDim "X XP" + "Y para o próximo rank".
+///
+/// Untrained rows (`entry.isUntrained` — rank 1, totalXp 0, vitalityPeak 0)
+/// render at 0.4 opacity with `—` instead of the rank num, no bar, no
+/// label row.
+///
+/// The whole row is `InkWell` tappable → `/saga/stats?body_part=<dbValue>`
+/// so the stats deep-dive opens with the trend chart pre-selected.
+///
+/// When [RankUpPulseLocalStorage.isPulsing] returns true for this body
+/// part, the dot is wrapped in [RankUpPulse] for the 24h glow-ring
+/// overlay.
+class BodyPartRankRow extends ConsumerWidget {
   const BodyPartRankRow({super.key, required this.entry});
 
   final BodyPartSheetEntry entry;
 
-  static const double _expandedHeight = 60;
-  static const double _compressedHeight = 32;
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Always read the provider first — Riverpod convention is to watch
+    // unconditionally so the subscription set is stable across rebuilds.
+    // The untrained branch ignores the result (untrained rows never pulse).
+    final pulseStorage = ref.watch(rankUpPulseLocalStorageProvider);
     if (entry.isUntrained) {
-      return _CompressedRow(entry: entry);
+      return _UntrainedRow(entry: entry);
     }
-    return _ExpandedRow(entry: entry);
+    final isPulsing = pulseStorage.isPulsing(entry.bodyPart);
+    return _TrainedRow(entry: entry, isPulsing: isPulsing);
   }
-
-  static double heightFor(BodyPartSheetEntry entry) =>
-      entry.isUntrained ? _compressedHeight : _expandedHeight;
 }
 
-class _ExpandedRow extends StatelessWidget {
-  const _ExpandedRow({required this.entry});
+class _TrainedRow extends StatelessWidget {
+  const _TrainedRow({required this.entry, required this.isPulsing});
 
   final BodyPartSheetEntry entry;
+  final bool isPulsing;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      height: BodyPartRankRow._expandedHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            _Sigil(
-              bodyPart: entry.bodyPart,
-              tint: entry.vitalityState.borderColor,
-              size: 28,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _localizedName(entry.bodyPart, l10n),
-                    style: theme.textTheme.titleSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  XpProgressHairline(
-                    xpInRank: entry.xpInRank,
-                    xpForNextRank: entry.xpForNextRank,
-                    vitalityState: entry.vitalityState,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            RankStamp(rank: entry.rank, vitalityState: entry.vitalityState),
-          ],
-        ),
-      ),
+    final locale = Localizations.localeOf(context).languageCode;
+    final dotColor =
+        VitalityStateStyles.bodyPartColor[entry.bodyPart] ?? AppColors.textDim;
+    final fraction = entry.xpForNextRank <= 0
+        ? 1.0
+        : (entry.xpInRank / entry.xpForNextRank).clamp(0.0, 1.0);
+    final remaining = (entry.xpForNextRank - entry.xpInRank).clamp(
+      0.0,
+      double.infinity,
     );
-  }
-}
 
-class _CompressedRow extends StatelessWidget {
-  const _CompressedRow({required this.entry});
-
-  final BodyPartSheetEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      height: BodyPartRankRow._compressedHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            Opacity(
-              opacity: 0.4,
-              child: _Sigil(
-                bodyPart: entry.bodyPart,
-                tint: AppColors.textDim,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _localizedName(entry.bodyPart, l10n),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textDim,
+    // Semantics MUST wrap the InkWell directly (single build method, no
+    // intervening widget boundaries) so Flutter merges them into one
+    // SemanticsNode. When the wrapper sat in the parent for-loop in
+    // character_sheet_screen.dart, two widget layers (ConsumerWidget +
+    // private _TrainedRow) separated the SemanticsNode from the gesture
+    // detector — Flutter web's AOM dispatched Playwright's click to the
+    // outer node which had no GestureDetector, so onTap never fired. The
+    // proven-working pattern in `vitality_table.dart` is Semantics →
+    // (Material →) InkWell as direct neighbors in one build method.
+    // Cluster: semantics-identifier-pair-rule.
+    return Semantics(
+      container: true,
+      button: true,
+      identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+      child: InkWell(
+        onTap: () =>
+            context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    _Dot(color: dotColor, isPulsing: isPulsing),
+                    const SizedBox(width: 8),
+                    Text(
+                      _localizedName(entry.bodyPart, l10n).toUpperCase(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.textCream,
+                        letterSpacing: _nameLetterSpacing,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${entry.rank}',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textCream,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  key: const ValueKey('body-part-row-bar'),
+                  borderRadius: BorderRadius.circular(2),
+                  child: Container(
+                    height: 4,
+                    color: AppColors.xpTrack,
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: fraction,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(color: dotColor),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                    Text(
+                      '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Sigil extends StatelessWidget {
-  const _Sigil({
-    required this.bodyPart,
-    required this.tint,
-    required this.size,
-  });
+class _Dot extends StatelessWidget {
+  const _Dot({required this.color, required this.isPulsing});
 
-  final BodyPart bodyPart;
-  final Color tint;
-  final double size;
+  final Color color;
+  final bool isPulsing;
 
   @override
   Widget build(BuildContext context) {
-    final asset = _muscleAsset(bodyPart);
-    return AppIcons.render(asset, color: tint, size: size);
+    final dot = Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+    if (!isPulsing) return dot;
+    return RankUpPulse(color: color, child: dot);
   }
 }
 
-/// Map a body part to the canonical [AppMuscleIcons] asset path.
-String _muscleAsset(BodyPart bodyPart) {
-  switch (bodyPart) {
-    case BodyPart.chest:
-      return AppMuscleIcons.chest;
-    case BodyPart.back:
-      return AppMuscleIcons.back;
-    case BodyPart.legs:
-      return AppMuscleIcons.legs;
-    case BodyPart.shoulders:
-      return AppMuscleIcons.shoulders;
-    case BodyPart.arms:
-      return AppMuscleIcons.arms;
-    case BodyPart.core:
-      return AppMuscleIcons.core;
-    case BodyPart.cardio:
-      return AppMuscleIcons.cardio;
+class _UntrainedRow extends StatelessWidget {
+  const _UntrainedRow({required this.entry});
+
+  final BodyPartSheetEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    // Element-level alpha (0.4) instead of an Opacity wrapper — Opacity
+    // creates a compositing layer that the InkWell splash paints THROUGH
+    // at full alpha, which reads as a visual defect on tap. Applying alpha
+    // per-color lets the splash render at theme strength while the dimmed
+    // text + dot stay at 40% saturation.
+    final dimmedTextDim = AppColors.textDim.withValues(alpha: 0.4);
+    // Same single-build-method Semantics→InkWell pattern as _TrainedRow.
+    // Untrained rows are still tappable (they navigate to the stats deep-
+    // dive with body_part pre-filtered), so they need the same routing
+    // contract and the same identifier shape so the E2E selector
+    // `body-part-row-<slug>` works for every slug regardless of train state.
+    return Semantics(
+      container: true,
+      button: true,
+      identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+      child: InkWell(
+        onTap: () =>
+            context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: dimmedTextDim,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _localizedName(entry.bodyPart, l10n).toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: dimmedTextDim,
+                    letterSpacing: _nameLetterSpacing,
+                  ),
+                ),
+                const Spacer(),
+                Text('—', style: TextStyle(color: dimmedTextDim)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-// Body-part display name lookup is shared with the celebration overlays via
-// `body_part_localization.dart`.
 String _localizedName(BodyPart bodyPart, AppLocalizations l10n) =>
     localizedBodyPartName(bodyPart, l10n);

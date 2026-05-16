@@ -21,6 +21,11 @@ class HiveService {
   static const String workoutHistoryCache = 'workout_history_cache';
   static const String lastSetsCache = 'last_sets_cache';
 
+  /// Durable user state — excluded from [cacheSchemaBoxes] (see
+  /// `RankUpPulseLocalStorage`). A schema-version bump must NOT wipe an
+  /// active pulse window. Same lifetime contract as [offlineQueue].
+  static const String rankUpPulse = 'rank_up_pulse';
+
   /// Bundled schema version for the model-shape-dependent caches
   /// (`exerciseCache`, `routineCache`, `prCache`, `workoutHistoryCache`,
   /// `lastSetsCache`, `activeWorkout`). Bump by 1 in the same PR as any
@@ -84,6 +89,7 @@ class HiveService {
     prCache,
     workoutHistoryCache,
     lastSetsCache,
+    rankUpPulse,
   ];
 
   /// Open every box, recovering from any single-box corruption by
@@ -222,6 +228,7 @@ class HiveService {
       _clearIfOpen(prCache),
       _clearIfOpen(workoutHistoryCache),
       _clearIfOpen(lastSetsCache),
+      _clearIfOpen(rankUpPulse),
     ]);
   }
 

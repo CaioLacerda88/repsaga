@@ -15,9 +15,10 @@
 /// golden surfaces.
 ///
 /// **Where to use this.** Only on golden tests where the painted output
-/// includes rasterized text. Pure-shape goldens (e.g. CustomPainter polygons
-/// like `VitalityRadar`) should keep the default zero-tolerance comparator
-/// because they are byte-exact across platforms.
+/// includes rasterized text. Pure-shape goldens (geometric CustomPainter
+/// renderings — polygons, arcs, gradients without external imagery) should
+/// keep the default zero-tolerance comparator because they are byte-exact
+/// across platforms.
 ///
 /// **Tolerance choice.** [tolerance] is the maximum fraction of pixels that
 /// may differ (0.0 = exact, 1.0 = always pass). Default 0.03 (3%) gives

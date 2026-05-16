@@ -19,7 +19,7 @@
  * wrappers. The SAGA.* selectors in helpers/selectors.ts map to these.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
 import { SAGA, NAV, HISTORY, CELEBRATION } from '../helpers/selectors';
@@ -37,6 +37,19 @@ import {
   getUserIdByEmail,
   resetRpgStateForUser,
 } from '../helpers/test-data-reset';
+
+// ---------------------------------------------------------------------------
+// Shared helper: login as rpgFoundationUser and land on the character sheet.
+// Used by the three describe blocks whose beforeEach is identical:
+//   "foundation user character sheet", "navigation", "body-part row tap".
+// Blocks with unique preambles (DB reset, codex-nav drill, S12 Home nav)
+// keep their own inline beforeEach.
+// ---------------------------------------------------------------------------
+async function loginFoundationAndGoToCharacterSheet(page: Page): Promise<void> {
+  await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
+  await navigateToTab(page, 'Profile');
+  await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+}
 
 // ---------------------------------------------------------------------------
 // S1–S2: Character sheet renders (smoke)
@@ -78,8 +91,8 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
   }) => {
     // Core structural elements must be present.
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.vitalityRadar).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(SAGA.characterLevel).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({ timeout: 10_000 });
 
     // Zero-history onboarding banner must appear.
     await expect(page.locator(SAGA.firstSetAwakensBanner).first()).toBeVisible({
@@ -100,9 +113,7 @@ test.describe('Saga — fresh user character sheet', { tag: '@smoke' }, () => {
 
 test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await loginFoundationAndGoToCharacterSheet(page);
   });
 
   // S2: Foundation user — no zero-history banner, has XP and level > 1.
@@ -117,13 +128,14 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
     // Zero-history banner must NOT be visible for a user with history.
     await expect(page.locator(SAGA.firstSetAwakensBanner)).not.toBeVisible({ timeout: 5_000 });
 
-    // Halo and radar must be present.
+    // Halo and class label must be present — both confirm the data state rendered
+    // (not loading skeleton). Phase 26b replaces the radar with the SagaHeader.
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(SAGA.vitalityRadar).first()).toBeVisible({ timeout: 10_000 });
 
-    // Class badge must be visible — even if class is null (placeholder shows).
-    // The presence of the badge confirms the data state rendered (not loading skeleton).
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({ timeout: 15_000 });
+    // Class label (sagaHeaderClass) must be visible — even if class is null
+    // (placeholder "The iron will name you." shows). Presence confirms the
+    // rpgProgressProvider has emitted data (not loading state).
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({ timeout: 15_000 });
 
     // Multiple body-part rows must be present.
     for (const slug of ['chest', 'back', 'legs'] as const) {
@@ -137,12 +149,31 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
     // the character-level Semantics wrapper (canvaskit renders the numeral
     // on a canvas, but the Semantics(identifier:'character-level') wrapper
     // exposes the text via the accessibility tree).
-    const lvlText = await page
-      .locator(SAGA.characterLevel)
-      .first()
-      .textContent();
-    const lvl = Number(lvlText?.replace(/^Lvl\s*/, '').trim());
+    // Phase 26b: `SagaHeader` renders the level as a "<N>" + "LVL" stack
+    // (was a single "Lvl <N>" line). The Semantics wrapper still exposes
+    // `label: 'Lvl <N>'` for the AOM, but `textContent()` now returns the
+    // concatenated visible text (e.g. "3 3 LVL" — once for the aria-label
+    // shadow, once for the visible numeral, once for the LVL tag).
+    //
+    // Read the aria-label first (canonical "Lvl <N>" contract) and fall
+    // back to the first digit-run in textContent if the label is absent.
+    // Matches the working pattern in `rpg-foundation.spec.ts:readLvlFromCharacterSheet`.
+    const lvlEl = page.locator(SAGA.characterLevel).first();
+    const ariaLabel = await lvlEl.getAttribute('aria-label');
+    const rawText = ariaLabel ?? (await lvlEl.textContent()) ?? '';
+    const match = rawText.match(/\d+/);
+    const lvl = match ? Number(match[0]) : NaN;
     expect(lvl).toBeGreaterThan(1);
+  });
+
+  test('should render CharacterXpBar on the character sheet', async ({ page }) => {
+    // The bar is unconditional once the screen has loaded — it renders even
+    // on day-zero (showing 0 XP toward LVL 2). This smoke catches a missing
+    // SagaHeader → CharacterXpBar composition regression without asserting on
+    // math (widget tests already pin the math).
+    await expect(page.locator(SAGA.characterXpBar).first()).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 
@@ -153,9 +184,7 @@ test.describe('Saga — foundation user character sheet', { tag: '@smoke' }, () 
 
 test.describe('Saga — navigation', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, getUser('rpgFoundationUser').email, getUser('rpgFoundationUser').password);
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 20_000 });
+    await loginFoundationAndGoToCharacterSheet(page);
   });
 
   // S3: Gear icon → profile settings.
@@ -462,8 +491,9 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 20_000 });
 
-    // Confirm the class badge slot is rendered (whether loading placeholder or Initiate).
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({
+    // Confirm the class label slot is rendered (whether loading placeholder or Initiate).
+    // Phase 26b: sagaHeaderClass replaces the legacy classBadge selector.
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({
       timeout: 15_000,
     });
 
@@ -501,10 +531,11 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 20_000 });
 
-    // The class badge must be visible after the rank-up. The exact text depends
+    // The class label must be visible after the rank-up. The exact text depends
     // on AppLocalizations (locale-sensitive), so we assert visibility rather than
     // text content. The resolver contract is pinned by class_provider_test.dart S12.
-    await expect(page.locator(SAGA.classBadge).first()).toBeVisible({
+    // Phase 26b: sagaHeaderClass replaces the legacy classBadge selector.
+    await expect(page.locator(SAGA.sagaHeaderClass).first()).toBeVisible({
       timeout: 15_000,
     });
 
@@ -513,5 +544,77 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
     await expect(page.locator(SAGA.bodyPartRow('chest')).first()).toBeVisible({
       timeout: 10_000,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S13: Body-part row tap → /saga/stats?body_part=<slug> (Phase 26b Task 8)
+//
+// Both _TrainedRow and _UntrainedRow have InkWell tap targets wired to
+// context.push('/saga/stats', extra: {'body_part': slug}). The StatsDeepDive
+// screen appends the body_part as a query parameter. This smoke test verifies
+// the routing contract end-to-end using rpgFoundationUser (has trained rows).
+//
+// Not tagged @smoke: the body-part routing is a regression test for Phase 26b
+// Task 8's InkWell wiring. The existing smoke gate already covers navigation
+// to /saga/stats via the codex nav row (S5).
+// ---------------------------------------------------------------------------
+
+test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginFoundationAndGoToCharacterSheet(page);
+  });
+
+  // TODO(26-tap-routing-e2e): Skipped per PR #234 user decision after
+  // 4 fix attempts. Production code is correct (widget test pins the
+  // contract in body_part_rank_row_test.dart; Playwright trace shows
+  // the destination Stats screen rendering on tap). The friction is
+  // in proving the navigation via Flutter web's AOM in CI — neither
+  // `toHaveURL` nor `aria-selected="true"` reliably reflects the
+  // post-tap state in headless runs. Revisit when 26c lands a similar
+  // tap surface and we can build a shared helper, OR when Flutter
+  // web's AOM-for-navigation diagnostic tooling improves. The widget
+  // test gives us functional coverage; this E2E was an extra smoke
+  // layer. See cluster memory: flutter-web-url-assertion +
+  // semantics-button-missing.
+  test.skip('should open stats deep-dive when a body-part row is tapped', async ({ page }) => {
+    // Tap the BACK row (not chest — chest is the screen's default
+    // pre-selection, so a chest landing would be observationally identical
+    // whether or not the `body_part` query param was consumed). Tapping a
+    // non-default slug means the test fails if the deep-link routing
+    // contract is broken — the trend chart + vitality table would default
+    // to chest instead of back.
+    const backRow = page.locator(SAGA.bodyPartRow('back')).first();
+    await backRow.scrollIntoViewIfNeeded();
+    await expect(backRow).toBeVisible({ timeout: 10_000 });
+    await backRow.click();
+
+    // Stats screen content visible (saga-stats-screen Semantics identifier).
+    //
+    // We do NOT assert on `page.toHaveURL(...)` here. GoRouter on Flutter
+    // web uses hash routing (HashUrlStrategy by default), and `context.push`
+    // from inside a `ShellRoute` does not always reflect the new path in
+    // `window.location.hash` within Playwright's poll window — the trace
+    // for this test on CI showed `location.hash == '#/profile'` even
+    // though the Stats screen was already mounted and visible. The same
+    // pattern is documented in S3 above ("URL update via context.push is
+    // unreliable in Flutter web — assert on element visibility"). Element
+    // visibility + the body_part-pre-selection assertion below cover the
+    // routing contract without depending on URL timing.
+    await expect(page.locator(SAGA.statsDeepDiveScreen).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Pre-selection proof: the VitalityTable row for `back` must be marked
+    // selected. `vitalityTable.dart` sets `Semantics(selected: isSelected)`
+    // on the row whose body part equals `_selectedBodyPart`, which is
+    // initialised from `widget.initialBodyPart` — the value derived from
+    // the `body_part` query param in the route builder. If the query param
+    // did not reach the screen, chest (the default) would be selected
+    // instead and `[aria-selected="true"]` on `vitality-row-back` would
+    // never appear.
+    await expect(
+      page.locator(`${SAGA.vitalityRow('back')}[aria-selected="true"]`).first(),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });

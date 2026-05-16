@@ -886,15 +886,27 @@ export const SAGA = {
    * read the numeric level from the AOM label.
    */
   characterLevel: '[flt-semantics-identifier="character-level"]',
-  /** VitalityRadar canvas — Semantics(identifier: 'vitality-radar') */
-  vitalityRadar: '[flt-semantics-identifier="vitality-radar"]',
   /** Per-body-part rank row — Semantics(identifier: 'body-part-row-{slug}') */
   bodyPartRow: (slug: 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core') =>
     `[flt-semantics-identifier="body-part-row-${slug}"]`,
-  /** ClassBadge slot — Semantics(identifier: 'class-badge') */
-  classBadge: '[flt-semantics-identifier="class-badge"]',
-  /** ActiveTitlePill — Semantics(identifier: 'active-title-pill') */
-  activeTitlePill: '[flt-semantics-identifier="active-title-pill"]',
+  /**
+   * Phase 26b SagaHeader class-label Text — Semantics(identifier: 'saga-header-class').
+   * Replaces the legacy ClassBadge selector ('class-badge'). The class label
+   * is now a Text child of the SagaHeader meta column rather than a standalone
+   * ClassBadge widget.
+   */
+  sagaHeaderClass: '[flt-semantics-identifier="saga-header-class"]',
+  /**
+   * Phase 26b SagaHeader active-title Text — Semantics(identifier: 'saga-header-title').
+   * Replaces the legacy ActiveTitlePill selector. Only rendered when an active
+   * title is equipped (activeTitle != null && isNotEmpty).
+   */
+  sagaHeaderTitle: '[flt-semantics-identifier="saga-header-title"]',
+  /**
+   * Phase 26b CharacterXpBar widget — Semantics(identifier: 'character-xp-bar').
+   * The XP progress bar shown beneath the SagaHeader on the character sheet.
+   */
+  characterXpBar: '[flt-semantics-identifier="character-xp-bar"]',
   /** DormantCardioRow — Semantics(identifier: 'dormant-cardio-row') */
   dormantCardioRow: '[flt-semantics-identifier="dormant-cardio-row"]',
   /** First-set-awakens onboarding banner — Semantics(identifier: 'first-set-awakens-banner') */
@@ -903,18 +915,6 @@ export const SAGA = {
   codexNavStats: '[flt-semantics-identifier="codex-nav-stats"]',
   codexNavTitles: '[flt-semantics-identifier="codex-nav-titles"]',
   codexNavHistory: '[flt-semantics-identifier="codex-nav-history"]',
-  /**
-   * RankStamp circle badge inside a BodyPartRankRow (expanded rows only).
-   * Semantics is inherited from the parent body-part-row container. There is no
-   * per-stamp identifier. Use `SAGA.bodyPartRow(slug)` to scope assertion to a
-   * specific body part, then look for a descendant with rank text if needed.
-   * This entry documents the current implementation — direct targeting is not
-   * supported until a per-stamp identifier is added.
-   *
-   * Note: the WIP contract listed `rankStamp` as a selector to add; this is the
-   * accurate representation of what the DOM exposes today.
-   */
-  // rankStamp: not selectable by identifier in this release (no per-stamp Semantics)
   /** Gear-icon settings button in CharacterSheetScreen AppBar — Semantics(identifier: 'saga-settings-btn') */
   gearIcon: '[flt-semantics-identifier="saga-settings-btn"]',
   /** ProfileSettingsScreen root — identified by PROFILE.heading ('profile-heading') */

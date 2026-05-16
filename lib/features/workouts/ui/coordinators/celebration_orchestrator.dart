@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../auth/providers/auth_providers.dart';
+import '../../../rpg/data/rank_up_pulse_local_storage.dart';
 import '../../../rpg/domain/celebration_queue.dart';
+import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/earned_titles_provider.dart';
+import '../../../rpg/providers/rank_up_pulse_provider.dart';
 import '../../../rpg/ui/celebration_player.dart';
 import '../../../rpg/ui/saga_intro_gate.dart';
 
@@ -91,6 +94,7 @@ class CelebrationOrchestrator {
     final priorEarned = ref.read(earnedTitlesProvider).value ?? const [];
     final hasPriorEarnedTitles = priorEarned.isNotEmpty;
     final catalog = ref.read(titleCatalogProvider).value ?? const [];
+    final pulseStorage = ref.read(rankUpPulseLocalStorageProvider);
 
     if (userId != null) {
       await SagaIntroSequencer.waitForIntroDismissed(userId).timeout(
@@ -133,6 +137,63 @@ class CelebrationOrchestrator {
         container.invalidate(equippedTitleSlugProvider);
       },
     );
+    // Phase 26b: write 24h pulse-window trigger timestamps for every
+    // rank-up that played in the celebration. BodyPartRankRow reads
+    // isPulsing() to decide whether to render the glow-ring overlay.
+    // Done AFTER play() returns so the pulse only starts after the user
+    // has actually seen the celebration — pulsing before dismissal would
+    // duplicate signal.
+    await recordRankUpPulses(
+      queue: celebration.queue,
+      pulseStorage: pulseStorage,
+    );
+
     return (userTappedOverflow: celebrationResult.userTappedOverflow);
+  }
+
+  /// Iterates [queue] for [RankUpEvent]s and writes a 24h pulse-window
+  /// trigger to [pulseStorage] for each. `BodyPartRankRow` reads
+  /// `isPulsing()` to decide whether to render the glow-ring overlay.
+  ///
+  /// **Fire-and-forget contract:** each write is wrapped in a try/catch.
+  /// A missed pulse write is cosmetic (no glow-ring on the dot for 24h —
+  /// the rank-up itself is server-side persistent and surfaces on the
+  /// saga screen). A Hive disk-full or corrupted-box exception must NEVER
+  /// abort the post-workout save flow over a cosmetic write. One bad
+  /// write also must not skip the remaining body parts.
+  ///
+  /// **Known limitation (Phase 26b plan, Task 10):** the [OverflowPayload]
+  /// only carries a count of rank-ups that didn't fit in the celebration
+  /// queue — the body parts aren't preserved. By taking just [queue]
+  /// (not the full [CelebrationQueueResult]), this helper structurally
+  /// cannot see overflow body parts. Overflow rank-ups DO NOT pulse.
+  /// Acceptable for v1 because overflow scenarios are rare (user must
+  /// rank up 4+ body parts in a single workout). If overflow becomes
+  /// common enough to warrant pulsing, extend [OverflowPayload] to carry
+  /// `List<BodyPart>` and update this helper's caller.
+  @visibleForTesting
+  static Future<void> recordRankUpPulses({
+    required List<CelebrationEvent> queue,
+    required RankUpPulseLocalStorage pulseStorage,
+  }) async {
+    for (final event in queue.whereType<RankUpEvent>()) {
+      try {
+        await pulseStorage.recordRankUp(event.bodyPart);
+      } on Exception catch (e, stack) {
+        // Fire-and-forget: cosmetic pulse failure must not abort the
+        // post-workout flow, and must not skip the remaining body
+        // parts. Log via developer.log so the failure is in
+        // `adb logcat` for diagnosis without invoking crash-report
+        // surfaces — consistent with the rest of celebration
+        // playback's never-throws posture.
+        developer.log(
+          'recordRankUp for ${event.bodyPart.dbValue} failed; continuing. '
+          'Cause: $e',
+          name: 'CelebrationOrchestrator',
+          error: e,
+          stackTrace: stack,
+        );
+      }
+    }
   }
 }

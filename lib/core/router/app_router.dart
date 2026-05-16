@@ -24,6 +24,7 @@ import '../../features/workouts/models/active_workout_state.dart';
 import '../../features/workouts/providers/workout_providers.dart';
 import '../../features/profile/ui/manage_data_screen.dart';
 import '../../features/profile/ui/profile_settings_screen.dart';
+import '../../features/rpg/models/body_part.dart';
 import '../../features/rpg/ui/character_sheet_screen.dart';
 import '../../features/rpg/ui/stats_deep_dive_screen.dart';
 import '../../features/rpg/ui/titles_screen.dart';
@@ -235,7 +236,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/saga/stats',
-            builder: (context, state) => const StatsDeepDiveScreen(),
+            builder: (context, state) {
+              // Deep-link: ?body_part=<slug> pre-selects the trend chart.
+              final bodyPartToken = state.uri.queryParameters['body_part'];
+              final initialBodyPart = bodyPartToken == null
+                  ? null
+                  : BodyPart.tryFromDbValue(bodyPartToken);
+              return StatsDeepDiveScreen(initialBodyPart: initialBodyPart);
+            },
           ),
           GoRoute(
             path: '/saga/titles',

@@ -43,6 +43,22 @@ class RuneHalo extends StatefulWidget {
 class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
   AnimationController? _controller;
 
+  /// Compact outer-padding threshold (Phase 26b). Below this size, static
+  /// states use the compact glow-pad; at or above, the legacy reservation
+  /// applies. The threshold is Material's tap-target floor — RuneHalo
+  /// instances below 48dp are header sigils that never need glow room.
+  static const double _compactSizeThreshold = 48;
+
+  /// Compact glow-pad for static states at sub-48dp sizes (Phase 26b).
+  /// Reserves 6dp on each axis so the sigil has breathing room without
+  /// the legacy 30dp glow halo.
+  static const double _compactGlowPad = 12;
+
+  /// Legacy glow-pad for animated states (fading breathing pulse, radiant
+  /// sweep arc) and any non-compact instance. Reserves 30dp on each axis
+  /// so the painter sub-widgets don't clip.
+  static const double _legacyGlowPad = 60;
+
   @override
   void initState() {
     super.initState();
@@ -102,7 +118,17 @@ class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final containerSize = widget.size + 60;
+    // Phase 26b: when the halo is used as the 36dp Saga-header sigil the
+    // legacy +60dp glow-padding is visually disruptive. Only the static
+    // states (active, dormant, untested) qualify for the compact pad —
+    // animated states (fading, radiant) keep the full reservation so their
+    // breathing pulse + sweep arc don't clip.
+    final isAnimatedState =
+        widget.state == VitalityState.fading ||
+        widget.state == VitalityState.radiant;
+    final isCompact = widget.size < _compactSizeThreshold && !isAnimatedState;
+    final glowPad = isCompact ? _compactGlowPad : _legacyGlowPad;
+    final containerSize = widget.size + glowPad;
     return SizedBox(
       width: containerSize,
       height: containerSize,
@@ -202,24 +228,18 @@ class _ActiveHalo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size + 32,
-      height: size + 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.hotViolet.withValues(alpha: 0.45),
-            blurRadius: 28,
-            spreadRadius: 2,
-          ),
-          BoxShadow(
-            color: AppColors.primaryViolet.withValues(alpha: 0.25),
-            blurRadius: 12,
-            spreadRadius: 4,
-          ),
-        ],
-      ),
+    // Phase 26b: active-state glow REMOVED. The previous two-layer
+    // boxShadow read as "this is a special moment" but active is the
+    // *steady state* — the user is on the path, not crossing a threshold.
+    // Reserving glow for radiant (the reward state) restores the contrast
+    // that made the four halo states distinguishable at a glance.
+    //
+    // The +8 padding is breathing room around the sigil, NOT glow space —
+    // a SizedBox makes that intent explicit (a Container with no
+    // decoration would suggest there's a shape/border/shadow to read).
+    return SizedBox(
+      width: size + 8,
+      height: size + 8,
       child: Center(
         child: AppIcons.render(
           AppIcons.hero,

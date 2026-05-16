@@ -174,10 +174,18 @@ Each PROJECT.md step follows this pipeline. **No step is skippable.**
    - **E2E (visual-only / no flow change):** Selector impact assessment only.
    - Removes or updates stale E2E tests affected by the change.
    - Bugs found → back to `tech-lead` → reviewer re-engages briefly → QA re-runs from top.
-9. **Verify after QA** — `make ci` + E2E green. Final check before merge.
-10. **Ship** — QA OK + CI green → squash merge.
-11. **Apply migrations** — After merge, check if the phase added/modified SQL migrations (`supabase/migrations/`). If so, apply them to the hosted Supabase instance with `npx supabase db push` (or link + push). Verify the schema matches what the code expects before moving on. During QA/testing, always confirm that any new migrations have been applied to the environment under test.
-12. **Close WIP** — Remove WIP section, condense phase in PROJECT.md §4 (see lifecycle below).
+9. **Visual verification (if UI)** — Required whenever a phase ships a new or rewritten user-facing surface. SKIPPED for backend-only / token-only / pure-bugfix phases.
+   - Build the Flutter web app from the post-QA HEAD (`flutter build web`).
+   - Boot the app (Playwright auto-serves `build/web/` on port 4200 when `FLUTTER_APP_URL=` is empty, OR use Chrome DevTools MCP if interactive inspection is needed).
+   - Sign in as each relevant test user from `test/e2e/fixtures/test-users.ts`. For a phase that changes the Saga screen, that's at minimum: a foundation user (steady-state data) AND a fresh user (day-zero). Other screens pick the analogous data states.
+   - For each user, screenshot the affected surface at three viewports: **320dp, 360dp, 412dp** (covering smallest Android, baseline, and large-phone breakpoints). Use `mcp__plugin_playwright_playwright__browser_resize` + `browser_take_screenshot`.
+   - Compare the screenshots side-by-side with the `docs/phase-<N>-mockups.html` mockup for that surface. The mockup is the locked design target — flag any drift loudly (color values off, spacing wrong, ellipsis not firing, etc.).
+   - Surface the comparison in the PR thread (drag-and-drop the screenshots, OR `gh pr comment` with paths) so the merger can eyeball them. Don't bury this in a transcript.
+   - Bugs found → back to `tech-lead` → re-render → re-screenshot. Don't merge until the visuals match the mockup.
+10. **Verify after QA + visuals** — `make ci` + E2E green + visuals match. Final check before merge.
+11. **Ship** — QA OK + CI green + visuals match → squash merge.
+12. **Apply migrations** — After merge, check if the phase added/modified SQL migrations (`supabase/migrations/`). If so, apply them to the hosted Supabase instance with `npx supabase db push` (or link + push). Verify the schema matches what the code expects before moving on. During QA/testing, always confirm that any new migrations have been applied to the environment under test.
+13. **Close WIP** — Remove WIP section, condense phase in PROJECT.md §4 (see lifecycle below).
 
 ### Pipeline exceptions
 

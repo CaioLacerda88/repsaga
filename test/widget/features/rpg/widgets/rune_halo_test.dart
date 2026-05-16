@@ -232,4 +232,67 @@ void main() {
       );
     });
   });
+
+  group('RuneHalo — Saga header sizing + active-glow removal', () {
+    testWidgets('active state renders no BoxShadow', (tester) async {
+      await tester.pumpWidget(
+        _wrap(const RuneHalo(state: VitalityState.active, size: 36)),
+      );
+      await tester.pumpAndSettle();
+      final containers = tester.widgetList<Container>(find.byType(Container));
+      for (final c in containers) {
+        final dec = c.decoration;
+        if (dec is BoxDecoration) {
+          expect(
+            dec.boxShadow == null || dec.boxShadow!.isEmpty,
+            isTrue,
+            reason:
+                'Active-state RuneHalo must not render any BoxShadow at 36dp.',
+          );
+        }
+      }
+    });
+
+    testWidgets('radiant state still renders a sweep (regression guard)', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(const RuneHalo(state: VitalityState.radiant, size: 36)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      // The radiant state uses a CustomPaint sweep; just confirm the painter
+      // is mounted. Glow boxShadow still present in radiant — that's the
+      // reward signal and stays unchanged.
+      expect(find.byType(CustomPaint), findsWidgets);
+    });
+
+    testWidgets('outer reserved size shrinks below 48dp threshold', (
+      tester,
+    ) async {
+      // At size: 36, compact pad +12 → outer 48dp.
+      await tester.pumpWidget(
+        _wrap(const RuneHalo(state: VitalityState.active, size: 36)),
+      );
+      await tester.pumpAndSettle();
+      final size = tester.getSize(find.byType(RuneHalo));
+      expect(size.width, closeTo(48, 1));
+      expect(size.height, closeTo(48, 1));
+    });
+
+    testWidgets('radiant state at 36dp keeps legacy padding (no sweep clip)', (
+      tester,
+    ) async {
+      // The Critical-fix regression: radiant must NOT use the compact pad,
+      // because _RadiantHalo paints a sweep arc into size + 60. If the
+      // outer container shrinks to 48dp, the arc clips.
+      await tester.pumpWidget(
+        _wrap(const RuneHalo(state: VitalityState.radiant, size: 36)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final size = tester.getSize(find.byType(RuneHalo));
+      // Expected: 36 + 60 = 96dp outer. closeTo for sub-pixel safety.
+      expect(size.width, closeTo(96, 1));
+      expect(size.height, closeTo(96, 1));
+    });
+  });
 }

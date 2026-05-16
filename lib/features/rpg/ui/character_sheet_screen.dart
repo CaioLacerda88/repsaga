@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
@@ -11,27 +10,26 @@ import '../models/character_sheet_state.dart';
 import '../models/vitality_state.dart';
 import '../providers/character_sheet_provider.dart';
 import 'utils/vitality_state_styles.dart';
-import 'widgets/active_title_pill.dart';
 import 'widgets/body_part_rank_row.dart';
-import 'widgets/class_badge.dart';
+import 'widgets/character_xp_bar.dart';
 import 'widgets/codex_nav_row.dart';
 import 'widgets/dormant_cardio_row.dart';
-import 'widgets/rune_halo.dart';
-import 'widgets/vitality_radar.dart';
+import 'widgets/saga_header.dart';
 
 /// `/profile` (the "Saga" tab) character sheet.
 ///
-/// Replaces the legacy profile screen with the v1 RPG identity surface per
-/// spec §13.1. Account/preferences settings move to `/profile/settings`,
-/// reachable via the gear icon in the app bar.
+/// Phase 26b Option B v4 composition: a tight three-column header plus a
+/// 6dp character XP bar collapse the rune face into ~80dp of chrome, freeing
+/// the screen for six trainable body-part rows + a dormant cardio row.
+/// Account/preferences settings move to `/profile/settings`, reachable via
+/// the gear icon in the app bar.
 ///
 /// **Composition (top-down):**
 ///   1. AppBar — "Saga" title + gear icon → `/profile/settings`.
-///   2. Header — [RuneHalo] + Lvl numeral + [ClassBadge] + [ActiveTitlePill].
-///   3. Onboarding hint — [firstSetAwakensCopy] banner when `lifetimeXp == 0`.
-///   4. [VitalityRadar] — 320 dp hex radar.
-///   5. Six [BodyPartRankRow]s — asymmetric (expanded for trained,
-///      compressed for untrained).
+///   2. [SagaHeader] — rune halo (36dp) · LVL numeral · class + title meta.
+///   3. [CharacterXpBar] — 6dp violet gradient track + remaining-to-LVL+1.
+///   4. Onboarding hint — first-set-awakens banner when `isZeroHistory`.
+///   5. Six [BodyPartRankRow]s — Option B v4 inline rank + mini XP bar.
 ///   6. [DormantCardioRow] — single distinct row.
 ///   7. Three [CodexNavRow]s — Stats / Titles / History.
 ///
@@ -92,22 +90,42 @@ class _CharacterSheetBody extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 16),
-            _SheetHeader(sheet: sheet),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            SagaHeader(
+              haloState: sheet.haloState,
+              characterLevel: sheet.characterLevel,
+              characterClass: sheet.characterClass,
+              activeTitle: sheet.activeTitle,
+            ),
+            const SizedBox(height: 12),
+            // Day-zero ordering: welcoming banner sits between header and bar
+            // so the user reads "welcome → first set will awaken → your goal
+            // (the bar)". On non-zero history the banner is omitted and the
+            // bar follows the header directly.
             if (sheet.isZeroHistory) ...[
               const _FirstSetAwakensBanner(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
             ],
-            Center(
-              child: Semantics(
-                container: true,
-                identifier: 'vitality-radar',
-                child: VitalityRadar(entries: sheet.bodyPartProgress),
-              ),
+            CharacterXpBar(
+              lifetimeXp: sheet.lifetimeXp,
+              xpForNextLevel: sheet.xpForNextLevel,
+              characterLevel: sheet.characterLevel,
             ),
-            const SizedBox(height: 24),
-            _BodyPartRows(entries: sheet.bodyPartProgress),
+            const SizedBox(height: 16),
+            // BodyPartRankRow emits its OWN Semantics(container, button,
+            // identifier) wrapper directly around the inner InkWell — this is
+            // load-bearing because Flutter web's AOM bridge only forwards
+            // Playwright clicks to the gesture detector when the Semantics
+            // node and the InkWell live in the same build() method (one
+            // SemanticsNode boundary). Wrapping it externally here meant the
+            // SemanticsNode and the InkWell were on separate nodes; the AOM
+            // dispatched the click to the outer (gesture-less) node, so
+            // onTap never fired even though `button: true` was set. The
+            // proven-working pattern from `vitality_table.dart` is to colocate
+            // the Semantics + InkWell in one build method. Cluster:
+            // semantics-identifier-pair-rule.
+            for (final entry in sheet.bodyPartProgress)
+              BodyPartRankRow(entry: entry),
             const SizedBox(height: 16),
             Semantics(
               container: true,
@@ -119,60 +137,6 @@ class _CharacterSheetBody extends StatelessWidget {
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.sheet});
-
-  final CharacterSheetState sheet;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          Semantics(
-            container: true,
-            identifier: 'rune-halo',
-            child: RuneHalo(state: sheet.haloState),
-          ),
-          const SizedBox(height: 8),
-          Semantics(
-            container: true,
-            identifier: 'character-level',
-            child: Text(
-              'Lvl ${sheet.characterLevel}',
-              style: GoogleFonts.rajdhani(
-                fontSize: 56,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textCream,
-                height: 1,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-          // Phase 18e UX-critic pass: 12 → 16dp gives the (now larger,
-          // titleMedium) class badge breathing room beneath the 56sp LVL
-          // numeral so the hierarchy reads LVL > class > title pill.
-          const SizedBox(height: 16),
-          Semantics(
-            container: true,
-            identifier: 'class-badge',
-            child: ClassBadge(characterClass: sheet.characterClass),
-          ),
-          if (sheet.activeTitle != null && sheet.activeTitle!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Semantics(
-              container: true,
-              identifier: 'active-title-pill',
-              child: ActiveTitlePill(title: sheet.activeTitle),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -224,26 +188,6 @@ class _FirstSetAwakensBanner extends StatelessWidget {
   }
 }
 
-class _BodyPartRows extends StatelessWidget {
-  const _BodyPartRows({required this.entries});
-
-  final List<BodyPartSheetEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final entry in entries)
-          Semantics(
-            container: true,
-            identifier: 'body-part-row-${entry.bodyPart.dbValue}',
-            child: BodyPartRankRow(entry: entry),
-          ),
-      ],
-    );
-  }
-}
-
 class _CodexNavSection extends StatelessWidget {
   const _CodexNavSection();
 
@@ -284,29 +228,40 @@ class _CharacterSheetSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        // Bottom padding matches the live body's trailing SizedBox so the
+        // skeleton placeholder rows don't sit flush against the viewport
+        // edge during the loading flash.
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
           children: [
-            const SizedBox(height: 32),
-            // Halo placeholder.
-            Container(
-              width: 156,
-              height: 156,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
+            // Phase 26b: SagaHeader's three-column footprint ~64dp tall.
+            DecoratedBox(
+              decoration: BoxDecoration(
                 color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(kRadiusMd),
               ),
+              child: const SizedBox(height: 64),
+            ),
+            const SizedBox(height: 16),
+            // CharacterXpBar placeholder (6dp bar + ~10dp label row).
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(kRadiusSm),
+              ),
+              child: const SizedBox(height: 16),
             ),
             const SizedBox(height: 24),
-            for (var i = 0; i < 4; i++) ...[
-              Container(
-                height: 48,
+            // Six body-part-row placeholders (mirroring the new composition).
+            for (var i = 0; i < 6; i++) ...[
+              DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(kRadiusMd),
+                  borderRadius: BorderRadius.circular(kRadiusSm),
                 ),
+                child: const SizedBox(height: 56),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
           ],
         ),
@@ -333,13 +288,15 @@ class _CharacterSheetError extends StatelessWidget {
             // BUG-026: drop generic Material error glyph in favor of the
             // brand hero sigil (dimmed) so the error state stays inside the
             // Arcane Ascent visual language.
-            Opacity(
-              opacity: 0.4,
-              child: AppIcons.render(
-                AppIcons.hero,
-                color: AppColors.textDim,
-                size: 48,
-              ),
+            AppIcons.render(
+              AppIcons.hero,
+              // Phase 26b pattern: element-level alpha over the textDim color
+              // instead of an Opacity wrapper. Avoids the compositing layer +
+              // matches the BodyPartRankRow._UntrainedRow approach for visual
+              // dimming. The icon is non-interactive here so the splash-bleed
+              // concern doesn't apply, but consistency in the pattern wins.
+              color: AppColors.textDim.withValues(alpha: 0.4),
+              size: 48,
             ),
             const SizedBox(height: 16),
             Text(

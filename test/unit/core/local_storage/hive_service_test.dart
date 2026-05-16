@@ -19,7 +19,7 @@ void main() {
     });
 
     group('box constants', () {
-      test('all 8 box names are unique', () {
+      test('all 9 box names are unique', () {
         final names = [
           HiveService.activeWorkout,
           HiveService.offlineQueue,
@@ -29,13 +29,14 @@ void main() {
           HiveService.prCache,
           HiveService.workoutHistoryCache,
           HiveService.lastSetsCache,
+          HiveService.rankUpPulse,
         ];
-        expect(names.toSet().length, 8);
+        expect(names.toSet().length, 9);
       });
     });
 
     group('init', () {
-      test('opens all 8 boxes', () async {
+      test('opens all 9 boxes', () async {
         // HiveService.init() calls Hive.initFlutter() which needs Flutter
         // bindings. Instead, we simulate what init does: open all boxes
         // and verify they are accessible.
@@ -48,6 +49,7 @@ void main() {
           Hive.openBox<dynamic>(HiveService.prCache),
           Hive.openBox<dynamic>(HiveService.workoutHistoryCache),
           Hive.openBox<dynamic>(HiveService.lastSetsCache),
+          Hive.openBox<dynamic>(HiveService.rankUpPulse),
         ]);
 
         expect(Hive.isBoxOpen(HiveService.activeWorkout), isTrue);
@@ -58,6 +60,7 @@ void main() {
         expect(Hive.isBoxOpen(HiveService.prCache), isTrue);
         expect(Hive.isBoxOpen(HiveService.workoutHistoryCache), isTrue);
         expect(Hive.isBoxOpen(HiveService.lastSetsCache), isTrue);
+        expect(Hive.isBoxOpen(HiveService.rankUpPulse), isTrue);
       });
     });
 
@@ -119,10 +122,10 @@ void main() {
         },
       );
 
-      test('init() opens all 8 boxes and recovers any corrupt one', () async {
-        // Plant corruption in two of the eight boxes; init must still
+      test('init() opens all 9 boxes and recovers any corrupt one', () async {
+        // Plant corruption in two of the nine boxes; init must still
         // bring all of them up. Iterate the canonical list so this test
-        // stays in sync if a ninth box is ever added.
+        // stays in sync if a tenth box is ever added.
         for (final name in [HiveService.prCache, HiveService.routineCache]) {
           await File(
             '${tempDir.path}/$name.hive',
@@ -323,7 +326,7 @@ void main() {
     });
 
     group('clearAll', () {
-      test('clears all 8 boxes', () async {
+      test('clears all 9 boxes', () async {
         // Open all boxes and put some data in each.
         final boxNames = [
           HiveService.activeWorkout,
@@ -334,6 +337,7 @@ void main() {
           HiveService.prCache,
           HiveService.workoutHistoryCache,
           HiveService.lastSetsCache,
+          HiveService.rankUpPulse,
         ];
 
         for (final name in boxNames) {
@@ -365,7 +369,7 @@ void main() {
           await box.put('test_key', 'test_value');
         }
 
-        // The other 6 boxes remain closed — _clearIfOpen should skip them
+        // The other 7 boxes remain closed — _clearIfOpen should skip them
         // without throwing.
         const service = HiveService();
         await expectLater(service.clearAll(), completes);

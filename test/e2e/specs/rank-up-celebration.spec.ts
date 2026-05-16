@@ -493,7 +493,9 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.locator(SAGA.activeTitlePill).first()).toBeVisible({
+    // Phase 26b: sagaHeaderTitle replaces the legacy activeTitlePill selector.
+    // The title text is now a Semantics-wrapped Text in the SagaHeader meta column.
+    await expect(page.locator(SAGA.sagaHeaderTitle).first()).toBeVisible({
       timeout: 10_000,
     });
   });
