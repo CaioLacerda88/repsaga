@@ -79,6 +79,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Dormant. Train this group to reawaken its path.';
 
   @override
+  String get vitalityRowUntestedSubtitle => 'No data';
+
+  @override
   String get vitalityStateBandActive => 'Active';
 
   @override

@@ -380,8 +380,12 @@ void main() {
     // patch every row read `0% / "Awaits your first stride."` which was ambiguous
     // (is this a failure grade?). After the patch:
     //
-    //   * peak == 0  → state = untested → readout `—` + "Uncharted — log a set
-    //                  to begin." copy.
+    //   * peak == 0  → state = untested → readout `—` + the Phase 26c short
+    //                  subtitle "No data" (en) / "Sem dados" (pt) sourced from
+    //                  `vitalityRowUntestedSubtitle` (compact stats register).
+    //                  The long-form `vitalityCopyUntested` ("Uncharted — log
+    //                  a set to begin.") remains in place for any other
+    //                  surface that consumes `VitalityStateStyles.localizedCopy`.
     //   * peak > 0 && ewma == 0 → state = dormant → readout `0%` + the dormant
     //                              copy "Dormant. Train this group to reawaken
     //                              its path." (rewritten in Phase 26 — the
@@ -389,9 +393,8 @@ void main() {
     //                              was Untested-state copy mislabeled as
     //                              Dormant). Regression pin: peak > 0 must NOT
     //                              route to untested.
-    testWidgets('renders `—` (em-dash) and untested copy for an untested row', (
-      tester,
-    ) async {
+    testWidgets('should render `—` (em-dash) and the short "No data" subtitle '
+        'for an untested row', (tester) async {
       const untestedRow = VitalityTableRow(
         bodyPart: BodyPart.chest,
         pct: 0,
@@ -411,8 +414,11 @@ void main() {
       // Untested readout: `—`, NOT `0%`.
       expect(find.text('—'), findsOneWidget);
       expect(find.text('0%'), findsNothing);
-      // Untested marginalia copy.
-      expect(find.text('Uncharted — log a set to begin.'), findsOneWidget);
+      // Untested subtitle: the new Phase 26c short form "No data" (en),
+      // not the long-form vitalityCopyUntested ("Uncharted — log a set to
+      // begin.") which stays in place for other surfaces.
+      expect(find.text('No data'), findsOneWidget);
+      expect(find.text('Uncharted — log a set to begin.'), findsNothing);
     });
 
     testWidgets('still renders `0%` and dormant copy for a fully-decayed row '

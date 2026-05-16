@@ -107,7 +107,13 @@ class _VitalityTableRow extends StatelessWidget {
         ? '—'
         : '${(row.pct * 100).round()}%';
     final localizedName = localizedBodyPartName(row.bodyPart, l10n);
-    final stateCopy = VitalityStateStyles.localizedCopy(row.state, l10n);
+    // Phase 26c (Task 10): untested rows use a short "No data" / "Sem dados"
+    // subtitle in this compact table register. The long-form
+    // `vitalityCopyUntested` stays in `VitalityStateStyles.localizedCopy` for
+    // any other surface that reads it.
+    final stateCopy = row.state == VitalityState.untested
+        ? l10n.vitalityRowUntestedSubtitle
+        : VitalityStateStyles.localizedCopy(row.state, l10n);
 
     return Semantics(
       container: true,

@@ -236,6 +236,12 @@ abstract class AppLocalizations {
   /// **'Dormant. Train this group to reawaken its path.'**
   String get vitalityCopyDormant;
 
+  /// Short subtitle for an untested row in the vitality table (Phase 26c). Compact stats register — shorter than vitalityCopyUntested which remains the long marginalia copy used elsewhere.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get vitalityRowUntestedSubtitle;
+
   /// Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c).
   ///
   /// In en, this message translates to:

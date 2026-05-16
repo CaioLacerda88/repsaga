@@ -47,6 +47,8 @@
   "@vitalityCopyUntested": { "description": "Empty-state copy for a body part the user has never trained (peak == 0; the ewma/peak ratio is undefined and the percentage renders as an em-dash). Distinct from vitalityCopyDormant which describes formerly-trained body parts whose conditioning has fully decayed (ratio is genuinely 0%)." },
   "vitalityCopyDormant": "Dormant. Train this group to reawaken its path.",
   "@vitalityCopyDormant": { "description": "Marginalia copy for a body-part rune in the Dormant state (peak > 0 but EWMA ~ 0 — trained at least once, then fully fallen off the path). Renders as 0–33% on the stats deep-dive screen. Distinct from vitalityCopyUntested which is the never-trained branch." },
+  "vitalityRowUntestedSubtitle": "No data",
+  "@vitalityRowUntestedSubtitle": { "description": "Short subtitle for an untested row in the vitality table (Phase 26c). Compact stats register — shorter than vitalityCopyUntested which remains the long marginalia copy used elsewhere." },
   "vitalityStateBandActive": "Active",
   "@vitalityStateBandActive": { "description": "Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c)." },
   "vitalityStateBandWaning": "Waning",

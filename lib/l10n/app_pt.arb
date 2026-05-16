@@ -24,6 +24,7 @@
   "settingsLabel": "Configurações",
   "vitalityCopyUntested": "Inexplorado — registre uma série para começar.",
   "vitalityCopyDormant": "Dormente. Treine este grupo para retomar o caminho.",
+  "vitalityRowUntestedSubtitle": "Sem dados",
   "vitalityStateBandActive": "Ativo",
   "vitalityStateBandWaning": "Esmorecendo",
   "vitalityStateBandDormant": "Dormente",

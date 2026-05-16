@@ -81,6 +81,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Dormente. Treine este grupo para retomar o caminho.';
 
   @override
+  String get vitalityRowUntestedSubtitle => 'Sem dados';
+
+  @override
   String get vitalityStateBandActive => 'Ativo';
 
   @override
