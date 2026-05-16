@@ -124,11 +124,24 @@ class SagaHeader extends StatelessWidget {
                   Semantics(
                     container: true,
                     identifier: 'saga-header-class',
+                    // Mockup spec: 10sp UPPERCASE class label with
+                    // letterSpacing 1.8 (0.18em in CSS). The 14sp Inter
+                    // sentence-case `titleSmall` we shipped first visually
+                    // competed with the 56sp LVL numeral; the spec's tracked-
+                    // out UPPERCASE rendering makes the class subordinate.
+                    //
+                    // Day-1 placeholder stays lowercase + italic: it reads
+                    // as a soft "still on the way" prompt — UPPERCASING the
+                    // phrase "O ferro lhe dará um nome." / "The iron will
+                    // name you." would read as shouting and break the tone.
+                    // The seven earned class names ("Baluarte", "Sentinela",
+                    // etc.) DO render uppercase per the mockup.
                     child: Text(
-                      classLabel,
+                      isStubClass ? classLabel : classLabel.toUpperCase(),
                       key: const ValueKey('saga-header-class'),
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: theme.textTheme.labelSmall?.copyWith(
                         color: classTextColor(characterClass),
+                        letterSpacing: 1.8,
                         fontStyle: isStubClass
                             ? FontStyle.italic
                             : FontStyle.normal,

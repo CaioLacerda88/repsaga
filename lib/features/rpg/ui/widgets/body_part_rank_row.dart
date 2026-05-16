@@ -77,79 +77,94 @@ class _TrainedRow extends StatelessWidget {
       double.infinity,
     );
 
-    return InkWell(
-      onTap: () =>
-          context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  _Dot(color: dotColor, isPulsing: isPulsing),
-                  const SizedBox(width: 8),
-                  Text(
-                    _localizedName(entry.bodyPart, l10n).toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.textCream,
-                      letterSpacing: _nameLetterSpacing,
+    // Semantics MUST wrap the InkWell directly (single build method, no
+    // intervening widget boundaries) so Flutter merges them into one
+    // SemanticsNode. When the wrapper sat in the parent for-loop in
+    // character_sheet_screen.dart, two widget layers (ConsumerWidget +
+    // private _TrainedRow) separated the SemanticsNode from the gesture
+    // detector — Flutter web's AOM dispatched Playwright's click to the
+    // outer node which had no GestureDetector, so onTap never fired. The
+    // proven-working pattern in `vitality_table.dart` is Semantics →
+    // (Material →) InkWell as direct neighbors in one build method.
+    // Cluster: semantics-identifier-pair-rule.
+    return Semantics(
+      container: true,
+      button: true,
+      identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+      child: InkWell(
+        onTap: () =>
+            context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    _Dot(color: dotColor, isPulsing: isPulsing),
+                    const SizedBox(width: 8),
+                    Text(
+                      _localizedName(entry.bodyPart, l10n).toUpperCase(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.textCream,
+                        letterSpacing: _nameLetterSpacing,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${entry.rank}',
-                    style: GoogleFonts.rajdhani(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textCream,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    const Spacer(),
+                    Text(
+                      '${entry.rank}',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textCream,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              ClipRRect(
-                key: const ValueKey('body-part-row-bar'),
-                borderRadius: BorderRadius.circular(2),
-                child: Container(
-                  height: 4,
-                  color: AppColors.xpTrack,
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: fraction,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: dotColor),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  key: const ValueKey('body-part-row-bar'),
+                  borderRadius: BorderRadius.circular(2),
+                  child: Container(
+                    height: 4,
+                    color: AppColors.xpTrack,
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: fraction,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(color: dotColor),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
-                    style: GoogleFonts.rajdhani(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textDim,
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDim,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
-                    style: GoogleFonts.rajdhani(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textDim,
+                    Text(
+                      '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDim,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -190,34 +205,44 @@ class _UntrainedRow extends StatelessWidget {
     // per-color lets the splash render at theme strength while the dimmed
     // text + dot stay at 40% saturation.
     final dimmedTextDim = AppColors.textDim.withValues(alpha: 0.4);
-    return InkWell(
-      onTap: () =>
-          context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: dimmedTextDim,
+    // Same single-build-method Semantics→InkWell pattern as _TrainedRow.
+    // Untrained rows are still tappable (they navigate to the stats deep-
+    // dive with body_part pre-filtered), so they need the same routing
+    // contract and the same identifier shape so the E2E selector
+    // `body-part-row-<slug>` works for every slug regardless of train state.
+    return Semantics(
+      container: true,
+      button: true,
+      identifier: 'body-part-row-${entry.bodyPart.dbValue}',
+      child: InkWell(
+        onTap: () =>
+            context.push('/saga/stats?body_part=${entry.bodyPart.dbValue}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: dimmedTextDim,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _localizedName(entry.bodyPart, l10n).toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: dimmedTextDim,
-                  letterSpacing: _nameLetterSpacing,
+                const SizedBox(width: 8),
+                Text(
+                  _localizedName(entry.bodyPart, l10n).toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: dimmedTextDim,
+                    letterSpacing: _nameLetterSpacing,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text('—', style: TextStyle(color: dimmedTextDim)),
-            ],
+                const Spacer(),
+                Text('—', style: TextStyle(color: dimmedTextDim)),
+              ],
+            ),
           ),
         ),
       ),

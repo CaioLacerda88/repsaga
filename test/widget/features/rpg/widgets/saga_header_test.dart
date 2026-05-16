@@ -38,8 +38,10 @@ void main() {
       expect(find.text('14'), findsOneWidget);
       // LVL tag below the numeral
       expect(find.text('LVL'), findsOneWidget);
-      // Class label resolves via localizedClassName; pt locale → "Baluarte"
-      expect(find.text('Baluarte'), findsOneWidget);
+      // Class label resolves via localizedClassName; pt locale → "Baluarte",
+      // and Phase 26b mockup spec UPPERCASE-tracks earned class names so the
+      // class label sits subordinate to the 56sp LVL numeral.
+      expect(find.text('BALUARTE'), findsOneWidget);
       // Active title verbatim
       expect(find.text('Plate-Bearer'), findsOneWidget);
     });

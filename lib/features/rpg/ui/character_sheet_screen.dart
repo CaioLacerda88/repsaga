@@ -112,22 +112,20 @@ class _CharacterSheetBody extends StatelessWidget {
               characterLevel: sheet.characterLevel,
             ),
             const SizedBox(height: 16),
+            // BodyPartRankRow emits its OWN Semantics(container, button,
+            // identifier) wrapper directly around the inner InkWell — this is
+            // load-bearing because Flutter web's AOM bridge only forwards
+            // Playwright clicks to the gesture detector when the Semantics
+            // node and the InkWell live in the same build() method (one
+            // SemanticsNode boundary). Wrapping it externally here meant the
+            // SemanticsNode and the InkWell were on separate nodes; the AOM
+            // dispatched the click to the outer (gesture-less) node, so
+            // onTap never fired even though `button: true` was set. The
+            // proven-working pattern from `vitality_table.dart` is to colocate
+            // the Semantics + InkWell in one build method. Cluster:
+            // semantics-identifier-pair-rule.
             for (final entry in sheet.bodyPartProgress)
-              // `button: true` is load-bearing: Flutter web's AOM exposes the
-              // wrapper as an interactable node only when the Semantics flags
-              // include button/link/etc. Without it the `flt-semantics-
-              // identifier` element renders as a passive container and
-              // Playwright clicks on it don't dispatch to the inner InkWell's
-              // pointer handler — the tap-routing E2E fails even though the
-              // widget test (pure Flutter, direct InkWell hit-test) passes.
-              // Mirrors the proven-working `vitality-row-<slug>` pattern in
-              // VitalityTable. Cluster: semantics-identifier-pair-rule.
-              Semantics(
-                container: true,
-                identifier: 'body-part-row-${entry.bodyPart.dbValue}',
-                button: true,
-                child: BodyPartRankRow(entry: entry),
-              ),
+              BodyPartRankRow(entry: entry),
             const SizedBox(height: 16),
             Semantics(
               container: true,
