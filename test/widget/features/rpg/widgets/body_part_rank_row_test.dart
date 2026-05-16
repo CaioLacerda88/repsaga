@@ -1,6 +1,7 @@
 /// Widget tests for [BodyPartRankRow] (Phase 26b Option B v4).
 ///
-/// The row is the mini-XP-block per `docs/phase-26b-plan.md` Task 8:
+/// The row is the mini-XP-block per `docs/PROJECT.md` §3 Phase 26 → 26b
+/// acceptance criteria:
 ///   * Trained: 6dp body-part-hue dot · UPPERCASE 10sp name · 20sp
 ///     Rajdhani rank num · 4dp XP bar · 9sp "X XP / Y to next rank" label.
 ///   * Untrained: 0.4 opacity, `—` rank, no bar, no label row.

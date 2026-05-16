@@ -2,6 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Ring inner-size at rest scale (1.0). Computed as the 6dp body-part
+/// dot diameter + ~5dp clearance on each side. The Transform.scale wraps
+/// this at 1.0–1.5×, so the ring grows to ~24dp at peak.
+const double _ringRestDiameter = 16;
+
 /// Animated glow-ring overlay used during the 24h post-rank-up pulse
 /// window (Phase 26b). Wraps the body-part dot; pulses its scale (1.0 →
 /// 1.5) and outer ring alpha (15% → 35%) in a slow sine loop.
@@ -67,13 +72,10 @@ class _RankUpPulseState extends State<RankUpPulse>
                     width: 1.5,
                   ),
                 ),
-                // 16dp = 6dp body-part dot + ~5dp clearance each side at rest
-                // (scale=1.0). At peak scale (1.5) the ring grows to ~24dp. The
-                // ring is decoupled from the wrapped child's actual size; this
-                // widget assumes the child is the 6dp body-part dot from
-                // BodyPartRankRow. Don't reuse with a different child size
-                // without updating this constant.
-                child: const SizedBox(width: 16, height: 16),
+                child: const SizedBox(
+                  width: _ringRestDiameter,
+                  height: _ringRestDiameter,
+                ),
               ),
             ),
             child!,

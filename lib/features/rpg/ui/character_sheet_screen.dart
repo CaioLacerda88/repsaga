@@ -280,13 +280,15 @@ class _CharacterSheetError extends StatelessWidget {
             // BUG-026: drop generic Material error glyph in favor of the
             // brand hero sigil (dimmed) so the error state stays inside the
             // Arcane Ascent visual language.
-            Opacity(
-              opacity: 0.4,
-              child: AppIcons.render(
-                AppIcons.hero,
-                color: AppColors.textDim,
-                size: 48,
-              ),
+            AppIcons.render(
+              AppIcons.hero,
+              // Phase 26b pattern: element-level alpha over the textDim color
+              // instead of an Opacity wrapper. Avoids the compositing layer +
+              // matches the BodyPartRankRow._UntrainedRow approach for visual
+              // dimming. The icon is non-interactive here so the splash-bleed
+              // concern doesn't apply, but consistency in the pattern wins.
+              color: AppColors.textDim.withValues(alpha: 0.4),
+              size: 48,
             ),
             const SizedBox(height: 16),
             Text(
