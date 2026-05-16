@@ -60,6 +60,11 @@ class _StatsDeepDiveScreenState extends ConsumerState<StatsDeepDiveScreen> {
   @override
   void initState() {
     super.initState();
+    // One-shot snapshot: GoRouter replaces this widget on re-navigation,
+    // so didUpdateWidget would never fire for a `body_part` change in the
+    // normal deep-link flow. After the initial selection, the user's row
+    // taps in VitalityTable drive _selectedBodyPart via setState — the
+    // prop is only consulted on first mount.
     _selectedBodyPart = widget.initialBodyPart ?? BodyPart.chest;
   }
 

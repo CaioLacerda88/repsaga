@@ -271,34 +271,30 @@ void main() {
     });
 
     group('initialBodyPart constructor arg', () {
-      testWidgets(
-        'opens with the trend chart pre-selected to initialBodyPart',
-        (tester) async {
-          await tester.pumpWidget(
-            _wrap(state: _canonicalState(), initialBodyPart: BodyPart.back),
-          );
-          await tester.pumpAndSettle();
+      testWidgets('preselects the body part from the constructor arg', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrap(state: _canonicalState(), initialBodyPart: BodyPart.back),
+        );
+        await tester.pumpAndSettle();
 
-          // Back is the vivid line, not chest — same assertion shape as the
-          // "tapping a vitality row drives the trend chart" test above.
-          final chart = tester.widget<LineChart>(find.byType(LineChart));
-          final backVivid = chart.data.lineBarsData
-              .where(
-                (b) =>
-                    b.color == VitalityStateStyles.bodyPartColor[BodyPart.back],
-              )
-              .length;
-          expect(backVivid, 1);
-          final chestVivid = chart.data.lineBarsData
-              .where(
-                (b) =>
-                    b.color ==
-                    VitalityStateStyles.bodyPartColor[BodyPart.chest],
-              )
-              .length;
-          expect(chestVivid, 0);
-        },
-      );
+        final lineChart = tester.widget<LineChart>(find.byType(LineChart));
+        final bars = lineChart.data.lineBarsData;
+
+        // Exactly one bar is the selected line (barWidth 2.5dp). The rest
+        // are ghost lines (1.0dp). Stroke width is the selection contract;
+        // this assertion stays stable across future color-treatment changes
+        // (e.g. 26c may render ghosts as same-hue + reduced alpha).
+        final selectedBars = bars.where((b) => b.barWidth > 2.0).toList();
+        expect(selectedBars, hasLength(1));
+
+        // The selected bar's color is bodyPartColor[BodyPart.back].
+        expect(
+          selectedBars.single.color,
+          VitalityStateStyles.bodyPartColor[BodyPart.back],
+        );
+      });
 
       testWidgets('falls back to chest when initialBodyPart is null', (
         tester,
@@ -307,14 +303,14 @@ void main() {
         await tester.pumpWidget(_wrap(state: _canonicalState()));
         await tester.pumpAndSettle();
 
-        final chart = tester.widget<LineChart>(find.byType(LineChart));
-        final chestVivid = chart.data.lineBarsData
-            .where(
-              (b) =>
-                  b.color == VitalityStateStyles.bodyPartColor[BodyPart.chest],
-            )
-            .length;
-        expect(chestVivid, 1);
+        final lineChart = tester.widget<LineChart>(find.byType(LineChart));
+        final bars = lineChart.data.lineBarsData;
+        final selectedBars = bars.where((b) => b.barWidth > 2.0).toList();
+        expect(selectedBars, hasLength(1));
+        expect(
+          selectedBars.single.color,
+          VitalityStateStyles.bodyPartColor[BodyPart.chest],
+        );
       });
     });
 

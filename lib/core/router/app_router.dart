@@ -237,11 +237,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/saga/stats',
             builder: (context, state) {
-              // Phase 26b Task 9: BodyPartRankRow taps push
-              // `/saga/stats?body_part=<slug>` so the tapped row's body part
-              // opens pre-selected in the trend chart. Unknown tokens fall
-              // through to the screen's legacy chest default (Phase 14e
-              // deep-link survivability).
+              // Deep-link: ?body_part=<slug> pre-selects the trend chart.
               final bodyPartToken = state.uri.queryParameters['body_part'];
               final initialBodyPart = bodyPartToken == null
                   ? null
