@@ -44,7 +44,6 @@ class SagaHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final isStubClass = characterClass == null;
-    final isInitiate = characterClass == CharacterClass.initiate;
     final classLabel = isStubClass
         ? l10n.classSlotPlaceholder
         : localizedClassName(characterClass!, l10n);
@@ -79,11 +78,15 @@ class SagaHeader extends StatelessWidget {
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
+                // 'LVL' is a brand token, intentionally not localized per
+                // Phase 26b spec. (Saga / Stats / Home all share this token;
+                // routing it through AppLocalizations would invite per-locale
+                // drift on a 3-char brand mark.)
                 Text(
                   'LVL',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: AppColors.textDim,
-                    letterSpacing: 0.12 * 10,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ],
@@ -91,7 +94,16 @@ class SagaHeader extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           // Column 3: meta column (class + title), max 120dp + ellipsis.
-          Expanded(
+          // Flexible (not Expanded) gives the ConstrainedBox loose
+          // constraints so the maxWidth: 120 actually bites — Expanded would
+          // force a tight width equal to the remaining row space, and
+          // BoxConstraints.enforce can't relax tight constraints (it only
+          // ADDS restrictions). With Flexible + ConstrainedBox the meta
+          // column shrinks to its intrinsic width, capped at 120dp. On a
+          // narrow viewport where remaining space is < 120, Flexible's loose
+          // [0, available] constraint shrinks the column further so the row
+          // never overflows.
+          Flexible(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 120),
               child: Column(
@@ -102,11 +114,7 @@ class SagaHeader extends StatelessWidget {
                     classLabel,
                     key: const ValueKey('saga-header-class'),
                     style: theme.textTheme.titleSmall?.copyWith(
-                      color: isStubClass
-                          ? AppColors.textDim
-                          : (isInitiate
-                                ? AppColors.primaryViolet
-                                : AppColors.hotViolet),
+                      color: classTextColor(characterClass),
                       fontStyle: isStubClass
                           ? FontStyle.italic
                           : FontStyle.normal,
