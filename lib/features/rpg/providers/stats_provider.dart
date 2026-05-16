@@ -2,28 +2,21 @@ import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/l10n/locale_provider.dart';
-import '../../auth/providers/auth_providers.dart';
-import '../../exercises/data/exercise_repository.dart';
-import '../../exercises/models/exercise.dart' as ex;
-import '../../exercises/providers/exercise_providers.dart';
 import '../data/rpg_repository.dart';
 import '../domain/vitality_calculator.dart';
 import '../domain/vitality_state_mapper.dart';
 import '../models/body_part.dart';
-import '../models/peak_load.dart';
 import '../models/stats_deep_dive_state.dart';
 import '../models/xp_event.dart';
 import 'rpg_progress_provider.dart';
 
 /// Async provider that composes the `/saga/stats` deep-dive screen state.
 ///
-/// Reads from three repositories — the per-body-part progress (via
-/// [rpgProgressProvider]), the user's recent `xp_events` (via
-/// [RpgRepository.getRecentXpEvents]), and `exercise_peak_loads` joined with
-/// `exercises.muscle_group` for the peak-loads section. Composition is a
-/// pure function ([assembleStatsState]) so unit tests can pin the trend
-/// reconstruction + peak-loads grouping without touching Supabase.
+/// Reads from two sources — the per-body-part progress (via
+/// [rpgProgressProvider]) and the user's recent `xp_events` (via
+/// [RpgRepository.getRecentXpEvents]). Composition is a pure function
+/// ([assembleStatsState]) so unit tests can pin the trend reconstruction +
+/// per-body-part volume/peak derivations without touching Supabase.
 ///
 /// **Why a `FutureProvider` not `AsyncNotifier`:** the screen is read-only
 /// — there are no actions on this surface that need to mutate state. A
@@ -36,10 +29,6 @@ final statsProvider = FutureProvider<StatsDeepDiveState>((ref) async {
   final snapshot = await ref.watch(rpgProgressProvider.future);
 
   final rpgRepo = ref.watch(rpgRepositoryProvider);
-  final peaksRepo = ref.watch(peakLoadsRepositoryProvider);
-  final exerciseRepo = ref.watch(exerciseRepositoryProvider);
-  final locale = ref.watch(localeProvider).languageCode;
-  final user = ref.watch(authStateProvider).value?.session?.user;
 
   // 90 days of xp_events drives the trend reconstruction. The query is
   // capped at a generous 5000 rows so a 5-set/day power user with 90 days
@@ -50,28 +39,7 @@ final statsProvider = FutureProvider<StatsDeepDiveState>((ref) async {
   final since = now.subtract(const Duration(days: 90));
   final events = await _fetchRecentEvents(rpgRepo, since: since);
 
-  // exercise_peak_loads is independent of the trend — fetch in parallel.
-  final peaks = await peaksRepo.getPeakLoads();
-
-  // Resolve exercise display names + muscle groups for grouping the peaks.
-  // Skip when the user has no peaks; avoids an unnecessary RPC roundtrip
-  // for fresh users.
-  final exercisesById = peaks.isEmpty || user == null
-      ? const <String, ex.Exercise>{}
-      : await _fetchExercisesByIds(
-          exerciseRepo,
-          locale: locale,
-          userId: user.id,
-          ids: peaks.map((p) => p.exerciseId).toList(growable: false),
-        );
-
-  return assembleStatsState(
-    now: now,
-    snapshot: snapshot,
-    events: events,
-    peaks: peaks,
-    exercisesById: exercisesById,
-  );
+  return assembleStatsState(now: now, snapshot: snapshot, events: events);
 });
 
 /// Pure assembler — extracted so unit tests can pin the algorithm without
@@ -83,8 +51,6 @@ final statsProvider = FutureProvider<StatsDeepDiveState>((ref) async {
 ///   * [snapshot] — current EWMA + peak per body part.
 ///   * [events] — last 90 days of `xp_events` for this user, newest-first
 ///     order is fine; the assembler re-sorts by [XpEvent.occurredAt].
-///   * [peaks] — `exercise_peak_loads` rows for this user, any order.
-///   * [exercisesById] — name + muscle-group lookup keyed by exercise id.
 ///
 /// Output: a fully-derived [StatsDeepDiveState] ready for direct
 /// `ref.read` consumption by the screen.
@@ -92,8 +58,6 @@ StatsDeepDiveState assembleStatsState({
   required DateTime now,
   required RpgProgressSnapshot snapshot,
   required List<XpEvent> events,
-  required List<PeakLoad> peaks,
-  required Map<String, ex.Exercise> exercisesById,
 }) {
   // ---------------------------------------------------------------------------
   // 1. Earliest activity + window selection.
@@ -253,19 +217,10 @@ StatsDeepDiveState assembleStatsState({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 5. Peak loads — group by body part, sort by peak weight desc.
-  // ---------------------------------------------------------------------------
-  final peakLoadsByBp = _groupPeakLoads(
-    peaks: peaks,
-    exercisesById: exercisesById,
-  );
-
   return StatsDeepDiveState(
     vitalityRows: vitalityRows,
     trendByBodyPart: trendByBp,
     volumePeakByBodyPart: volumePeak,
-    peakLoadsByBodyPart: peakLoadsByBp,
     earliestActivity: earliest,
     windowStart: windowStart,
     windowEnd: today,
@@ -414,73 +369,6 @@ DateTime _isoWeekStart(DateTime d) {
   return utc.subtract(Duration(days: daysFromMonday));
 }
 
-/// Group `exercise_peak_loads` rows by body part using the `MuscleGroup` of
-/// the parent exercise. Within each group, sort by peak weight descending —
-/// the heaviest lift opens the section visually.
-Map<BodyPart, List<PeakLoadRow>> _groupPeakLoads({
-  required List<PeakLoad> peaks,
-  required Map<String, ex.Exercise> exercisesById,
-}) {
-  final out = <BodyPart, List<PeakLoadRow>>{};
-  for (final peak in peaks) {
-    final exercise = exercisesById[peak.exerciseId];
-    if (exercise == null) continue; // exercise deleted / not visible to user
-    final bp = _muscleGroupToBodyPart(exercise.muscleGroup);
-    if (bp == null) continue; // shouldn't happen in v1, but be defensive
-
-    final estimated = _epley1RM(
-      weight: peak.peakWeight,
-      peakReps: peak.peakReps,
-    );
-    out
-        .putIfAbsent(bp, () => <PeakLoadRow>[])
-        .add(
-          PeakLoadRow(
-            exerciseName: exercise.name,
-            peakWeight: peak.peakWeight,
-            peakReps: peak.peakReps,
-            estimated1RM: estimated,
-          ),
-        );
-  }
-  for (final list in out.values) {
-    list.sort((a, b) => b.peakWeight.compareTo(a.peakWeight));
-  }
-  return out;
-}
-
-BodyPart? _muscleGroupToBodyPart(ex.MuscleGroup mg) {
-  switch (mg) {
-    case ex.MuscleGroup.chest:
-      return BodyPart.chest;
-    case ex.MuscleGroup.back:
-      return BodyPart.back;
-    case ex.MuscleGroup.legs:
-      return BodyPart.legs;
-    case ex.MuscleGroup.shoulders:
-      return BodyPart.shoulders;
-    case ex.MuscleGroup.arms:
-      return BodyPart.arms;
-    case ex.MuscleGroup.core:
-      return BodyPart.core;
-    case ex.MuscleGroup.cardio:
-      // v1: cardio track not active in `/saga/stats` (no XP attribution path
-      // in 18d). Returning null excludes any cardio-mapped peak from
-      // [peakLoadsByBodyPart] at the source rather than leaving the dead row
-      // for [PeakLoadsTable]'s `activeBodyParts` filter to drop downstream.
-      // Lifts the gate when Phase 19 adds cardio attribution.
-      return null;
-  }
-}
-
-/// Epley 1RM estimate: `weight * (1 + reps/30)`. Returns null when reps == 0
-/// (bodyweight / non-loaded peaks where the formula doesn't apply).
-double? _epley1RM({required double weight, required int peakReps}) {
-  if (peakReps <= 0 || weight <= 0) return null;
-  if (peakReps == 1) return weight;
-  return weight * (1 + peakReps / 30.0);
-}
-
 // ---------------------------------------------------------------------------
 // Repository helpers — kept private; callers consume [statsProvider].
 // ---------------------------------------------------------------------------
@@ -511,14 +399,4 @@ Future<List<XpEvent>> _fetchRecentEvents(
     if (page.length < pageSize) break;
   }
   return out;
-}
-
-Future<Map<String, ex.Exercise>> _fetchExercisesByIds(
-  ExerciseRepository repo, {
-  required String locale,
-  required String userId,
-  required List<String> ids,
-}) {
-  if (ids.isEmpty) return Future.value(const <String, ex.Exercise>{});
-  return repo.getExercisesByIds(locale: locale, userId: userId, ids: ids);
 }

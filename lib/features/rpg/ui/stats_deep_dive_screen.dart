@@ -1,30 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/format/number_format.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/body_part.dart';
 import '../models/stats_deep_dive_state.dart';
 import '../providers/stats_provider.dart';
-import 'widgets/body_part_localization.dart';
-import 'widgets/peak_loads_table.dart';
 import 'widgets/vitality_explainer_sheet.dart';
 import 'widgets/vitality_table.dart';
 import 'widgets/vitality_trend_chart.dart';
+import 'widgets/volume_peak_block.dart';
 
-/// `/saga/stats` deep-dive screen — Phase 18d.2.
+/// `/saga/stats` deep-dive screen.
 ///
 /// The numeric face of the saga. The character sheet is the rune face (no
 /// numbers, runes drive the visual state); this screen is where users come
-/// to see the underlying figures: live Vitality %, the 90-day (or narrower)
-/// trend, weekly volume + peak EWMA, and per-exercise peak loads.
+/// to see the underlying figures: the 90-day (or narrower) Vitality trend,
+/// the live Vitality table, and per-body-part weekly volume + peak EWMA.
 ///
 /// **Composition:** a [statsProvider] that hydrates a [StatsDeepDiveState]
-/// from rpg + xp_events + peak_loads. The screen is pure presentation —
-/// every section reads its slice from that single state object so the
-/// X-axis, the percentage column, and the trend line agree by construction.
+/// from rpg + xp_events. The screen is pure presentation — every section
+/// reads its slice from that single state object so the X-axis, the
+/// percentage column, and the trend line agree by construction.
 ///
 /// **Selection state lives here.** The user taps a row in [VitalityTable]
 /// → the screen updates [_selectedBodyPart] → [VitalityTrendChart] re-draws
@@ -109,6 +106,7 @@ class _Body extends StatelessWidget {
     final trendHeading = state.useNarrowWindow
         ? l10n.vitalityTrendHeadingShort
         : l10n.vitalityTrendHeading;
+    final orderedBodyParts = activeBodyParts.toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
@@ -149,17 +147,34 @@ class _Body extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ─── Volume & Peak section ───────────────────────────────────────
+        // ─── Volume & pico section ───────────────────────────────────────
         _SectionHeader(label: l10n.volumePeakSectionHeading),
         const SizedBox(height: 8),
-        _VolumePeakTable(volumePeakByBodyPart: state.volumePeakByBodyPart),
-        const SizedBox(height: 24),
-
-        // ─── Peak loads section ──────────────────────────────────────────
-        _SectionHeader(label: l10n.peakLoadsSectionHeading),
-        const SizedBox(height: 4),
-        PeakLoadsTable(peakLoadsByBodyPart: state.peakLoadsByBodyPart),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < orderedBodyParts.length; i++) ...[
+              _buildVolumePeakBlock(orderedBodyParts[i]),
+              if (i < orderedBodyParts.length - 1)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.surface2,
+                ),
+            ],
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildVolumePeakBlock(BodyPart bp) {
+    final row = state.volumePeakByBodyPart[bp]!;
+    return VolumePeakBlock(
+      bodyPart: bp,
+      row: row,
+      volumeDelta: VolumeDeltaView.fromRow(row),
+      peakDelta: PeakDeltaView.fromRow(row),
     );
   }
 }
@@ -226,87 +241,6 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// The Volume & Peak secondary table. Six rows (one per active body part) +
-/// dividers between, exposing the weekly volume in sets and the lifetime
-/// peak EWMA in tabular figures. Layout mirrors the [VitalityTable]'s
-/// raw-Row primitive — no ListTile.
-class _VolumePeakTable extends StatelessWidget {
-  const _VolumePeakTable({required this.volumePeakByBodyPart});
-
-  final Map<BodyPart, VolumePeakRow> volumePeakByBodyPart;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final locale = Localizations.localeOf(context).languageCode;
-
-    final rows = <Widget>[];
-    // `volumePeakByBodyPart` is provider-built from `activeBodyParts` itself
-    // (see `assembleStatsState` → §4 Volume + Peak loop) so it always
-    // contains all six entries. Iterating `activeBodyParts` directly avoids
-    // a dead `where(containsKey(...))` filter that read as a defensive
-    // guard but never excluded any row.
-    final orderedBodyParts = activeBodyParts.toList();
-
-    for (var i = 0; i < orderedBodyParts.length; i++) {
-      final bp = orderedBodyParts[i];
-      final row = volumePeakByBodyPart[bp]!;
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  localizedBodyPartName(bp, l10n),
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              // Weekly volume — "12 sets" — left of the peak EWMA so the eye
-              // reads "training cadence, then conditioning ceiling" left-to-
-              // right.
-              Text(
-                '${row.weeklyVolumeSets} ${l10n.weeklyVolumeUnit}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textDim,
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Peak EWMA — tabular numeral. Rendered as a rounded integer
-              // (the underlying value is a `numeric(14,4)` in DB; pixels
-              // don't need the precision).
-              Text(
-                AppNumberFormat.volume(row.peakEwma, locale: locale),
-                style: GoogleFonts.rajdhani(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textCream,
-                  height: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (i < orderedBodyParts.length - 1) {
-        rows.add(
-          const Divider(height: 1, thickness: 1, color: AppColors.surface2),
-        );
-      }
-    }
-
-    return Semantics(
-      container: true,
-      identifier: 'volume-peak-table',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: rows,
       ),
     );
   }

@@ -9,11 +9,10 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:repsaga/features/exercises/models/exercise.dart' as ex;
-import 'package:repsaga/features/rpg/data/rpg_repository.dart';
+import 'package:repsaga/features/rpg/data/rpg_repository.dart'
+    show CharacterState;
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/body_part_progress.dart';
-import 'package:repsaga/features/rpg/models/peak_load.dart';
 import 'package:repsaga/features/rpg/models/stats_deep_dive_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/models/xp_event.dart';
@@ -62,37 +61,6 @@ XpEvent _event({
   );
 }
 
-PeakLoad _peak({
-  required String exerciseId,
-  required double weight,
-  int reps = 5,
-  DateTime? on,
-}) {
-  return PeakLoad(
-    userId: 'u1',
-    exerciseId: exerciseId,
-    peakWeight: weight,
-    peakReps: reps,
-    peakDate: on ?? DateTime.utc(2026, 4, 15),
-    updatedAt: on ?? DateTime.utc(2026, 4, 15),
-  );
-}
-
-ex.Exercise _exercise({
-  required String id,
-  required String name,
-  required ex.MuscleGroup mg,
-}) {
-  return ex.Exercise(
-    id: id,
-    name: name,
-    muscleGroup: mg,
-    equipmentType: ex.EquipmentType.barbell,
-    isDefault: true,
-    createdAt: DateTime.utc(2026, 1, 1),
-  );
-}
-
 void main() {
   // Anchor "now" so all tests are deterministic regardless of when they run.
   final now = DateTime.utc(2026, 4, 30);
@@ -106,8 +74,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
 
       expect(state.vitalityRows.length, 6);
@@ -154,8 +120,6 @@ void main() {
         now: now,
         snapshot: snapshot,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
 
       final chest = state.vitalityRows.firstWhere(
@@ -194,8 +158,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.earliestActivity, isNull);
       expect(state.useNarrowWindow, isFalse);
@@ -210,8 +172,6 @@ void main() {
         events: [
           _event(occurredAt: firstActivity, attribution: const {'chest': 10.0}),
         ],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.earliestActivity, firstActivity);
       expect(state.useNarrowWindow, isTrue);
@@ -232,8 +192,6 @@ void main() {
               attribution: const {'chest': 10.0},
             ),
           ],
-          peaks: const [],
-          exercisesById: const {},
         );
         expect(state.useNarrowWindow, isFalse);
         expect(state.windowSpanDays, 90);
@@ -248,8 +206,6 @@ void main() {
         events: [
           _event(occurredAt: firstActivity, attribution: const {'chest': 10.0}),
         ],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.useNarrowWindow, isFalse);
       expect(state.windowSpanDays, 90);
@@ -265,8 +221,6 @@ void main() {
           now: now,
           snapshot: RpgProgressSnapshot.empty,
           events: const [],
-          peaks: const [],
-          exercisesById: const {},
         );
 
         final lengths = state.trendByBodyPart.values
@@ -313,8 +267,6 @@ void main() {
             setId: 'set-$i',
           ),
         ),
-        peaks: const [],
-        exercisesById: const {},
       );
 
       final chestSeries = state.trendByBodyPart[BodyPart.chest]!;
@@ -345,8 +297,6 @@ void main() {
           now: now,
           snapshot: snapshot,
           events: const [], // zero attribution to chest in window
-          peaks: const [],
-          exercisesById: const {},
         );
 
         final chestSeries = state.trendByBodyPart[BodyPart.chest]!;
@@ -396,8 +346,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: events,
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.volumePeakByBodyPart[BodyPart.chest]!.weeklyVolumeSets, 3);
       // Other body parts get 0.
@@ -415,163 +363,10 @@ void main() {
         now: now,
         snapshot: snapshot,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.volumePeakByBodyPart[BodyPart.chest]!.peakEwma, 9850);
       expect(state.volumePeakByBodyPart[BodyPart.back]!.peakEwma, 0);
     });
-  });
-
-  group('assembleStatsState — peak loads grouping', () {
-    test('groups peaks by exercise muscle group, sorted by weight desc', () {
-      final peaks = [
-        _peak(exerciseId: 'bench', weight: 100, reps: 5),
-        _peak(exerciseId: 'incline', weight: 80, reps: 8),
-        _peak(exerciseId: 'squat', weight: 140, reps: 3),
-      ];
-      final exercises = {
-        'bench': _exercise(
-          id: 'bench',
-          name: 'Bench Press',
-          mg: ex.MuscleGroup.chest,
-        ),
-        'incline': _exercise(
-          id: 'incline',
-          name: 'Incline DB Press',
-          mg: ex.MuscleGroup.chest,
-        ),
-        'squat': _exercise(
-          id: 'squat',
-          name: 'Back Squat',
-          mg: ex.MuscleGroup.legs,
-        ),
-      };
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: exercises,
-      );
-
-      // Two muscle groups present.
-      expect(state.peakLoadsByBodyPart.keys.toSet(), {
-        BodyPart.chest,
-        BodyPart.legs,
-      });
-
-      // Chest sorted by weight desc.
-      final chestPeaks = state.peakLoadsByBodyPart[BodyPart.chest]!;
-      expect(chestPeaks.map((r) => r.exerciseName).toList(), [
-        'Bench Press',
-        'Incline DB Press',
-      ]);
-      expect(chestPeaks[0].peakWeight, 100);
-      expect(chestPeaks[1].peakWeight, 80);
-
-      // Legs has the squat.
-      final legPeaks = state.peakLoadsByBodyPart[BodyPart.legs]!;
-      expect(legPeaks.length, 1);
-      expect(legPeaks[0].peakWeight, 140);
-    });
-
-    test('estimated1RM uses Epley formula and is null for zero-rep peaks', () {
-      // 100kg × 5 → Epley = 100 × (1 + 5/30) ≈ 116.67
-      // 100kg × 1 → exactly the lift weight
-      // 100kg × 0 → null (bodyweight / non-loaded)
-      final peaks = [
-        _peak(exerciseId: 'a', weight: 100, reps: 5),
-        _peak(exerciseId: 'b', weight: 100, reps: 1),
-        _peak(exerciseId: 'c', weight: 100, reps: 0),
-      ];
-      final exercises = {
-        'a': _exercise(id: 'a', name: 'A', mg: ex.MuscleGroup.chest),
-        'b': _exercise(id: 'b', name: 'B', mg: ex.MuscleGroup.chest),
-        'c': _exercise(id: 'c', name: 'C', mg: ex.MuscleGroup.chest),
-      };
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: exercises,
-      );
-
-      final byName = {
-        for (final r in state.peakLoadsByBodyPart[BodyPart.chest]!)
-          r.exerciseName: r,
-      };
-      expect(byName['A']!.estimated1RM, closeTo(100 * (1 + 5 / 30), 1e-6));
-      expect(byName['B']!.estimated1RM, 100);
-      expect(byName['C']!.estimated1RM, isNull);
-    });
-
-    test('peaks for unknown exercises silently dropped', () {
-      // Defensive: a deleted/foreign exercise won't be in the map. The row
-      // is dropped rather than rendered as "Unknown".
-      final peaks = [_peak(exerciseId: 'ghost', weight: 50)];
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: const {},
-      );
-      expect(state.peakLoadsByBodyPart, isEmpty);
-    });
-
-    test('empty peaks → empty map (drives empty-state UI)', () {
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: const [],
-        exercisesById: const {},
-      );
-      expect(state.peakLoadsByBodyPart, isEmpty);
-    });
-
-    test(
-      'peaks for cardio exercises are excluded from peak loads (v1 cardio gate)',
-      () {
-        // v1 (Phase 18d) does not route cardio peaks through the deep-dive.
-        // The mapping `_muscleGroupToBodyPart(cardio)` returns null at the
-        // source so cardio rows are dropped before they enter the map —
-        // not silently allocated to `BodyPart.cardio` and then dropped
-        // downstream by [PeakLoadsTable]'s `activeBodyParts.where(...)`
-        // filter (which would silently regress when Phase 19 adds cardio
-        // attribution). Mixing in a chest peak proves the bench (other
-        // groups still flow).
-        final peaks = [
-          _peak(exerciseId: 'run', weight: 0, reps: 0),
-          _peak(exerciseId: 'bench', weight: 100, reps: 5),
-        ];
-        final exercises = {
-          'run': _exercise(
-            id: 'run',
-            name: 'Treadmill Run',
-            mg: ex.MuscleGroup.cardio,
-          ),
-          'bench': _exercise(
-            id: 'bench',
-            name: 'Bench Press',
-            mg: ex.MuscleGroup.chest,
-          ),
-        };
-        final state = assembleStatsState(
-          now: now,
-          snapshot: RpgProgressSnapshot.empty,
-          events: const [],
-          peaks: peaks,
-          exercisesById: exercises,
-        );
-
-        // Only chest is in the map — cardio is gated off at `_muscleGroupToBodyPart`.
-        expect(state.peakLoadsByBodyPart.keys.toSet(), {BodyPart.chest});
-        expect(state.peakLoadsByBodyPart.containsKey(BodyPart.cardio), isFalse);
-      },
-    );
   });
 
   group('assembleStatsState — VolumePeakRow extended delta fields', () {
@@ -626,8 +421,6 @@ void main() {
           now: now,
           snapshot: snapshot,
           events: events,
-          peaks: const [],
-          exercisesById: const {},
         );
         final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
         expect(chestRow.weeklyVolumeSets, 8);
@@ -672,8 +465,6 @@ void main() {
           now: now,
           snapshot: snapshot,
           events: events,
-          peaks: const [],
-          exercisesById: const {},
         );
         final backRow = state.volumePeakByBodyPart[BodyPart.back]!;
         expect(backRow.weeksOfHistory, 1);
@@ -691,8 +482,6 @@ void main() {
           now: now,
           snapshot: RpgProgressSnapshot.empty,
           events: const [],
-          peaks: const [],
-          exercisesById: const {},
         );
         final legsRow = state.volumePeakByBodyPart[BodyPart.legs]!;
         expect(legsRow.weeksOfHistory, 0);
@@ -748,8 +537,6 @@ void main() {
           now: now,
           snapshot: snapshot,
           events: events,
-          peaks: const [],
-          exercisesById: const {},
         );
         final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
         expect(chestRow.weeksOfHistory, 5);
@@ -765,7 +552,6 @@ void main() {
       expect(empty.vitalityRows.length, 6);
       expect(empty.trendByBodyPart.length, 6);
       expect(empty.volumePeakByBodyPart.length, 6);
-      expect(empty.peakLoadsByBodyPart, isEmpty);
       expect(empty.earliestActivity, isNull);
     });
   });

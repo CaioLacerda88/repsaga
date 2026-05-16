@@ -6,19 +6,18 @@ import 'vitality_state.dart';
 
 part 'stats_deep_dive_state.freezed.dart';
 
-/// State shape consumed by the `/saga/stats` deep-dive screen (Phase 18d.2).
+/// State shape consumed by the `/saga/stats` deep-dive screen.
 ///
 /// Composed by [statsProvider] from `body_part_progress` (current EWMA +
-/// peak), `xp_events` (90-day reconstruction window), `exercise_peak_loads`
-/// (peak loads list), and the user-exercise lookup needed to resolve names
-/// + muscle groups for the per-body-part peak-loads grouping.
+/// peak) and `xp_events` (90-day reconstruction window). The screen renders
+/// three sections from this single state: the Vitality trend chart, the
+/// live Vitality table, and per-body-part Volume + Carga pico blocks.
 ///
 /// **Why a top-level state class instead of separate providers per section:**
-/// the screen's six sections share the same temporal window — earliest
-/// activity gates the chart's X-axis _and_ informs the empty-state for the
-/// volume/peak table _and_ informs the peak-loads grouping. Composing once
-/// at provider time avoids three round-trips of cross-section coordination
-/// in the UI.
+/// the screen's sections share the same temporal window — earliest activity
+/// gates the chart's X-axis _and_ informs the empty-state for the
+/// volume/peak blocks. Composing once at provider time avoids round-trips
+/// of cross-section coordination in the UI.
 @freezed
 abstract class StatsDeepDiveState with _$StatsDeepDiveState {
   const factory StatsDeepDiveState({
@@ -35,12 +34,6 @@ abstract class StatsDeepDiveState with _$StatsDeepDiveState {
     /// Per-body-part volume-and-peak row for the secondary table.
     required Map<BodyPart, VolumePeakRow> volumePeakByBodyPart,
 
-    /// Per-body-part peak-loads list (grouped + sorted), sourced from
-    /// `exercise_peak_loads` joined with `exercises.muscle_group`. Body parts
-    /// with no recorded peaks are absent from the map. The ExpansionTile
-    /// section shows the empty state when the map is empty.
-    required Map<BodyPart, List<PeakLoadRow>> peakLoadsByBodyPart,
-
     /// Timestamp of the user's earliest `xp_event`. `null` for users who
     /// have never recorded a set. Drives the hybrid X-axis decision.
     required DateTime? earliestActivity,
@@ -54,9 +47,9 @@ abstract class StatsDeepDiveState with _$StatsDeepDiveState {
 
   const StatsDeepDiveState._();
 
-  /// Day-0 / loading-failed fallback. Six untested rows, empty trend lines,
-  /// empty peaks. Identity invariant: rendering this state must produce a
-  /// laid-out screen with no overflow / no null-deref.
+  /// Day-0 / loading-failed fallback. Six untested rows, empty trend lines.
+  /// Identity invariant: rendering this state must produce a laid-out
+  /// screen with no overflow / no null-deref.
   ///
   /// 2026-05-04 untested patch: rows ship with [VitalityState.untested]
   /// (peak == 0; ratio undefined) so the table renders `—` for the
@@ -81,7 +74,6 @@ abstract class StatsDeepDiveState with _$StatsDeepDiveState {
         for (final bp in activeBodyParts)
           bp: const VolumePeakRow(weeklyVolumeSets: 0, peakEwma: 0),
       },
-      peakLoadsByBodyPart: const {},
       earliestActivity: null,
       windowStart: now.subtract(const Duration(days: 90)),
       windowEnd: now,
@@ -164,21 +156,6 @@ abstract class VolumePeakRow with _$VolumePeakRow {
     ///   * 5+ weeks  → "X vs média (4 sem)"  (uses [fourWeekMeanVolumeSets])
     @Default(0) int weeksOfHistory,
   }) = _VolumePeakRow;
-}
-
-/// One row in the per-exercise Peak Loads section.
-@freezed
-abstract class PeakLoadRow with _$PeakLoadRow {
-  const factory PeakLoadRow({
-    /// Localized display name fetched via `fn_exercises_localized`.
-    required String exerciseName,
-    required double peakWeight,
-    required int peakReps,
-
-    /// Epley-style 1RM estimate. Null when peakReps == 0 (bodyweight /
-    /// non-loaded peaks) so the UI can suppress the "1RM est." label.
-    required double? estimated1RM,
-  }) = _PeakLoadRow;
 }
 
 /// Convenience: derive [BodyPart] count of active rows for tests/UI gates.
