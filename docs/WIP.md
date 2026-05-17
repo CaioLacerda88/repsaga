@@ -38,8 +38,8 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
 - [x] Task 5: Simplify `equipTitle` + `onEquipTitle`
 - [x] Task 6: `TitlesViewModel` pure splitter
-- [ ] Task 7: L10n keys
-- [ ] Task 8: `EquippedTitleCard` widget (heroGold gradient)
+- [x] Task 7: L10n keys
+- [x] Task 8: `EquippedTitleCard` widget (heroGold gradient)
 - [ ] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
 - [ ] Task 10: Counter pill widget
 - [ ] Task 11: Rewrite `TitlesScreen` around the new view-model
