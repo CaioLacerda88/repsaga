@@ -1821,6 +1821,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get titlesEquippedTag => 'Active';
 
   @override
+  String get titlesCharacterLabel => 'Character';
+
+  @override
   String titlesCounterPill(int earned, int total) {
     return '$earned / $total earned';
   }

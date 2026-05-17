@@ -1496,6 +1496,8 @@
   "@titlesRowEquipCta": { "description": "Per-row CTA button label that equips an already-earned title as the active one." },
   "titlesEquippedTag": "Active",
   "@titlesEquippedTag": { "description": "Small inline tag/badge shown on the currently-equipped title row to indicate it is the one in use." },
+  "titlesCharacterLabel": "Character",
+  "@titlesCharacterLabel": { "description": "Localized scope label used in place of a body-part name for character-level titles (e.g. on the equipped card, earned-row meta line). Stays consistent with `titlesNextSubCharacter*`." },
   "titlesCounterPill": "{earned} / {total} earned",
   "@titlesCounterPill": {
     "description": "Compact counter pill shown at the top of the Titles screen — earned vs total catalog count.",

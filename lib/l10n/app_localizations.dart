@@ -3228,6 +3228,12 @@ abstract class AppLocalizations {
   /// **'Active'**
   String get titlesEquippedTag;
 
+  /// Localized scope label used in place of a body-part name for character-level titles (e.g. on the equipped card, earned-row meta line). Stays consistent with `titlesNextSubCharacter*`.
+  ///
+  /// In en, this message translates to:
+  /// **'Character'**
+  String get titlesCharacterLabel;
+
   /// Compact counter pill shown at the top of the Titles screen — earned vs total catalog count.
   ///
   /// In en, this message translates to:

@@ -589,6 +589,7 @@
   "titlesRegionNext": "Próximos",
   "titlesRowEquipCta": "Equipar",
   "titlesEquippedTag": "Em uso",
+  "titlesCharacterLabel": "Personagem",
   "titlesCounterPill": "{earned} / {total} conquistados",
   "titlesNextSubBodyPart": "{bodyPart} · faltam {remaining} ranks",
   "titlesNextSubBodyPartOne": "{bodyPart} · falta 1 rank",
