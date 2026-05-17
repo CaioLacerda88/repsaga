@@ -43,8 +43,8 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
 - [x] Task 10: Counter pill widget
 - [x] Task 11: Rewrite `TitlesScreen` around the new view-model
-- [ ] Task 12: E2E regression test + selector updates
-- [ ] Task 13: Visual verification + screenshot package
+- [x] Task 12: E2E regression test + selector updates
+- [x] Task 13: Visual verification + screenshot package
 - [ ] Task 14: Open PR + address review findings in the same cycle
 
 ### 26e — Plan editor + bucket model evolution
