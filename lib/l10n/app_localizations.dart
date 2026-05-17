@@ -236,6 +236,12 @@ abstract class AppLocalizations {
   /// **'Dormant. Train this group to reawaken its path.'**
   String get vitalityCopyDormant;
 
+  /// Short subtitle for an untested row in the vitality table (Phase 26c). Compact stats register — shorter than vitalityCopyUntested which remains the long marginalia copy used elsewhere.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get vitalityRowUntestedSubtitle;
+
   /// Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c).
   ///
   /// In en, this message translates to:
@@ -253,6 +259,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dormant'**
   String get vitalityStateBandDormant;
+
+  /// Title of the vitality explainer bottom sheet (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality'**
+  String get vitalityExplainerTitle;
+
+  /// First-paragraph definition copy in the vitality explainer bottom sheet (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality reflects how recent your training is for each muscle group. It\'s a measure of how active your saga is, not a measure of strength.'**
+  String get vitalityExplainerDefinition;
+
+  /// Sub-heading above the three-state band ramp in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'How it moves:'**
+  String get vitalityExplainerHowItMoves;
+
+  /// High-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'66–100% — recent training, on the path.'**
+  String get vitalityExplainerBandActive;
+
+  /// Mid-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'34–65% — slowing down, the path is fading.'**
+  String get vitalityExplainerBandWaning;
+
+  /// Low-band copy in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'0–33% — the path has gone silent.'**
+  String get vitalityExplainerBandDormant;
+
+  /// heroGold-bordered safety guarantee in the vitality explainer (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Vitality does NOT affect your rank or XP — those are permanent. Vitality is purely a consistency signal.'**
+  String get vitalityExplainerRankSafety;
 
   /// Trailing copy on per-stat XP labels across Saga, Stats deep-dive, Home expanded card, Titles próximos rows. Rendered as 'N XP · M {withinRankXpSuffix}' (e.g., '1,420 XP · 580 to next rank').
   ///
@@ -4391,6 +4439,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Workout — {date}'**
   String workoutDefaultName(String date);
+
+  /// Volume column header in VolumePeakBlock (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Volume'**
+  String get volumePeakBlockVolumeLabel;
+
+  /// Carga pico (peak load) column header in VolumePeakBlock (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Peak load'**
+  String get volumePeakBlockCargaPicoLabel;
+
+  /// Generic-tip fallback label when the user has no personal history for this body part (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'Reference'**
+  String get volumePeakBlockReferenciaLabel;
+
+  /// Plural unit for weekly volume in VolumePeakBlock (matches the existing weeklyVolumeUnit pattern; Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'sets'**
+  String get volumePeakBlockSeries;
+
+  /// Delta-basis copy for the previous-week comparison (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'vs last week'**
+  String get volumePeakBlockDeltaVsPrevWeek;
+
+  /// Delta-basis copy for the 4-week-mean comparison (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'vs 4-week avg'**
+  String get volumePeakBlockDeltaVsFourWeekMean;
+
+  /// Suppressed-delta copy for users with insufficient history (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'no history'**
+  String get volumePeakBlockDeltaNoHistory;
+
+  /// Footer copy under the Referência generic-tip block (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'estimated'**
+  String get volumePeakBlockDeltaEstimated;
+
+  /// Over-target delta tail copy ('▲ +N above target') — locked decision rules this as amber, not green (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'above target'**
+  String get volumePeakBlockDeltaAboveTarget;
+
+  /// Tiny pill badge next to the monthly peak EWMA delta (Phase 26c).
+  ///
+  /// In en, this message translates to:
+  /// **'30D'**
+  String get volumePeakBlockBadge30D;
 }
 
 class _AppLocalizationsDelegate

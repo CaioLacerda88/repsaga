@@ -13,9 +13,9 @@ import '../utils/vitality_state_styles.dart';
 /// Renders six lines (one per active body part) over the same X-axis. The
 /// **selected** body part is drawn in its `bodyPartColor` at full saturation,
 /// 2.5sp stroke, with a terminal dot + percent label at the right edge. The
-/// other five lines collapse to a single ghost color (`textDim` at 30%
-/// opacity, 1sp stroke) — the UX-critic amendment that locks the visual
-/// hierarchy: one figure-line, five ground-lines.
+/// other five lines render as ghost color (each body-part's identity color at
+/// 35% opacity, 1sp stroke — the UX-critic amendment that locks the visual
+/// hierarchy: one figure-line, five identity-tinted ground-lines).
 ///
 /// **Hybrid X-axis (per amendment #2):**
 ///   * `<30 days` of activity → narrow window from earliest activity to today,
@@ -74,8 +74,11 @@ class VitalityTrendChart extends StatelessWidget {
   /// Ghost line stroke — used for the five unselected body parts.
   static const double _ghostLineWidth = 1.0;
 
-  /// Ghost line opacity — locked at 30% per UX-critic amendment.
-  static const double _ghostOpacity = 0.30;
+  /// Ghost line opacity — Phase 26c: 35% alpha applied to each line's
+  /// body-part identity color so the six lines on the chart line up with
+  /// the six row dots on the vitality table below (was a single textDim
+  /// ghost at 30% alpha pre-26c).
+  static const double _ghostOpacity = 0.35;
 
   /// Reserved horizontal space for the Y-axis labels (`0%`, `100%`).
   static const double _yAxisReservedWidth = 28;
@@ -95,7 +98,6 @@ class VitalityTrendChart extends StatelessWidget {
     final selectedColor =
         VitalityStateStyles.bodyPartColor[selectedBodyPart] ??
         AppColors.hotViolet;
-    final ghostColor = AppColors.textDim.withValues(alpha: _ghostOpacity);
 
     // Build the line series per body part. Selected goes last so its dots
     // paint on top of the ghost lines.
@@ -147,6 +149,13 @@ class VitalityTrendChart extends StatelessWidget {
         );
         if (spots.isNotEmpty) terminalPctForLabel = spots.last.y;
       } else {
+        // Phase 26c (Task 7): ghost lines now carry their OWN body-part
+        // identity color at 35% alpha (was a single textDim ghost pre-26c).
+        // Lines up the six chart lines with the six identity-colored row
+        // dots on the vitality table below it.
+        final ghostColor =
+            (VitalityStateStyles.bodyPartColor[bp] ?? AppColors.textDim)
+                .withValues(alpha: _ghostOpacity);
         lineBars.add(
           LineChartBarData(
             spots: spots,
@@ -250,7 +259,8 @@ class VitalityTrendChart extends StatelessWidget {
                 ),
                 lineBarsData: lineBars,
               ),
-              duration: const Duration(milliseconds: 200),
+              // Phase 26c: 180ms (was 200ms) per locked-decision tween spec.
+              duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
             ),
             // Terminal % label — anchored by the chart's data-coordinate-to-

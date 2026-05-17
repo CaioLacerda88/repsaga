@@ -79,6 +79,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Dormant. Train this group to reawaken its path.';
 
   @override
+  String get vitalityRowUntestedSubtitle => 'No data';
+
+  @override
   String get vitalityStateBandActive => 'Active';
 
   @override
@@ -86,6 +89,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vitalityStateBandDormant => 'Dormant';
+
+  @override
+  String get vitalityExplainerTitle => 'Vitality';
+
+  @override
+  String get vitalityExplainerDefinition =>
+      'Vitality reflects how recent your training is for each muscle group. It\'s a measure of how active your saga is, not a measure of strength.';
+
+  @override
+  String get vitalityExplainerHowItMoves => 'How it moves:';
+
+  @override
+  String get vitalityExplainerBandActive =>
+      '66–100% — recent training, on the path.';
+
+  @override
+  String get vitalityExplainerBandWaning =>
+      '34–65% — slowing down, the path is fading.';
+
+  @override
+  String get vitalityExplainerBandDormant =>
+      '0–33% — the path has gone silent.';
+
+  @override
+  String get vitalityExplainerRankSafety =>
+      'Vitality does NOT affect your rank or XP — those are permanent. Vitality is purely a consistency signal.';
 
   @override
   String get withinRankXpSuffix => 'to next rank';
@@ -2505,4 +2534,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String workoutDefaultName(String date) {
     return 'Workout — $date';
   }
+
+  @override
+  String get volumePeakBlockVolumeLabel => 'Volume';
+
+  @override
+  String get volumePeakBlockCargaPicoLabel => 'Peak load';
+
+  @override
+  String get volumePeakBlockReferenciaLabel => 'Reference';
+
+  @override
+  String get volumePeakBlockSeries => 'sets';
+
+  @override
+  String get volumePeakBlockDeltaVsPrevWeek => 'vs last week';
+
+  @override
+  String get volumePeakBlockDeltaVsFourWeekMean => 'vs 4-week avg';
+
+  @override
+  String get volumePeakBlockDeltaNoHistory => 'no history';
+
+  @override
+  String get volumePeakBlockDeltaEstimated => 'estimated';
+
+  @override
+  String get volumePeakBlockDeltaAboveTarget => 'above target';
+
+  @override
+  String get volumePeakBlockBadge30D => '30D';
 }

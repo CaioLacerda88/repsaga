@@ -1,14 +1,14 @@
-/// Widget tests for [VitalityTrendChart] — Phase 18d.2.
+/// Widget tests for [VitalityTrendChart].
 ///
-/// The chart is six lines on a fixed 0..100 Y-axis. Five render as a single
-/// ghost color (`textDim` 30% opacity, 1sp), the **selected** body part
-/// renders vivid (its `bodyPartColor`, 2.5sp) with a terminal dot at the
-/// right edge.
+/// The chart is six lines on a fixed 0..100 Y-axis. Five render as ghost
+/// lines — each carrying its OWN body-part identity color at ~35% alpha,
+/// 1sp stroke (Phase 26c). The **selected** body part renders vivid (its
+/// `bodyPartColor`, 2.5sp) with a terminal dot at the right edge.
 ///
 /// **Visual locks under test:**
 ///   * Six [LineChartBarData] entries — one per [activeBodyParts] body part.
-///   * Selected line uses `bodyPartColor[selectedBodyPart]`; the five others
-///     share the ghost color.
+///   * Selected line uses `bodyPartColor[selectedBodyPart]`; the five ghost
+///     lines each carry their own body-part identity color at reduced alpha.
 ///   * `LineTouchData(enabled: false)` — touch is structurally off.
 ///   * No grid lines — `gridData.show == false`.
 ///   * No chart frame — `borderData.show == false`.
@@ -18,7 +18,6 @@ library;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/stats_deep_dive_state.dart';
 import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
@@ -101,7 +100,7 @@ void main() {
     });
 
     testWidgets(
-      'selected body part renders in its bodyPartColor + 2.5sp; others share ghost color + 1sp',
+      'should render the selected line in bodyPartColor + 2.5sp and ghost lines in each body-part identity at <1.0 alpha + 1sp',
       (tester) async {
         await tester.pumpWidget(
           _wrap(
@@ -122,32 +121,34 @@ void main() {
         expect(selectedBars.length, 1);
         expect(selectedBars.single.barWidth, 2.5);
 
-        // Ghost lines: every non-selected bar shares the same ghost color
-        // and 1sp stroke. We don't lock the alpha-channel exact value so a
-        // future palette tweak doesn't break this test, but we do lock that
-        // the color is _derived from_ AppColors.textDim with reduced alpha.
+        // Phase 26c (Task 7): each ghost now carries its OWN body-part
+        // identity color at reduced alpha — was a single textDim ghost
+        // pre-Task-7. We pull the ghost bars by color-inequality with
+        // selectedColor, then assert per-body-part that exactly one ghost
+        // bar matches its identity RGB at <1.0 alpha and 1sp stroke.
         final ghostBars = chart.data.lineBarsData
             .where((b) => b.color != selectedColor)
             .toList();
         expect(ghostBars.length, activeBodyParts.length - 1);
-        for (final b in ghostBars) {
-          expect(b.barWidth, 1.0);
-          // The ghost color is textDim with reduced alpha — we assert the
-          // RGB channels match textDim and the alpha is below full.
-          expect(b.color, isNotNull);
+
+        for (final bp in activeBodyParts) {
+          if (bp == BodyPart.legs) continue; // legs is the selected body part
+          final expectedRgb = VitalityStateStyles.bodyPartColor[bp]!;
+          final matching = ghostBars.where((b) {
+            final c = b.color!;
+            return (c.r * 255).round() == (expectedRgb.r * 255).round() &&
+                (c.g * 255).round() == (expectedRgb.g * 255).round() &&
+                (c.b * 255).round() == (expectedRgb.b * 255).round() &&
+                c.a < 1.0 &&
+                b.barWidth == 1.0;
+          }).toList();
           expect(
-            (b.color!.r * 255).round(),
-            (AppColors.textDim.r * 255).round(),
+            matching,
+            hasLength(1),
+            reason:
+                'expected exactly one ghost bar matching ${bp.dbValue} '
+                'identity color at <1.0 alpha and 1sp stroke',
           );
-          expect(
-            (b.color!.g * 255).round(),
-            (AppColors.textDim.g * 255).round(),
-          );
-          expect(
-            (b.color!.b * 255).round(),
-            (AppColors.textDim.b * 255).round(),
-          );
-          expect(b.color!.a, lessThan(1.0));
         }
       },
     );
@@ -351,6 +352,82 @@ void main() {
           .where((s) => s.properties.identifier == 'vitality-trend-chart')
           .toList();
       expect(semantics.length, 1);
+    });
+
+    group('Ghost line identity color + 180ms tween (Task 7)', () {
+      testWidgets(
+        'should color the back ghost line in bodyPartColor[back] at <1.0 alpha',
+        (tester) async {
+          await tester.pumpWidget(
+            _wrap(
+              trendByBodyPart: _allRamps(start: windowStart, days: 91),
+              selected: BodyPart.chest,
+              windowStart: windowStart,
+              windowEnd: today,
+              useNarrowWindow: false,
+            ),
+          );
+          await tester.pump();
+
+          final chart = tester.widget<LineChart>(find.byType(LineChart));
+          final backRgb = VitalityStateStyles.bodyPartColor[BodyPart.back]!;
+          final backBars = chart.data.lineBarsData.where((b) {
+            final c = b.color;
+            if (c == null) return false;
+            return (c.r * 255).round() == (backRgb.r * 255).round() &&
+                (c.g * 255).round() == (backRgb.g * 255).round() &&
+                (c.b * 255).round() == (backRgb.b * 255).round();
+          }).toList();
+          expect(backBars, hasLength(1));
+          expect(backBars.single.color!.a, lessThan(1.0));
+          expect(backBars.single.barWidth, 1.0);
+        },
+      );
+
+      testWidgets(
+        'should color the legs ghost line in bodyPartColor[legs] at <1.0 alpha',
+        (tester) async {
+          await tester.pumpWidget(
+            _wrap(
+              trendByBodyPart: _allRamps(start: windowStart, days: 91),
+              selected: BodyPart.chest,
+              windowStart: windowStart,
+              windowEnd: today,
+              useNarrowWindow: false,
+            ),
+          );
+          await tester.pump();
+
+          final chart = tester.widget<LineChart>(find.byType(LineChart));
+          final legsRgb = VitalityStateStyles.bodyPartColor[BodyPart.legs]!;
+          final legsBars = chart.data.lineBarsData.where((b) {
+            final c = b.color;
+            if (c == null) return false;
+            return (c.r * 255).round() == (legsRgb.r * 255).round() &&
+                (c.g * 255).round() == (legsRgb.g * 255).round() &&
+                (c.b * 255).round() == (legsRgb.b * 255).round();
+          }).toList();
+          expect(legsBars, hasLength(1));
+          expect(legsBars.single.color!.a, lessThan(1.0));
+          expect(legsBars.single.barWidth, 1.0);
+        },
+      );
+
+      testWidgets('should run the cross-fade tween at 180ms', (tester) async {
+        await tester.pumpWidget(
+          _wrap(
+            trendByBodyPart: _allRamps(start: windowStart, days: 91),
+            selected: BodyPart.chest,
+            windowStart: windowStart,
+            windowEnd: today,
+            useNarrowWindow: false,
+          ),
+        );
+        await tester.pump();
+
+        final chart = tester.widget<LineChart>(find.byType(LineChart));
+        expect(chart.duration, const Duration(milliseconds: 180));
+      });
     });
   });
 }

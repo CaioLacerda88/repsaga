@@ -9,11 +9,10 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:repsaga/features/exercises/models/exercise.dart' as ex;
-import 'package:repsaga/features/rpg/data/rpg_repository.dart';
+import 'package:repsaga/features/rpg/data/rpg_repository.dart'
+    show CharacterState;
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/body_part_progress.dart';
-import 'package:repsaga/features/rpg/models/peak_load.dart';
 import 'package:repsaga/features/rpg/models/stats_deep_dive_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/models/xp_event.dart';
@@ -62,37 +61,6 @@ XpEvent _event({
   );
 }
 
-PeakLoad _peak({
-  required String exerciseId,
-  required double weight,
-  int reps = 5,
-  DateTime? on,
-}) {
-  return PeakLoad(
-    userId: 'u1',
-    exerciseId: exerciseId,
-    peakWeight: weight,
-    peakReps: reps,
-    peakDate: on ?? DateTime.utc(2026, 4, 15),
-    updatedAt: on ?? DateTime.utc(2026, 4, 15),
-  );
-}
-
-ex.Exercise _exercise({
-  required String id,
-  required String name,
-  required ex.MuscleGroup mg,
-}) {
-  return ex.Exercise(
-    id: id,
-    name: name,
-    muscleGroup: mg,
-    equipmentType: ex.EquipmentType.barbell,
-    isDefault: true,
-    createdAt: DateTime.utc(2026, 1, 1),
-  );
-}
-
 void main() {
   // Anchor "now" so all tests are deterministic regardless of when they run.
   final now = DateTime.utc(2026, 4, 30);
@@ -106,8 +74,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
 
       expect(state.vitalityRows.length, 6);
@@ -154,8 +120,6 @@ void main() {
         now: now,
         snapshot: snapshot,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
 
       final chest = state.vitalityRows.firstWhere(
@@ -194,8 +158,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.earliestActivity, isNull);
       expect(state.useNarrowWindow, isFalse);
@@ -210,8 +172,6 @@ void main() {
         events: [
           _event(occurredAt: firstActivity, attribution: const {'chest': 10.0}),
         ],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.earliestActivity, firstActivity);
       expect(state.useNarrowWindow, isTrue);
@@ -232,8 +192,6 @@ void main() {
               attribution: const {'chest': 10.0},
             ),
           ],
-          peaks: const [],
-          exercisesById: const {},
         );
         expect(state.useNarrowWindow, isFalse);
         expect(state.windowSpanDays, 90);
@@ -248,8 +206,6 @@ void main() {
         events: [
           _event(occurredAt: firstActivity, attribution: const {'chest': 10.0}),
         ],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.useNarrowWindow, isFalse);
       expect(state.windowSpanDays, 90);
@@ -265,8 +221,6 @@ void main() {
           now: now,
           snapshot: RpgProgressSnapshot.empty,
           events: const [],
-          peaks: const [],
-          exercisesById: const {},
         );
 
         final lengths = state.trendByBodyPart.values
@@ -313,8 +267,6 @@ void main() {
             setId: 'set-$i',
           ),
         ),
-        peaks: const [],
-        exercisesById: const {},
       );
 
       final chestSeries = state.trendByBodyPart[BodyPart.chest]!;
@@ -345,8 +297,6 @@ void main() {
           now: now,
           snapshot: snapshot,
           events: const [], // zero attribution to chest in window
-          peaks: const [],
-          exercisesById: const {},
         );
 
         final chestSeries = state.trendByBodyPart[BodyPart.chest]!;
@@ -396,8 +346,6 @@ void main() {
         now: now,
         snapshot: RpgProgressSnapshot.empty,
         events: events,
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.volumePeakByBodyPart[BodyPart.chest]!.weeklyVolumeSets, 3);
       // Other body parts get 0.
@@ -415,161 +363,185 @@ void main() {
         now: now,
         snapshot: snapshot,
         events: const [],
-        peaks: const [],
-        exercisesById: const {},
       );
       expect(state.volumePeakByBodyPart[BodyPart.chest]!.peakEwma, 9850);
       expect(state.volumePeakByBodyPart[BodyPart.back]!.peakEwma, 0);
     });
   });
 
-  group('assembleStatsState — peak loads grouping', () {
-    test('groups peaks by exercise muscle group, sorted by weight desc', () {
-      final peaks = [
-        _peak(exerciseId: 'bench', weight: 100, reps: 5),
-        _peak(exerciseId: 'incline', weight: 80, reps: 8),
-        _peak(exerciseId: 'squat', weight: 140, reps: 3),
-      ];
-      final exercises = {
-        'bench': _exercise(
-          id: 'bench',
-          name: 'Bench Press',
-          mg: ex.MuscleGroup.chest,
-        ),
-        'incline': _exercise(
-          id: 'incline',
-          name: 'Incline DB Press',
-          mg: ex.MuscleGroup.chest,
-        ),
-        'squat': _exercise(
-          id: 'squat',
-          name: 'Back Squat',
-          mg: ex.MuscleGroup.legs,
-        ),
-      };
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: exercises,
-      );
-
-      // Two muscle groups present.
-      expect(state.peakLoadsByBodyPart.keys.toSet(), {
-        BodyPart.chest,
-        BodyPart.legs,
-      });
-
-      // Chest sorted by weight desc.
-      final chestPeaks = state.peakLoadsByBodyPart[BodyPart.chest]!;
-      expect(chestPeaks.map((r) => r.exerciseName).toList(), [
-        'Bench Press',
-        'Incline DB Press',
-      ]);
-      expect(chestPeaks[0].peakWeight, 100);
-      expect(chestPeaks[1].peakWeight, 80);
-
-      // Legs has the squat.
-      final legPeaks = state.peakLoadsByBodyPart[BodyPart.legs]!;
-      expect(legPeaks.length, 1);
-      expect(legPeaks[0].peakWeight, 140);
-    });
-
-    test('estimated1RM uses Epley formula and is null for zero-rep peaks', () {
-      // 100kg × 5 → Epley = 100 × (1 + 5/30) ≈ 116.67
-      // 100kg × 1 → exactly the lift weight
-      // 100kg × 0 → null (bodyweight / non-loaded)
-      final peaks = [
-        _peak(exerciseId: 'a', weight: 100, reps: 5),
-        _peak(exerciseId: 'b', weight: 100, reps: 1),
-        _peak(exerciseId: 'c', weight: 100, reps: 0),
-      ];
-      final exercises = {
-        'a': _exercise(id: 'a', name: 'A', mg: ex.MuscleGroup.chest),
-        'b': _exercise(id: 'b', name: 'B', mg: ex.MuscleGroup.chest),
-        'c': _exercise(id: 'c', name: 'C', mg: ex.MuscleGroup.chest),
-      };
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: exercises,
-      );
-
-      final byName = {
-        for (final r in state.peakLoadsByBodyPart[BodyPart.chest]!)
-          r.exerciseName: r,
-      };
-      expect(byName['A']!.estimated1RM, closeTo(100 * (1 + 5 / 30), 1e-6));
-      expect(byName['B']!.estimated1RM, 100);
-      expect(byName['C']!.estimated1RM, isNull);
-    });
-
-    test('peaks for unknown exercises silently dropped', () {
-      // Defensive: a deleted/foreign exercise won't be in the map. The row
-      // is dropped rather than rendered as "Unknown".
-      final peaks = [_peak(exerciseId: 'ghost', weight: 50)];
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: peaks,
-        exercisesById: const {},
-      );
-      expect(state.peakLoadsByBodyPart, isEmpty);
-    });
-
-    test('empty peaks → empty map (drives empty-state UI)', () {
-      final state = assembleStatsState(
-        now: now,
-        snapshot: RpgProgressSnapshot.empty,
-        events: const [],
-        peaks: const [],
-        exercisesById: const {},
-      );
-      expect(state.peakLoadsByBodyPart, isEmpty);
-    });
+  group('assembleStatsState — VolumePeakRow extended delta fields', () {
+    test(
+      'should populate previousWeekVolumeSets / fourWeekMean / peakEwma30dAgo / weeksOfHistory for 8-week history',
+      () {
+        // Anchor: April 30, 2026 (a Thursday). Current ISO-week starts Mon Apr 27.
+        // Build 8 distinct weeks of chest events. Spec says fourWeekMean uses
+        // the 4 weeks BEFORE the current in-progress week, i.e. weeks -4..-1.
+        //   week -7 (Mon Mar 9):    12 events
+        //   week -6 (Mon Mar 16):   14 events
+        //   week -5 (Mon Mar 23):   16 events
+        //   week -4 (Mon Mar 30):   14 events   ← in 4-week-mean window
+        //   week -3 (Mon Apr 6):    12 events   ← in 4-week-mean window
+        //   week -2 (Mon Apr 13):   14 events   ← in 4-week-mean window
+        //   week -1 (Mon Apr 20):   16 events   ← previousWeekVolumeSets
+        //   week 0  (Mon Apr 27):    8 events   ← current week
+        //
+        // Expected: weeklyVolumeSets=8, previousWeek=16,
+        //   fourWeekMean=(14+12+14+16)/4 = 14.0, weeksOfHistory=8.
+        final events = [
+          for (final entry in {
+            DateTime.utc(2026, 3, 9): 12,
+            DateTime.utc(2026, 3, 16): 14,
+            DateTime.utc(2026, 3, 23): 16,
+            DateTime.utc(2026, 3, 30): 14,
+            DateTime.utc(2026, 4, 6): 12,
+            DateTime.utc(2026, 4, 13): 14,
+            DateTime.utc(2026, 4, 20): 16,
+            DateTime.utc(2026, 4, 27): 8,
+          }.entries)
+            for (var i = 0; i < entry.value; i++)
+              _event(
+                occurredAt: entry.key.add(Duration(hours: i)),
+                attribution: const {'chest': 1.0},
+                setId: 'set-${entry.key.toIso8601String()}-$i',
+              ),
+        ];
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.chest: _progress(
+              bp: BodyPart.chest,
+              rank: 5,
+              totalXp: 1000,
+              vitalityEwma: 80.0,
+              vitalityPeak: 100.0,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+        );
+        final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
+        expect(chestRow.weeklyVolumeSets, 8);
+        expect(chestRow.previousWeekVolumeSets, 16);
+        expect(chestRow.fourWeekMeanVolumeSets, closeTo(14.0, 0.01));
+        expect(chestRow.weeksOfHistory, 8);
+        expect(chestRow.peakEwma30dAgo, isNotNull);
+        // Lower-bound sanity check: with vitalityPeak=100 and earliest well
+        // past the 30-day window, the closest-date sample × peak must be > 0.
+        // The exact value depends on the trend reconstruction's
+        // interpolation, but non-zero is the guarantee the assertion existing
+        // was meant to pin.
+        expect(chestRow.peakEwma30dAgo, greaterThan(0));
+      },
+    );
 
     test(
-      'peaks for cardio exercises are excluded from peak loads (v1 cardio gate)',
+      'should leave previousWeek / fourWeekMean / peakEwma30dAgo null for 1-week history',
       () {
-        // v1 (Phase 18d) does not route cardio peaks through the deep-dive.
-        // The mapping `_muscleGroupToBodyPart(cardio)` returns null at the
-        // source so cardio rows are dropped before they enter the map —
-        // not silently allocated to `BodyPart.cardio` and then dropped
-        // downstream by [PeakLoadsTable]'s `activeBodyParts.where(...)`
-        // filter (which would silently regress when Phase 19 adds cardio
-        // attribution). Mixing in a chest peak proves the bench (other
-        // groups still flow).
-        final peaks = [
-          _peak(exerciseId: 'run', weight: 0, reps: 0),
-          _peak(exerciseId: 'bench', weight: 100, reps: 5),
+        // Single-week history for back: just this week's events.
+        final events = [
+          for (var i = 0; i < 5; i++)
+            _event(
+              occurredAt: DateTime.utc(2026, 4, 27).add(Duration(hours: i)),
+              attribution: const {'back': 1.0},
+              setId: 'back-set-$i',
+            ),
         ];
-        final exercises = {
-          'run': _exercise(
-            id: 'run',
-            name: 'Treadmill Run',
-            mg: ex.MuscleGroup.cardio,
-          ),
-          'bench': _exercise(
-            id: 'bench',
-            name: 'Bench Press',
-            mg: ex.MuscleGroup.chest,
-          ),
-        };
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.back: _progress(
+              bp: BodyPart.back,
+              rank: 2,
+              totalXp: 100,
+              vitalityEwma: 30.0,
+              vitalityPeak: 40.0,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+        );
+        final backRow = state.volumePeakByBodyPart[BodyPart.back]!;
+        expect(backRow.weeksOfHistory, 1);
+        expect(backRow.previousWeekVolumeSets, isNull);
+        expect(backRow.fourWeekMeanVolumeSets, isNull);
+        expect(backRow.peakEwma30dAgo, isNull, reason: 'history < 30 days');
+      },
+    );
+
+    test(
+      'should return all-null delta fields for body part with zero history',
+      () {
+        // No events at all. All body parts untrained, peak == 0.
         final state = assembleStatsState(
           now: now,
           snapshot: RpgProgressSnapshot.empty,
           events: const [],
-          peaks: peaks,
-          exercisesById: exercises,
         );
+        final legsRow = state.volumePeakByBodyPart[BodyPart.legs]!;
+        expect(legsRow.weeksOfHistory, 0);
+        expect(legsRow.previousWeekVolumeSets, isNull);
+        expect(legsRow.fourWeekMeanVolumeSets, isNull);
+        expect(legsRow.peakEwma30dAgo, isNull);
+        expect(legsRow.weeklyVolumeSets, 0);
+        expect(legsRow.peakEwma, 0);
+      },
+    );
 
-        // Only chest is in the map — cardio is gated off at `_muscleGroupToBodyPart`.
-        expect(state.peakLoadsByBodyPart.keys.toSet(), {BodyPart.chest});
-        expect(state.peakLoadsByBodyPart.containsKey(BodyPart.cardio), isFalse);
+    test(
+      'should fill 4-week-mean using weeks immediately before the current week (off-by-one guard)',
+      () {
+        // Off-by-one regression guard. Exactly 5 weeks of chest activity:
+        //   weeks -4, -3, -2, -1 (each 10 sets) + week 0 (5 sets).
+        // weeksOfHistory = 5 → fourWeekMean = (10+10+10+10)/4 = 10.0.
+        // If the impl uses weeks -5..-1 or -3..0, the mean diverges. This
+        // pins the documented "4 weeks BEFORE current" semantic.
+        final events = [
+          for (final wkStart in [
+            DateTime.utc(2026, 3, 30), // -4
+            DateTime.utc(2026, 4, 6), // -3
+            DateTime.utc(2026, 4, 13), // -2
+            DateTime.utc(2026, 4, 20), // -1
+          ])
+            for (var i = 0; i < 10; i++)
+              _event(
+                occurredAt: wkStart.add(Duration(hours: i)),
+                attribution: const {'chest': 1.0},
+                setId: 'set-${wkStart.toIso8601String()}-$i',
+              ),
+          for (var i = 0; i < 5; i++)
+            _event(
+              occurredAt: DateTime.utc(2026, 4, 27).add(Duration(hours: i)),
+              attribution: const {'chest': 1.0},
+              setId: 'curr-$i',
+            ),
+        ];
+        final snapshot = RpgProgressSnapshot(
+          byBodyPart: {
+            BodyPart.chest: _progress(
+              bp: BodyPart.chest,
+              rank: 3,
+              totalXp: 500,
+              vitalityEwma: 50,
+              vitalityPeak: 60,
+            ),
+          },
+          characterState: CharacterState.empty,
+        );
+        final state = assembleStatsState(
+          now: now,
+          snapshot: snapshot,
+          events: events,
+        );
+        final chestRow = state.volumePeakByBodyPart[BodyPart.chest]!;
+        expect(chestRow.weeksOfHistory, 5);
+        expect(chestRow.previousWeekVolumeSets, 10);
+        expect(chestRow.fourWeekMeanVolumeSets, closeTo(10.0, 0.01));
       },
     );
   });
@@ -580,7 +552,6 @@ void main() {
       expect(empty.vitalityRows.length, 6);
       expect(empty.trendByBodyPart.length, 6);
       expect(empty.volumePeakByBodyPart.length, 6);
-      expect(empty.peakLoadsByBodyPart, isEmpty);
       expect(empty.earliestActivity, isNull);
     });
   });

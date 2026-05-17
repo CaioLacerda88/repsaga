@@ -1,29 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/format/number_format.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/body_part.dart';
 import '../models/stats_deep_dive_state.dart';
 import '../providers/stats_provider.dart';
-import 'widgets/body_part_localization.dart';
-import 'widgets/peak_loads_table.dart';
+import 'widgets/vitality_explainer_sheet.dart';
 import 'widgets/vitality_table.dart';
 import 'widgets/vitality_trend_chart.dart';
+import 'widgets/volume_peak_block.dart';
 
-/// `/saga/stats` deep-dive screen — Phase 18d.2.
+/// `/saga/stats` deep-dive screen.
 ///
 /// The numeric face of the saga. The character sheet is the rune face (no
 /// numbers, runes drive the visual state); this screen is where users come
-/// to see the underlying figures: live Vitality %, the 90-day (or narrower)
-/// trend, weekly volume + peak EWMA, and per-exercise peak loads.
+/// to see the underlying figures: the 90-day (or narrower) Vitality trend,
+/// the live Vitality table, and per-body-part weekly volume + peak EWMA.
 ///
 /// **Composition:** a [statsProvider] that hydrates a [StatsDeepDiveState]
-/// from rpg + xp_events + peak_loads. The screen is pure presentation —
-/// every section reads its slice from that single state object so the
-/// X-axis, the percentage column, and the trend line agree by construction.
+/// from rpg + xp_events. The screen is pure presentation — every section
+/// reads its slice from that single state object so the X-axis, the
+/// percentage column, and the trend line agree by construction.
 ///
 /// **Selection state lives here.** The user taps a row in [VitalityTable]
 /// → the screen updates [_selectedBodyPart] → [VitalityTrendChart] re-draws
@@ -108,12 +106,18 @@ class _Body extends StatelessWidget {
     final trendHeading = state.useNarrowWindow
         ? l10n.vitalityTrendHeadingShort
         : l10n.vitalityTrendHeading;
+    final orderedBodyParts = activeBodyParts.toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
       children: [
         // ─── Trend chart ──────────────────────────────────────────────────
-        _SectionHeader(label: trendHeading),
+        _SectionHeader(
+          label: trendHeading,
+          infoIconKey: const ValueKey('vitality-trend-info-icon'),
+          infoIconIdentifier: 'vitality-trend-info-icon',
+          onInfoTap: () => _showVitalityExplainer(context),
+        ),
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -131,7 +135,12 @@ class _Body extends StatelessWidget {
         // Section header anchors the chart→table junction. Without it the
         // table reads as the chart's legend; with it the table claims its
         // own register as the live current-state surface.
-        _SectionHeader(label: l10n.liveVitalitySectionHeading),
+        _SectionHeader(
+          label: l10n.liveVitalitySectionHeading,
+          infoIconKey: const ValueKey('vitality-table-info-icon'),
+          infoIconIdentifier: 'vitality-table-info-icon',
+          onInfoTap: () => _showVitalityExplainer(context),
+        ),
         const SizedBox(height: 8),
         VitalityTable(
           rows: state.vitalityRows,
@@ -140,115 +149,146 @@ class _Body extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ─── Volume & Peak section ───────────────────────────────────────
+        // ─── Volume & pico section ───────────────────────────────────────
         _SectionHeader(label: l10n.volumePeakSectionHeading),
         const SizedBox(height: 8),
-        _VolumePeakTable(volumePeakByBodyPart: state.volumePeakByBodyPart),
-        const SizedBox(height: 24),
-
-        // ─── Peak loads section ──────────────────────────────────────────
-        _SectionHeader(label: l10n.peakLoadsSectionHeading),
-        const SizedBox(height: 4),
-        PeakLoadsTable(peakLoadsByBodyPart: state.peakLoadsByBodyPart),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < orderedBodyParts.length; i++) ...[
+              _buildVolumePeakBlock(orderedBodyParts[i]),
+              if (i < orderedBodyParts.length - 1)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.surface2,
+                ),
+            ],
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildVolumePeakBlock(BodyPart bp) {
+    final row = state.volumePeakByBodyPart[bp]!;
+    return VolumePeakBlock(
+      bodyPart: bp,
+      row: row,
+      volumeDelta: VolumeDeltaView.fromRow(row),
+      peakDelta: PeakDeltaView.fromRow(row),
     );
   }
 }
 
+/// Opens [VitalityExplainerSheet] as a modal bottom sheet. The sheet paints
+/// its own surface (rounded top edge + scrim-friendly background) so this
+/// scaffold passes a transparent background and lets `isScrollControlled`
+/// give the sheet room to size to its own content.
+void _showVitalityExplainer(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const VitalityExplainerSheet(),
+  );
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
+  const _SectionHeader({
+    required this.label,
+    this.onInfoTap,
+    this.infoIconKey,
+    this.infoIconIdentifier,
+  });
 
   final String label;
+
+  /// Optional handler — when non-null, a 14dp ⓘ info icon renders at the
+  /// trailing edge of the header. Currently used by the trend chart and the
+  /// live-vitality table headers to open [VitalityExplainerSheet]. The
+  /// Volume & peak / Peak loads headers leave this null per the 26c spec
+  /// (no explainer surface for those sections).
+  final VoidCallback? onInfoTap;
+
+  /// Optional `Key` for the icon's tap target. Widget tests anchor onto this
+  /// rather than walking the widget tree by type — keeps the test resilient
+  /// to future icon-shape changes (e.g. swapping `Icons.info_outline` for a
+  /// custom glyph).
+  final Key? infoIconKey;
+
+  /// Optional Semantics identifier for the icon's tap target. Flutter web's
+  /// AOM does not expose `ValueKey` reliably across Flutter 3.41.6 versions
+  /// (data-flt-key is unstable), so E2E tests target the icon via
+  /// `flt-semantics-identifier`. The ValueKey stays in place for widget-test
+  /// targeting — both production code and tests must satisfy each path.
+  final String? infoIconIdentifier;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Text(
-        label.toUpperCase(),
-        style: AppTextStyles.sectionHeader.copyWith(color: AppColors.hotViolet),
+      // 26c: explicit 12dp bottom padding fixes the trend chart's top label
+      // clipping against this header (previously fromLTRB(16, 8, 16, 0)).
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              style: AppTextStyles.sectionHeader.copyWith(
+                color: AppColors.hotViolet,
+              ),
+            ),
+          ),
+          if (onInfoTap != null)
+            _InfoIconButton(
+              identifier: infoIconIdentifier,
+              iconKey: infoIconKey,
+              onTap: onInfoTap!,
+            ),
+        ],
       ),
     );
   }
 }
 
-/// The Volume & Peak secondary table. Six rows (one per active body part) +
-/// dividers between, exposing the weekly volume in sets and the lifetime
-/// peak EWMA in tabular figures. Layout mirrors the [VitalityTable]'s
-/// raw-Row primitive — no ListTile.
-class _VolumePeakTable extends StatelessWidget {
-  const _VolumePeakTable({required this.volumePeakByBodyPart});
+/// 14dp ⓘ info-icon tap target used in [_SectionHeader]. Wraps the inner
+/// [InkWell] in a `Semantics(container: true, button: true, identifier:)`
+/// shell when an identifier is supplied so Flutter web's AOM exposes a
+/// targetable `flt-semantics-identifier` attribute for E2E. The ValueKey
+/// remains on the InkWell so widget tests can keep using `find.byKey(...)`.
+class _InfoIconButton extends StatelessWidget {
+  const _InfoIconButton({
+    required this.identifier,
+    required this.iconKey,
+    required this.onTap,
+  });
 
-  final Map<BodyPart, VolumePeakRow> volumePeakByBodyPart;
+  final String? identifier;
+  final Key? iconKey;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final locale = Localizations.localeOf(context).languageCode;
-
-    final rows = <Widget>[];
-    // `volumePeakByBodyPart` is provider-built from `activeBodyParts` itself
-    // (see `assembleStatsState` → §4 Volume + Peak loop) so it always
-    // contains all six entries. Iterating `activeBodyParts` directly avoids
-    // a dead `where(containsKey(...))` filter that read as a defensive
-    // guard but never excluded any row.
-    final orderedBodyParts = activeBodyParts.toList();
-
-    for (var i = 0; i < orderedBodyParts.length; i++) {
-      final bp = orderedBodyParts[i];
-      final row = volumePeakByBodyPart[bp]!;
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  localizedBodyPartName(bp, l10n),
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              // Weekly volume — "12 sets" — left of the peak EWMA so the eye
-              // reads "training cadence, then conditioning ceiling" left-to-
-              // right.
-              Text(
-                '${row.weeklyVolumeSets} ${l10n.weeklyVolumeUnit}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textDim,
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Peak EWMA — tabular numeral. Rendered as a rounded integer
-              // (the underlying value is a `numeric(14,4)` in DB; pixels
-              // don't need the precision).
-              Text(
-                AppNumberFormat.volume(row.peakEwma, locale: locale),
-                style: GoogleFonts.rajdhani(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textCream,
-                  height: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (i < orderedBodyParts.length - 1) {
-        rows.add(
-          const Divider(height: 1, thickness: 1, color: AppColors.surface2),
-        );
-      }
-    }
-
-    return Semantics(
-      container: true,
-      identifier: 'volume-peak-table',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: rows,
+    final button = InkWell(
+      key: iconKey,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: const Padding(
+        padding: EdgeInsets.all(2),
+        child: Icon(Icons.info_outline, size: 14, color: AppColors.textDim),
       ),
+    );
+    if (identifier == null) return button;
+    return Semantics(
+      // Cluster: semantics-identifier-pair-rule — explicitChildNodes:true
+      // is load-bearing on Flutter web; without it the AOM drops the
+      // flt-semantics-identifier attribute and Playwright can't target.
+      container: true,
+      explicitChildNodes: true,
+      button: true,
+      identifier: identifier,
+      child: button,
     );
   }
 }

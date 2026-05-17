@@ -1,13 +1,12 @@
-/// Widget tests for [StatsDeepDiveScreen] — Phase 18d.2.
+/// Widget tests for [StatsDeepDiveScreen].
 ///
-/// The screen composes the live Vitality table, the trend chart, the volume
-/// & peak secondary table, and the peak loads section into a single scroll
-/// view. These tests verify the composition contract:
+/// The screen composes the trend chart, the live Vitality table, and the
+/// per-body-part Volume + Carga pico blocks into a single scroll view.
+/// These tests verify the composition contract:
 ///   * Correct heading per hybrid window (90-day vs short).
-///   * Six VitalityTable rows + one VitalityTrendChart + the volume/peak
-///     section + the peak-loads section all render.
+///   * Six VitalityTable rows + one VitalityTrendChart + one
+///     VolumePeakBlock per active body part all render.
 ///   * Tapping a vitality row drives the trend chart's selected line.
-///   * Empty peak-loads map renders the empty-state copy.
 ///   * Sentinel: zero numeric Vitality % numbers leak from the screen onto
 ///     the character sheet (handled by a sibling test file).
 library;
@@ -24,9 +23,10 @@ import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/stats_provider.dart';
 import 'package:repsaga/features/rpg/ui/stats_deep_dive_screen.dart';
 import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
-import 'package:repsaga/features/rpg/ui/widgets/peak_loads_table.dart';
+import 'package:repsaga/features/rpg/ui/widgets/vitality_explainer_sheet.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_table.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_trend_chart.dart';
+import 'package:repsaga/features/rpg/ui/widgets/volume_peak_block.dart';
 
 import '../../../../helpers/test_material_app.dart';
 
@@ -38,7 +38,7 @@ class _StubProfileNotifier extends ProfileNotifier {
 }
 
 /// A canonical "user with 90 days of activity" state — six body parts trained
-/// to varying degrees, three peaks under chest, none under shoulders.
+/// to varying degrees.
 StatsDeepDiveState _canonicalState({
   DateTime? earliestActivity,
   DateTime? today,
@@ -95,16 +95,6 @@ StatsDeepDiveState _canonicalState({
       for (final bp in activeBodyParts)
         bp: const VolumePeakRow(weeklyVolumeSets: 12, peakEwma: 1234.0),
     },
-    peakLoadsByBodyPart: const {
-      BodyPart.chest: [
-        PeakLoadRow(
-          exerciseName: 'Bench Press',
-          peakWeight: 100,
-          peakReps: 5,
-          estimated1RM: 116.7,
-        ),
-      ],
-    },
     earliestActivity: earliest,
     windowStart: earliest,
     windowEnd: t,
@@ -143,27 +133,31 @@ void main() {
       expect(find.widgetWithText(AppBar, 'Stats'), findsOneWidget);
     });
 
-    testWidgets('composes all four sections (table + chart + volume + peaks)', (
-      tester,
-    ) async {
-      // Stretch the surface so the long ListView fits without scrolling.
-      await tester.binding.setSurfaceSize(const Size(400, 1600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+    testWidgets(
+      'should compose 3 sections (trend chart + vitality table + per-body-part volume blocks)',
+      (tester) async {
+        // Stretch the surface so the long ListView fits without scrolling.
+        await tester.binding.setSurfaceSize(const Size(400, 2000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(_wrap(state: _canonicalState()));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(_wrap(state: _canonicalState()));
+        await tester.pumpAndSettle();
 
-      expect(find.byType(VitalityTable), findsOneWidget);
-      expect(find.byType(VitalityTrendChart), findsOneWidget);
-      expect(find.byType(PeakLoadsTable), findsOneWidget);
-      // All four section headings render through `_SectionHeader` (uppercased
-      // at the call site). The Live Vitality heading anchors the chart→table
-      // junction added in c59ef2a; without an assertion the heading could
-      // silently regress without a failing test.
-      expect(find.text('LIVE VITALITY'), findsOneWidget);
-      expect(find.text('VOLUME & PEAK'), findsOneWidget);
-      expect(find.text('PEAK LOADS'), findsOneWidget);
-    });
+        expect(find.byType(VitalityTable), findsOneWidget);
+        expect(find.byType(VitalityTrendChart), findsOneWidget);
+        // One VolumePeakBlock per active body part (six in v1).
+        expect(
+          find.byType(VolumePeakBlock),
+          findsNWidgets(activeBodyParts.length),
+        );
+        // Both `_SectionHeader` headings render through the screen (uppercased
+        // at the call site). The Live Vitality heading anchors the chart→table
+        // junction added in c59ef2a; without an assertion the heading could
+        // silently regress without a failing test.
+        expect(find.text('LIVE VITALITY'), findsOneWidget);
+        expect(find.text('VOLUME & PEAK'), findsOneWidget);
+      },
+    );
 
     testWidgets('uses the 90-day heading when window >= 30 days', (
       tester,
@@ -231,34 +225,11 @@ void main() {
       expect(chestVivid, 0);
     });
 
-    testWidgets('empty peak-loads map renders the localized empty copy', (
-      tester,
-    ) async {
-      // Stretch the surface so the empty-state copy lands inside the viewport.
-      await tester.binding.setSurfaceSize(const Size(400, 1600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      final base = _canonicalState();
-      final state = StatsDeepDiveState(
-        vitalityRows: base.vitalityRows,
-        trendByBodyPart: base.trendByBodyPart,
-        volumePeakByBodyPart: base.volumePeakByBodyPart,
-        peakLoadsByBodyPart: const {},
-        earliestActivity: base.earliestActivity,
-        windowStart: base.windowStart,
-        windowEnd: base.windowEnd,
-      );
-      await tester.pumpWidget(_wrap(state: state));
-      await tester.pumpAndSettle();
-
-      expect(find.text('No peaks recorded yet.'), findsOneWidget);
-    });
-
     testWidgets('renders empty-state defaults without throwing', (
       tester,
     ) async {
-      // Day-0 user — six dormant rows, empty trends, empty peaks. Widget
-      // must lay out without overflow / null-deref.
+      // Day-0 user — six dormant rows, empty trends. Widget must lay out
+      // without overflow / null-deref.
       await tester.pumpWidget(_wrap(state: StatsDeepDiveState.empty()));
       await tester.pumpAndSettle();
 
@@ -330,6 +301,62 @@ void main() {
           .where((s) => s.properties.identifier == 'saga-stats-screen')
           .toList();
       expect(semantics.length, 1);
+    });
+
+    group('vitality explainer icons', () {
+      testWidgets(
+        'should open the explainer sheet when the trend-section ⓘ is tapped',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          final icon = find.byKey(const ValueKey('vitality-trend-info-icon'));
+          expect(icon, findsOneWidget);
+
+          await tester.tap(icon);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(VitalityExplainerSheet), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'should open the same explainer sheet when the live-vitality ⓘ is tapped',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          final icon = find.byKey(const ValueKey('vitality-table-info-icon'));
+          expect(icon, findsOneWidget);
+
+          await tester.tap(icon);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(VitalityExplainerSheet), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'should NOT render an info icon on the Volume & peak section header',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const ValueKey('volume-peak-info-icon')),
+            findsNothing,
+          );
+        },
+      );
     });
   });
 }

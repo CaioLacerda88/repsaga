@@ -89,7 +89,15 @@ class _VitalityTableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final stateColor = VitalityStateStyles.borderColorFor(row.state);
+    // Phase 26c (Task 6): the percentage numeral colors by the HP-drain ramp
+    // (vitalityHigh/Mid/Low) — the conditioning signal — while the chip-form
+    // dot and the muscle icon stay on body-part identity color. Untested
+    // rows keep the em-dash in textDim because the ratio is undefined.
+    final pctColor = row.state == VitalityState.untested
+        ? AppColors.textDim
+        : VitalityStateStyles.vitalityRampColorFor(row.pct);
+    final dotColor =
+        VitalityStateStyles.bodyPartColor[row.bodyPart] ?? AppColors.textDim;
     // Untested = peak == 0 (never trained). The ewma/peak ratio is
     // mathematically undefined, so we render an em-dash instead of the
     // misleading "0%" that a brand-new account would otherwise see across
@@ -99,14 +107,22 @@ class _VitalityTableRow extends StatelessWidget {
         ? '—'
         : '${(row.pct * 100).round()}%';
     final localizedName = localizedBodyPartName(row.bodyPart, l10n);
-    final stateCopy = VitalityStateStyles.localizedCopy(row.state, l10n);
+    // Phase 26c (Task 10): untested rows use a short "No data" / "Sem dados"
+    // subtitle in this compact table register. The long-form
+    // `vitalityCopyUntested` stays in `VitalityStateStyles.localizedCopy` for
+    // any other surface that reads it.
+    final stateCopy = row.state == VitalityState.untested
+        ? l10n.vitalityRowUntestedSubtitle
+        : VitalityStateStyles.localizedCopy(row.state, l10n);
 
     return Semantics(
       container: true,
       identifier: 'vitality-row-${row.bodyPart.dbValue}',
       button: true,
       selected: isSelected,
-      label: '$localizedName, $pctText, $stateCopy',
+      label: stateCopy.isEmpty
+          ? '$localizedName, $pctText'
+          : '$localizedName, $pctText, $stateCopy',
       child: Material(
         // Selected row sits one elevation level higher so it confirms the
         // tap without redrawing the whole table. surface2 vs surface — the
@@ -120,7 +136,7 @@ class _VitalityTableRow extends StatelessWidget {
               children: [
                 AppIcons.render(
                   _muscleAsset(row.bodyPart),
-                  color: stateColor,
+                  color: dotColor,
                   size: 32,
                 ),
                 const SizedBox(width: 14),
@@ -135,15 +151,17 @@ class _VitalityTableRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        stateCopy,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textDim,
+                      if (stateCopy.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          stateCopy,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.textDim,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -153,18 +171,20 @@ class _VitalityTableRow extends StatelessWidget {
                   style: GoogleFonts.rajdhani(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    color: stateColor,
+                    color: pctColor,
                     height: 1,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
                 const SizedBox(width: 10),
-                // 8x8 state-color dot — the chip-form legend per row.
+                // 8x8 body-part identity dot — the chip-form legend per row.
+                // Identity (which body part) is communicated by the dot;
+                // conditioning state is communicated by the percentage color.
                 Container(
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: stateColor,
+                    color: dotColor,
                     shape: BoxShape.circle,
                   ),
                 ),
