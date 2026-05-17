@@ -76,8 +76,22 @@ class EarnedTitleRow {
 /// drive the *celebration overlay* — the durable record was already written
 /// by the time `record_set_xp` returned its deltas.
 class TitlesRepository extends BaseRepository {
-  TitlesRepository(this._client, {AssetBundle? bundle, super.recoveryRecorder})
-    : _bundle = bundle ?? rootBundle;
+  TitlesRepository(
+    supabase.SupabaseClient client, {
+    AssetBundle? bundle,
+    super.recoveryRecorder,
+  }) : _client = client,
+       _bundle = bundle ?? rootBundle;
+
+  /// Test-only factory that constructs a repository wired ONLY to the asset
+  /// bundle (no Supabase client). The unit tests for the threshold-table
+  /// integrity assertion use this to read the JSON catalog without a Supabase
+  /// connection. The Supabase-dependent methods will throw [StateError] if
+  /// called against this instance.
+  @visibleForTesting
+  factory TitlesRepository.forAssetBundleOnly({AssetBundle? bundle}) {
+    return TitlesRepository(_ThrowingSupabaseClient(), bundle: bundle);
+  }
 
   final supabase.SupabaseClient _client;
   final AssetBundle _bundle;
@@ -286,4 +300,16 @@ class TitlesRepository extends BaseRepository {
           .eq('is_active', true);
     });
   }
+}
+
+/// Throwing stub used by [TitlesRepository.forAssetBundleOnly]. Any method
+/// invocation surfaces a [StateError] — tests using the asset-only factory
+/// must not exercise Supabase code paths. We cannot use a real
+/// `SupabaseClient` here because instantiating one requires a URL + anon key
+/// and would attempt network setup at construction time.
+class _ThrowingSupabaseClient implements supabase.SupabaseClient {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw StateError(
+    'TitlesRepository.forAssetBundleOnly: Supabase methods are not available',
+  );
 }
