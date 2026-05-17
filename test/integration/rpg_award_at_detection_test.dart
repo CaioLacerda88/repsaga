@@ -1,4 +1,6 @@
-/// Integration tests for Phase 26d Task 2 — `earned_titles` award-at-detection.
+/// Integration tests for the `earned_titles` award-at-detection path
+/// (`record_session_xp_batch` extension in migration 00060) and the one-shot
+/// `backfill_earned_titles` RPC (migration 00061).
 ///
 /// Validates that `record_session_xp_batch` (the production save_workout
 /// hot path) INSERTs into `earned_titles` whenever:
@@ -9,9 +11,11 @@
 ///      `evaluate_cross_build_titles_for_user`) fires against the post-save
 ///      rank distribution.
 ///
-/// Also pins idempotency: re-running the RPC against the same workout never
-/// produces duplicate `earned_titles` rows (the function's INSERT uses
-/// `ON CONFLICT (user_id, title_id) DO NOTHING`).
+/// Also pins idempotency on both paths: re-running either RPC never produces
+/// duplicate rows (every INSERT uses `ON CONFLICT (user_id, title_id) DO NOTHING`).
+/// The backfill group additionally pins that the ON CONFLICT clause preserves
+/// `is_active` and the original `earned_at` on rows already inserted via the
+/// detection path.
 ///
 /// Requires local Supabase running: `npx supabase start`.
 ///
@@ -348,6 +352,14 @@ void main() {
             'chest_r10_plate_bearer',
           ]),
           reason: 'every body-part title at or below rank 12 must be inserted',
+        );
+        // Upper boundary: threshold 15 must NOT fire for rank 12. Pins the
+        // predicate so a regression from `<=` to `<` (or vice versa) fails.
+        expect(
+          slugs,
+          isNot(contains('chest_r15_forge_marked')),
+          reason:
+              'chest_r15_forge_marked (threshold 15) must not fire for rank 12',
         );
       },
     );
