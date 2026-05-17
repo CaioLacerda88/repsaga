@@ -45,7 +45,7 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 11: Rewrite `TitlesScreen` around the new view-model
 - [x] Task 12: E2E regression test + selector updates
 - [x] Task 13: Visual verification + screenshot package
-- [ ] Task 14: Open PR + address review findings in the same cycle
+- [x] Task 14: Open PR + address review findings in the same cycle (PR #238)
 
 ### 26e — Plan editor + bucket model evolution
 
