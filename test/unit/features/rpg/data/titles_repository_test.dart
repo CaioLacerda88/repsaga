@@ -434,7 +434,7 @@ void main() {
       expect(builder.capturedUpdates[1], {'is_active': true});
     });
 
-    test('is a no-op when the user is not authenticated', () async {
+    test('should be a no-op when the user is not authenticated', () async {
       // Defensive guard already in the implementation — pinning it so a
       // future refactor doesn't drop the early-return and surface a null
       // user.id to `eq('user_id', …)` (which would map to an opaque

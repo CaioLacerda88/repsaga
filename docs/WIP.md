@@ -35,8 +35,8 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 1: Mirror title thresholds in Dart table + integrity test
 - [x] Task 2: SQL — extend `record_set_xp` + `record_session_xp_batch` with earned_titles INSERT
 - [x] Task 3: SQL — `backfill_earned_titles(p_user_id uuid)` RPC
-- [ ] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
-- [ ] Task 5: Simplify `equipTitle` + `onEquipTitle`
+- [x] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
+- [x] Task 5: Simplify `equipTitle` + `onEquipTitle`
 - [ ] Task 6: `TitlesViewModel` pure splitter
 - [ ] Task 7: L10n keys
 - [ ] Task 8: `EquippedTitleCard` widget (heroGold gradient)
