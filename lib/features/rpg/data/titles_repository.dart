@@ -300,6 +300,24 @@ class TitlesRepository extends BaseRepository {
           .eq('is_active', true);
     });
   }
+
+  /// Invokes the `backfill_earned_titles(p_user_id uuid)` RPC for [userId].
+  /// Idempotent server-side — the RPC's INSERTs use `ON CONFLICT DO NOTHING`,
+  /// so re-running is a no-op rather than a duplicate-key error.
+  ///
+  /// Best-effort from the caller's perspective. The
+  /// `earnedTitlesBackfillProvider` swallows failures so a transient network
+  /// outage at first app open never blocks the shell from rendering; the
+  /// provider's per-(user, device) Hive flag stays unset on failure so the
+  /// next session retries.
+  Future<void> backfillEarnedTitles(String userId) {
+    return mapException(() async {
+      await _client.rpc(
+        'backfill_earned_titles',
+        params: {'p_user_id': userId},
+      );
+    });
+  }
 }
 
 // ─── Test infrastructure ─────────────────────────────────────────────────────
