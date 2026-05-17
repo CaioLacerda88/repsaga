@@ -417,6 +417,41 @@ Future<Map<String, dynamic>> saveWorkoutRpc({
   return result as Map<String, dynamic>;
 }
 
+/// Phase 26d Task 2: seed a single `body_part_progress` row at a chosen
+/// `(rank, total_xp)`. Used by the title-award integration tests to pin a
+/// user just below a threshold so a small workout pushes them across it.
+///
+/// **Caller responsibility:** keep `rank` and `totalXp` self-consistent w.r.t.
+/// `rpg_rank_for_xp(totalXp)`. The RPC re-derives `rank` from
+/// `total_xp + delta` on UPSERT, so the seeded `rank` value matters only for
+/// pre-state capture inside the RPC (and the pre-rank read is the v_pre_ranks
+/// snapshot built at the top of `record_session_xp_batch`). If the seed pair
+/// disagrees with the curve, the test's pre-rank assumption could drift —
+/// the body-part block uses `>` against `v_pre_ranks` to gate INSERTs.
+///
+/// Uses the service-role admin client (bypasses RLS).
+Future<void> seedBodyPartProgress({
+  required supabase.SupabaseClient adminClient,
+  required String userId,
+  required String bodyPart,
+  required double totalXp,
+  required int rank,
+  double peakEwma = 0.0,
+  double peakValue = 0.0,
+}) async {
+  final ts = DateTime.now().toUtc().toIso8601String();
+  await adminClient.from('body_part_progress').upsert({
+    'user_id': userId,
+    'body_part': bodyPart,
+    'total_xp': totalXp,
+    'rank': rank,
+    'vitality_ewma': peakEwma,
+    'vitality_peak': peakValue,
+    'last_event_at': ts,
+    'updated_at': ts,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Backfill helpers (bypass RpgRepository which requires _client.auth)
 // ---------------------------------------------------------------------------
