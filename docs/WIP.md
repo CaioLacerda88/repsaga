@@ -16,27 +16,10 @@ the phase summary in PROJECT.md §4.
 **Reference:** `docs/PROJECT.md §3 Phase 26` (authoritative spec) +
 `docs/phase-26-mockups.html` (visual companion).
 
-**State:** 26a + 26b shipped (PRs #232, #234 — see PROJECT.md §4 for
-retrospectives). Four sub-phases remain (26c–f). Each gets its own plan
-written via `superpowers:writing-plans` just before that sub-phase starts,
-so each plan reflects the actual landed state of prior sub-phases.
-
-### 26c — Stats deep-dive
-
-Branch: `feature/26c-stats-deep-dive`
-
-- [ ] Update `lib/features/rpg/ui/stats_deep_dive_screen.dart`: 3-section layout (Peak Loads dropped)
-- [ ] `_SectionHeader` gets 12dp bottom padding (fixes trend overlap)
-- [ ] Update `lib/features/rpg/ui/widgets/vitality_trend_chart.dart`: selected line 2.5dp/100%, others 1dp/35%, 180ms tap tween
-- [ ] Update `lib/features/rpg/ui/widgets/vitality_table.dart`: HP-ramp coloring; drop fading/radiant marginalia
-- [ ] New: `lib/features/rpg/ui/widgets/volume_peak_block.dart` per-body-part two-column block
-- [ ] New: `lib/features/rpg/ui/widgets/vitality_explainer_sheet.dart` (ⓘ tooltip)
-- [ ] DELETE: `lib/features/rpg/ui/widgets/peak_loads_table.dart`
-- [ ] Extend `lib/features/rpg/providers/stats_provider.dart` with weekly volume/delta + 30D EWMA delta math
-- [ ] Volume delta adapts to history: weeks 0–1 → none; 2–4 → vs semana passada; 5+ → vs média (4 sem)
-- [ ] Over-target uses `warning` amber (not green) — locked decision
-- [ ] Generic-tip fallback: REFERÊNCIA label + ⓘ estimado badge (10 sets/wk Schoenfeld floor)
-- [ ] Widget tests: vitality table boundary %s; trend chart line emphasis; volume/peak block edge cases; ⓘ sheet opens
+**State:** 26a + 26b + 26c shipped (PRs #232, #234, #236 — see PROJECT.md §4
+for retrospectives). Three sub-phases remain (26d–f). Each gets its own
+plan written via `superpowers:writing-plans` just before that sub-phase
+starts, so each plan reflects the actual landed state of prior sub-phases.
 
 ### 26d — Titles screen + awarding pipeline bug fix
 
@@ -112,7 +95,8 @@ Branch: `feature/26f-home-character-card`
 
 ### Next step
 
-Re-invoke `superpowers:writing-plans` to draft 26c's plan against the
-up-to-date codebase (now that 26b's `SagaHeader` / `CharacterXpBar` /
-`vitalityRampColorFor` consumer / `RankUpPulse` / `body-part-row InkWell
-routing` are live on `main`).
+Re-invoke `superpowers:writing-plans` to draft 26d's plan against the
+up-to-date codebase (now that 26c's `VolumePeakBlock` / `VitalityExplainerSheet`
+/ HP-drain `VitalityTable` / per-body-part trend ghosts / `VolumeDeltaView` +
+`PeakDeltaView` view-state factories / `VolumePeakRow` history fields are
+live on `main`).
