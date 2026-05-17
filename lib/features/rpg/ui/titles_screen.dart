@@ -103,12 +103,14 @@ class _TitlesScreenState extends ConsumerState<TitlesScreen> {
     final showCounter = catalogAsync.hasValue && earnedAsync.hasValue;
 
     return Semantics(
-      // `container: true` forces Flutter to emit a flt-semantics node for
-      // this identifier even when no descendant Semantics carries
-      // label/role/action. Without it, Flutter web's AOM elides
-      // identifier-only wrappers from the accessibility tree on rebuild,
-      // breaking E2E selectors.
+      // `container: true` + `explicitChildNodes: true` forces Flutter to emit
+      // a flt-semantics node for this identifier even when no descendant
+      // Semantics carries label/role/action. Without the pair, Flutter web's
+      // AOM elides identifier-only wrappers from the accessibility tree on
+      // rebuild, breaking E2E selectors. See
+      // `cluster_semantics_identifier_pair_rule`.
       container: true,
+      explicitChildNodes: true,
       identifier: 'titles-screen',
       child: Scaffold(
         appBar: AppBar(
@@ -343,8 +345,9 @@ class _ThreeRegions extends StatelessWidget {
 /// Region header for one of the three Titles screen regions.
 ///
 /// `cluster_semantics_identifier_pair_rule`: every identifier-bearing
-/// wrapper carries `container: true` so Flutter web's AOM emits a
-/// flt-semantics node even though the header itself has no role or action.
+/// wrapper carries `container: true` + `explicitChildNodes: true` so Flutter
+/// web's AOM emits a flt-semantics node even though the header itself has
+/// no role or action.
 class _RegionHeader extends StatelessWidget {
   const _RegionHeader({required this.label, required this.identifier});
 
@@ -355,6 +358,7 @@ class _RegionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: identifier,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -416,9 +420,13 @@ String _thresholdLabel(rpg.Title title, AppLocalizations l10n) {
 /// Body-part hue for the row dot / progress bar fill. Character-level
 /// titles use the brand violet (the "personagem" scope feeds back into the
 /// shared character track, not any single body part). Cross-build titles
-/// use heroGold — these titles only surface through [CrossBuildCard] (which
-/// is whitelisted to read heroGold directly), so this path is defensive
-/// rather than load-bearing.
+/// return [AppColors.textDim] as a defensive neutral — they never surface
+/// through the body-part / character-level row widgets that read this
+/// accent (they only render through [CrossBuildCard], which owns its own
+/// heroGold accents under the `scripts/check_reward_accent.sh` whitelist).
+/// Keeping this arm `textDim` rather than `heroGold` upholds
+/// `project_design_language_brand_vs_identity` — heroGold reads are
+/// confined to the heroGold-whitelisted widgets.
 Color _accentColor(rpg.Title title) {
   return switch (title) {
     rpg.BodyPartTitle(:final bodyPart) =>

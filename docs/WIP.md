@@ -40,9 +40,9 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 6: `TitlesViewModel` pure splitter
 - [x] Task 7: L10n keys
 - [x] Task 8: `EquippedTitleCard` widget (heroGold gradient)
-- [ ] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
-- [ ] Task 10: Counter pill widget
-- [ ] Task 11: Rewrite `TitlesScreen` around the new view-model
+- [x] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
+- [x] Task 10: Counter pill widget
+- [x] Task 11: Rewrite `TitlesScreen` around the new view-model
 - [ ] Task 12: E2E regression test + selector updates
 - [ ] Task 13: Visual verification + screenshot package
 - [ ] Task 14: Open PR + address review findings in the same cycle
