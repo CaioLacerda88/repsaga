@@ -1486,6 +1486,59 @@
   "@titlesSectionCharacterLevel": { "description": "Phase 18e titles screen section header for character-level titles (lvl 10/25/50/75/100/125/148)." },
   "titlesSectionCrossBuild": "DISTINCTION",
   "@titlesSectionCrossBuild": { "description": "Phase 18e titles screen section header for cross-build distinction titles (Pillar-Walker, Saga-Forged, etc.)." },
+  "titlesRegionEquipped": "Equipped",
+  "@titlesRegionEquipped": { "description": "Titles screen region header for the currently-equipped title." },
+  "titlesRegionEarned": "Earned",
+  "@titlesRegionEarned": { "description": "Titles screen region header for titles the user has already unlocked but is not currently wearing." },
+  "titlesRegionNext": "Next",
+  "@titlesRegionNext": { "description": "Titles screen region header for upcoming locked titles closest to unlock." },
+  "titlesRowEquipCta": "Equip",
+  "@titlesRowEquipCta": { "description": "Per-row CTA button label that equips an already-earned title as the active one." },
+  "titlesEquippedTag": "Active",
+  "@titlesEquippedTag": { "description": "Small inline tag/badge shown on the currently-equipped title row to indicate it is the one in use." },
+  "titlesCharacterLabel": "Character",
+  "@titlesCharacterLabel": { "description": "Localized scope label used in place of a body-part name for character-level titles (e.g. on the equipped card, earned-row meta line). Stays consistent with `titlesNextSubCharacter*`." },
+  "titlesCounterPill": "{earned} / {total} earned",
+  "@titlesCounterPill": {
+    "description": "Compact counter pill shown at the top of the Titles screen — earned vs total catalog count.",
+    "placeholders": {
+      "earned": { "type": "int", "example": "12" },
+      "total": { "type": "int", "example": "78" }
+    }
+  },
+  "titlesNextSubBodyPart": "{bodyPart} · {remaining} ranks to go",
+  "@titlesNextSubBodyPart": {
+    "description": "Sub-line under a body-part-driven next title showing how many ranks remain. Plural form (remaining >= 2).",
+    "placeholders": {
+      "bodyPart": { "type": "String", "example": "Chest" },
+      "remaining": { "type": "int", "example": "3" }
+    }
+  },
+  "titlesNextSubBodyPartOne": "{bodyPart} · 1 rank to go",
+  "@titlesNextSubBodyPartOne": {
+    "description": "Sub-line under a body-part-driven next title when exactly one rank remains. Singular form.",
+    "placeholders": {
+      "bodyPart": { "type": "String", "example": "Chest" }
+    }
+  },
+  "titlesNextSubCharacter": "Character · {remaining} levels to go",
+  "@titlesNextSubCharacter": {
+    "description": "Sub-line under a character-level-driven next title showing how many character levels remain. Plural form (remaining >= 2).",
+    "placeholders": {
+      "remaining": { "type": "int", "example": "5" }
+    }
+  },
+  "titlesNextSubCharacterOne": "Character · 1 level to go",
+  "@titlesNextSubCharacterOne": { "description": "Sub-line under a character-level-driven next title when exactly one level remains. Singular form." },
+  "titlesCrossBuildEspecial": "Special",
+  "@titlesCrossBuildEspecial": { "description": "Cross-build distinction card label used to flag these titles as special / rare relative to the per-body-part ladder." },
+  "titlesCrossBuildBottleneck": "◆ 1 rank to go in {bodyPart}",
+  "@titlesCrossBuildBottleneck": {
+    "description": "Cross-build distinction card bottleneck line surfacing the single nearest blocking body-part rank.",
+    "placeholders": {
+      "bodyPart": { "type": "String", "example": "Shoulders" }
+    }
+  },
 
   "classTaglineInitiate": "the path begins",
   "@classTaglineInitiate": { "description": "BUG-011 class-change overlay tagline for CharacterClass.initiate. Short declarative phrase, lowercase. Brand voice: masculine-emphatic. Used as `classChangeOverlayHeadline(className, tagline)` formatting." },

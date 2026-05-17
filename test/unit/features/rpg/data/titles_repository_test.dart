@@ -5,6 +5,7 @@
 /// celebration spec). Re-faking it here would only test the fake.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -54,6 +55,91 @@ String _emptyCatalog() => jsonEncode({'version': 1, 'titles': <dynamic>[]});
 /// must accept a SupabaseClient. The catalog tests never invoke any client
 /// method, so the fake only needs to exist (not respond).
 class _UnusedClient extends Fake implements supabase.SupabaseClient {}
+
+// ---------------------------------------------------------------------------
+// Fake plumbing for `equipTitle`.
+//
+// equipTitle calls:
+//   1. _client.auth.currentUser           → needs a fake GoTrueClient
+//   2. _client.from('earned_titles')
+//        .update({'is_active': false})
+//        .eq('user_id', uid).eq('is_active', true)
+//   3. _client.from('earned_titles')
+//        .update({'is_active': true})
+//        .eq('user_id', uid).eq('title_id', slug)
+//
+// We capture every `update` payload and every `upsert` invocation so the
+// contract test can assert: TWO updates fired AND zero upserts fired.
+// ---------------------------------------------------------------------------
+
+class _FakeAuthClient extends Fake implements supabase.GoTrueClient {
+  _FakeAuthClient(this._user);
+  final supabase.User? _user;
+
+  @override
+  supabase.User? get currentUser => _user;
+}
+
+class _FakeAuthSupabaseClient extends Fake implements supabase.SupabaseClient {
+  _FakeAuthSupabaseClient(this._builder, this._auth);
+  final _EquipFakeQueryBuilder _builder;
+  final _FakeAuthClient _auth;
+
+  @override
+  supabase.GoTrueClient get auth => _auth;
+
+  @override
+  supabase.SupabaseQueryBuilder from(String table) => _builder;
+}
+
+// ignore: must_be_immutable
+class _EquipFakeQueryBuilder extends Fake
+    implements supabase.SupabaseQueryBuilder {
+  final List<Map<String, dynamic>> capturedUpdates = [];
+  final List<Map<String, dynamic>> capturedUpserts = [];
+
+  @override
+  _EquipFakeFilterBuilder update(Map values) {
+    capturedUpdates.add(Map<String, dynamic>.from(values));
+    return _EquipFakeFilterBuilder();
+  }
+
+  @override
+  _EquipFakeFilterBuilder upsert(
+    dynamic values, {
+    String? onConflict,
+    bool ignoreDuplicates = false,
+    bool defaultToNull = true,
+  }) {
+    capturedUpserts.add(Map<String, dynamic>.from(values as Map));
+    return _EquipFakeFilterBuilder();
+  }
+}
+
+class _EquipFakeFilterBuilder extends Fake
+    implements supabase.PostgrestFilterBuilder<List<Map<String, dynamic>>> {
+  @override
+  _EquipFakeFilterBuilder eq(String column, Object value) => this;
+
+  @override
+  Future<S> then<S>(
+    FutureOr<S> Function(List<Map<String, dynamic>>) onValue, {
+    Function? onError,
+  }) {
+    return Future.value(onValue(const <Map<String, dynamic>>[]));
+  }
+}
+
+supabase.User _fakeUser({String id = 'user-equip-001'}) {
+  return supabase.User(
+    id: id,
+    appMetadata: const {},
+    userMetadata: const {},
+    aud: 'authenticated',
+    createdAt: '2026-01-01T00:00:00Z',
+    isAnonymous: false,
+  );
+}
 
 String _validCatalog() {
   return jsonEncode({
@@ -314,6 +400,53 @@ void main() {
         CrossBuildTriggerId.ironBound,
         CrossBuildTriggerId.sagaForged,
       });
+    });
+  });
+
+  group('TitlesRepository.equipTitle', () {
+    test('should toggle is_active without INSERTing', () async {
+      // Contract: the `earned_titles` row is guaranteed to exist before
+      // equipTitle fires — INSERTed server-side by `record_session_xp_batch`
+      // (migration 00060) at detection time, or via the one-shot
+      // `backfill_earned_titles` RPC (migration 00061) for pre-26d users.
+      //
+      // equipTitle must therefore be a PURE two-step UPDATE: clear any active
+      // flag, then set the target row's `is_active = true`. A regression that
+      // re-introduces an UPSERT would silently re-enable the original
+      // "row doesn't exist when equip fires" bug, letting the client equip a
+      // title for a row it shouldn't have produced — and re-arming the rare
+      // race where a user equips a title they haven't actually earned.
+      final builder = _EquipFakeQueryBuilder();
+      final auth = _FakeAuthClient(_fakeUser(id: 'user-equip-001'));
+      final repo = TitlesRepository(_FakeAuthSupabaseClient(builder, auth));
+
+      await repo.equipTitle('chest_r5_initiate_of_the_forge');
+
+      // No UPSERT path remains; an UPSERT here would be a regression.
+      expect(builder.capturedUpserts, isEmpty);
+
+      // Exactly two UPDATEs: one clearing the prior active row, one setting
+      // the new active row. Asserting the payload shapes pins the contract
+      // against silent refactors (e.g. someone collapsing both into a single
+      // statement, which would break the at-most-one-active invariant).
+      expect(builder.capturedUpdates, hasLength(2));
+      expect(builder.capturedUpdates[0], {'is_active': false});
+      expect(builder.capturedUpdates[1], {'is_active': true});
+    });
+
+    test('should be a no-op when the user is not authenticated', () async {
+      // Defensive guard already in the implementation — pinning it so a
+      // future refactor doesn't drop the early-return and surface a null
+      // user.id to `eq('user_id', …)` (which would map to an opaque
+      // PostgrestException at runtime).
+      final builder = _EquipFakeQueryBuilder();
+      final auth = _FakeAuthClient(null);
+      final repo = TitlesRepository(_FakeAuthSupabaseClient(builder, auth));
+
+      await repo.equipTitle('chest_r5_initiate_of_the_forge');
+
+      expect(builder.capturedUpdates, isEmpty);
+      expect(builder.capturedUpserts, isEmpty);
     });
   });
 }

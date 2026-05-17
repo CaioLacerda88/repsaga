@@ -18,7 +18,11 @@
  *   - Describe: feature name only ("Title equip"), no "smoke"/"full" suffix.
  *   - Tests: "should ..." naming.
  *   - Selectors: CELEBRATION.titleLibraryButton, CELEBRATION.titleLibrarySheet,
- *     CELEBRATION.titleRow(slug), CELEBRATION.equippedTitleLabel, SAGA.sagaHeaderTitle.
+ *     TITLES.earnedRow(slug) (replaces pre-26d CELEBRATION.titleRow — identifier
+ *     changed from 'title-row-{slug}' to 'titles-earned-row-{slug}' in Phase 26d),
+ *     TITLES.equippedCard (replaces CELEBRATION.equippedTitleLabel — identifier
+ *     changed from 'equipped-title-label' to 'titles-equipped-card' in Phase 26d),
+ *     SAGA.sagaHeaderTitle.
  *   - Text input: flutterFill() — not used here (no text fields).
  *   - SnackBar text: .first() selector.
  */
@@ -26,7 +30,7 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
-import { SAGA, CELEBRATION } from '../helpers/selectors';
+import { SAGA, CELEBRATION, TITLES } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 
 test.describe('Title equip', () => {
@@ -66,15 +70,15 @@ test.describe('Title equip', () => {
   // T2: Tapping an earned unequipped title row equips the title.
   //
   // rpgTitleEquipUser has 'chest_r5_initiate_of_the_forge' in earned_titles
-  // with is_active = false. The TitlesScreen _TitleRow renders this row as
-  // tappable (earned but not active → onTap fires _equip). After the equip
-  // round-trip completes, the EQUIPPED badge (equipped-title-label identifier)
-  // appears on the same row.
+  // with is_active = false. The 26d TitlesScreen renders this in the
+  // Conquistados region as an EarnedTitleRow with an "Equipar" CTA.
+  // After the equip round-trip completes, the EquippedTitleCard
+  // (titles-equipped-card identifier) appears in the Equipado region.
   //
   // The active-title-pill on the character sheet is checked on a second
   // navigation so the earnedTitlesProvider + equippedTitleSlugProvider
   // invalidation has time to propagate before we assert.
-  test('should equip an earned title and show EQUIPPED badge on title row (T2)', async ({
+  test('should equip an earned title and show EquippedTitleCard in Equipado region (T2)', async ({
     page,
   }) => {
     // Open the title library.
@@ -89,22 +93,27 @@ test.describe('Title equip', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 15_000 });
 
-    // The earned title row must be visible (chest section, rank 5 entry).
+    // The earned title row must be visible in the Conquistados region.
+    // Phase 26d: identifier changed from 'title-row-{slug}' to
+    // 'titles-earned-row-{slug}' in EarnedTitleRow.
     const titleRow = page
-      .locator(CELEBRATION.titleRow('chest_r5_initiate_of_the_forge'))
+      .locator(TITLES.earnedRow('chest_r5_initiate_of_the_forge'))
       .first();
     await titleRow.scrollIntoViewIfNeeded();
     await expect(titleRow).toBeVisible({ timeout: 10_000 });
 
-    // Tap the row to equip. The row's InkWell fires _equip → equipTitle RPC
+    // Tap the Equip / Equipar CTA to equip. Role-match is locale-independent.
+    // The EarnedTitleRow.onEquip callback fires _equip → equipTitle RPC
     // → earnedTitlesProvider + equippedTitleSlugProvider invalidation.
-    await titleRow.click();
+    await page.getByRole('button', { name: /equip/i }).first().click();
 
-    // The EQUIPPED badge must appear on the row after the round-trip completes.
+    // The EquippedTitleCard must appear in the Equipado region after the
+    // round-trip completes. Phase 26d: identifier changed from
+    // 'equipped-title-label' to 'titles-equipped-card' in EquippedTitleCard.
     // equip_title is a Postgres UPSERT (fast path) — the round-trip typically
     // completes in < 2 s on the local Supabase instance.
     await expect(
-      page.locator(CELEBRATION.equippedTitleLabel).first(),
+      page.locator(TITLES.equippedCard).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -129,11 +138,11 @@ test.describe('Title equip', () => {
       .first()
       .waitFor({ state: 'visible', timeout: 15_000 });
 
+    // Phase 26d: identifier changed from 'title-row-{slug}' to
+    // 'titles-earned-row-{slug}' in EarnedTitleRow.
     const titleRow = page
-      .locator(CELEBRATION.titleRow('chest_r5_initiate_of_the_forge'))
+      .locator(TITLES.earnedRow('chest_r5_initiate_of_the_forge'))
       .first();
-    await titleRow.scrollIntoViewIfNeeded();
-    await expect(titleRow).toBeVisible({ timeout: 10_000 });
 
     // Equip the title (idempotently across runs). T3's prerequisite is
     // "a title is equipped" — either we equip it now, or it's already equipped
@@ -141,19 +150,31 @@ test.describe('Title equip', () => {
     // state persists between tests in the same describe block; global-setup
     // only re-seeds at invocation start, not between tests).
     //
-    // We can't blindly tap the row: when isActive is true the production code
-    // sets _TitleRow.onTap = null (active rows are no-ops by design — see
-    // titles_screen.dart `rowFor(...)`). Playwright correctly refuses the
-    // click in that case ("flutter-view intercepts pointer events"). So we
-    // probe the EQUIPPED badge first and only click if equip is needed.
-    const equippedLabel = page.locator(CELEBRATION.equippedTitleLabel).first();
-    const alreadyEquipped = await equippedLabel
-      .isVisible({ timeout: 1_000 })
-      .catch(() => false);
+    // Phase 26d: The EquippedTitleCard (identifier 'titles-equipped-card')
+    // replaces the old EQUIPPED badge (identifier 'equipped-title-label').
+    //
+    // Wait for the data region to be ready before probing: either the
+    // EarnedTitleRow (unequipped state) OR the EquippedTitleCard (already
+    // equipped from T2 running first in the same worker session) must appear.
+    // We wait for either signal with a generous timeout so the AOM has time
+    // to settle after data fetch.
+    const equippedCard = page.locator(TITLES.equippedCard).first();
+    const earnedRowLocator = titleRow;
+
+    // Poll until one of the two expected elements is visible.
+    await page.waitForSelector(
+      `${TITLES.equippedCard}, ${TITLES.earnedRow('chest_r5_initiate_of_the_forge')}`,
+      { timeout: 15_000 },
+    );
+
+    const alreadyEquipped = await equippedCard.isVisible().catch(() => false);
     if (!alreadyEquipped) {
-      await titleRow.click();
+      await earnedRowLocator.scrollIntoViewIfNeeded();
+      await expect(earnedRowLocator).toBeVisible({ timeout: 5_000 });
+      // Role-match is locale-independent (en: "Equip", pt-BR: "Equipar").
+      await page.getByRole('button', { name: /equip/i }).first().click();
     }
-    await expect(equippedLabel).toBeVisible({ timeout: 15_000 });
+    await expect(equippedCard).toBeVisible({ timeout: 15_000 });
 
     // Navigate back to the character sheet. The active-title-pill should render
     // because equippedTitleSlugProvider was invalidated after the equip RPC.

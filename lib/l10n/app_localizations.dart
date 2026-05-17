@@ -3198,6 +3198,84 @@ abstract class AppLocalizations {
   /// **'DISTINCTION'**
   String get titlesSectionCrossBuild;
 
+  /// Titles screen region header for the currently-equipped title.
+  ///
+  /// In en, this message translates to:
+  /// **'Equipped'**
+  String get titlesRegionEquipped;
+
+  /// Titles screen region header for titles the user has already unlocked but is not currently wearing.
+  ///
+  /// In en, this message translates to:
+  /// **'Earned'**
+  String get titlesRegionEarned;
+
+  /// Titles screen region header for upcoming locked titles closest to unlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get titlesRegionNext;
+
+  /// Per-row CTA button label that equips an already-earned title as the active one.
+  ///
+  /// In en, this message translates to:
+  /// **'Equip'**
+  String get titlesRowEquipCta;
+
+  /// Small inline tag/badge shown on the currently-equipped title row to indicate it is the one in use.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get titlesEquippedTag;
+
+  /// Localized scope label used in place of a body-part name for character-level titles (e.g. on the equipped card, earned-row meta line). Stays consistent with `titlesNextSubCharacter*`.
+  ///
+  /// In en, this message translates to:
+  /// **'Character'**
+  String get titlesCharacterLabel;
+
+  /// Compact counter pill shown at the top of the Titles screen — earned vs total catalog count.
+  ///
+  /// In en, this message translates to:
+  /// **'{earned} / {total} earned'**
+  String titlesCounterPill(int earned, int total);
+
+  /// Sub-line under a body-part-driven next title showing how many ranks remain. Plural form (remaining >= 2).
+  ///
+  /// In en, this message translates to:
+  /// **'{bodyPart} · {remaining} ranks to go'**
+  String titlesNextSubBodyPart(String bodyPart, int remaining);
+
+  /// Sub-line under a body-part-driven next title when exactly one rank remains. Singular form.
+  ///
+  /// In en, this message translates to:
+  /// **'{bodyPart} · 1 rank to go'**
+  String titlesNextSubBodyPartOne(String bodyPart);
+
+  /// Sub-line under a character-level-driven next title showing how many character levels remain. Plural form (remaining >= 2).
+  ///
+  /// In en, this message translates to:
+  /// **'Character · {remaining} levels to go'**
+  String titlesNextSubCharacter(int remaining);
+
+  /// Sub-line under a character-level-driven next title when exactly one level remains. Singular form.
+  ///
+  /// In en, this message translates to:
+  /// **'Character · 1 level to go'**
+  String get titlesNextSubCharacterOne;
+
+  /// Cross-build distinction card label used to flag these titles as special / rare relative to the per-body-part ladder.
+  ///
+  /// In en, this message translates to:
+  /// **'Special'**
+  String get titlesCrossBuildEspecial;
+
+  /// Cross-build distinction card bottleneck line surfacing the single nearest blocking body-part rank.
+  ///
+  /// In en, this message translates to:
+  /// **'◆ 1 rank to go in {bodyPart}'**
+  String titlesCrossBuildBottleneck(String bodyPart);
+
   /// BUG-011 class-change overlay tagline for CharacterClass.initiate. Short declarative phrase, lowercase. Brand voice: masculine-emphatic. Used as `classChangeOverlayHeadline(className, tagline)` formatting.
   ///
   /// In en, this message translates to:

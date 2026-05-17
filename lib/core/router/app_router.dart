@@ -37,6 +37,7 @@ import '../../features/personal_records/ui/pr_list_screen.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
 import '../../features/workouts/ui/home_screen.dart';
 import '../../features/weekly_plan/ui/plan_management_screen.dart';
+import '../../features/rpg/providers/earned_titles_backfill_provider.dart';
 import '../../features/rpg/providers/rpg_progress_provider.dart';
 import '../../features/workouts/ui/workout_detail_screen.dart';
 import '../../features/routines/models/routine.dart';
@@ -415,6 +416,16 @@ class _ShellScaffold extends ConsumerWidget {
     // rpgProgressProvider — keeps the provider alive across the shell's
     // lifetime without rebuilding the scaffold on emissions.
     ref.listen(prCacheBootstrapProvider, (_, _) {});
+    // One-shot backfill of `earned_titles` rows for users who pre-date the
+    // detection-time INSERT migration (00061). The provider is gated by a
+    // per-(user, device) Hive flag — first signed-in build calls the
+    // `backfill_earned_titles(uuid)` RPC; subsequent launches no-op. RPC
+    // failures are swallowed so a transient network blip never blocks the
+    // shell; the flag stays unset on failure so the next session retries.
+    // Same `ref.listen` no-op pattern as `prCacheBootstrapProvider` and
+    // `rpgProgressProvider` — keeps the provider alive across the shell's
+    // lifetime without rebuilding the scaffold on emissions.
+    ref.listen(earnedTitlesBackfillProvider, (_, _) {});
     final tabIndex = _currentIndex(context);
     // When on a non-tab route (e.g. /records, /plan/week), pass index 0 to
     // satisfy NavigationBar's range requirement but hide the indicator so no

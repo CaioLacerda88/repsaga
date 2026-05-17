@@ -1806,6 +1806,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get titlesSectionCrossBuild => 'DISTINCTION';
 
   @override
+  String get titlesRegionEquipped => 'Equipped';
+
+  @override
+  String get titlesRegionEarned => 'Earned';
+
+  @override
+  String get titlesRegionNext => 'Next';
+
+  @override
+  String get titlesRowEquipCta => 'Equip';
+
+  @override
+  String get titlesEquippedTag => 'Active';
+
+  @override
+  String get titlesCharacterLabel => 'Character';
+
+  @override
+  String titlesCounterPill(int earned, int total) {
+    return '$earned / $total earned';
+  }
+
+  @override
+  String titlesNextSubBodyPart(String bodyPart, int remaining) {
+    return '$bodyPart · $remaining ranks to go';
+  }
+
+  @override
+  String titlesNextSubBodyPartOne(String bodyPart) {
+    return '$bodyPart · 1 rank to go';
+  }
+
+  @override
+  String titlesNextSubCharacter(int remaining) {
+    return 'Character · $remaining levels to go';
+  }
+
+  @override
+  String get titlesNextSubCharacterOne => 'Character · 1 level to go';
+
+  @override
+  String get titlesCrossBuildEspecial => 'Special';
+
+  @override
+  String titlesCrossBuildBottleneck(String bodyPart) {
+    return '◆ 1 rank to go in $bodyPart';
+  }
+
+  @override
   String get classTaglineInitiate => 'the path begins';
 
   @override

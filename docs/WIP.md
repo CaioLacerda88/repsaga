@@ -25,20 +25,27 @@ starts, so each plan reflects the actual landed state of prior sub-phases.
 
 Branch: `feature/26d-titles-bug-fix`
 
-- [ ] `supabase/migrations/00060_titles_award_at_detection.sql` — extend `record_set_xp` + `record_session_xp_batch` RPCs with `INSERT INTO earned_titles ... ON CONFLICT DO NOTHING` at rank-threshold crossings
-- [ ] `supabase/migrations/00061_backfill_earned_titles.sql` — one-shot `backfill_earned_titles(user_id uuid)` RPC walking xp_events
-- [ ] Bootstrap hook: call backfill on first app open post-deploy per user (feature-flag-gated)
-- [ ] `lib/features/rpg/data/titles_repository.dart`: `equipTitle` simplifies to is_active toggle only
-- [ ] `lib/features/rpg/ui/titles_screen.dart` rewrite for three-region layout (Equipado / Conquistados / Próximos)
-- [ ] New: `lib/features/rpg/ui/widgets/equipped_title_card.dart` (heroGold gradient)
-- [ ] New: `lib/features/rpg/ui/widgets/earned_title_row.dart`
-- [ ] New: `lib/features/rpg/ui/widgets/next_title_row.dart` (rank progress bar)
-- [ ] New: `lib/features/rpg/ui/widgets/cross_build_card.dart` (heroGold treatment, ESPECIAL badge)
-- [ ] Locked titles hidden entirely (no "Ver todos" link)
-- [ ] Regression test (e2e): workout → dismiss celebration overlay → re-open Titles → earned row visible
-- [ ] Integration test: backfill RPC idempotency
-- [ ] Update `test/e2e/specs/titles.spec.ts` for new layout
-- [ ] Title names in `assets/rpg/titles_v1.json` UNCHANGED for this phase
+**Plan:** `docs/phase-26d-plan.md` (14 tasks, subagent-driven execution).
+
+**Locked architectural decisions:**
+- Backfill walks **current `body_part_progress` ranks** (not xp_events history) — synthetic `now()` as `earned_at`. Conquistados first-launch sort order arbitrary for backfilled batch; correct chronological order for all post-deploy earnings.
+- Cross-build "within 1 rank" predicate = `(floor - current) <= 1` — already-cleared conditions count as satisfied.
+- Title catalog stays in `assets/rpg/titles_v1.json` (client-side dispatch); SQL backfill mirrors thresholds via integrity-hash-guarded Dart-to-SQL VALUES table.
+
+- [x] Task 1: Mirror title thresholds in Dart table + integrity test
+- [x] Task 2: SQL — extend `record_set_xp` + `record_session_xp_batch` with earned_titles INSERT
+- [x] Task 3: SQL — `backfill_earned_titles(p_user_id uuid)` RPC
+- [x] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
+- [x] Task 5: Simplify `equipTitle` + `onEquipTitle`
+- [x] Task 6: `TitlesViewModel` pure splitter
+- [x] Task 7: L10n keys
+- [x] Task 8: `EquippedTitleCard` widget (heroGold gradient)
+- [x] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
+- [x] Task 10: Counter pill widget
+- [x] Task 11: Rewrite `TitlesScreen` around the new view-model
+- [x] Task 12: E2E regression test + selector updates
+- [x] Task 13: Visual verification + screenshot package
+- [x] Task 14: Open PR + address review findings in the same cycle (PR #238)
 
 ### 26e — Plan editor + bucket model evolution
 

@@ -1,66 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
-import '../domain/cross_build_title_evaluator.dart';
+import '../domain/titles_view_model.dart';
 import '../models/body_part.dart';
 import '../models/title.dart' as rpg;
 import '../providers/earned_titles_provider.dart';
 import '../providers/rpg_progress_provider.dart';
+import 'utils/vitality_state_styles.dart';
 import 'widgets/body_part_localization.dart';
+import 'widgets/cross_build_card.dart';
+import 'widgets/earned_title_row.dart';
+import 'widgets/equipped_title_card.dart';
+import 'widgets/next_title_row.dart';
 import 'widgets/title_localization.dart';
+import 'widgets/titles_counter_pill.dart';
 
-/// `/saga/titles` — title library screen (Phase 18c, stage 8; Phase 18e
-/// extended with character-level + cross-build sections).
+/// `/saga/titles` — Titles surface (Phase 26d).
 ///
-/// Replaces the [SagaStubScreen] previously routed at this path. Renders the
-/// full title catalog (90 entries v1: 78 per-body-part + 7 character-level +
-/// 5 cross-build) grouped into:
-///   * One section per body part for [BodyPartTitle] (sorted by rank threshold).
-///   * One "CHARACTER LEVEL" section for [CharacterLevelTitle] (sorted by
-///     level threshold).
-///   * One "DISTINCTION" section for [CrossBuildTitle] (catalog order).
+/// Three regions, top to bottom:
+///   * **Equipado** — the single currently-equipped title rendered as an
+///     [EquippedTitleCard] (heroGold gradient surface). Absent when no title
+///     is equipped.
+///   * **Conquistados** — earned-but-not-equipped titles as a list of
+///     [EarnedTitleRow] entries, most recent first. Each row carries an
+///     "Equipar" CTA.
+///   * **Próximos** — locked titles, ordered: cross-build [CrossBuildCard]s
+///     first (each rendered when within 1 rank of every condition), then one
+///     [NextTitleRow] per body-part track, then the next character-level
+///     [NextTitleRow] last (mockup ordering).
 ///
-/// Each row indicates earned/locked state and supports tap-to-equip on
-/// earned rows regardless of variant.
+/// AppBar `actions` slot renders a [TitlesCounterPill] showing
+/// `{earned}/{total}` once data is loaded.
 ///
 /// **Architecture decisions:**
-///   * **Pure consumer widget** — no notifier of its own. The screen reads
-///     [titleCatalogProvider] (asset-backed catalog) + [earnedTitlesProvider]
-///     (per-user earned rows). Equip writes go straight through
-///     [TitlesRepository.equipTitle] and invalidate the providers downstream
-///     so a single notifier is unnecessary.
-///   * **Earned/locked overlay** — the catalog is the master list; earned
-///     rows are derived by zipping against [earnedTitlesProvider]. Locked
-///     rows render as a roadmap, which doubles as motivation: the user sees
-///     "Plate-Bearer" greyed out at Rank 10 and knows what to chase.
-///   * **Equip path:** tapping an earned but unequipped row calls
-///     [TitlesRepository.equipTitle]. Optimistic UI is *not* used here — the
-///     screen waits for the round-trip to complete and refreshes via
-///     `ref.invalidate(earnedTitlesProvider)`. This is the rare slow-loop
-///     screen where correctness matters more than snappiness; equipping a
-///     title is a once-a-week interaction.
-///   * **Active row taps are no-ops:** tapping the already-equipped row does
-///     nothing. We don't unequip from this surface — that's reserved for the
-///     character sheet's title pill long-press in a future phase, and avoids
-///     accidental "tap the wrong row to peek at flavor" → user lost their
-///     title.
-///   * **Locked row taps are also no-ops:** there's no flavor-preview UX in
-///     v1 — the rank-threshold breadcrumb is enough hint. Phase 18d may add
-///     a long-press preview sheet.
+///   * **Pure consumer widget.** No notifier of its own. The screen reads
+///     [titleCatalogProvider], [earnedTitlesProvider], and
+///     [rpgProgressProvider] via Riverpod, hands them to
+///     [TitlesViewModel.split] (pure domain function), and renders the
+///     resulting [TitlesView]. Equip writes go straight through
+///     [TitlesRepository.equipTitle] and invalidate the relevant providers.
+///   * **View-model split, not inline grouping.** Phase 18c walked the
+///     catalog inline in the body widget. 26d moves that into
+///     [TitlesViewModel.split] so the three-region selection contract is
+///     unit-testable without a `ProviderContainer` and the screen can swap
+///     how it composes the inputs without churning the view-model.
+///   * **No flavor preview wired in v1.** The widgets accept `onTap` for a
+///     future lore bottom-sheet; v1 passes null so the rows degrade to
+///     non-tappable surfaces. The equip CTA on [EarnedTitleRow] stays wired.
+///   * **Equip path waits for the round-trip.** Optimistic UI is *not* used
+///     — equipping a title is a once-a-week interaction; correctness wins
+///     over snappiness. After the RPC returns, we invalidate
+///     [earnedTitlesProvider] and [equippedTitleSlugProvider] so the screen
+///     reflects the new active row and the character sheet's title pill
+///     picks up the change on next visit.
 ///
 /// **Loading + error states:**
-///   * Catalog and earned-titles use AsyncValue. While either is loading we
-///     render a centered progress indicator. On error we show a centered
-///     localized error string — the screen is recoverable via re-entry, so a
-///     dedicated retry button is overkill.
-///   * Empty state (no earned titles) renders the localized
-///     [titlesEmptyState] copy at the top of the body, *above* the catalog.
-///     Showing the locked-row roadmap below the empty state turns "you have
-///     nothing" into "here's what's coming."
+///   * The screen treats catalog + earned + rpg-progress as a single unit.
+///     While any is loading we render [_TitlesSkeleton]; on any error we
+///     render [_ErrorState] with the first error message. The pill is
+///     suppressed during loading/error so we don't flash `0 / 0` counts.
 class TitlesScreen extends ConsumerStatefulWidget {
   const TitlesScreen({super.key});
 
@@ -69,51 +70,82 @@ class TitlesScreen extends ConsumerStatefulWidget {
 }
 
 class _TitlesScreenState extends ConsumerState<TitlesScreen> {
-  /// Slug of the most recently tapped row that's currently being persisted.
-  /// Locks the row visually so a double-tap doesn't fire two `equipTitle`
-  /// calls; cleared in `finally`. We keep this in widget state (not a
-  /// provider) because it's purely transient UI feedback.
+  /// Slug of the row whose `equipTitle` round-trip is in flight. Locks the
+  /// equip handler so a double-tap doesn't fire two writes; cleared in
+  /// `finally`. We keep this in widget state (not a provider) because it's
+  /// purely transient UI feedback.
   String? _equippingSlug;
+
+  /// Equip an earned (non-active) title. Async caller pattern:
+  /// `cluster_async_caller_broke_snackbar` — we `await` the RPC before
+  /// invalidating providers so the read side sees the new `is_active` row
+  /// when it rebuilds.
+  Future<void> _equip(String slug) async {
+    if (_equippingSlug != null) return; // re-entrancy guard.
+    setState(() => _equippingSlug = slug);
+    try {
+      final repo = ref.read(titlesRepositoryProvider);
+      await repo.equipTitle(slug);
+      ref.invalidate(earnedTitlesProvider);
+      ref.invalidate(equippedTitleSlugProvider);
+    } finally {
+      if (mounted) setState(() => _equippingSlug = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final catalogAsync = ref.watch(titleCatalogProvider);
     final earnedAsync = ref.watch(earnedTitlesProvider);
-    // BUG-014: cross-build locked rows render structured stat chips
-    // computed from the user's current rank distribution. Reading the
-    // RPG snapshot here keeps the row widget pure (no Riverpod inside
-    // the row); we pass a `Map<BodyPart, int>` down.
-    final snapshotAsync = ref.watch(rpgProgressProvider);
+    final progressAsync = ref.watch(rpgProgressProvider);
+
+    final showCounter = catalogAsync.hasValue && earnedAsync.hasValue;
 
     return Semantics(
-      // `container: true` forces Flutter to emit a flt-semantics node for this
-      // identifier even when no descendant Semantics carries label/role/action.
-      // Without it, Flutter web's AOM elides identifier-only wrappers from the
-      // accessibility tree on rebuild, breaking E2E selectors. Same pattern as
-      // 'character-sheet', 'saga-stats-screen' (via container), 'volume-peak-table',
-      // and every other identifier wrapper in the codebase that needs to survive
-      // rebuilds regardless of child semantic content.
+      // `container: true` + `explicitChildNodes: true` forces Flutter to emit
+      // a flt-semantics node for this identifier even when no descendant
+      // Semantics carries label/role/action. Without the pair, Flutter web's
+      // AOM elides identifier-only wrappers from the accessibility tree on
+      // rebuild, breaking E2E selectors. See
+      // `cluster_semantics_identifier_pair_rule`.
       container: true,
+      explicitChildNodes: true,
       identifier: 'titles-screen',
       child: Scaffold(
-        appBar: AppBar(title: Text(l10n.titlesScreenTitle)),
-        body: _buildBody(catalogAsync, earnedAsync, snapshotAsync),
+        appBar: AppBar(
+          title: Text(l10n.titlesScreenTitle),
+          actions: [
+            if (showCounter)
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Center(
+                  child: TitlesCounterPill(
+                    earnedCount: earnedAsync.requireValue.length,
+                    totalCount: catalogAsync.requireValue.length,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        body: _buildBody(catalogAsync, earnedAsync, progressAsync, l10n),
       ),
     );
   }
 
-  /// BUG-027: combine the catalog + earned async branches into a single
-  /// loading/error/data switch. The previous implementation rendered a
-  /// `CircularProgressIndicator` once for the catalog and again for the
-  /// earned list — two stacked spinners that flashed in sequence on cold
-  /// open. Here we treat both providers as a unit: while either is loading
-  /// we show the branded [_TitlesSkeleton] (mirrors `_CharacterSheetSkeleton`),
-  /// and only enter the data branch once both have resolved.
+  /// Combine the three async branches into a single loading/error/data
+  /// switch. The previous implementation flashed two stacked spinners on
+  /// cold open; here we treat them as a unit and only enter the data branch
+  /// once all three resolved.
+  ///
+  /// `rpgProgressProvider` errors are *not* treated as catalog failures —
+  /// the screen falls back to a default rank-1 distribution so the
+  /// "Próximos" region still renders meaningfully when the rank fetch fails.
   Widget _buildBody(
     AsyncValue<List<rpg.Title>> catalogAsync,
     AsyncValue<List<EarnedTitleEntry>> earnedAsync,
-    AsyncValue<RpgProgressSnapshot> snapshotAsync,
+    AsyncValue<RpgProgressSnapshot> progressAsync,
+    AppLocalizations l10n,
   ) {
     if (catalogAsync.hasError) {
       return _ErrorState(message: '${catalogAsync.error}');
@@ -124,492 +156,289 @@ class _TitlesScreenState extends ConsumerState<TitlesScreen> {
     if (catalogAsync.isLoading || earnedAsync.isLoading) {
       return const _TitlesSkeleton();
     }
-    // RPG snapshot is allowed to be loading/missing — the chip falls
-    // back to a default-row distribution (every track at 1) which still
-    // renders the floors correctly. This avoids a third loading branch
-    // for what's purely additional stat data.
+    // RPG snapshot is allowed to be loading/missing — falls back to a
+    // default rank-1 distribution + character level 1. This avoids a third
+    // loading branch for what's purely additional stat data.
+    final snapshot = progressAsync.value ?? RpgProgressSnapshot.empty;
     final ranks = <BodyPart, int>{
-      for (final bp in activeBodyParts)
-        bp: snapshotAsync.value?.byBodyPart[bp]?.rank ?? 1,
+      for (final bp in activeBodyParts) bp: snapshot.byBodyPart[bp]?.rank ?? 1,
     };
-    return _Body(
+    final view = TitlesViewModel.split(
       catalog: catalogAsync.requireValue,
       earned: earnedAsync.requireValue,
       ranks: ranks,
-      onTapEarned: _equip,
+      characterLevel: snapshot.characterState.characterLevel,
     );
-  }
-
-  Future<void> _equip(rpg.Title title) async {
-    if (_equippingSlug != null) return; // re-entrancy guard.
-    setState(() => _equippingSlug = title.slug);
-    try {
-      final repo = ref.read(titlesRepositoryProvider);
-      await repo.equipTitle(title.slug);
-      // Invalidate so the screen reflects the new is_active row, and so the
-      // character sheet's title pill picks up the change on next visit.
-      ref.invalidate(earnedTitlesProvider);
-      ref.invalidate(equippedTitleSlugProvider);
-    } finally {
-      if (mounted) setState(() => _equippingSlug = null);
-    }
+    return _ThreeRegions(view: view, onEquip: _equip);
   }
 }
 
-/// Maps catalog → earned-by-slug for O(1) lookup, then renders a single
-/// scroll view with one section per body part. Pulled out as a separate
-/// widget so the loading/error branches stay legible in the parent.
-class _Body extends StatelessWidget {
-  const _Body({
-    required this.catalog,
-    required this.earned,
-    required this.ranks,
-    required this.onTapEarned,
-  });
+/// Renders the three regions (Equipado · Conquistados · Próximos) of the
+/// Titles screen as a single [ListView]. Pulled out as a stateless widget
+/// so the [_TitlesScreenState] equip handler can pass through without
+/// re-creating the widget tree on every state ticker.
+class _ThreeRegions extends StatelessWidget {
+  const _ThreeRegions({required this.view, required this.onEquip});
 
-  final List<rpg.Title> catalog;
-  final List<EarnedTitleEntry> earned;
+  final TitlesView view;
 
-  /// Current rank distribution for the user. Drives the BUG-014
-  /// structured-stat chip on locked cross-build rows. Always populated
-  /// for every active body part (defaults to rank 1 when the snapshot
-  /// has no row).
-  final Map<BodyPart, int> ranks;
-
-  final void Function(rpg.Title) onTapEarned;
+  /// Equip callback for [EarnedTitleRow]s. Receives the slug of the row
+  /// whose "Equipar" CTA was tapped.
+  final Future<void> Function(String slug) onEquip;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final children = <Widget>[];
 
-    final earnedBySlug = <String, EarnedTitleEntry>{
-      for (final e in earned) e.title.slug: e,
-    };
-    final activeSlug = earned
-        .where((e) => e.isActive)
-        .map((e) => e.title.slug)
-        .firstOrNull;
-
-    // Group by body part for [BodyPartTitle] entries, preserving the
-    // canonical [activeBodyParts] order. Other variants are bucketed by
-    // their kind for the trailing two sections.
-    final byBodyPart = <BodyPart, List<rpg.BodyPartTitle>>{};
-    final characterLevelTitles = <rpg.CharacterLevelTitle>[];
-    final crossBuildTitles = <rpg.CrossBuildTitle>[];
-    for (final t in catalog) {
-      switch (t) {
-        case rpg.BodyPartTitle(:final bodyPart):
-          byBodyPart.putIfAbsent(bodyPart, () => []).add(t);
-        case rpg.CharacterLevelTitle():
-          characterLevelTitles.add(t);
-        case rpg.CrossBuildTitle():
-          crossBuildTitles.add(t);
-      }
-    }
-    for (final list in byBodyPart.values) {
-      list.sort((a, b) => a.rankThreshold.compareTo(b.rankThreshold));
-    }
-    characterLevelTitles.sort(
-      (a, b) => a.levelThreshold.compareTo(b.levelThreshold),
-    );
-
-    final orderedBodyParts = activeBodyParts
-        .where((bp) => byBodyPart.containsKey(bp))
-        .toList(growable: false);
-
-    Widget rowFor(rpg.Title title) => _TitleRow(
-      title: title,
-      earned: earnedBySlug[title.slug],
-      isActive: activeSlug == title.slug,
-      ranks: ranks,
-      onTap: earnedBySlug.containsKey(title.slug) && activeSlug != title.slug
-          ? () => onTapEarned(title)
-          : null,
-    );
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        if (earned.isEmpty)
-          _EmptyState(copy: l10n.titlesEmptyState)
-        else
-          _ProgressHeader(
-            earnedCount: earned.length,
-            totalCount: catalog.length,
+    // ─── Region 1: Equipado ──────────────────────────────────────────────
+    if (view.equipped != null) {
+      final entry = view.equipped!;
+      final title = entry.title;
+      children
+        ..add(
+          _RegionHeader(
+            label: l10n.titlesRegionEquipped,
+            identifier: 'titles-region-equipped',
           ),
-        const SizedBox(height: 16),
-        for (final bp in orderedBodyParts) ...[
-          _SectionHeader(label: localizedBodyPartName(bp, l10n).toUpperCase()),
-          const SizedBox(height: 8),
-          for (final title in byBodyPart[bp]!) rowFor(title),
-          const SizedBox(height: 24),
-        ],
-        if (characterLevelTitles.isNotEmpty) ...[
-          _SectionHeader(label: l10n.titlesSectionCharacterLevel),
-          const SizedBox(height: 8),
-          for (final title in characterLevelTitles) rowFor(title),
-          const SizedBox(height: 24),
-        ],
-        if (crossBuildTitles.isNotEmpty) ...[
-          _SectionHeader(label: l10n.titlesSectionCrossBuild),
-          const SizedBox(height: 8),
-          for (final title in crossBuildTitles) rowFor(title),
-          const SizedBox(height: 24),
-        ],
-      ],
-    );
-  }
-}
-
-class _ProgressHeader extends StatelessWidget {
-  const _ProgressHeader({required this.earnedCount, required this.totalCount});
-
-  final int earnedCount;
-  final int totalCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        l10n.titlesProgressLabel(earnedCount, totalCount),
-        style: AppTextStyles.label.copyWith(
-          fontSize: 13,
-          color: AppColors.textDim,
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.copy});
-
-  final String copy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          Opacity(
-            opacity: 0.4,
-            child: AppIcons.render(
-              AppIcons.hero,
-              color: AppColors.textDim,
-              size: 64,
+        )
+        ..add(const SizedBox(height: 8))
+        ..add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: EquippedTitleCard(
+              titleName: _titleName(title, l10n),
+              bodyPartLabel: _scopeLabel(title, l10n),
+              thresholdLabel: _thresholdLabel(title, l10n),
+              accentColor: _accentColor(title),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            copy,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body.copyWith(
-              fontSize: 14,
-              color: AppColors.textDim,
-              height: 1.5,
-            ),
+        )
+        ..add(const SizedBox(height: 24));
+    }
+
+    // ─── Region 2: Conquistados ──────────────────────────────────────────
+    if (view.earned.isNotEmpty) {
+      children
+        ..add(
+          _RegionHeader(
+            label: l10n.titlesRegionEarned,
+            identifier: 'titles-region-earned',
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Text(
-        label,
-        style: AppTextStyles.label.copyWith(
-          fontSize: 12,
-          color: AppColors.hotViolet,
-          letterSpacing: 0.12 * 12,
-        ),
-      ),
-    );
-  }
-}
-
-/// Single title row.
-///
-/// **Why a flat layout (not a Card):** the screen renders ~78 rows; the
-/// Material Card chrome would dominate the visual budget and fight the
-/// codex aesthetic. We use a `surface2`-tinted container with a hairline
-/// divider only when active.
-///
-/// **BUG-014 (Cluster 3) — locked cross-build rendering:**
-///   * Locked cross-build titles render at `textDim @ 0.5` opacity (vs
-///     full textDim for locked body-part / character-level titles).
-///   * NO padlock icon on cross-build rows — the padlock connotes
-///     "unavailable forever" (per-rank gates), but cross-build titles
-///     are pattern gates the user can choose to chase. Opacity says
-///     "not yet" without the finality of the lock glyph.
-///   * A structured stat-line chip below the name shows the gap math
-///     ("PEITO 42/60 · COSTAS 60/60 · PERNAS 60/60" for `iron_bound`).
-///     Per PO call: gym-bro audience scans numbers, doesn't read prose.
-class _TitleRow extends StatelessWidget {
-  const _TitleRow({
-    required this.title,
-    required this.earned,
-    required this.isActive,
-    required this.ranks,
-    this.onTap,
-  });
-
-  final rpg.Title title;
-
-  /// Null when locked; non-null when the user has earned this title.
-  final EarnedTitleEntry? earned;
-
-  final bool isActive;
-
-  /// User's current rank distribution. Used by locked cross-build rows
-  /// to render the BUG-014 structured stat chip. Always non-null —
-  /// the parent fills missing tracks with rank 1.
-  final Map<BodyPart, int> ranks;
-
-  /// Null disables the tap target (locked rows + the already-equipped row).
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final copy = localizedTitleCopy(title.slug, l10n);
-    final isEarned = earned != null;
-    final isCrossBuild = title is rpg.CrossBuildTitle;
-
-    // BUG-014: locked cross-build titles fade to 0.5 opacity (vs full
-    // textDim for other locked rows). The opacity gates the WHOLE row
-    // so the structured chip and name fade together.
-    final lockedCrossBuildLocked = isCrossBuild && !isEarned;
-    final rowOpacity = lockedCrossBuildLocked ? 0.5 : 1.0;
-    final nameColor = isEarned ? AppColors.textCream : AppColors.textDim;
-
-    return Semantics(
-      container: true,
-      identifier: 'title-row-${title.slug}',
-      child: Opacity(
-        opacity: rowOpacity,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.surface2
-                  : AppColors.surface.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(8),
-              border: isActive
-                  ? Border.all(color: AppColors.hotViolet, width: 1)
-                  : null,
+        )
+        ..add(const SizedBox(height: 8));
+      for (final entry in view.earned) {
+        final title = entry.title;
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: EarnedTitleRow(
+              slug: title.slug,
+              titleName: _titleName(title, l10n),
+              bodyPartLabel: _scopeLabel(title, l10n),
+              thresholdLabel: _thresholdLabel(title, l10n),
+              accentColor: _accentColor(title),
+              onEquip: () => onEquip(title.slug),
             ),
-            margin: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        copy?.name ?? title.slug,
-                        style: AppTextStyles.headline.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: nameColor,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      // Sub-label: rank/level threshold for body-part /
-                      // character-level rows; "Distinction" for earned
-                      // cross-build rows; structured stat chip for
-                      // locked cross-build rows.
-                      _Sublabel(
-                        title: title,
-                        isEarned: isEarned,
-                        ranks: ranks,
-                        l10n: l10n,
-                      ),
-                    ],
-                  ),
-                ),
-                if (isActive)
-                  Semantics(
-                    container: true,
-                    identifier: 'equipped-title-label',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.hotViolet.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        l10n.equippedLabel,
-                        style: AppTextStyles.label.copyWith(
-                          fontSize: 11,
-                          color: AppColors.hotViolet,
-                          letterSpacing: 0.12 * 11,
-                        ),
-                      ),
-                    ),
-                  )
-                // BUG-014: NO padlock for cross-build titles. The
-                // padlock stays for body-part / character-level rows
-                // because those are grind gates ("you must clear rank
-                // 30 to unlock"); cross-build titles are pattern gates
-                // (the lifter chooses the predicate to chase).
-                else if (!isEarned && !isCrossBuild)
-                  Icon(
-                    Icons.lock_outline,
-                    size: 16,
-                    color: AppColors.textDim.withValues(alpha: 0.6),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sub-label rendering policy:
-///   * `BodyPartTitle` → "Rank {N}"
-///   * `CharacterLevelTitle` → "Level {N}"
-///   * `CrossBuildTitle` (earned) → "Distinction" (single localized word)
-///   * `CrossBuildTitle` (locked) → structured stat chip
-///     "PEITO 42/60 · COSTAS 60/60" via [_CrossBuildStatChip]
-///
-/// Pulled out of [_TitleRow] so the chip widget can stay a stateless
-/// child without piping every prop through three layers.
-class _Sublabel extends StatelessWidget {
-  const _Sublabel({
-    required this.title,
-    required this.isEarned,
-    required this.ranks,
-    required this.l10n,
-  });
-
-  final rpg.Title title;
-  final bool isEarned;
-  final Map<BodyPart, int> ranks;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = title;
-    if (t is rpg.BodyPartTitle) {
-      return _plainLabel(l10n.titlesRowRankThreshold(t.rankThreshold));
-    }
-    if (t is rpg.CharacterLevelTitle) {
-      return _plainLabel(l10n.titlesRowCharacterLevel(t.levelThreshold));
-    }
-    if (t is rpg.CrossBuildTitle) {
-      if (isEarned) {
-        return _plainLabel(l10n.titlesRowCrossBuild);
-      }
-      return _CrossBuildStatChip(slug: t.slug, ranks: ranks, l10n: l10n);
-    }
-    return const SizedBox.shrink();
-  }
-
-  Widget _plainLabel(String text) => Text(
-    text,
-    style: AppTextStyles.label.copyWith(
-      fontSize: 11,
-      color: AppColors.textDim,
-      letterSpacing: 0.08 * 11,
-    ),
-  );
-}
-
-/// BUG-014 structured stat chip — renders a row of "BODYPART current/floor"
-/// tuples separated by middle dots. Cleared stats render at full textDim;
-/// gapped stats render slightly dimmer so the eye lands on the cleared
-/// progress (the "you've made it this far" affordance).
-///
-/// Tabular figures via the Rajdhani `numeric` tokens keep the stat columns
-/// from jiggling between 1-digit and 2-digit ranks.
-class _CrossBuildStatChip extends StatelessWidget {
-  const _CrossBuildStatChip({
-    required this.slug,
-    required this.ranks,
-    required this.l10n,
-  });
-
-  final String slug;
-  final Map<BodyPart, int> ranks;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final stats = crossBuildStatsFor(slug, ranks);
-    if (stats.isEmpty) {
-      // Unknown cross-build slug — fall back to the localized
-      // "Distinction" label. Defensive only; the catalog shouldn't ship
-      // unknown trigger ids.
-      return Text(
-        l10n.titlesRowCrossBuild,
-        style: AppTextStyles.label.copyWith(
-          fontSize: 11,
-          color: AppColors.textDim,
-          letterSpacing: 0.08 * 11,
-        ),
-      );
-    }
-    final pieces = <InlineSpan>[];
-    for (var i = 0; i < stats.length; i++) {
-      final s = stats[i];
-      if (i > 0) {
-        pieces.add(
-          const TextSpan(
-            text: '  ·  ',
-            style: TextStyle(color: AppColors.textDim),
           ),
         );
       }
-      final body = localizedBodyPartName(s.bodyPart, l10n).toUpperCase();
-      pieces.add(
-        TextSpan(
-          text: '$body ${s.current}/${s.floor}',
-          style: TextStyle(
-            color: AppColors.textDim.withValues(alpha: s.isCleared ? 1.0 : 0.7),
+      children.add(const SizedBox(height: 24));
+    }
+
+    // ─── Region 3: Próximos ──────────────────────────────────────────────
+    // Always present — even an empty next list still shows the header so
+    // the user knows what section they're on. The view-model can skip
+    // body-part tracks that are maxed out, so the next-rows list might be
+    // shorter than 6.
+    children
+      ..add(
+        _RegionHeader(
+          label: l10n.titlesRegionNext,
+          identifier: 'titles-region-next',
+        ),
+      )
+      ..add(const SizedBox(height: 8));
+
+    // 3a — Cross-build cards first. They surface a denser, multi-condition
+    // narrative ("Iron-Bound: chest 59/60, back 60/60, legs 60/60") and
+    // belong at the top of "Próximos" where the eye lands first.
+    for (final card in view.crossBuildCards) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: CrossBuildCard(
+            slug: card.title.slug,
+            titleName: _titleName(card.title, l10n),
+            stats: card.stats,
+            bottleneckBodyPart: card.bottleneckBodyPart,
+            bottleneckLabel: localizedBodyPartName(
+              card.bottleneckBodyPart,
+              l10n,
+            ),
+            statColors: <BodyPart, Color>{
+              for (final s in card.stats)
+                s.bodyPart:
+                    VitalityStateStyles.bodyPartColor[s.bodyPart] ??
+                    AppColors.textDim,
+            },
+            statLabels: <BodyPart, String>{
+              for (final s in card.stats)
+                s.bodyPart: localizedBodyPartName(s.bodyPart, l10n),
+            },
           ),
         ),
       );
     }
-    return Semantics(
-      identifier: 'cross-build-stat-chip-$slug',
-      container: true,
-      child: Text.rich(
-        TextSpan(
-          children: pieces,
-          style: AppTextStyles.label.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.08 * 11,
-            fontFeatures: const [FontFeature.tabularFigures()],
+
+    // 3b — Body-part next rows in `activeBodyParts` order. The view-model
+    // already returns them in that order; we just need to render
+    // non-character entries before the character row.
+    for (final row in view.nextRows) {
+      if (row.title is rpg.CharacterLevelTitle) continue;
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: NextTitleRow(
+            slug: row.title.slug,
+            titleName: _titleName(row.title, l10n),
+            accentColor: _accentColor(row.title),
+            currentValue: row.currentValue,
+            thresholdValue: row.thresholdValue,
+            bodyPartLabel: _scopeLabel(row.title, l10n),
+            isCharacterLevel: false,
           ),
         ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    // 3c — Character-level next row last (mockup convention: per-track
+    // motivation reads naturally, then the character-wide threshold caps
+    // the region).
+    for (final row in view.nextRows) {
+      if (row.title is! rpg.CharacterLevelTitle) continue;
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: NextTitleRow(
+            slug: row.title.slug,
+            titleName: _titleName(row.title, l10n),
+            accentColor: _accentColor(row.title),
+            currentValue: row.currentValue,
+            thresholdValue: row.thresholdValue,
+            bodyPartLabel: _scopeLabel(row.title, l10n),
+            isCharacterLevel: true,
+          ),
+        ),
+      );
+    }
+
+    children.add(const SizedBox(height: 16));
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      children: children,
+    );
+  }
+}
+
+/// Region header for one of the three Titles screen regions.
+///
+/// `cluster_semantics_identifier_pair_rule`: every identifier-bearing
+/// wrapper carries `container: true` + `explicitChildNodes: true` so Flutter
+/// web's AOM emits a flt-semantics node even though the header itself has
+/// no role or action.
+class _RegionHeader extends StatelessWidget {
+  const _RegionHeader({required this.label, required this.identifier});
+
+  final String label;
+  final String identifier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: identifier,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Text(
+          label.toUpperCase(),
+          style: AppTextStyles.label.copyWith(
+            fontSize: 11,
+            color: AppColors.textDim,
+            letterSpacing: 0.12 * 11,
+          ),
+        ),
       ),
     );
   }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// File-private helpers: title → display strings + accent color
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Localized display name for a title. Falls back to the slug if the copy
+/// table doesn't carry an entry for the slug (defensive; the catalog ships
+/// with full coverage and the repository's parse step would have failed if
+/// a slug were missing).
+String _titleName(rpg.Title title, AppLocalizations l10n) {
+  return localizedTitleCopy(title.slug, l10n)?.name ?? title.slug;
+}
+
+/// Scope label rendered next to the threshold: body-part name for
+/// [BodyPartTitle], the localized "Personagem"/"Character" label for
+/// [CharacterLevelTitle]. Cross-build titles don't use this on the
+/// equipped/earned rows (they go into the dedicated [CrossBuildCard]
+/// surface), but the helper returns the localized cross-build distinction
+/// copy for completeness.
+String _scopeLabel(rpg.Title title, AppLocalizations l10n) {
+  return switch (title) {
+    rpg.BodyPartTitle(:final bodyPart) => localizedBodyPartName(bodyPart, l10n),
+    rpg.CharacterLevelTitle() => l10n.titlesCharacterLabel,
+    rpg.CrossBuildTitle() => l10n.titlesRowCrossBuild,
+  };
+}
+
+/// Threshold label rendered on the equipped/earned rows after the scope
+/// label. "Rank 5" / "Nível 10" per title kind. Cross-build titles aren't
+/// expected to land in [EquippedTitleCard]/[EarnedTitleRow] today (they
+/// don't have a numeric threshold), but the helper returns the localized
+/// distinction copy as a safe default.
+String _thresholdLabel(rpg.Title title, AppLocalizations l10n) {
+  return switch (title) {
+    rpg.BodyPartTitle(:final rankThreshold) => l10n.titlesRowRankThreshold(
+      rankThreshold,
+    ),
+    rpg.CharacterLevelTitle(:final levelThreshold) =>
+      l10n.titlesRowCharacterLevel(levelThreshold),
+    rpg.CrossBuildTitle() => l10n.titlesRowCrossBuild,
+  };
+}
+
+/// Body-part hue for the row dot / progress bar fill. Character-level
+/// titles use the brand violet (the "personagem" scope feeds back into the
+/// shared character track, not any single body part). Cross-build titles
+/// return [AppColors.textDim] as a defensive neutral — they never surface
+/// through the body-part / character-level row widgets that read this
+/// accent (they only render through [CrossBuildCard], which owns its own
+/// heroGold accents under the `scripts/check_reward_accent.sh` whitelist).
+/// Keeping this arm `textDim` rather than `heroGold` upholds
+/// `project_design_language_brand_vs_identity` — heroGold reads are
+/// confined to the heroGold-whitelisted widgets.
+Color _accentColor(rpg.Title title) {
+  return switch (title) {
+    rpg.BodyPartTitle(:final bodyPart) =>
+      VitalityStateStyles.bodyPartColor[bodyPart] ?? AppColors.textDim,
+    rpg.CharacterLevelTitle() => AppColors.primaryViolet,
+    rpg.CrossBuildTitle() => AppColors.textDim,
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Loading + error states
+// ───────────────────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message});
@@ -631,30 +460,31 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// BUG-027: branded skeleton shown while the catalog and/or earned-titles
-/// providers are loading. Mirrors the `_CharacterSheetSkeleton` pattern: a
-/// progress-header placeholder followed by three sections of placeholder
-/// rows so the layout doesn't shift when real data lands.
+/// Branded skeleton shown while the catalog and/or earned-titles providers
+/// are loading. Mirrors the 26d three-region shape: a region-header
+/// placeholder followed by three rows of placeholders, repeated three
+/// times. Keeping the placeholder layout aligned with the real screen
+/// prevents the "shift on data arrival" feel.
 class _TitlesSkeleton extends StatelessWidget {
   const _TitlesSkeleton();
 
-  // Hoisted out of `build` (post-review) so each rebuild doesn't reallocate
-  // the placeholder closures. Both placeholders are stateless and capture
+  // Hoisted out of `build` (review-style: avoid reallocating placeholder
+  // closures per rebuild). Both placeholders are stateless and capture
   // nothing, so static methods are the cheapest scoping option.
   static Widget _rowPlaceholder() => Container(
     height: 56,
-    margin: const EdgeInsets.only(bottom: 6),
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
     decoration: BoxDecoration(
       color: AppColors.surface2,
       borderRadius: BorderRadius.circular(kRadiusSm),
     ),
   );
 
-  static Widget _sectionHeaderPlaceholder() => Padding(
-    padding: const EdgeInsets.only(top: 8, bottom: 12),
+  static Widget _regionHeaderPlaceholder() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
     child: Container(
       height: 14,
-      width: 120,
+      width: 96,
       decoration: BoxDecoration(
         color: AppColors.surface2,
         borderRadius: BorderRadius.circular(kRadiusSm),
@@ -665,21 +495,10 @@ class _TitlesSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
-        // Progress header placeholder.
-        Container(
-          height: 16,
-          width: 160,
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.surface2,
-            borderRadius: BorderRadius.circular(kRadiusSm),
-          ),
-        ),
-        const SizedBox(height: 16),
-        for (var section = 0; section < 3; section++) ...[
-          _sectionHeaderPlaceholder(),
+        for (var region = 0; region < 3; region++) ...[
+          _regionHeaderPlaceholder(),
           for (var i = 0; i < 3; i++) _rowPlaceholder(),
           const SizedBox(height: 24),
         ],

@@ -72,6 +72,15 @@ class _StatsDeepDiveScreenState extends ConsumerState<StatsDeepDiveScreen> {
     final stateAsync = ref.watch(statsProvider);
 
     return Semantics(
+      // `container: true` + `explicitChildNodes: true` — without the pair,
+      // Flutter web's AOM elides this identifier wrapper from the
+      // accessibility tree on rebuild (e.g. when a vitality row is tapped
+      // and selectedBodyPart changes), breaking E2E selectors that target
+      // `[flt-semantics-identifier="saga-stats-screen"]`. See
+      // `cluster_semantics_identifier_pair_rule` /
+      // `cluster_flutter_web_aom_role_swap`.
+      container: true,
+      explicitChildNodes: true,
       identifier: 'saga-stats-screen',
       child: Scaffold(
         appBar: AppBar(title: Text(l10n.statsDeepDiveTitle)),

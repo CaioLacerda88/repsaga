@@ -1817,6 +1817,55 @@ class AppLocalizationsPt extends AppLocalizations {
   String get titlesSectionCrossBuild => 'DISTINÇÃO';
 
   @override
+  String get titlesRegionEquipped => 'Equipado';
+
+  @override
+  String get titlesRegionEarned => 'Conquistados';
+
+  @override
+  String get titlesRegionNext => 'Próximos';
+
+  @override
+  String get titlesRowEquipCta => 'Equipar';
+
+  @override
+  String get titlesEquippedTag => 'Em uso';
+
+  @override
+  String get titlesCharacterLabel => 'Personagem';
+
+  @override
+  String titlesCounterPill(int earned, int total) {
+    return '$earned / $total conquistados';
+  }
+
+  @override
+  String titlesNextSubBodyPart(String bodyPart, int remaining) {
+    return '$bodyPart · faltam $remaining ranks';
+  }
+
+  @override
+  String titlesNextSubBodyPartOne(String bodyPart) {
+    return '$bodyPart · falta 1 rank';
+  }
+
+  @override
+  String titlesNextSubCharacter(int remaining) {
+    return 'Personagem · faltam $remaining níveis';
+  }
+
+  @override
+  String get titlesNextSubCharacterOne => 'Personagem · falta 1 nível';
+
+  @override
+  String get titlesCrossBuildEspecial => 'Especial';
+
+  @override
+  String titlesCrossBuildBottleneck(String bodyPart) {
+    return '◆ Falta 1 rank em $bodyPart';
+  }
+
+  @override
   String get classTaglineInitiate => 'o caminho começa';
 
   @override

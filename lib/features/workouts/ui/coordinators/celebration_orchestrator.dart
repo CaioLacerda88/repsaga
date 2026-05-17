@@ -130,6 +130,13 @@ class CelebrationOrchestrator {
         // the ConsumerStatefulWidget's ref). rootContext is the root
         // navigator's context which stays alive for the full app
         // session.
+        //
+        // Detection-time INSERT contract: equipTitle is a pure
+        // is_active toggle — the earned_titles row was already
+        // INSERTed server-side inside record_session_xp_batch during
+        // the save_workout call that produced this celebration. The
+        // client never needs to materialize the row; it just flips
+        // the active flag.
         final container = ProviderScope.containerOf(rootContext);
         final repo = container.read(titlesRepositoryProvider);
         await repo.equipTitle(title.slug);

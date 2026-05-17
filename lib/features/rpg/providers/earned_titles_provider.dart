@@ -3,7 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../data/titles_repository.dart';
+import '../models/earned_title_entry.dart';
 import '../models/title.dart';
+
+// Re-export so existing call-sites that read `EarnedTitleEntry` through this
+// provider file keep compiling. New code that doesn't need Riverpod should
+// import the model directly.
+export '../models/earned_title_entry.dart';
 
 /// Single instance of the titles repository. Lazily resolves the Supabase
 /// client and the default `rootBundle` for asset reads.
@@ -20,23 +26,6 @@ final titlesRepositoryProvider = Provider<TitlesRepository>((ref) {
 final titleCatalogProvider = FutureProvider<List<Title>>((ref) {
   return ref.read(titlesRepositoryProvider).loadCatalog();
 });
-
-/// UI-shaped row for the Titles screen — pairs a [Title] catalog entry with
-/// its per-user earned state.
-class EarnedTitleEntry {
-  const EarnedTitleEntry({
-    required this.title,
-    required this.earnedAt,
-    required this.isActive,
-  });
-
-  final Title title;
-  final DateTime earnedAt;
-
-  /// True for the single equipped row enforced by
-  /// `earned_titles_one_active` UNIQUE INDEX.
-  final bool isActive;
-}
 
 /// Per-user list of earned titles, joined against the catalog.
 ///

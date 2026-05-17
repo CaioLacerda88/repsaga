@@ -76,8 +76,22 @@ class EarnedTitleRow {
 /// drive the *celebration overlay* — the durable record was already written
 /// by the time `record_set_xp` returned its deltas.
 class TitlesRepository extends BaseRepository {
-  TitlesRepository(this._client, {AssetBundle? bundle, super.recoveryRecorder})
-    : _bundle = bundle ?? rootBundle;
+  TitlesRepository(
+    supabase.SupabaseClient client, {
+    AssetBundle? bundle,
+    super.recoveryRecorder,
+  }) : _client = client,
+       _bundle = bundle ?? rootBundle;
+
+  /// Test-only factory that constructs a repository wired ONLY to the asset
+  /// bundle (no Supabase client). The unit tests for the threshold-table
+  /// integrity assertion use this to read the JSON catalog without a Supabase
+  /// connection. The Supabase-dependent methods will throw [StateError] if
+  /// called against this instance.
+  @visibleForTesting
+  factory TitlesRepository.forAssetBundleOnly({AssetBundle? bundle}) {
+    return TitlesRepository(_ThrowingSupabaseClient(), bundle: bundle);
+  }
 
   final supabase.SupabaseClient _client;
   final AssetBundle _bundle;
@@ -232,23 +246,29 @@ class TitlesRepository extends BaseRepository {
     });
   }
 
-  /// Equip a title. Clears any prior `is_active = true` row, then upserts the
-  /// new row — INSERT if the title has never been equipped/earned, UPDATE if it
-  /// already has a row. The UNIQUE INDEX `earned_titles_one_active` enforces the
-  /// at-most-one-active invariant across both the clear and the upsert.
+  /// Equip a title. Pure `is_active` toggle — clears any prior active row,
+  /// then sets the requested row to active. Two UPDATEs, no INSERT/UPSERT.
   ///
-  /// **Why UPSERT instead of plain UPDATE:** Phase 18a planned server-side
-  /// title-row creation inside `record_set_xp`, but that code path was never
-  /// implemented (migration 00041 adds the INSERT RLS policy that makes this
-  /// safe). The first time a user equips a title from the celebration overlay
-  /// there is no pre-existing `earned_titles` row — the UPSERT creates it.
+  /// **Pre-condition (contract):** the `earned_titles` row for `slug` already
+  /// exists. The awarding pipeline INSERTs it server-side inside
+  /// `record_session_xp_batch` at detection time (migration 00060), and the
+  /// one-shot `backfill_earned_titles(p_user_id)` RPC (migration 00061)
+  /// reconciles any pre-26d users who earned titles before the server-side
+  /// INSERT shipped. Equipping is therefore always a row-already-exists
+  /// operation.
   ///
-  /// **Race safety:** a concurrent equip from another device would surface a
-  /// `23505` from the UPSERT's ON CONFLICT clause if two INSERTs race on the
-  /// same primary key, which `mapException` translates to [DatabaseException].
-  /// The UNIQUE INDEX is the real safety net; the two-statement implementation
-  /// is the v1 approach pending a server-side `equip_title(title_id)` RPC
-  /// (Phase 18d).
+  /// **What happens if the row doesn't exist:** the second UPDATE's
+  /// `.eq('title_id', slug)` clause matches zero rows and silently no-ops.
+  /// The next read of `earnedTitlesProvider` will surface the title as
+  /// not-equipped — which is the truth: a missing row means the awarding
+  /// pipeline failed upstream, and we MUST NOT paper over that by INSERTing
+  /// a row here. Doing so would re-arm the rare race where a user equips a
+  /// title they haven't actually earned (the original sin that motivated
+  /// 26d's server-side INSERT migration).
+  ///
+  /// The UNIQUE INDEX `earned_titles_one_active` guards the at-most-one-active
+  /// invariant across the two statements; a concurrent equip from another
+  /// device surfaces a `23505` from `mapException` as [DatabaseException].
   Future<void> equipTitle(String slug) {
     return mapException(() async {
       final user = _client.auth.currentUser;
@@ -261,13 +281,14 @@ class TitlesRepository extends BaseRepository {
           .eq('user_id', user.id)
           .eq('is_active', true);
 
-      // Upsert the new active row. INSERT if no row exists for this title yet
-      // (first equip from the celebration overlay), UPDATE otherwise.
-      await _client.from('earned_titles').upsert({
-        'user_id': user.id,
-        'title_id': slug,
-        'is_active': true,
-      }, onConflict: 'user_id,title_id');
+      // Activate the requested row. No-ops if the row doesn't exist — see
+      // doc comment on why that's the correct failure mode rather than an
+      // UPSERT fallback.
+      await _client
+          .from('earned_titles')
+          .update({'is_active': true})
+          .eq('user_id', user.id)
+          .eq('title_id', slug);
     });
   }
 
@@ -286,4 +307,36 @@ class TitlesRepository extends BaseRepository {
           .eq('is_active', true);
     });
   }
+
+  /// Invokes the `backfill_earned_titles(p_user_id uuid)` RPC for [userId].
+  /// Idempotent server-side — the RPC's INSERTs use `ON CONFLICT DO NOTHING`,
+  /// so re-running is a no-op rather than a duplicate-key error.
+  ///
+  /// Best-effort from the caller's perspective. The
+  /// `earnedTitlesBackfillProvider` swallows failures so a transient network
+  /// outage at first app open never blocks the shell from rendering; the
+  /// provider's per-(user, device) Hive flag stays unset on failure so the
+  /// next session retries.
+  Future<void> backfillEarnedTitles(String userId) {
+    return mapException(() async {
+      await _client.rpc(
+        'backfill_earned_titles',
+        params: {'p_user_id': userId},
+      );
+    });
+  }
+}
+
+// ─── Test infrastructure ─────────────────────────────────────────────────────
+
+/// Throwing stub used by [TitlesRepository.forAssetBundleOnly]. Any method
+/// invocation surfaces a [StateError] — tests using the asset-only factory
+/// must not exercise Supabase code paths. We cannot use a real
+/// `SupabaseClient` here because instantiating one requires a URL + anon key
+/// and would attempt network setup at construction time.
+class _ThrowingSupabaseClient implements supabase.SupabaseClient {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw StateError(
+    'TitlesRepository.forAssetBundleOnly: Supabase methods are not available',
+  );
 }
