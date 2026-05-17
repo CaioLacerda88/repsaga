@@ -290,4 +290,162 @@ void main() {
           'record_session_xp_batch.',
     );
   });
+
+  // -------------------------------------------------------------------------
+  // 5. backfill_earned_titles RPC (migration 00061)
+  //
+  // The detection-time INSERT in 00060 only fires going forward — users who
+  // crossed thresholds before 00060 shipped have zero earned_titles rows.
+  // The backfill RPC walks current ranks + character level + cross-build
+  // predicates once and inserts every title the user already qualifies for.
+  // ON CONFLICT (user_id, title_id) DO NOTHING preserves live state (the
+  // is_active flag + the original earned_at) on rows already inserted via
+  // the detection path. See `00061_backfill_earned_titles.sql`.
+  // -------------------------------------------------------------------------
+
+  group('backfill_earned_titles', () {
+    // Curve: cumulative(n) = 60 × (1.10^(n-1) - 1) / 0.10.
+    //   rank 11 begins at ≈  956.25
+    //   rank 12 begins at ≈ 1111.87
+    //   rank 13 begins at ≈ 1283.06
+    // 1200 maps to rank 12 (verified by `rpg_rank_for_xp(1200) = 12`).
+    const chestRank12Xp = 1200.0;
+
+    test(
+      'should INSERT missing rows for a user with historical rank crossings',
+      () async {
+        // Simulates the pre-26d bug: user dismissed the R5 + R10 celebrations
+        // without tapping equip, so earned_titles is empty but their chest is
+        // at rank 12.
+        final user = await freshUser();
+        final admin = serviceRoleClient();
+        await seedBodyPartProgress(
+          adminClient: admin,
+          userId: user.userId,
+          bodyPart: 'chest',
+          totalXp: chestRank12Xp,
+          rank: 12,
+        );
+        await admin.from('earned_titles').delete().eq('user_id', user.userId);
+
+        final userClient = authenticatedClient(user);
+        await userClient.rpc(
+          'backfill_earned_titles',
+          params: {'p_user_id': user.userId},
+        );
+
+        final rows = await admin
+            .from('earned_titles')
+            .select('title_id')
+            .eq('user_id', user.userId);
+        final slugs = (rows as List)
+            .map((r) => r['title_id'] as String)
+            .toSet();
+        expect(
+          slugs,
+          containsAll(<String>[
+            'chest_r5_initiate_of_the_forge',
+            'chest_r10_plate_bearer',
+          ]),
+          reason: 'every body-part title at or below rank 12 must be inserted',
+        );
+      },
+    );
+
+    test('should produce the same rows on re-run (idempotent)', () async {
+      final user = await freshUser();
+      final admin = serviceRoleClient();
+      await seedBodyPartProgress(
+        adminClient: admin,
+        userId: user.userId,
+        bodyPart: 'chest',
+        totalXp: chestRank12Xp,
+        rank: 12,
+      );
+      await admin.from('earned_titles').delete().eq('user_id', user.userId);
+
+      final userClient = authenticatedClient(user);
+
+      await userClient.rpc(
+        'backfill_earned_titles',
+        params: {'p_user_id': user.userId},
+      );
+      final first = await admin
+          .from('earned_titles')
+          .select('title_id')
+          .eq('user_id', user.userId);
+
+      await userClient.rpc(
+        'backfill_earned_titles',
+        params: {'p_user_id': user.userId},
+      );
+      final second = await admin
+          .from('earned_titles')
+          .select('title_id')
+          .eq('user_id', user.userId);
+
+      final firstList = (first as List).cast<Map<String, dynamic>>();
+      final secondList = (second as List).cast<Map<String, dynamic>>();
+      expect(
+        secondList.length,
+        firstList.length,
+        reason:
+            'ON CONFLICT DO NOTHING must dedupe — no duplicate rows on re-run',
+      );
+      expect(
+        secondList.map((r) => r['title_id']).toSet(),
+        firstList.map((r) => r['title_id']).toSet(),
+        reason: 're-run must produce the exact same slug set',
+      );
+    });
+
+    test('should preserve is_active and earned_at on rows already INSERTed '
+        'via detection', () async {
+      final user = await freshUser();
+      final admin = serviceRoleClient();
+      await seedBodyPartProgress(
+        adminClient: admin,
+        userId: user.userId,
+        bodyPart: 'chest',
+        totalXp: chestRank12Xp,
+        rank: 12,
+      );
+      await admin.from('earned_titles').delete().eq('user_id', user.userId);
+
+      // Simulate pre-existing row from detection-time INSERT, equipped by the
+      // user at an earlier date. The backfill MUST NOT flip is_active back
+      // to FALSE or overwrite the earlier earned_at.
+      final originalEarnedAt = DateTime.utc(2026, 5, 1).toIso8601String();
+      await admin.from('earned_titles').insert(<String, dynamic>{
+        'user_id': user.userId,
+        'title_id': 'chest_r5_initiate_of_the_forge',
+        'is_active': true,
+        'earned_at': originalEarnedAt,
+      });
+
+      final userClient = authenticatedClient(user);
+      await userClient.rpc(
+        'backfill_earned_titles',
+        params: {'p_user_id': user.userId},
+      );
+
+      final r5 = await admin
+          .from('earned_titles')
+          .select('is_active, earned_at')
+          .eq('user_id', user.userId)
+          .eq('title_id', 'chest_r5_initiate_of_the_forge')
+          .single();
+      expect(
+        r5['is_active'],
+        true,
+        reason: 'ON CONFLICT DO NOTHING must not flip the active flag',
+      );
+      // earned_at comes back as ISO string from PostgREST.
+      expect(
+        DateTime.parse(r5['earned_at'] as String).toUtc(),
+        DateTime.parse(originalEarnedAt).toUtc(),
+        reason: 'ON CONFLICT DO NOTHING must not overwrite earned_at',
+      );
+    });
+  });
 }
