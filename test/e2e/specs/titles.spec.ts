@@ -35,9 +35,32 @@ import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
 import { SAGA, CELEBRATION, TITLES } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
+import {
+  getAdminClient,
+  getUserIdByEmail,
+} from '../helpers/test-data-reset';
 
 test.describe('Titles screen', () => {
   test.beforeEach(async ({ page }) => {
+    // Cross-spec pollution defense: `title-equip.spec.ts` T2 EQUIPS the
+    // seeded chest_r5 title (UPDATE earned_titles SET is_active=true). When
+    // that spec runs before us in the same worker, the row drifts out of
+    // the Conquistados region into Equipado, breaking our regression test.
+    // Reset is_active=false for every row owned by this user before each
+    // test so we always start from the canonical pre-equip state.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('rpgTitleEquipUser').email,
+    );
+    if (userId) {
+      await admin
+        .from('earned_titles')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .eq('is_active', true);
+    }
+
     await login(
       page,
       getUser('rpgTitleEquipUser').email,
@@ -103,11 +126,10 @@ test.describe('Titles screen', () => {
   // T3: Counter pill renders "{earned} / 90" in the AppBar.
   //
   // Total catalog: 78 body-part + 7 character-level + 5 cross-build = 90.
-  // rpgTitleEquipUser has 1 earned title, so the pill should read "1 / 90".
-  // We assert the pattern rather than the exact "1" because global-setup runs
-  // are idempotent but don't guarantee exactly-one earned title if T2 from
-  // title-equip.spec.ts ran first in the same session (it equips the title,
-  // which doesn't add new earned rows — count stays 1).
+  // rpgTitleEquipUser has 1 earned title (seeded by global-setup), so the
+  // pill reads "1 / 90". We assert the regex rather than the exact "1"
+  // numerator so the test stays locale-independent and tolerates any
+  // future seeding tweak that adds rows for this user.
   test('should render the counter pill with a numerator and the total of 90', async ({
     page,
   }) => {
