@@ -52,6 +52,7 @@ difficulty framework permanent reference: `docs/xp-difficulty-framework.md`.
 | 26a | Pre-launch UI/UX revamp — color system foundation | DONE | #232 |
 | 26b | Pre-launch UI/UX revamp — Saga screen Option B v4 | DONE | #234 |
 | 26c | Pre-launch UI/UX revamp — Stats deep-dive revamp | DONE | #236 |
+| 26d | Pre-launch UI/UX revamp — Titles screen + awarding pipeline fix | DONE | #238 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -456,37 +457,9 @@ Full retrospective in §4 Completed Phases. The widgets established here (`SagaH
 
 Full retrospective in §4 Completed Phases. The widgets established here (`VolumePeakBlock`, `VitalityExplainerSheet`, the rewritten `VitalityTable` with HP-drain ramp coloring, the rewritten `VitalityTrendChart` with per-body-part ghost lines + 180ms tween) plus the new view-state types (`VolumeDeltaView`, `PeakDeltaView`) plus the extended `VolumePeakRow` history fields (previous-week / 4-week-mean / 30-day-ago peak EWMA / weeks-of-history) plus the `vitalityRowUntestedSubtitle` short copy are what 26d–f consume on the data-display side.
 
-#### 26d acceptance criteria — Titles screen + awarding pipeline fix
+#### 26d — Titles screen + awarding pipeline fix ✅ DONE (PR #238)
 
-**Scope.** Two-part: UI redesign + data-integrity fix. The bug today: `earned_titles` is only INSERTed when the user taps **"EQUIP TITLE"** in the celebration overlay. Dismissing the overlay = title permanently lost (the threshold has already crossed; the client-side `TitleUnlockDetector` won't re-fire). Fix is to write at detection time (server-side or client-side in `CelebrationEventBuilder`) plus a one-shot backfill RPC for existing users.
-
-**Acceptance — bug fix:**
-- New SQL migration adds `INSERT INTO earned_titles … ON CONFLICT DO NOTHING` to both `record_set_xp` and `record_session_xp_batch` at the point a rank-up crosses a title threshold. Title rows land in DB independent of UI flow.
-- `TitlesRepository.equipTitle(slug)` becomes a pure `is_active` toggle (the row exists from the RPC; equip just flips the flag).
-- One-shot backfill RPC `backfill_earned_titles(user_id uuid)` — walks `xp_events` history per user, identifies rank thresholds crossed, INSERTs missing `earned_titles` rows. Idempotent. Called automatically on first app open post-deploy for every active user via a feature-flag-gated bootstrap hook.
-- Regression test: workout → dismiss celebration overlay without tapping EQUIP → re-open Titles screen → earned row visible.
-- `CelebrationOrchestrator` flow unchanged from user POV (still shows celebration; tapping EQUIP still works; dismiss no longer loses the title).
-
-**Acceptance — UI redesign:**
-- Three regions in order: **Equipado** (1 row, heroGold gradient card) → **Conquistados** (earned-but-not-equipped, most recent first, body-part-color dot, "Equipar" CTA) → **Próximos** (single next title per body-part track + character-level + nearest cross-build, with rank progress bar in body-part hue).
-- Counter pill top-right: `N / 90 conquistados`.
-- Locked titles **hidden entirely** — no "Ver todos" link. The catalog still backs the detector; hiding is UI-only.
-- Cross-build titles surface in Próximos only when **within 1 rank of every condition**. Special "Especial" card treatment: heroGold dot + faint gold gradient background + 1px gold border + ESPECIAL badge top-right. Two condition rows inside, each in its own body-part hue; met conditions show a gold ✓; bottom sub-line names the bottleneck ("◆ Falta 1 rank em Ombros").
-- Tap a row → bottom sheet with title lore + (for earned) "Equipar" / "Desequipar" / (for próximos) deep-link to the bottleneck body-part's deep-dive.
-
-**Files:**
-- `lib/features/rpg/ui/titles_screen.dart` (significant rewrite)
-- New: `lib/features/rpg/ui/widgets/equipped_title_card.dart` (heroGold gradient)
-- New: `lib/features/rpg/ui/widgets/earned_title_row.dart`
-- New: `lib/features/rpg/ui/widgets/next_title_row.dart` (with progress bar)
-- New: `lib/features/rpg/ui/widgets/cross_build_card.dart` (heroGold treatment)
-- `lib/features/rpg/data/titles_repository.dart` — `equipTitle` simplifies; no INSERT path
-- `supabase/migrations/00060_titles_award_at_detection.sql`
-- `supabase/migrations/00061_backfill_earned_titles.sql`
-- `lib/features/workouts/ui/coordinators/celebration_orchestrator.dart` — verify no behavior change beyond removing the equip-time INSERT
-- E2E: `test/e2e/specs/titles.spec.ts` — dismiss-then-reopen regression
-
-**Tests:** integration test for the new RPC INSERT path; backfill idempotency test; titles screen widget tests for each section (empty / one-earned / many-earned / no-cross-build-near / cross-build-near); cross-build card visual variants.
+Full retrospective in §4 Completed Phases. The data-integrity contract established here (detection-time `earned_titles` INSERT inside both XP RPCs + one-shot `backfill_earned_titles` RPC + `equipTitle` collapsed to a pure `is_active` toggle) plus the three-region Titles screen (`EquippedTitleCard` heroGold / `EarnedTitleRow` / `NextTitleRow` / `CrossBuildCard` / `TitlesCounterPill`) backed by the pure `TitlesViewModel.split` splitter are what 26e/26f consume on the titles surface.
 
 #### 26e acceptance criteria — Plan editor + bucket model evolution
 
@@ -1014,6 +987,22 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **One in-cycle bug surfaced by QA — `cluster_semantics_identifier_pair_rule`.** The new `Semantics(identifier:)` wrappers on `VolumePeakBlock`, `_InfoIconButton`, and `VitalityExplainerSheet` shipped without `explicitChildNodes: true`. Flutter web's AOM dropped the `flt-semantics-identifier` attribute on all three nodes, so Playwright couldn't target them. Fix lands the flag on every new Semantics constructor + inline cluster reference comments per CLAUDE.md A3. The ledger entry was already in §0 Cluster Ledger from prior phases — this was a "knew the rule, missed it on new code" gap, not a new pattern.
 - **Reviewer + QA cycle:** 14 task implementations × 2-stage review (the reviewer found zero issues on the final pass) + QA (two rounds — first round caught the semantics-identifier-pair-rule violation, second round confirmed 242/1 pass with the 1 failure classified as a pre-existing `setWeight` helper flake unrelated to 26c). Visual verification (step 9): caught a test-fixture gap (foundation user's xp_events backfill doesn't run before screenshot) but no 26c-specific bugs — the screen correctly renders its empty state when xp_events is empty.
 - **Verification:** `make ci` clean on the final commit. All 8 GitHub Actions green including the full E2E suite (35m50s, 240 passed / 1 failed pre-fix → 0 failed post-fix / 2 flaky / 63 skipped). 2817 unit/widget tests pass.
+
+### Phase 26d: Pre-launch UI/UX Revamp — Titles Screen + Awarding Pipeline Fix (PR #238)
+
+> Fourth of six sub-phases. **Two-part deliverable:** (1) data-integrity fix — move `earned_titles` row creation from equip-time (client tap inside the celebration overlay) to detection-time (server-side, inside the XP RPCs), eliminating the dismiss-without-equip data loss bug; (2) UI rewrite — replace the legacy 78-row catalog browser with a three-region screen (Equipado / Conquistados / Próximos), with locked titles hidden entirely. Visual companion: `docs/phase-26-mockups.html` section `#titles`.
+
+- **New SQL migrations:** `00060_titles_award_at_detection.sql` extends both `record_set_xp` and `record_session_xp_batch` to `INSERT INTO earned_titles … ON CONFLICT (user_id, title_id) DO NOTHING` for body-part rank crossings (78 slugs in inline VALUES), character-level crossings (7 slugs), and cross-build predicate fires (delegated to `public.evaluate_cross_build_titles_for_user` from 00043 — no inline predicate re-implementation). `00061_backfill_earned_titles.sql` adds the one-shot per-user RPC walking current `body_part_progress` ranks + character-level + cross-build state, preserving `is_active` + `earned_at` on rows already inserted via detection.
+- **New Dart canonicals:** `lib/features/rpg/data/title_thresholds_table.dart` pins the 90-entry catalog (78 + 7 + 5) as the source of truth the SQL VALUES lists mirror; integrity test (`test/unit/features/rpg/data/title_thresholds_table_test.dart`) fails the suite if the Dart table and the JSON catalogs drift. `lib/features/rpg/providers/earned_titles_backfill_provider.dart` mirrors `prCacheBootstrapProvider` (auth-gated, per-user Hive flag, swallows RPC failures so a network blip never blocks the shell). `EarnedTitleEntry` hoisted from `providers/earned_titles_provider.dart` into `models/earned_title_entry.dart` so the domain splitter doesn't pull in Riverpod (reviewer Warning).
+- **`equipTitle` collapsed to a pure `is_active` toggle:** the prior UPSERT path is gone — the row is guaranteed to exist post-26d via the detection-time INSERT + backfill. A no-op UPDATE (the WHERE clause finds zero rows) is the correct failure mode if the awarding pipeline fell down upstream; the next `earnedTitlesProvider` read will reflect the truth.
+- **Pure view-model splitter:** `lib/features/rpg/domain/titles_view_model.dart` — `TitlesViewModel.split(catalog, earned, ranks, characterLevel)` returns `(equipped, earned-non-active sorted most-recent-first, nextRows, crossBuildCards)` with no async / no widget tree / no provider access. Cross-build predicate: `(floor - current) <= 1` on every condition (already-cleared conditions count as satisfied). Pinned by 4 unit tests.
+- **New widgets:** `EquippedTitleCard` (heroGold 12%→4% gradient + 40%-alpha border + "Em uso" tag — path-whitelisted in `check_reward_accent.sh` from 26a), `EarnedTitleRow` (body-part-hue dot + "Equipar" CTA), `NextTitleRow` (`FractionallySizedBox` progress bar + tabular figures + ICU-plural "N ranks to go"), `CrossBuildCard` (heroGold-accented "Especial" card with per-condition rows, met conditions show a heroGold ✓), `TitlesCounterPill` (tabular `{earned} / 90` in the AppBar actions). All carry `Semantics(container: true, explicitChildNodes: true, button: onTap != null, identifier:)` per `cluster_semantics_identifier_pair_rule` + `cluster_semantics_button_missing`.
+- **Screen rewrite:** `titles_screen.dart` 689 → 461 lines. Old `_TitleRow` / `_Sublabel` / `_CrossBuildStatChip` / `_SectionHeader` / `_EmptyState` / `_ProgressHeader` private helpers deleted. The screen watches `titleCatalogProvider` + `earnedTitlesProvider` + `rpgProgressProvider`, calls `TitlesViewModel.split` once on the data branch, and renders the three regions in order. `_equip` re-entrancy guard preserved. `_TitlesSkeleton` rewritten to mirror the new three-region shape during loading.
+- **L10n:** 12 new ARB keys (`titlesRegionEquipped/Earned/Next`, `titlesRowEquipCta`, `titlesEquippedTag`, `titlesCounterPill`, `titlesNextSubBodyPart` + `titlesNextSubBodyPartOne`, `titlesNextSubCharacter` + `titlesNextSubCharacterOne`, `titlesCrossBuildEspecial`, `titlesCrossBuildBottleneck`) + `titlesCharacterLabel` added during the screen rewrite. EN-side `@`-metadata phase-agnostic (descriptions don't reference "Phase 26d" — they describe what the key is).
+- **CI debug:** two deterministic failures on the first CI run, both fixed in the unblock commit (`12cc34e`). (1) `saga.spec.ts:371` (S9) timed out on `[flt-semantics-identifier="saga-stats-screen"]` despite the screen rendering correctly — pre-existing Phase 26c miss: the `Semantics(identifier: 'saga-stats-screen')` wrapper at `stats_deep_dive_screen.dart:75` carried only `identifier:`, no `container: true + explicitChildNodes: true`. Same `cluster_semantics_identifier_pair_rule` violation the reviewer caught on the new titles-screen wrapper. Fix lands the pair on saga's wrapper too. (2) `titles.spec.ts:72` regression test saw the chest_r5 row in **Equipado** with the "Active" tag instead of in Conquistados — cross-spec state pollution from `title-equip.spec.ts:T2` equipping the title in the same worker. Fix adds a `beforeEach` admin-reset that UPDATEs `is_active=false` for `rpgTitleEquipUser`'s rows, mirroring the saga-spec rpg-foundation pollution defense pattern from `helpers/test-data-reset.ts`.
+- **Reviewer cycle:** 14 task implementations × per-task reviewer pass on Tasks 1–6 + 11 (Tasks 7–10 mechanical enough to skip). Per `feedback_no_deferring_review_findings`, every finding (1 Warning + 7 Nits across the cycle) fixed in the same commit. Notable in-cycle catches: `_accentColor` doc mismatch (said heroGold, returned textDim — fixed by tightening the comment to enforce `project_design_language_brand_vs_identity`); `EarnedTitleEntry` lived in the providers layer creating a domain→provider import (hoisted to `models/`).
+- **Visual verification (step 9):** screenshots at 320/360/412dp under `docs/phase-26d-visual-verification/` matched the mockup — three regions render in the locked order, body-part-hue dots + progress bars track the canonical palette, tabular figures right-align, character-level row renders LAST in Próximos, cross-build cards correctly absent for a user not within 1 rank of any predicate.
+- **Verification:** `make ci` clean. All 8 GitHub Actions green on the final commit including E2E (36m39s, 245+ passed, 3 pre-existing flakes recovered on retry). 2850 unit/widget tests pass. Hosted Supabase migrations applied via `npx supabase db push` post-merge.
 
 ---
 

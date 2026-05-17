@@ -16,36 +16,11 @@ the phase summary in PROJECT.md §4.
 **Reference:** `docs/PROJECT.md §3 Phase 26` (authoritative spec) +
 `docs/phase-26-mockups.html` (visual companion).
 
-**State:** 26a + 26b + 26c shipped (PRs #232, #234, #236 — see PROJECT.md §4
-for retrospectives). Three sub-phases remain (26d–f). Each gets its own
-plan written via `superpowers:writing-plans` just before that sub-phase
-starts, so each plan reflects the actual landed state of prior sub-phases.
-
-### 26d — Titles screen + awarding pipeline bug fix
-
-Branch: `feature/26d-titles-bug-fix`
-
-**Plan:** `docs/phase-26d-plan.md` (14 tasks, subagent-driven execution).
-
-**Locked architectural decisions:**
-- Backfill walks **current `body_part_progress` ranks** (not xp_events history) — synthetic `now()` as `earned_at`. Conquistados first-launch sort order arbitrary for backfilled batch; correct chronological order for all post-deploy earnings.
-- Cross-build "within 1 rank" predicate = `(floor - current) <= 1` — already-cleared conditions count as satisfied.
-- Title catalog stays in `assets/rpg/titles_v1.json` (client-side dispatch); SQL backfill mirrors thresholds via integrity-hash-guarded Dart-to-SQL VALUES table.
-
-- [x] Task 1: Mirror title thresholds in Dart table + integrity test
-- [x] Task 2: SQL — extend `record_set_xp` + `record_session_xp_batch` with earned_titles INSERT
-- [x] Task 3: SQL — `backfill_earned_titles(p_user_id uuid)` RPC
-- [x] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
-- [x] Task 5: Simplify `equipTitle` + `onEquipTitle`
-- [x] Task 6: `TitlesViewModel` pure splitter
-- [x] Task 7: L10n keys
-- [x] Task 8: `EquippedTitleCard` widget (heroGold gradient)
-- [x] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets
-- [x] Task 10: Counter pill widget
-- [x] Task 11: Rewrite `TitlesScreen` around the new view-model
-- [x] Task 12: E2E regression test + selector updates
-- [x] Task 13: Visual verification + screenshot package
-- [x] Task 14: Open PR + address review findings in the same cycle (PR #238)
+**State:** 26a + 26b + 26c + 26d shipped (PRs #232, #234, #236, #238 — see
+PROJECT.md §4 for retrospectives). Two sub-phases remain (26e–f). Each gets
+its own plan written via `superpowers:writing-plans` just before that
+sub-phase starts, so each plan reflects the actual landed state of prior
+sub-phases.
 
 ### 26e — Plan editor + bucket model evolution
 
