@@ -1081,6 +1081,33 @@ export const CELEBRATION = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// TITLES — Phase 26d revamp (Equipado / Conquistados / Próximos regions).
+// Counter pill in the AppBar actions slot. Identifier wrappers per the
+// `cluster_semantics_identifier_pair_rule` cluster.
+// ---------------------------------------------------------------------------
+export const TITLES = {
+  /** TitlesScreen root — Semantics(identifier: 'titles-screen'). */
+  screen: '[flt-semantics-identifier="titles-screen"]',
+  /** Equipado heroGold card (only present when an earned title is active). */
+  equippedCard: '[flt-semantics-identifier="titles-equipped-card"]',
+  /** Earned-but-not-equipped row by slug. */
+  earnedRow: (slug: string) =>
+    `[flt-semantics-identifier="titles-earned-row-${slug}"]`,
+  /** Next-milestone row by slug (body-part or character-level). */
+  nextRow: (slug: string) =>
+    `[flt-semantics-identifier="titles-next-row-${slug}"]`,
+  /** Cross-build "Especial" card by slug (only when within 1 rank). */
+  crossBuildCard: (slug: string) =>
+    `[flt-semantics-identifier="titles-cross-build-card-${slug}"]`,
+  /** Counter pill in the AppBar actions slot. */
+  counterPill: '[flt-semantics-identifier="titles-counter-pill"]',
+  /** Region header wrappers. */
+  regionEquipped: '[flt-semantics-identifier="titles-region-equipped"]',
+  regionEarned: '[flt-semantics-identifier="titles-region-earned"]',
+  regionNext: '[flt-semantics-identifier="titles-region-next"]',
+} as const;
+
+// ---------------------------------------------------------------------------
 // Gamification intro — SagaIntroOverlay + LVL badge (Phase 17b)
 //
 // SagaIntroOverlay wraps each step in Semantics(identifier: 'saga-intro-step-{n}')
