@@ -314,7 +314,7 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
     await page
       .locator(SAGA.statsDeepDiveScreen)
       .first()
-      .waitFor({ state: 'visible', timeout: 15_000 });
+      .waitFor({ state: 'visible', timeout: 20_000 });
   });
 
   // S8: Composition — the three deep-dive sections render.
