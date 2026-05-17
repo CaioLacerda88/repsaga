@@ -32,8 +32,8 @@ Branch: `feature/26d-titles-bug-fix`
 - Cross-build "within 1 rank" predicate = `(floor - current) <= 1` — already-cleared conditions count as satisfied.
 - Title catalog stays in `assets/rpg/titles_v1.json` (client-side dispatch); SQL backfill mirrors thresholds via integrity-hash-guarded Dart-to-SQL VALUES table.
 
-- [ ] Task 1: Mirror title thresholds in Dart table + integrity test
-- [ ] Task 2: SQL — extend `record_set_xp` + `record_session_xp_batch` with earned_titles INSERT
+- [x] Task 1: Mirror title thresholds in Dart table + integrity test
+- [x] Task 2: SQL — extend `record_set_xp` + `record_session_xp_batch` with earned_titles INSERT
 - [ ] Task 3: SQL — `backfill_earned_titles(p_user_id uuid)` RPC
 - [ ] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
 - [ ] Task 5: Simplify `equipTitle` + `onEquipTitle`

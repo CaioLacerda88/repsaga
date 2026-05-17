@@ -227,7 +227,7 @@ void main() {
       1,
       reason:
           'wanderer (character level 10) must be inserted when '
-          'SUM(body_part_progress.total_xp) crosses ≈ 853.59',
+          'SUM(body_part_progress.total_xp) crosses ≈ 814.77 (rank 10 threshold)',
     );
   });
 

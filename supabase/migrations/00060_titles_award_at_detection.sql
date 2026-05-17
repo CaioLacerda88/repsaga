@@ -458,6 +458,11 @@ BEGIN
     ('shoulders_r90_sky_untouched',    'shoulders', 90),
     ('shoulders_r99_the_atlas',        'shoulders', 99)
   ) AS v(slug, body_part, rank_threshold)
+  -- COALESCE to 1 on both sides:
+  --   * pre missing → no prior body_part_progress row → user was at rank 1
+  --   * post missing → this RPC didn't write to that body part (no XP earned
+  --     for it this call), so the threshold > 1 filter blocks every row and
+  --     no spurious INSERTs fire.
   WHERE v.rank_threshold > COALESCE((v_pre_ranks  ->> v.body_part)::int, 1)
     AND v.rank_threshold <= COALESCE((v_post_ranks ->> v.body_part)::int, 1)
   ON CONFLICT (user_id, title_id) DO NOTHING;
@@ -911,6 +916,11 @@ BEGIN
     ('shoulders_r90_sky_untouched',    'shoulders', 90),
     ('shoulders_r99_the_atlas',        'shoulders', 99)
   ) AS v(slug, body_part, rank_threshold)
+  -- COALESCE to 1 on both sides:
+  --   * pre missing → no prior body_part_progress row → user was at rank 1
+  --   * post missing → this RPC didn't write to that body part (no XP earned
+  --     for it this call), so the threshold > 1 filter blocks every row and
+  --     no spurious INSERTs fire.
   WHERE v.rank_threshold > COALESCE((v_pre_ranks  ->> v.body_part)::int, 1)
     AND v.rank_threshold <= COALESCE((v_post_ranks ->> v.body_part)::int, 1)
   ON CONFLICT (user_id, title_id) DO NOTHING;
