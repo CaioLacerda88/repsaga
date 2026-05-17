@@ -47,7 +47,11 @@ class VolumePeakBlock extends StatelessWidget {
     final dotColor =
         VitalityStateStyles.bodyPartColor[bodyPart] ?? AppColors.textDim;
     return Semantics(
+      // Cluster: semantics-identifier-pair-rule — explicitChildNodes:true
+      // is load-bearing on Flutter web; without it the AOM drops the
+      // flt-semantics-identifier attribute and Playwright can't target.
       container: true,
+      explicitChildNodes: true,
       identifier: 'volume-peak-block-${bodyPart.dbValue}',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

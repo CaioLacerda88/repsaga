@@ -281,7 +281,11 @@ class _InfoIconButton extends StatelessWidget {
     );
     if (identifier == null) return button;
     return Semantics(
+      // Cluster: semantics-identifier-pair-rule — explicitChildNodes:true
+      // is load-bearing on Flutter web; without it the AOM drops the
+      // flt-semantics-identifier attribute and Playwright can't target.
       container: true,
+      explicitChildNodes: true,
       button: true,
       identifier: identifier,
       child: button,

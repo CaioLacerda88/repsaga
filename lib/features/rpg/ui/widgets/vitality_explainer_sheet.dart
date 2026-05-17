@@ -41,7 +41,11 @@ class VitalityExplainerSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Semantics(
+      // Cluster: semantics-identifier-pair-rule — explicitChildNodes:true
+      // is load-bearing on Flutter web; without it the AOM drops the
+      // flt-semantics-identifier attribute and Playwright can't target.
       container: true,
+      explicitChildNodes: true,
       identifier: 'vitality-explainer-sheet',
       label: l10n.vitalityExplainerTitle,
       child: DraggableScrollableSheet(
