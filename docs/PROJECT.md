@@ -51,6 +51,7 @@ difficulty framework permanent reference: `docs/xp-difficulty-framework.md`.
 | 24d | Calibration sign-off + production propagation | DONE | #229 |
 | 26a | Pre-launch UI/UX revamp — color system foundation | DONE | #232 |
 | 26b | Pre-launch UI/UX revamp — Saga screen Option B v4 | DONE | #234 |
+| 26c | Pre-launch UI/UX revamp — Stats deep-dive revamp | DONE | #236 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -410,7 +411,7 @@ Six-screen surgical revamp for launch readiness. User flagged the visual of four
 |---|---|---|
 | 26a — Color system foundation | DONE (PR #232) | 4 new `AppColors` tokens (`xpTrack`, `bodyPartChest` = Pink, `bodyPartBack` = Sky, `bodyPartCardio` infrastructure-only) + `vitalityHigh/Mid/Low` aliases. `vitalityRampColorFor` helper. `bodyPartColor[chest/back]` rebound. Vitality copy l10n fixes. heroGold whitelist for Titles screen. |
 | 26b — Saga screen revamp | DONE (PR #234) | Option B v4 — type-dominant header (level numeral 56sp, 36dp rune without active-state glow, class+title meta column with ellipsis), 6dp character XP bar, full-width per-stat 4dp XP bars with "X XP · Y para o próximo rank" label, dot pulse on rank-up (24h Hive-backed window). Stat rows tappable → /saga/stats?body_part=X. VitalityRadar + XpProgressHairline deleted. |
-| 26c — Stats deep-dive | NOT STARTED | HP-drain vitality ramp (3 bands), trend chart selected-line emphasis, "Path mastered" + "caminho esfriando" copy removed, ⓘ tooltip for vitality concept, Volume & pico restructure (weekly volume delta + 30D peak delta). Peak Loads section dropped. |
+| 26c — Stats deep-dive | DONE (PR #236) | HP-drain vitality ramp (3 bands), trend chart selected-line emphasis with per-body-part ghost lines, ⓘ explainer sheet (definition · band ramp · rank-safety in heroGold), Volume & pico restructure (per-body-part `VolumePeakBlock` with history-aware weekly delta + monthly peak delta). Peak Loads section dropped. |
 | 26d — Titles screen + awarding fix | NOT STARTED | Three-region UI (Equipado / Conquistados / Próximos), cross-build "Especial" cards in heroGold, locked titles hidden. **Server-side INSERT into `earned_titles` at detection time** + one-shot backfill RPC. |
 | 26e — Plan editor + bucket model | NOT STARTED | Add `isSpontaneous` to `BucketRoutine`; auto-absorb workouts on save into bucket entries; compact bucket list (no day binding); new Engajamento section (6 body-part bars). |
 | 26f — Home redesign | NOT STARTED | Replace 7-day-timeline → bucket chip row. Replace body-part chip rail → tappable **expanding character card** (collapsed: closest-rank-up indicator; expanded: char XP bar + 6 stat rows mirroring Saga Option B v4). |
@@ -451,33 +452,9 @@ Full retrospective in §4 Completed Phases. The token set established here (`bod
 
 Full retrospective in §4 Completed Phases. The widgets established here (`SagaHeader`, `CharacterXpBar`, the rewritten `BodyPartRankRow` with `_TrainedRow`/`_UntrainedRow`/`RankUpPulse`, `RuneHalo` with active-glow-removed + state-aware compact-pad) plus the `xpForNextCharacterLevel` helper + the `/saga/stats?body_part=` deep-link contract + the `classTextColor` shared tier helper are what 26c–f consume.
 
-#### 26c acceptance criteria — Stats deep-dive
+#### 26c — Stats deep-dive ✅ DONE (PR #236)
 
-**Scope.** Three sections only — Vitality trend chart, Vitality table, Volume & pico. Peak Loads section removed. ⓘ tooltips added to both vitality section headers (same modal). Vitality table uses the new HP-drain ramp tokens. Trend chart adopts selected-line-dominant treatment (2.5dp/100% selected, 1dp/35% non-selected, 180ms linear tap-tween between).
-
-**Acceptance:**
-- Section header `_SectionHeader` gets explicit 12dp bottom padding — fixes the overlap reported on the trend chart.
-- `VitalityTrendChart` lines colored by **body-part identity** (not vitality state). Selected line 2.5dp / opacity 1; non-selected 1dp / opacity 0.35. Tap a body-part row in `VitalityTable` → trend chart selection updates with 180ms tween on both stroke-width and opacity.
-- `VitalityTable` percentage column reads `vitalityRampColorFor(pct)` from 26a. 100% green, 76% green, 52% amber, 28% red. Untested row reads "—" in textDim with "sem dados" subtitle.
-- ⓘ icon (14dp circle outline) added to **both** section headers ("Vitalidade — últimos 90 dias" and "Vitalidade atual"). Both open the same bottom sheet — three-part content (definition · 3-state band ramp · rank-safety guarantee in heroGold-bordered box).
-- Volume & pico restructure: one `.vp-block` per body part. Left column "Volume" = current week sets `X / Y séries`; right column "Carga pico" = EWMA value with kg/lbs suffix.
-- Volume delta line adapts to history depth: weeks 0–1 → no delta; weeks 2–4 → "X vs semana passada"; weeks 5+ → "X vs média (4 sem)".
-- Peak-load delta is **always monthly** with explicit `30D` badge before the delta value.
-- Delta state colors: under-target → `vitalityLow`; over-target → `warning` (amber, NOT green — amber says "noted, you decide"); exactly met → `vitalityHigh` with filled bullet `●` ("no ritmo"); flat → textDim.
-- Generic-tip fallback (no personal history for that body part): right column label flips to `REFERÊNCIA`, value = 10 sets (Schoenfeld 2019 hypertrophy maintenance floor), `ⓘ estimado` inline badge tied to a bottom-sheet explainer ("Baseado em recomendações de volume para hipertrofia (10–20 séries/semana por grupo muscular)…").
-- **Peak Loads section deleted** (no horizontal bar chart). The widget `peak_loads_table.dart` is removed.
-
-**Files:**
-- `lib/features/rpg/ui/stats_deep_dive_screen.dart`
-- `lib/features/rpg/ui/widgets/vitality_trend_chart.dart`
-- `lib/features/rpg/ui/widgets/vitality_table.dart`
-- New: `lib/features/rpg/ui/widgets/volume_peak_block.dart`
-- New: `lib/features/rpg/ui/widgets/vitality_explainer_sheet.dart`
-- Delete: `lib/features/rpg/ui/widgets/peak_loads_table.dart`
-- `lib/features/rpg/providers/stats_provider.dart` — extend with weekly volume + delta + EWMA-month-delta math; tie to `exercises.xp_attribution` for set counting (locked rule)
-- L10n: new keys for ⓘ bottom-sheet copy
-
-**Tests:** widget tests for vitality table coloring (boundary %s); trend chart line emphasis; volume/peak block edge cases (zero history, under-target, over-target amber, goal met bullet, generic-tip fallback); ⓘ tap opens sheet.
+Full retrospective in §4 Completed Phases. The widgets established here (`VolumePeakBlock`, `VitalityExplainerSheet`, the rewritten `VitalityTable` with HP-drain ramp coloring, the rewritten `VitalityTrendChart` with per-body-part ghost lines + 180ms tween) plus the new view-state types (`VolumeDeltaView`, `PeakDeltaView`) plus the extended `VolumePeakRow` history fields (previous-week / 4-week-mean / 30-day-ago peak EWMA / weeks-of-history) plus the `vitalityRowUntestedSubtitle` short copy are what 26d–f consume on the data-display side.
 
 #### 26d acceptance criteria — Titles screen + awarding pipeline fix
 
@@ -1023,6 +1000,20 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **CLAUDE.md pipeline gained step 9 — visual verification.** First applied to 26b: caught a class label typography drift (14sp Inter sentence-case → 10sp UPPERCASE letterSpacing 1.8) before merge.
 - **Reviewer + debug cycle:** 14 task implementations × 2-stage review + 1 final whole-branch review + 1 re-engagement + 4 CI E2E fix attempts on the saga tap-routing test. Three Criticals caught + fixed (state-aware compact-pad in `RuneHalo`, error-isolation on celebration→pulse, redundant `xpInLevel` field). Saga tap-routing E2E ultimately `test.skip`'d after 4 fix attempts couldn't get the Flutter web AOM-to-navigation assertion to match in CI (widget test pins the contract; trace shows production navigation works); revisit conditions in §2 Backlog.
 - **Verification:** `make ci` clean. All 8 GitHub Actions green including the full E2E suite (35m29s) on the green CI run. 2795 unit/widget tests pass.
+
+### Phase 26c: Pre-launch UI/UX Revamp — Stats Deep-Dive Revamp (PR #236)
+
+> Third of six sub-phases. **Stats deep-dive screen restructured from 4 sections to 3** (Vitality trend chart · Vitality table · per-body-part Volume & pico blocks). Peak Loads horizontal-bar table dropped entirely — the heaviest-lift data lives in V&P's Carga pico column post-26c. Visual companion: `docs/phase-26-mockups.html` sections `#stats` + `#vitality-explainer`.
+
+- **New widgets:** `VolumePeakBlock` (per-body-part two-column block — Volume left with history-aware delta basis selection, Carga pico right with monthly EWMA + `30D` badge OR `Referência`/Schoenfeld 10-set generic-tip fallback), `VitalityExplainerSheet` (bottom-sheet definition · 3-state band ramp · heroGold-bordered rank-safety guarantee opened from the ⓘ on either vitality section header). The heroGold render flows through `RewardAccent.of(context)!.color` (no whitelist needed). `_InfoIconButton` extracted from `_SectionHeader` so the ⓘ wraps the InkWell in `Semantics(container:true, button:true, explicitChildNodes:true, identifier:)` — both ValueKey (widget tests) and AOM identifier (E2E) supported.
+- **Rewritten widgets:** `VitalityTable` percentage column colors via `VitalityStateStyles.vitalityRampColorFor(pct)` (HP-drain ramp — green/amber/red); active/fading/radiant rows omit the subtitle Text entirely (no empty-line gap); untested rows use the new short `vitalityRowUntestedSubtitle` ("No data" / "Sem dados") instead of the long-form `vitalityCopyUntested`; muscle icon + chip dot stay on body-part identity so identity vs state stays separable. `VitalityTrendChart` ghost lines colored by per-body-part identity at 35% alpha (was single textDim at 30%); cross-fade tween 200ms → 180ms. `_SectionHeader` bottom padding 0 → 12dp (fixes trend chart's top-label overlap).
+- **New domain types:** `VolumeDeltaView`/`VolumeDeltaState` (suppressed/met/underTarget/overTarget) + `VolumeDeltaBasis` (previousWeek/fourWeekMean — drives "vs semana passada" vs "vs média (4 sem)" copy) + `PeakDeltaView`/`PeakDeltaState` (suppressed/up/flat). Pure view-state factories on `fromRow(VolumePeakRow)` keep widgets as switch-on-state presentation. `VolumePeakRow` gains four history fields: `previousWeekVolumeSets`, `fourWeekMeanVolumeSets`, `peakEwma30dAgo`, `weeksOfHistory`. Half-set tolerance (`delta.abs() < 0.5`) on the four-week-mean path absorbs IEEE754 drift on the `sum / 4.0` division.
+- **Provider math:** `assembleStatsState §4` extended with ISO-week-bucketed previous-week count + 4-week-mean count + 30-days-ago peak EWMA sampled from `trendByBp[bp]` by closest-date (`inMilliseconds.abs()`). `_isoWeekStart(DateTime)` helper using `(weekday - DateTime.monday) % 7` lands every event on its canonical Monday-00:00-UTC bucket. Weekly volume basis selection: `< 2 weeks` → suppressed, `2–4 weeks` → previousWeek, `5+ weeks` → fourWeekMean.
+- **Deleted:** `peak_loads_table.dart` + its companion widget test, `PeakLoadRow` Freezed class, `peakLoadsByBodyPart` field on `StatsDeepDiveState`, the entire peak-loads pipeline in `stats_provider.dart` (`_groupPeakLoads`, `_muscleGroupToBodyPart`, `_epley1RM`, `_fetchExercisesByIds` + related imports), the private `_VolumePeakTable` from the screen. Net diff `+85 / -1050` after the cleanup (the screen file alone dropped ~75 lines). `peak_load.dart` model kept (still used by the repository layer for other consumers).
+- **E2E:** dropped `peakLoadsTable` + `volumePeakTable` selectors; added `vitalityExplainerSheet`, `vitalityTrendInfoIcon`, `vitalityTableInfoIcon`, `volumePeakBlock(slug)`. S8 adapted to assert 3-section composition (sampling chest's `VolumePeakBlock` as the sentinel); new S8b smoke pins the ⓘ → explainer-sheet open. CI E2E `beforeEach` timeout bumped 15s → 30s after 4 parallel workers contention pushed the foundation user's login → profile → stats nav chain past the original tight budget.
+- **One in-cycle bug surfaced by QA — `cluster_semantics_identifier_pair_rule`.** The new `Semantics(identifier:)` wrappers on `VolumePeakBlock`, `_InfoIconButton`, and `VitalityExplainerSheet` shipped without `explicitChildNodes: true`. Flutter web's AOM dropped the `flt-semantics-identifier` attribute on all three nodes, so Playwright couldn't target them. Fix lands the flag on every new Semantics constructor + inline cluster reference comments per CLAUDE.md A3. The ledger entry was already in §0 Cluster Ledger from prior phases — this was a "knew the rule, missed it on new code" gap, not a new pattern.
+- **Reviewer + QA cycle:** 14 task implementations × 2-stage review (the reviewer found zero issues on the final pass) + QA (two rounds — first round caught the semantics-identifier-pair-rule violation, second round confirmed 242/1 pass with the 1 failure classified as a pre-existing `setWeight` helper flake unrelated to 26c). Visual verification (step 9): caught a test-fixture gap (foundation user's xp_events backfill doesn't run before screenshot) but no 26c-specific bugs — the screen correctly renders its empty state when xp_events is empty.
+- **Verification:** `make ci` clean on the final commit. All 8 GitHub Actions green including the full E2E suite (35m50s, 240 passed / 1 failed pre-fix → 0 failed post-fix / 2 flaky / 63 skipped). 2817 unit/widget tests pass.
 
 ---
 
