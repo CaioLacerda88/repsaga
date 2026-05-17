@@ -37,7 +37,7 @@ Branch: `feature/26d-titles-bug-fix`
 - [x] Task 3: SQL — `backfill_earned_titles(p_user_id uuid)` RPC
 - [x] Task 4: Bootstrap hook — `earnedTitlesBackfillProvider`
 - [x] Task 5: Simplify `equipTitle` + `onEquipTitle`
-- [ ] Task 6: `TitlesViewModel` pure splitter
+- [x] Task 6: `TitlesViewModel` pure splitter
 - [ ] Task 7: L10n keys
 - [ ] Task 8: `EquippedTitleCard` widget (heroGold gradient)
 - [ ] Task 9: `EarnedTitleRow` + `NextTitleRow` + `CrossBuildCard` widgets

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/domain/titles_view_model.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/earned_title_entry.dart';
 import 'package:repsaga/features/rpg/models/title.dart';
-import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 
 const _bodyPartChestR5 = BodyPartTitle(
   slug: 'chest_r5_initiate_of_the_forge',
@@ -64,6 +64,10 @@ void main() {
 
     test('should surface only the next per-body-part title in nextRows', () {
       // User at chest rank 6 — next chest title is r10 (not r15 too).
+      // The splitter iterates every activeBodyPart; the other 5 fall back
+      // to rank 1 via the COALESCE in the splitter and produce no
+      // candidates because this catalog is chest-only, so the resulting
+      // nextRows list collapses to the single chest entry.
       final view = TitlesViewModel.split(
         catalog: const [_bodyPartChestR5, _bodyPartChestR10, _bodyPartChestR15],
         earned: [_earned(_bodyPartChestR5)],

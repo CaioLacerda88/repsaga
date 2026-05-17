@@ -1,6 +1,6 @@
 import '../models/body_part.dart';
+import '../models/earned_title_entry.dart';
 import '../models/title.dart';
-import '../providers/earned_titles_provider.dart';
 import 'cross_build_title_evaluator.dart';
 
 /// One row in the "Próximos" region. Either a per-body-part next title or
