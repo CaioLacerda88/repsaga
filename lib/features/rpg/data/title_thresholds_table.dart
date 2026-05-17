@@ -30,7 +30,7 @@ class TitleThresholdEntry {
 /// Canonical Dart-side mirror of the v1 title catalog (90 entries:
 /// 78 body-part + 7 character-level + 5 cross-build).
 ///
-/// This table is the source of truth Phase 26d migrations reflect into the
+/// This table is the source of truth the XP RPC migrations reflect into the
 /// `title_catalog_v1` VALUES list embedded inside `record_set_xp` and
 /// `record_session_xp_batch`. The integrity test in
 /// `test/unit/features/rpg/data/title_thresholds_table_test.dart` fails the

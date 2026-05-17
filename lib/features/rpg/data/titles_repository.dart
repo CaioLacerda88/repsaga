@@ -302,6 +302,8 @@ class TitlesRepository extends BaseRepository {
   }
 }
 
+// ─── Test infrastructure ─────────────────────────────────────────────────────
+
 /// Throwing stub used by [TitlesRepository.forAssetBundleOnly]. Any method
 /// invocation surfaces a [StateError] — tests using the asset-only factory
 /// must not exercise Supabase code paths. We cannot use a real
