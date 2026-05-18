@@ -1362,6 +1362,13 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           'is_active': false,
           'notes': workout.notes,
           'created_at': workout.createdAt.toIso8601String(),
+          // 26e: ride the source routine through the offline payload so the
+          // drain in pending_sync_provider can replay the same find-or-create
+          // semantics the online path uses. The 00063 `save_workout` RPC
+          // does the bucket update in the same transaction as the workout
+          // insert; persisting `routine_id` here is what replaces the
+          // pre-26e `PendingMarkRoutineComplete` sibling enqueue.
+          'routine_id': current.routineId,
         };
         final exercisesJson = workoutExercises
             .map(
@@ -1631,64 +1638,23 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // longer depends on the legacy XP roll-up). Phase 18a's per-set RPC
       // is the single writer.
 
-      // Weekly plan: mark matching bucket routine as complete.
-      try {
-        final matchedRoutineId = current.routineId;
-        if (matchedRoutineId != null) {
-          final plan = ref.read(weeklyPlanProvider).value;
-          if (plan != null && plan.routines.isNotEmpty) {
-            final hasBucketMatch = plan.routines.any(
-              (r) =>
-                  r.routineId == matchedRoutineId &&
-                  r.completedWorkoutId == null,
-            );
-            if (hasBucketMatch) {
-              try {
-                await ref
-                    .read(weeklyPlanProvider.notifier)
-                    .markRoutineComplete(
-                      routineId: matchedRoutineId,
-                      workoutId: workout.id,
-                    );
-              } catch (e) {
-                log(
-                  'Weekly plan update failed, queueing offline: $e',
-                  name: 'ActiveWorkoutNotifier',
-                  level: 900,
-                );
-                await ref
-                    .read(pendingSyncProvider.notifier)
-                    .enqueue(
-                      PendingAction.markRoutineComplete(
-                        id: _uuid.v4(),
-                        planId: plan.id,
-                        routineId: matchedRoutineId,
-                        workoutId: workout.id,
-                        queuedAt: now,
-                        // H7: hold the weekly-plan completion until the
-                        // parent workout commits server-side. Without this
-                        // dependency the FIFO drain can fire this RPC
-                        // before the workout exists, and because
-                        // `weekly_plans.routines` is a JSONB column with
-                        // no FK, the RPC silently inserts a phantom
-                        // workout id and the bucket displays a completion
-                        // pointing at nothing. Mirrors the BUG-002 pattern
-                        // for offline PR upserts.
-                        dependsOn: <String>[workout.id],
-                      ),
-                    );
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // Weekly plan update failure should NOT fail the workout save.
-        log(
-          'Weekly plan update failed: $e',
-          name: 'ActiveWorkoutNotifier',
-          level: 900,
-        );
-      }
+      // Weekly plan: the 00063 `save_workout` RPC owns the bucket
+      // find-or-create entirely server-side (26e). The RPC matches an
+      // existing uncompleted entry by `routine_id` and stamps
+      // `completed_workout_id` + `completed_at` in the same transaction
+      // as the workout insert; if no match exists it appends a spontaneous
+      // entry. Invalidate the provider so the next read fetches the
+      // server-updated row (async-caller-broke-snackbar cluster:
+      // invalidate triggers a refetch, it does NOT update `state.value`
+      // synchronously — nothing below this line reads weeklyPlanProvider).
+      //
+      // Offline saves: the queued `PendingSaveWorkout` carries
+      // `routine_id` in its JSON payload, so the drain replays the same
+      // RPC with the same find-or-create semantics. No separate
+      // weekly-plan enqueue is needed; the legacy
+      // `PendingMarkRoutineComplete` variant is now a logged no-op in the
+      // drain (in case any pre-26e queue entries survived an upgrade).
+      ref.invalidate(weeklyPlanProvider);
 
       final totalSets = sets.length;
       final completedSetsCount = sets.where((s) => s.isCompleted).length;

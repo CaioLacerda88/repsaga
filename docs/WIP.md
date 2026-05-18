@@ -38,10 +38,10 @@ Branch: `feature/26e-bucket-spontaneous`
 - `routine_id` MUST ride the `save_workout` payload (verified `workout_repository.dart:76-83` currently omits it; Task 3 plumbs it).
 - Screen `plan_management_screen.dart` → `week_plan_screen.dart` (wholesale rename + rewrite); class `PlanManagementScreen` → `WeekPlanScreen`.
 
-- [ ] Task 1: Data model — `BucketRoutine.isSpontaneous`
-- [ ] Task 2: Migration 00062 — JSONB backfill
-- [ ] Task 3: Migration 00063 — `save_workout` find-or-create (+ Dart-side `routine_id` plumbing in `workout_repository.dart`)
-- [ ] Task 4: Drop client-side `markRoutineComplete`
+- [x] Task 1: Data model — `BucketRoutine.isSpontaneous`
+- [x] Task 2: Migration 00062 — JSONB backfill
+- [x] Task 3: Migration 00063 — `save_workout` find-or-create (+ Dart-side `routine_id` plumbing in `workout_repository.dart`)
+- [x] Task 4: Drop client-side `markRoutineComplete`
 - [ ] Task 5: `WeeklyEngagement` domain + set-counting math
 - [ ] Task 6: `weeklyEngagementProvider`
 - [ ] Task 7: `BucketRoutineRow` widget

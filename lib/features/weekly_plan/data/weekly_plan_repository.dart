@@ -60,36 +60,10 @@ class WeeklyPlanRepository extends BaseRepository {
     });
   }
 
-  /// Mark a specific bucket routine as completed.
-  ///
-  /// Accepts the current [routines] from provider state to avoid a redundant
-  /// SELECT before UPDATE (eliminates read-modify-write race condition).
-  Future<WeeklyPlan> markRoutineComplete({
-    required String planId,
-    required String routineId,
-    required String workoutId,
-    required List<BucketRoutine> currentRoutines,
-  }) {
-    return mapException(() async {
-      final now = DateTime.now().toUtc();
-      final updatedRoutines = currentRoutines.map((r) {
-        if (r.routineId == routineId && r.completedWorkoutId == null) {
-          return r.copyWith(completedWorkoutId: workoutId, completedAt: now);
-        }
-        return r;
-      }).toList();
-
-      final updated = await _plans
-          .update({
-            'routines': updatedRoutines.map((r) => r.toJson()).toList(),
-            'updated_at': now.toIso8601String(),
-          })
-          .eq('id', planId)
-          .select()
-          .single();
-      return WeeklyPlan.fromJson(updated);
-    });
-  }
+  // markRoutineComplete is gone (26e): the 00063 save_workout RPC owns
+  // the bucket find-or-create entirely server-side. Callers `ref.invalidate
+  // (weeklyPlanProvider)` after save; the next read fetches the row that
+  // the RPC already updated in the same transaction as the workout insert.
 
   /// Delete a plan entirely (used for "Clear Week").
   Future<void> deletePlan(String planId) {
