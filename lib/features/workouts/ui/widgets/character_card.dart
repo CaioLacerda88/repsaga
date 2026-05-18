@@ -9,6 +9,8 @@ import '../../../rpg/models/character_sheet_state.dart';
 import '../../../rpg/providers/character_sheet_provider.dart';
 import '../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
+import '../../../rpg/ui/widgets/body_part_rank_row.dart';
+import '../../../rpg/ui/widgets/character_xp_bar.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/rune_halo.dart';
 import '../../domain/closest_rank_up.dart';
@@ -16,14 +18,24 @@ import '../../domain/closest_rank_up.dart';
 /// Phase 26f Home character card — tappable expanding surface that replaces
 /// the body-part rank chip rail.
 ///
-/// **T7 (this commit): expand/collapse interaction wired.** Tap toggles
-/// `_expanded`; chevron rotates 90° via [AnimatedRotation]; closest-rank-up
-/// indicator is gated out when expanded. Inner column wrapped in
-/// [AnimatedSize] (250ms easeOut) so future expanded-body content (T8)
-/// grows/shrinks smoothly. T6's plumbing kept intact — `_expanded` flows
-/// through `_CardBody` → `_HeaderRow` (chevron) and is the gate for the
-/// `_ClosestRankUpRow`. T8 will append the expanded body (XP bar + 6 stat
-/// rows) inside the same [AnimatedSize].
+/// **Collapsed state.** Header (40dp rune · level/class/title meta · dominant
+/// rank chip · chevron) + the closest-rank-up indicator row.
+///
+/// **Expanded state.** Header + 1dp hair divider + [CharacterXpBar] +
+/// 6 [BodyPartRankRow] widgets in canonical order
+/// (chest → back → legs → shoulders → arms → core). The closest-rank-up
+/// indicator is hidden in expanded state — the stat rows render the same
+/// information in higher fidelity. Each row is `InkWell`-tappable and
+/// `context.push`-es to `/saga/stats?body_part=<dbValue>`; that contract
+/// lives inside [BodyPartRankRow] (reused verbatim from Saga).
+///
+/// **Why reuse [BodyPartRankRow] verbatim.** The Saga character sheet
+/// renders the identical row spec (Option B v4 — 6dp dot · UPPERCASE name
+/// · rank num · 4dp bar · 9sp XP labels). Reusing the widget means the
+/// Home expanded view stays visually identical to Saga without two copies
+/// of the row to keep in sync. The widget already watches
+/// `rankUpPulseLocalStorageProvider` for the 24h glow-ring overlay — that
+/// behavior carries over to the home card automatically.
 ///
 /// **Why ConsumerStatefulWidget:** the expand state is local to this card
 /// instance and intentionally NOT persisted across launches (PROJECT.md 26f
@@ -44,12 +56,10 @@ class CharacterCard extends ConsumerStatefulWidget {
 }
 
 class _CharacterCardState extends ConsumerState<CharacterCard> {
-  /// Local-only flag (T7). Intentionally NOT persisted — PROJECT.md §3 26f
+  /// Local-only flag. Intentionally NOT persisted — PROJECT.md §3 26f
   /// "always opens collapsed". Hoisting this into a Riverpod provider would
-  /// survive restarts and add a needless rebuild hop. T8 will gate the
-  /// expanded body (`if (_expanded) ...`) inside the [AnimatedSize] in
-  /// [_CardBody].
-  // ignore: prefer_final_fields
+  /// survive restarts and add a needless rebuild hop. Gates the expanded
+  /// body (XP bar + 6 stat rows) inside the [AnimatedSize] in [_CardBody].
   bool _expanded = false;
 
   @override
@@ -85,6 +95,15 @@ class _CardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tap scope: ONLY the header + closest-rank-up row act as the
+    // toggle target. The expanded body sits OUTSIDE the outer InkWell —
+    // each `BodyPartRankRow` owns its own InkWell that deep-links to
+    // `/saga/stats?body_part=<slug>`. Nesting the row InkWells inside
+    // an outer InkWell would have the outer one intercept taps before
+    // they reached the rows (Material InkWells don't claim gestures
+    // from descendants — the outermost handler wins on hit-test), and
+    // the user would see the card collapse instead of navigating.
+    // Splitting the tap surface preserves both interactions cleanly.
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -92,36 +111,56 @@ class _CardBody extends StatelessWidget {
       child: Material(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(kRadiusLg),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(kRadiusLg),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            // 250ms easeOut height tween (PROJECT.md §3 26f). Anchored
-            // top-center so the header stays planted while the body grows
-            // downward — the home layout reads as the card "opening" rather
-            // than the whole tile shifting. T8's expanded body will live
-            // inside this same Column.
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-              alignment: Alignment.topCenter,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _HeaderRow(sheet: sheet, expanded: expanded),
-                  // T8 will insert the expanded body (XP bar + 6 stat rows)
-                  // here when `expanded == true`. The closest-rank-up row is
-                  // hidden once expanded — the stat rows render the same
-                  // information in higher fidelity.
-                  if (!expanded) ...[
-                    const SizedBox(height: 12),
-                    _ClosestRankUpRow(sheet: sheet),
-                  ],
-                ],
+        // 250ms easeOut height tween (PROJECT.md §3 26f). Anchored
+        // top-center so the header stays planted while the body grows
+        // downward — the home layout reads as the card "opening" rather
+        // than the whole tile shifting.
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header tap zone: toggles expanded state. Includes the
+              // header row + the closest-rank-up indicator (when
+              // collapsed) so the whole collapsed surface is tappable.
+              InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(kRadiusLg),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, expanded ? 8 : 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _HeaderRow(sheet: sheet, expanded: expanded),
+                      // Collapsed only: closest-rank-up indicator. In the
+                      // expanded state the stat rows below render the same
+                      // information in higher fidelity, so the indicator
+                      // would duplicate the data.
+                      if (!expanded) ...[
+                        const SizedBox(height: 12),
+                        _ClosestRankUpRow(sheet: sheet),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+              // Expanded body sits OUTSIDE the InkWell so its child row
+              // InkWells receive taps without the outer toggle intercept.
+              if (expanded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Semantics(
+                    container: true,
+                    explicitChildNodes: true,
+                    identifier: 'home-character-card-expanded',
+                    child: _ExpandedBody(sheet: sheet),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -392,6 +431,52 @@ class _ClosestRankUpRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
+    );
+  }
+}
+
+/// Expanded body — 1dp hair divider, character XP bar, and 6 body-part rank
+/// rows in canonical order. Mounted only when `_expanded == true`; the
+/// [AnimatedSize] parent owns the open/close height tween.
+///
+/// `sheet.bodyPartProgress` is built by `character_sheet_provider` in
+/// `activeBodyParts` order (chest → back → legs → shoulders → arms → core),
+/// so a `for` loop over the list reproduces the canonical order without a
+/// client-side sort. `BodyPartRankRow` decides internally whether to render
+/// the trained or untrained variant (`entry.isUntrained` ⇒ dimmed `—`),
+/// so this widget passes every entry through unconditionally — including
+/// day-0 sheets where every body part is untrained.
+class _ExpandedBody extends StatelessWidget {
+  const _ExpandedBody({required this.sheet});
+
+  final CharacterSheetState sheet;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1dp hair divider separates the header section from the expanded
+        // body. `AppColors.hair` (rgba(179,109,255,0.14)) matches the
+        // `--hair` token used in the mockup. `Divider`'s 24dp height
+        // provides the 12dp vertical padding above + below the line.
+        const Divider(height: 24, thickness: 1, color: AppColors.hair),
+        CharacterXpBar(
+          lifetimeXp: sheet.lifetimeXp,
+          xpForNextLevel: sheet.xpForNextLevel,
+          characterLevel: sheet.characterLevel,
+        ),
+        const SizedBox(height: 16),
+        for (final entry in sheet.bodyPartProgress)
+          Padding(
+            // 4dp inter-row gap — `BodyPartRankRow` already owns a 48dp
+            // min-height tap target and its own 8dp/12dp vertical padding,
+            // so this is purely visual breathing room between rows.
+            padding: const EdgeInsets.only(bottom: 4),
+            child: BodyPartRankRow(entry: entry),
+          ),
+      ],
     );
   }
 }

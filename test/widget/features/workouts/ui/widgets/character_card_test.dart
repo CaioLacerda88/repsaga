@@ -1,26 +1,43 @@
 /// Widget tests for [CharacterCard].
 ///
-/// T6 covers the **collapsed** state only — header (40dp rune + level/class/
-/// title center column + dominant rank/body-part right column) and the
-/// closest-rank-up indicator row. T7 (tap-to-expand animation) and T8
-/// (expanded body: character XP bar + 6 stat rows) extend this same file.
+/// Covers collapsed header (rune + level/class/title + dominant rank chip),
+/// closest-rank-up indicator, tap-to-expand animation (chevron rotation +
+/// indicator hide), and the expanded body (CharacterXpBar + 6
+/// BodyPartRankRow widgets in canonical order, each tappable to
+/// `/saga/stats?body_part=<slug>`).
 ///
 /// Tests stub [characterSheetProvider] directly with `AsyncData(...)`
 /// (the provider exposes `AsyncValue<CharacterSheetState>`, not an
 /// AsyncNotifier — see `character_sheet_provider.dart`).
+///
+/// The harness wires a real [GoRouter] (with a placeholder `/saga/stats`
+/// route) so the body-part-row deep-link push survives — reusing the
+/// pattern proven in `body_part_rank_row_test.dart`. The
+/// [rankUpPulseLocalStorageProvider] is overridden with a mock that
+/// returns `false` for every isPulsing query — without the override the
+/// production provider tries to open a Hive box that isn't initialized
+/// in the unit-test harness.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
+import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
+import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
 import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 // ---------------------------------------------------------------------------
 // Fixture builders
@@ -96,24 +113,79 @@ Widget _harness({
   required CharacterSheetState sheet,
   double width = 360,
   Locale locale = const Locale('en'),
+  RankUpPulseLocalStorage? pulseStorage,
+  bool scrollable = true,
 }) {
+  final storage = pulseStorage ?? _MockPulseStorage();
+  // Default stub: nothing is pulsing. Individual tests can pass a pre-stubbed
+  // storage if they need different behavior.
+  if (pulseStorage == null) {
+    when(
+      () => storage.isPulsing(any(), now: any(named: 'now')),
+    ).thenReturn(false);
+  }
+  // Real GoRouter (with a placeholder /saga/stats route) so the expanded
+  // body's BodyPartRankRow `context.push('/saga/stats?body_part=...')` taps
+  // resolve to an asserted destination instead of throwing. Same pattern
+  // proven in `body_part_rank_row_test.dart`.
+  //
+  // `scrollable: true` (default) wraps the card in a SingleChildScrollView
+  // so the expanded body doesn't overflow the 600dp default viewport. The
+  // navigation test opts OUT (`scrollable: false`) because a ScrollView's
+  // Scrollable competes with the row InkWell in the gesture arena and
+  // can swallow taps; that test instead resizes the test surface.
+  Widget homeChild = SizedBox(width: width, child: const CharacterCard());
+  homeChild = Center(child: homeChild);
+  if (scrollable) {
+    homeChild = SingleChildScrollView(child: homeChild);
+  }
+  final router = GoRouter(
+    initialLocation: '/home',
+    routes: [
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => Scaffold(body: homeChild),
+      ),
+      GoRoute(
+        path: '/saga/stats',
+        // pageBuilder + NoTransitionPage so the route change is synchronous
+        // — there's no Material transition to pump through. We can't use
+        // pumpAndSettle (RuneHalo runs an infinite controller in the
+        // source route), so we need the route swap to land in a single
+        // microtask + frame.
+        pageBuilder: (context, state) {
+          final bodyPart = state.uri.queryParameters['body_part'] ?? '';
+          return NoTransitionPage(
+            child: Scaffold(body: Text('stats:$bodyPart')),
+          );
+        },
+      ),
+    ],
+  );
   return ProviderScope(
-    overrides: [characterSheetProvider.overrideWith((_) => AsyncData(sheet))],
-    child: MaterialApp(
+    overrides: [
+      characterSheetProvider.overrideWith((_) => AsyncData(sheet)),
+      rankUpPulseLocalStorageProvider.overrideWithValue(storage),
+    ],
+    child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
       theme: AppTheme.dark,
-      home: Scaffold(
-        body: Center(
-          child: SizedBox(width: width, child: const CharacterCard()),
-        ),
-      ),
+      routerConfig: router,
     ),
   );
 }
 
 void main() {
+  // `mocktail`'s `any()` matcher needs a fallback instance for non-nullable
+  // enum types — without it the first `when(...isPulsing(any(), ...))` setup
+  // throws StateError. Registered once for the whole file because every
+  // group uses `_harness`, which stubs the pulse storage.
+  setUpAll(() {
+    registerFallbackValue(BodyPart.chest);
+  });
+
   group('CharacterCard — collapsed', () {
     testWidgets(
       'renders Lvl numeral, class label, and active title for trained user',
@@ -236,6 +308,11 @@ void main() {
     // hang on RuneHalo's infinite-loop AnimationControllers (see collapsed-
     // group inline rationale).
 
+    // Tap target: the OUTER InkWell — the one wrapping the whole card body.
+    // Once the expanded body renders, each BodyPartRankRow has its own
+    // InkWell (6 of them), so `find.byType(InkWell)` alone is ambiguous.
+    // `.first` resolves to the outer card InkWell because Flutter walks the
+    // widget tree depth-first and the card's InkWell is the ancestor.
     testWidgets('tap toggles AnimatedRotation chevron turns 0 → 0.25', (
       tester,
     ) async {
@@ -254,7 +331,7 @@ void main() {
 
       // Tap → trigger expand. Pump past 250ms easeOut to settle the
       // AnimatedRotation tween.
-      await tester.tap(find.byType(InkWell));
+      await tester.tap(find.byType(InkWell).first);
       await tester.pump(const Duration(milliseconds: 300));
 
       // Expanded: chevron rotated 90° (0.25 turns).
@@ -271,7 +348,7 @@ void main() {
       expect(find.text('◆ Chest · 20 XP for rank 17'), findsOneWidget);
 
       // Tap → expand → indicator hidden.
-      await tester.tap(find.byType(InkWell));
+      await tester.tap(find.byType(InkWell).first);
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('◆ Chest · 20 XP for rank 17'), findsNothing);
@@ -284,15 +361,141 @@ void main() {
         await tester.pump();
 
         // Tap once → expanded.
-        await tester.tap(find.byType(InkWell));
+        await tester.tap(find.byType(InkWell).first);
         await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('◆ Chest · 20 XP for rank 17'), findsNothing);
 
         // Tap again → collapsed.
-        await tester.tap(find.byType(InkWell));
+        await tester.tap(find.byType(InkWell).first);
         await tester.pump(const Duration(milliseconds: 300));
         expect(find.text('◆ Chest · 20 XP for rank 17'), findsOneWidget);
       },
     );
+  });
+
+  group('CharacterCard — expanded body', () {
+    // Expanded body composition (PROJECT.md §3 26f lines 477–478):
+    //   - 1dp hair divider between header section and XP bar.
+    //   - CharacterXpBar (reused from Saga — 6dp gradient track + label).
+    //   - 6 BodyPartRankRow widgets in canonical order
+    //     (chest → back → legs → shoulders → arms → core).
+    //   - Each row is `InkWell` tappable → /saga/stats?body_part=<slug>
+    //     (the deep-link behavior lives inside BodyPartRankRow; we just
+    //     have to render the rows and the contract holds).
+    //
+    // All animation pumps use `pump(Duration)` — `pumpAndSettle` would hang
+    // on RuneHalo's infinite-loop AnimationControllers (same constraint
+    // documented in the collapsed group).
+
+    testWidgets('shows CharacterXpBar in expanded state', (tester) async {
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      // Collapsed: XP bar not yet mounted.
+      expect(find.byType(CharacterXpBar), findsNothing);
+
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Expanded: XP bar present and wired to the sheet's level/XP values.
+      expect(find.byType(CharacterXpBar), findsOneWidget);
+      final xpBar = tester.widget<CharacterXpBar>(find.byType(CharacterXpBar));
+      expect(xpBar.lifetimeXp, 8420);
+      expect(xpBar.xpForNextLevel, 12000);
+      expect(xpBar.characterLevel, 14);
+    });
+
+    testWidgets('renders 6 BodyPartRankRow widgets in canonical order', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      // Collapsed: no rows rendered.
+      expect(find.byType(BodyPartRankRow), findsNothing);
+
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // 6 rows — one per active body part.
+      final rows = tester
+          .widgetList<BodyPartRankRow>(find.byType(BodyPartRankRow))
+          .toList();
+      expect(rows, hasLength(6));
+      // Canonical order: chest → back → legs → shoulders → arms → core.
+      // `bodyPartProgress` is built in `activeBodyParts` order by the
+      // character_sheet_provider, so the rendered rows match without
+      // any client-side sort.
+      expect(
+        rows.map((r) => r.entry.bodyPart).toList(),
+        equals(activeBodyParts),
+      );
+    });
+
+    testWidgets(
+      'tapping a body-part row navigates to /saga/stats with body_part query',
+      (tester) async {
+        // The expanded card is ~625dp tall — bigger than the default 600dp
+        // viewport. Resize the test surface so the whole card fits without
+        // a scroll view (a scroll view's Scrollable competes with the row
+        // InkWell in the gesture arena and swallows the tap). try/finally
+        // resets the surface before subsequent tests run.
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        try {
+          await tester.pumpWidget(
+            _harness(sheet: _trainedSheet(), scrollable: false),
+          );
+          await tester.pump();
+
+          // Expand the card so the rows are mounted. Pump several frames
+          // past the 250ms AnimatedSize duration so:
+          // (a) the size animation fully settles and the clip-rect no
+          //     longer truncates the body's hit-test region, and
+          // (b) the outer InkWell's InkResponse tap-gesture cleanup
+          //     completes — leaving its tap recognizer in an idle state
+          //     before we issue the second tap on the row.
+          await tester.tap(find.byType(InkWell).first);
+          await tester.pump(const Duration(milliseconds: 500));
+          await tester.pump(const Duration(milliseconds: 100));
+
+          final chestRow = find.byWidgetPredicate(
+            (w) => w is BodyPartRankRow && w.entry.bodyPart == BodyPart.chest,
+          );
+          expect(chestRow, findsOneWidget);
+          final chestInkWell = find.descendant(
+            of: chestRow,
+            matching: find.byType(InkWell),
+          );
+          expect(chestInkWell, findsOneWidget);
+          await tester.tap(chestInkWell);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+
+          // Lands on the /saga/stats placeholder with the chest slug.
+          expect(find.text('stats:chest'), findsOneWidget);
+        } finally {
+          await tester.binding.setSurfaceSize(null);
+        }
+      },
+    );
+
+    testWidgets('day-0 sheet renders 6 untrained rows in expanded state', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(sheet: _dayZeroSheet()));
+      await tester.pump();
+
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // All 6 BodyPartRankRow widgets still render — the row picks the
+      // `_UntrainedRow` variant internally based on `entry.isUntrained`
+      // (rank 1 + zero XP + zero vitality). Confirms day-0 users don't
+      // see an empty body when they expand the card.
+      expect(find.byType(BodyPartRankRow), findsNWidgets(6));
+      // CharacterXpBar still renders even at lifetimeXp == 0 (denominator
+      // is the day-0 xpForNextLevel = 1000, fraction = 0).
+      expect(find.byType(CharacterXpBar), findsOneWidget);
+    });
   });
 }
