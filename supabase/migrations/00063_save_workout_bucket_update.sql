@@ -164,12 +164,13 @@ BEGIN
   -- ===========================================================================
   -- Phase 26e Task 3: bucket find-or-create on weekly_plans.
   --
-  -- Compute current-week Monday (ISO week start) from v_finished_at if set,
-  -- else now(). All math UTC; the client's week boundary may drift by a few
-  -- hours at TZ edges — acceptable since the user's "week" is defined here
-  -- by when the workout was finished, not by their local clock.
+  -- Server-authoritative week boundary: use v_now (server NOW()) to derive
+  -- the current week's Monday. The client's `finished_at` is for display +
+  -- sorting only; trusting it for bucket membership would let a backdated
+  -- finished_at silently corrupt a past or future week's plan. The user's
+  -- "week" for bucket purposes is "when save_workout actually ran".
   -- ===========================================================================
-  v_week_start := (date_trunc('week', COALESCE(v_finished_at, v_now))::date);
+  v_week_start := (date_trunc('week', v_now)::date);
 
   SELECT id, routines
   INTO v_plan_id, v_plan_routines
@@ -197,23 +198,21 @@ BEGIN
     RETURN v_result;
   END IF;
 
-  -- First-completion-wins: find the FIRST uncompleted entry (by JSONB order
-  -- index = bucket order) whose routine_id matches. If routine_id is NULL on
-  -- the workout (free workout, no source routine), skip the match step and
-  -- go straight to spontaneous-append.
+  -- First-completion-wins: find the FIRST uncompleted entry (by the user's
+  -- chosen `order` field, ASC) whose routine_id matches. v_match_idx is the
+  -- PHYSICAL JSONB array index — that's what jsonb_set requires; using
+  -- rank-by-order instead would diverge whenever the stored array isn't
+  -- already sorted by order. If routine_id is NULL on the workout (free
+  -- workout, no source routine), skip the match step and go straight to
+  -- spontaneous-append.
   v_match_idx := NULL;
   IF v_routine_id IS NOT NULL THEN
-    SELECT idx
+    SELECT (ord - 1)::int
     INTO v_match_idx
-    FROM (
-      SELECT
-        (row_number() OVER (ORDER BY (r ->> 'order')::int))::int - 1 AS idx,
-        r
-      FROM jsonb_array_elements(v_plan_routines) WITH ORDINALITY AS arr(r, ord)
-    ) ranked
-    WHERE (ranked.r ->> 'routine_id') = v_routine_id::text
-      AND (ranked.r ->> 'completed_workout_id') IS NULL
-    ORDER BY idx ASC
+    FROM jsonb_array_elements(v_plan_routines) WITH ORDINALITY AS arr(r, ord)
+    WHERE (r ->> 'routine_id') = v_routine_id::text
+      AND (r ->> 'completed_workout_id') IS NULL
+    ORDER BY (r ->> 'order')::int ASC
     LIMIT 1;
   END IF;
 
@@ -237,8 +236,9 @@ BEGIN
     INTO v_max_order
     FROM jsonb_array_elements(v_plan_routines) AS r;
 
+    -- to_jsonb(NULL::text) → JSON null; valid uuid → JSON string. No CASE needed.
     v_routine_entry := jsonb_build_object(
-      'routine_id',           CASE WHEN v_routine_id IS NULL THEN NULL ELSE to_jsonb(v_routine_id::text) END,
+      'routine_id',           to_jsonb(v_routine_id::text),
       'order',                v_max_order + 1,
       'completed_workout_id', v_workout_id::text,
       'completed_at',         to_jsonb(v_now),

@@ -106,10 +106,18 @@ class PendingSyncNotifier extends Notifier<int> {
         :final setsJson,
       ):
         final repo = ref.read(workoutRepositoryProvider);
+        // Extract routine_id from the persisted workout JSON so the 26e
+        // bucket find-or-create in `save_workout` (migration 00063) gets
+        // the same payload as the online path. The key is written into
+        // workoutJson by the repository at enqueue time; absent for
+        // pre-26e queued workouts (graceful fallback to null = free
+        // workout / spontaneous append).
+        final routineId = workoutJson['routine_id'] as String?;
         await repo.saveWorkout(
           workout: Workout.fromJson(workoutJson),
           exercises: exercisesJson.map(WorkoutExercise.fromJson).toList(),
           sets: setsJson.map(ExerciseSet.fromJson).toList(),
+          routineId: routineId,
         );
 
       case PendingUpsertRecords(:final recordsJson):
