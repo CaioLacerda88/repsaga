@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../rpg/domain/titles_view_model.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/title.dart' as rpg;
+import '../../../rpg/providers/character_sheet_provider.dart';
 import '../../../rpg/providers/earned_titles_provider.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
@@ -69,6 +70,28 @@ class EncouragementNudge extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+
+    // Day-0 suppression. CharacterCard's `_ClosestRankUpRow` fallback
+    // already carries the day-0 first-step copy
+    // (`homeFirstStepFallback`). Rendering the same string here would
+    // duplicate it on the home surface for a brand-new user, so we
+    // collapse the nudge to a layout-preserving empty slot. The Semantics
+    // identifier stays attached so E2E specs that hook on
+    // `home-encouragement-nudge` keep resolving. L2 fix (visual
+    // verification, 2026-05-18).
+    final sheet = ref.watch(characterSheetProvider).value;
+    if (sheet != null && sheet.isZeroHistory) {
+      // `Semantics` has no const constructor — wrap the const SizedBox
+      // inline. Height matches [EncouragementNudge.height] so the slot
+      // stays the same vertical size whether the nudge is suppressed or
+      // surfaced.
+      return Semantics(
+        container: true,
+        explicitChildNodes: true,
+        identifier: 'home-encouragement-nudge',
+        child: const SizedBox(height: height),
+      );
+    }
 
     // Reactive inputs — five providers, one resolver call. Each watch
     // updates the line on the next frame when the underlying value

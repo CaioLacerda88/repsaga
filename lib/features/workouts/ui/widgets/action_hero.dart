@@ -11,6 +11,7 @@ import '../../../routines/ui/start_routine_action.dart';
 import '../../../weekly_plan/data/models/weekly_plan.dart';
 import '../../../weekly_plan/providers/suggested_next_provider.dart';
 import '../../../weekly_plan/utils/routine_duration_estimator.dart';
+import '../../providers/workout_history_providers.dart';
 import '../../providers/workout_providers.dart';
 import 'resume_workout_dialog.dart';
 
@@ -18,17 +19,19 @@ import 'resume_workout_dialog.dart';
 ///
 /// Phase 26f collapsed the legacy 4-branch state machine (active /
 /// brand-new / lapsed / week-complete) into 3 deterministic branches keyed
-/// off the bucket + routine list state:
+/// off the user's workout history + bucket state:
 ///
-/// 1. **Routines list is empty** — `_CreateFirstRoutineHero` points the user
-///    at `/routines/create`. Replaces the legacy beginner CTA — the new
-///    onboarding direction is to walk the user through creating their own
-///    routine, not preselect a default one.
+/// 1. **Day-0 user** (`workoutCountProvider == 0` — never recorded a
+///    workout) → `_CreateFirstRoutineHero` points the user at
+///    `/routines/create`. Preserves the legacy `_BrandNewHero` semantics —
+///    default routines ship seeded for every user, so a `routines.isEmpty`
+///    gate would never fire in production. "Has the user ever lifted?" is
+///    the real onboarding signal. L1 fix (visual verification, 2026-05-18).
 /// 2. **Bucket has an uncompleted entry** (`suggestedNextProvider != null`)
-///    — `_StartNextRoutineHero` shows `Iniciar {routineName}` and starts the
-///    routine on tap (resume-vs-start guard preserved via
+///    → `_StartNextRoutineHero` shows `Iniciar {routineName}` and starts
+///    the routine on tap (resume-vs-start guard preserved via
 ///    [startRoutineWorkout]).
-/// 3. **Otherwise** — `_FreeWorkoutHero` surfaces the spontaneous "free
+/// 3. **Otherwise** → `_FreeWorkoutHero` surfaces the spontaneous "free
 ///    workout" entry point. When `isWeekCompleteProvider` is true the
 ///    subline reads "Semana completa"; otherwise the slot is empty so the
 ///    layout stays stable.
@@ -43,26 +46,27 @@ import 'resume_workout_dialog.dart';
 /// the variant without locale-dependent text. Decision locked 2026-05-18.
 ///
 /// **Why scoped per-branch widgets.** Each ConsumerWidget owns the
-/// providers it actually needs. `routineListProvider` lives only on the
-/// outer ActionHero because all three branches need it; per-branch
-/// subscriptions (e.g. resolving the routine name for "Iniciar X") stay
-/// inside the relevant branch so we don't rebuild the whole hero when the
-/// non-active branch's data churns.
+/// providers it actually needs. Outer ActionHero only watches
+/// [workoutCountProvider] (the day-0 gate); per-branch subscriptions (e.g.
+/// resolving the routine name for "Iniciar X" via [routineListProvider])
+/// stay inside the relevant branch so we don't rebuild the whole hero when
+/// the non-active branch's data churns.
 class ActionHero extends ConsumerWidget {
   const ActionHero({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Riverpod 3.x: AsyncValue exposes `.value` for the committed value.
-    // Fallback to const [] so the build resolves to a deterministic branch
-    // even during the first frame before the provider hydrates — this
-    // gracefully degrades to `_CreateFirstRoutineHero` during the loading
-    // window. If the user has routines, the rebuild on hydrate swaps to the
-    // correct branch.
-    final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
+    // Day-0 gate: user has never recorded a workout. `workoutCountProvider`
+    // is `keepAlive`, so once it resolves the value is cached for the
+    // session. During the first-frame load `.value` is null → we default to
+    // 0 (show the create-first-routine hero); the rebuild on hydrate swaps
+    // to the correct branch. For a real day-0 user that "swap" is a no-op
+    // (resolves to 0). Mirrors the legacy `_BrandNewHero` gate. L1 fix —
+    // see class doc.
+    final workoutCount = ref.watch(workoutCountProvider).value ?? 0;
 
     final Widget branch;
-    if (routines.isEmpty) {
+    if (workoutCount == 0) {
       branch = const _CreateFirstRoutineHero();
     } else {
       final next = ref.watch(suggestedNextProvider);

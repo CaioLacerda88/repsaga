@@ -18,11 +18,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
-import 'package:repsaga/features/rpg/models/body_part.dart';
-import 'package:repsaga/features/rpg/models/body_part_progress.dart';
 import 'package:repsaga/features/rpg/data/rpg_repository.dart'
     show CharacterState;
+import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/body_part_progress.dart';
+import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
+import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/weekly_plan/providers/suggested_next_provider.dart';
@@ -79,12 +81,47 @@ class _RpgProgressStub extends AsyncNotifier<RpgProgressSnapshot>
   Future<void> runBackfill() async {}
 }
 
+/// Minimal "past day-0" character sheet so the L2 day-0 suppression gate
+/// (added 2026-05-18) does not short-circuit the resolver for the
+/// priority/streak/title tests. `lifetimeXp > 0` ⇒ `isZeroHistory == false`.
+/// Body-part progress is left empty — the tests don't read it directly;
+/// they drive title/streak slots through their dedicated provider
+/// overrides.
+CharacterSheetState _pastDay0Sheet() => const CharacterSheetState(
+  characterLevel: 2,
+  lifetimeXp: 100,
+  xpForNextLevel: 1000,
+  bodyPartProgress: [],
+);
+
+/// Day-0 sheet for the L2 suppression test. `lifetimeXp == 0` ⇒
+/// `isZeroHistory == true`.
+CharacterSheetState _dayZeroSheet() => const CharacterSheetState(
+  characterLevel: 1,
+  lifetimeXp: 0,
+  xpForNextLevel: 1000,
+  bodyPartProgress: [],
+);
+
 /// Wraps [EncouragementNudge] in a minimal scaffold + localizations harness.
-/// Caller passes the full override list — each test customizes the five
-/// reactive inputs that drive the resolver.
-Widget _harness({required List<Override> overrides}) {
+/// Caller passes the full override list for the five reactive resolver
+/// inputs. The optional [sheet] override controls the L2 day-0 suppression
+/// gate — default is `_pastDay0Sheet()` so the resolver runs through to
+/// the priority/streak/title slots; the suppression test passes
+/// `_dayZeroSheet()` explicitly.
+Widget _harness({
+  required List<Override> overrides,
+  CharacterSheetState? sheet,
+}) {
+  final resolvedSheet = sheet ?? _pastDay0Sheet();
   return ProviderScope(
-    overrides: overrides,
+    overrides: [
+      // Sheet override comes FIRST so test-specified overrides (if any)
+      // for `characterSheetProvider` win — Riverpod resolves the latest
+      // matching override in the list.
+      characterSheetProvider.overrideWith((_) => AsyncData(resolvedSheet)),
+      ...overrides,
+    ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -100,35 +137,98 @@ Widget _harness({required List<Override> overrides}) {
 
 void main() {
   group('EncouragementNudge', () {
-    testWidgets('shows first-step fallback for day-0 user', (tester) async {
-      await tester.pumpWidget(
-        _harness(
-          overrides: [
-            streakProvider.overrideWith((ref) => 0),
-            completedCountProvider.overrideWith((ref) => 0),
-            totalBucketCountProvider.overrideWith((ref) => 0),
-            titleCatalogProvider.overrideWith(
-              (ref) async => const <rpg.Title>[],
-            ),
-            earnedTitlesProvider.overrideWith(
-              (ref) async => const <EarnedTitleEntry>[],
-            ),
-            rpgProgressProvider.overrideWith(
-              () => _RpgProgressStub(RpgProgressSnapshot.empty),
-            ),
-          ],
-        ),
-      );
-      // Two pumps: one for ProviderScope build, one for the FutureProvider
-      // resolution (catalog + earned).
-      await tester.pump();
-      await tester.pump();
+    testWidgets(
+      'shows first-step fallback for past-day-0 user with no streak / bucket / titles',
+      (tester) async {
+        // Past day-0 (lifetimeXp > 0 ⇒ suppression gate doesn't fire) but
+        // no streak, no bucket entries, no titles within reach — resolver
+        // falls through to NudgeFirstStep.
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 0),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith(
+                (ref) async => const <rpg.Title>[],
+              ),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(RpgProgressSnapshot.empty),
+              ),
+            ],
+          ),
+        );
+        // Two pumps: one for ProviderScope build, one for the FutureProvider
+        // resolution (catalog + earned).
+        await tester.pump();
+        await tester.pump();
 
-      expect(
-        find.text('Begin your journey — first set awaits'),
-        findsOneWidget,
-      );
-    });
+        expect(
+          find.text('Begin your journey — first set awaits'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'returns empty slot when characterSheet.isZeroHistory == true (L2)',
+      (tester) async {
+        // L2 (visual verification, 2026-05-18): CharacterCard's fallback
+        // already carries the day-0 first-step copy. Surfacing it here
+        // duplicated the line on home for brand-new users. The nudge
+        // collapses to a layout-preserving SizedBox but keeps the
+        // `home-encouragement-nudge` Semantics identifier so the E2E hook
+        // stays addressable.
+        await tester.pumpWidget(
+          _harness(
+            sheet: _dayZeroSheet(),
+            overrides: [
+              streakProvider.overrideWith((ref) => 0),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith(
+                (ref) async => const <rpg.Title>[],
+              ),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(RpgProgressSnapshot.empty),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Duplicate first-step copy must NOT render.
+        expect(
+          find.text('Begin your journey — first set awaits'),
+          findsNothing,
+        );
+        // The semantics container is still mounted at the reserved 24dp
+        // height so layout stays stable.
+        final identifierFinder = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.identifier == 'home-encouragement-nudge',
+        );
+        expect(identifierFinder, findsOneWidget);
+        // The placeholder SizedBox sits as a direct descendant of the
+        // identifier-bearing Semantics node, sized to the widget's
+        // reserved height.
+        final placeholder = find.descendant(
+          of: identifierFinder,
+          matching: find.byWidgetPredicate(
+            (w) => w is SizedBox && w.height == EncouragementNudge.height,
+          ),
+        );
+        expect(placeholder, findsOneWidget);
+      },
+    );
 
     testWidgets('shows streak line when only streak is non-zero', (
       tester,

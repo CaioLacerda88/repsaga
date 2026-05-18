@@ -33,6 +33,7 @@ import 'package:repsaga/features/workouts/models/routine_start_config.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
 import 'package:repsaga/features/workouts/providers/notifiers/active_workout_notifier.dart';
+import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
@@ -231,6 +232,10 @@ ActiveWorkoutState _seedActiveWorkout() {
 Widget _buildWithRouter({
   WeeklyPlan? plan,
   List<Routine> routines = const [],
+  // Default to 1 (returning user) so the day-0 branch isn't triggered for
+  // tests that just exercise bucket / free-workout state. Tests targeting
+  // `_CreateFirstRoutineHero` pass `workoutCount: 0` explicitly.
+  int workoutCount = 1,
   ActiveWorkoutNotifier Function()? activeWorkoutNotifier,
   ValueChanged<String>? onRoute,
 }) {
@@ -278,6 +283,12 @@ Widget _buildWithRouter({
     overrides: [
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
       routineListProvider.overrideWith(() => _RoutineListStub(routines)),
+      // Day-0 gate. `overrideWithValue` seeds the FutureProvider with an
+      // already-resolved AsyncData, so the first build sees the value
+      // synchronously — no extra pump needed to drain a microtask. This
+      // mirrors `onlineStatusProvider.overrideWithValue(const AsyncData(...))`
+      // used elsewhere in the test suite for FutureProvider seeding.
+      workoutCountProvider.overrideWithValue(AsyncData(workoutCount)),
       activeWorkoutProvider.overrideWith(
         activeWorkoutNotifier ?? () => _NullActiveWorkoutNotifier(),
       ),
@@ -543,8 +554,21 @@ void main() {
   });
 
   group('ActionHero — _CreateFirstRoutineHero', () {
-    testWidgets('shows when routines list is empty', (tester) async {
-      await tester.pumpWidget(_buildWithRouter(plan: null, routines: const []));
+    // L1 (visual verification, 2026-05-18): the branch is gated on
+    // `workoutCountProvider == 0` — "user has never recorded a workout" —
+    // not on `routines.isEmpty`. Default routines ship seeded for every
+    // user in production, so the empty-routines gate never fires.
+    testWidgets('shows when workoutCount is 0 (day-0 user)', (tester) async {
+      // Seed routines AND a plan to prove the gate is purely workout-count
+      // driven: even with full routines + a bucket, a zero-history user
+      // still sees the create-first-routine CTA.
+      await tester.pumpWidget(
+        _buildWithRouter(
+          workoutCount: 0,
+          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+          routines: [_routine(id: 'r-1', name: 'Push Day')],
+        ),
+      );
       await tester.pump();
       await tester.pump();
 
@@ -554,7 +578,7 @@ void main() {
       );
       expect(find.text('Criar primeira rotina'), findsOneWidget);
       expect(find.text('BEM-VINDO'), findsOneWidget);
-      // Other branches not in the tree.
+      // Other branches not in the tree — day-0 gate wins over the bucket.
       expect(_findByIdentifier('home-action-hero-start-routine'), findsNothing);
       expect(_findByIdentifier('home-action-hero-free-workout'), findsNothing);
     });
@@ -563,6 +587,7 @@ void main() {
       String? lastPushed;
       await tester.pumpWidget(
         _buildWithRouter(
+          workoutCount: 0,
           plan: null,
           routines: const [],
           onRoute: (location) => lastPushed = location,
@@ -577,6 +602,34 @@ void main() {
       expect(lastPushed, '/routines/create');
       expect(find.text('Create Routine Screen'), findsOneWidget);
     });
+
+    testWidgets(
+      'falls through to _FreeWorkoutHero when workoutCount > 0 and bucket is empty',
+      (tester) async {
+        // The exact regression L1 unmasked: a returning user (workoutCount
+        // == 1) with seeded default routines but no plan must NOT see the
+        // create-first-routine CTA. They should land on free-workout.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 1,
+            plan: null,
+            routines: [_routine(id: 'r-1', name: 'Push Day', isDefault: true)],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsNothing,
+        );
+        expect(
+          _findByIdentifier('home-action-hero-free-workout'),
+          findsOneWidget,
+        );
+        expect(find.text('Treino livre'), findsOneWidget);
+      },
+    );
   });
 
   group('ActionHero — outer home-action-hero identifier', () {
@@ -609,7 +662,9 @@ void main() {
     });
 
     testWidgets('present in _CreateFirstRoutineHero branch', (tester) async {
-      await tester.pumpWidget(_buildWithRouter(plan: null, routines: const []));
+      await tester.pumpWidget(
+        _buildWithRouter(workoutCount: 0, plan: null, routines: const []),
+      );
       await tester.pump();
       await tester.pump();
       expect(_findByIdentifier('home-action-hero'), findsOneWidget);
