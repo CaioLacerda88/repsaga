@@ -48,10 +48,9 @@ Branch: `feature/26e-bucket-spontaneous`
 - [x] Task 8: `MuscleBarRow` widget + `EngajamentoSection`
 - [x] Task 9: Engagement explainer bottom sheet
 - [x] Task 10: `WeekPlanScreen` rewrite (+ 8 new l10n keys folded in)
-- [ ] Task 11: L10n keys — collapses to gen-l10n verification (keys already
-      shipped in Task 10 so the rewrite stays self-contained)
-- [ ] Task 12: Integration test for `save_workout` find-or-create
-- [ ] Task 13: E2E updates
+- [x] Task 11: L10n keys — collapsed to gen-l10n verification (keys shipped in Task 10)
+- [x] Task 12: Integration test for `save_workout` find-or-create
+- [x] Task 13: E2E updates
 - [ ] Task 14: Visual verification (3-viewport screenshots vs mockup)
 
 ### 26f — Home redesign
