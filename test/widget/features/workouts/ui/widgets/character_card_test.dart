@@ -6,6 +6,9 @@
 /// BodyPartRankRow widgets in canonical order, each tappable to
 /// `/saga/stats?body_part=<slug>`).
 ///
+/// CH2: dominant column absent for day-0 user (no trained body parts).
+/// CH3: chevron exposes localized accessibility hint.
+///
 /// Tests stub [characterSheetProvider] directly with `AsyncData(...)`
 /// (the provider exposes `AsyncValue<CharacterSheetState>`, not an
 /// AsyncNotifier — see `character_sheet_provider.dart`).
@@ -294,6 +297,94 @@ void main() {
       final rankText = tester.widget<Text>(rankNumFinder);
       expect(rankText.data, '16');
       expect(rankText.style?.color, AppColors.bodyPartChest);
+    });
+
+    testWidgets(
+      'dominant column absent for day-0 user (no trained entries) (CH2)',
+      (tester) async {
+        // Pins the rendering contract that the right-side dominant rank
+        // column does NOT appear when every body part is untrained.
+        // `_dominantTrainedEntry` returns null for day-0 users, so the
+        // `if (dominant != null)` guard collapses the whole column.
+        await tester.pumpWidget(_harness(sheet: _dayZeroSheet()));
+        await tester.pump();
+
+        // Card renders — no crash on day-0 data.
+        expect(find.byType(CharacterCard), findsOneWidget);
+
+        // Dominant rank column NOT present. Anchored by the ValueKey that the
+        // `_DominantColumn` widget stamps on its rank-num Text widget
+        // (line 329 of character_card.dart). If the column were accidentally
+        // rendered, this key would be findable.
+        expect(
+          find.byKey(const ValueKey('character-card-dominant-rank')),
+          findsNothing,
+          reason:
+              'Dominant rank column must be absent when every body part '
+              'is untrained (day-0 user). Only _HeaderRow._dominantTrainedEntry '
+              'returning null gates this correctly.',
+        );
+        expect(
+          find.byKey(const ValueKey('character-card-dominant-name')),
+          findsNothing,
+        );
+
+        // The first-step fallback IS present — confirms the card renders the
+        // correct day-0 copy in the closest-rank-up indicator slot.
+        expect(
+          find.text('Begin your journey — first set awaits'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('chevron exposes localized accessibility hint (CH3)', (
+      tester,
+    ) async {
+      // Pins the `Semantics(label: hint)` on `_Chevron` so a future
+      // refactor cannot silently drop the `homeCharacterCardChevronHint`
+      // accessibility copy. The hint communicates the tap affordance to
+      // screen-reader users.
+      //
+      // Assertion shape: use `find.bySemanticsLabel(RegExp(...))` rather
+      // than an exact-string match. Flutter's semantics system merges a
+      // `Semantics(label:)` without `container: true` into the ancestor
+      // node's label — the resulting merged label is not equal to the
+      // isolated hint string but DOES contain it. The Flutter test docs
+      // (see `_bySemanticsProperty` source) explicitly recommend regex
+      // over exact strings when the framework has combined semantics.
+      // The regex still fails if the Semantics wrapper is removed,
+      // which is the regression this test guards.
+      //
+      // NOTE FOR TECH-LEAD: The `_Chevron` Semantics node does NOT
+      // carry `container: true`, so its label is merged into the parent
+      // header node by the semantics system. A screen reader receives the
+      // entire merged text block, not a discrete "Tap to expand character
+      // details" announcement. Adding `container: true` to `_Chevron`'s
+      // Semantics would isolate the node and allow an exact-string match.
+      // This is a tracked accessibility gap — see QA bug report in PR #242.
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      final handle = tester.ensureSemantics();
+
+      // Regex matches the partial label within the merged semantics node.
+      // The en-locale hint is "Tap to expand character details" — any
+      // prefix like "expand" is stable and locale-invariant enough for a
+      // widget-level pin. If the Semantics(label: hint) wrapper is removed,
+      // no semantics node will carry any form of this text and the test fails.
+      expect(
+        find.bySemanticsLabel(RegExp('expand character details')),
+        findsOneWidget,
+        reason:
+            'The _Chevron widget must expose `homeCharacterCardChevronHint` '
+            'via Semantics(label: hint). If this fails, the label wrapper '
+            'was removed from _Chevron. Note: exact-string bySemanticsLabel '
+            'does not work here because Flutter merges the label into the '
+            'parent header node — use regex per Flutter docs.',
+      );
+
+      handle.dispose();
     });
   });
 

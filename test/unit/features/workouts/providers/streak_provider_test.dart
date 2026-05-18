@@ -160,5 +160,45 @@ void main() {
       ]);
       expect(streak, 1);
     });
+
+    test('workout with finishedAt == null counts toward streak via startedAt '
+        '(CH4 — finishedAt ?? startedAt fallback)', () async {
+      // Pins the `finishedAt ?? startedAt` bucket convention in the
+      // provider. An in-progress or never-finished workout (finishedAt is
+      // null) should still count toward the streak via startedAt. Prior to
+      // the I1 / I2 fix-wave, the provider could throw a null-safety error
+      // or silently skip the workout if the date-buckling called
+      // `finishedAt!.toLocal()` directly.
+      //
+      // Build a Workout with startedAt = today, finishedAt = null.
+      // `TestWorkoutFactory.create` defaults `finished_at` to a non-null
+      // ISO string, so we override it explicitly with null to exercise the
+      // edge case.
+      final workoutJson = TestWorkoutFactory.create(
+        id: 'in-progress',
+        startedAt: _reference.toIso8601String(),
+        finishedAt: null, // explicit null — the edge case
+      );
+      // The factory defaults to a non-null finished_at string; null-override
+      // overrides that key to null so `Workout.fromJson` hydrates
+      // `finishedAt` as null.
+      workoutJson['finished_at'] = null;
+
+      final workout = Workout.fromJson(workoutJson);
+
+      // Sanity-check the fixture: startedAt is today, finishedAt is null.
+      expect(workout.finishedAt, isNull);
+      expect(
+        workout.startedAt.toLocal().day,
+        _reference.toLocal().day,
+        reason: 'startedAt must fall on today for the streak to count',
+      );
+
+      final streak = await _readStreakWith([workout]);
+
+      // Provider uses `finishedAt?.toLocal() ?? startedAt.toLocal()` to
+      // bucket the workout day — startedAt is today so streak = 1.
+      expect(streak, 1);
+    });
   });
 }

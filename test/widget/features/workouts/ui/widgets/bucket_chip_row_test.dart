@@ -1,6 +1,6 @@
 /// Widget tests for [BucketChipRow].
 ///
-/// Covers nine cases:
+/// Covers ten cases:
 ///   1. Empty bucket: header + Editar plano link, no chip wrap.
 ///   2. Chip render order: planned (by `order` ascending) → spontaneous
 ///      appended in completion order.
@@ -14,6 +14,8 @@
 ///      on the same Monday + one on Wednesday → "2 days trained").
 ///   9. The Editar plano link is present in every state variant
 ///      (empty, partial, all-complete).
+///  10. Chip with completedWorkoutId set but completedAt null renders
+///      without crashing and without day-of-week meta (CH1 — I1 fix).
 ///
 /// Harness pattern follows `character_card_test.dart`: real [GoRouter]
 /// with placeholder routes for `/plan/week`, [ProviderScope] overrides
@@ -331,6 +333,50 @@ void main() {
       // Sanity: NOT the routine-count form.
       expect(find.text('3 days trained'), findsNothing);
     });
+
+    testWidgets(
+      'chip with completedWorkoutId set but completedAt null renders without '
+      'crashing (CH1 — I1 fix: server delivers workoutId without timestamp)',
+      (tester) async {
+        // Edge case pinned by reviewer finding CH1: server can return a
+        // BucketRoutine where `completedWorkoutId` is non-null but
+        // `completedAt` is null (partial server response / race). The
+        // `_BucketChip._isDone` gate is true (workoutId present), which
+        // previously crashed when it attempted `_shortDayLabel(null!, ...)`.
+        // The I1 fix added an explicit null guard:
+        //   `final dayLabel = (_isDone && entry.completedAt != null) ? ...`
+        // This test pins that contract so a future refactor cannot re-introduce
+        // the crash.
+        const buggyEntry = BucketRoutine(
+          routineId: 'rid-1',
+          order: 0,
+          completedWorkoutId: 'wid-1',
+          completedAt: null, // explicit null — the edge case
+          isSpontaneous: false,
+        );
+        final plan = _plan([buggyEntry]);
+
+        await tester.pumpWidget(
+          _harness(plan: plan, routines: [_routine('rid-1', 'Push')]),
+        );
+        await tester.pumpAndSettle();
+
+        // Chip renders — the widget didn't throw.
+        expect(find.text('Push'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        // Day-of-week meta NOT present — no label to derive from null timestamp.
+        // All three-letter weekday abbreviations (en locale) that could appear:
+        const dayAbbrevs = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+        for (final abbrev in dayAbbrevs) {
+          expect(
+            find.text(abbrev),
+            findsNothing,
+            reason: 'Day-of-week meta must be absent when completedAt is null',
+          );
+        }
+      },
+    );
 
     testWidgets('Editar plano link is present in every state variant', (
       tester,
