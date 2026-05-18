@@ -16,42 +16,10 @@ the phase summary in PROJECT.md §4.
 **Reference:** `docs/PROJECT.md §3 Phase 26` (authoritative spec) +
 `docs/phase-26-mockups.html` (visual companion).
 
-**State:** 26a + 26b + 26c + 26d shipped (PRs #232, #234, #236, #238 — see
-PROJECT.md §4 for retrospectives). Two sub-phases remain (26e–f). Each gets
-its own plan written via `superpowers:writing-plans` just before that
-sub-phase starts, so each plan reflects the actual landed state of prior
-sub-phases.
-
-### 26e — Plan editor + bucket model evolution
-
-Branch: `feature/26e-bucket-spontaneous`
-
-**Plan:** `docs/phase-26e-plan.md` (14 tasks, subagent-driven execution).
-
-**Locked architectural decisions:**
-- First-completion-wins: matching uncompleted entry → fill; otherwise append spontaneous (state 4).
-- Week rollover: copy `isSpontaneous == false` entries only; spontaneous do NOT carry forward.
-- Backfill (00062): all existing JSONB entries set to `is_spontaneous = false` (conservative).
-- Set-counting math: per-set body part = max `xp_attribution` share; tied body parts each credited; strict equality.
-- `weeklyEngagementProvider` parameter `{ includePlanned: bool }`.
-- Engajamento section: 6 bars in canonical order, cardio HIDDEN, total counter REMOVED from header.
-- `routine_id` MUST ride the `save_workout` payload (verified `workout_repository.dart:76-83` currently omits it; Task 3 plumbs it).
-- Screen `plan_management_screen.dart` → `week_plan_screen.dart` (wholesale rename + rewrite); class `PlanManagementScreen` → `WeekPlanScreen`.
-
-- [x] Task 1: Data model — `BucketRoutine.isSpontaneous`
-- [x] Task 2: Migration 00062 — JSONB backfill
-- [x] Task 3: Migration 00063 — `save_workout` find-or-create (+ Dart-side `routine_id` plumbing in `workout_repository.dart`)
-- [x] Task 4: Drop client-side `markRoutineComplete`
-- [x] Task 5: `WeeklyEngagement` domain + set-counting math
-- [x] Task 6: `weeklyEngagementProvider`
-- [x] Task 7: `BucketRoutineRow` widget
-- [x] Task 8: `MuscleBarRow` widget + `EngajamentoSection`
-- [x] Task 9: Engagement explainer bottom sheet
-- [x] Task 10: `WeekPlanScreen` rewrite (+ 8 new l10n keys folded in)
-- [x] Task 11: L10n keys — collapsed to gen-l10n verification (keys shipped in Task 10)
-- [x] Task 12: Integration test for `save_workout` find-or-create
-- [x] Task 13: E2E updates
-- [x] Task 14: Visual verification (3-viewport screenshots vs mockup)
+**State:** 26a + 26b + 26c + 26d + 26e shipped (PRs #232, #234, #236, #238,
+#240 — see PROJECT.md §4 for retrospectives). One sub-phase remains (26f).
+Plan written via `superpowers:writing-plans` just before 26f starts, so
+the plan reflects the actual landed state of prior sub-phases.
 
 ### 26f — Home redesign
 
