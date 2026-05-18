@@ -535,6 +535,96 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fitnessLevelAdvanced => 'Advanced';
 
   @override
+  String get homeActionHeroCreateFirstRoutine => 'Create first routine';
+
+  @override
+  String get homeActionHeroFreeWorkout => 'Free workout';
+
+  @override
+  String get homeActionHeroFreeWorkoutSubtitleWeekComplete => 'Week complete';
+
+  @override
+  String homeActionHeroStartRoutine(String routineName) {
+    return 'Start $routineName';
+  }
+
+  @override
+  String homeBucketDaysTrained(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString days trained',
+      one: '1 day trained',
+      zero: 'No days trained',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeBucketSectionTitle => 'This week';
+
+  @override
+  String get homeBucketSpontaneousBadge => 'Free';
+
+  @override
+  String get homeCharacterCardChevronHint => 'Tap to expand character details';
+
+  @override
+  String homeClosestRankUp(String bodyPart, int xp, int rank) {
+    return '◆ $bodyPart · $xp XP for rank $rank';
+  }
+
+  @override
+  String get homeEditPlanLink => 'Edit plan →';
+
+  @override
+  String get homeFirstStepFallback => 'Begin your journey — first set awaits';
+
+  @override
+  String homeNudgeBodyPartTitleClose(String bodyPart, String titleName) {
+    return '$bodyPart title within reach: $titleName';
+  }
+
+  @override
+  String homeNudgeCrossBuildClose(String titleName) {
+    return 'Cross-build title within reach: $titleName';
+  }
+
+  @override
+  String homeNudgeRemainingWorkouts(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Need $countString workouts to close the week',
+      one: 'Need 1 workout to close the week',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String homeNudgeStreakDays(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString-day streak',
+      one: '1-day streak',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String homeStatusWeekComplete(int count) {
     return 'Week complete — $count of $count done';
   }
