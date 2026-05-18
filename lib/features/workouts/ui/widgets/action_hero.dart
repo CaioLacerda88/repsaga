@@ -14,29 +14,6 @@ import '../../../weekly_plan/utils/routine_duration_estimator.dart';
 import '../../providers/workout_providers.dart';
 import 'resume_workout_dialog.dart';
 
-/// Selects the routine to recommend to a brand-new user. Prefers
-/// "Full Body"; falls back to the alphabetical-first default.
-///
-/// Top-level because it is a pure function over [List<Routine>] with no
-/// dependency on widget state — keeping it outside the widget class makes it
-/// trivially testable in isolation.
-///
-/// Retained as a public helper after Phase 26f's collapse to a 3-branch
-/// ActionHero: the new `_CreateFirstRoutineHero` branch does not surface a
-/// recommended routine (it points the user at the create-routine flow), so
-/// this is currently unused inside this file. T11/T12 will fold the legacy
-/// brand-new widget tests away; until then we keep the export so they
-/// continue to compile.
-Routine? pickBeginnerRoutine(List<Routine> routines) {
-  final defaults = routines.where((r) => r.isDefault).toList();
-  if (defaults.isEmpty) return null;
-  for (final r in defaults) {
-    if (r.name == 'Full Body') return r;
-  }
-  defaults.sort((a, b) => a.name.compareTo(b.name));
-  return defaults.first;
-}
-
 /// The banner CTA on the Home screen.
 ///
 /// Phase 26f collapsed the legacy 4-branch state machine (active /
@@ -266,10 +243,7 @@ class _FreeWorkoutHero extends ConsumerWidget {
 /// default routine. The new onboarding direction is to walk the user
 /// through creating their own routine.
 ///
-/// Tap pushes `/routines/create`. The legacy `pickBeginnerRoutine` helper
-/// is retained as a top-level export so the existing
-/// `beginner_routine_cta_test.dart` keeps compiling — T11/T12 will retire
-/// that test alongside the home_screen rewrite.
+/// Tap pushes `/routines/create`.
 class _CreateFirstRoutineHero extends StatelessWidget {
   const _CreateFirstRoutineHero();
 

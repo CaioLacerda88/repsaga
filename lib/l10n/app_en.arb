@@ -443,22 +443,6 @@
       "count": { "type": "int", "format": "decimalPattern" }
     }
   },
-  "homeStatusWeekComplete": "Week complete \u2014 {count} of {count} done",
-  "@homeStatusWeekComplete": {
-    "description": "Home status line when week is complete",
-    "placeholders": {
-      "count": { "type": "int", "example": "4" }
-    }
-  },
-  "homeStatusProgress": " of {total} this week",
-  "@homeStatusProgress": {
-    "description": "Home status line suffix showing weekly progress",
-    "placeholders": {
-      "total": { "type": "int", "example": "4" }
-    }
-  },
-  "noPlanThisWeek": "No plan this week",
-  "@noPlanThisWeek": { "description": "Home status: no active plan" },
   "samePlanThisWeek": "Same plan this week?",
   "@samePlanThisWeek": { "description": "Confirmation banner question" },
   "myRoutines": "MY ROUTINES",

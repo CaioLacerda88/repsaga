@@ -1166,24 +1166,6 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1-day streak} other{{count}-day streak}}'**
   String homeNudgeStreakDays(int count);
 
-  /// Home status line when week is complete
-  ///
-  /// In en, this message translates to:
-  /// **'Week complete — {count} of {count} done'**
-  String homeStatusWeekComplete(int count);
-
-  /// Home status line suffix showing weekly progress
-  ///
-  /// In en, this message translates to:
-  /// **' of {total} this week'**
-  String homeStatusProgress(int total);
-
-  /// Home status: no active plan
-  ///
-  /// In en, this message translates to:
-  /// **'No plan this week'**
-  String get noPlanThisWeek;
-
   /// Confirmation banner question
   ///
   /// In en, this message translates to:

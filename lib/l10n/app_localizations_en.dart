@@ -625,19 +625,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String homeStatusWeekComplete(int count) {
-    return 'Week complete — $count of $count done';
-  }
-
-  @override
-  String homeStatusProgress(int total) {
-    return ' of $total this week';
-  }
-
-  @override
-  String get noPlanThisWeek => 'No plan this week';
-
-  @override
   String get samePlanThisWeek => 'Same plan this week?';
 
   @override
