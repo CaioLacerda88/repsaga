@@ -13,6 +13,7 @@ abstract class BucketRoutine with _$BucketRoutine {
     required int order,
     String? completedWorkoutId,
     DateTime? completedAt,
+    @Default(false) bool isSpontaneous,
   }) = _BucketRoutine;
 
   factory BucketRoutine.fromJson(Map<String, dynamic> json) =>
