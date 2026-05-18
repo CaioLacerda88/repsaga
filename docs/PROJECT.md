@@ -53,6 +53,7 @@ difficulty framework permanent reference: `docs/xp-difficulty-framework.md`.
 | 26b | Pre-launch UI/UX revamp — Saga screen Option B v4 | DONE | #234 |
 | 26c | Pre-launch UI/UX revamp — Stats deep-dive revamp | DONE | #236 |
 | 26d | Pre-launch UI/UX revamp — Titles screen + awarding pipeline fix | DONE | #238 |
+| 26e | Pre-launch UI/UX revamp — Plan editor + bucket model evolution | DONE | #240 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -413,8 +414,8 @@ Six-screen surgical revamp for launch readiness. User flagged the visual of four
 | 26a — Color system foundation | DONE (PR #232) | 4 new `AppColors` tokens (`xpTrack`, `bodyPartChest` = Pink, `bodyPartBack` = Sky, `bodyPartCardio` infrastructure-only) + `vitalityHigh/Mid/Low` aliases. `vitalityRampColorFor` helper. `bodyPartColor[chest/back]` rebound. Vitality copy l10n fixes. heroGold whitelist for Titles screen. |
 | 26b — Saga screen revamp | DONE (PR #234) | Option B v4 — type-dominant header (level numeral 56sp, 36dp rune without active-state glow, class+title meta column with ellipsis), 6dp character XP bar, full-width per-stat 4dp XP bars with "X XP · Y para o próximo rank" label, dot pulse on rank-up (24h Hive-backed window). Stat rows tappable → /saga/stats?body_part=X. VitalityRadar + XpProgressHairline deleted. |
 | 26c — Stats deep-dive | DONE (PR #236) | HP-drain vitality ramp (3 bands), trend chart selected-line emphasis with per-body-part ghost lines, ⓘ explainer sheet (definition · band ramp · rank-safety in heroGold), Volume & pico restructure (per-body-part `VolumePeakBlock` with history-aware weekly delta + monthly peak delta). Peak Loads section dropped. |
-| 26d — Titles screen + awarding fix | NOT STARTED | Three-region UI (Equipado / Conquistados / Próximos), cross-build "Especial" cards in heroGold, locked titles hidden. **Server-side INSERT into `earned_titles` at detection time** + one-shot backfill RPC. |
-| 26e — Plan editor + bucket model | NOT STARTED | Add `isSpontaneous` to `BucketRoutine`; auto-absorb workouts on save into bucket entries; compact bucket list (no day binding); new Engajamento section (6 body-part bars). |
+| 26d — Titles screen + awarding fix | DONE (PR #238) | Three-region UI (Equipado / Conquistados / Próximos), cross-build "Especial" cards in heroGold, locked titles hidden. **Server-side INSERT into `earned_titles` at detection time** + one-shot backfill RPC. |
+| 26e — Plan editor + bucket model | DONE (PR #240) | `BucketRoutine.isSpontaneous` + server-side bucket find-or-create in `save_workout` RPC; compact `WeekPlanScreen` (no day binding); Engajamento section (6 body-part bars, cardio hidden, no total counter). |
 | 26f — Home redesign | NOT STARTED | Replace 7-day-timeline → bucket chip row. Replace body-part chip rail → tappable **expanding character card** (collapsed: closest-rank-up indicator; expanded: char XP bar + 6 stat rows mirroring Saga Option B v4). |
 
 **Scope estimate:** ~17–22 dev days. By far the largest UI work since Phase 18.
@@ -461,39 +462,9 @@ Full retrospective in §4 Completed Phases. The widgets established here (`Volum
 
 Full retrospective in §4 Completed Phases. The data-integrity contract established here (detection-time `earned_titles` INSERT inside both XP RPCs + one-shot `backfill_earned_titles` RPC + `equipTitle` collapsed to a pure `is_active` toggle) plus the three-region Titles screen (`EquippedTitleCard` heroGold / `EarnedTitleRow` / `NextTitleRow` / `CrossBuildCard` / `TitlesCounterPill`) backed by the pure `TitlesViewModel.split` splitter are what 26e/26f consume on the titles surface.
 
-#### 26e acceptance criteria — Plan editor + bucket model evolution
+#### 26e — Plan editor + bucket model evolution ✅ DONE (PR #240)
 
-**Scope.** Keep Phase 12's bucket model (ordered list of `BucketRoutine`, no day binding). Add `isSpontaneous: bool` to distinguish auto-appended entries. Extend `save_workout` RPC to find-or-create the appropriate bucket entry. Redesign the plan editor as a compact ordered list (~42dp rows). Add **Engajamento** section showing weekly muscle-group volume — 6 body-part bars in canonical order (cardio hidden).
-
-**Acceptance — data model:**
-- `BucketRoutine` gains `@Default(false) bool isSpontaneous`. Freezed regen, no schema migration needed beyond JSONB tolerance.
-- `save_workout` RPC logic:
-  - If the workout's `routineId` matches an uncompleted bucket entry → set that entry's `completedWorkoutId` (state 2 / planned-done).
-  - If no match → create a new bucket entry with `routineId` = actual workout's source routine, `completedWorkoutId` set, `isSpontaneous = true`, order appended (state 4 / spontaneous).
-  - First-completion-wins: if a matching uncompleted entry exists but a duplicate spontaneous would also match, prefer filling the planned entry.
-- Week rollover (existing auto-populate on first app open of new week) copies entries where `isSpontaneous == false`, clears completion state. Spontaneous entries don't carry forward.
-- Backfill: walk existing `weekly_plans` rows, set `is_spontaneous = false` on all entries.
-
-**Acceptance — UI:**
-- Plan editor is a vertical ordered list of bucket entries. Each row: status icon (○ planned outline ring / ✓ green filled / ✓ violet filled + ★ Espontâneo tag) + routine name (textCream when done; textDim when pending) + completion day if done + ⋯ overflow menu.
-- Counter pill: `N dias treinados` — count of unique completion dates (two workouts same day = 1 day).
-- "+ Adicionar treino" CTA at the bottom of the list. Soft-cap warning when adding past `training_frequency_per_week` (existing Phase 12 inline text, retained).
-- **Engajamento section** below the bucket list (separated by hairline). 6 bars in canonical order (Peito · Costas · Pernas · Ombros · Braços · Core). Each bar: 6dp body-part dot + UPPERCASE 10sp name + stacked done-fill (100% opacity) and planned-fill (40% opacity) on the same 4dp track + tabular "X / Y" sets number on the right. Total counter REMOVED from section header (would mislead due to compound-attribution double-counting).
-- ⓘ icon on Engajamento header → bottom sheet explaining the volume counting rule (primary by max share, ties counted).
-- Set-counting math: live read from `exercises.xp_attribution` JSONB via the locked rule. Provider: `weeklyEngagementProvider` with parameter `{ includePlanned: bool }` — plan editor passes true; future Stats deep-dive Volume & pico passes false.
-
-**Files:**
-- `lib/features/weekly_plan/data/models/weekly_plan.dart`
-- `lib/features/weekly_plan/data/weekly_plan_repository.dart`
-- `lib/features/weekly_plan/ui/week_plan_screen.dart` (rewrite)
-- New: `lib/features/weekly_plan/ui/widgets/bucket_routine_row.dart`
-- New: `lib/features/weekly_plan/ui/widgets/engajamento_section.dart`
-- New: `lib/features/weekly_plan/providers/weekly_engagement_provider.dart`
-- `supabase/migrations/00062_weekly_plan_is_spontaneous_backfill.sql`
-- `supabase/migrations/00063_save_workout_bucket_update.sql` — extend save_workout RPC
-- E2E: `test/e2e/specs/weekly-plan.spec.ts` — major updates for new layout + spontaneous flow
-
-**Tests:** unit tests for the find-or-create logic in save_workout (planned hit, no match, duplicate route, multi-workout-same-day); widget tests for status-icon states; integration test for save_workout → bucket entry creation; weekly engagement math edge cases (zero history, all-completed week, abandoned body part, compound tie counting).
+Full retrospective in §4 Completed Phases. The contract established here (`BucketRoutine.isSpontaneous` + server-side bucket find-or-create inside `save_workout` + the rollover filter that drops spontaneous entries on week boundary + the `weeklyEngagementProvider({ includePlanned })` set-counting helper + the compact `WeekPlanScreen` with `BucketRoutineRow` / `EngajamentoSection` / `MuscleBarRow` / `EngagementExplainerSheet` widgets) is what 26f consumes when wiring the home-screen bucket chip row and the engagement nudge.
 
 #### 26f acceptance criteria — Home redesign
 
@@ -1003,6 +974,26 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **Reviewer cycle:** 14 task implementations × per-task reviewer pass on Tasks 1–6 + 11 (Tasks 7–10 mechanical enough to skip). Per `feedback_no_deferring_review_findings`, every finding (1 Warning + 7 Nits across the cycle) fixed in the same commit. Notable in-cycle catches: `_accentColor` doc mismatch (said heroGold, returned textDim — fixed by tightening the comment to enforce `project_design_language_brand_vs_identity`); `EarnedTitleEntry` lived in the providers layer creating a domain→provider import (hoisted to `models/`).
 - **Visual verification (step 9):** screenshots at 320/360/412dp under `docs/phase-26d-visual-verification/` matched the mockup — three regions render in the locked order, body-part-hue dots + progress bars track the canonical palette, tabular figures right-align, character-level row renders LAST in Próximos, cross-build cards correctly absent for a user not within 1 rank of any predicate.
 - **Verification:** `make ci` clean. All 8 GitHub Actions green on the final commit including E2E (36m39s, 245+ passed, 3 pre-existing flakes recovered on retry). 2850 unit/widget tests pass. Hosted Supabase migrations applied via `npx supabase db push` post-merge.
+
+### Phase 26e: Pre-launch UI/UX Revamp — Plan Editor + Bucket Model Evolution (PR #240)
+
+> Fifth of six sub-phases. **Two-part deliverable:** (1) data model + server-side ownership — `BucketRoutine.isSpontaneous` field, JSONB backfill, and `save_workout` RPC now owns first-completion-wins bucket find-or-create (eliminating the prior client-side double-write); (2) plan editor rewrite — compact ordered list replacing the legacy day-grid, plus the new Engajamento section (6 body-part bars in canonical order, cardio hidden, no total counter). Visual companion: `docs/phase-26-mockups.html` section `#plan`.
+
+- **New SQL migrations:** `00062_weekly_plan_is_spontaneous_backfill.sql` walks every existing `weekly_plans.routines` JSONB array and sets `is_spontaneous = false` on entries missing the key (conservative — preserves the user's current plan as planned, not spontaneous, so week rollover still carries them forward). `00063_save_workout_bucket_update.sql` `CREATE OR REPLACE`s `save_workout(...)` with the 26e bucket step appended after `PERFORM record_session_xp_batch`: SELECT current-week plan `FOR UPDATE`, short-circuit if the workout already landed in the bucket (idempotency), else find the FIRST uncompleted entry by `order` ASC matching `routine_id` and fill it via `jsonb_set`, else append a spontaneous entry. The bucket update rides the same transaction as the workout insert + XP roll-up.
+- **`BucketRoutine.isSpontaneous: bool` (default false)** lands on the Freezed factory; JSONB back-compat preserved via the generator's `as bool? ?? false` decode. `Exercise.xpAttribution: Map<String, num>?` added so the planned-counts side of the engagement provider can apply `primaryBodyPartsForSet` without a DB round-trip per routine exercise.
+- **Server-side ownership eliminates the client double-write.** `WeeklyPlanNotifier.markRoutineComplete` + the matching `WeeklyPlanRepository.markRoutineComplete` are deleted. The active-workout notifier now just `ref.invalidate(weeklyPlanProvider)` after a successful save; the next read fetches the server-updated row. `week_complete` analytics event fires from a `ref.listenSelf` on the notifier instead of from the removed method (same payload, same fire-once guard). `PendingMarkRoutineComplete` offline drain becomes a logged no-op so legacy queue entries from pre-26e installs drain gracefully.
+- **Rollover filter applied:** `_tryAutoPopulate` + `autoPopulateFromLastWeek` now `.where(!r.isSpontaneous)` before copying forward, then renumber `order` contiguous starting at 1. Spontaneous entries from week N do NOT carry into week N+1. Pinned by a dedicated rollover test (no longer routes through the deleted `mark_complete` test file).
+- **`routine_id` plumbed through `workout_repository.saveWorkout(..., routineId)`** as an optional named parameter. The `p_workout` map now carries `'routine_id': routineId` so the 00063 RPC's `NULLIF(p_workout ->> 'routine_id', '')::uuid` cast reads it correctly. Both online (active-workout notifier) and offline (pending-sync drain via `workoutJson['routine_id']`) paths thread it.
+- **New pure-Dart `WeeklyEngagement` domain** (`primaryBodyPartsForSet` + `WeeklyEngagement.from`): set's primary body part = the max `xp_attribution` share; tied body parts (strict equality, no tolerance) each credited; cardio dropped. `WeeklyEngagement.from(done, planned)` clamps `plannedFor = max(done, planned)` so the bar invariant `doneFor <= plannedFor` always holds. `weeklyEngagementProvider.family({ bool includePlanned })` reads completed working sets from the current week + bucket-uncompleted routines' set configs.
+- **New widgets:** `BucketRoutineRow` (compact 42dp with 3 status states — planned outline ring / green done check / violet done check with ★ Espontâneo tag), `MuscleBarRow` (6dp dot + 72dp uppercase name + 4dp stacked done/planned track via `FractionallySizedBox` per `cluster_align_widthfactor_zerofill` + tabular figures), `EngajamentoSection` (6 bars in canonical order + Done/Planned legend, header + ⓘ icon, no total counter), `EngagementExplainerSheet` (bottom sheet explaining the set-counting rule). All four widgets parameterize their l10n strings via constructor params so they unit-test without an l10n harness; the screen layer resolves the keys.
+- **`WeekPlanScreen` rewrite:** 672 → 567 lines. Replaces `PlanManagementScreen` + drops `plan_routine_row.dart` + `plan_add_routine_row.dart`. Single-scroll ListView: "THIS WEEK" label + "N days trained" counter pill (unique completion dates) → `ReorderableListView` of `BucketRoutineRow`s → "+ Add workout" CTA → soft-cap warning when bucket count exceeds `trainingFrequencyPerWeek` → hairline → `EngajamentoSection` with ⓘ → explainer sheet. Carries forward the debounce + undo SnackBar + analytics scaffolding verbatim — the architectural change is the layout, not the persistence path. Swipe-to-remove gesture replaced by the per-row overflow `⋯` button.
+- **L10n:** 9 new keys land in en + pt (`weeklyEngagementHeader`, `engagementExplainerTitle`, `engagementExplainerBody`, `engagementLegendDone`, `engagementLegendPlanned`, `daysTrainedCount` ICU-plural, `addWorkout`, `softCapWarning`, `spontaneousTag`). Folded into Task 10 so the screen rewrite ships self-contained.
+- **Integration coverage:** `test/integration/save_workout_bucket_update_test.dart` exercises the 00063 RPC end-to-end with 7 scenarios — planned hit fills entry / no match appends spontaneous / duplicate routine prefers planned over spontaneous / matching entry already completed → new spontaneous / idempotent re-save / no plan for current week → no-op / multi-workout same day → both entries land. All 7 pass; full integration suite (53 tests) green.
+- **E2E:** new `WEEKLY_PLAN_26E` selectors block carries identifier-based + role-based locators (text-based ones use EN copy since CI runs without locale config). Three new `@smoke` tests — "+ Add workout" CTA visible, 6 muscle bars render with CARDIO absent, ⓘ → explainer sheet — plus the legacy swipe-to-remove test converted to the new overflow-button affordance. All 14 weekly-plan E2E tests green (11 existing + 3 new).
+- **Reviewer cycle on Task 3** caught one Critical + two Warnings, all fixed in the same cycle: offline drain wasn't threading `routine_id` (silently breaking the bucket logic for every offline-queued workout); `jsonb_set` index was computed via `row_number()` rank-by-order rather than the physical `WITH ORDINALITY` index (would have produced wrong patches if the array was stored out of `order` sequence); `v_week_start` was derived from the client's `finished_at` (let a backdated workout silently corrupt a past or future week's plan — switched to server-authoritative `NOW()`).
+- **Operational note on subagent execution:** Task 13 (E2E) was completed by a subagent that hung at the `flutter build web` pre-flight (PID frozen 10+ hours, no stdout). The agent's code edits were correct and complete; recovery flow was TaskStop the agent + kill the hung flutter process + verify the work-in-progress diff + run the build/tests/commit manually. Documented for future orchestration — a `flutter build web` invocation that exceeds 10 minutes without output is the cancellation signal.
+- **Visual verification (step 9):** screenshots at 320 / 360 / 412dp under `docs/phase-26e-visual-verification/`. First pass surfaced a "SHOULDERS" truncation on the muscle-name column at all three viewports — the 64dp column was too tight for "SHOULDERS" at 10sp / Inter 600 / letterSpacing 0.5. Bumped to 72dp with an inline comment explaining the constraint; re-verified, all 6 body-part names now render cleanly.
+- **Verification:** `make ci` equivalent clean (`dart format` idempotent, `dart analyze --fatal-infos` clean, full Dart suite 2873/2873 unit + widget green). All 8 GitHub Actions green on the final commit including E2E (35m38s on the green run). Hosted Supabase migrations 00062 + 00063 applied via `npx supabase db push` post-merge.
 
 ---
 
