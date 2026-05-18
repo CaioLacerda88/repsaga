@@ -224,4 +224,75 @@ void main() {
       expect(rankText.style?.color, AppColors.bodyPartChest);
     });
   });
+
+  group('CharacterCard — expand/collapse', () {
+    // Animation contract (PROJECT.md §3 26f, lines 476–480):
+    //   - tap → 250ms easeOut expand
+    //   - chevron rotates 90° (0.25 turns) when expanded
+    //   - closest-rank-up indicator hidden during expanded state
+    //   - state NOT persisted (always opens collapsed)
+    //
+    // All assertions use `pump(Duration)` — NOT `pumpAndSettle()`, which would
+    // hang on RuneHalo's infinite-loop AnimationControllers (see collapsed-
+    // group inline rationale).
+
+    testWidgets('tap toggles AnimatedRotation chevron turns 0 → 0.25', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      AnimatedRotation rotation() => tester.widget<AnimatedRotation>(
+        find.ancestor(
+          of: find.byIcon(Icons.chevron_right),
+          matching: find.byType(AnimatedRotation),
+        ),
+      );
+
+      // Initial collapsed: chevron points right (0 turns).
+      expect(rotation().turns, 0);
+
+      // Tap → trigger expand. Pump past 250ms easeOut to settle the
+      // AnimatedRotation tween.
+      await tester.tap(find.byType(InkWell));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Expanded: chevron rotated 90° (0.25 turns).
+      expect(rotation().turns, 0.25);
+    });
+
+    testWidgets('closest-rank-up indicator is hidden when expanded', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      // Collapsed: closest-rank-up line visible.
+      expect(find.text('◆ Chest · 20 XP for rank 17'), findsOneWidget);
+
+      // Tap → expand → indicator hidden.
+      await tester.tap(find.byType(InkWell));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('◆ Chest · 20 XP for rank 17'), findsNothing);
+    });
+
+    testWidgets(
+      'tap-tap returns to collapsed state (closest-rank-up re-shown)',
+      (tester) async {
+        await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+        await tester.pump();
+
+        // Tap once → expanded.
+        await tester.tap(find.byType(InkWell));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('◆ Chest · 20 XP for rank 17'), findsNothing);
+
+        // Tap again → collapsed.
+        await tester.tap(find.byType(InkWell));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('◆ Chest · 20 XP for rank 17'), findsOneWidget);
+      },
+    );
+  });
 }

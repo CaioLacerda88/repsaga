@@ -16,11 +16,14 @@ import '../../domain/closest_rank_up.dart';
 /// Phase 26f Home character card — tappable expanding surface that replaces
 /// the body-part rank chip rail.
 ///
-/// **T6 (this commit): collapsed state only.** Header (40dp rune + level/
-/// class/title center + dominant rank right) + closest-rank-up indicator +
-/// chevron. T7 wires tap-to-expand animation; T8 renders the expanded body
-/// (character XP bar + 6 stat rows). The `_expanded` flag is plumbed here so
-/// later tasks can wire toggle + hidden state without restructuring.
+/// **T7 (this commit): expand/collapse interaction wired.** Tap toggles
+/// `_expanded`; chevron rotates 90° via [AnimatedRotation]; closest-rank-up
+/// indicator is gated out when expanded. Inner column wrapped in
+/// [AnimatedSize] (250ms easeOut) so future expanded-body content (T8)
+/// grows/shrinks smoothly. T6's plumbing kept intact — `_expanded` flows
+/// through `_CardBody` → `_HeaderRow` (chevron) and is the gate for the
+/// `_ClosestRankUpRow`. T8 will append the expanded body (XP bar + 6 stat
+/// rows) inside the same [AnimatedSize].
 ///
 /// **Why ConsumerStatefulWidget:** the expand state is local to this card
 /// instance and intentionally NOT persisted across launches (PROJECT.md 26f
@@ -41,8 +44,11 @@ class CharacterCard extends ConsumerStatefulWidget {
 }
 
 class _CharacterCardState extends ConsumerState<CharacterCard> {
-  /// Collapsed in T6. T7 will wire the tap toggle. T8 will gate the
-  /// expanded body (`if (_expanded) ...`).
+  /// Local-only flag (T7). Intentionally NOT persisted — PROJECT.md §3 26f
+  /// "always opens collapsed". Hoisting this into a Riverpod provider would
+  /// survive restarts and add a needless rebuild hop. T8 will gate the
+  /// expanded body (`if (_expanded) ...`) inside the [AnimatedSize] in
+  /// [_CardBody].
   // ignore: prefer_final_fields
   bool _expanded = false;
 
@@ -60,11 +66,7 @@ class _CharacterCardState extends ConsumerState<CharacterCard> {
       data: (sheet) => _CardBody(
         sheet: sheet,
         expanded: _expanded,
-        // T7 will replace this with a `setState(() => _expanded = !_expanded)`
-        // toggle. T6 ships the tap target as a no-op so the InkWell ink-splash
-        // affordance reads identically across the T6→T7 transition (no visual
-        // diff on commit-by-commit review).
-        onTap: () {},
+        onTap: () => setState(() => _expanded = !_expanded),
       ),
     );
   }
@@ -95,20 +97,30 @@ class _CardBody extends StatelessWidget {
           borderRadius: BorderRadius.circular(kRadiusLg),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _HeaderRow(sheet: sheet, expanded: expanded),
-                // T8 will insert the expanded body (XP bar + 6 stat rows)
-                // here when `expanded == true`. The closest-rank-up row is
-                // hidden once expanded — the stat rows render the same
-                // information in higher fidelity.
-                if (!expanded) ...[
-                  const SizedBox(height: 12),
-                  _ClosestRankUpRow(sheet: sheet),
+            // 250ms easeOut height tween (PROJECT.md §3 26f). Anchored
+            // top-center so the header stays planted while the body grows
+            // downward — the home layout reads as the card "opening" rather
+            // than the whole tile shifting. T8's expanded body will live
+            // inside this same Column.
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _HeaderRow(sheet: sheet, expanded: expanded),
+                  // T8 will insert the expanded body (XP bar + 6 stat rows)
+                  // here when `expanded == true`. The closest-rank-up row is
+                  // hidden once expanded — the stat rows render the same
+                  // information in higher fidelity.
+                  if (!expanded) ...[
+                    const SizedBox(height: 12),
+                    _ClosestRankUpRow(sheet: sheet),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -392,15 +404,23 @@ class _Chevron extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // T7 will animate the rotation between collapsed (›) and expanded (⌄).
-    // T6 ships the static collapsed glyph so the affordance is visible on
-    // first paint.
+    // Single icon (`chevron_right`) rotated 90° via [AnimatedRotation] when
+    // expanded — turns 0 (›) → 0.25 (⌄). Using one icon + rotation (rather
+    // than swapping `chevron_right` ↔ `expand_more`) makes the animation
+    // continuous and gives tests a stable `find.byIcon(Icons.chevron_right)`
+    // anchor across both states. 250ms easeOut matches the [AnimatedSize]
+    // body tween so the chevron's spin lands when the card finishes growing.
     return Semantics(
       label: hint,
-      child: Icon(
-        expanded ? Icons.expand_more : Icons.chevron_right,
-        color: AppColors.textDim,
-        size: 24,
+      child: AnimatedRotation(
+        turns: expanded ? 0.25 : 0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        child: const Icon(
+          Icons.chevron_right,
+          color: AppColors.textDim,
+          size: 24,
+        ),
       ),
     );
   }
