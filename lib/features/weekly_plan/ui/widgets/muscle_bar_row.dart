@@ -50,7 +50,11 @@ class MuscleBarRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 64,
+            // 72dp is the smallest width that fits "SHOULDERS" (the longest
+            // body-part name in EN) at 10sp / Inter 600 / letterSpacing 0.5
+            // without the AOM ellipsis kicking in. Verified during Phase 26e
+            // visual verification at 320 / 360 / 412dp viewports.
+            width: 72,
             child: Text(
               name.toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
