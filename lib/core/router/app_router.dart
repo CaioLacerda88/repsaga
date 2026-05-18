@@ -36,7 +36,7 @@ import '../../features/personal_records/ui/pr_celebration_screen.dart';
 import '../../features/personal_records/ui/pr_list_screen.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
 import '../../features/workouts/ui/home_screen.dart';
-import '../../features/weekly_plan/ui/plan_management_screen.dart';
+import '../../features/weekly_plan/ui/week_plan_screen.dart';
 import '../../features/rpg/providers/earned_titles_backfill_provider.dart';
 import '../../features/rpg/providers/rpg_progress_provider.dart';
 import '../../features/workouts/ui/workout_detail_screen.dart';
@@ -252,7 +252,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/plan/week',
-            builder: (context, state) => const PlanManagementScreen(),
+            builder: (context, state) => const WeekPlanScreen(),
           ),
         ],
       ),

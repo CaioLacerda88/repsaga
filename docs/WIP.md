@@ -42,13 +42,14 @@ Branch: `feature/26e-bucket-spontaneous`
 - [x] Task 2: Migration 00062 — JSONB backfill
 - [x] Task 3: Migration 00063 — `save_workout` find-or-create (+ Dart-side `routine_id` plumbing in `workout_repository.dart`)
 - [x] Task 4: Drop client-side `markRoutineComplete`
-- [ ] Task 5: `WeeklyEngagement` domain + set-counting math
-- [ ] Task 6: `weeklyEngagementProvider`
-- [ ] Task 7: `BucketRoutineRow` widget
-- [ ] Task 8: `MuscleBarRow` widget + `EngajamentoSection`
-- [ ] Task 9: Engagement explainer bottom sheet
-- [ ] Task 10: `WeekPlanScreen` rewrite
-- [ ] Task 11: L10n keys
+- [x] Task 5: `WeeklyEngagement` domain + set-counting math
+- [x] Task 6: `weeklyEngagementProvider`
+- [x] Task 7: `BucketRoutineRow` widget
+- [x] Task 8: `MuscleBarRow` widget + `EngajamentoSection`
+- [x] Task 9: Engagement explainer bottom sheet
+- [x] Task 10: `WeekPlanScreen` rewrite (+ 8 new l10n keys folded in)
+- [ ] Task 11: L10n keys — collapses to gen-l10n verification (keys already
+      shipped in Task 10 so the rewrite stays self-contained)
 - [ ] Task 12: Integration test for `save_workout` find-or-create
 - [ ] Task 13: E2E updates
 - [ ] Task 14: Visual verification (3-viewport screenshots vs mockup)

@@ -2622,4 +2622,47 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get volumePeakBlockBadge30D => '30D';
+
+  @override
+  String get weeklyEngagementHeader => 'Engajamento da semana';
+
+  @override
+  String get engagementExplainerTitle => 'Como contamos os sets';
+
+  @override
+  String get engagementExplainerBody =>
+      'Cada set conta para a parte do corpo com maior parcela na atribuição de XP. Se duas partes empatam na maior parcela, ambas contam. Isso evita contagem dupla de músculos não relacionados sem deixar de creditar exercícios compostos.';
+
+  @override
+  String get engagementLegendDone => 'Realizado';
+
+  @override
+  String get engagementLegendPlanned => 'Planejado';
+
+  @override
+  String daysTrainedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString dias treinados',
+      one: '1 dia treinado',
+      zero: '0 dias treinados',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get addWorkout => '+ Adicionar treino';
+
+  @override
+  String softCapWarning(int count) {
+    return 'Acima do seu limite semanal de $count';
+  }
+
+  @override
+  String get spontaneousTag => 'Espontâneo';
 }

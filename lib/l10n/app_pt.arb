@@ -827,5 +827,15 @@
   "volumePeakBlockDeltaNoHistory": "sem histórico",
   "volumePeakBlockDeltaEstimated": "estimado",
   "volumePeakBlockDeltaAboveTarget": "acima da meta",
-  "volumePeakBlockBadge30D": "30D"
+  "volumePeakBlockBadge30D": "30D",
+
+  "weeklyEngagementHeader": "Engajamento da semana",
+  "engagementExplainerTitle": "Como contamos os sets",
+  "engagementExplainerBody": "Cada set conta para a parte do corpo com maior parcela na atribuição de XP. Se duas partes empatam na maior parcela, ambas contam. Isso evita contagem dupla de músculos não relacionados sem deixar de creditar exercícios compostos.",
+  "engagementLegendDone": "Realizado",
+  "engagementLegendPlanned": "Planejado",
+  "daysTrainedCount": "{count, plural, =0{0 dias treinados} =1{1 dia treinado} other{{count} dias treinados}}",
+  "addWorkout": "+ Adicionar treino",
+  "softCapWarning": "Acima do seu limite semanal de {count}",
+  "spontaneousTag": "Espontâneo"
 }

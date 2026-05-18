@@ -2060,5 +2060,42 @@
   "@volumePeakBlockDeltaAboveTarget": { "description": "Over-target delta tail copy ('▲ +N above target') — locked decision rules this as amber, not green (Phase 26c)." },
 
   "volumePeakBlockBadge30D": "30D",
-  "@volumePeakBlockBadge30D": { "description": "Tiny pill badge next to the monthly peak EWMA delta (Phase 26c)." }
+  "@volumePeakBlockBadge30D": { "description": "Tiny pill badge next to the monthly peak EWMA delta (Phase 26c)." },
+
+  "weeklyEngagementHeader": "Weekly engagement",
+  "@weeklyEngagementHeader": { "description": "Title above the 6-bar engagement section in the plan editor (Phase 26e)." },
+
+  "engagementExplainerTitle": "How we count sets",
+  "@engagementExplainerTitle": { "description": "Title of the bottom sheet that explains the set-counting rule (Phase 26e)." },
+
+  "engagementExplainerBody": "Each set counts toward the body part with the largest share of its XP attribution. If two body parts tie at the largest share, both count. This avoids double-counting unrelated muscles while still crediting compound lifts.",
+  "@engagementExplainerBody": { "description": "Body of the engagement explainer sheet (Phase 26e)." },
+
+  "engagementLegendDone": "Done",
+  "@engagementLegendDone": { "description": "Legend label for the filled portion of the engagement bar (Phase 26e)." },
+
+  "engagementLegendPlanned": "Planned",
+  "@engagementLegendPlanned": { "description": "Legend label for the dimmed portion of the engagement bar (Phase 26e)." },
+
+  "daysTrainedCount": "{count, plural, =0{0 days trained} =1{1 day trained} other{{count} days trained}}",
+  "@daysTrainedCount": {
+    "description": "Counter pill at the top of the plan editor (Phase 26e).",
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+
+  "addWorkout": "+ Add workout",
+  "@addWorkout": { "description": "CTA at the bottom of the bucket list (Phase 26e)." },
+
+  "softCapWarning": "Exceeds your weekly limit of {count}",
+  "@softCapWarning": {
+    "description": "Warning when bucket count exceeds trainingFrequencyPerWeek (Phase 26e).",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "spontaneousTag": "Spontaneous",
+  "@spontaneousTag": { "description": "Tag on bucket rows for routines that didn't match a planned entry (Phase 26e)." }
 }
