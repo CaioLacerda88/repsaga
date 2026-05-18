@@ -26,22 +26,32 @@ sub-phases.
 
 Branch: `feature/26e-bucket-spontaneous`
 
-- [ ] Add `isSpontaneous: bool` (default false) to `BucketRoutine` in `lib/features/weekly_plan/data/models/weekly_plan.dart`
-- [ ] Freezed regen, generated files updated
-- [ ] `supabase/migrations/00062_weekly_plan_is_spontaneous_backfill.sql` — backfill existing JSONB entries
-- [ ] `supabase/migrations/00063_save_workout_bucket_update.sql` — extend save_workout RPC: find-or-create bucket entry for the completed workout
-- [ ] First-completion-wins logic: if matching uncompleted entry exists, fill it; otherwise create spontaneous
-- [ ] Update `lib/features/weekly_plan/data/weekly_plan_repository.dart` for the new logic + week rollover (copy isSpontaneous=false entries, clear completion)
-- [ ] Rewrite `lib/features/weekly_plan/ui/week_plan_screen.dart` as compact ordered list (drop day rows)
-- [ ] New: `lib/features/weekly_plan/ui/widgets/bucket_routine_row.dart`
-- [ ] New: `lib/features/weekly_plan/ui/widgets/engajamento_section.dart` (6 body-part bars, cardio hidden)
-- [ ] New: `lib/features/weekly_plan/providers/weekly_engagement_provider.dart` with `{ includePlanned: bool }` parameter
-- [ ] Set-counting rule per locked decision: primary by max XP share, ties counted, strict equality
-- [ ] ⓘ on Engajamento header → set-counting explainer bottom sheet
-- [ ] Update `test/e2e/specs/weekly-plan.spec.ts` for new layout + spontaneous flow
-- [ ] Unit tests: save_workout find-or-create (planned hit / no match / duplicate / multi-workout-same-day)
-- [ ] Integration test: save_workout → bucket update
-- [ ] Engajamento math tests: compound tie counting, abandoned body part
+**Plan:** `docs/phase-26e-plan.md` (14 tasks, subagent-driven execution).
+
+**Locked architectural decisions:**
+- First-completion-wins: matching uncompleted entry → fill; otherwise append spontaneous (state 4).
+- Week rollover: copy `isSpontaneous == false` entries only; spontaneous do NOT carry forward.
+- Backfill (00062): all existing JSONB entries set to `is_spontaneous = false` (conservative).
+- Set-counting math: per-set body part = max `xp_attribution` share; tied body parts each credited; strict equality.
+- `weeklyEngagementProvider` parameter `{ includePlanned: bool }`.
+- Engajamento section: 6 bars in canonical order, cardio HIDDEN, total counter REMOVED from header.
+- `routine_id` MUST ride the `save_workout` payload (verified `workout_repository.dart:76-83` currently omits it; Task 3 plumbs it).
+- Screen `plan_management_screen.dart` → `week_plan_screen.dart` (wholesale rename + rewrite); class `PlanManagementScreen` → `WeekPlanScreen`.
+
+- [ ] Task 1: Data model — `BucketRoutine.isSpontaneous`
+- [ ] Task 2: Migration 00062 — JSONB backfill
+- [ ] Task 3: Migration 00063 — `save_workout` find-or-create (+ Dart-side `routine_id` plumbing in `workout_repository.dart`)
+- [ ] Task 4: Drop client-side `markRoutineComplete`
+- [ ] Task 5: `WeeklyEngagement` domain + set-counting math
+- [ ] Task 6: `weeklyEngagementProvider`
+- [ ] Task 7: `BucketRoutineRow` widget
+- [ ] Task 8: `MuscleBarRow` widget + `EngajamentoSection`
+- [ ] Task 9: Engagement explainer bottom sheet
+- [ ] Task 10: `WeekPlanScreen` rewrite
+- [ ] Task 11: L10n keys
+- [ ] Task 12: Integration test for `save_workout` find-or-create
+- [ ] Task 13: E2E updates
+- [ ] Task 14: Visual verification (3-viewport screenshots vs mockup)
 
 ### 26f — Home redesign
 
