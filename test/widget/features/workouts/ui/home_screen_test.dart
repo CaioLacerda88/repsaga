@@ -1,30 +1,44 @@
-/// Top-level HomeScreen smoke tests for the W8 Home refresh.
+/// Phase 26f HomeScreen smoke tests.
 ///
-/// The deep contracts (status line, action hero, last session) live in
-/// dedicated test files. This file only verifies that:
-///   - the skeleton composes the right blocks per state
-///   - removed legacy elements (date header, stat grid, Start Empty Workout
-///     label, _SuggestedNextCard, THIS WEEK label, counter) are gone
-///   - the confirmation banner still renders when needsConfirmation is true
+/// Asserts the canonical block order on Home and verifies the per-state
+/// surfaces (collapsed character card, empty-bucket compact chip row,
+/// confirmation banner). Deep contracts for each block live in dedicated
+/// files (`character_card_test.dart`, `bucket_chip_row_test.dart`,
+/// `encouragement_nudge_test.dart`, `home_screen_action_hero_test.dart`,
+/// `home_screen_last_session_test.dart`, `home_screen_routines_test.dart`).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/character_class.dart';
+import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
+import 'package:repsaga/features/rpg/models/vitality_state.dart';
+import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
+import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
 import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/notifiers/active_workout_notifier.dart';
+import 'package:repsaga/features/workouts/providers/streak_provider.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/core/offline/pending_sync_provider.dart';
 import 'package:repsaga/features/workouts/ui/home_screen.dart';
+import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
+import 'package:repsaga/features/workouts/ui/widgets/bucket_chip_row.dart';
+import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
+import 'package:repsaga/features/workouts/ui/widgets/encouragement_nudge.dart';
+import 'package:repsaga/features/workouts/ui/widgets/last_session_line.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
@@ -32,6 +46,8 @@ import '../../../../helpers/test_material_app.dart';
 // ---------------------------------------------------------------------------
 // Stubs
 // ---------------------------------------------------------------------------
+
+class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 class _RoutineStub extends AsyncNotifier<List<Routine>>
     implements RoutineListNotifier {
@@ -104,7 +120,7 @@ class _ZeroPendingSyncNotifier extends PendingSyncNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// Factories
+// Fixture builders
 // ---------------------------------------------------------------------------
 
 Routine _routine({
@@ -148,6 +164,58 @@ WeeklyPlan _plan({required List<BucketRoutine> routines}) => WeeklyPlan(
   updatedAt: DateTime(2026, 4, 13),
 );
 
+BodyPartSheetEntry _untrained(BodyPart bp) => BodyPartSheetEntry(
+  bodyPart: bp,
+  rank: 1,
+  vitalityEwma: 0,
+  vitalityPeak: 0,
+  vitalityState: VitalityState.untested,
+  xpInRank: 0,
+  xpForNextRank: 100,
+  totalXp: 0,
+);
+
+BodyPartSheetEntry _trained(
+  BodyPart bp, {
+  required int rank,
+  required double xpInRank,
+  required double xpForNextRank,
+}) => BodyPartSheetEntry(
+  bodyPart: bp,
+  rank: rank,
+  vitalityEwma: 100,
+  vitalityPeak: 200,
+  vitalityState: VitalityState.active,
+  xpInRank: xpInRank,
+  xpForNextRank: xpForNextRank,
+  totalXp: 1000,
+);
+
+CharacterSheetState _trainedSheet() => CharacterSheetState(
+  characterLevel: 14,
+  lifetimeXp: 8420,
+  xpForNextLevel: 12000,
+  bodyPartProgress: [
+    _trained(BodyPart.chest, rank: 16, xpInRank: 80, xpForNextRank: 100),
+    _trained(BodyPart.back, rank: 11, xpInRank: 20, xpForNextRank: 100),
+    _trained(BodyPart.legs, rank: 9, xpInRank: 18, xpForNextRank: 100),
+    _untrained(BodyPart.shoulders),
+    _untrained(BodyPart.arms),
+    _untrained(BodyPart.core),
+  ],
+  activeTitle: 'Plate-Bearer',
+  characterClass: CharacterClass.bulwark,
+);
+
+CharacterSheetState _dayZeroSheet() => CharacterSheetState(
+  characterLevel: 1,
+  lifetimeXp: 0,
+  xpForNextLevel: 1000,
+  bodyPartProgress: [for (final bp in activeBodyParts) _untrained(bp)],
+  activeTitle: null,
+  characterClass: null,
+);
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -163,7 +231,16 @@ Widget _build({
   ),
   int workoutCount = 0,
   bool needsConfirmation = false,
+  CharacterSheetState? sheet,
+  int streak = 0,
 }) {
+  final pulseStorage = _MockPulseStorage();
+  when(
+    () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
+
+  final resolvedSheet = sheet ?? _dayZeroSheet();
+
   return ProviderScope(
     overrides: [
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
@@ -176,6 +253,9 @@ Widget _build({
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
       profileProvider.overrideWith(() => _ProfileStub(profile)),
       pendingSyncProvider.overrideWith(() => _ZeroPendingSyncNotifier()),
+      characterSheetProvider.overrideWith((_) => AsyncData(resolvedSheet)),
+      rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+      streakProvider.overrideWith((ref) => streak),
     ],
     child: TestMaterialApp(
       theme: AppTheme.dark,
@@ -189,76 +269,15 @@ Widget _build({
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('HomeScreen - W8 skeleton', () {
-    testWidgets('active plan: renders status line + action hero + chips', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 2000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  setUpAll(() {
+    registerFallbackValue(BodyPart.chest);
+  });
 
-      await tester.pumpWidget(
-        _build(
-          plan: _plan(
-            routines: [
-              _bucket(routineId: 'r-1', order: 1),
-              _bucket(routineId: 'r-2', order: 2),
-            ],
-          ),
-          routines: [
-            _routine(id: 'r-1', name: 'Push Day', userId: 'user-001'),
-            _routine(id: 'r-2', name: 'Pull Day', userId: 'user-001'),
-          ],
-          workoutCount: 3,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      // Status line is present with count text.
-      final richTexts = tester.widgetList<RichText>(find.byType(RichText));
-      final combined = richTexts.map((rt) => rt.text.toPlainText()).join('|');
-      expect(combined, contains('of 2 this week'));
-
-      // Action hero shows the suggested next routine (new UP NEXT banner
-      // uses just the routine name, not the legacy "Start X" prefix). The
-      // routine name also appears in the bucket chip row below, so we
-      // assert one-or-more rather than a strict single match.
-      expect(find.text('UP NEXT'), findsOneWidget);
-      expect(find.text('Push Day'), findsWidgets);
-    });
-
-    testWidgets('active plan + week complete: shows "Start new week" hero', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 2000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        _build(
-          plan: _plan(
-            routines: [
-              _bucket(routineId: 'r-1', order: 1, completedWorkoutId: 'wk-1'),
-            ],
-          ),
-          routines: [_routine(id: 'r-1', name: 'Push Day', userId: 'user-001')],
-          workoutCount: 1,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Start new week'), findsOneWidget);
-      expect(find.textContaining('Week complete'), findsOneWidget);
-    });
-
+  group('HomeScreen - canonical composition', () {
     testWidgets(
-      'lapsed (no plan + history): shows Plan your week + Quick workout',
+      'renders block order: CharacterCard → Nudge → ActionHero → BucketChipRow → LastSession → RoutinesList',
       (tester) async {
-        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.physicalSize = const Size(800, 3000);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
@@ -266,53 +285,121 @@ void main() {
         final yesterday = DateTime.now().subtract(const Duration(days: 1));
         await tester.pumpWidget(
           _build(
-            plan: null,
-            routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
+            plan: _plan(
+              routines: [
+                _bucket(routineId: 'r-1', order: 1),
+                _bucket(routineId: 'r-2', order: 2),
+              ],
+            ),
+            routines: [
+              _routine(id: 'r-1', name: 'Push Day', userId: 'user-001'),
+              _routine(id: 'r-2', name: 'Pull Day', userId: 'user-001'),
+            ],
             workouts: [_workout(finishedAt: yesterday.toIso8601String())],
-            workoutCount: 3,
+            workoutCount: 1,
+            sheet: _trainedSheet(),
           ),
         );
+        // pump() — NOT pumpAndSettle(). CharacterCard's RuneHalo owns
+        // infinite-loop AnimationControllers; pumpAndSettle would hang.
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('Plan your week'), findsOneWidget);
-        expect(find.text('Quick workout'), findsOneWidget);
-        expect(find.text('No plan this week'), findsOneWidget);
+        // Each canonical block is on the tree exactly once.
+        expect(find.byType(CharacterCard), findsOneWidget);
+        expect(find.byType(EncouragementNudge), findsOneWidget);
+        expect(find.byType(ActionHero), findsOneWidget);
+        expect(find.byType(BucketChipRow), findsOneWidget);
+        expect(find.byType(LastSessionLine), findsOneWidget);
+
+        // Order check via vertical position in the rendered tree.
+        Offset offsetOf<T extends Widget>() =>
+            tester.getTopLeft(find.byType(T));
+
+        final cardDy = offsetOf<CharacterCard>().dy;
+        final nudgeDy = offsetOf<EncouragementNudge>().dy;
+        final heroDy = offsetOf<ActionHero>().dy;
+        final chipsDy = offsetOf<BucketChipRow>().dy;
+        final lastDy = offsetOf<LastSessionLine>().dy;
+
+        expect(cardDy, lessThan(nudgeDy));
+        expect(nudgeDy, lessThan(heroDy));
+        expect(heroDy, lessThan(chipsDy));
+        expect(chipsDy, lessThan(lastDy));
       },
     );
 
+    testWidgets('CharacterCard renders collapsed on first build', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_build(sheet: _trainedSheet()));
+      await tester.pump();
+      await tester.pump();
+
+      // Chevron in collapsed orientation is on the tree. Expanded body's
+      // CharacterXpBar is NOT yet mounted.
+      expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    });
+
     testWidgets(
-      'brand new (no plan, no history, Full Body default): shows beginner CTA',
+      'empty bucket: BucketChipRow renders compact form (header + Editar plano), no chip wrap',
       (tester) async {
-        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.physicalSize = const Size(800, 2400);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
 
         await tester.pumpWidget(
-          _build(
-            plan: null,
-            routines: [
-              _routine(id: 'r-fb', name: 'Full Body', isDefault: true),
-            ],
-            workoutCount: 0,
-          ),
+          _build(plan: null, routines: const [], sheet: _trainedSheet()),
         );
         await tester.pump();
         await tester.pump();
 
-        expect(find.text('YOUR FIRST WORKOUT'), findsOneWidget);
-        expect(find.text('Full Body'), findsOneWidget);
-        // No lapsed-state buttons.
-        expect(find.text('Plan your week'), findsNothing);
-        expect(find.text('Quick workout'), findsNothing);
+        // BucketChipRow itself stays on the tree (Editar plano link is
+        // always visible per DECISION LOCKED 2026-05-18).
+        expect(find.byType(BucketChipRow), findsOneWidget);
+        // Compact form: no chip Wrap renders because there are no bucket
+        // entries. Asserting via the routine-name text guard.
+        expect(find.text('Push Day'), findsNothing);
+        expect(find.text('Pull Day'), findsNothing);
       },
     );
+
+    testWidgets('active plan: routines list is hidden', (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _build(
+          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+          routines: [
+            _routine(id: 'r-1', name: 'Push', userId: 'user-001'),
+            _routine(id: 'u-1', name: 'Private', userId: 'user-001'),
+          ],
+          workoutCount: 1,
+          sheet: _trainedSheet(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // The MY ROUTINES section + See all pill are gated on the no-plan
+      // branch — when an active plan exists, both must be absent.
+      expect(find.text('MY ROUTINES'), findsNothing);
+      expect(find.text('See all'), findsNothing);
+    });
 
     testWidgets(
       'no plan + user routines: shows My Routines list (truncated to 3 + See all)',
       (tester) async {
-        tester.view.physicalSize = const Size(800, 3000);
+        tester.view.physicalSize = const Size(800, 4000);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
@@ -330,110 +417,19 @@ void main() {
             ],
             workouts: [_workout(finishedAt: yesterday.toIso8601String())],
             workoutCount: 1,
+            sheet: _trainedSheet(),
           ),
         );
         await tester.pump();
         await tester.pump();
 
-        // Top 3 visible.
+        // Top 3 visible, 4th/5th hidden behind See all.
         expect(find.text('My Push'), findsOneWidget);
         expect(find.text('My Pull'), findsOneWidget);
         expect(find.text('My Legs'), findsOneWidget);
-        // 4th and 5th hidden behind See all.
         expect(find.text('My Arms'), findsNothing);
         expect(find.text('My Shoulders'), findsNothing);
-        // See all pill is visible.
         expect(find.text('See all'), findsOneWidget);
-      },
-    );
-
-    testWidgets('active plan: routines list is hidden', (tester) async {
-      tester.view.physicalSize = const Size(800, 2000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        _build(
-          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [
-            _routine(id: 'r-1', name: 'Push', userId: 'user-001'),
-            _routine(id: 'u-1', name: 'Private', userId: 'user-001'),
-          ],
-          workoutCount: 1,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('MY ROUTINES'), findsNothing);
-      expect(find.text('See all'), findsNothing);
-    });
-  });
-
-  group('HomeScreen - removed legacy elements', () {
-    testWidgets('does NOT render date header (EEE, MMM d)', (tester) async {
-      await tester.pumpWidget(_build(workoutCount: 1));
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.textContaining('MON,'), findsNothing);
-      expect(find.textContaining('TUE,'), findsNothing);
-      expect(find.textContaining('WED,'), findsNothing);
-      expect(find.textContaining('THU,'), findsNothing);
-      expect(find.textContaining('FRI,'), findsNothing);
-      expect(find.textContaining('SAT,'), findsNothing);
-      expect(find.textContaining('SUN,'), findsNothing);
-    });
-
-    testWidgets('does NOT render the old stat grid', (tester) async {
-      await tester.pumpWidget(_build(workoutCount: 1));
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Last session'), findsNothing);
-      expect(find.text("Week's volume"), findsNothing);
-    });
-
-    testWidgets('does NOT render "Start Empty Workout" label', (tester) async {
-      await tester.pumpWidget(_build(workoutCount: 1));
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Start Empty Workout'), findsNothing);
-    });
-
-    testWidgets(
-      'does NOT render the "Up next" suggested-next card (folded into hero)',
-      (tester) async {
-        await tester.pumpWidget(
-          _build(
-            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-            routines: [_routine(id: 'r-1', name: 'Push', userId: 'user-001')],
-            workoutCount: 1,
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        expect(find.text('Up next'), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'does NOT render THIS WEEK label or counter (absorbed by status line)',
-      (tester) async {
-        await tester.pumpWidget(
-          _build(
-            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-            routines: [_routine(id: 'r-1', name: 'Push', userId: 'user-001')],
-            workoutCount: 1,
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        expect(find.text('THIS WEEK'), findsNothing);
       },
     );
   });
@@ -448,6 +444,7 @@ void main() {
             routines: [_routine(id: 'r-1', name: 'Push', userId: 'user-001')],
             workoutCount: 1,
             needsConfirmation: true,
+            sheet: _trainedSheet(),
           ),
         );
         await tester.pump();

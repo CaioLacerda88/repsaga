@@ -1,10 +1,8 @@
-/// Widget tests for the state-aware HomeStatusLine.
+/// Widget tests for the (now-retired) HomeStatusLine.
 ///
-/// Covers the four states per PLAN W8:
-///   1. Active plan, incomplete -> "X of Y this week" (green X, muted total)
-///   2. Active plan, complete -> "Week complete - Y of Y done"
-///   3. No plan + history exists -> "No plan this week" (muted)
-///   4. Brand-new (no plan, no history) -> display name only, no date/greeting
+/// Phase 26f T11 stopped wiring `HomeStatusLine` into `HomeScreen`. T12
+/// will delete the widget + this test file together. T11 keeps the file
+/// compiling but skips every test so the suite stays green.
 library;
 
 import 'package:flutter/material.dart';
@@ -128,8 +126,11 @@ Widget _build({
 // Tests
 // ---------------------------------------------------------------------------
 
+// All groups skipped — see library docstring above. T12 deletes this file.
+const _retiredReason = 'Retired in T12 — HomeStatusLine deleted in 26f';
+
 void main() {
-  group('HomeStatusLine - active plan, incomplete', () {
+  group('HomeStatusLine - active plan, incomplete', skip: _retiredReason, () {
     testWidgets('shows "X of Y this week" when plan has uncompleted routines', (
       tester,
     ) async {
@@ -237,7 +238,7 @@ void main() {
     );
   });
 
-  group('HomeStatusLine - active plan, complete', () {
+  group('HomeStatusLine - active plan, complete', skip: _retiredReason, () {
     testWidgets(
       'shows "Week complete - Y of Y done" when all bucket routines are done',
       (tester) async {
@@ -286,7 +287,7 @@ void main() {
     );
   });
 
-  group('HomeStatusLine - no plan, history exists', () {
+  group('HomeStatusLine - no plan, history exists', skip: _retiredReason, () {
     testWidgets('shows "No plan this week" when history is non-empty', (
       tester,
     ) async {
@@ -351,58 +352,20 @@ void main() {
     );
   });
 
-  group('HomeStatusLine - brand new (no plan, no history)', () {
-    testWidgets('shows display name only when profile has one', (tester) async {
-      await tester.pumpWidget(
-        _build(
-          plan: null,
-          workouts: const [],
-          profile: const Profile(
-            id: 'user-001',
-            displayName: 'Alex',
-            weightUnit: 'kg',
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Alex'), findsOneWidget);
-      // No date, no "No plan this week" copy, no count.
-      expect(find.text('No plan this week'), findsNothing);
-      expect(find.textContaining('this week'), findsNothing);
-      expect(find.textContaining('Week complete'), findsNothing);
-    });
-
-    testWidgets(
-      'renders SizedBox.shrink equivalent when display name is null',
-      (tester) async {
-        await tester.pumpWidget(
-          _build(
-            plan: null,
-            workouts: const [],
-            profile: const Profile(id: 'user-001', weightUnit: 'kg'),
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        // No text is emitted at all.
-        expect(find.textContaining('No plan'), findsNothing);
-        expect(find.textContaining('week'), findsNothing);
-      },
-    );
-
-    testWidgets(
-      'renders SizedBox.shrink equivalent when display name is empty string',
-      (tester) async {
+  group(
+    'HomeStatusLine - brand new (no plan, no history)',
+    skip: _retiredReason,
+    () {
+      testWidgets('shows display name only when profile has one', (
+        tester,
+      ) async {
         await tester.pumpWidget(
           _build(
             plan: null,
             workouts: const [],
             profile: const Profile(
               id: 'user-001',
-              displayName: '',
+              displayName: 'Alex',
               weightUnit: 'kg',
             ),
           ),
@@ -410,8 +373,52 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.textContaining('No plan'), findsNothing);
-      },
-    );
-  });
+        expect(find.text('Alex'), findsOneWidget);
+        // No date, no "No plan this week" copy, no count.
+        expect(find.text('No plan this week'), findsNothing);
+        expect(find.textContaining('this week'), findsNothing);
+        expect(find.textContaining('Week complete'), findsNothing);
+      });
+
+      testWidgets(
+        'renders SizedBox.shrink equivalent when display name is null',
+        (tester) async {
+          await tester.pumpWidget(
+            _build(
+              plan: null,
+              workouts: const [],
+              profile: const Profile(id: 'user-001', weightUnit: 'kg'),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // No text is emitted at all.
+          expect(find.textContaining('No plan'), findsNothing);
+          expect(find.textContaining('week'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'renders SizedBox.shrink equivalent when display name is empty string',
+        (tester) async {
+          await tester.pumpWidget(
+            _build(
+              plan: null,
+              workouts: const [],
+              profile: const Profile(
+                id: 'user-001',
+                displayName: '',
+                weightUnit: 'kg',
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.textContaining('No plan'), findsNothing);
+        },
+      );
+    },
+  );
 }

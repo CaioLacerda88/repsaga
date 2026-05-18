@@ -4,45 +4,50 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../profile/providers/profile_providers.dart';
-import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../routines/ui/start_routine_action.dart';
 import '../../routines/ui/widgets/routine_action_sheet.dart';
 import '../../routines/ui/widgets/routine_card.dart';
-import '../../weekly_plan/providers/suggested_next_provider.dart';
-import '../../weekly_plan/providers/week_review_stats_provider.dart';
 import '../../weekly_plan/providers/weekly_plan_provider.dart';
-import '../../weekly_plan/ui/widgets/week_bucket_section.dart';
-import '../../weekly_plan/ui/widgets/week_review_section.dart';
 import '../../../shared/widgets/pending_sync_badge.dart';
 import '../../../shared/widgets/sync_failure_card.dart';
 import 'widgets/action_hero.dart';
-import 'widgets/home_status_line.dart';
+import 'widgets/bucket_chip_row.dart';
+import 'widgets/character_card.dart';
+import 'widgets/encouragement_nudge.dart';
 import 'widgets/last_session_line.dart';
 
 /// The RepSaga home surface.
 ///
-/// Per PLAN W8, the composition is state-aware and intent-first:
+/// **Phase 26f composition.** Replaces the W8 status-line + 7-day-bucket
+/// layout with a single-card character surface + chip row:
 ///
-/// 1. [HomeStatusLine]     — state-aware single-line status (replaces date
-///                           header + greeting)
-/// 2. Confirmation banner  — "Same plan this week?" (renders above hero when
-///                           `weeklyPlanNeedsConfirmationProvider` is true)
-/// 3. [WeekReviewSection]  — week-complete stats card (only when the current
-///                           week's plan is fully done)
-/// 4. [ActionHero]         — the banner CTA for the current state
-/// 5. [WeekBucketSection]  — chip row (only when an active plan exists and is
-///                           not yet complete)
-/// 6. [LastSessionLine]    — editorial "Last: ..." line (hidden when no
-///                           history)
-/// 7. `_HomeRoutinesList`  — user's routines, top 3 + "See all", only when
-///                           no active plan
+/// 1. Sync chrome             — `PendingSyncBadge` + `SyncFailureCard` for
+///                              offline / failed-write affordances.
+/// 2. [_ConfirmBanner]        — "Same plan this week?" banner (shown when
+///                              `weeklyPlanNeedsConfirmationProvider` is true).
+/// 3. [CharacterCard]         — tappable expanding character card. Collapsed
+///                              shows level/class/title meta + closest-rank-up
+///                              indicator; expanded reveals the full Saga
+///                              character sheet (XP bar + 6 body-part rows).
+/// 4. [EncouragementNudge]    — one-line rotating-priority hint (cross-build
+///                              title close, body-part title close, remaining
+///                              workouts, streak, or day-0 fallback).
+/// 5. [ActionHero]            — primary CTA. Phase 26f collapsed it into
+///                              3 branches: create-first-routine / start-next-
+///                              routine-in-bucket / free-workout (with
+///                              week-complete subline when applicable).
+/// 6. [BucketChipRow]         — week-at-a-glance chip wrap. Hides chips when
+///                              the bucket is empty but always surfaces the
+///                              "Editar plano →" link.
+/// 7. [LastSessionLine]       — editorial "Last: ..." line (hidden when no
+///                              history).
+/// 8. [_HomeRoutinesList]     — user's routines, top 3 + "See all", only when
+///                              no active plan.
 ///
-/// Note: this build method intentionally does NOT watch any providers. Each
-/// block is a ConsumerWidget that subscribes to only the state it needs, so
-/// a change in (for example) `workoutHistoryProvider` does not rebuild the
-/// status line or chip row.
+/// Each block is its own ConsumerWidget — this build method intentionally
+/// watches NO providers, so a change in (for example)
+/// `workoutHistoryProvider` does not rebuild the character card or chip row.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -52,20 +57,23 @@ class HomeScreen extends StatelessWidget {
       child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            HomeStatusLine(),
-            SizedBox(height: 16),
             PendingSyncBadge(),
             SyncFailureCard(),
             _ConfirmBanner(),
-            _WeekReviewCard(),
-            ActionHero(),
+            CharacterCard(),
             SizedBox(height: 12),
-            RepaintBoundary(child: WeekBucketSection()),
+            EncouragementNudge(),
+            SizedBox(height: 12),
+            ActionHero(),
+            SizedBox(height: 16),
+            BucketChipRow(),
+            SizedBox(height: 16),
             LastSessionLine(),
             SizedBox(height: 16),
             _HomeRoutinesList(),
+            SizedBox(height: 24),
           ],
         ),
       ),
@@ -123,43 +131,6 @@ class _ConfirmBanner extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Week review card (complete state)
-// ---------------------------------------------------------------------------
-
-/// Renders the [WeekReviewSection] stats card — and only the stats card — when
-/// the current week's bucket is fully completed. The "Start new week" CTA is
-/// owned by [ActionHero], so this card passes `onNewWeek: null` to keep the
-/// review card chrome-free (no NEW WEEK link in the header).
-class _WeekReviewCard extends ConsumerWidget {
-  const _WeekReviewCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final plan = ref.watch(weeklyPlanProvider).value;
-    if (plan == null || plan.routines.isEmpty) return const SizedBox.shrink();
-
-    final isComplete = ref.watch(isWeekCompleteProvider);
-    if (!isComplete) return const SizedBox.shrink();
-
-    final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
-    final nameMap = <String, String>{for (final r in routines) r.id: r.name};
-    final weightUnit = ref.watch(profileProvider).value?.weightUnit ?? 'kg';
-    final stats = ref.watch(weekReviewStatsProvider).value;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: WeekReviewSection(
-        plan: plan,
-        routineNames: nameMap,
-        totalVolume: stats?.totalVolume ?? 0,
-        prCount: stats?.prCount ?? 0,
-        weightUnit: weightUnit,
       ),
     );
   }
