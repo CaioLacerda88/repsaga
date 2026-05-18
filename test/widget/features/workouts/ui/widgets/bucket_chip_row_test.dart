@@ -6,7 +6,7 @@
 ///      appended in completion order.
 ///   3. Done planned chip shows day-of-week meta.
 ///   4. Pending chip text uses `AppColors.textDim`.
-///   5. Spontaneous chip carries the `★` glyph.
+///   5. Spontaneous chip carries the localized badge text.
 ///   6. Tap chip opens the existing routine action sheet (the pre-workout
 ///      preview surface in this codebase).
 ///   7. Tap "Editar plano →" navigates to `/plan/week`.
@@ -249,7 +249,7 @@ void main() {
       expect(nameText.style?.color, AppColors.textDim);
     });
 
-    testWidgets('spontaneous chip carries ★ glyph', (tester) async {
+    testWidgets('spontaneous chip carries localized badge', (tester) async {
       final wed = DateTime(2026, 5, 20, 9);
       final plan = _plan([_spontaneous('r-spont', order: 1, completedAt: wed)]);
       await tester.pumpWidget(
@@ -257,8 +257,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Star glyph rendered in the chip body.
-      expect(find.text('★'), findsOneWidget);
+      // Localized badge text rendered in the chip body (en → "Free").
+      expect(find.text('Free'), findsOneWidget);
     });
 
     testWidgets('tap chip opens the routine action sheet', (tester) async {

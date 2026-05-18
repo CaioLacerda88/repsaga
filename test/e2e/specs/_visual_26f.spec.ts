@@ -20,6 +20,7 @@
 
 import { test } from '@playwright/test';
 import { Page } from '@playwright/test';
+import path from 'path';
 import { login } from '../helpers/auth';
 import { HOME } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
@@ -30,7 +31,9 @@ const VIEWPORTS = [
   { name: '412dp', width: 412, height: 915 },
 ];
 
-const OUTPUT_DIR = 'C:/Users/caiol/Projects/repsaga/docs/26f-visual';
+// Resolve relative to this spec file so the path works across machines and CI.
+// __dirname here is `<repo>/test/e2e/specs`, so three `..` segments land at `<repo>/`.
+const OUTPUT_DIR = path.resolve(__dirname, '..', '..', '..', 'docs', '26f-visual');
 
 async function settleHome(page: Page): Promise<void> {
   // Wait for the redesigned character card to be mounted.
@@ -43,7 +46,7 @@ test.describe.configure({ mode: 'serial' });
 
 // Tagged @visual so default regression runs (and @smoke) exclude this spec;
 // re-run on demand with `npx playwright test --grep @visual`.
-test.describe('Phase 26f visual verification', { tag: '@visual' }, () => {
+test.describe('Home visual verification', { tag: '@visual' }, () => {
   for (const vp of VIEWPORTS) {
     test(`rpg foundation user — collapsed @ ${vp.name}`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });

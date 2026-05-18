@@ -220,7 +220,8 @@ class _BucketChip extends ConsumerWidget {
               : AppColors.success.withValues(alpha: 0.30))
         : AppColors.hair;
 
-    final dayLabel = _isDone
+    // completedWorkoutId and completedAt are independently nullable; guard avoids crash if server delivers one without the other
+    final dayLabel = (_isDone && entry.completedAt != null)
         ? _shortDayLabel(entry.completedAt!, locale)
         : null;
 
@@ -270,7 +271,7 @@ class _BucketChip extends ConsumerWidget {
                   if (entry.isSpontaneous && _isDone) ...[
                     const SizedBox(width: 2),
                     Text(
-                      '★',
+                      AppLocalizations.of(context).homeBucketSpontaneousBadge,
                       style: AppTextStyles.label.copyWith(
                         fontSize: 9,
                         color: AppColors.hotViolet,

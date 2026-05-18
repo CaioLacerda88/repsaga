@@ -1,4 +1,4 @@
-/// Unit tests for [closestRankUp] (Phase 26f, T2).
+/// Unit tests for [closestRankUp].
 ///
 /// The helper picks the [BodyPartSheetEntry] with the smallest absolute XP
 /// gap to its next rank, used by the Home character-card collapsed-state

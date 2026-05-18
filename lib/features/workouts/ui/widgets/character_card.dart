@@ -214,6 +214,7 @@ class _HeaderRow extends StatelessWidget {
               // Stats / Home (no per-locale drift on a 3-char mark).
               Semantics(
                 container: true,
+                explicitChildNodes: true,
                 identifier: 'home-character-card-level',
                 label: 'Lvl ${sheet.characterLevel}',
                 child: Row(
