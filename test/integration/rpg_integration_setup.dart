@@ -361,6 +361,11 @@ Future<SeedResult> seedMultiExerciseWorkout({
 
 /// Calls `save_workout` via RPC as the authenticated user, which triggers
 /// `record_set_xp` per set inside the same transaction.
+///
+/// Pass [routineId] to include `routine_id` in the `p_workout` payload — this
+/// is required for the Phase 26e bucket find-or-create logic in migration 00063
+/// to match a planned entry. When omitted (null), the workout is treated as a
+/// free/spontaneous workout by the RPC.
 Future<Map<String, dynamic>> saveWorkoutRpc({
   required supabase.SupabaseClient userClient,
   required SeedResult seed,
@@ -368,16 +373,18 @@ Future<Map<String, dynamic>> saveWorkoutRpc({
   required double weightKg,
   required int reps,
   required int numSets,
+  String? routineId,
 }) async {
   // Build the JSON payloads expected by save_workout.
   final ts = DateTime.now().toUtc();
-  final workoutJson = {
+  final workoutJson = <String, dynamic>{
     'id': seed.workoutId,
     'user_id': userId,
     'name': 'Integration Test Workout',
     'finished_at': ts.toIso8601String(),
     'duration_seconds': 3600,
     'notes': null,
+    'routine_id': routineId,
   };
 
   final exercisesJson = [
@@ -554,3 +561,67 @@ String _uuid() {
 }
 
 final _rng = math.Random(DateTime.now().millisecondsSinceEpoch);
+
+// ---------------------------------------------------------------------------
+// Phase 26e helpers — weekly_plans bucket testing
+// ---------------------------------------------------------------------------
+
+/// Seed a weekly_plans row with [routines] JSONB array for [userId].
+///
+/// [weekStart] defaults to the current week's Monday in UTC. Returns the plan
+/// UUID. Use [serviceRoleClient] as [adminClient] to bypass RLS for seeding.
+Future<String> seedWeeklyPlan({
+  required supabase.SupabaseClient adminClient,
+  required String userId,
+  required List<Map<String, dynamic>> routines,
+  DateTime? weekStart,
+}) async {
+  final monday = (weekStart ?? _currentMondayUtc())
+      .toIso8601String()
+      .split('T')
+      .first;
+  final planId = _uuid();
+  await adminClient.from('weekly_plans').insert({
+    'id': planId,
+    'user_id': userId,
+    'week_start': monday,
+    'routines': routines,
+  });
+  return planId;
+}
+
+/// Returns the current week's Monday as a UTC midnight DateTime.
+DateTime _currentMondayUtc() {
+  final now = DateTime.now().toUtc();
+  final daysFromMonday = (now.weekday - DateTime.monday) % 7;
+  final monday = now.subtract(Duration(days: daysFromMonday));
+  return DateTime.utc(monday.year, monday.month, monday.day);
+}
+
+/// SELECT the user's current-week weekly_plans row (service-role bypasses RLS).
+/// Returns null if no row exists for the current week.
+Future<Map<String, dynamic>?> readCurrentWeeklyPlan(
+  supabase.SupabaseClient adminClient,
+  String userId,
+) async {
+  final monday = _currentMondayUtc().toIso8601String().split('T').first;
+  final rows = await adminClient
+      .from('weekly_plans')
+      .select()
+      .eq('user_id', userId)
+      .eq('week_start', monday);
+  final list = rows as List;
+  if (list.isEmpty) return null;
+  return Map<String, dynamic>.from(list.first as Map);
+}
+
+/// Seed a lightweight routine-like record.
+///
+/// Because there is no `routines` table (routine_id in weekly_plans.routines
+/// JSONB is a bare UUID with no FK), this helper simply returns a fresh UUID
+/// that can be used consistently as a routine identifier in both the plan seed
+/// and the save_workout payload. It does NOT insert anything into the database.
+///
+/// If you need the UUID to be deterministic for assertion purposes, pass [id];
+/// otherwise a new UUID is generated.
+String seedRoutineId({String? id}) => id ?? _uuid();
