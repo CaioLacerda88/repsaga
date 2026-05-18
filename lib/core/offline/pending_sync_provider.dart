@@ -6,7 +6,6 @@ import '../../features/exercises/models/exercise.dart';
 import '../../features/exercises/providers/exercise_providers.dart';
 import '../../features/personal_records/models/personal_record.dart';
 import '../../features/personal_records/providers/pr_providers.dart';
-import '../../features/weekly_plan/providers/weekly_plan_provider.dart';
 import '../../features/workouts/models/exercise_set.dart';
 import '../../features/workouts/models/workout.dart';
 import '../../features/workouts/models/workout_exercise.dart';
@@ -106,10 +105,18 @@ class PendingSyncNotifier extends Notifier<int> {
         :final setsJson,
       ):
         final repo = ref.read(workoutRepositoryProvider);
+        // Extract routine_id from the persisted workout JSON so the 26e
+        // bucket find-or-create in `save_workout` (migration 00063) gets
+        // the same payload as the online path. The key is written into
+        // workoutJson by the repository at enqueue time; absent for
+        // pre-26e queued workouts (graceful fallback to null = free
+        // workout / spontaneous append).
+        final routineId = workoutJson['routine_id'] as String?;
         await repo.saveWorkout(
           workout: Workout.fromJson(workoutJson),
           exercises: exercisesJson.map(WorkoutExercise.fromJson).toList(),
           sets: setsJson.map(ExerciseSet.fromJson).toList(),
+          routineId: routineId,
         );
 
       case PendingUpsertRecords(:final recordsJson):
@@ -118,22 +125,23 @@ class PendingSyncNotifier extends Notifier<int> {
           recordsJson.map(PersonalRecord.fromJson).toList(),
         );
 
-      case PendingMarkRoutineComplete(
-        :final planId,
-        :final routineId,
-        :final workoutId,
-      ):
-        final plan = ref.read(weeklyPlanProvider).value;
-        if (plan != null && plan.id == planId) {
-          await ref
-              .read(weeklyPlanProvider.notifier)
-              .markRoutineComplete(routineId: routineId, workoutId: workoutId);
-        } else {
-          log(
-            'Skipping stale markRoutineComplete: plan $planId no longer current',
-            name: 'PendingSyncNotifier',
-          );
-        }
+      case PendingMarkRoutineComplete(:final planId, :final routineId):
+        // 26e: client-side `markRoutineComplete` is gone — the 00063
+        // `save_workout` RPC owns the bucket update server-side in the
+        // same transaction as the workout insert. Any `PendingSaveWorkout`
+        // sitting next to this action in the queue carries `routine_id`
+        // in its JSON payload, so the sibling drain re-applies the bucket
+        // update. This branch exists only to gracefully drain legacy
+        // queue entries from a pre-26e build that may still be in a
+        // user's Hive box across an upgrade — without this case the
+        // switch becomes non-exhaustive and the drain throws on the
+        // legacy row, blocking the rest of the FIFO.
+        log(
+          '26e: PendingMarkRoutineComplete is a no-op — bucket update '
+          'now in 00063 RPC; legacy queue entry skipped (plan=$planId '
+          'routine=$routineId)',
+          name: 'PendingSyncNotifier',
+        );
 
       case PendingCreateExercise(
         :final exerciseId,

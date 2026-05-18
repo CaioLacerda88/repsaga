@@ -1,12 +1,12 @@
 /// Regression pin: the routine-removed undo SnackBar in
-/// `plan_management_screen.dart` MUST be constructed via
+/// `week_plan_screen.dart` MUST be constructed via
 /// `SnackBarTapOutDismissScope.showCountdownSnackBar` with the agreed
 /// 3 s duration, the `routineRemoved` l10n key, and NO `showCloseIcon`.
 ///
 /// See
 /// `test/widget/features/workouts/ui/active_workout_add_exercise_snackbar_dismiss_test.dart`
 /// for the root-cause narrative and the architecture of the fix wave.
-/// Plan-management-specific subtlety: the screen wires a
+/// Week-plan-specific subtlety: the screen wires a
 /// `controller.closed.whenComplete` listener to clear
 /// `_undoSnackbarActive`. That listener fires for ANY close reason
 /// (timeout, tap-out, action, user dismiss). The scope's factory pins
@@ -20,12 +20,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('Plan-management routine-removed undo — factory contract', () {
+  group('Week-plan routine-removed undo — factory contract', () {
     test('should be constructed via showCountdownSnackBar with a 3 s duration, '
         'the routineRemoved l10n key, and NO showCloseIcon — pins the '
         'production wiring', () {
       final source = File(
-        'lib/features/weekly_plan/ui/plan_management_screen.dart',
+        'lib/features/weekly_plan/ui/week_plan_screen.dart',
       ).readAsStringSync();
 
       final factoryIdx = source.indexOf('showCountdownSnackBar(');
@@ -34,7 +34,7 @@ void main() {
         isNot(-1),
         reason:
             'Could not find `showCountdownSnackBar(` in '
-            'plan_management_screen.dart. The factory entrypoint must be '
+            'week_plan_screen.dart. The factory entrypoint must be '
             'the only way `_removeRoutine` shows its undo snack — so the '
             'persist:false + countdown + tap-out contract can never be '
             'bypassed by reverting to a bare `showSnackBar` call.',

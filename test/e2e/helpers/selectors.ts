@@ -697,6 +697,110 @@ export const WEEKLY_PLAN = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Weekly plan — Phase 26e compact-row layout (WeekPlanScreen)
+// ---------------------------------------------------------------------------
+//
+// Identifier-based selectors are locale-independent; text-based selectors use
+// EN copy because Playwright runs without a locale config → app defaults to EN.
+//
+// Muscle bar labels: MuscleBarRow renders `name.toUpperCase()` so the AOM
+// text is "CHEST", "BACK", etc. — not the title-case ARB values.
+//
+// Cardio is intentionally excluded from the 6-bar section (v1 rendering rule).
+export const WEEKLY_PLAN_26E = {
+  /**
+   * "+ Add workout" InkWell at the bottom of the bucket list.
+   *
+   * AOM structure (Flutter Web):
+   *   flt-semantics[role="button"][flt-semantics-identifier="weekly-plan-add-workout"]
+   *     └─ flt-semantics[role="button"][flt-tappable][tabindex="0"] "+ Add workout"
+   *
+   * The outer wrapper node carries the identifier but is NOT flt-tappable.
+   * Clicking via `[flt-semantics-identifier=...]` hits the wrapper and does
+   * not forward to Flutter's gesture system. Use `role=button[name*="Add workout"]`
+   * to target the inner flt-tappable directly (per CLAUDE.md AOM selector rule).
+   *
+   * Locale note: "+ Add workout" is the EN value of l10n key `addWorkout`.
+   * Text-based — if the key changes, update this selector.
+   */
+  addWorkoutCta: 'role=button[name*="Add workout"]',
+  /**
+   * ⓘ icon button next to the "Weekly engagement" header.
+   * Semantics(button: true, identifier: 'engagement-info-icon').
+   */
+  engagementInfoIcon: '[flt-semantics-identifier="engagement-info-icon"]',
+  /**
+   * "Weekly engagement" section — the EngajamentoSection Column is a single
+   * AOM group node whose aria-label concatenates all child Text widgets:
+   *   "Weekly engagement\nCHEST\n0 / 0\nBACK\n0 / 0\n…\nDone\nPlanned"
+   * Flutter AOM puts the label in aria-label, NOT in DOM text content, so
+   * `:has-text()` pseudo-class doesn't work — use `role=group[name*=...]`.
+   * Use .first() because multiple group nodes may exist in the tree.
+   */
+  engagementSection: 'role=group[name*="Weekly engagement"]',
+  /**
+   * Engagement explainer bottom sheet — Flutter Web AOM exposes the modal
+   * bottom sheet scrim/container as a node with `aria-label="Dialog"` and no
+   * role attribute. The sheet's Text content ("How we count sets", body) is
+   * rendered via CanvasKit and does NOT appear as AOM text or aria-label.
+   * After `showModalBottomSheet` resolves, the count of `[aria-label="Dialog"]`
+   * goes from 0 to 1. Use `.first()` — count should be exactly 1 for this sheet.
+   *
+   * AOM observation: flt-semantic-node-95 role="" label="Dialog" (no child nodes
+   * labeled with sheet content — canvas rendering, not DOM text).
+   */
+  engagementExplainerSheet: '[aria-label="Dialog"]',
+  /**
+   * Muscle-group bars — all 6 bars are merged into the EngajamentoSection's
+   * single AOM group node (no per-bar Semantics identifiers). The group's
+   * aria-label contains each bar's uppercase name. Asserting `name*="CHEST"`
+   * on the group confirms the section rendered the bar.
+   *
+   * MuscleBarRow renders `name.toUpperCase()` → "CHEST", "BACK", etc.
+   * All muscle selectors point to the same AOM group; use .first().
+   */
+  muscleBarChest: 'role=group[name*="CHEST"]',
+  muscleBarBack: 'role=group[name*="BACK"]',
+  muscleBarLegs: 'role=group[name*="LEGS"]',
+  muscleBarShoulders: 'role=group[name*="SHOULDERS"]',
+  muscleBarArms: 'role=group[name*="ARMS"]',
+  muscleBarCore: 'role=group[name*="CORE"]',
+  /**
+   * CARDIO is intentionally absent from the v1 6-bar layout.
+   * The engagement group's aria-label must NOT contain "CARDIO".
+   * Use `page.locator(muscleBarCardio).filter({hasNot:...})` pattern OR
+   * simply assert the engagement group's label does not match "CARDIO".
+   * Kept as a selector for completeness; test checks count() == 0 indirectly
+   * by asserting the section group name does not include "CARDIO".
+   */
+  muscleBarCardio: 'role=group[name*="CARDIO"]',
+  /**
+   * Bucket routine row — keyed by routineId.
+   * Semantics(identifier: 'bucket-row-{routineId}').
+   */
+  bucketRow: (routineId: string) =>
+    `[flt-semantics-identifier="bucket-row-${routineId}"]`,
+  /**
+   * Overflow menu on a bucket routine row — keyed by routineId.
+   * Semantics(identifier: 'bucket-row-overflow-{routineId}').
+   */
+  bucketRowOverflow: (routineId: string) =>
+    `[flt-semantics-identifier="bucket-row-overflow-${routineId}"]`,
+  /**
+   * Spontaneous tag chip on a done-spontaneous bucket row.
+   * l10n key: spontaneousTag = "Spontaneous" (en).
+   *
+   * The "Spontaneous" tag text is merged into the bucket-row group's
+   * aria-label (no dedicated Semantics identifier on _SpontaneousTag).
+   * Use `role=group[name*="Spontaneous"]` to find the row group.
+   *
+   * Note: The spontaneous E2E flow test (test 2.3) was deferred to v1.1;
+   * the widget tests (Task 7) pin this behavior at the unit level.
+   */
+  bucketRowSpontaneousTag: 'role=group[name*="Spontaneous"]',
+} as const;
+
+// ---------------------------------------------------------------------------
 // Onboarding — extended selectors for the 2-page flow
 // ---------------------------------------------------------------------------
 // Note: ONBOARDING already exists above. These are supplemental selectors for

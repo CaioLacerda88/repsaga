@@ -231,30 +231,19 @@ class _CapturingPendingSyncNotifier extends PendingSyncNotifier {
   List<PendingAction> getAll() => List.unmodifiable(enqueued);
 }
 
-/// Stub [WeeklyPlanNotifier] for the offline H7 finishWorkout test.
+/// Stub [WeeklyPlanNotifier] for offline finishWorkout tests.
 ///
-/// build() returns the seeded plan synchronously so
-/// `ref.read(weeklyPlanProvider).value` is non-null. [markRoutineComplete]
-/// throws when [throwOnMark] is true, exercising the catch-and-enqueue
-/// branch in the production notifier.
+/// build() returns the seeded plan synchronously so any caller that does
+/// `ref.read(weeklyPlanProvider).value` gets a concrete plan. The notifier
+/// no longer exposes `markRoutineComplete` (26e: the 00063 RPC owns the
+/// bucket update server-side), so this stub only seeds `build()`.
 class _StubWeeklyPlanNotifier extends WeeklyPlanNotifier {
-  _StubWeeklyPlanNotifier({required this.plan, this.throwOnMark = false});
+  _StubWeeklyPlanNotifier({required this.plan});
 
   final WeeklyPlan plan;
-  final bool throwOnMark;
 
   @override
   FutureOr<WeeklyPlan?> build() => plan;
-
-  @override
-  Future<void> markRoutineComplete({
-    required String routineId,
-    required String workoutId,
-  }) async {
-    if (throwOnMark) {
-      throw Exception('Network error from weekly-plan markRoutineComplete');
-    }
-  }
 }
 
 /// Creates a container for offline-path tests. Includes MockAuthRepository
@@ -2220,41 +2209,41 @@ void main() {
       expect(firstId, initial.workout.id);
     });
 
-    test('PR1 — H7: offline weekly-plan markRoutineComplete enqueue carries '
-        'dependsOn = [workout.id]', () async {
-      // Audit H7: when finishWorkout fires the weekly-plan update against
-      // a routine that is in this week's bucket, and the network call
-      // throws, the fallback enqueue used to omit `dependsOn`. The
-      // resulting `PendingMarkRoutineComplete` could drain BEFORE the
-      // sibling `PendingSaveWorkout` committed — at which point the RPC
-      // silently inserted an unknown UUID into `weekly_plans.routines`
-      // (JSONB column with no FK) and the bucket displayed a phantom
-      // completion that pointed at a workout id the server had never
-      // seen.
-      //
-      // Fix: stamp `dependsOn: [workout.id]` so the FIFO drain holds the
-      // weekly-plan update until the parent save commits. Same pattern
-      // that BUG-002 already uses for offline PR upserts.
-      const workoutId = 'workout-h7-001';
-      const routineId = 'routine-h7-bench';
+    test('offline save with a source routine carries routine_id in the '
+        'PendingSaveWorkout payload so the drain triggers the 00063 '
+        'bucket find-or-create', () async {
+      // 26e: client-side `markRoutineComplete` is gone — the bucket
+      // update happens inside the 00063 `save_workout` RPC. For offline
+      // saves this means `routine_id` MUST ride in the `workoutJson`
+      // payload that gets persisted into the offline queue; the drain
+      // in `pending_sync_provider` reads it back and forwards to
+      // `WorkoutRepository.saveWorkout(routineId: ...)`. Without this,
+      // offline workouts started from a routine would silently stop
+      // updating the weekly bucket — the user finishes a routine,
+      // syncs back online, and the bucket entry still shows uncompleted.
+      const workoutId = 'workout-offline-routine-001';
+      const routineId = 'routine-offline-bench';
 
-      // Build an active workout state pre-populated with the routineId
-      // — the factory doesn't expose routineId, so construct it directly.
+      // Build an active-workout state pre-populated with the routineId
+      // — the factory doesn't expose routineId, so construct directly.
       final exercise = Exercise.fromJson(
-        TestExerciseFactory.create(id: 'exercise-h7', equipmentType: 'barbell'),
+        TestExerciseFactory.create(
+          id: 'exercise-offline',
+          equipmentType: 'barbell',
+        ),
       );
       final we = WorkoutExercise(
-        id: 'we-h7',
+        id: 'we-offline',
         workoutId: workoutId,
-        exerciseId: 'exercise-h7',
+        exerciseId: 'exercise-offline',
         order: 0,
         exercise: exercise,
       );
       final sets = [
         ExerciseSet.fromJson(
           TestSetFactory.create(
-            id: 'set-h7',
-            workoutExerciseId: 'we-h7',
+            id: 'set-offline',
+            workoutExerciseId: 'we-offline',
             setNumber: 1,
             weight: 100.0,
             reps: 5,
@@ -2279,31 +2268,26 @@ void main() {
       when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
       when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
       when(() => mockAuth.currentUser).thenReturn(fakeUser());
-      // Save throws → PendingSaveWorkout enqueued; downstream
-      // weekly-plan branch still runs because that catch is independent.
+      // Save throws → PendingSaveWorkout enqueued with the offline payload.
       when(
         () => mockRepo.saveWorkout(
           workout: any(named: 'workout'),
           exercises: any(named: 'exercises'),
           sets: any(named: 'sets'),
+          routineId: any(named: 'routineId'),
         ),
       ).thenThrow(Exception('Network error'));
       when(() => mockRepo.getCachedWorkoutCount(any())).thenReturn(1);
 
-      // Pre-populate the weekly plan provider with a plan containing the
-      // routine, then make markRoutineComplete throw so the offline
-      // enqueue path runs.
+      // Seed a plan in the weekly_plan provider for the routineId so the
+      // post-save invalidate path doesn't crash if it touches the plan.
       final plan = WeeklyPlan(
-        id: 'plan-h7',
+        id: 'plan-offline',
         userId: 'user-test-001',
         weekStart: DateTime.utc(2026, 5, 4),
-        routines: const [BucketRoutine(routineId: routineId, order: 0)],
+        routines: const [BucketRoutine(routineId: routineId, order: 1)],
         createdAt: DateTime.utc(2026, 5, 4),
         updatedAt: DateTime.utc(2026, 5, 4),
-      );
-      final stubWeeklyNotifier = _StubWeeklyPlanNotifier(
-        plan: plan,
-        throwOnMark: true,
       );
 
       final container = ProviderContainer(
@@ -2315,7 +2299,9 @@ void main() {
             const _FakeAnalyticsRepository(),
           ),
           pendingSyncProvider.overrideWith(() => capturedNotifier),
-          weeklyPlanProvider.overrideWith(() => stubWeeklyNotifier),
+          weeklyPlanProvider.overrideWith(
+            () => _StubWeeklyPlanNotifier(plan: plan),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -2323,24 +2309,81 @@ void main() {
       await container.read(activeWorkoutProvider.future);
       await container.read(activeWorkoutProvider.notifier).finishWorkout();
 
-      // PendingSaveWorkout (parent) and PendingMarkRoutineComplete
-      // (weekly-plan child) must both be enqueued.
-      final marks = capturedNotifier.enqueued
-          .whereType<PendingMarkRoutineComplete>()
+      // 26e invariant: exactly one PendingSaveWorkout, no separate
+      // PendingMarkRoutineComplete enqueue. The routine_id must be
+      // baked into the saveWorkout payload — that is what drives the
+      // server-side bucket update on drain.
+      final saves = capturedNotifier.enqueued
+          .whereType<PendingSaveWorkout>()
           .toList();
-      expect(marks, hasLength(1));
+      expect(saves, hasLength(1));
       expect(
-        marks.single.dependsOn,
-        [workoutId],
+        saves.single.workoutJson['routine_id'],
+        routineId,
         reason:
-            'The weekly-plan completion must wait for the parent save to '
-            'commit, otherwise the RPC silently writes a phantom workout '
-            'id into weekly_plans.routines (JSONB, no FK).',
+            'routine_id must be persisted in the offline workoutJson so '
+            'the drain can replay the 00063 save_workout RPC with the '
+            'same find-or-create semantics as the online path.',
       );
-      expect(marks.single.routineId, routineId);
-      expect(marks.single.workoutId, workoutId);
-      expect(marks.single.planId, plan.id);
+
+      // No legacy PendingMarkRoutineComplete should be emitted by the
+      // active-workout notifier — the variant is preserved only to
+      // drain pre-26e queue entries gracefully, not as a new enqueue
+      // target.
+      expect(
+        capturedNotifier.enqueued.whereType<PendingMarkRoutineComplete>(),
+        isEmpty,
+        reason:
+            'Active-workout notifier no longer enqueues '
+            'PendingMarkRoutineComplete; the bucket update rides with '
+            'the parent PendingSaveWorkout via routine_id.',
+      );
     });
+
+    test(
+      'offline save with no source routine omits routine_id (free workout)',
+      () async {
+        // Free workouts (started ad-hoc, no routine attached) MUST still
+        // queue cleanly. The persisted workoutJson should carry
+        // `routine_id: null` — the SQL side uses NULLIF to treat null as
+        // "no source routine" (spontaneous-append candidate on drain).
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
+        final bundle = makeOfflineContainer(initial);
+        addTearDown(bundle.container.dispose);
+
+        when(() => bundle.mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () => bundle.mockRepo.saveWorkout(
+            workout: any(named: 'workout'),
+            exercises: any(named: 'exercises'),
+            sets: any(named: 'sets'),
+            routineId: any(named: 'routineId'),
+          ),
+        ).thenThrow(Exception('Network error'));
+        when(
+          () => bundle.mockRepo.getFinishedWorkoutCount(any()),
+        ).thenThrow(Exception('Offline'));
+        when(() => bundle.mockRepo.getCachedWorkoutCount(any())).thenReturn(0);
+
+        await bundle.container.read(activeWorkoutProvider.future);
+        await bundle.container
+            .read(activeWorkoutProvider.notifier)
+            .finishWorkout();
+
+        final saves = bundle.capturedNotifier.enqueued
+            .whereType<PendingSaveWorkout>()
+            .toList();
+        expect(saves, hasLength(1));
+        expect(
+          saves.single.workoutJson['routine_id'],
+          isNull,
+          reason:
+              'Free workouts have no source routine; the offline payload '
+              'must carry routine_id: null so the drain treats them as '
+              'spontaneous-append candidates server-side.',
+        );
+      },
+    );
   });
 
   group('ActiveWorkoutNotifier — discardWorkout', () {

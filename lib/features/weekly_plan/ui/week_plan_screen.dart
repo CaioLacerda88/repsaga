@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/device/platform_info.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../../analytics/data/analytics_repository.dart';
@@ -16,28 +18,36 @@ import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../workouts/providers/workout_history_providers.dart';
 import '../data/models/weekly_plan.dart';
+import '../providers/weekly_engagement_provider.dart';
 import '../providers/weekly_plan_provider.dart';
 import 'add_routines_sheet.dart';
-import 'widgets/plan_add_routine_row.dart';
-import 'widgets/plan_empty_state.dart';
-import 'widgets/plan_routine_row.dart';
+import 'widgets/bucket_routine_row.dart';
+import 'widgets/engagement_explainer_sheet.dart';
+import 'widgets/engajamento_section.dart';
 
-/// Plan management screen at `/plan/week`.
+/// Weekly plan editor screen at `/plan/week` (Phase 26e rewrite).
 ///
-/// Allows users to:
-/// - View and reorder routines in this week's bucket
-/// - Add/remove routines
-/// - Clear the week
-/// - Auto-fill from most-used routines
-class PlanManagementScreen extends ConsumerStatefulWidget {
-  const PlanManagementScreen({super.key});
+/// Single-scroll layout:
+///   * "Esta semana" header + "N dias treinados" counter pill (unique
+///     completion dates across the bucket).
+///   * Ordered `BucketRoutineRow` list (planned / done-planned /
+///     done-spontaneous states) inside a `ReorderableListView`.
+///   * "+ Adicionar treino" CTA (drives [_showAddSheet]).
+///   * Soft-cap warning text when the bucket size exceeds
+///     `trainingFrequencyPerWeek`.
+///   * Hairline + `EngajamentoSection` (6 muscle bars + ⓘ explainer).
+///
+/// Carries forward the debounce + undo + analytics scaffolding from the
+/// previous `PlanManagementScreen` verbatim. The architectural change is
+/// the layout, not the persistence path.
+class WeekPlanScreen extends ConsumerStatefulWidget {
+  const WeekPlanScreen({super.key});
 
   @override
-  ConsumerState<PlanManagementScreen> createState() =>
-      _PlanManagementScreenState();
+  ConsumerState<WeekPlanScreen> createState() => _WeekPlanScreenState();
 }
 
-class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
+class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   List<BucketRoutine> _bucketRoutines = [];
 
   /// Tracks whether the user has made local edits (reorder, add, remove).
@@ -55,16 +65,6 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   // edit — we debounce ONLY the analytics insert. We fire once per session
   // when the user leaves the screen (dispose), capturing whichever options
   // were most recently in effect.
-  //
-  // Tracked bits:
-  // - `_pendingAnalyticsEvent`: true once the user has made at least one
-  //   edit that would have fired `week_plan_saved`
-  // - `_lastUsedAutofill` / `_lastReplacedExisting`: latest flags from the
-  //   most recent edit, used when we finally fire at dispose
-  // - `_debouncedAnalyticsRepo` / `_debouncedAnalyticsUserId`: captured on
-  //   the FIRST edit. `ref` cannot be used in dispose() — Riverpod treats
-  //   the element as already torn down at that point — so we must hold the
-  //   repo and user id directly.
   bool _pendingAnalyticsEvent = false;
   bool _lastUsedAutofill = false;
   bool _lastReplacedExisting = false;
@@ -77,25 +77,14 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   Timer? _saveDebounce;
 
   /// Whether the undo snackbar from a recent `_removeRoutine` is still
-  /// on-screen. While true, the Fix-1A "Saved" confirmation snackbar is
+  /// on-screen. While true, the "Saved" confirmation snackbar is
   /// suppressed so it can't hide-and-replace the undo affordance.
-  /// Tracked here (rather than poked at the `ScaffoldMessenger` queue)
-  /// because the messenger does not expose a public "is anything
-  /// showing" predicate.
   bool _undoSnackbarActive = false;
 
   /// Whether a "Saved" confirmation snackbar is currently in its 1-second
-  /// display window. Two slow consecutive edits each fire `upsertPlan` and
-  /// chain `_maybeShowSavedSnackbar`; without this guard the second call's
-  /// `showSnackBar` REPLACES the still-visible first one, producing a
-  /// visible "Saved... Saved..." stutter as the first snack is dismissed
-  /// mid-display and a fresh 1-second snack appears in its place.
-  ///
-  /// Set true synchronously before `showSnackBar`; cleared via
-  /// `controller.closed.whenComplete` once the 1-second window elapses
-  /// (or another snack pre-empts it). While true, additional `Saved`
-  /// requests are suppressed — the existing snack already gives the user
-  /// the same signal.
+  /// display window. Set true synchronously before `showSnackBar`; cleared
+  /// via `controller.closed.whenComplete`. See
+  /// `cluster_persist_eats_duration` + `cluster_async_caller_broke_snackbar`.
   bool _savedSnackbarActive = false;
 
   /// Captured notifier for debounced save. `ref` cannot be used in dispose(),
@@ -104,17 +93,13 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
 
   @override
   void dispose() {
-    // Flush any pending debounced save before tearing down. This ensures
-    // the user's last reorder is persisted even if they leave the screen
-    // within the 300ms debounce window.
+    // Flush any pending debounced save before tearing down.
     if (_saveDebounce?.isActive ?? false) {
       _saveDebounce!.cancel();
       _flushDebouncedSave();
     }
     // Fire a single analytics event for the entire edit session, capturing
-    // the most-recent flags (usedAutofill / replacedExisting). This is the
-    // funnel-friendly "user saved the plan" signal — intermediate reorders
-    // and undos do not fire their own events.
+    // the most-recent flags (usedAutofill / replacedExisting).
     if (_pendingAnalyticsEvent) {
       _flushAnalyticsEvent();
     }
@@ -150,12 +135,31 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
     ref.watch(weeklyPlanProvider);
     final routinesAsync = ref.watch(routineListProvider);
     final profile = ref.watch(profileProvider);
+    final engagementAsync = ref.watch(
+      weeklyEngagementProvider(
+        const WeeklyEngagementArgs(includePlanned: true),
+      ),
+    );
 
     final allRoutines = routinesAsync.value ?? [];
     final routineMap = <String, Routine>{for (final r in allRoutines) r.id: r};
     final trainingFrequency = profile.value?.trainingFrequencyPerWeek ?? 3;
+    final overSoftCap = _bucketRoutines.length > trainingFrequency;
 
-    final atSoftCap = _bucketRoutines.length >= trainingFrequency;
+    // Counter pill counts UNIQUE completion days across the bucket. Two
+    // bucket entries completed on the same day still count as 1 day
+    // trained — matches the "days trained" verbiage and the mockup.
+    final uniqueCompletionDays = _bucketRoutines
+        .where((r) => r.completedAt != null)
+        .map(
+          (r) => DateTime(
+            r.completedAt!.year,
+            r.completedAt!.month,
+            r.completedAt!.day,
+          ),
+        )
+        .toSet()
+        .length;
 
     final l10n = AppLocalizations.of(context);
     return Scaffold(
@@ -198,69 +202,136 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
       ),
       // SnackBarTapOutDismissScope hosts the screen-level Listener that
       // dismisses the routine-removed undo snack when the user taps
-      // outside it. The bounding-box hit-test (see scope class doc)
-      // means taps on routine rows or the add-routine row still
-      // function normally — only "empty body" taps dismiss the snack.
+      // outside it. See `cluster_async_caller_broke_snackbar` +
+      // `cluster_persist_eats_duration`.
       body: SnackBarTapOutDismissScope(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
           children: [
-            Expanded(
-              child: _bucketRoutines.isEmpty
-                  ? PlanEmptyState(
-                      onAddRoutines: () => _showAddSheet(allRoutines),
-                      onAutoFill: () =>
-                          _autoFill(allRoutines, trainingFrequency),
-                    )
-                  : ReorderableListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      itemCount: _bucketRoutines.length + 1,
-                      onReorder: _onReorder,
-                      buildDefaultDragHandles: false,
-                      itemBuilder: (context, index) {
-                        if (index == _bucketRoutines.length) {
-                          // Add routine row.
-                          return PlanAddRoutineRow(
-                            key: const ValueKey('add-routine'),
-                            atSoftCap: atSoftCap,
-                            bucketCount: _bucketRoutines.length,
-                            trainingFrequency: trainingFrequency,
-                            onTap: () => _showAddSheet(allRoutines),
-                          );
-                        }
-
-                        final bucket = _bucketRoutines[index];
-                        final routine = routineMap[bucket.routineId];
-                        final isDone = bucket.completedWorkoutId != null;
-                        final name = routine?.name ?? l10n.unknownRoutine;
-                        final exerciseCount = routine?.exercises.length ?? 0;
-
-                        // `context` here is the itemBuilder's context,
-                        // which Flutter resolves to an element INSIDE the
-                        // `ReorderableListView` — and therefore inside our
-                        // `SnackBarTapOutDismissScope`. We thread it
-                        // through `_removeRoutine` so the scope's
-                        // InheritedWidget is reachable. The State's own
-                        // `this.context` would NOT work — it resolves to
-                        // the mount point of `PlanManagementScreen`,
-                        // ABOVE the scope.
-                        final rowContext = context;
-                        return PlanRoutineRow(
-                          key: ValueKey(bucket.routineId),
-                          index: index,
-                          routineId: bucket.routineId,
-                          sequenceNumber: bucket.order,
-                          name: name,
-                          exerciseCount: exerciseCount,
-                          isDone: isDone,
-                          onDismissed: isDone
-                              ? null
-                              : () => _removeRoutine(rowContext, index),
-                        );
-                      },
+            // "ESTA SEMANA" header + N-days-trained pill row.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    l10n.thisWeek,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.textDim,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const Spacer(),
+                  _CounterPill(
+                    label: l10n.daysTrainedCount(uniqueCompletionDays),
+                  ),
+                ],
+              ),
+            ),
+            // Bucket list — ReorderableListView in shrinkWrap mode so it
+            // lives inside the outer ListView with the Engajamento section
+            // beneath it.
+            ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemCount: _bucketRoutines.length,
+              onReorder: _onReorder,
+              buildDefaultDragHandles: false,
+              itemBuilder: (context, index) {
+                final bucket = _bucketRoutines[index];
+                final routine = routineMap[bucket.routineId];
+                final rowContext = context;
+                return ReorderableDelayedDragStartListener(
+                  key: ValueKey(bucket.routineId),
+                  index: index,
+                  child: BucketRoutineRow(
+                    routineId: bucket.routineId,
+                    name: routine?.name ?? l10n.unknownRoutine,
+                    isDone: bucket.completedWorkoutId != null,
+                    isSpontaneous: bucket.isSpontaneous,
+                    completionDayLabel: bucket.completedAt != null
+                        ? _shortDayLabel(bucket.completedAt!, l10n)
+                        : null,
+                    spontaneousLabel: l10n.spontaneousTag,
+                    onOverflowTap: bucket.completedWorkoutId != null
+                        ? null
+                        : () => _removeRoutine(rowContext, index),
+                  ),
+                );
+              },
+            ),
+            // "+ Adicionar treino" CTA.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Semantics(
+                  container: true,
+                  explicitChildNodes: true,
+                  button: true,
+                  identifier: 'weekly-plan-add-workout',
+                  child: InkWell(
+                    key: const ValueKey('weekly-plan-add-workout'),
+                    onTap: () => _showAddSheet(allRoutines),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
+                      child: Text(
+                        l10n.addWorkout,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.hotViolet,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Soft-cap warning — only shown when the bucket count strictly
+            // exceeds the user's weekly target. At-cap is the normal
+            // steady state and does not need a warning.
+            if (overSoftCap)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Semantics(
+                  container: true,
+                  identifier: 'weekly-plan-soft-cap-warning',
+                  child: Text(
+                    l10n.softCapWarning(trainingFrequency),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppColors.warning),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            // Engajamento section (hairline + 6 bars + ⓘ).
+            engagementAsync.when(
+              data: (engagement) => EngajamentoSection(
+                engagement: engagement,
+                headerLabel: l10n.weeklyEngagementHeader,
+                infoIconSemanticsLabel: l10n.engagementExplainerTitle,
+                legendDoneLabel: l10n.engagementLegendDone,
+                legendPlannedLabel: l10n.engagementLegendPlanned,
+                onInfoTap: () => EngagementExplainerSheet.show(
+                  context,
+                  title: l10n.engagementExplainerTitle,
+                  body: l10n.engagementExplainerBody,
+                ),
+              ),
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (_, _) => const SizedBox.shrink(),
             ),
           ],
         ),
@@ -269,7 +340,6 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   }
 
   void _onReorder(int oldIndex, int newIndex) {
-    // Don't reorder beyond the actual bucket items (skip the add row).
     if (oldIndex >= _bucketRoutines.length ||
         newIndex > _bucketRoutines.length) {
       return;
@@ -302,25 +372,13 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
 
     // Undo snackbar. `rowContext` is from the ReorderableListView's
     // itemBuilder, which sits INSIDE our `SnackBarTapOutDismissScope`
-    // — required for `SnackBarTapOutDismissScope.of(...)` to resolve
-    // the InheritedWidget. The State's own `context` is above the
-    // scope and would throw an assert here.
+    // — required for `SnackBarTapOutDismissScope.of(...)` to resolve.
     if (rowContext.mounted) {
       final l10n = AppLocalizations.of(rowContext);
       _undoSnackbarActive = true;
-      // Duration tuned 2026-05-13 from 5 s to 3 s — pairing with the
-      // countdown bar makes the remaining time legible, so the previous
-      // wider reaction window is unnecessary visual debt. Tap-out
-      // dismiss (provided by `SnackBarTapOutDismissScope`) also gives
-      // the user an instant exit without using Undo.
-      //
-      // The scope's `showCountdownSnackBar` factory pins `persist:
-      // false` (Flutter defaults to `true` when an `action:` is set —
-      // the root-cause bug that broke auto-dismiss before this fix
-      // wave) and threads the duration through to the countdown
-      // widget. `_undoSnackbarActive` is still cleared by the
-      // `closed` listener below for ANY close reason (timeout,
-      // tap-out, action, user dismiss).
+      // showCountdownSnackBar pins `persist: false` (avoids the
+      // `cluster_persist_eats_duration` trap) and threads the duration
+      // through to the countdown widget.
       final controller = SnackBarTapOutDismissScope.of(rowContext)
           .showCountdownSnackBar(
             context: rowContext,
@@ -330,8 +388,6 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
               label: l10n.undo.toUpperCase(),
               onPressed: () {
                 setState(() {
-                  // Clamp to current list length in case reorders or other
-                  // removals happened between remove and undo.
                   final safeIndex = index.clamp(0, _bucketRoutines.length);
                   _bucketRoutines.insert(safeIndex, removed);
                   _renumber();
@@ -340,10 +396,6 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
               },
             ),
           );
-      // Clear the flag when the snackbar closes (timeout, user dismiss,
-      // or another snack replaces it). Without this, a subsequent edit
-      // long after the undo expired would silently suppress its Saved
-      // confirmation.
       controller.closed.whenComplete(() {
         if (mounted) _undoSnackbarActive = false;
       });
@@ -386,29 +438,16 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         });
         _savePlan(usedAutofill: false, replacedExisting: false);
       case AddRoutinesSheetResultCreateNew(:final previouslySelectedIds):
-        // Snapshot the current routine ids BEFORE pushing so we can
-        // identify the freshly-created one on return. Using a diff on ids
-        // is robust against the user creating multiple routines in one
-        // session and against an unrelated routine sync flushing while
-        // the create screen is open.
+        // Snapshot ids BEFORE pushing so we can identify the
+        // freshly-created routine on return.
         final beforeIds = allRoutines.map((r) => r.id).toSet();
         await context.push<void>('/routines/create');
         if (!mounted) return;
-        // Re-read the routine list after creation. The provider may have
-        // refreshed; either way we want the freshly-created id (if any)
-        // pre-selected so the user only has to tap "ADD".
         final refreshed = ref.read(routineListProvider).value ?? allRoutines;
         final newIds = refreshed
             .map((r) => r.id)
             .where((id) => !beforeIds.contains(id))
             .toSet();
-        // Merge the user's prior selection (carried through the sentinel)
-        // with the freshly-created id(s). If the user had nothing checked
-        // (empty-state path or just opened the sheet), `previouslySelectedIds`
-        // is empty and the merge collapses to just `newIds`. If the user
-        // backed out of creation without saving, `newIds` is empty and the
-        // merge preserves the prior selection — the sheet re-opens with the
-        // same checks the user had before tapping "Create new routine".
         await _showAddSheet(
           refreshed,
           preSelectedRoutineIds: {...previouslySelectedIds, ...newIds},
@@ -417,22 +456,15 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   }
 
   /// Auto-fill the bucket with the user's most-started routines.
-  ///
-  /// Ranks routines by how often their name appears in workout history.
-  /// Fills up to [trainingFrequency] slots. If the bucket already has
-  /// routines, shows a confirmation dialog before replacing.
   Future<void> _autoFill(
     List<Routine> allRoutines,
     int trainingFrequency,
   ) async {
     if (allRoutines.isEmpty) return;
 
-    // Don't auto-fill if workout history hasn't loaded yet — frequency
-    // ranking would silently fall back to alphabetical order.
     final historyState = ref.read(workoutHistoryProvider);
     if (historyState.isLoading && !historyState.hasValue) return;
 
-    // If bucket already has routines, confirm replacement.
     if (_bucketRoutines.isNotEmpty) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -457,14 +489,12 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
       if (confirmed != true || !mounted) return;
     }
 
-    // Build frequency map from workout history (name -> count).
     final history = ref.read(workoutHistoryProvider).value ?? [];
     final nameFrequency = <String, int>{};
     for (final workout in history) {
       nameFrequency[workout.name] = (nameFrequency[workout.name] ?? 0) + 1;
     }
 
-    // Sort routines by frequency descending, then by name for stability.
     final ranked = [...allRoutines]
       ..sort((a, b) {
         final freqA = nameFrequency[a.name] ?? 0;
@@ -473,14 +503,11 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         return a.name.compareTo(b.name);
       });
 
-    // Take the top N routines up to training frequency.
     final count = trainingFrequency < ranked.length
         ? trainingFrequency
         : ranked.length;
     final selected = ranked.take(count).toList();
 
-    // Capture BEFORE the mutation so we can record whether autofill
-    // replaced an existing plan.
     final wasNotEmpty = _bucketRoutines.isNotEmpty;
     setState(() {
       _dirty = true;
@@ -528,36 +555,20 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   /// Persist the current bucket state to Supabase and record that we owe an
   /// analytics event when the user finally leaves the screen.
   ///
-  /// We deliberately do NOT fire `week_plan_saved` here: a single edit
-  /// session (reorder + remove + undo + add routine) calls this method four
-  /// or more times in a few seconds. Firing per-call floods the funnel with
-  /// duplicate events. Instead we mark that an event is pending and store
-  /// the most-recent flags; the actual insert happens once, at dispose,
-  /// via [_flushAnalyticsEvent]. The persistence call stays per-edit so
-  /// UX stays live.
-  ///
-  /// We ALSO capture a reference to the analytics repository and the user id
-  /// on the first edit — `ref` cannot be used inside `dispose()` (the
-  /// ConsumerStatefulElement is already torn down by then), so we must hold
-  /// the repo object directly.
+  /// Per the analytics-debounce design carried over from PlanManagementScreen:
+  /// the persistence call (upsertPlan) runs on every edit (debounced 300 ms),
+  /// but the analytics event fires at most once per session at dispose.
   void _savePlan({required bool usedAutofill, required bool replacedExisting}) {
     _saveDebounce?.cancel();
-    // Capture the notifier while ref is still alive. The debounce timer
-    // (or dispose) may fire after the widget is unmounted, so we must not
-    // call ref.read() at that point.
     _debouncedPlanNotifier = ref.read(weeklyPlanProvider.notifier);
     _saveDebounce = Timer(const Duration(milliseconds: 300), () {
       _flushDebouncedSave();
     });
     _pendingAnalyticsEvent = true;
-    // usedAutofill and replacedExisting are "sticky" within a session: if
-    // the user first auto-filled then reordered one card, the event that
-    // ships at dispose should still say used_autofill=true. So we OR-in
-    // any truthy value instead of overwriting.
+    // Sticky-OR: if any edit in the session used autofill or replaced an
+    // existing plan, the dispose-time event records that.
     _lastUsedAutofill = _lastUsedAutofill || usedAutofill;
     _lastReplacedExisting = _lastReplacedExisting || replacedExisting;
-    // Capture repo + user id + training frequency while ref is still alive.
-    // Refreshed on every edit so the latest profile value is used at flush.
     _debouncedAnalyticsRepo = ref.read(analyticsRepositoryProvider);
     _debouncedAnalyticsUserId = ref
         .read(authRepositoryProvider)
@@ -568,60 +579,26 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
   }
 
   /// Immediately flush the pending debounced upsert call.
-  ///
-  /// Called from [dispose] and when the debounce timer fires. Uses the
-  /// captured [_debouncedPlanNotifier] instead of `ref.read()` because
-  /// `ref` cannot be used after the widget is unmounted.
-  ///
-  /// Fix 1A — on successful flush we show a 1-second "Saved" SnackBar to
-  /// give the user visible feedback that their edit landed. Two suppress
-  /// conditions:
-  ///
-  ///   1. The widget is no longer mounted (e.g. dispose() flush). Showing
-  ///      a snackbar after unmount would crash on `ScaffoldMessenger.of`.
-  ///   2. An undo snackbar is already showing (after `_removeRoutine`).
-  ///      Replacing it would destroy the 5-second undo affordance — the
-  ///      remove path is itself evidence the edit registered, so the
-  ///      Saved confirmation is redundant there.
   void _flushDebouncedSave() {
     final notifier = _debouncedPlanNotifier;
     if (notifier == null) return;
     final future = notifier.upsertPlan(_bucketRoutines);
-    // The persistence call may resolve synchronously (test stubs) or
-    // asynchronously (production). Either way, we only show the snackbar
-    // after the future settles successfully — we never lie about a save
-    // that hasn't actually committed yet.
     future
         .then((_) {
           _maybeShowSavedSnackbar();
         })
         .catchError((_) {
           // Swallow: the offline banner already covers persistence
-          // failures, and the analytics layer logs them. Showing a "Saved"
-          // snack on a failed save would be a lie.
+          // failures, and the analytics layer logs them.
         });
   }
 
-  /// Shows the "Saved" confirmation snackbar IF the widget is still
-  /// mounted AND no other snackbar is currently visible AND no other
-  /// Saved snack is already in its 1-second display window. Three
-  /// suppression rules:
-  ///
-  ///   * `!mounted` — showing after dispose would crash on
-  ///     `ScaffoldMessenger.of`.
-  ///   * `_undoSnackbarActive` — protects the 5-second undo affordance
-  ///     shipped from `_removeRoutine`. Replacing it would destroy the
-  ///     user's recovery affordance for an action they may have
-  ///     triggered by accident.
-  ///   * `_savedSnackbarActive` — coalesces consecutive Saved snacks.
-  ///     Two slow-but-separate edits (each ≥300ms apart) each fire
-  ///     `upsertPlan` and chain back here; the default
-  ///     `ScaffoldMessenger.showSnackBar` REPLACES the current snack, so
-  ///     without this guard the first Saved is dismissed mid-display
-  ///     and a fresh 1-second Saved appears — visible "Saved... Saved..."
-  ///     stutter. With the guard the second call no-ops, the user
-  ///     continues seeing the still-active Saved snack, and the contract
-  ///     ("the last edit was persisted") still holds.
+  /// Shows the "Saved" confirmation snackbar IF still mounted AND no undo
+  /// snackbar is active AND no Saved snack is already in its window. See
+  /// `cluster_persist_eats_duration` for the persist:false trap and
+  /// `cluster_async_caller_broke_snackbar` for the await-before-read rule
+  /// (we await `upsertPlan` via `.then` before showing the snack — never
+  /// before persistence has actually committed).
   void _maybeShowSavedSnackbar() {
     if (!mounted) return;
     if (_undoSnackbarActive) return;
@@ -636,20 +613,12 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    // Clear the flag when the snack finishes (timeout, dismiss, or
-    // replacement). Without this, a subsequent edit long after the snack
-    // expired would silently suppress its own Saved confirmation.
     controller.closed.whenComplete(() {
       if (mounted) _savedSnackbarActive = false;
     });
   }
 
   /// Fire the debounced `week_plan_saved` analytics event exactly once.
-  /// Called from [dispose] when the user leaves the plan screen.
-  ///
-  /// Must not touch `ref` — the widget element is disposed before this
-  /// runs. All data needed to build the event has been captured in the
-  /// state fields during earlier edits.
   void _flushAnalyticsEvent() {
     final userId = _debouncedAnalyticsUserId;
     final repo = _debouncedAnalyticsRepo;
@@ -666,6 +635,52 @@ class _PlanManagementScreenState extends ConsumerState<PlanManagementScreen> {
         ),
         platform: currentPlatform(),
         appVersion: currentAppVersion(),
+      ),
+    );
+  }
+
+  /// 3-letter localized weekday label ("Mon"/"Seg", "Tue"/"Ter", …).
+  ///
+  /// Uses [DateFormat.E] (intl) seeded against the active [AppLocalizations]
+  /// locale — same pattern as `resume_workout_dialog.dart`. Title-cased + 3
+  /// chars in both en + pt-BR; we strip a trailing dot if intl emits one
+  /// (the pt locale formats Mon as "seg." in some platforms).
+  String _shortDayLabel(DateTime date, AppLocalizations l10n) {
+    final locale = l10n.localeName;
+    final raw = DateFormat.E(locale).format(date);
+    final trimmed = raw.endsWith('.') ? raw.substring(0, raw.length - 1) : raw;
+    if (trimmed.isEmpty) return trimmed;
+    return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
+  }
+}
+
+/// Right-aligned counter pill at the top of the plan editor. Shows the
+/// "N dias treinados" copy resolved by the screen layer (so this widget
+/// stays presentation-pure).
+class _CounterPill extends StatelessWidget {
+  const _CounterPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      identifier: 'weekly-plan-counter',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: AppColors.textCream,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

@@ -126,6 +126,40 @@ void main() {
     });
   });
 
+  group('BucketRoutine — isSpontaneous field', () {
+    test('should default to false when absent from JSONB (back-compat)', () {
+      final json = _bucketRoutineJson();
+      // Defensive: legacy JSONB rows have no `is_spontaneous` key.
+      json.remove('is_spontaneous');
+      final routine = BucketRoutine.fromJson(json);
+      expect(routine.isSpontaneous, isFalse);
+    });
+
+    test('should roundtrip true through toJson/fromJson', () {
+      const routine = BucketRoutine(
+        routineId: 'routine-001',
+        order: 1,
+        isSpontaneous: true,
+      );
+      final json = routine.toJson();
+      expect(json['is_spontaneous'], isTrue);
+      final restored = BucketRoutine.fromJson(json);
+      expect(restored.isSpontaneous, isTrue);
+    });
+
+    test('should roundtrip false explicitly', () {
+      const routine = BucketRoutine(
+        routineId: 'routine-001',
+        order: 1,
+        isSpontaneous: false,
+      );
+      final json = routine.toJson();
+      expect(json['is_spontaneous'], isFalse);
+      final restored = BucketRoutine.fromJson(json);
+      expect(restored.isSpontaneous, isFalse);
+    });
+  });
+
   group('WeeklyPlan model', () {
     test('fromJson parses all required fields', () {
       final json = _weeklyPlanJson(id: 'plan-42', userId: 'user-007');

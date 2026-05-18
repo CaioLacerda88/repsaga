@@ -57,6 +57,30 @@ DateTime currentWeekMonday([DateTime? now]) {
 class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
   @override
   FutureOr<WeeklyPlan?> build() async {
+    // Detect plan-fully-completed transitions and fire week_complete once.
+    // Previously this lived inside `markRoutineComplete`; with the 00063
+    // `save_workout` RPC owning the server-side bucket update (26e), the
+    // notifier no longer mutates the bucket directly — it observes the
+    // refetched state after callers `ref.invalidate(weeklyPlanProvider)`.
+    // The `!wasAllComplete && isNowAllComplete` guard makes this fire
+    // exactly once per transition (idempotent re-fetches that produce the
+    // same all-complete state see `wasAllComplete == true` and skip).
+    listenSelf((previous, next) {
+      final prevPlan = previous?.value;
+      final nextPlan = next.value;
+      if (nextPlan == null) return;
+      final wasAllComplete =
+          prevPlan != null &&
+          prevPlan.routines.isNotEmpty &&
+          prevPlan.routines.every((r) => r.completedWorkoutId != null);
+      final isNowAllComplete =
+          nextPlan.routines.isNotEmpty &&
+          nextPlan.routines.every((r) => r.completedWorkoutId != null);
+      if (!wasAllComplete && isNowAllComplete) {
+        _fireWeekCompleteEvent(nextPlan);
+      }
+    });
+
     final userId = ref.read(authRepositoryProvider).currentUser?.id;
     if (userId == null) return null;
     final repo = ref.watch(weeklyPlanRepositoryProvider);
@@ -77,20 +101,35 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
   ///
   /// Called via microtask after build() to avoid modifying state during build.
   /// Strips all completion data so the new week starts fresh (BUG-R1).
+  /// Filters out spontaneous entries (26e) so only planned routines carry
+  /// forward, then renumbers `order` contiguously starting at 1.
   Future<void> _tryAutoPopulate(String userId, DateTime monday) async {
     final repo = ref.read(weeklyPlanRepositoryProvider);
     final previous = await repo.getPreviousWeekPlan(userId, monday);
     if (previous == null || previous.routines.isEmpty) return;
 
-    // Reset completions, keep order and routine IDs.
+    // Drop spontaneous entries: only planned routines roll forward.
+    // Reset completion fields (workoutId / completedAt) by reconstructing
+    // each BucketRoutine without them, then renumber so the new week's
+    // order is 1, 2, 3, ... (no gaps left by the filtered-out spontaneous
+    // entries).
     final resetRoutines = previous.routines
+        .where((r) => !r.isSpontaneous)
         .map((r) => BucketRoutine(routineId: r.routineId, order: r.order))
         .toList();
+    final renumbered = resetRoutines.indexed
+        .map((entry) => entry.$2.copyWith(order: entry.$1 + 1))
+        .toList();
+
+    // Nothing to roll forward — either every entry was spontaneous, or the
+    // previous-week list was empty after the filter. Leave the new week
+    // unpopulated; the user starts with an empty bucket.
+    if (renumbered.isEmpty) return;
 
     final plan = await repo.upsertPlan(
       userId: userId,
       weekStart: monday,
-      routines: resetRoutines,
+      routines: renumbered,
     );
 
     state = AsyncData(plan);
@@ -114,99 +153,70 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
     });
   }
 
-  /// Mark a routine in the bucket as completed by a workout.
+  // markRoutineComplete is gone (26e): the 00063 save_workout RPC updates
+  // the bucket entry server-side in the same transaction as the workout
+  // insert. After saveWorkout, callers `ref.invalidate(weeklyPlanProvider)`
+  // to re-fetch the updated row. The week_complete analytics event now
+  // fires from the `listenSelf` callback in build() — same payload, same
+  // fire-once guard.
+
+  /// Fires the `week_complete` analytics event for a fully-completed plan.
   ///
-  /// Uses the in-memory routines list to build the update payload,
-  /// avoiding a redundant SELECT (single atomic UPDATE).
-  Future<void> markRoutineComplete({
-    required String routineId,
-    required String workoutId,
-  }) async {
-    final plan = state.value;
-    if (plan == null) return;
-
-    // Check if this routine is in the bucket and not yet completed.
-    final hasMatch = plan.routines.any(
-      (r) => r.routineId == routineId && r.completedWorkoutId == null,
+  /// Extracted from the old `markRoutineComplete` body so the firing site
+  /// is the only thing that changed (payload + fire-once guard unchanged).
+  void _fireWeekCompleteEvent(WeeklyPlan plan) {
+    final authUser = ref.read(authRepositoryProvider).currentUser;
+    final userId = authUser?.id;
+    if (userId == null) return;
+    // NOTE: `weekStart` is the client-local Monday midnight (see
+    // currentWeekMonday). A PR achieved in a different timezone near the
+    // week boundary could be miscounted here; acceptable for now since
+    // SQL can also derive this from pr_celebration_seen events later.
+    final weekStart = plan.weekStart;
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    // Read the PR list without awaiting. On a cold read (never warmed up
+    // by the PR list screen or recent PRs widget), this returns null and
+    // we fall back to 0 — SQL can correct it from pr_celebration_seen.
+    final prsAsync = ref.read(prListProvider);
+    final prCountThisWeek =
+        prsAsync.value
+            ?.where(
+              (pr) =>
+                  pr.achievedAt.isAfter(weekStart) &&
+                  pr.achievedAt.isBefore(weekEnd),
+            )
+            .length ??
+        0;
+    // Week number = ordinal week since user signup, computed from
+    // auth.users.created_at. Formula: floor(daysSinceSignup / 7) + 1,
+    // so the first seven days post-signup = week 1. If created_at is
+    // not parseable we skip the event entirely — shipping a
+    // known-bad column (week_number: 0) is worse than omitting it.
+    final weekNumber = _computeWeekNumberSinceSignup(authUser?.createdAt);
+    if (weekNumber == null) return;
+    unawaited(
+      ref
+          .read(analyticsRepositoryProvider)
+          .insertEvent(
+            userId: userId,
+            event: AnalyticsEvent.weekComplete(
+              sessionsCompleted: plan.routines
+                  .where((r) => r.completedWorkoutId != null)
+                  .length,
+              prCountThisWeek: prCountThisWeek,
+              planSize: plan.routines.length,
+              weekNumber: weekNumber,
+            ),
+            platform: currentPlatform(),
+            appVersion: currentAppVersion(),
+          ),
     );
-    if (!hasMatch) return;
-
-    final repo = ref.read(weeklyPlanRepositoryProvider);
-    state = await AsyncValue.guard(() async {
-      return repo.markRoutineComplete(
-        planId: plan.id,
-        routineId: routineId,
-        workoutId: workoutId,
-        currentRoutines: plan.routines,
-      );
-    });
-
-    // Detect transition to all-complete and fire week_complete event once.
-    // The `plan` variable above is the PRE-transition snapshot; `newPlan` is
-    // POST-transition. The `!wasAllComplete && isNowAllComplete` guard makes
-    // this fire exactly once, even on idempotent re-taps (the second call
-    // would see `wasAllComplete == true` and skip).
-    final newPlan = state.value;
-    if (newPlan == null) return;
-    final wasAllComplete =
-        plan.routines.isNotEmpty &&
-        plan.routines.every((r) => r.completedWorkoutId != null);
-    final isNowAllComplete =
-        newPlan.routines.isNotEmpty &&
-        newPlan.routines.every((r) => r.completedWorkoutId != null);
-    if (!wasAllComplete && isNowAllComplete) {
-      final authUser = ref.read(authRepositoryProvider).currentUser;
-      final userId = authUser?.id;
-      if (userId != null) {
-        // NOTE: `weekStart` is the client-local Monday midnight (see
-        // currentWeekMonday). A PR achieved in a different timezone near the
-        // week boundary could be miscounted here; acceptable for now since
-        // SQL can also derive this from pr_celebration_seen events later.
-        final weekStart = newPlan.weekStart;
-        final weekEnd = weekStart.add(const Duration(days: 7));
-        // Read the PR list without awaiting. On a cold read (never warmed up
-        // by the PR list screen or recent PRs widget), this returns null and
-        // we fall back to 0 — SQL can correct it from pr_celebration_seen.
-        final prsAsync = ref.read(prListProvider);
-        final prCountThisWeek =
-            prsAsync.value
-                ?.where(
-                  (pr) =>
-                      pr.achievedAt.isAfter(weekStart) &&
-                      pr.achievedAt.isBefore(weekEnd),
-                )
-                .length ??
-            0;
-        // Week number = ordinal week since user signup, computed from
-        // auth.users.created_at. Formula: floor(daysSinceSignup / 7) + 1,
-        // so the first seven days post-signup = week 1. If created_at is
-        // not parseable we skip the event entirely — shipping a
-        // known-bad column (week_number: 0) is worse than omitting it.
-        final weekNumber = _computeWeekNumberSinceSignup(authUser?.createdAt);
-        if (weekNumber != null) {
-          unawaited(
-            ref
-                .read(analyticsRepositoryProvider)
-                .insertEvent(
-                  userId: userId,
-                  event: AnalyticsEvent.weekComplete(
-                    sessionsCompleted: newPlan.routines
-                        .where((r) => r.completedWorkoutId != null)
-                        .length,
-                    prCountThisWeek: prCountThisWeek,
-                    planSize: newPlan.routines.length,
-                    weekNumber: weekNumber,
-                  ),
-                  platform: currentPlatform(),
-                  appVersion: currentAppVersion(),
-                ),
-          );
-        }
-      }
-    }
   }
 
   /// Auto-populate from last week's plan (reset completions).
+  ///
+  /// Filters out spontaneous entries (26e) so only planned routines carry
+  /// forward, then renumbers `order` contiguously starting at 1.
   Future<WeeklyPlan?> autoPopulateFromLastWeek() async {
     final userId = ref.read(authRepositoryProvider).currentUser?.id;
     if (userId == null) return null;
@@ -216,15 +226,21 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
     final previous = await repo.getPreviousWeekPlan(userId, monday);
     if (previous == null || previous.routines.isEmpty) return null;
 
-    // Reset completions, keep order and routine IDs.
+    // Drop spontaneous entries: only planned routines roll forward. Reset
+    // completion fields and renumber for a contiguous 1..N order.
     final resetRoutines = previous.routines
+        .where((r) => !r.isSpontaneous)
         .map((r) => BucketRoutine(routineId: r.routineId, order: r.order))
         .toList();
+    final renumbered = resetRoutines.indexed
+        .map((entry) => entry.$2.copyWith(order: entry.$1 + 1))
+        .toList();
+    if (renumbered.isEmpty) return null;
 
     final plan = await repo.upsertPlan(
       userId: userId,
       weekStart: monday,
-      routines: resetRoutines,
+      routines: renumbered,
     );
     state = AsyncData(plan);
     return plan;

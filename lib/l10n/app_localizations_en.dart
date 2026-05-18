@@ -2613,4 +2613,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get volumePeakBlockBadge30D => '30D';
+
+  @override
+  String get weeklyEngagementHeader => 'Weekly engagement';
+
+  @override
+  String get engagementExplainerTitle => 'How we count sets';
+
+  @override
+  String get engagementExplainerBody =>
+      'Each set counts toward the body part with the largest share of its XP attribution. If two body parts tie at the largest share, both count. This avoids double-counting unrelated muscles while still crediting compound lifts.';
+
+  @override
+  String get engagementLegendDone => 'Done';
+
+  @override
+  String get engagementLegendPlanned => 'Planned';
+
+  @override
+  String daysTrainedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString days trained',
+      one: '1 day trained',
+      zero: '0 days trained',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get addWorkout => '+ Add workout';
+
+  @override
+  String softCapWarning(int count) {
+    return 'Exceeds your weekly limit of $count';
+  }
+
+  @override
+  String get spontaneousTag => 'Spontaneous';
 }

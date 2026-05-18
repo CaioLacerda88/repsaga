@@ -98,6 +98,14 @@ abstract class Exercise with _$Exercise {
     // Hive cache version bump in HiveService forces a one-shot wipe so the
     // first post-upgrade fetch repopulates with authoritative server values.
     @Default(false) bool usesBodyweightLoad,
+    // Phase 26e — per-body-part XP share for this exercise, e.g.
+    // `{"chest": 0.70, "shoulders": 0.20, "arms": 0.10}`. Keys are
+    // `BodyPart.dbValue` tokens; values sum to ~1.0 (server-side invariant).
+    // Used by `primaryBodyPartsForSet` to decide which body parts a set
+    // counts toward in the weekly Engajamento view. Nullable for legacy
+    // rows + non-strength exercises; consumers fall back to
+    // `muscle_group` when null.
+    @JsonKey(name: 'xp_attribution') Map<String, num>? xpAttribution,
   }) = _Exercise;
 
   factory Exercise.fromJson(Map<String, dynamic> json) =>

@@ -4577,6 +4577,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'30D'**
   String get volumePeakBlockBadge30D;
+
+  /// Title above the 6-bar engagement section in the plan editor (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly engagement'**
+  String get weeklyEngagementHeader;
+
+  /// Title of the bottom sheet that explains the set-counting rule (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'How we count sets'**
+  String get engagementExplainerTitle;
+
+  /// Body of the engagement explainer sheet (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Each set counts toward the body part with the largest share of its XP attribution. If two body parts tie at the largest share, both count. This avoids double-counting unrelated muscles while still crediting compound lifts.'**
+  String get engagementExplainerBody;
+
+  /// Legend label for the filled portion of the engagement bar (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get engagementLegendDone;
+
+  /// Legend label for the dimmed portion of the engagement bar (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Planned'**
+  String get engagementLegendPlanned;
+
+  /// Counter pill at the top of the plan editor (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{0 days trained} =1{1 day trained} other{{count} days trained}}'**
+  String daysTrainedCount(int count);
+
+  /// CTA at the bottom of the bucket list (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'+ Add workout'**
+  String get addWorkout;
+
+  /// Warning when bucket count exceeds trainingFrequencyPerWeek (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Exceeds your weekly limit of {count}'**
+  String softCapWarning(int count);
+
+  /// Tag on bucket rows for routines that didn't match a planned entry (Phase 26e).
+  ///
+  /// In en, this message translates to:
+  /// **'Spontaneous'**
+  String get spontaneousTag;
 }
 
 class _AppLocalizationsDelegate

@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 import { Page } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
-import { HOME, WEEKLY_PLAN } from '../helpers/selectors';
+import { HOME, WEEKLY_PLAN, WEEKLY_PLAN_26E } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 
 /**
@@ -182,9 +182,11 @@ test.describe('Weekly Plan', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
 
-    // Tap "Add Routines" button (empty state) or "Add Routine" row.
+    // Tap "Add Routines" button (empty state), "Add Routine" row, or the
+    // "+ Add workout" CTA (Phase 26e compact layout — always visible).
     const addRoutinesBtn = page.locator(WEEKLY_PLAN.addRoutinesButton)
-      .or(page.locator(WEEKLY_PLAN.addRoutineRow));
+      .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+      .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
     await expect(addRoutinesBtn.first()).toBeVisible({ timeout: 10_000 });
     await addRoutinesBtn.first().click();
 
@@ -231,9 +233,11 @@ test.describe('Weekly Plan', { tag: '@smoke' }, () => {
       .catch(() => false);
 
     if (!alreadyIn) {
-      // Add it.
+      // Add it. Phase 26e layout shows "+ Add workout" CTA instead of the
+      // old empty-state "Add Routines" button — include it as a fallback.
       const addBtn = page.locator(WEEKLY_PLAN.addRoutinesButton)
-        .or(page.locator(WEEKLY_PLAN.addRoutineRow));
+        .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+        .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
       await addBtn.first().click();
       await expect(page.locator(WEEKLY_PLAN.addRoutinesSheetTitle)).toBeVisible({
         timeout: 10_000,
@@ -280,8 +284,11 @@ test.describe('Weekly Plan', { tag: '@smoke' }, () => {
       .catch(() => false);
 
     if (!alreadyIn) {
+      // Phase 26e layout always shows "+ Add workout" CTA; include it as a
+      // fallback so the test works on both old and new screen revisions.
       const addBtn = page.locator(WEEKLY_PLAN.addRoutinesButton)
-        .or(page.locator(WEEKLY_PLAN.addRoutineRow));
+        .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+        .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
       const addVisible = await addBtn.first().isVisible({ timeout: 5_000 }).catch(() => false);
       if (addVisible) {
         await addBtn.first().click();
@@ -529,8 +536,11 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
     // Add Push Day to the plan so there is a pending (non-done) routine row
     // available for swipe-remove. Push Day is a default routine seeded by
     // seed.sql — available to every user without manual creation.
+    // Phase 26e layout always shows "+ Add workout" CTA instead of the old
+    // empty-state "Add Routines" button — include it as a fallback.
     const addBtn = page.locator(WEEKLY_PLAN.addRoutinesButton)
-      .or(page.locator(WEEKLY_PLAN.addRoutineRow));
+      .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+      .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
     await expect(addBtn.first()).toBeVisible({ timeout: 10_000 });
     await addBtn.first().click();
 
@@ -554,51 +564,18 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
     });
 
     // Wait for the "Saved" confirmation snackbar to fire and dismiss before
-    // measuring the row for the swipe. The Saved snack has a 1 s duration +
-    // ~0.4 s exit animation, fired ~300 ms after upsertPlan resolves. While
-    // it is on-screen the bottom of the viewport reflows and the Push Day
-    // row's element can be detached/reattached mid-frame — that's what
-    // makes `boundingBox()` return null AND `scrollIntoViewIfNeeded()`
-    // fail with "Element is not attached to the DOM". A 2.5 s settle covers
-    // the 1.7 s worst-case Saved lifetime + headroom.
+    // interacting with the row. A 2.5 s settle covers the 1.7 s worst-case
+    // Saved lifetime + headroom (same rationale as the original swipe test).
     await page.waitForTimeout(2_500);
 
-    // Swipe-remove the Push Day row (Dismissible direction: endToStart).
-    // The PlanRoutineRow Dismissible is keyed by routine id. We anchor the
-    // horizontal drag on the text label's vertical centre — no dedicated
-    // Semantics identifier exists on the row; the text is the stable anchor.
-    //
-    // boundingBox() can intermittently return null for Flutter Web text
-    // matches: `text=` resolves to an inner element whose DOM layout is
-    // not yet measurable even though the AOM tree reports it visible.
-    // Scroll into view + small settle + retry up to 5× absorbs that
-    // measurement flake without papering over a real regression — if the
-    // row never measures, the test fails with the explicit error below.
-    const routineText = page.locator(`text=${PUSH_DAY}`).first();
-    await expect(routineText).toBeVisible({ timeout: 5_000 });
-    await routineText.scrollIntoViewIfNeeded({ timeout: 5_000 });
-
-    let box: Awaited<ReturnType<typeof routineText.boundingBox>> = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      box = await routineText.boundingBox();
-      if (box && box.width > 0 && box.height > 0) break;
-      await page.waitForTimeout(200);
-    }
-    if (!box) throw new Error('Push Day row bounding box not available');
-
-    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
-    const y = box.y + box.height / 2;
-    const startX = viewport.width - 24;
-    const endX = 24;
-
-    await page.mouse.move(startX, y);
-    await page.mouse.down();
-    const steps = 12;
-    for (let i = 1; i <= steps; i++) {
-      const x = startX - ((startX - endX) * i) / steps;
-      await page.mouse.move(x, y, { steps: 2 });
-    }
-    await page.mouse.up();
+    // Phase 26e removed the Dismissible swipe gesture; removal is now
+    // triggered by the overflow (⋯) button on each BucketRoutineRow.
+    // The identifier is 'bucket-row-overflow-{routineId}' — use a CSS
+    // attribute-prefix selector to match the first overflow button present
+    // without knowing the routineId at test time.
+    const overflowBtn = page.locator('[flt-semantics-identifier^="bucket-row-overflow-"]').first();
+    await expect(overflowBtn).toBeVisible({ timeout: 5_000 });
+    await overflowBtn.click();
 
     // Appearance assertion — snack fires immediately after dismissal.
     const snackBar = page.locator(WEEKLY_PLAN.routineRemovedUndoSnackBar).first();
@@ -626,5 +603,90 @@ test.describe('Weekly Plan — routine-removed undo SnackBar dismissal (23-P-4)'
     await expect(page.locator(`text=${PUSH_DAY}`).first()).toHaveCount(0, {
       timeout: 2_000,
     });
+  });
+});
+
+// =============================================================================
+// SMOKE — Phase 26e WeekPlanScreen compact layout (smokeWeeklyPlan user)
+//
+// Covers the three new surfaces shipped in Phase 26e:
+//   1. "+ Add workout" CTA (identifier: weekly-plan-add-workout)
+//   2. Engajamento section with 6 muscle-group bars (CHEST/BACK/LEGS/
+//      SHOULDERS/ARMS/CORE); CARDIO explicitly absent per v1 rendering rule
+//   3. ⓘ tap opens the "How we count sets" explainer bottom sheet
+//
+// Re-uses the smokeWeeklyPlan user (clean weekly_plans + minimal workout
+// seeded). Does NOT test the spontaneous bucket-row tag — that requires a
+// full workout-save round-trip; pinned by widget tests (Task 7) instead.
+// =============================================================================
+
+test.describe('Weekly Plan — 26e compact layout', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWeeklyPlan').email,
+      getUser('smokeWeeklyPlan').password,
+    );
+    // Navigate directly to the WeekPlanScreen.
+    await page.evaluate(() => { window.location.hash = '#/plan/week'; });
+    await page.waitForURL('**/plan/week**', { timeout: 10_000 });
+    // Wait for the screen title to confirm we are on WeekPlanScreen.
+    await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('should show the "+ Add workout" CTA on the compact plan layout', async ({
+    page,
+  }) => {
+    // The CTA is the primary affordance for adding workouts on the new
+    // compact-row layout (Phase 26e). Identifier-based — locale-independent.
+    await expect(
+      page.locator(WEEKLY_PLAN_26E.addWorkoutCta).first(),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should render Engajamento section with 6 body-part bars (CARDIO absent)', async ({
+    page,
+  }) => {
+    // Flutter's AOM merges all MuscleBarRow text into the EngajamentoSection's
+    // single group node aria-label:
+    //   "Weekly engagement\nCHEST\n0 / 0\nBACK\n0 / 0\n…\nDone\nPlanned"
+    // The section is one AOM group; per-bar assertions all resolve to that
+    // same node.  Asserting `name*="CHEST"` on the group confirms CHEST was
+    // rendered; similarly for the other 5 bars.
+    const section = page.locator(WEEKLY_PLAN_26E.engagementSection).first();
+    await expect(section).toBeVisible({ timeout: 15_000 });
+
+    // Each bar name appears in the group's aria-label (name*= substring match).
+    // All 6 selectors resolve to the same element — CHEST implies the section
+    // rendered; asserting all 6 guards against the wrong bar being dropped.
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarChest).first()).toBeVisible();
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarBack).first()).toBeVisible();
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarLegs).first()).toBeVisible();
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarShoulders).first()).toBeVisible();
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarArms).first()).toBeVisible();
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarCore).first()).toBeVisible();
+
+    // CARDIO is intentionally excluded from the v1 6-bar layout.
+    // Since all bars are in one AOM group, absence of CARDIO means the
+    // group's aria-label must NOT contain "CARDIO" as a substring.
+    await expect(page.locator(WEEKLY_PLAN_26E.muscleBarCardio)).toHaveCount(0);
+  });
+
+  test('should open the engagement explainer sheet when the info icon is tapped', async ({
+    page,
+  }) => {
+    // The ⓘ icon sits next to the "Weekly engagement" header.
+    await expect(
+      page.locator(WEEKLY_PLAN_26E.engagementInfoIcon).first(),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.locator(WEEKLY_PLAN_26E.engagementInfoIcon).first().click();
+
+    // The bottom sheet title is "How we count sets" (engagementExplainerTitle).
+    await expect(
+      page.locator(WEEKLY_PLAN_26E.engagementExplainerSheet).first(),
+    ).toBeVisible({ timeout: 5_000 });
   });
 });
