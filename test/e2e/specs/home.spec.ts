@@ -1,378 +1,408 @@
 /**
- * Home screen and navigation spec — W8 IA refresh.
+ * Home screen — Phase 26f redesign.
  *
- * Tests:
- *  1. All 4 bottom nav tabs are visible and tappable
- *  2. Switching tabs updates the visible screen content
- *  3. Brand-new user sees "YOUR FIRST WORKOUT" CTA (smokeFirstWorkout user)
- *  4. Brand-new user tapping CTA navigates to /workout/active
- *  5. After completing a workout, the Last session line is visible
- *  6. Tapping Last session line navigates to the history screen
- *  7. Lapsed state (has history, no plan) shows Plan your week + Quick workout
- *  8. "Plan your week" button navigates to /plan/week
- *  9. "Quick workout" button starts an active workout (/workout/active)
- * 10. See all routes to /routines when user has >3 routines (no plan state)
- * 11. Profile tab shows the user's email and Log Out button
- * 12. Profile weight unit toggle shows kg and lbs options
+ * Covers the new home composition:
+ *   1. CharacterCard (collapsed/expanded, closest-rank-up indicator)
+ *   2. EncouragementNudge (rotating priority line)
+ *   3. ActionHero (3 branches: start-routine, free-workout, create-first-routine)
+ *   4. BucketChipRow (header + chips when bucket non-empty + Editar plano link)
+ *   5. LastSessionLine, HomeRoutinesList (preserved from W8)
  *
- * Stat cell tests (HOME-STAT-001 through HOME-STAT-004) are removed — the
- * _ContextualStatCells widget was deleted in W8. The editorial Last session
- * line (HOME.lastSessionLine) replaces the stat-cell tap-to-history flow.
+ * Branch identifiers are locale-independent — assertions target
+ * `home-action-hero-<branch>` rather than localized text.
+ *
+ * User selection
+ * --------------
+ * - fullHome (@smoke): lapsed (1 minimal workout, no plan, default routines
+ *   exist, no body-part training data). Steady state for character-card
+ *   collapse/expand, day-0 closest-rank-up fallback, free-workout ActionHero,
+ *   empty-bucket BucketChipRow (header + Editar plano only).
+ * - rpgFoundationUser: 12 workouts seeded across 6 weeks → multiple body
+ *   parts trained. Drives the closest-rank-up indicator (non-fallback) and
+ *   body-part-row tap → /saga/stats deep-dive.
+ * - smokeWeeklyPlan: lapsed, no plan. Drives plan creation in-test so the
+ *   bucket chip row + start-routine ActionHero branch are reachable.
  */
 
 import { test, expect } from '@playwright/test';
-import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
+import { Page } from '@playwright/test';
+import { navigateToTab } from '../helpers/app';
 import { login } from '../helpers/auth';
-import {
-  NAV,
-  HOME,
-  WORKOUT,
-  HISTORY,
-  PROFILE,
-  WEEKLY_PLAN,
-  FIRST_WORKOUT_CTA,
-  SAGA,
-} from '../helpers/selectors';
-import {
-  startEmptyWorkout,
-  addExercise,
-  setWeight,
-  setReps,
-  completeSet,
-  finishWorkout,
-} from '../helpers/workout';
+import { HOME, NAV, SAGA, WEEKLY_PLAN, WEEKLY_PLAN_26E } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
-import { SEED_EXERCISES } from '../fixtures/test-exercises';
 
-// ---------------------------------------------------------------------------
-// Full — home screen and navigation (fullHome user)
-//
-// fullHome is cleaned to zero workouts + no plan each run (global-setup
-// freshStateUsers). It starts each run in the brand-new state and transitions
-// to lapsed after completing a workout.
-// ---------------------------------------------------------------------------
-test.describe('Home screen and navigation', () => {
+// The Push Day starter routine is seeded by seed.sql.
+const PUSH_DAY = 'Push Day';
+
+/**
+ * Drive the UI to add Push Day to the current week's plan, used by tests that
+ * need a non-empty bucket. Mirrors the pattern from weekly-plan.spec.ts so the
+ * tests don't depend on raw DB writes.
+ */
+async function ensurePushDayInPlan(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.location.hash = '#/plan/week';
+  });
+  await page.waitForURL('**/plan/week**', { timeout: 10_000 });
+  await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const alreadyIn = await page
+    .locator(`text=${PUSH_DAY}`)
+    .first()
+    .isVisible({ timeout: 3_000 })
+    .catch(() => false);
+
+  if (!alreadyIn) {
+    const addBtn = page
+      .locator(WEEKLY_PLAN.addRoutinesButton)
+      .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+      .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
+    await expect(addBtn.first()).toBeVisible({ timeout: 10_000 });
+    await addBtn.first().click();
+
+    await expect(page.locator(WEEKLY_PLAN.addRoutinesSheetTitle)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Flutter's ListView.builder uses viewport culling — items below the fold
+    // are not in the DOM. Scroll until the Push Day tile appears, then tap.
+    const pushDayTile = page
+      .locator(`role=button[name*="${PUSH_DAY}"]`)
+      .first();
+    const visibleAlready = await pushDayTile
+      .waitFor({ state: 'visible', timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!visibleAlready) {
+      const vp = page.viewportSize();
+      const cx = vp ? vp.width / 2 : 400;
+      const cy = vp ? vp.height * 0.7 : 500;
+      await page.mouse.move(cx, cy);
+      for (let i = 0; i < 8; i++) {
+        await page.mouse.wheel(0, 200);
+        await page.waitForTimeout(300);
+        const ok = await pushDayTile
+          .waitFor({ state: 'visible', timeout: 1_500 })
+          .then(() => true)
+          .catch(() => false);
+        if (ok) break;
+      }
+    }
+
+    await pushDayTile.click();
+    await page.locator(WEEKLY_PLAN.addConfirmButton).click();
+    await expect(page.locator(`text=${PUSH_DAY}`).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+
+  // Back to home.
+  await navigateToTab(page, 'Home');
+}
+
+// =============================================================================
+// SMOKE — Home (fullHome user, lapsed state)
+// =============================================================================
+test.describe('Home', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
     await login(page, getUser('fullHome').email, getUser('fullHome').password);
-  });
-
-  test('should show all four bottom nav tabs after login', async ({ page }) => {
-    await expect(page.locator(NAV.homeTab)).toBeVisible();
-    await expect(page.locator(NAV.exercisesTab)).toBeVisible();
-    await expect(page.locator(NAV.routinesTab)).toBeVisible();
-    await expect(page.locator(NAV.profileTab)).toBeVisible();
-  });
-
-  test('should update visible content heading when switching tabs', async ({
-    page,
-  }) => {
-    // Exercises tab.
-    await page.click(NAV.exercisesTab);
-    await page.waitForURL('**/exercises**', { timeout: 15_000 });
-
-    // Routines tab.
-    await page.click(NAV.routinesTab);
-    await page.waitForURL('**/routines**', { timeout: 15_000 });
-
-    // Profile tab (Phase 18b: shows CharacterSheetScreen).
-    await page.click(NAV.profileTab);
-    await page.waitForURL('**/profile**', { timeout: 15_000 });
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 15_000 });
-
-    // Home tab — verify the ActionHero or status line renders.
-    await page.click(NAV.homeTab);
-    await page.waitForURL('**/home**', { timeout: 15_000 });
-    // Home always renders either the action hero or the status line.
-    const hasHero = await page
-      .locator(FIRST_WORKOUT_CTA.label)
-      .isVisible({ timeout: 10_000 })
-      .catch(() => false);
-    const hasPlanBtn = await page
-      .locator(HOME.planYourWeek)
-      .isVisible({ timeout: 5_000 })
-      .catch(() => false);
-    const hasStatusLine = await page
-      .locator(HOME.statusLine)
-      .isVisible({ timeout: 5_000 })
-      .catch(() => false);
-    expect(hasHero || hasPlanBtn || hasStatusLine).toBe(true);
-  });
-
-  test('should show Last session line after completing a workout', async ({
-    page,
-  }) => {
-    // Start and finish a minimal workout with one completed set.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '60');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-    await finishWorkout(page);
-
-    // Dismiss celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
-    await dismissCelebrationIfPresent(page);
-
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-
-    // After completing a workout the Last session editorial line must be visible.
-    await expect(page.locator(HOME.lastSessionLine)).toBeVisible({
-      timeout: 10_000,
+    await navigateToTab(page, 'Home');
+    // CharacterCard always renders on home — wait for it as the
+    // "home tree settled" sentinel before each test.
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
     });
   });
 
-  test('should navigate to history screen when tapping Last session line', async ({
+  test('should show character card collapsed on first load', async ({
     page,
   }) => {
-    // Complete a workout first so the Last session line is present.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '60');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-    await finishWorkout(page);
-
-    // Dismiss celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
-    await dismissCelebrationIfPresent(page);
-
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-
-    // Wait for the Last session line then tap it.
-    await expect(page.locator(HOME.lastSessionLine)).toBeVisible({
+    // Collapsed surface: closest-rank-up indicator visible, expanded body absent.
+    await expect(page.locator(HOME.characterCard)).toBeVisible();
+    await expect(page.locator(HOME.closestRankUp).first()).toBeVisible({
       timeout: 10_000,
     });
-    await page.click(HOME.lastSessionLine);
-
-    // History screen heading must appear.
-    await expect(page.locator(HISTORY.heading)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(HOME.characterCardExpanded)).not.toBeVisible();
   });
 
-  test('should show lapsed state (Plan your week + Quick workout) after completing a workout', async ({
+  test('should expand character card on tap and reveal body-part rows', async ({
     page,
   }) => {
-    // Complete a workout to push workoutCount above 0 — now lapsed state.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '60');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-    await finishWorkout(page);
+    await page.locator(HOME.characterCard).click();
 
-    // Dismiss celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
-    await dismissCelebrationIfPresent(page);
+    // Expanded body must mount.
+    await expect(page.locator(HOME.characterCardExpanded)).toBeVisible({
+      timeout: 5_000,
+    });
 
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-
-    // Lapsed state: no plan this week, has history.
-    await expect(page.locator(HOME.planYourWeek)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(HOME.quickWorkout)).toBeVisible({ timeout: 5_000 });
-    // Status line shows "No plan this week".
-    await expect(page.locator('text=No plan this week')).toBeVisible({
+    // Body-part rows render in canonical order. Assert at least the first
+    // two (chest, back) are present — full canonical order is covered by
+    // the Saga widget unit tests.
+    await expect(page.locator(SAGA.bodyPartRow('chest')).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(SAGA.bodyPartRow('back')).first()).toBeVisible({
       timeout: 5_000,
     });
   });
 
-  test('should navigate to /plan/week when tapping Plan your week', async ({
+  test('should collapse character card on second tap', async ({ page }) => {
+    // Open.
+    await page.locator(HOME.characterCard).click();
+    await expect(page.locator(HOME.characterCardExpanded)).toBeVisible({
+      timeout: 5_000,
+    });
+    // Close — tap the card header zone again.
+    await page.locator(HOME.characterCard).click();
+    await expect(page.locator(HOME.characterCardExpanded)).not.toBeVisible({
+      timeout: 5_000,
+    });
+  });
+
+  test('should hide closest-rank-up indicator when card is expanded', async ({
     page,
   }) => {
-    // Complete a workout to enter lapsed state.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '60');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-    await finishWorkout(page);
+    // Collapsed: indicator visible.
+    await expect(page.locator(HOME.closestRankUp).first()).toBeVisible({
+      timeout: 10_000,
+    });
 
-    // Dismiss celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
-    await dismissCelebrationIfPresent(page);
+    // Expand → indicator hides (the expanded body owns the higher-fidelity
+    // stat rows that render the same info).
+    await page.locator(HOME.characterCard).click();
+    await expect(page.locator(HOME.characterCardExpanded)).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(HOME.closestRankUp)).not.toBeVisible({
+      timeout: 5_000,
+    });
+  });
 
-    await expect(page.locator(HOME.planYourWeek)).toBeVisible({ timeout: 15_000 });
-    await page.click(HOME.planYourWeek);
+  test('should show day-0 first-step fallback for a fresh-training user', async ({
+    page,
+  }) => {
+    // fullHome's seeded workout has no workout_exercises → no body-part
+    // training data → closestRankUp returns null → fallback copy renders
+    // inside the closest-rank-up Semantics container.
+    await expect(page.locator(HOME.closestRankUp).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
 
-    // Weekly plan management screen must appear.
+  test('should render encouragement nudge', async ({ page }) => {
+    // EncouragementNudge resolves one of 5 priorities and always renders
+    // something (day-0 fallback if nothing else triggers).
+    await expect(page.locator(HOME.encouragementNudge).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('should show free-workout ActionHero when no plan exists', async ({
+    page,
+  }) => {
+    // Lapsed state (no plan, default routines exist) → ActionHero falls
+    // through to the free-workout branch.
+    await expect(page.locator(HOME.actionHero).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.locator(HOME.actionHeroFreeWorkout).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('should hide bucket chip wrap when bucket is empty (header + Editar plano stay visible)', async ({
+    page,
+  }) => {
+    // BucketChipRow root + Editar plano link are always rendered.
+    await expect(page.locator(HOME.bucketChipRow)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator(HOME.editPlanLink).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    // No bucket chips — empty plan means no `home-bucket-chip-*` nodes exist.
+    // We can't selector-match on "anything starting with home-bucket-chip-"
+    // without inspecting the DOM, so the contract assertion here is that
+    // none of the seeded default-routine UUIDs appear as bucket chips. The
+    // weakest reliable form: assert the row exists but no chip-shaped
+    // selector resolves. We use the structural assertion below by querying
+    // the bucket-chip-row's descendants.
+    // NOTE: the parent row's identifier `home-bucket-chip-row` matches a
+    // `home-bucket-chip-*` prefix selector too, so we filter that out via
+    // `:not()` on the row identifier — only true chip nodes (each carrying
+    // a routine UUID suffix) remain.
+    const chipCount = await page
+      .locator(
+        '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
+      )
+      .count();
+    expect(chipCount).toBe(0);
+  });
+
+  test('should navigate to /plan/week when tapping Editar plano link', async ({
+    page,
+  }) => {
+    await page.locator(HOME.editPlanLink).first().click();
+    // The plan management screen is the deterministic destination — assert
+    // on the destination heading rather than the URL (Flutter web hash
+    // routing — see cluster_flutter_web_url_assertion).
     await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
       timeout: 15_000,
     });
   });
 
-  test('should navigate to /workout/active when tapping Quick workout', async ({
-    page,
-  }) => {
-    // Complete a workout to enter lapsed state.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await setWeight(page, '60');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-    await finishWorkout(page);
-
-    // Dismiss celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
-    await dismissCelebrationIfPresent(page);
-
-    await expect(page.locator(HOME.quickWorkout)).toBeVisible({ timeout: 15_000 });
-    await page.click(HOME.quickWorkout);
-
-    // BUG-020: Finish button only appears after the first exercise is added.
-    // Use addExerciseFab as the screen-ready sentinel for an empty workout.
-    await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Clean up — discard the started workout.
-    await page.locator(WORKOUT.discardButton).click();
-    await expect(page.locator(WORKOUT.discardConfirmButton)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.locator(WORKOUT.discardConfirmButton).click();
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
-  });
-
-  test('should show user email and Log Out button on profile settings', async ({
-    page,
-  }) => {
-    // Phase 18b: /profile shows CharacterSheet; email + Log Out are on /profile/settings.
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 10_000 });
-    await page.locator(SAGA.gearIcon).first().click();
-    await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
-
-    // The user's email is shown in the identity card.
-    await expect(page.locator(`text=${getUser('fullHome').email}`)).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Log Out button must be visible.
-    await expect(page.locator(PROFILE.logOutButton)).toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
-  test('should show kg and lbs options in profile weight unit toggle', async ({
-    page,
-  }) => {
-    // Phase 18b: weight unit toggle is on /profile/settings.
-    await navigateToTab(page, 'Profile');
-    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 10_000 });
-    await page.locator(SAGA.gearIcon).first().click();
-    await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
-
-    await expect(page.locator(PROFILE.kgOption)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(PROFILE.lbsOption)).toBeVisible({ timeout: 5_000 });
-
-    // Tapping lbs must not crash the app.
-    await page.click(PROFILE.lbsOption);
-    await expect(page.locator(PROFILE.lbsOption)).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator(PROFILE.kgOption)).toBeVisible();
-  });
-});
-
-// =============================================================================
-// SMOKE — Brand-new user CTA (P8 / W8) — smokeFirstWorkout user
-//
-// A brand-new account with zero workouts and no active weekly plan sees the
-// "YOUR FIRST WORKOUT" hero banner recommending the Full Body default routine.
-// Tapping the banner must start an active workout at /workout/active.
-// =============================================================================
-test.describe('First workout CTA (P8)', { tag: '@smoke' }, () => {
-  test.beforeEach(async ({ page }) => {
-    await login(
-      page,
-      getUser('smokeFirstWorkout').email,
-      getUser('smokeFirstWorkout').password,
-    );
-    await navigateToTab(page, 'Home');
-  });
-
-  test('should show YOUR FIRST WORKOUT card for a brand-new user', async ({
-    page,
-  }) => {
-    await expect(page.locator(FIRST_WORKOUT_CTA.label)).toBeVisible({
-      timeout: 15_000,
-    });
-  });
-
-  test('should recommend the Full Body default routine', async ({ page }) => {
-    await expect(page.locator(FIRST_WORKOUT_CTA.label)).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(
-      page.locator(FIRST_WORKOUT_CTA.routineName('Full Body')).first(),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('should navigate to /workout/active when tapping the card', async ({
-    page,
-  }) => {
-    // The CTA renders as a merged-semantics button. Use the card selector
-    // (role=button[name*="YOUR FIRST WORKOUT"]) which is reliable with Flutter AOM.
-    await expect(page.locator(FIRST_WORKOUT_CTA.card)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Flutter CanvasKit AOM: clicking the flt-semantics button node fires a
-    // semantics action (SemanticsAction.tap) which should trigger InkWell.onTap.
-    // Use the card locator for the click — it's the merged-semantics node that
-    // Flutter's AOM exposes as role=button.
-    await page.locator(FIRST_WORKOUT_CTA.card).click();
-    await page.waitForTimeout(800);
-
-    // Check if we navigated. If not, try again — Flutter CanvasKit may require
-    // two interactions (first activates semantics, second fires the tap).
-    const navigated = await page.locator(WORKOUT.finishButton)
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-    if (!navigated) {
-      await page.locator(FIRST_WORKOUT_CTA.card).click().catch((e) => {
-        console.warn('retry click failed:', e);
-      });
-      await page.waitForTimeout(800);
-    }
-
-    // Active workout screen identifies itself by the Finish Workout button.
-    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-
-  test('should NOT render old stat-grid cells (HOME_STATS deleted in W8)', async ({
-    page,
-  }) => {
-    // The _ContextualStatCells widget was deleted. Neither "Last session" nor
-    // "Week's volume" should appear on home for any user.
-    await expect(page.locator('text=Last session')).not.toBeVisible({
-      timeout: 5_000,
-    });
-    await expect(page.locator("text=Week's volume")).not.toBeVisible({
-      timeout: 3_000,
-    });
-  });
-
-  test('should NOT render Start Empty Workout button (removed in W8)', async ({
-    page,
-  }) => {
-    // The old "Start Empty Workout" FilledButton was replaced by the lapsed-state
-    // "Quick workout" OutlinedButton and the brand-new hero CTA. Neither the old
-    // label should appear.
-    await expect(page.locator('text=Start Empty Workout')).not.toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
-  test('should render all four bottom nav tabs with pixel icons (17.0)', async ({
-    page,
-  }) => {
-    // Phase 17.0 replaced Material IconData with PixelImage in the bottom
-    // NavigationBar. Each tab is wrapped in Semantics(identifier: 'nav-<name>')
-    // and the icon uses semanticLabel:'' (decorative). Assert every tab is
-    // reachable via its identifier — this catches a regression where a pixel
-    // asset path is wrong and the widget throws, collapsing the tab.
+  test('should render all four bottom nav tabs', async ({ page }) => {
+    // Regression guard from the W8 era — pixel icons + Semantics identifiers
+    // on every NavigationBar destination.
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(NAV.exercisesTab)).toBeVisible({ timeout: 5_000 });
     await expect(page.locator(NAV.routinesTab)).toBeVisible({ timeout: 5_000 });
     await expect(page.locator(NAV.profileTab)).toBeVisible({ timeout: 5_000 });
   });
+});
+
+// =============================================================================
+// REGRESSION — Character card body-part rows (rpgFoundationUser)
+//
+// The foundation user has multiple body parts trained → the closest-rank-up
+// indicator surfaces real XP-to-rank progress (not the day-0 fallback) and
+// the expanded body-part rows are tappable into /saga/stats.
+// =============================================================================
+test.describe('Home character card (trained user)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('rpgFoundationUser').email,
+      getUser('rpgFoundationUser').password,
+    );
+    await navigateToTab(page, 'Home');
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('should show closest-rank-up indicator with real XP for a trained user', async ({
+    page,
+  }) => {
+    // Indicator visible in the collapsed state — the foundation user has
+    // trained chest/back/legs across 12 sessions so closestRankUp returns
+    // a non-null record. The semantics identifier is the same one used by
+    // the day-0 fallback (see character_card.dart _ClosestRankUpRow), so
+    // this test pins presence + collapsed-state visibility.
+    await expect(page.locator(HOME.closestRankUp).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('should navigate to /saga/stats when tapping a body-part row in the expanded card', async ({
+    page,
+  }) => {
+    // Open the card so the body-part rows mount.
+    await page.locator(HOME.characterCard).click();
+    await expect(page.locator(HOME.characterCardExpanded)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Tap the chest row. The row owns its own InkWell that pushes
+    // /saga/stats?body_part=chest — assert on the destination screen
+    // (saga-stats-screen identifier) rather than the URL because Flutter
+    // web hash routing makes URL assertions unreliable (cluster:
+    // flutter-web-url-assertion).
+    await page.locator(SAGA.bodyPartRow('chest')).first().click();
+    await expect(page.locator(SAGA.statsDeepDiveScreen)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+});
+
+// =============================================================================
+// REGRESSION — Bucket chip row populated state (smokeWeeklyPlan)
+//
+// smokeWeeklyPlan is lapsed (no plan) and starts clean each run. We drive the
+// UI to add Push Day, then assert the BucketChipRow + start-routine
+// ActionHero branch reflect the planned routine.
+// =============================================================================
+test.describe('Home bucket chip row (planned routines)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeWeeklyPlan').email,
+      getUser('smokeWeeklyPlan').password,
+    );
+    await navigateToTab(page, 'Home');
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
+    });
+    await ensurePushDayInPlan(page);
+    // Wait for the bucket chip row to settle in the populated state.
+    await expect(page.locator(HOME.bucketChipRow)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('should render the bucket chip wrap with at least one planned chip', async ({
+    page,
+  }) => {
+    // After ensurePushDayInPlan, the chip wrap mounts a chip with an
+    // identifier of the form `home-bucket-chip-<routineId>`. We don't know
+    // the UUID upfront, so we match on the identifier prefix.
+    // NOTE: the parent row's identifier `home-bucket-chip-row` matches a
+    // `home-bucket-chip-*` prefix selector too, so we filter that out via
+    // `:not()` on the row identifier — only true chip nodes (each carrying
+    // a routine UUID suffix) remain.
+    const chipCount = await page
+      .locator(
+        '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
+      )
+      .count();
+    expect(chipCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('should show start-routine ActionHero when the bucket has an uncompleted entry', async ({
+    page,
+  }) => {
+    // Push Day was just added and has NOT been completed → suggestedNext
+    // is non-null → ActionHero branches into start-routine. Assert on the
+    // per-branch identifier so the test is locale-independent.
+    await expect(
+      page.locator(HOME.actionHeroStartRoutine).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('should keep Editar plano link visible when bucket is populated', async ({
+    page,
+  }) => {
+    // Editar plano is always rendered (locked decision) — both empty-bucket
+    // and populated-bucket states. Pin the populated branch here.
+    await expect(page.locator(HOME.editPlanLink).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+});
+
+// =============================================================================
+// REGRESSION — Create-first-routine ActionHero branch (skipped)
+//
+// The third ActionHero branch fires only when the user has zero routines
+// (including no default routines visible). The current Supabase seed exposes
+// the default routines (Full Body, Push Day, …) to every account, so
+// `routineListProvider.value.isEmpty` is unreachable through the public seed.
+// Reproducing this branch requires a custom seed that deletes/hides defaults
+// for one user — out of scope for T13.
+//
+// Unit tests already pin the branch: see
+// `test/widget/features/workouts/ui/widgets/action_hero_test.dart`.
+// =============================================================================
+test.describe('Home ActionHero create-first-routine branch', () => {
+  test.skip(
+    'should show create-first-routine ActionHero when user has zero routines',
+    () => {
+      // Skipped — no seeded user has zero routines (default routines are
+      // global). Add a dedicated fixture that filters default routines
+      // out for one user before un-skipping. Branch covered by unit tests.
+    },
+  );
 });

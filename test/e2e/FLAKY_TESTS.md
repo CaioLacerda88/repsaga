@@ -34,8 +34,8 @@ These tests pass reliably in CI single-run and in independent reproductions; the
 | # | Spec | Test | Carryover root cause | Resolution path |
 |---|------|------|----------------------|-----------------|
 | 14 | `specs/workouts.spec.ts` | navigate-after-finish | Under `--repeat-each=10` hits Supabase local `sign_in_sign_ups` rate limit (30/5 min); auth returns "Wrong email or password" from repeat 3 onward. Phase 18c fixed the actual nav-timing bug — passes 5/5 in independent runs. | Raise `sign_in_sign_ups` in `supabase/config.toml` for local dev, OR restructure to use per-repeat throwaway users. Not a CI blocker. |
-| 18 | `specs/home.spec.ts` | history-nav | Under `--repeat-each=10`: `fullHome` user accumulates workouts across repeats → heavier XP calc → home `ActionHero` loads slower than 15s assertion. Passes 5/5 in independent runs. | Add `waitForURL('**/home**')` + `waitForSelector` on status-line after `dismissCelebrationIfPresent`, OR raise the home-state assertion timeout beyond 15s. |
-| 19 | `specs/home.spec.ts` | quick-workout | Same root cause as #18 — `home-quick-workout` not visible after `dismissCelebrationIfPresent` at repeat 4 (workers=2) / repeat 7 (workers=1). Passes 5/5 independently. | Same fix as #18. |
+
+(Entries 18 + 19 — `home-status-line` / `home-quick-workout` carryover flakes — were retired in Phase 26f T13 when the home tests were rewritten against the new CharacterCard + ActionHero per-branch identifiers. The redesigned tests do not depend on those legacy selectors.)
 
 ## Investigation playbook
 

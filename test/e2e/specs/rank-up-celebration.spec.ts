@@ -483,7 +483,9 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     // newly equipped title.
     await page.waitForURL(/\/home/, { timeout: 10_000 });
     // Wait for home screen to stabilise before navigating to profile tab.
-    await page.locator(HOME.quickWorkout).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    // 26f: the CharacterCard always renders on Home and replaces the legacy
+    // "Quick workout" CTA as the post-workout home-loaded sentinel.
+    await page.locator(HOME.characterCard).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     await page.locator(WORKOUT.finishButton).waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
 
     // Navigate to Profile (Saga) tab and verify active title pill is set.

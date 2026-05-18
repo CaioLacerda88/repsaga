@@ -537,14 +537,17 @@ test.describe('Manage Data', () => {
     await assertNoTableNamesVisible(page);
 
     // After history deletion, the Last session line must be hidden (no history).
-    // This is a more direct assertion: the W8 home screen hides LastSessionLine
-    // when workoutHistory is empty.
-    // Wait for the home status line first — it confirms the Riverpod home provider
-    // has re-queried after deletion (the stream re-emits before the status line renders).
-    // Use 30s to accommodate provider invalidation propagating across repeat runs
-    // where Supabase sync may still be completing when we navigate to Home.
+    // This is a more direct assertion: the home screen hides LastSessionLine
+    // when workoutHistory is empty (LastSessionLine renders nothing for a
+    // history-less user — 26f preserved this behavior).
+    // Wait for the CharacterCard first — it always renders on home and is the
+    // most reliable sentinel that the Riverpod home tree has settled after
+    // deletion (the stream re-emits before the new layout paints).
+    // 20s on the negative assertion accommodates provider invalidation
+    // propagating across repeat runs where Supabase sync may still be
+    // completing when we navigate to Home.
     await navigateToTab(page, 'Home');
-    await expect(page.locator(HOME.statusLine)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(HOME.characterCard)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(HOME.lastSessionLine)).not.toBeVisible({
       timeout: 20_000,
     });
@@ -699,9 +702,9 @@ test.describe('Manage Data', () => {
     await assertNoTableNamesVisible(page);
 
     // After Reset All, the Last session line must be hidden (history cleared).
-    // Wait for home status line first — confirms Riverpod provider has re-queried.
+    // Wait for the CharacterCard first — confirms the home tree has re-queried.
     await navigateToTab(page, 'Home');
-    await expect(page.locator(HOME.statusLine)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(HOME.characterCard)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator(HOME.lastSessionLine)).not.toBeVisible({
       timeout: 20_000,
     });

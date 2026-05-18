@@ -253,16 +253,25 @@ test.describe('Weekly Plan', { tag: '@smoke' }, () => {
     // Navigate to Home.
     await navigateToTab(page, 'Home');
 
-    // The home status line should be visible (e.g. "0 of 1 this week").
-    // The old thisWeekHeader identifier is only on WeekReviewSection which
-    // renders in week-complete state — use the always-visible status line.
-    await expect(page.locator(HOME.statusLine).first()).toBeVisible({
+    // 26f: the BucketChipRow is always rendered on Home (header + chips when
+    // bucket non-empty + Editar plano link). Use it as the "home loaded and
+    // plan reactive" sentinel — replaces the legacy home-status-line check.
+    await expect(page.locator(HOME.bucketChipRow).first()).toBeVisible({
       timeout: 15_000,
     });
     // The chip button includes the routine name in its accessible label.
-    await expect(page.getByRole('button', { name: new RegExp(PUSH_DAY) })).toBeVisible({
-      timeout: 10_000,
-    });
+    // Phase 26f: the BucketChipRow wraps each chip in a Semantics(button: true)
+    // node AND Flutter renders an inner text node that also exposes role=button
+    // — `getByRole('button', { name: /Push Day/ })` resolves to BOTH. Use the
+    // outer chip identifier (`home-bucket-chip-*`, with the routine UUID
+    // suffix) which is unique and locale-independent.
+    await expect(
+      page
+        .locator(
+          '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test('should remove routines from Home screen section when clearing the plan', async ({

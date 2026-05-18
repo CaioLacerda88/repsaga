@@ -550,9 +550,13 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     await page.waitForTimeout(1_000);
     await ss(page, 'B5-home');
 
-    const planYourWeek = page.locator('[flt-semantics-identifier="home-plan-your-week"]');
+    // Phase 26f: the legacy `home-plan-your-week` banner was removed. The
+    // BucketChipRow now exposes an always-visible "Editar plano" link with
+    // identifier `home-edit-plan-link` that pushes /plan/week — same
+    // navigation contract, always reachable from home.
+    const planYourWeek = page.locator('[flt-semantics-identifier="home-edit-plan-link"]').first();
     const planWeekVisible = await planYourWeek.isVisible({ timeout: 5_000 }).catch(() => false);
-    log(`[B5] "Plan your week" CTA visible: ${planWeekVisible}`);
+    log(`[B5] "Editar plano" link visible: ${planWeekVisible}`);
 
     if (planWeekVisible) {
       await planYourWeek.click();
