@@ -67,6 +67,7 @@ class WorkoutRepository extends BaseRepository {
     required Workout workout,
     required List<WorkoutExercise> exercises,
     required List<ExerciseSet> sets,
+    String? routineId,
   }) {
     return mapException(() async {
       final result = await _client
@@ -80,6 +81,11 @@ class WorkoutRepository extends BaseRepository {
                 'finished_at': workout.finishedAt?.toIso8601String(),
                 'duration_seconds': workout.durationSeconds,
                 'notes': workout.notes,
+                // 26e: drives bucket find-or-create in 00063 save_workout RPC.
+                // Null for free workouts (no source routine) → RPC treats
+                // as spontaneous-append candidate; NULLIF on the SQL side
+                // handles missing key + empty string + valid uuid.
+                'routine_id': routineId,
               },
               'p_exercises': exercises
                   .map(

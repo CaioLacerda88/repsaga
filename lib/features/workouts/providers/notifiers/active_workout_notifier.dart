@@ -1283,6 +1283,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           workout: workout,
           exercises: workoutExercises,
           sets: sets,
+          // 26e: source routine for weekly_plans bucket find-or-create
+          // (00063). Null for free workouts started ad-hoc — the RPC
+          // treats them as spontaneous-append candidates.
+          routineId: current.routineId,
         );
         // C1: mark the commit so the post-guard cancel-check honors it.
         // Anything below this line that throws will leave saveCommitted
