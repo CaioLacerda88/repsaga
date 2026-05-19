@@ -41,6 +41,18 @@ class WeeklyPlanRepository extends BaseRepository {
   }
 
   /// Create or update the plan for a given week.
+  ///
+  /// **`onConflict` is required** — `weekly_plans` has `UNIQUE (user_id,
+  /// week_start)` (migration 00011). Without naming that constraint as the
+  /// conflict target, PostgREST falls back to the primary key (`id`), which
+  /// the payload does not include — so the upsert silently becomes a plain
+  /// INSERT that violates the unique constraint on every save after the
+  /// first one of the week. The first session works, subsequent edits all
+  /// fail with "duplicate key", `AsyncValue.guard` catches the throw,
+  /// state goes to AsyncError, and the editor's "saved" toast lies. Adding
+  /// `onConflict: 'user_id,week_start'` makes PostgREST emit
+  /// `ON CONFLICT (user_id, week_start) DO UPDATE` and the upsert behaves
+  /// as advertised.
   Future<WeeklyPlan> upsertPlan({
     required String userId,
     required DateTime weekStart,
@@ -53,7 +65,7 @@ class WeeklyPlanRepository extends BaseRepository {
             'week_start': _toDateString(weekStart),
             'routines': routines.map((r) => r.toJson()).toList(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          }, onConflict: 'user_id,week_start')
           .select()
           .single();
       return WeeklyPlan.fromJson(data);
