@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
@@ -225,12 +224,13 @@ class _HeaderRow extends StatelessWidget {
                   children: [
                     Text(
                       '${sheet.characterLevel}',
-                      style: GoogleFonts.rajdhani(
+                      style: const TextStyle(
+                        fontFamily: 'Rajdhani',
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textCream,
                         height: 1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -348,7 +348,8 @@ class _DominantColumn extends StatelessWidget {
         Text(
           '${entry.rank}',
           key: const ValueKey('character-card-dominant-rank'),
-          style: GoogleFonts.rajdhani(
+          style: TextStyle(
+            fontFamily: 'Rajdhani',
             fontSize: 28,
             fontWeight: FontWeight.w700,
             color: color,

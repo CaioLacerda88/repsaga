@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -79,12 +78,13 @@ class SagaHeader extends StatelessWidget {
               children: [
                 Text(
                   '$characterLevel',
-                  style: GoogleFonts.rajdhani(
+                  style: const TextStyle(
+                    fontFamily: 'Rajdhani',
                     fontSize: 56,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textCream,
                     height: 1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
                 // 'LVL' is a brand token, intentionally not localized per

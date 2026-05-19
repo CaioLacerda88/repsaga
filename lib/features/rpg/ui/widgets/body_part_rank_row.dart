@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/format/number_format.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -122,11 +121,12 @@ class _TrainedRow extends StatelessWidget {
                     const Spacer(),
                     Text(
                       '${entry.rank}',
-                      style: GoogleFonts.rajdhani(
+                      style: const TextStyle(
+                        fontFamily: 'Rajdhani',
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textCream,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -153,7 +153,8 @@ class _TrainedRow extends StatelessWidget {
                   children: [
                     Text(
                       '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
-                      style: GoogleFonts.rajdhani(
+                      style: const TextStyle(
+                        fontFamily: 'Rajdhani',
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textDim,
@@ -161,7 +162,8 @@ class _TrainedRow extends StatelessWidget {
                     ),
                     Text(
                       '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
-                      style: GoogleFonts.rajdhani(
+                      style: const TextStyle(
+                        fontFamily: 'Rajdhani',
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textDim,

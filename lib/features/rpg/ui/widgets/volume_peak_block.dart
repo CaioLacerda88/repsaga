@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/format/number_format.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -153,7 +152,8 @@ class _VolumeColumn extends StatelessWidget {
           children: [
             Text(
               '${row.weeklyVolumeSets}',
-              style: GoogleFonts.rajdhani(
+              style: const TextStyle(
+                fontFamily: 'Rajdhani',
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textCream,
@@ -282,7 +282,8 @@ class _CargaPicoColumn extends StatelessWidget {
               // a trailing ",0" (so "80" not "80,0") and uses the locale
               // decimal separator for half-kg increments ("82,5" in pt).
               AppNumberFormat.weight(row.peakLoadKg, locale: locale),
-              style: GoogleFonts.rajdhani(
+              style: const TextStyle(
+                fontFamily: 'Rajdhani',
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textCream,
@@ -395,9 +396,10 @@ class _ReferenciaColumn extends StatelessWidget {
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.end,
           children: [
-            Text(
+            const Text(
               '${VolumePeakBlock._schoenfeldFloor}',
-              style: GoogleFonts.rajdhani(
+              style: TextStyle(
+                fontFamily: 'Rajdhani',
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textCream,

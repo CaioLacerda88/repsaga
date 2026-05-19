@@ -1,6 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -374,7 +373,8 @@ class _TerminalPctLabel extends StatelessWidget {
                 top: (dotY - 22).clamp(0, plotHeight - 18),
                 child: Text(
                   '${pct.round()}%',
-                  style: GoogleFonts.rajdhani(
+                  style: TextStyle(
+                    fontFamily: 'Rajdhani',
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: color,

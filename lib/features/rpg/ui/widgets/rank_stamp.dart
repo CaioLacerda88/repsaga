@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../models/vitality_state.dart';
@@ -41,12 +40,13 @@ class RankStamp extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         '$rank',
-        style: GoogleFonts.rajdhani(
+        style: const TextStyle(
+          fontFamily: 'Rajdhani',
           fontSize: 22,
           fontWeight: FontWeight.w700,
           color: AppColors.textCream,
           height: 1,
-          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFeatures: [FontFeature.tabularFigures()],
         ),
         textAlign: TextAlign.center,
         maxLines: 1,
