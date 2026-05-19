@@ -1,4 +1,4 @@
-/// Widget tests for [BodyPartRankRow] (Phase 26b Option B v4).
+/// Widget tests for [BodyPartRankRow].
 ///
 /// The row is the mini-XP-block per `docs/PROJECT.md` §3 Phase 26 → 26b
 /// acceptance criteria:
@@ -6,7 +6,10 @@
 ///     Rajdhani rank num · 4dp XP bar · 9sp "X XP / Y to next rank" label.
 ///   * Untrained: 0.4 opacity, `—` rank, no bar, no label row.
 ///   * Whole row InkWell-tappable → `/saga/stats?body_part=<dbValue>`.
-///   * Dot wrapped in [RankUpPulse] only when storage.isPulsing == true.
+///   * Every trained dot is wrapped in [AmbientPulseDot] (Phase 27 L8 —
+///     subtle baseline pulse so the row reads as active). The dot's
+///     `emphasized` flag is `true` only when `storage.isPulsing == true`
+///     for the body part (24h post-rank-up window).
 library;
 
 import 'package:flutter/material.dart';
@@ -19,8 +22,8 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
+import 'package:repsaga/features/rpg/ui/widgets/ambient_pulse_dot.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
-import 'package:repsaga/features/rpg/ui/widgets/rank_up_pulse.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
@@ -99,7 +102,11 @@ void main() {
           storage: storage,
         ),
       );
-      await tester.pumpAndSettle();
+      // AmbientPulseDot (Phase 27 L8) runs an infinite repeat() controller
+      // on every trained row — pumpAndSettle would hang. Two manual pumps
+      // are enough for the row layout + first animation frame.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
 
       // Rank num.
       expect(find.text('16'), findsOneWidget);
@@ -150,7 +157,7 @@ void main() {
     );
 
     testWidgets(
-      'renders RankUpPulse overlay when storage.isPulsing returns true',
+      'trained dot is wrapped in AmbientPulseDot with emphasized=true when storage.isPulsing returns true',
       (tester) async {
         final storage = _MockPulseStorage();
         when(
@@ -163,19 +170,25 @@ void main() {
         await tester.pumpWidget(
           _wrap(BodyPartRankRow(entry: _entry()), storage: storage),
         );
-        // RankUpPulse runs an infinite AnimationController.repeat() — using
-        // pumpAndSettle would time out. A single pump is enough to mount the
-        // subtree; bound the second pump to one frame so the controller can
-        // advance without hanging the test.
+        // AmbientPulseDot runs an infinite AnimationController.repeat() —
+        // pumpAndSettle would time out. A single pump mounts the subtree;
+        // bound the second pump to one frame so the controller advances.
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 16));
-        expect(find.byType(RankUpPulse), findsOneWidget);
+        final pulseDot = tester.widget<AmbientPulseDot>(
+          find.byType(AmbientPulseDot),
+        );
+        expect(pulseDot.emphasized, isTrue);
       },
     );
 
     testWidgets(
-      'does NOT render RankUpPulse when storage.isPulsing returns false',
+      'trained dot is wrapped in AmbientPulseDot with emphasized=false when storage.isPulsing returns false',
       (tester) async {
+        // Phase 27 L8: every trained dot ALWAYS gets the ambient pulse —
+        // the `emphasized` flag is the only difference between rank-up and
+        // steady-state. This pins the new contract (vs. Phase 26b's binary
+        // "pulse or no pulse" which caused the user-reported confusion).
         final storage = _MockPulseStorage();
         when(
           () => storage.isPulsing(any(), now: any(named: 'now')),
@@ -183,8 +196,59 @@ void main() {
         await tester.pumpWidget(
           _wrap(BodyPartRankRow(entry: _entry()), storage: storage),
         );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        final pulseDot = tester.widget<AmbientPulseDot>(
+          find.byType(AmbientPulseDot),
+        );
+        expect(pulseDot.emphasized, isFalse);
+      },
+    );
+
+    testWidgets(
+      'untrained row does NOT mount an AmbientPulseDot (no animation on dimmed dots)',
+      (tester) async {
+        final storage = _MockPulseStorage();
+        when(
+          () => storage.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        await tester.pumpWidget(
+          _wrap(
+            BodyPartRankRow(
+              entry: _entry(
+                rank: 1,
+                xpInRank: 0,
+                totalXp: 0,
+                vitalityPeak: 0,
+                vitalityEwma: 0,
+                state: VitalityState.untested,
+              ),
+            ),
+            storage: storage,
+          ),
+        );
         await tester.pumpAndSettle();
-        expect(find.byType(RankUpPulse), findsNothing);
+        expect(find.byType(AmbientPulseDot), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'AmbientPulseDot animation completes one ambient period without crashing',
+      (tester) async {
+        // Pump 5s — longer than the 3.2s ambient period — to catch any
+        // exception fired during the sine cycle (NaN scale, alpha out of
+        // range, etc.). Tree must stay stable; no exceptions.
+        final storage = _MockPulseStorage();
+        when(
+          () => storage.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        await tester.pumpWidget(
+          _wrap(BodyPartRankRow(entry: _entry()), storage: storage),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 5));
+        expect(find.byType(AmbientPulseDot), findsOneWidget);
+        expect(tester.takeException(), isNull);
       },
     );
 
@@ -201,12 +265,19 @@ void main() {
             storage: storage,
           ),
         );
-        await tester.pumpAndSettle();
+        // Bounded pumps — AmbientPulseDot's repeat() loop would hang
+        // pumpAndSettle on the source tree. Two frames are enough for the
+        // row to lay out + react to the tap.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
         // Pin that there's exactly one InkWell — if a future change adds a
         // child InkWell (e.g. a nested tap target on the dot), this assertion
         // breaks first instead of the tap finding an ambiguous target.
         expect(find.byType(InkWell), findsOneWidget);
         await tester.tap(find.byType(InkWell));
+        // The destination route (/saga/stats) has no infinite animation —
+        // pumpAndSettle is safe here (and required for GoRouter's navigation
+        // future to resolve).
         await tester.pumpAndSettle();
         // After tap, we should have landed on the /saga/stats route placeholder.
         expect(find.text('stats'), findsOneWidget);
@@ -226,7 +297,9 @@ void main() {
           storage: storage,
         ),
       );
-      await tester.pumpAndSettle();
+      // AmbientPulseDot's repeat() loop precludes pumpAndSettle; one pump
+      // settles layout for the getSize measurement.
+      await tester.pump();
       final size = tester.getSize(find.byType(BodyPartRankRow));
       expect(size.height, greaterThanOrEqualTo(48));
     });

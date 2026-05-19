@@ -10,8 +10,8 @@ import '../../models/body_part.dart';
 import '../../models/character_sheet_state.dart';
 import '../../providers/rank_up_pulse_provider.dart';
 import '../utils/vitality_state_styles.dart';
+import 'ambient_pulse_dot.dart';
 import 'body_part_localization.dart';
-import 'rank_up_pulse.dart';
 
 /// Letter-spacing for the uppercase body-part name across trained +
 /// untrained rows. Phase 26b Option B v4 type token; matches the 12%
@@ -34,9 +34,11 @@ const double _nameLetterSpacing = 1.2;
 /// The whole row is `InkWell` tappable → `/saga/stats?body_part=<dbValue>`
 /// so the stats deep-dive opens with the trend chart pre-selected.
 ///
-/// When [RankUpPulseLocalStorage.isPulsing] returns true for this body
-/// part, the dot is wrapped in [RankUpPulse] for the 24h glow-ring
-/// overlay.
+/// Every trained dot renders an [AmbientPulseDot] — subtle baseline pulse
+/// (Phase 27 L8) so the row reads as "this body part is active". When
+/// [RankUpPulseLocalStorage.isPulsing] returns true (24h post-rank-up
+/// window — Phase 26b), the same widget is mounted with `emphasized: true`
+/// for a bigger/faster pulse as additive emphasis.
 class BodyPartRankRow extends ConsumerWidget {
   const BodyPartRankRow({super.key, required this.entry});
 
@@ -51,16 +53,20 @@ class BodyPartRankRow extends ConsumerWidget {
     if (entry.isUntrained) {
       return _UntrainedRow(entry: entry);
     }
-    final isPulsing = pulseStorage.isPulsing(entry.bodyPart);
-    return _TrainedRow(entry: entry, isPulsing: isPulsing);
+    final emphasized = pulseStorage.isPulsing(entry.bodyPart);
+    return _TrainedRow(entry: entry, emphasized: emphasized);
   }
 }
 
 class _TrainedRow extends StatelessWidget {
-  const _TrainedRow({required this.entry, required this.isPulsing});
+  const _TrainedRow({required this.entry, required this.emphasized});
 
   final BodyPartSheetEntry entry;
-  final bool isPulsing;
+
+  /// `true` when the body part is in its 24h post-rank-up window — drives
+  /// the [AmbientPulseDot]'s `emphasized` flag. `false` still renders the
+  /// dot with the subtle ambient pulse (Phase 27 L8).
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +110,7 @@ class _TrainedRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _Dot(color: dotColor, isPulsing: isPulsing),
+                    _Dot(color: dotColor, emphasized: emphasized),
                     const SizedBox(width: 8),
                     Text(
                       _localizedName(entry.bodyPart, l10n).toUpperCase(),
@@ -173,20 +179,18 @@ class _TrainedRow extends StatelessWidget {
 }
 
 class _Dot extends StatelessWidget {
-  const _Dot({required this.color, required this.isPulsing});
+  const _Dot({required this.color, required this.emphasized});
 
   final Color color;
-  final bool isPulsing;
+
+  /// Forwarded to [AmbientPulseDot.emphasized]. Trained dots ALWAYS pulse
+  /// (Phase 27 L8) — the flag only escalates the amplitude/period for the
+  /// 24h post-rank-up window.
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    final dot = Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-    );
-    if (!isPulsing) return dot;
-    return RankUpPulse(color: color, child: dot);
+    return AmbientPulseDot(color: color, size: 6, emphasized: emphasized);
   }
 }
 
