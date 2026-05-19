@@ -94,7 +94,7 @@ CharacterSheetState _trainedSheet() {
       _untrained(BodyPart.arms),
       _untrained(BodyPart.core),
     ],
-    activeTitle: 'Plate-Bearer',
+    activeTitle: 'chest_r5_initiate_of_the_forge',
     characterClass: CharacterClass.bulwark,
   );
 }
@@ -206,8 +206,14 @@ void main() {
         expect(find.text('14'), findsOneWidget);
         // Bulwark in en uppercases to "BULWARK" (matches SagaHeader treatment).
         expect(find.text('BULWARK'), findsOneWidget);
-        // Active title rendered verbatim.
-        expect(find.text('Plate-Bearer'), findsOneWidget);
+        // Active title resolves through `localizedTitleCopy(slug, l10n)?.name`.
+        // The provider chain forwards the raw slug
+        // (`chest_r5_initiate_of_the_forge`) from `earned_titles.title_id` —
+        // the widget MUST resolve it to the localized display name. Pin both
+        // sides: the localized name renders, and the raw slug does NOT.
+        // See `cluster_slug_rendered_as_display_name`.
+        expect(find.text('Initiate of the Forge'), findsOneWidget);
+        expect(find.text('chest_r5_initiate_of_the_forge'), findsNothing);
       },
     );
 

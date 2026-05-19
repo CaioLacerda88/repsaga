@@ -13,6 +13,7 @@ import '../../../rpg/ui/widgets/body_part_rank_row.dart';
 import '../../../rpg/ui/widgets/character_xp_bar.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/rune_halo.dart';
+import '../../../rpg/ui/widgets/title_localization.dart';
 import '../../domain/closest_rank_up.dart';
 
 /// Phase 26f Home character card — tappable expanding surface that replaces
@@ -260,8 +261,16 @@ class _HeaderRow extends StatelessWidget {
               ),
               if (hasTitle) ...[
                 const SizedBox(height: 2),
+                // `sheet.activeTitle` is the raw slug from
+                // `earned_titles.title_id` (e.g. `chest_r5_initiate_of_the_forge`).
+                // It MUST be resolved through `localizedTitleCopy` before
+                // rendering. The `?? sheet.activeTitle!` fallback is
+                // intentional: a freshly-shipped DB title without an l10n
+                // entry should degrade to the slug rather than crash. See
+                // `cluster_slug_rendered_as_display_name`.
                 Text(
-                  sheet.activeTitle!,
+                  localizedTitleCopy(sheet.activeTitle!, l10n)?.name ??
+                      sheet.activeTitle!,
                   key: const ValueKey('character-card-title'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppColors.textDim,
