@@ -44,10 +44,7 @@ const _fakeUser = User(
   createdAt: '2026-01-01T00:00:00Z',
 );
 
-WeeklyPlan _plan({
-  String id = 'plan-001',
-  List<String> routineIds = const [],
-}) {
+WeeklyPlan _plan({String id = 'plan-001', List<String> routineIds = const []}) {
   return WeeklyPlan(
     id: id,
     userId: 'user-001',
@@ -155,28 +152,30 @@ void main() {
       );
     });
 
-    test('is a no-op when no user is authenticated and no plan is cached',
-        () async {
-      when(() => mockAuth.currentUser).thenReturn(null);
-      when(
-        () => mockRepo.getPlanForWeek(any(), any()),
-      ).thenAnswer((_) async => null);
+    test(
+      'is a no-op when no user is authenticated and no plan is cached',
+      () async {
+        when(() => mockAuth.currentUser).thenReturn(null);
+        when(
+          () => mockRepo.getPlanForWeek(any(), any()),
+        ).thenAnswer((_) async => null);
 
-      final container = _container(mockAuth: mockAuth, mockRepo: mockRepo);
-      addTearDown(container.dispose);
+        final container = _container(mockAuth: mockAuth, mockRepo: mockRepo);
+        addTearDown(container.dispose);
 
-      await container.read(weeklyPlanProvider.future);
-      expect(container.read(weeklyPlanProvider).value, isNull);
+        await container.read(weeklyPlanProvider.future);
+        expect(container.read(weeklyPlanProvider).value, isNull);
 
-      container.read(weeklyPlanProvider.notifier).setOptimistic([
-        const BucketRoutine(routineId: 'r1', order: 1),
-      ]);
+        container.read(weeklyPlanProvider.notifier).setOptimistic([
+          const BucketRoutine(routineId: 'r1', order: 1),
+        ]);
 
-      // Signed-out edge case: nothing to write a plan against. Silently
-      // ignore rather than synthesize a plan with a fake userId — the
-      // editor is unreachable in this state anyway (the route guard
-      // sends signed-out users to /login).
-      expect(container.read(weeklyPlanProvider).value, isNull);
-    });
+        // Signed-out edge case: nothing to write a plan against. Silently
+        // ignore rather than synthesize a plan with a fake userId — the
+        // editor is unreachable in this state anyway (the route guard
+        // sends signed-out users to /login).
+        expect(container.read(weeklyPlanProvider).value, isNull);
+      },
+    );
   });
 }

@@ -52,32 +52,29 @@ class _FakeQueryBuilder extends Fake implements supabase.SupabaseQueryBuilder {
 }
 
 void main() {
-  test(
-    'upsertPlan passes onConflict: user_id,week_start so PostgREST uses '
-    'the UNIQUE constraint instead of the primary key',
-    () async {
-      final builder = _FakeQueryBuilder();
-      final client = _FakeSupabaseClient(builder);
-      final repo = WeeklyPlanRepository(client);
+  test('upsertPlan passes onConflict: user_id,week_start so PostgREST uses '
+      'the UNIQUE constraint instead of the primary key', () async {
+    final builder = _FakeQueryBuilder();
+    final client = _FakeSupabaseClient(builder);
+    final repo = WeeklyPlanRepository(client);
 
-      try {
-        await repo.upsertPlan(
-          userId: 'user-001',
-          weekStart: DateTime(2026, 5, 18),
-          routines: [const BucketRoutine(routineId: 'r1', order: 1)],
-        );
-      } on Object {
-        // mapException rewraps the probe throw; we don't care about the
-        // shape since we only need to verify the args captured before it.
-      }
+    try {
+      await repo.upsertPlan(
+        userId: 'user-001',
+        weekStart: DateTime(2026, 5, 18),
+        routines: [const BucketRoutine(routineId: 'r1', order: 1)],
+      );
+    } on Object {
+      // mapException rewraps the probe throw; we don't care about the
+      // shape since we only need to verify the args captured before it.
+    }
 
-      // The user-visible bug: without onConflict, PostgREST resolves the
-      // upsert against the primary key (`id`), which is auto-generated and
-      // never present in the payload — so every save after the first
-      // INSERTs and fails on UNIQUE (user_id, week_start). Pinning the
-      // exact conflict target catches a regression where a maintainer
-      // refactors the call and drops the argument.
-      expect(builder.capturedOnConflict, 'user_id,week_start');
-    },
-  );
+    // The user-visible bug: without onConflict, PostgREST resolves the
+    // upsert against the primary key (`id`), which is auto-generated and
+    // never present in the payload — so every save after the first
+    // INSERTs and fails on UNIQUE (user_id, week_start). Pinning the
+    // exact conflict target catches a regression where a maintainer
+    // refactors the call and drops the argument.
+    expect(builder.capturedOnConflict, 'user_id,week_start');
+  });
 }
