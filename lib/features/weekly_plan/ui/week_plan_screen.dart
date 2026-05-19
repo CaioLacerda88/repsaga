@@ -546,6 +546,10 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
 
     if (confirmed != true || !mounted) return;
     setState(() => _bucketRoutines = []);
+    // L5 — same invalidate-on-local-mutation contract as `_savePlan`; clear
+    // goes through `clearPlan()` instead of `upsertPlan()` so it needs its
+    // own invalidate call. Per `cluster_optimistic_ui_vs_async_provider`.
+    ref.invalidate(weeklyEngagementProvider);
     await ref.read(weeklyPlanProvider.notifier).clearPlan();
     if (!mounted) return;
     // ignore: use_build_context_synchronously
@@ -564,6 +568,18 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
     _saveDebounce = Timer(const Duration(milliseconds: 300), () {
       _flushDebouncedSave();
     });
+    // L5 — invalidate the engagement provider immediately on every local
+    // mutation so the bars rerender against the new `_bucketRoutines`
+    // without waiting for the 300ms debounce. Without this, the user sees
+    // "I added a routine but the bars didn't change" until the debounce
+    // fires and the provider chain catches up.
+    //
+    // We invalidate the whole family (no argument) so every variant
+    // (`includePlanned: true` from the editor + `false` from any future
+    // Stats surface) is dirtied uniformly. Per
+    // `cluster_optimistic_ui_vs_async_provider` — pattern 1 (invalidate on
+    // local mutation).
+    ref.invalidate(weeklyEngagementProvider);
     _pendingAnalyticsEvent = true;
     // Sticky-OR: if any edit in the session used autofill or replaced an
     // existing plan, the dispose-time event records that.

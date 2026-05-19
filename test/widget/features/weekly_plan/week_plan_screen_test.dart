@@ -23,6 +23,7 @@ import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
 import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
@@ -172,6 +173,7 @@ Widget _build({
   required WeeklyPlan? plan,
   required List<Routine> routines,
   int trainingFrequency = 3,
+  Future<WeeklyEngagement> Function()? engagementBuilder,
 }) {
   final mockAuth = _MockAuthRepository();
   when(() => mockAuth.currentUser).thenReturn(null);
@@ -187,10 +189,16 @@ Widget _build({
         const _FakeAnalyticsRepository(),
       ),
       // weeklyEngagementProvider hits Supabase — override to a deterministic
-      // empty engagement so the screen renders the section without network.
+      // engagement so the screen renders the section without network. Default
+      // is empty; callers can pass `engagementBuilder` to drive a different
+      // value per build (used by the L5 invalidate-regression test).
       weeklyEngagementProvider(
         const WeeklyEngagementArgs(includePlanned: true),
-      ).overrideWith((_) async => WeeklyEngagement.empty),
+      ).overrideWith(
+        (_) async => engagementBuilder == null
+            ? WeeklyEngagement.empty
+            : await engagementBuilder(),
+      ),
     ],
     child: TestMaterialApp(
       theme: AppTheme.dark,
@@ -427,6 +435,174 @@ void main() {
         );
         // Title pin — copy comes from the en ARB.
         expect(find.text('How we count sets'), findsOneWidget);
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // L5 — engagement bars must refresh when a routine is added/removed from
+  // the local bucket. Without `ref.invalidate(weeklyEngagementProvider)`
+  // wired into the setState mutations, the bars stay frozen through the
+  // 300ms debounce window — user sees "I added a routine but the bars
+  // didn't change". See `cluster_optimistic_ui_vs_async_provider`.
+  // ---------------------------------------------------------------------------
+  group('WeekPlanScreen — engagement bars refresh on local mutation (L5)', () {
+    testWidgets(
+      'should rerender engagement bars after adding a routine to the bucket',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        // Drive a different engagement value per provider build so the test
+        // can assert the bar text changes on rebuild (which only happens
+        // when `ref.invalidate(weeklyEngagementProvider)` fires). The first
+        // build returns "2 / 4" for chest (pre-edit baseline); subsequent
+        // builds return "2 / 7" (post-add: planned chest sets climbed).
+        var buildCount = 0;
+        Future<WeeklyEngagement> nextEngagement() async {
+          buildCount++;
+          if (buildCount == 1) {
+            return WeeklyEngagement.from(
+              done: const {BodyPart.chest: 2},
+              planned: const {BodyPart.chest: 4},
+            );
+          }
+          return WeeklyEngagement.from(
+            done: const {BodyPart.chest: 2},
+            planned: const {BodyPart.chest: 7},
+          );
+        }
+
+        final routines = [
+          _routine(id: 'r-001', name: 'Push Day'),
+          _routine(id: 'r-002', name: 'Pull Day'),
+        ];
+        final plan = _plan(routines: [_bucket(routineId: 'r-001', order: 1)]);
+
+        await tester.pumpWidget(
+          _build(
+            plan: plan,
+            routines: routines,
+            trainingFrequency: 3,
+            engagementBuilder: nextEngagement,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Baseline assertion: bar text reflects the FIRST provider build.
+        expect(
+          find.text('2 / 4'),
+          findsOneWidget,
+          reason:
+              'Pre-edit bar text must reflect the initial engagement value.',
+        );
+
+        // Add a routine via the "+ Add workout" sheet — the L5 regression
+        // target. Without `ref.invalidate(weeklyEngagementProvider)` wired
+        // into the post-add setState, the bar stays at "2 / 4" through the
+        // 300ms debounce.
+        await tester.tap(find.text('+ Add workout'));
+        await tester.pumpAndSettle();
+
+        // Tap the routine tile in the sheet (Pull Day — the one not in the
+        // bucket yet).
+        await tester.tap(find.text('Pull Day'));
+        await tester.pumpAndSettle();
+
+        // Confirm the selection — the "ADD N ROUTINES" button.
+        await tester.tap(
+          find.textContaining(RegExp(r'^ADD ', caseSensitive: true)),
+        );
+        await tester.pumpAndSettle();
+
+        // POST-MUTATION assertion: bar text must reflect the SECOND provider
+        // build (invalidate fired → engagement provider re-ran → returned
+        // the updated planned count). If invalidate is missing, this fails
+        // with "Found 1 widget with text '2 / 4'" because the bar still
+        // shows the pre-edit baseline.
+        expect(
+          find.text('2 / 7'),
+          findsOneWidget,
+          reason:
+              'After adding a routine, `ref.invalidate(weeklyEngagementProvider)` '
+              'must fire so the engagement provider re-runs and the bars '
+              'render the new planned count immediately (not after the '
+              '300ms save debounce). Per `cluster_optimistic_ui_vs_async_provider`.',
+        );
+        expect(
+          find.text('2 / 4'),
+          findsNothing,
+          reason:
+              'Stale pre-edit bar text must NOT survive the local mutation.',
+        );
+      },
+    );
+
+    testWidgets(
+      'should rerender engagement bars after removing a routine from the bucket',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        var buildCount = 0;
+        Future<WeeklyEngagement> nextEngagement() async {
+          buildCount++;
+          if (buildCount == 1) {
+            return WeeklyEngagement.from(
+              done: const {BodyPart.chest: 2},
+              planned: const {BodyPart.chest: 7},
+            );
+          }
+          return WeeklyEngagement.from(
+            done: const {BodyPart.chest: 2},
+            planned: const {BodyPart.chest: 4},
+          );
+        }
+
+        final routines = [
+          _routine(id: 'r-001', name: 'Push Day'),
+          _routine(id: 'r-002', name: 'Pull Day'),
+        ];
+        final plan = _plan(
+          routines: [
+            _bucket(routineId: 'r-001', order: 1),
+            _bucket(routineId: 'r-002', order: 2),
+          ],
+        );
+
+        await tester.pumpWidget(
+          _build(
+            plan: plan,
+            routines: routines,
+            trainingFrequency: 3,
+            engagementBuilder: nextEngagement,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Baseline: bar text reflects first build (pre-removal).
+        expect(find.text('2 / 7'), findsOneWidget);
+
+        // Tap the overflow icon on the second bucket entry (Pull Day) — the
+        // row's `onOverflowTap` fires `_removeRoutine`.
+        await tester.tap(
+          find.byKey(const ValueKey('bucket-row-overflow')).last,
+        );
+        await tester.pumpAndSettle();
+
+        // Post-removal: bar text reflects the SECOND provider build.
+        expect(
+          find.text('2 / 4'),
+          findsOneWidget,
+          reason:
+              'After removing a routine, `ref.invalidate(weeklyEngagementProvider)` '
+              'must fire so the engagement provider re-runs and the bars '
+              'render the new planned count immediately.',
+        );
       },
     );
   });
