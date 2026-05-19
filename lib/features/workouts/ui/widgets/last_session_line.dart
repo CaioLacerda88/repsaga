@@ -32,8 +32,15 @@ class LastSessionLine extends ConsumerWidget {
     if (last == null) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context);
+    // `.toLocal()` is required: `last.date` is the raw `finishedAt`/
+    // `startedAt` value which can arrive in UTC from Supabase. Without the
+    // local conversion, a workout finished at 23:00 BRT (= 02:00 UTC next
+    // day) renders as "Hoje" instead of "Ontem" because the formatter
+    // reads `date.year/month/day` (UTC) against `DateTime.now()` (local).
+    // The old `_formatRelativeDate` helper in the provider did this — the
+    // L16 widget-side move dropped it; this restores it.
     final relativeDate = WorkoutFormatters.formatRelativeDate(
-      last.date,
+      last.date.toLocal(),
       l10n: l10n,
     );
 

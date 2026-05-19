@@ -389,19 +389,29 @@ class _ClosestRankUpRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final closest = closestRankUp(sheet.bodyPartProgress);
+
+    // Mockup spec (`docs/phase-26-mockups.html` `.cc-closest .indicator`):
+    //   `font-family: 'Rajdhani'; font-weight: 600; font-size: 11px;
+    //    color: var(--text-dim); letter-spacing: 0.04em;`
+    //   `.cc-closest .indicator strong { color: var(--text-cream); }`
+    // L17 — was inheriting `theme.textTheme.bodyMedium` (Inter 14) which
+    // mismatched both font and size. Rebuilt as a direct Rajdhani style.
+    const fallbackStyle = TextStyle(
+      fontFamily: 'Rajdhani',
+      fontWeight: FontWeight.w600,
+      fontSize: 11,
+      color: AppColors.textDim,
+      letterSpacing: 0.04 * 11,
+    );
 
     if (closest == null) {
       return Semantics(
         container: true,
         explicitChildNodes: true,
         identifier: 'home-closest-rank-up',
-        child: Text(
-          l10n.homeFirstStepFallback,
-          style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.textDim),
-        ),
+        child: Text(l10n.homeFirstStepFallback, style: fallbackStyle),
       );
     }
 
@@ -434,14 +444,16 @@ class _ClosestRankUpRow extends StatelessWidget {
     //
     // L11.b (Phase 27, 2026-05-19) — adds the bold-cream body-part span.
     const diamondPrefix = '◆ ';
-    final baseStyle = theme.textTheme.bodyMedium?.copyWith(
-      color: AppColors.textDim,
-    );
-    final boldStyle = baseStyle?.copyWith(
+    // Use the same Rajdhani 600 11px baseline as the fallback line above —
+    // mockup `.cc-closest .indicator` is the same style for both branches.
+    // Bold span lifts to w700 + textCream so the body-part name reads as
+    // distinct emphasis (matches L11.b's original contract pinned by tests).
+    const baseStyle = fallbackStyle;
+    final boldStyle = baseStyle.copyWith(
       fontWeight: FontWeight.w700,
       color: AppColors.textCream,
     );
-    final diamondStyle = theme.textTheme.bodyMedium?.copyWith(color: color);
+    final diamondStyle = baseStyle.copyWith(color: color);
     // Body-part name lookup starts AFTER the diamond prefix (skips the
     // glyph) and bails to a single muted span if the name isn't present
     // — should never happen since we generate the line from this same
