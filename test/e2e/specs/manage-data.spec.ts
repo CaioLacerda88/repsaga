@@ -124,6 +124,66 @@ const FORBIDDEN_TABLE_NAMES = [
 // ---------------------------------------------------------------------------
 
 /**
+ * Ensure the fullManageData user is in Phase 26f lapsed state.
+ *
+ * The describe block runs tests sequentially and earlier tests (MD-006)
+ * delete all workout history, which drops `workoutCountProvider` to 0 and
+ * makes the ActionHero render `_CreateFirstRoutineHero` instead of
+ * `_FreeWorkoutHero`. Subsequent tests that need to start an empty workout
+ * (MD-007/009/010/011) would then fail because `startEmptyWorkout` targets
+ * the free-workout banner. Re-seeding a sets-less marker workout before
+ * each such test restores lapsed state without re-introducing any
+ * workout_exercises / sets the post-delete assertions could trip over.
+ *
+ * Idempotent on the well-known workout name so this is safe to call from
+ * tests that did NOT just delete history (the second insert is a no-op).
+ */
+async function ensureLapsedStateForFullManageData(
+  page: Page,
+  userEmail: string,
+): Promise<void> {
+  const supabase = getAdminClient();
+  const { data: userList } = await supabase.auth.admin.listUsers({
+    perPage: 1000,
+  });
+  const user = userList?.users?.find((u) => u.email === userEmail);
+  if (!user) return;
+  const userId = user.id;
+
+  const { data: existing } = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'E2E Manage-Data Lapsed Marker')
+    .maybeSingle();
+  if (existing) {
+    // Already lapsed — but the in-app workoutCountProvider could be stale
+    // if a prior test in the describe block called reload(). Force a
+    // refresh via page navigation so the Home tree re-queries.
+    return;
+  }
+
+  const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const finishedAt = new Date(Date.now() - 90 * 60 * 1000);
+  await supabase.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Manage-Data Lapsed Marker',
+    started_at: startedAt.toISOString(),
+    finished_at: finishedAt.toISOString(),
+    duration_seconds: 1800,
+  });
+
+  // The Home screen's workoutCountProvider is `keepAlive` and caches its
+  // value for the session. After we insert the marker workout via the
+  // admin API we need the client to re-query. A hard reload is the
+  // simplest deterministic way to invalidate the cached count without
+  // wiring an in-app refresh affordance into this helper. waitForAppReady
+  // re-enables semantics so subsequent selectors resolve.
+  await page.reload();
+  await waitForAppReady(page);
+}
+
+/**
  * Complete a single-exercise workout with one set so there is data to delete.
  * Dismisses any post-workout overlay (PR celebration, rank-up, level-up,
  * title-unlock) using the shared deterministic helper so this helper is immune
@@ -406,6 +466,19 @@ test.describe('Manage Data', () => {
       page,
       getUser('fullManageData').email,
       getUser('fullManageData').password,
+    );
+    // Phase 26f ActionHero collapsed brand-new + lapsed branches into a
+    // single workoutCount gate — when count == 0 the hero renders
+    // _CreateFirstRoutineHero (no path to an empty workout) and
+    // startEmptyWorkout cannot resolve the free-workout banner. Tests
+    // earlier in this describe block delete all workout history (MD-006
+    // and the Reset All flows), which would leave subsequent tests with
+    // workoutCount == 0. Re-seed a sets-less marker workout so the user
+    // is always in lapsed state when a test starts. Idempotent on the
+    // marker workout name.
+    await ensureLapsedStateForFullManageData(
+      page,
+      getUser('fullManageData').email,
     );
   });
 

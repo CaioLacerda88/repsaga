@@ -850,6 +850,21 @@ async function seedRpgFreshUser(
     );
   }
 
+  // Phase 26f ActionHero day-0 gate (workoutCount == 0) renders
+  // _CreateFirstRoutineHero, which has no path into an empty workout. The
+  // RPG E2E tests (18a-E2 first-workout XP, S3 FirstAwakeningOverlay) need
+  // to drive `startEmptyWorkout` so the user must be in lapsed state from
+  // the ActionHero's perspective. seedMinimalWorkout inserts ONE finished
+  // workout with NO workout_exercises / NO sets — `getFinishedWorkoutCount`
+  // returns 1 (free-workout branch wins) but record_session_xp_batch sees
+  // zero historical sets, so:
+  //   * 18a-E2's `body_part_progress` rows still come exclusively from the
+  //     test's own bench-press workout (assertion target preserved).
+  //   * S3's CelebrationEventBuilder snapshot diff still detects
+  //     `wasUntouched → isNowTouched` for every body part the test exercises
+  //     (FirstAwakeningOverlay still fires).
+  await seedMinimalWorkout(supabase, userId);
+
   console.log('[global-setup] Cleaned and seeded profile for rpgFreshUser');
 }
 
@@ -1428,6 +1443,18 @@ function buildRoleSeedRunners(): Record<
     smokeFirstWorkout: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await ensureProfile(supabase, userId);
+    },
+
+    // BUG-001 workout-restore tests need lapsed state so startEmptyWorkout
+    // resolves the Phase 26f free-workout banner. The tests only assert that
+    // a manually-added exercise name survives a page reload — they don't
+    // care about day-0 vs lapsed beyond the entry point being reachable.
+    smokeWorkoutRestore: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Workout Restore User',
+      });
+      await seedMinimalWorkout(supabase, userId);
     },
 
     // ── Saga intro (fresh + profile, no workouts) ────────────────────────
