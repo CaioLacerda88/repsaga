@@ -135,5 +135,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(tapped, isTrue);
     });
+
+    // L6 — the row's affordance is a DIRECT REMOVE (no menu, no
+    // disambiguation). The ⋯ overflow glyph wrongly implied a menu would
+    // open. Pin the rendered glyph as a close X so a future regression
+    // (someone swapping back to `more_horiz` "for consistency with material
+    // patterns") fails this test.
+    testWidgets('should render Icons.close as the remove affordance (L6)', (
+      tester,
+    ) async {
+      await pumpRow(tester, isDone: false, isSpontaneous: false);
+      expect(
+        find.byIcon(Icons.close),
+        findsOneWidget,
+        reason:
+            'Bucket row remove affordance must use Icons.close — the row '
+            'maps onOverflowTap straight to _removeRoutine, with no menu. '
+            'Icons.more_horiz misled users into expecting a popup.',
+      );
+      expect(
+        find.byIcon(Icons.more_horiz),
+        findsNothing,
+        reason:
+            'Icons.more_horiz must NOT be used here — it implies a menu '
+            'that does not exist.',
+      );
+    });
   });
 }
