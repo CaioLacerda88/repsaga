@@ -204,7 +204,7 @@ export const CREATE_EXERCISE = {
 // Active workout — ActiveWorkoutScreen
 // ---------------------------------------------------------------------------
 export const WORKOUT = {
-  /** "Start Empty Workout" button on the Home screen launchpad — deprecated, use HOME.quickWorkout */
+  /** "Start Empty Workout" button on the Home screen launchpad — removed in W8 and again in 26f. Kept only so any historical reference still resolves (text= match against a string the app no longer renders). New tests should use HOME.actionHeroFreeWorkout. */
   startEmpty: 'text=Start Empty Workout',
   /** "Finish Workout" button — Semantics(identifier: 'workout-finish-btn') */
   finishButton: '[flt-semantics-identifier="workout-finish-btn"]',
@@ -414,28 +414,6 @@ export const HOME = {
    */
   activeBanner: '[flt-semantics-identifier="home-active-banner"]',
   /**
-   * HomeStatusLine — the single-line state-aware status at the top of Home.
-   * Semantics(identifier: 'home-status-line') wraps every return branch.
-   */
-  statusLine: '[flt-semantics-identifier="home-status-line"]',
-  /**
-   * Brand-new state: HomeStatusLine shows the user's display name only.
-   * Used to confirm the brand-new home state without relying on workout data.
-   * Check for 'Gym User' which is the display_name seeded for most E2E users.
-   */
-  statusDisplayName: (name: string) => `text=${name}`,
-  /**
-   * ActionHero label — the small uppercase label inside the hero banner.
-   * One of: "UP NEXT", "YOUR FIRST WORKOUT", "NEW WEEK".
-   * labelSmall with letterSpacing and FontWeight.w700.
-   */
-  actionHeroLabel: (label: string) => `text=${label}`,
-  /**
-   * ActionHero headline — the routine name (active / beginner) or
-   * "Start new week" (week-complete). titleLarge bold.
-   */
-  actionHeroHeadline: (headline: string) => `text=${headline}`,
-  /**
    * LastSessionLine — editorial "Last: {routineName}, {relativeDate}" tap
    * target navigating to /home/history.
    * Flutter's Semantics widget sets label="Last session: {name}, {date}" on the
@@ -448,23 +426,97 @@ export const HOME = {
    * Only visible when the user has more than 3 user routines and no active plan.
    */
   myRoutinesSeeAll: '[flt-semantics-identifier="home-see-all-routines"]',
+
+  // ---------------------------------------------------------------------------
+  // Phase 26f — Home redesign (CharacterCard, BucketChipRow, ActionHero, ...)
+  //
+  // The W8 status-line + 7-day-bucket layout was replaced by a single-card
+  // character surface + chip row. The old text-based ActionHero selectors
+  // (label, headline) were replaced by per-branch Semantics identifiers so
+  // tests don't depend on localized copy.
+  //
+  // Dropped (no longer in DOM): statusLine, statusDisplayName, planYourWeek,
+  // quickWorkout, startNewWeek, actionHeroLabel, actionHeroHeadline.
+  // ---------------------------------------------------------------------------
+
   /**
-   * "Plan your week" _HeroBanner in the lapsed-state ActionHero.
-   * Semantics(identifier: 'home-plan-your-week') wraps the banner.
-   * Navigates to /plan/week.
+   * CharacterCard root — the top tile on Home. Tap toggles expand. The
+   * collapsed surface includes the closest-rank-up indicator; the expanded
+   * surface mounts XP bar + 6 body-part rows in canonical order.
+   * Semantics(container: true, explicitChildNodes: true,
+   *   identifier: 'home-character-card').
    */
-  planYourWeek: '[flt-semantics-identifier="home-plan-your-week"]',
+  characterCard: '[flt-semantics-identifier="home-character-card"]',
   /**
-   * "Quick workout" OutlinedButton in the lapsed-state ActionHero secondary CTA.
-   * Navigates to /workout/active (starts an empty workout).
+   * Inner expanded body of the CharacterCard — present in DOM only when the
+   * card is expanded. Use as a sentinel for "is the card open?" assertions.
    */
-  quickWorkout: '[flt-semantics-identifier="home-quick-workout"]',
+  characterCardExpanded:
+    '[flt-semantics-identifier="home-character-card-expanded"]',
   /**
-   * "Start new week" _HeroBanner inside the week-complete ActionHero.
-   * Semantics(identifier: 'home-start-new-week') wraps the banner.
-   * Tapping navigates to /plan/week.
+   * Closest-rank-up indicator row inside the CharacterCard. Visible only in
+   * the COLLAPSED state — the expanded state hides it because the stat rows
+   * surface the same info in higher fidelity (locked decision, see
+   * `character_card.dart` _CardBody).
+   *
+   * Day-0 / no-trained-bodypart users see the same identifier wrapping the
+   * `homeFirstStepFallback` copy.
    */
-  startNewWeek: '[flt-semantics-identifier="home-start-new-week"]',
+  closestRankUp: '[flt-semantics-identifier="home-closest-rank-up"]',
+  /**
+   * Encouragement nudge — single line above ActionHero. Rotating-priority
+   * resolver (cross-build title close / body-part title close / remaining
+   * bucket workouts / streak / day-0 first-step fallback). Semantics
+   * identifier is stable across all 5 nudge variants.
+   */
+  encouragementNudge: '[flt-semantics-identifier="home-encouragement-nudge"]',
+  /**
+   * BucketChipRow root — header + chip wrap (when bucket non-empty) + edit
+   * plan link. Always rendered; the chip wrap collapses when the bucket is
+   * empty but the header + Editar plano link stay visible (locked decision).
+   */
+  bucketChipRow: '[flt-semantics-identifier="home-bucket-chip-row"]',
+  /**
+   * Individual bucket chip — one per planned + spontaneous bucket entry.
+   * Identifier carries the routine UUID (not name) so selectors are stable
+   * across locale changes and routine renames. Tap opens the routine action
+   * sheet.
+   */
+  bucketChip: (routineId: string) =>
+    `[flt-semantics-identifier="home-bucket-chip-${routineId}"]`,
+  /**
+   * "Editar plano →" link below the bucket chip wrap. Always visible (even
+   * when the bucket is empty) — surfaces the plan editor for routines-but-
+   * no-plan users. Pushes /plan/week.
+   */
+  editPlanLink: '[flt-semantics-identifier="home-edit-plan-link"]',
+  /**
+   * ActionHero outer wrapper — stable across all three branches. Charter
+   * specs that just assert "hero exists" can target this; per-branch specs
+   * should use one of the variant identifiers below.
+   */
+  actionHero: '[flt-semantics-identifier="home-action-hero"]',
+  /**
+   * ActionHero "Start <routineName>" branch — bucket has an uncompleted
+   * entry (suggestedNextProvider != null). Tap delegates to
+   * startRoutineWorkout(routine).
+   */
+  actionHeroStartRoutine:
+    '[flt-semantics-identifier="home-action-hero-start-routine"]',
+  /**
+   * ActionHero "Free workout" branch — bucket complete OR no plan exists.
+   * Tap starts an empty workout via _startQuickWorkout (with the existing
+   * resume-vs-start dialog guard).
+   */
+  actionHeroFreeWorkout:
+    '[flt-semantics-identifier="home-action-hero-free-workout"]',
+  /**
+   * ActionHero "Create first routine" branch — user has zero routines. Tap
+   * pushes /routines/create. Replaces the legacy beginner CTA preselect-
+   * default-routine flow.
+   */
+  actionHeroCreateFirstRoutine:
+    '[flt-semantics-identifier="home-action-hero-create-first-routine"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -635,15 +687,29 @@ export const MANAGE_DATA = {
 // Weekly plan — WeekBucketSection (Home screen) and PlanManagementScreen
 // ---------------------------------------------------------------------------
 export const WEEKLY_PLAN = {
-  /** "THIS WEEK" header in WeekReviewSection — Semantics(identifier: 'weekly-plan-this-week') */
+  /**
+   * "THIS WEEK" header in WeekReviewSection (legacy week-complete surface).
+   * Phase 26f: WeekReviewSection is no longer mounted from the home tree;
+   * the bucket chip row (HOME.bucketChipRow) replaced it. Tests that probed
+   * this header against the home screen will never resolve. Kept here only
+   * so the (test.skip-guarded) week-complete weekly-plan specs that
+   * defensively wait on it continue to compile.
+   */
   thisWeekHeader: '[flt-semantics-identifier="weekly-plan-this-week"]',
-  /** "WEEK COMPLETE" header in WeekReviewSection — Semantics(identifier: 'weekly-plan-complete') */
+  /**
+   * "WEEK COMPLETE" header in WeekReviewSection — same dead-surface caveat
+   * as `thisWeekHeader` above.
+   */
   weekCompleteHeader: '[flt-semantics-identifier="weekly-plan-complete"]',
   /**
-   * "Plan your week" CTA — same as HOME.planYourWeek.
-   * _EmptyBucketState was removed; lapsed hero banner uses Semantics(identifier: 'home-plan-your-week').
+   * "Plan your week" affordance on the home tab.
+   * Phase 26f: the legacy `home-plan-your-week` banner was deleted. The
+   * closest 26f equivalent is the "Editar plano →" link on the bucket chip
+   * row — always visible (even on empty bucket) and pushes /plan/week.
+   * Pinned here so legacy WEEKLY_PLAN.planYourWeekCta callers keep resolving
+   * after the home redesign.
    */
-  planYourWeekCta: '[flt-semantics-identifier="home-plan-your-week"]',
+  planYourWeekCta: '[flt-semantics-identifier="home-edit-plan-link"]',
   /** AppBar title of PlanManagementScreen — Semantics(identifier: 'weekly-plan-title') */
   planManagementTitle: '[flt-semantics-identifier="weekly-plan-title"]',
   /** "Add Routines" FilledButton in empty state — Semantics(identifier: 'weekly-plan-add-routines') */
@@ -660,8 +726,18 @@ export const WEEKLY_PLAN = {
   clearWeekOption: '[flt-semantics-identifier="weekly-plan-clear-week"]',
   /** "Clear" confirm button in dialog — Semantics(identifier: 'weekly-plan-clear-confirm') */
   clearConfirmButton: '[flt-semantics-identifier="weekly-plan-clear-confirm"]',
-  /** "Start new week" banner in ActionHero — Semantics(identifier: 'home-start-new-week') */
-  newWeekButton: '[flt-semantics-identifier="home-start-new-week"]',
+  /**
+   * "Start new week" affordance.
+   * Phase 26f: the dedicated `home-start-new-week` banner is gone. In the
+   * week-complete state ActionHero now renders the free-workout banner with
+   * a "Semana completa" subline. The plan-management entry point is the
+   * Editar plano link on the bucket chip row. Pinned here so legacy
+   * WEEKLY_PLAN.newWeekButton callers keep resolving — every consumer of
+   * this selector lives inside a `test.skip()` branch that only fires when a
+   * fully-seeded week-complete user is configured, which is not the case
+   * today.
+   */
+  newWeekButton: '[flt-semantics-identifier="home-edit-plan-link"]',
   /**
    * Stats text in WeekReviewSection — contains "sessions" substring.
    * _buildStatsText always starts with "{n} sessions". Dynamic content — keep text= selector.

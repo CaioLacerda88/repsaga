@@ -296,82 +296,92 @@ void main() {
   // neither copy can be removed without a test failure catching the regression.
   // ---------------------------------------------------------------------------
 
-  group('ActionHero._startQuickWorkout — offline guard', () {
-    late _TrackingActiveWorkoutNotifier trackingNotifier;
+  group(
+    'ActionHero._startQuickWorkout — offline guard',
+    // Phase 26f T10 collapsed ActionHero from 4 branches to 3 and removed
+    // the legacy `_LapsedHero` that surfaced the "Quick workout" secondary
+    // button. T12 deletes this group once `_startQuickWorkout` is fully
+    // unused; until then we skip it so the rest of the offline-guard
+    // contract (startRoutineWorkout) stays under test.
+    skip: 'Retired in T12 — Quick workout button removed in 26f',
+    () {
+      late _TrackingActiveWorkoutNotifier trackingNotifier;
 
-    setUp(() {
-      trackingNotifier = _TrackingActiveWorkoutNotifier();
-    });
+      setUp(() {
+        trackingNotifier = _TrackingActiveWorkoutNotifier();
+      });
 
-    Future<void> pumpActionHeroLapsed(
-      WidgetTester tester, {
-      required bool isOnline,
-    }) async {
-      final router = GoRouter(
-        initialLocation: '/home',
-        routes: [
-          GoRoute(
-            path: '/home',
-            builder: (ctx, _) => Consumer(
-              builder: (context, ref, _) {
-                ref.watch(activeWorkoutProvider);
-                return const Scaffold(body: ActionHero());
-              },
+      Future<void> pumpActionHeroLapsed(
+        WidgetTester tester, {
+        required bool isOnline,
+      }) async {
+        final router = GoRouter(
+          initialLocation: '/home',
+          routes: [
+            GoRoute(
+              path: '/home',
+              builder: (ctx, _) => Consumer(
+                builder: (context, ref, _) {
+                  ref.watch(activeWorkoutProvider);
+                  return const Scaffold(body: ActionHero());
+                },
+              ),
+            ),
+            GoRoute(
+              path: '/workout/active',
+              builder: (ctx, _) =>
+                  const Scaffold(body: Text('Active Workout Screen')),
+            ),
+            GoRoute(
+              path: '/plan/week',
+              builder: (ctx, _) =>
+                  const Scaffold(body: Text('Plan Week Screen')),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              isOnlineProvider.overrideWithValue(isOnline),
+              weeklyPlanProvider.overrideWith(() => _NullPlanStub()),
+              routineListProvider.overrideWith(() => _EmptyRoutineListStub()),
+              // workoutCount > 0 → lapsed state → "Quick workout" button visible.
+              workoutCountProvider.overrideWith((_) => Future.value(3)),
+              activeWorkoutProvider.overrideWith(() => trackingNotifier),
+            ],
+            child: MaterialApp.router(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: AppTheme.dark,
+              routerConfig: router,
             ),
           ),
-          GoRoute(
-            path: '/workout/active',
-            builder: (ctx, _) =>
-                const Scaffold(body: Text('Active Workout Screen')),
-          ),
-          GoRoute(
-            path: '/plan/week',
-            builder: (ctx, _) => const Scaffold(body: Text('Plan Week Screen')),
-          ),
-        ],
-      );
+        );
+      }
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            isOnlineProvider.overrideWithValue(isOnline),
-            weeklyPlanProvider.overrideWith(() => _NullPlanStub()),
-            routineListProvider.overrideWith(() => _EmptyRoutineListStub()),
-            // workoutCount > 0 → lapsed state → "Quick workout" button visible.
-            workoutCountProvider.overrideWith((_) => Future.value(3)),
-            activeWorkoutProvider.overrideWith(() => trackingNotifier),
-          ],
-          child: MaterialApp.router(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            theme: AppTheme.dark,
-            routerConfig: router,
-          ),
-        ),
-      );
-    }
+      testWidgets('shows snackbar and does NOT call startWorkout when offline', (
+        tester,
+      ) async {
+        await pumpActionHeroLapsed(tester, isOnline: false);
+        // Settle so workoutCountProvider resolves and ActionHero renders lapsed.
+        await tester.pumpAndSettle();
 
-    testWidgets('shows snackbar and does NOT call startWorkout when offline', (
-      tester,
-    ) async {
-      await pumpActionHeroLapsed(tester, isOnline: false);
-      // Settle so workoutCountProvider resolves and ActionHero renders lapsed.
-      await tester.pumpAndSettle();
+        // The lapsed hero renders "Quick workout" as a secondary OutlinedButton.
+        expect(find.text('Quick workout'), findsOneWidget);
 
-      // The lapsed hero renders "Quick workout" as a secondary OutlinedButton.
-      expect(find.text('Quick workout'), findsOneWidget);
+        await tester.tap(find.text('Quick workout'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.text('Quick workout'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          find.text('Starting a workout requires an internet connection'),
+          findsOneWidget,
+        );
 
-      expect(
-        find.text('Starting a workout requires an internet connection'),
-        findsOneWidget,
-      );
-
-      // The tracking notifier must not have been asked to start a workout.
-      expect(trackingNotifier.startWorkoutCallCount, 0);
-    });
-  });
+        // The tracking notifier must not have been asked to start a workout.
+        expect(trackingNotifier.startWorkoutCallCount, 0);
+      });
+    },
+  );
 }

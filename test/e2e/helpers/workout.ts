@@ -25,73 +25,36 @@
 
 import { Page, expect } from '@playwright/test';
 import { flutterFill } from './app';
-import { WORKOUT, EXERCISE_PICKER, HOME, FIRST_WORKOUT_CTA } from './selectors';
+import { WORKOUT, EXERCISE_PICKER, HOME } from './selectors';
 
 /**
  * Start an empty workout from the Home screen.
  *
- * W8 Home refresh removed the "Start Empty Workout" FilledButton. The helper
- * now handles two home states:
+ * Phase 26f ActionHero exposes three branches; the entry point that always
+ * starts a *new* workout (rather than starting a planned routine or pushing
+ * the routine-create flow) is the "Free workout" branch:
  *
- *   - Lapsed state (has history, no plan): taps "Quick workout" OutlinedButton.
- *   - Brand-new state (no history, no plan): the hero shows "YOUR FIRST WORKOUT"
- *     which starts the Full Body routine, not an empty workout. In this case we
- *     fall back to tapping the beginner CTA (FIRST_WORKOUT_CTA.card — the button
- *     role selector) and accept that it starts a routine instead of an empty
- *     workout. Tests using freshStateUsers that need truly empty workouts should
- *     ensure lapsed state by completing one workout first.
+ *   - Bucket has uncompleted entry → home-action-hero-start-routine (starts
+ *     a planned routine — NOT an empty workout, this helper avoids that).
+ *   - Bucket complete OR no plan exists → home-action-hero-free-workout
+ *     (starts an empty workout — what this helper wants).
+ *   - User has zero routines → home-action-hero-create-first-routine (pushes
+ *     /routines/create; tapping this would NOT reach the active workout).
  *
- * For tests that need a truly empty workout (no exercises pre-filled), use the
- * lapsed state by ensuring the user has at least one completed workout before
- * calling this helper. Users in global-setup freshStateUsers start brand-new
- * but transition to lapsed after the first test in each suite completes a workout.
+ * Callers that need a guaranteed-empty workout must seed the user into the
+ * "free workout" branch — either lapsed (has history, no plan) or fully
+ * complete week. The full E2E suite seeds users into lapsed state via
+ * `seedMinimalWorkout` so this helper resolves the free-workout banner.
  */
 export async function startEmptyWorkout(page: Page): Promise<void> {
-  // W8 Home refresh removed the "Start Empty Workout" FilledButton.
-  // The entry points are now state-dependent:
-  //   - Lapsed (has history, no plan): "Quick workout" OutlinedButton
-  //   - Brand-new (no history, no plan): "YOUR FIRST WORKOUT" hero CTA
-  //
-  // Wait for the home screen to stabilise (either state is visible), then click
-  // the appropriate entry point. We use waitFor({ state: 'visible' }) so the
-  // helper actually waits rather than doing an immediate snapshot check.
-  //
-  // Prefer "Quick workout" (lapsed state). If it never appears within 10 s,
-  // fall back to the "YOUR FIRST WORKOUT" beginner CTA (brand-new state).
-
-  const quickWorkoutLoc = page.locator(HOME.quickWorkout).first();
-  const beginnerCtaLoc = page.locator(FIRST_WORKOUT_CTA.card).first();
-
-  // Race the two locators: whichever becomes visible first wins.
-  const quickWorkoutVisible = await quickWorkoutLoc
-    .waitFor({ state: 'visible', timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (quickWorkoutVisible) {
-    await quickWorkoutLoc.click();
-  } else {
-    // Brand-new state: the beginner CTA card is the only entry point.
-    // Use .first() to guard against Flutter AOM duplicate nodes.
-    await beginnerCtaLoc.waitFor({ state: 'visible', timeout: 10_000 });
-    await beginnerCtaLoc.click();
-    // Flutter CanvasKit may need a second tap to fire the InkWell after the
-    // first click activates the semantics overlay.
-    await page.waitForTimeout(800);
-    // BUG-020: WORKOUT.finishButton is no longer used as the navigation
-    // sentinel here. After BUG-020 the Finish button lives in the bottom bar
-    // and is HIDDEN on the empty workout body (no exercises yet). Use the
-    // Add Exercise FAB / empty-state CTA instead — it is always visible on
-    // the active workout screen regardless of exercise count.
-    const navigated = await page
-      .locator(WORKOUT.addExerciseFab)
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-    if (!navigated) {
-      await beginnerCtaLoc.click().catch(() => {});
-      await page.waitForTimeout(800);
-    }
-  }
+  // 26f: the free-workout ActionHero banner is the single deterministic
+  // entry point for an empty workout. Wait for it explicitly — if the user
+  // is in the wrong state (no routines OR bucket has uncompleted entries),
+  // surface a clear failure rather than misleadingly starting a planned
+  // routine.
+  const freeWorkoutLoc = page.locator(HOME.actionHeroFreeWorkout).first();
+  await freeWorkoutLoc.waitFor({ state: 'visible', timeout: 15_000 });
+  await freeWorkoutLoc.click();
 
   // BUG-020: confirm we reached the active workout screen by waiting for the
   // Add Exercise entry point (visible on both empty-body and FAB states).

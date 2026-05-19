@@ -1076,23 +1076,95 @@ abstract class AppLocalizations {
   /// **'Advanced'**
   String get fitnessLevelAdvanced;
 
-  /// Home status line when week is complete
+  /// ActionHero headline when the user has zero routines — points them at routine creation. Phase 26f.
   ///
   /// In en, this message translates to:
-  /// **'Week complete — {count} of {count} done'**
-  String homeStatusWeekComplete(int count);
+  /// **'Create first routine'**
+  String get homeActionHeroCreateFirstRoutine;
 
-  /// Home status line suffix showing weekly progress
+  /// ActionHero headline when the bucket is empty or fully complete — the user can still start an unplanned (spontaneous) workout. Phase 26f.
   ///
   /// In en, this message translates to:
-  /// **' of {total} this week'**
-  String homeStatusProgress(int total);
+  /// **'Free workout'**
+  String get homeActionHeroFreeWorkout;
 
-  /// Home status: no active plan
+  /// ActionHero subline shown beneath the free-workout headline when every planned routine in the week's bucket has been completed. Phase 26f.
   ///
   /// In en, this message translates to:
-  /// **'No plan this week'**
-  String get noPlanThisWeek;
+  /// **'Week complete'**
+  String get homeActionHeroFreeWorkoutSubtitleWeekComplete;
+
+  /// ActionHero headline pointing at the next uncompleted routine in the week's bucket. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Start {routineName}'**
+  String homeActionHeroStartRoutine(String routineName);
+
+  /// Right-aligned counter on the home bucket section header. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No days trained} =1{1 day trained} other{{count} days trained}}'**
+  String homeBucketDaysTrained(int count);
+
+  /// Section title for the home bucket chip row. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get homeBucketSectionTitle;
+
+  /// Star-marked badge text on bucket chips for spontaneous (off-plan) routines logged during the week. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get homeBucketSpontaneousBadge;
+
+  /// Semantics hint on the chevron of the home character card — communicates the tap affordance to assistive tech. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to expand character details'**
+  String get homeCharacterCardChevronHint;
+
+  /// Collapsed character-card indicator highlighting the body part closest to its next rank threshold. Diamond glyph (◆) prefix matches the body-part hue at render time. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'◆ {bodyPart} · {xp} XP for rank {rank}'**
+  String homeClosestRankUp(String bodyPart, int xp, int rank);
+
+  /// Right-aligned link below the home bucket chip row that opens the weekly plan editor. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit plan →'**
+  String get homeEditPlanLink;
+
+  /// Fallback copy shown on the collapsed character card when the user has no trained body parts yet (day-0). Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Begin your journey — first set awaits'**
+  String get homeFirstStepFallback;
+
+  /// Encouragement nudge variant when a body-part-specific title is within one rank. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'{bodyPart} title within reach: {titleName}'**
+  String homeNudgeBodyPartTitleClose(String bodyPart, String titleName);
+
+  /// Encouragement nudge variant when a cross-build (distinction) title is within reach. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-build title within reach: {titleName}'**
+  String homeNudgeCrossBuildClose(String titleName);
+
+  /// Encouragement nudge variant when planned bucket entries remain for the current week. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Need 1 workout to close the week} other{Need {count} workouts to close the week}}'**
+  String homeNudgeRemainingWorkouts(int count);
+
+  /// Encouragement nudge variant celebrating a consecutive-day training streak. Phase 26f.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1-day streak} other{{count}-day streak}}'**
+  String homeNudgeStreakDays(int count);
 
   /// Confirmation banner question
   ///

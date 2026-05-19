@@ -1,23 +1,32 @@
-/// Navigation tests for the W8 redesigned home screen.
+/// Navigation tests for HomeScreen.
 ///
-/// - LastSessionLine navigates to /home/history via push.
-/// - "Quick workout" (lapsed-state secondary CTA) goes to /workout/active via go.
+/// Covers the navigation flows that fan out from Home:
+/// - LastSessionLine → /home/history via push (history detail entry).
+/// - "EDITAR PLANO →" link in BucketChipRow → /plan/week (plan editor).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
+import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
+import 'package:repsaga/features/rpg/models/vitality_state.dart';
+import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
+import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
 import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/notifiers/active_workout_notifier.dart';
+import 'package:repsaga/features/workouts/providers/streak_provider.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/core/offline/pending_sync_provider.dart';
@@ -30,6 +39,8 @@ import 'package:repsaga/l10n/app_localizations.dart';
 // ---------------------------------------------------------------------------
 // Stubs
 // ---------------------------------------------------------------------------
+
+class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 class _RoutineStub extends AsyncNotifier<List<Routine>>
     implements RoutineListNotifier {
@@ -108,7 +119,7 @@ class _ZeroPendingSyncNotifier extends PendingSyncNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// Harness
+// Fixture builders
 // ---------------------------------------------------------------------------
 
 Workout _workout({required String finishedAt, String name = 'Push Day'}) =>
@@ -116,7 +127,40 @@ Workout _workout({required String finishedAt, String name = 'Push Day'}) =>
       TestWorkoutFactory.create(name: name, finishedAt: finishedAt),
     );
 
-Widget _buildTestApp({required List<Workout> workouts}) {
+BodyPartSheetEntry _untrained(BodyPart bp) => BodyPartSheetEntry(
+  bodyPart: bp,
+  rank: 1,
+  vitalityEwma: 0,
+  vitalityPeak: 0,
+  vitalityState: VitalityState.untested,
+  xpInRank: 0,
+  xpForNextRank: 100,
+  totalXp: 0,
+);
+
+CharacterSheetState _dayZeroSheet() => CharacterSheetState(
+  characterLevel: 1,
+  lifetimeXp: 0,
+  xpForNextLevel: 1000,
+  bodyPartProgress: [for (final bp in activeBodyParts) _untrained(bp)],
+  activeTitle: null,
+  characterClass: null,
+);
+
+// ---------------------------------------------------------------------------
+// Harness
+// ---------------------------------------------------------------------------
+
+Widget _buildTestApp({
+  required List<Workout> workouts,
+  WeeklyPlan? plan,
+  List<Routine> routines = const [],
+}) {
+  final pulseStorage = _MockPulseStorage();
+  when(
+    () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
+
   final router = GoRouter(
     initialLocation: '/home',
     routes: [
@@ -146,10 +190,10 @@ Widget _buildTestApp({required List<Workout> workouts}) {
 
   return ProviderScope(
     overrides: [
-      routineListProvider.overrideWith(() => _RoutineStub(const [])),
+      routineListProvider.overrideWith(() => _RoutineStub(routines)),
       workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
-      weeklyPlanProvider.overrideWith(() => _PlanStub(null)),
+      weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
       weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
       workoutCountProvider.overrideWith((ref) => Future.value(workouts.length)),
       profileProvider.overrideWith(
@@ -158,6 +202,9 @@ Widget _buildTestApp({required List<Workout> workouts}) {
         ),
       ),
       pendingSyncProvider.overrideWith(() => _ZeroPendingSyncNotifier()),
+      characterSheetProvider.overrideWith((_) => AsyncData(_dayZeroSheet())),
+      rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+      streakProvider.overrideWith((ref) => 0),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -173,6 +220,10 @@ Widget _buildTestApp({required List<Workout> workouts}) {
 // ---------------------------------------------------------------------------
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(BodyPart.chest);
+  });
+
   group('HomeScreen - last session line navigation', () {
     testWidgets('tapping LastSessionLine navigates to /home/history via push', (
       tester,
@@ -188,9 +239,16 @@ void main() {
           workouts: [_workout(finishedAt: yesterday.toIso8601String())],
         ),
       );
+      // CharacterCard's RuneHalo runs infinite animations, so we avoid
+      // pumpAndSettle on the source tree; two pumps are enough for the
+      // history line to hydrate.
       await tester.pump();
       await tester.pump();
 
+      // Scroll the LastSessionLine into view — the new home composition
+      // pushes it below the CharacterCard, which can place it off-screen
+      // on the default test viewport.
+      await tester.scrollUntilVisible(find.byType(LastSessionLine), 200);
       await tester.tap(find.byType(LastSessionLine));
       await tester.pumpAndSettle();
 
@@ -215,43 +273,50 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      await tester.scrollUntilVisible(find.byType(LastSessionLine), 200);
       await tester.tap(find.byType(LastSessionLine));
       await tester.pumpAndSettle();
       expect(find.text('History Screen'), findsOneWidget);
 
       final nav = tester.state<NavigatorState>(find.byType(Navigator).last);
       nav.pop();
-      await tester.pumpAndSettle();
+      // Cannot pumpAndSettle after pop — CharacterCard's RuneHalo runs
+      // infinite-loop AnimationControllers (8s rotation, 3s breathing
+      // pulse) on the destination (Home) tree. Stepped pumps drain the
+      // pop transition without waiting for animation idle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
 
-      // Home is visible again - no History on stack.
+      // History is off the stack — destination text gone.
       expect(find.text('History Screen'), findsNothing);
     });
   });
 
-  group('HomeScreen - lapsed-state secondary CTA navigation', () {
+  group('HomeScreen - bucket chip row navigation', () {
     testWidgets(
-      'tapping Quick workout (lapsed state) navigates to /workout/active',
+      'tapping "Edit plan" link in BucketChipRow navigates to /plan/week',
       (tester) async {
-        tester.view.physicalSize = const Size(800, 2000);
+        tester.view.physicalSize = const Size(800, 2400);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
 
-        final yesterday = DateTime.now().subtract(const Duration(days: 1));
-        await tester.pumpWidget(
-          _buildTestApp(
-            workouts: [_workout(finishedAt: yesterday.toIso8601String())],
-          ),
-        );
+        // Empty bucket — the BucketChipRow still surfaces the "Edit plan →"
+        // link (DECISION LOCKED 2026-05-18) so this navigation flow works
+        // even for "has-routines-but-no-plan" users.
+        await tester.pumpWidget(_buildTestApp(workouts: const [], plan: null));
         await tester.pump();
         await tester.pump();
 
-        await tester.tap(find.text('Quick workout'));
-        // Allow the activeWorkoutProvider to resolve and the navigation to
-        // settle. Multiple pumps model the async startWorkout flow.
+        // English locale (TestMaterialApp default) — the link reads
+        // "EDIT PLAN →".
+        final link = find.text('EDIT PLAN →');
+        await tester.scrollUntilVisible(link, 200);
+        await tester.tap(link);
         await tester.pumpAndSettle();
 
-        expect(find.text('Active Workout Screen'), findsOneWidget);
+        expect(find.text('Plan Week Screen'), findsOneWidget);
       },
     );
   });

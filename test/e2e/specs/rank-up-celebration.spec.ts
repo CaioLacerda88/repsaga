@@ -206,6 +206,23 @@ async function reseedRpgFreshUser(): Promise<void> {
       { onConflict: 'user_id,exercise_id' },
     );
   }
+
+  // Phase 26f ActionHero day-0 gate: workoutCount == 0 renders
+  // _CreateFirstRoutineHero (no path into empty workout). Re-seed one
+  // finished workout with NO sets so getFinishedWorkoutCount returns 1 →
+  // the FreeWorkout branch wins → startEmptyWorkout can resolve the
+  // free-workout banner. Sets-less workout is XP-neutral so the
+  // CelebrationEventBuilder snapshot diff still flags
+  // wasUntouched → isNowTouched for the exercises this test logs.
+  const warmupStartedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const warmupFinishedAt = new Date(Date.now() - 90 * 60 * 1000);
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Warmup Workout',
+    started_at: warmupStartedAt.toISOString(),
+    finished_at: warmupFinishedAt.toISOString(),
+    duration_seconds: 1800,
+  });
 }
 
 // Reseed rpgOverflowQueue: all 6 body parts rank 3 @ 196 XP.
@@ -483,7 +500,9 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     // newly equipped title.
     await page.waitForURL(/\/home/, { timeout: 10_000 });
     // Wait for home screen to stabilise before navigating to profile tab.
-    await page.locator(HOME.quickWorkout).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+    // 26f: the CharacterCard always renders on Home and replaces the legacy
+    // "Quick workout" CTA as the post-workout home-loaded sentinel.
+    await page.locator(HOME.characterCard).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     await page.locator(WORKOUT.finishButton).waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
 
     // Navigate to Profile (Saga) tab and verify active title pill is set.

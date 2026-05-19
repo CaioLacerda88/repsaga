@@ -37,9 +37,11 @@ test.describe('Workout history pt locale', () => {
     const ptBenchName = EXERCISE_NAMES.barbell_bench_press.pt;
     const enBenchName = EXERCISE_NAMES.barbell_bench_press.en;
 
-    // Navigate to Home and wait for it to render.
+    // Navigate to Home and wait for it to render. 26f: the CharacterCard
+    // is always-present on home and is the steady-state "home loaded"
+    // sentinel — replaces the legacy home-status-line check.
     await navigateToTab(page, 'Home');
-    await expect(page.locator(HOME.statusLine)).toBeVisible({
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
       timeout: 15_000,
     });
 

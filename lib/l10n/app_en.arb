@@ -375,22 +375,74 @@
   "fitnessLevelAdvanced": "Advanced",
   "@fitnessLevelAdvanced": { "description": "Fitness level: advanced" },
 
-  "homeStatusWeekComplete": "Week complete \u2014 {count} of {count} done",
-  "@homeStatusWeekComplete": {
-    "description": "Home status line when week is complete",
+  "homeActionHeroCreateFirstRoutine": "Create first routine",
+  "@homeActionHeroCreateFirstRoutine": { "description": "ActionHero headline when the user has zero routines \u2014 points them at routine creation. Phase 26f." },
+  "homeActionHeroFreeWorkout": "Free workout",
+  "@homeActionHeroFreeWorkout": { "description": "ActionHero headline when the bucket is empty or fully complete \u2014 the user can still start an unplanned (spontaneous) workout. Phase 26f." },
+  "homeActionHeroFreeWorkoutSubtitleWeekComplete": "Week complete",
+  "@homeActionHeroFreeWorkoutSubtitleWeekComplete": { "description": "ActionHero subline shown beneath the free-workout headline when every planned routine in the week's bucket has been completed. Phase 26f." },
+  "homeActionHeroStartRoutine": "Start {routineName}",
+  "@homeActionHeroStartRoutine": {
+    "description": "ActionHero headline pointing at the next uncompleted routine in the week's bucket. Phase 26f.",
     "placeholders": {
-      "count": { "type": "int", "example": "4" }
+      "routineName": { "type": "String", "example": "Push Day" }
     }
   },
-  "homeStatusProgress": " of {total} this week",
-  "@homeStatusProgress": {
-    "description": "Home status line suffix showing weekly progress",
+  "homeBucketDaysTrained": "{count, plural, =0{No days trained} =1{1 day trained} other{{count} days trained}}",
+  "@homeBucketDaysTrained": {
+    "description": "Right-aligned counter on the home bucket section header. Phase 26f.",
     "placeholders": {
-      "total": { "type": "int", "example": "4" }
+      "count": { "type": "int", "format": "decimalPattern" }
     }
   },
-  "noPlanThisWeek": "No plan this week",
-  "@noPlanThisWeek": { "description": "Home status: no active plan" },
+  "homeBucketSectionTitle": "This week",
+  "@homeBucketSectionTitle": { "description": "Section title for the home bucket chip row. Phase 26f." },
+  "homeBucketSpontaneousBadge": "Free",
+  "@homeBucketSpontaneousBadge": { "description": "Star-marked badge text on bucket chips for spontaneous (off-plan) routines logged during the week. Phase 26f." },
+  "homeCharacterCardChevronHint": "Tap to expand character details",
+  "@homeCharacterCardChevronHint": { "description": "Semantics hint on the chevron of the home character card \u2014 communicates the tap affordance to assistive tech. Phase 26f." },
+  "homeClosestRankUp": "\u25c6 {bodyPart} \u00b7 {xp} XP for rank {rank}",
+  "@homeClosestRankUp": {
+    "description": "Collapsed character-card indicator highlighting the body part closest to its next rank threshold. Diamond glyph (\u25c6) prefix matches the body-part hue at render time. Phase 26f.",
+    "placeholders": {
+      "bodyPart": { "type": "String", "example": "Chest" },
+      "xp": { "type": "int", "example": "80" },
+      "rank": { "type": "int", "example": "4" }
+    }
+  },
+  "homeEditPlanLink": "Edit plan \u2192",
+  "@homeEditPlanLink": { "description": "Right-aligned link below the home bucket chip row that opens the weekly plan editor. Phase 26f." },
+  "homeFirstStepFallback": "Begin your journey \u2014 first set awaits",
+  "@homeFirstStepFallback": { "description": "Fallback copy shown on the collapsed character card when the user has no trained body parts yet (day-0). Phase 26f." },
+  "homeNudgeBodyPartTitleClose": "{bodyPart} title within reach: {titleName}",
+  "@homeNudgeBodyPartTitleClose": {
+    "description": "Encouragement nudge variant when a body-part-specific title is within one rank. Phase 26f.",
+    "placeholders": {
+      "bodyPart": { "type": "String", "example": "Chest" },
+      "titleName": { "type": "String", "example": "Iron Chested" }
+    }
+  },
+  "homeNudgeCrossBuildClose": "Cross-build title within reach: {titleName}",
+  "@homeNudgeCrossBuildClose": {
+    "description": "Encouragement nudge variant when a cross-build (distinction) title is within reach. Phase 26f.",
+    "placeholders": {
+      "titleName": { "type": "String", "example": "Iron Bound" }
+    }
+  },
+  "homeNudgeRemainingWorkouts": "{count, plural, =1{Need 1 workout to close the week} other{Need {count} workouts to close the week}}",
+  "@homeNudgeRemainingWorkouts": {
+    "description": "Encouragement nudge variant when planned bucket entries remain for the current week. Phase 26f.",
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "homeNudgeStreakDays": "{count, plural, =1{1-day streak} other{{count}-day streak}}",
+  "@homeNudgeStreakDays": {
+    "description": "Encouragement nudge variant celebrating a consecutive-day training streak. Phase 26f.",
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
   "samePlanThisWeek": "Same plan this week?",
   "@samePlanThisWeek": { "description": "Confirmation banner question" },
   "myRoutines": "MY ROUTINES",

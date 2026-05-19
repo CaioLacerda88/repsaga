@@ -538,17 +538,96 @@ class AppLocalizationsPt extends AppLocalizations {
   String get fitnessLevelAdvanced => 'Avançado';
 
   @override
-  String homeStatusWeekComplete(int count) {
-    return 'Semana completa — $count de $count concluídos';
+  String get homeActionHeroCreateFirstRoutine => 'Criar primeira rotina';
+
+  @override
+  String get homeActionHeroFreeWorkout => 'Treino livre';
+
+  @override
+  String get homeActionHeroFreeWorkoutSubtitleWeekComplete => 'Semana completa';
+
+  @override
+  String homeActionHeroStartRoutine(String routineName) {
+    return 'Iniciar $routineName';
   }
 
   @override
-  String homeStatusProgress(int total) {
-    return ' de $total esta semana';
+  String homeBucketDaysTrained(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString dias treinados',
+      one: '1 dia treinado',
+      zero: 'Nenhum dia treinado',
+    );
+    return '$_temp0';
   }
 
   @override
-  String get noPlanThisWeek => 'Sem plano esta semana';
+  String get homeBucketSectionTitle => 'Esta semana';
+
+  @override
+  String get homeBucketSpontaneousBadge => 'Livre';
+
+  @override
+  String get homeCharacterCardChevronHint =>
+      'Toque para expandir detalhes do personagem';
+
+  @override
+  String homeClosestRankUp(String bodyPart, int xp, int rank) {
+    return '◆ $bodyPart · $xp XP p/ rank $rank';
+  }
+
+  @override
+  String get homeEditPlanLink => 'Editar plano →';
+
+  @override
+  String get homeFirstStepFallback =>
+      'Comece sua jornada — primeiro set aguarda';
+
+  @override
+  String homeNudgeBodyPartTitleClose(String bodyPart, String titleName) {
+    return 'Título de $bodyPart ao alcance: $titleName';
+  }
+
+  @override
+  String homeNudgeCrossBuildClose(String titleName) {
+    return 'Título Especial ao alcance: $titleName';
+  }
+
+  @override
+  String homeNudgeRemainingWorkouts(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Faltam $countString treinos para fechar a semana',
+      one: 'Falta 1 treino para fechar a semana',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String homeNudgeStreakDays(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString dias de sequência',
+      one: '1 dia de sequência',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get samePlanThisWeek => 'Mesmo plano esta semana?';

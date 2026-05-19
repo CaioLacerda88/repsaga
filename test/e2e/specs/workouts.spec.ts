@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, FIRST_WORKOUT_CTA, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
+import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -79,31 +79,19 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
   test('should show home screen with a workout entry point after login', async ({
     page,
   }) => {
-    // After login the home screen should be visible with the navigation bar
-    // and a way to start a workout. W8: the "Start Empty Workout" button was
-    // replaced — the home screen shows either:
-    //   • "Quick workout" (lapsed state, has history)
-    //   • "YOUR FIRST WORKOUT" card (brand-new, no history)
+    // After login the home screen must surface a way to start a workout.
+    // Phase 26f ActionHero is one of three branches keyed off bucket / routine
+    // state — any of the three branches counts as a valid workout entry point:
+    //   • home-action-hero-free-workout         (bucket complete OR no plan)
+    //   • home-action-hero-start-routine        (bucket has uncompleted entry)
+    //   • home-action-hero-create-first-routine (user has zero routines)
     //
     // Use waitFor() (retrying) rather than isVisible() (one-shot check) so the
     // test properly waits for the ActionHero to render after the provider loads.
     await expect(page.locator(NAV.homeTab)).toBeVisible();
-    const hasQuickWorkout = await page
-      .locator(HOME.quickWorkout)
-      .first()
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    // Flutter AOM exposes the hero card as a button — use the card selector
-    // (role=button[name*="YOUR FIRST WORKOUT"]) not the plain text selector
-    // (text=) which only matches DOM text nodes, not aria-labels.
-    const hasBeginnerCta = await page
-      .locator(FIRST_WORKOUT_CTA.card)
-      .first()
-      .waitFor({ state: 'visible', timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    expect(hasQuickWorkout || hasBeginnerCta).toBe(true);
+    await expect(page.locator(HOME.actionHero).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('should complete full workout journey: start, add exercise, set weight/reps, complete set, finish', async ({

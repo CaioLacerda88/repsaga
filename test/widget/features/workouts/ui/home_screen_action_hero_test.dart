@@ -1,11 +1,22 @@
-/// Widget tests for the home Action Hero banner CTA.
+/// Widget tests for the Phase 26f Action Hero (3-branch contract).
 ///
-/// Covers the four state modes per PLAN W8:
-///   1. Active plan + incomplete week -> "Start {suggestedNext routineName}"
-///   2. Brand new (no plan, no history) -> beginner CTA (Full Body)
-///   3. Lapsed (no plan, has history) -> "Plan your week" primary + "Quick
-///      workout" secondary TextButton below
-///   4. Week complete -> "Start new week" (navigates to /plan/week)
+/// Branches (decision locked 2026-05-18, docs/WIP.md → T10):
+///   1. Routines empty → `_CreateFirstRoutineHero` (identifier:
+///      `home-action-hero-create-first-routine`). Headline "Criar primeira
+///      rotina"; tap → push `/routines/create`.
+///   2. `suggestedNextProvider` returns a `BucketRoutine` → `_StartNextRoutineHero`
+///      (identifier: `home-action-hero-start-routine`). Eyebrow "INICIAR",
+///      headline `Iniciar {routineName}`, subline = exercise count + duration.
+///      Tap → start the routine (mirrors the active-plan branch).
+///   3. Else → `_FreeWorkoutHero` (identifier: `home-action-hero-free-workout`).
+///      Eyebrow "TREINO LIVRE", headline "Treino livre". Subline =
+///      "Semana completa" when `isWeekCompleteProvider` is true, otherwise
+///      absent. Tap → quick workout flow (mirrors the legacy `_startQuickWorkout`
+///      helper, including the resume-vs-start dialog).
+///
+/// Each branch sets a per-branch `flt-semantics-identifier` AND lives under the
+/// stable outer wrapper `home-action-hero` so charter specs that target the
+/// outer hero keep working.
 library;
 
 import 'package:flutter/material.dart';
@@ -25,57 +36,30 @@ import 'package:repsaga/features/workouts/providers/notifiers/active_workout_not
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
-
-import '../../../../fixtures/test_factories.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
+import '../../../../fixtures/test_factories.dart';
+
 // ---------------------------------------------------------------------------
-// Stubs
+// Stubs — extend the real notifiers so AsyncNotifierProvider.overrideWith
+// can receive a typed factory. Following the bucket_chip_row_test pattern
+// from T9.
 // ---------------------------------------------------------------------------
 
-class _PlanStub extends AsyncNotifier<WeeklyPlan?>
-    implements WeeklyPlanNotifier {
-  _PlanStub(this.plan);
-  final WeeklyPlan? plan;
+class _PlanStub extends WeeklyPlanNotifier {
+  _PlanStub(this._plan);
+  final WeeklyPlan? _plan;
 
   @override
-  Future<WeeklyPlan?> build() async => plan;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  Future<WeeklyPlan?> build() async => _plan;
 }
 
-class _RoutineListStub extends AsyncNotifier<List<Routine>>
-    implements RoutineListNotifier {
-  _RoutineListStub(this.routines);
-  final List<Routine> routines;
+class _RoutineListStub extends RoutineListNotifier {
+  _RoutineListStub(this._routines);
+  final List<Routine> _routines;
 
   @override
-  Future<List<Routine>> build() async => routines;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _HistoryStub extends AsyncNotifier<List<Workout>>
-    implements WorkoutHistoryNotifier {
-  _HistoryStub(this.workouts);
-  final List<Workout> workouts;
-
-  @override
-  Future<List<Workout>> build() async => workouts;
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
-
-  @override
-  Future<void> loadMore() async {}
-
-  @override
-  Future<void> refresh() async {}
+  Future<List<Routine>> build() async => _routines;
 }
 
 class _NullActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
@@ -89,15 +73,21 @@ class _NullActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
   @override
   Future<void> startFromRoutine(RoutineStartConfig config) async {}
 
+  /// Same idea for the free-workout branch: `_startQuickWorkout` calls
+  /// `startWorkout()` when no existing workout is present.
+  @override
+  Future<void> startWorkout([String? name]) async {}
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// Tracks `discardWorkout` + `startWorkout` calls so tests can assert the
-/// B1 "Quick workout → Discard → new workout started" path. The initial
-/// seed represents the stale active workout the user is about to discard;
-/// after discard the state becomes null; after startWorkout it becomes
-/// [_startedState] (a distinct workout id so tests can tell them apart).
+/// Tracks `discardWorkout` + `startWorkout` calls so the resume-vs-start
+/// regression test can assert "Quick workout → Discard → fresh workout
+/// started" (carried forward from the legacy 4-branch test). The seed
+/// represents the stale active workout the user is about to discard; after
+/// discard the state becomes null; after startWorkout it becomes
+/// [_startedState] (distinct workout id so tests can tell them apart).
 class _SeededActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
     implements ActiveWorkoutNotifier {
   _SeededActiveWorkoutNotifier(this._seed);
@@ -139,14 +129,14 @@ class _SeededActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
 }
 
 // ---------------------------------------------------------------------------
-// Factories
+// Fixture builders
 // ---------------------------------------------------------------------------
 
 Routine _routine({
   required String id,
   required String name,
   bool isDefault = false,
-  String? userId,
+  String? userId = 'user-001',
 }) => Routine(
   id: id,
   name: name,
@@ -156,33 +146,10 @@ Routine _routine({
   createdAt: DateTime(2026),
 );
 
-BucketRoutine _bucket({
-  required String routineId,
-  required int order,
-  String? completedWorkoutId,
-}) => BucketRoutine(
-  routineId: routineId,
-  order: order,
-  completedWorkoutId: completedWorkoutId,
-);
-
-WeeklyPlan _plan({required List<BucketRoutine> routines}) => WeeklyPlan(
-  id: 'plan-001',
-  userId: 'user-001',
-  weekStart: DateTime(2026, 4, 13),
-  routines: routines,
-  createdAt: DateTime(2026, 4, 13),
-  updatedAt: DateTime(2026, 4, 13),
-);
-
-Workout _workout() => Workout.fromJson(
-  TestWorkoutFactory.create(finishedAt: '2026-04-10T10:00:00Z'),
-);
-
-/// Builds a routine whose single exercise has a resolved (non-null,
-/// non-deleted) [Exercise] so `startRoutineWorkout` proceeds through to
+/// A routine whose single exercise has a resolved (non-null, non-deleted)
+/// [Exercise] so `startRoutineWorkout` proceeds through to
 /// `context.go('/workout/active')` rather than showing the empty-exercises
-/// snackbar.
+/// snackbar. Used by the tap-navigation tests.
 Routine _routineWithResolvedExercise({
   required String id,
   required String name,
@@ -207,10 +174,29 @@ Routine _routineWithResolvedExercise({
   return Routine.fromJson(routineJson);
 }
 
-/// Seeded active-workout state used by the discard-then-start test.
+BucketRoutine _bucket({
+  required String routineId,
+  required int order,
+  String? completedWorkoutId,
+}) => BucketRoutine(
+  routineId: routineId,
+  order: order,
+  completedWorkoutId: completedWorkoutId,
+);
+
+WeeklyPlan _plan({required List<BucketRoutine> routines}) => WeeklyPlan(
+  id: 'plan-001',
+  userId: 'user-001',
+  weekStart: DateTime(2026, 4, 13),
+  routines: routines,
+  createdAt: DateTime(2026, 4, 13),
+  updatedAt: DateTime(2026, 4, 13),
+);
+
+/// Seeded active-workout state used by the discard-then-start regression test.
 ///
 /// `startedAt` is "now minus 10 minutes" so the [ResumeWorkoutDialog] picks
-/// the non-stale copy ("Resume workout?") — keeps the test locator stable
+/// the non-stale copy ("Resume workout?") — keeps the locator stable
 /// regardless of when the suite runs.
 ActiveWorkoutState _seedActiveWorkout() {
   final startedAt = DateTime.now().toUtc().subtract(
@@ -246,10 +232,12 @@ ActiveWorkoutState _seedActiveWorkout() {
 Widget _buildWithRouter({
   WeeklyPlan? plan,
   List<Routine> routines = const [],
-  List<Workout> workouts = const [],
-  int workoutCount = 0,
-  void Function(String)? onPushed,
+  // Default to 1 (returning user) so the day-0 branch isn't triggered for
+  // tests that just exercise bucket / free-workout state. Tests targeting
+  // `_CreateFirstRoutineHero` pass `workoutCount: 0` explicitly.
+  int workoutCount = 1,
   ActiveWorkoutNotifier Function()? activeWorkoutNotifier,
+  ValueChanged<String>? onRoute,
 }) {
   final router = GoRouter(
     initialLocation: '/home',
@@ -257,10 +245,10 @@ Widget _buildWithRouter({
       GoRoute(
         path: '/home',
         // Wraps ActionHero in a Consumer that silently watches
-        // activeWorkoutProvider so the seeded AsyncNotifier actually
-        // builds and commits its initial state — otherwise the provider
-        // stays uninitialized and `_startQuickWorkout`'s `ref.read(...)
-        // .value` reads a null AsyncLoading on first tap.
+        // activeWorkoutProvider so the seeded AsyncNotifier actually builds
+        // and commits its initial state — otherwise the provider stays
+        // uninitialized and `_startQuickWorkout`'s `ref.read(...).value`
+        // reads a null AsyncLoading on first tap.
         builder: (ctx, _) => Scaffold(
           body: Consumer(
             builder: (context, ref, _) {
@@ -271,20 +259,23 @@ Widget _buildWithRouter({
         ),
       ),
       GoRoute(
-        path: '/plan/week',
-        builder: (ctx, _) =>
-            const Scaffold(body: Center(child: Text('Plan Week Screen'))),
+        path: '/routines/create',
+        pageBuilder: (ctx, state) {
+          onRoute?.call('/routines/create');
+          return const NoTransitionPage(
+            child: Scaffold(body: Text('Create Routine Screen')),
+          );
+        },
       ),
       GoRoute(
         path: '/workout/active',
-        builder: (ctx, _) =>
-            const Scaffold(body: Center(child: Text('Active Workout Screen'))),
+        pageBuilder: (ctx, state) {
+          onRoute?.call('/workout/active');
+          return const NoTransitionPage(
+            child: Scaffold(body: Text('Active Workout Screen')),
+          );
+        },
       ),
-    ],
-    observers: [
-      _RouterObserver((loc) {
-        onPushed?.call(loc);
-      }),
     ],
   );
 
@@ -292,8 +283,12 @@ Widget _buildWithRouter({
     overrides: [
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
       routineListProvider.overrideWith(() => _RoutineListStub(routines)),
-      workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
-      workoutCountProvider.overrideWith((ref) => Future.value(workoutCount)),
+      // Day-0 gate. `overrideWithValue` seeds the FutureProvider with an
+      // already-resolved AsyncData, so the first build sees the value
+      // synchronously — no extra pump needed to drain a microtask. This
+      // mirrors `onlineStatusProvider.overrideWithValue(const AsyncData(...))`
+      // used elsewhere in the test suite for FutureProvider seeding.
+      workoutCountProvider.overrideWithValue(AsyncData(workoutCount)),
       activeWorkoutProvider.overrideWith(
         activeWorkoutNotifier ?? () => _NullActiveWorkoutNotifier(),
       ),
@@ -301,22 +296,25 @@ Widget _buildWithRouter({
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // Pin to pt so the inlined Portuguese-first labels in ActionHero
+      // (Phase 26f decision — single-locale launch) line up with l10n keys
+      // like homeActionHeroStartRoutine / homeActionHeroFreeWorkout that
+      // still pass through ARB.
+      locale: const Locale('pt'),
       theme: AppTheme.dark,
       routerConfig: router,
     ),
   );
 }
 
-class _RouterObserver extends NavigatorObserver {
-  _RouterObserver(this.onPushed);
-  final void Function(String location) onPushed;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    super.didPush(route, previousRoute);
-    final name = route.settings.name;
-    if (name != null) onPushed(name);
-  }
+Finder _findByIdentifier(String identifier) {
+  return find.byWidgetPredicate(
+    (w) => w is Semantics && w.properties.identifier == identifier,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -324,10 +322,8 @@ class _RouterObserver extends NavigatorObserver {
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('ActionHero - active plan, incomplete', () {
-    testWidgets('renders banner with UP NEXT label and routine name', (
-      tester,
-    ) async {
+  group('ActionHero — _StartNextRoutineHero', () {
+    testWidgets('shows when bucket has an uncompleted entry', (tester) async {
       await tester.pumpWidget(
         _buildWithRouter(
           plan: _plan(
@@ -337,27 +333,35 @@ void main() {
             ],
           ),
           routines: [
-            _routine(id: 'r-1', name: 'Push Day', userId: 'user-001'),
-            _routine(id: 'r-2', name: 'Pull Day', userId: 'user-001'),
+            _routine(id: 'r-1', name: 'Push Day'),
+            _routine(id: 'r-2', name: 'Pull Day'),
           ],
-          workoutCount: 5,
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      // New banner pattern (matches _BeginnerCta vocabulary): UP NEXT label
-      // above the routine name; no stock "Start X" button text.
-      expect(find.text('UP NEXT'), findsOneWidget);
-      expect(find.text('Push Day'), findsOneWidget);
-      expect(find.text('Start Push Day'), findsNothing);
+      // Per-branch identifier is the stable E2E hook.
+      expect(
+        _findByIdentifier('home-action-hero-start-routine'),
+        findsOneWidget,
+      );
+      // Headline carries the routine name through the l10n template.
+      expect(find.text('Iniciar Push Day'), findsOneWidget);
+      // Eyebrow label is the inlined uppercase Portuguese stopgap.
+      expect(find.text('INICIAR'), findsOneWidget);
+      // The other 2 branches are NOT in the tree.
+      expect(_findByIdentifier('home-action-hero-free-workout'), findsNothing);
+      expect(
+        _findByIdentifier('home-action-hero-create-first-routine'),
+        findsNothing,
+      );
     });
 
-    testWidgets('renders metadata line with exercise count and duration', (
-      tester,
-    ) async {
-      // 6 exercises x 3 sets at 120s rest each — matches the duration
-      // estimator's 45-min output (mirrors the beginner CTA test pattern).
+    testWidgets('subline renders exercise count and duration', (tester) async {
+      // 6 exercises × 3 sets at 120s rest each — mirrors the legacy
+      // "renders stats line" assertion. Subline format comes from
+      // exerciseCountDuration ARB template ({count} exercícios · ~{minutes} min).
       final routine = Routine(
         id: 'r-1',
         name: 'Push Day',
@@ -380,80 +384,17 @@ void main() {
         _buildWithRouter(
           plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
           routines: [routine],
-          workoutCount: 5,
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      expect(find.textContaining('6 exercises'), findsOneWidget);
+      // pt-BR copy: "{N} exercícios · ~{M} min".
+      expect(find.textContaining('6 exercícios'), findsOneWidget);
       expect(find.textContaining('~45 min'), findsOneWidget);
     });
 
-    testWidgets('renders play_arrow as a glyph (not a Button component)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [_routine(id: 'r-1', name: 'Push Day', userId: 'user-001')],
-          workoutCount: 5,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      // Play glyph is present, but the banner must NOT be a FilledButton —
-      // the active-plan hero is a tappable Material+InkWell card, not a
-      // stock Material button.
-      expect(find.byIcon(Icons.play_arrow), findsOneWidget);
-      expect(find.byType(FilledButton), findsNothing);
-    });
-
-    testWidgets('routine name is rendered with titleLarge typography', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [_routine(id: 'r-1', name: 'Push Day', userId: 'user-001')],
-          workoutCount: 5,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      final ctx = tester.element(find.text('Push Day'));
-      final expected = Theme.of(
-        ctx,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700);
-      final actual = tester.widget<Text>(find.text('Push Day')).style;
-      expect(actual?.fontSize, expected?.fontSize);
-      expect(actual?.fontWeight, FontWeight.w700);
-    });
-
-    testWidgets('banner is tappable (InkWell with non-null onTap)', (
-      tester,
-    ) async {
-      // We don't assert the destination here — startRoutineWorkout is covered
-      // by its own widget tests and needs a routine with resolved exercises
-      // to reach the navigation call. The contract this test owns is that
-      // the banner surface is wired up as a tappable InkWell.
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [_routine(id: 'r-1', name: 'Push Day', userId: 'user-001')],
-          workoutCount: 5,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      final inkWell = tester.widget<InkWell>(find.byType(InkWell));
-      expect(inkWell.onTap, isNotNull);
-    });
-
-    testWidgets('suggested-next advances to the next uncompleted routine', (
+    testWidgets('advances to the next uncompleted routine in bucket order', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -465,251 +406,46 @@ void main() {
             ],
           ),
           routines: [
-            _routine(id: 'r-1', name: 'Push Day', userId: 'user-001'),
-            _routine(id: 'r-2', name: 'Pull Day', userId: 'user-001'),
+            _routine(id: 'r-1', name: 'Push Day'),
+            _routine(id: 'r-2', name: 'Pull Day'),
           ],
-          workoutCount: 5,
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      // With the first routine complete, the hero CTA advances to Pull Day.
-      expect(find.text('Pull Day'), findsOneWidget);
-      expect(find.text('Push Day'), findsNothing);
+      // First routine complete → headline targets the next uncompleted one.
+      expect(find.text('Iniciar Pull Day'), findsOneWidget);
+      expect(find.text('Iniciar Push Day'), findsNothing);
     });
 
-    testWidgets(
-      'tapping the active-plan hero navigates to /workout/active (I5)',
-      (tester) async {
-        // The routine must have a resolved (non-null, non-deleted) exercise
-        // so startRoutineWorkout proceeds past its empty-exercises guard
-        // and reaches context.go('/workout/active'). The active-workout
-        // notifier is the default _NullActiveWorkoutNotifier whose
-        // startFromRoutine is a no-op, so no repo mocks are needed.
-        final routine = _routineWithResolvedExercise(
-          id: 'r-1',
-          name: 'Push Day',
-        );
-
-        await tester.pumpWidget(
-          _buildWithRouter(
-            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-            routines: [routine],
-            workoutCount: 5,
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        // Tap the hero banner (wraps the routine name).
-        await tester.tap(find.text('Push Day'));
-        await tester.pumpAndSettle();
-
-        // Landed on the active workout screen.
-        expect(find.text('Active Workout Screen'), findsOneWidget);
-      },
-    );
-  });
-
-  group('ActionHero - brand new (no plan, no history)', () {
-    testWidgets('renders beginner CTA (Full Body)', (tester) async {
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: null,
-          routines: [
-            _routine(id: 'r-fb', name: 'Full Body', isDefault: true),
-            _routine(id: 'r-u', name: 'Upper Body', isDefault: true),
-          ],
-          workouts: const [],
-          workoutCount: 0,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      // Beginner CTA label is "YOUR FIRST WORKOUT" and shows the routine name.
-      expect(find.text('YOUR FIRST WORKOUT'), findsOneWidget);
-      expect(find.text('Full Body'), findsOneWidget);
-      // Not lapsed-state copy.
-      expect(find.text('Plan your week'), findsNothing);
-      expect(find.text('Quick workout'), findsNothing);
-    });
-
-    testWidgets('renders nothing when no defaults and no history and no plan', (
+    testWidgets('tap navigates to /workout/active (start-routine flow)', (
       tester,
     ) async {
+      // Routine needs a resolved exercise so startRoutineWorkout proceeds
+      // past its empty-exercises guard and reaches context.go('/workout/active').
+      // The active-workout notifier is the default _NullActiveWorkoutNotifier
+      // whose startFromRoutine is a no-op, so no repo mocks are needed.
+      final routine = _routineWithResolvedExercise(id: 'r-1', name: 'Push Day');
+
       await tester.pumpWidget(
         _buildWithRouter(
-          plan: null,
-          routines: [
-            _routine(id: 'r-u', name: 'My Routine', userId: 'user-001'),
-          ],
-          workouts: const [],
-          workoutCount: 0,
+          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+          routines: [routine],
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('YOUR FIRST WORKOUT'), findsNothing);
-      expect(find.text('Plan your week'), findsNothing);
-      expect(find.text('Quick workout'), findsNothing);
-    });
-  });
-
-  group('ActionHero - lapsed (no plan, has history)', () {
-    testWidgets(
-      'shows NO PLAN banner as primary + "Quick workout" OutlinedButton as secondary',
-      (tester) async {
-        await tester.pumpWidget(
-          _buildWithRouter(
-            plan: null,
-            routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
-            workouts: [_workout()],
-            workoutCount: 3,
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        // Primary is now a _HeroBanner (shares vocabulary with active-plan /
-        // brand-new / week-complete) — NO PLAN label above "Plan your week".
-        expect(find.text('NO PLAN'), findsOneWidget);
-        expect(find.text('Plan your week'), findsOneWidget);
-        // Secondary stays as a clearly-secondary OutlinedButton below.
-        expect(find.text('Quick workout'), findsOneWidget);
-        expect(find.byType(OutlinedButton), findsOneWidget);
-        // No FilledButton primary anymore — the banner surface IS the primary.
-        expect(find.byType(FilledButton), findsNothing);
-        expect(find.byType(TextButton), findsNothing);
-      },
-    );
-
-    testWidgets('secondary OutlinedButton has minimum height of 48dp', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: null,
-          routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
-          workouts: [_workout()],
-          workoutCount: 3,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      final outlined = tester.widget<OutlinedButton>(
-        find.byType(OutlinedButton),
-      );
-      final min = outlined.style?.minimumSize?.resolve({});
-      expect(min, isNotNull);
-      expect(min!.height, greaterThanOrEqualTo(48));
-    });
-
-    testWidgets('"Plan your week" navigates to /plan/week', (tester) async {
-      await tester.pumpWidget(
-        _buildWithRouter(
-          plan: null,
-          routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
-          workouts: [_workout()],
-          workoutCount: 3,
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      await tester.tap(find.text('Plan your week'));
+      await tester.tap(find.text('Iniciar Push Day'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Plan Week Screen'), findsOneWidget);
+      expect(find.text('Active Workout Screen'), findsOneWidget);
     });
-
-    testWidgets(
-      '"Quick workout" → Discard → starts a fresh workout and navigates to '
-      '/workout/active (I6, B1 regression)',
-      (tester) async {
-        // Seed the active-workout provider with a stale workout. Tapping
-        // "Quick workout" surfaces the resume dialog; choosing Discard must
-        // (a) clear the stale workout, (b) start a fresh one, and
-        // (c) land on /workout/active. Before B1 this silently returned.
-        final seededNotifier = _SeededActiveWorkoutNotifier(
-          _seedActiveWorkout(),
-        );
-
-        await tester.pumpWidget(
-          _buildWithRouter(
-            plan: null,
-            routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
-            workouts: [_workout()],
-            workoutCount: 3,
-            activeWorkoutNotifier: () => seededNotifier,
-          ),
-        );
-        // Settle so _SeededActiveWorkoutNotifier.build() commits the seeded
-        // state — otherwise ref.read(activeWorkoutProvider).value returns
-        // null at the moment of tap and the dialog never appears.
-        await tester.pumpAndSettle();
-
-        // Open the resume dialog via the secondary "Quick workout" button.
-        await tester.tap(find.text('Quick workout'));
-        await tester.pumpAndSettle();
-
-        // Dialog is up — pick Discard.
-        expect(find.text('Resume workout?'), findsOneWidget);
-        await tester.tap(find.text('Discard'));
-        await tester.pumpAndSettle();
-
-        // Discard was called AND a fresh workout was started.
-        expect(seededNotifier.discardCount, 1);
-        expect(
-          seededNotifier.startCount,
-          1,
-          reason:
-              'B1: after Discard the user intended to start fresh. A new '
-              'workout must be started, not silently swallowed.',
-        );
-
-        // Landed on the active workout screen.
-        expect(find.text('Active Workout Screen'), findsOneWidget);
-      },
-    );
   });
 
-  group('ActionHero - week complete', () {
-    testWidgets(
-      'renders banner with NEW WEEK label and "Start new week" headline',
-      (tester) async {
-        await tester.pumpWidget(
-          _buildWithRouter(
-            plan: _plan(
-              routines: [
-                _bucket(routineId: 'r-1', order: 1, completedWorkoutId: 'wk-1'),
-                _bucket(routineId: 'r-2', order: 2, completedWorkoutId: 'wk-2'),
-              ],
-            ),
-            routines: [
-              _routine(id: 'r-1', name: 'Push', userId: 'user-001'),
-              _routine(id: 'r-2', name: 'Pull', userId: 'user-001'),
-            ],
-            workoutCount: 6,
-          ),
-        );
-        await tester.pump();
-        await tester.pump();
-
-        // New banner pattern: NEW WEEK label + "Start new week" headline +
-        // "Y of Y done" sub-line, NOT a FilledButton with stock chrome.
-        expect(find.text('NEW WEEK'), findsOneWidget);
-        expect(find.text('Start new week'), findsOneWidget);
-        expect(find.textContaining('2 of 2 done'), findsOneWidget);
-        expect(find.byType(FilledButton), findsNothing);
-        expect(find.byIcon(Icons.play_arrow), findsOneWidget);
-      },
-    );
-
-    testWidgets('tapping the week-complete banner navigates to /plan/week', (
+  group('ActionHero — _FreeWorkoutHero', () {
+    testWidgets('shows when bucket is fully complete with "Semana completa"', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -717,66 +453,221 @@ void main() {
           plan: _plan(
             routines: [
               _bucket(routineId: 'r-1', order: 1, completedWorkoutId: 'wk-1'),
+              _bucket(routineId: 'r-2', order: 2, completedWorkoutId: 'wk-2'),
             ],
           ),
-          routines: [_routine(id: 'r-1', name: 'Push', userId: 'user-001')],
-          workoutCount: 2,
+          routines: [
+            _routine(id: 'r-1', name: 'Push'),
+            _routine(id: 'r-2', name: 'Pull'),
+          ],
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      await tester.tap(find.text('Start new week'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Plan Week Screen'), findsOneWidget);
+      expect(
+        _findByIdentifier('home-action-hero-free-workout'),
+        findsOneWidget,
+      );
+      expect(find.text('TREINO LIVRE'), findsOneWidget);
+      expect(find.text('Treino livre'), findsOneWidget);
+      expect(find.text('Semana completa'), findsOneWidget);
     });
-  });
 
-  group('ActionHero - tap targets', () {
-    testWidgets('lapsed primary banner is at least 80dp tall', (tester) async {
+    testWidgets(
+      'shows when user has routines but no plan (no "Semana completa" subline)',
+      (tester) async {
+        // No plan → isWeekCompleteProvider returns false → free-workout hero
+        // shows without the weekly-completion subline. This is the steady-
+        // state "has routines but bucket is empty" case (lapsed-style users
+        // who haven't created a plan this week).
+        await tester.pumpWidget(
+          _buildWithRouter(
+            plan: null,
+            routines: [_routine(id: 'r-1', name: 'X')],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          _findByIdentifier('home-action-hero-free-workout'),
+          findsOneWidget,
+        );
+        expect(find.text('TREINO LIVRE'), findsOneWidget);
+        expect(find.text('Treino livre'), findsOneWidget);
+        // No week-complete subline when the week is NOT complete.
+        expect(find.text('Semana completa'), findsNothing);
+        // Not the create-first-routine branch.
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('tap → Discard → starts fresh workout and navigates', (
+      tester,
+    ) async {
+      // Carry-forward of the legacy B1 regression test. Seed the
+      // active-workout provider with a stale workout. Tapping the
+      // free-workout hero surfaces the resume dialog; choosing Discard must
+      // (a) clear the stale workout, (b) start a fresh one, and (c) land on
+      // /workout/active. Before B1 this silently returned.
+      final seededNotifier = _SeededActiveWorkoutNotifier(_seedActiveWorkout());
+
       await tester.pumpWidget(
         _buildWithRouter(
           plan: null,
-          routines: [_routine(id: 'r-1', name: 'X', userId: 'user-001')],
-          workouts: [_workout()],
-          workoutCount: 3,
+          routines: [_routine(id: 'r-1', name: 'X')],
+          activeWorkoutNotifier: () => seededNotifier,
+        ),
+      );
+      // Settle so the seeded notifier commits its initial state — otherwise
+      // ref.read(activeWorkoutProvider).value returns null at the moment of
+      // tap and the dialog never appears.
+      await tester.pumpAndSettle();
+
+      // Open the resume dialog via the free-workout hero card.
+      await tester.tap(find.text('Treino livre'));
+      await tester.pumpAndSettle();
+
+      // Dialog is up — pick Discard. Harness pins locale to pt, so the
+      // dialog title and discard button render their Portuguese forms.
+      expect(find.text('Retomar sessão?'), findsOneWidget);
+      await tester.tap(find.text('Descartar'));
+      await tester.pumpAndSettle();
+
+      // Discard was called AND a fresh workout was started.
+      expect(seededNotifier.discardCount, 1);
+      expect(
+        seededNotifier.startCount,
+        1,
+        reason:
+            'After Discard the user intended to start fresh. A new workout '
+            'must be started, not silently swallowed (B1 regression).',
+      );
+
+      // Landed on the active workout screen.
+      expect(find.text('Active Workout Screen'), findsOneWidget);
+    });
+  });
+
+  group('ActionHero — _CreateFirstRoutineHero', () {
+    // L1 (visual verification, 2026-05-18): the branch is gated on
+    // `workoutCountProvider == 0` — "user has never recorded a workout" —
+    // not on `routines.isEmpty`. Default routines ship seeded for every
+    // user in production, so the empty-routines gate never fires.
+    testWidgets('shows when workoutCount is 0 (day-0 user)', (tester) async {
+      // Seed routines AND a plan to prove the gate is purely workout-count
+      // driven: even with full routines + a bucket, a zero-history user
+      // still sees the create-first-routine CTA.
+      await tester.pumpWidget(
+        _buildWithRouter(
+          workoutCount: 0,
+          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+          routines: [_routine(id: 'r-1', name: 'Push Day')],
         ),
       );
       await tester.pump();
       await tester.pump();
 
-      // The banner wraps "Plan your week" — find its enclosing InkWell and
-      // assert the rendered height is >= 80dp (same tap-target vocabulary
-      // as the active-plan / brand-new / week-complete hero).
-      final inkWell = find
-          .ancestor(
-            of: find.text('Plan your week'),
-            matching: find.byType(InkWell),
-          )
-          .first;
-      final size = tester.getSize(inkWell);
-      expect(size.height, greaterThanOrEqualTo(80));
+      expect(
+        _findByIdentifier('home-action-hero-create-first-routine'),
+        findsOneWidget,
+      );
+      expect(find.text('Criar primeira rotina'), findsOneWidget);
+      expect(find.text('BEM-VINDO'), findsOneWidget);
+      // Other branches not in the tree — day-0 gate wins over the bucket.
+      expect(_findByIdentifier('home-action-hero-start-routine'), findsNothing);
+      expect(_findByIdentifier('home-action-hero-free-workout'), findsNothing);
     });
 
-    testWidgets('active-plan banner has at least 80dp height', (tester) async {
+    testWidgets('tap navigates to /routines/create', (tester) async {
+      String? lastPushed;
+      await tester.pumpWidget(
+        _buildWithRouter(
+          workoutCount: 0,
+          plan: null,
+          routines: const [],
+          onRoute: (location) => lastPushed = location,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Criar primeira rotina'));
+      await tester.pumpAndSettle();
+
+      expect(lastPushed, '/routines/create');
+      expect(find.text('Create Routine Screen'), findsOneWidget);
+    });
+
+    testWidgets(
+      'falls through to _FreeWorkoutHero when workoutCount > 0 and bucket is empty',
+      (tester) async {
+        // The exact regression L1 unmasked: a returning user (workoutCount
+        // == 1) with seeded default routines but no plan must NOT see the
+        // create-first-routine CTA. They should land on free-workout.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 1,
+            plan: null,
+            routines: [_routine(id: 'r-1', name: 'Push Day', isDefault: true)],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsNothing,
+        );
+        expect(
+          _findByIdentifier('home-action-hero-free-workout'),
+          findsOneWidget,
+        );
+        expect(find.text('Treino livre'), findsOneWidget);
+      },
+    );
+  });
+
+  group('ActionHero — outer home-action-hero identifier', () {
+    // The outer wrapper preserves the legacy `home-action-hero` semantics so
+    // charter specs that assert "hero exists" keep passing across all three
+    // branches without locale-specific text matching.
+
+    testWidgets('present in _StartNextRoutineHero branch', (tester) async {
       await tester.pumpWidget(
         _buildWithRouter(
           plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [_routine(id: 'r-1', name: 'Push', userId: 'user-001')],
-          workoutCount: 2,
+          routines: [_routine(id: 'r-1', name: 'Push')],
         ),
       );
       await tester.pump();
       await tester.pump();
+      expect(_findByIdentifier('home-action-hero'), findsOneWidget);
+    });
 
-      // The banner wraps "Push" — find its enclosing InkWell and assert the
-      // rendered height is >= 80dp.
-      final inkWell = find
-          .ancestor(of: find.text('Push'), matching: find.byType(InkWell))
-          .first;
-      final size = tester.getSize(inkWell);
-      expect(size.height, greaterThanOrEqualTo(80));
+    testWidgets('present in _FreeWorkoutHero branch', (tester) async {
+      await tester.pumpWidget(
+        _buildWithRouter(
+          plan: null,
+          routines: [_routine(id: 'r-1', name: 'Push')],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(_findByIdentifier('home-action-hero'), findsOneWidget);
+    });
+
+    testWidgets('present in _CreateFirstRoutineHero branch', (tester) async {
+      await tester.pumpWidget(
+        _buildWithRouter(workoutCount: 0, plan: null, routines: const []),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(_findByIdentifier('home-action-hero'), findsOneWidget);
     });
   });
 }

@@ -8,322 +8,271 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../routines/models/routine.dart';
 import '../../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../../routines/ui/start_routine_action.dart';
+import '../../../weekly_plan/data/models/weekly_plan.dart';
 import '../../../weekly_plan/providers/suggested_next_provider.dart';
-import '../../../weekly_plan/providers/weekly_plan_provider.dart';
 import '../../../weekly_plan/utils/routine_duration_estimator.dart';
 import '../../providers/workout_history_providers.dart';
 import '../../providers/workout_providers.dart';
 import 'resume_workout_dialog.dart';
 
-/// Selects the routine to recommend to a brand-new user. Prefers
-/// "Full Body"; falls back to the alphabetical-first default.
+/// The banner CTA on the Home screen.
 ///
-/// Top-level because it is a pure function over [List<Routine>] with no
-/// dependency on widget state — keeping it outside the widget class makes it
-/// trivially testable in isolation.
-Routine? pickBeginnerRoutine(List<Routine> routines) {
-  final defaults = routines.where((r) => r.isDefault).toList();
-  if (defaults.isEmpty) return null;
-  for (final r in defaults) {
-    if (r.name == 'Full Body') return r;
-  }
-  defaults.sort((a, b) => a.name.compareTo(b.name));
-  return defaults.first;
-}
-
-/// The banner CTA on the Home screen. Resolves to one of four state modes
-/// per PLAN W8:
+/// Phase 26f collapsed the legacy 4-branch state machine (active /
+/// brand-new / lapsed / week-complete) into 3 deterministic branches keyed
+/// off the user's workout history + bucket state:
 ///
-/// 1. **Active plan, incomplete** — primary `"Start {suggestedNext}"`. Tapping
-///    starts the next uncompleted routine in the bucket.
-/// 2. **Brand new (no plan, no history)** — beginner CTA surfacing the
-///    default Full Body (or alphabetical-first default) routine.
-/// 3. **Lapsed (no plan, has history)** — a `_HeroBanner` "Plan your week"
-///    primary (same surface vocabulary as the other three hero states) plus
-///    a clearly-secondary "Quick workout" `OutlinedButton` below.
-/// 4. **Week complete** — primary `"Start new week"` that navigates to
-///    `/plan/week`.
+/// 1. **Day-0 user** (`workoutCountProvider == 0` — never recorded a
+///    workout) → `_CreateFirstRoutineHero` points the user at
+///    `/routines/create`. Preserves the legacy `_BrandNewHero` semantics —
+///    default routines ship seeded for every user, so a `routines.isEmpty`
+///    gate would never fire in production. "Has the user ever lifted?" is
+///    the real onboarding signal. L1 fix (visual verification, 2026-05-18).
+/// 2. **Bucket has an uncompleted entry** (`suggestedNextProvider != null`)
+///    → `_StartNextRoutineHero` shows `Iniciar {routineName}` and starts
+///    the routine on tap (resume-vs-start guard preserved via
+///    [startRoutineWorkout]).
+/// 3. **Otherwise** → `_FreeWorkoutHero` surfaces the spontaneous "free
+///    workout" entry point. When `isWeekCompleteProvider` is true the
+///    subline reads "Semana completa"; otherwise the slot is empty so the
+///    layout stays stable.
 ///
-/// Watches only the minimum set of providers required to decide the current
-/// mode. Per-state widgets are extracted so Riverpod only registers listeners
-/// that are actually needed for the active branch — e.g. [_BrandNewHero]
-/// owns its `routineListProvider` subscription so [ActionHero] does NOT
-/// rebuild whenever any routine is added/edited/deleted.
+/// **Outer semantics wrapper.** Every branch sits inside an outer
+/// `Semantics(identifier: 'home-action-hero', container: true,
+/// explicitChildNodes: true)` so charter E2E specs that just assert "hero
+/// exists" keep working across all 3 states. Each branch ALSO sets its own
+/// per-branch identifier (`home-action-hero-start-routine`,
+/// `home-action-hero-free-workout`,
+/// `home-action-hero-create-first-routine`) so flow-specific specs target
+/// the variant without locale-dependent text. Decision locked 2026-05-18.
+///
+/// **Why scoped per-branch widgets.** Each ConsumerWidget owns the
+/// providers it actually needs. Outer ActionHero only watches
+/// [workoutCountProvider] (the day-0 gate); per-branch subscriptions (e.g.
+/// resolving the routine name for "Iniciar X" via [routineListProvider])
+/// stay inside the relevant branch so we don't rebuild the whole hero when
+/// the non-active branch's data churns.
 class ActionHero extends ConsumerWidget {
   const ActionHero({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Scoped subscription: this derived provider only flips when a plan is
-    // created / cleared / emptied, not on every routine mutation inside a
-    // plan.
-    final hasActivePlan = ref.watch(hasActivePlanProvider);
+    // Day-0 gate: user has never recorded a workout. `workoutCountProvider`
+    // is `keepAlive`, so once it resolves the value is cached for the
+    // session. During the first-frame load `.value` is null → we default to
+    // 0 (show the create-first-routine hero); the rebuild on hydrate swaps
+    // to the correct branch. For a real day-0 user that "swap" is a no-op
+    // (resolves to 0). Mirrors the legacy `_BrandNewHero` gate. L1 fix —
+    // see class doc.
+    final workoutCount = ref.watch(workoutCountProvider).value ?? 0;
 
-    if (hasActivePlan) {
-      final isComplete = ref.watch(isWeekCompleteProvider);
-      if (isComplete) {
-        return _WeekCompleteHero(onTap: () => context.push('/plan/week'));
-      }
-      return const _ActivePlanHero();
-    }
-
-    // No active plan. Differentiate brand-new vs lapsed on workoutCount.
-    final workoutCountAsync = ref.watch(workoutCountProvider);
-    // Wait for a committed value before deciding between the beginner CTA
-    // and the lapsed CTA. Without this guard the wrong branch flashes in
-    // the 200-600ms cold-start window.
-    //
-    // Note: `workoutCountProvider` is `keepAlive` — once warmed up, it
-    // survives nav transitions, so this wait only matters on the very first
-    // Home mount of the session. `workoutHistoryProvider` does NOT keepAlive
-    // and would need a full page load to repopulate, giving a noticeably
-    // longer flash window if we gated on it here instead.
-    if (!workoutCountAsync.hasValue) return const SizedBox.shrink();
-    final workoutCount = workoutCountAsync.value!;
-
+    final Widget branch;
     if (workoutCount == 0) {
-      return const _BrandNewHero();
+      branch = const _CreateFirstRoutineHero();
+    } else {
+      final next = ref.watch(suggestedNextProvider);
+      if (next != null) {
+        branch = _StartNextRoutineHero(bucketEntry: next);
+      } else {
+        final weekComplete = ref.watch(isWeekCompleteProvider);
+        branch = _FreeWorkoutHero(weekComplete: weekComplete);
+      }
     }
 
-    // Lapsed: user has history but no plan this week.
-    return _LapsedHero(
-      onPlanWeek: () => context.push('/plan/week'),
-      onQuickWorkout: () => _startQuickWorkout(context, ref),
+    // Outer semantics wrapper preserves the stable `home-action-hero`
+    // identifier across all three branches. `container: true +
+    // explicitChildNodes: true` follows the `semantics-identifier-pair-rule`
+    // cluster — the outer node owns the identifier, inner nodes own their
+    // own taps/labels.
+    return Semantics(
+      identifier: 'home-action-hero',
+      container: true,
+      explicitChildNodes: true,
+      child: branch,
     );
-  }
-
-  /// Starts an empty workout with the active-workout resume dialog guard.
-  ///
-  /// Three outcomes when an existing workout is present:
-  /// * **Resume** — navigate to `/workout/active` and keep the existing
-  ///   workout intact.
-  /// * **Discard** — delete the existing workout, start a fresh one, and
-  ///   navigate to `/workout/active`. The user chose "Quick workout" intending
-  ///   to start fresh; stopping after the discard would leave them staring at
-  ///   Home with nothing happening.
-  /// * **Dismissed** (`result == null`) — currently impossible because the
-  ///   dialog is shown with `barrierDismissible: false`, but guarded here as
-  ///   a no-op so a future dismissible variant does not need to touch this
-  ///   code.
-  ///
-  /// When there is no existing workout we just start one and navigate.
-  Future<void> _startQuickWorkout(BuildContext context, WidgetRef ref) async {
-    // Guard: starting a workout requires a network call to create it.
-    final isOnline = ref.read(isOnlineProvider);
-    if (!isOnline) {
-      if (context.mounted) {
-        final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.offlineStartWorkout)));
-      }
-      return;
-    }
-
-    final existingWorkout = ref.read(activeWorkoutProvider).value;
-    if (existingWorkout != null) {
-      if (!context.mounted) return;
-      final result = await ResumeWorkoutDialog.show(
-        context,
-        workoutName: existingWorkout.workout.name,
-        startedAt: existingWorkout.workout.startedAt,
-      );
-      if (!context.mounted) return;
-      if (result == ResumeWorkoutResult.resume) {
-        context.go('/workout/active');
-        return;
-      }
-      if (result == ResumeWorkoutResult.discard) {
-        try {
-          await ref.read(activeWorkoutProvider.notifier).discardWorkout();
-        } catch (_) {
-          return; // discard failed — do not silently start a new workout
-        }
-        if (!context.mounted) return;
-        await ref.read(activeWorkoutProvider.notifier).startWorkout();
-        if (!context.mounted) return;
-        context.go('/workout/active');
-        return;
-      }
-      // result == null (dialog dismissed). Unreachable today due to
-      // barrierDismissible: false — treat as cancel.
-      return;
-    }
-    await ref.read(activeWorkoutProvider.notifier).startWorkout();
-    if (!context.mounted) return;
-    context.go('/workout/active');
   }
 }
 
+/// Starts an empty workout with the active-workout resume dialog guard.
+///
+/// Lifted from the legacy `ActionHero._startQuickWorkout` instance method
+/// into a top-level helper so `_FreeWorkoutHero` (which is the only caller
+/// post-26f) can invoke it without re-implementing the resume-vs-start
+/// branch. Kept identical in behavior:
+///
+/// * **Offline** — show a snackbar, do nothing else.
+/// * **No existing workout** — start one and navigate to `/workout/active`.
+/// * **Existing workout + Resume** — navigate to `/workout/active`, leave
+///   the workout intact.
+/// * **Existing workout + Discard** — delete the existing workout, start a
+///   fresh one, and navigate to `/workout/active`. (B1 regression: the
+///   "intend to start fresh" intent must not be silently swallowed.)
+/// * **Dialog dismissed** (`result == null`) — unreachable today
+///   (`barrierDismissible: false`) but guarded as a no-op for forward
+///   compatibility.
+Future<void> _startQuickWorkout(BuildContext context, WidgetRef ref) async {
+  final isOnline = ref.read(isOnlineProvider);
+  if (!isOnline) {
+    if (context.mounted) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.offlineStartWorkout)));
+    }
+    return;
+  }
+
+  final existingWorkout = ref.read(activeWorkoutProvider).value;
+  if (existingWorkout != null) {
+    if (!context.mounted) return;
+    final result = await ResumeWorkoutDialog.show(
+      context,
+      workoutName: existingWorkout.workout.name,
+      startedAt: existingWorkout.workout.startedAt,
+    );
+    if (!context.mounted) return;
+    if (result == ResumeWorkoutResult.resume) {
+      context.go('/workout/active');
+      return;
+    }
+    if (result == ResumeWorkoutResult.discard) {
+      try {
+        await ref.read(activeWorkoutProvider.notifier).discardWorkout();
+      } catch (_) {
+        return; // discard failed — do not silently start a new workout
+      }
+      if (!context.mounted) return;
+      await ref.read(activeWorkoutProvider.notifier).startWorkout();
+      if (!context.mounted) return;
+      context.go('/workout/active');
+      return;
+    }
+    return; // dialog dismissed — unreachable today, guard for the future
+  }
+  await ref.read(activeWorkoutProvider.notifier).startWorkout();
+  if (!context.mounted) return;
+  context.go('/workout/active');
+}
+
 // ---------------------------------------------------------------------------
-// Active plan: 80dp banner — UP NEXT label + routine name + metadata
+// Branch 1: bucket has an uncompleted entry → "Iniciar {routineName}"
 // ---------------------------------------------------------------------------
 
-class _ActivePlanHero extends ConsumerWidget {
-  const _ActivePlanHero();
+/// Shown when [suggestedNextProvider] returns a bucket entry. Headline
+/// reuses the `homeActionHeroStartRoutine` template ("Iniciar {routineName}"
+/// in pt). The subline reuses the existing `exerciseCountDuration` template
+/// for parity with the rest of the surfaces that show routine metadata.
+class _StartNextRoutineHero extends ConsumerWidget {
+  const _StartNextRoutineHero({required this.bucketEntry});
+
+  final BucketRoutine bucketEntry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final suggested = ref.watch(suggestedNextProvider);
-    if (suggested == null) return const SizedBox.shrink();
-
     final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
     final routine = routines.cast<Routine?>().firstWhere(
-      (r) => r?.id == suggested.routineId,
+      (r) => r?.id == bucketEntry.routineId,
       orElse: () => null,
     );
-    if (routine == null) return const SizedBox.shrink();
+    // Bucket entry points at a routine that's been deleted out from under
+    // us. Render the free-workout fallback identifier so the outer
+    // home-action-hero wrapper still has a deterministic inner child. The
+    // user can still kick off a quick workout while the data layer
+    // reconciles.
+    if (routine == null) return const _FreeWorkoutHero(weekComplete: false);
 
     final l10n = AppLocalizations.of(context);
     final durationMin = estimateRoutineDurationMinutes(routine);
-    final metadata = l10n.exerciseCountDuration(
+    final subline = l10n.exerciseCountDuration(
       routine.exercises.length,
       durationMin,
     );
 
     return _HeroBanner(
-      label: l10n.heroUpNext,
-      headline: routine.name,
-      subline: metadata,
+      // Inlined uppercase Portuguese — single-locale launch (Phase 26f
+      // decision). T1's l10n key set did not include eyebrow labels, and we
+      // explicitly defer adding them until the second locale lands.
+      label: 'INICIAR',
+      headline: l10n.homeActionHeroStartRoutine(routine.name),
+      subline: subline,
       onTap: () => startRoutineWorkout(context, ref, routine),
-      semanticsIdentifier: 'home-up-next',
+      semanticsIdentifier: 'home-action-hero-start-routine',
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Brand new: YOUR FIRST WORKOUT — recommended default routine (e.g. Full Body)
+// Branch 2: bucket empty / fully complete → "Treino livre"
 // ---------------------------------------------------------------------------
 
-/// First-run hero. Extracted as its own [ConsumerWidget] so the
-/// `routineListProvider` subscription lives only on this branch — otherwise
-/// `ActionHero` would re-subscribe whenever any routine is added/edited/
-/// deleted, regardless of which state the hero is actually in.
-class _BrandNewHero extends ConsumerWidget {
-  const _BrandNewHero();
+/// Shown when the user has routines but no uncompleted bucket entry. Covers
+/// two underlying states:
+///
+/// * **Week complete** (`weekComplete == true`) — every planned routine has
+///   been finished. Subline reads "Semana completa" as positive
+///   reinforcement.
+/// * **No plan / bucket empty otherwise** (`weekComplete == false`) — user
+///   has not created a plan this week (legacy "lapsed" state) or the plan
+///   has zero entries. Subline is omitted so the layout slot stays stable
+///   without redundant copy.
+///
+/// Tapping the card delegates to the shared [_startQuickWorkout] helper,
+/// which inherits the resume-vs-start dialog flow from the legacy
+/// ActionHero — including the B1 regression fix for "Discard → start fresh".
+class _FreeWorkoutHero extends ConsumerWidget {
+  const _FreeWorkoutHero({required this.weekComplete});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
-    final beginner = pickBeginnerRoutine(routines);
-    if (beginner == null) return const SizedBox.shrink();
-    return _BeginnerCta(
-      routine: beginner,
-      onTap: () => startRoutineWorkout(context, ref, beginner),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Lapsed: [_HeroBanner] "Plan your week" (primary) + OutlinedButton
-// "Quick workout" (secondary)
-// ---------------------------------------------------------------------------
-
-/// Lapsed-state hero. Shares the [_HeroBanner] surface with the three other
-/// hero states (active plan / brand-new / week-complete) so the four modes
-/// read as variants of one banner, not four unrelated components. Underneath
-/// the banner we keep a secondary [OutlinedButton] "Quick workout" — a
-/// clearly-secondary affordance, not a second hero.
-class _LapsedHero extends StatelessWidget {
-  const _LapsedHero({required this.onPlanWeek, required this.onQuickWorkout});
-
-  final VoidCallback onPlanWeek;
-  final VoidCallback onQuickWorkout;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _HeroBanner(
-          label: l10n.heroNoPlan,
-          headline: l10n.planYourWeek,
-          subline: l10n.pickRoutinesForWeek,
-          onTap: onPlanWeek,
-          semanticsIdentifier: 'home-plan-your-week',
-        ),
-        const SizedBox(height: 8),
-        Semantics(
-          container: true,
-          identifier: 'home-quick-workout',
-          child: OutlinedButton(
-            onPressed: onQuickWorkout,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-            ),
-            child: Text(l10n.quickWorkout),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Week complete: 80dp banner — NEW WEEK label + "Start new week" + Y of Y done
-// ---------------------------------------------------------------------------
-
-class _WeekCompleteHero extends ConsumerWidget {
-  const _WeekCompleteHero({required this.onTap});
-
-  final VoidCallback onTap;
+  final bool weekComplete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final total = ref.watch(totalBucketCountProvider);
     return _HeroBanner(
-      label: l10n.heroNewWeek,
-      headline: l10n.startNewWeek,
-      subline: total > 0 ? l10n.nOfNDone(total, total) : null,
-      onTap: onTap,
-      semanticsIdentifier: 'home-start-new-week',
+      label: 'TREINO LIVRE',
+      headline: l10n.homeActionHeroFreeWorkout,
+      subline: weekComplete
+          ? l10n.homeActionHeroFreeWorkoutSubtitleWeekComplete
+          : null,
+      onTap: () => _startQuickWorkout(context, ref),
+      semanticsIdentifier: 'home-action-hero-free-workout',
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Brand-new user: YOUR FIRST WORKOUT card (beginner CTA)
+// Branch 3: routines list is empty → "Criar primeira rotina"
 // ---------------------------------------------------------------------------
 
-/// First-run banner CTA surfacing a recommended beginner routine with a
-/// one-tap entry into an active workout. Shares the [_HeroBanner] vocabulary
-/// with [_ActivePlanHero] and [_WeekCompleteHero] so the four hero states
-/// read as variants of one surface, not four unrelated cards.
-class _BeginnerCta extends StatelessWidget {
-  const _BeginnerCta({required this.routine, required this.onTap});
-
-  final Routine routine;
-  final VoidCallback onTap;
+/// Shown when the user has zero routines. Replaces the legacy
+/// `_BrandNewHero` / `_BeginnerCta` flow that surfaced a recommended
+/// default routine. The new onboarding direction is to walk the user
+/// through creating their own routine.
+///
+/// Tap pushes `/routines/create`.
+class _CreateFirstRoutineHero extends StatelessWidget {
+  const _CreateFirstRoutineHero();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final durationMin = estimateRoutineDurationMinutes(routine);
-    final stats = l10n.exerciseCountDuration(
-      routine.exercises.length,
-      durationMin,
-    );
-
     return _HeroBanner(
-      label: l10n.heroYourFirstWorkout,
-      headline: routine.name,
-      subline: stats,
-      onTap: onTap,
-      semanticsIdentifier: 'first-workout-card',
-      labelIdentifier: 'first-workout-label',
+      label: 'BEM-VINDO',
+      headline: l10n.homeActionHeroCreateFirstRoutine,
+      // No new ARB key for the subline. Reuse `pickRoutinesForWeek`'s
+      // existing nav-cue copy — semantically close enough for the
+      // single-locale launch, and avoids adding a key that T1 didn't budget
+      // for.
+      subline: l10n.pickRoutinesForWeek,
+      onTap: () => context.push('/routines/create'),
+      semanticsIdentifier: 'home-action-hero-create-first-routine',
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Shared 80dp banner surface for all four hero variants (active plan,
-// brand-new beginner, lapsed "Plan your week", week complete). One
-// Material+InkWell card with a left accent border in primary green,
-// label / headline / subline rows, and a trailing play glyph. Background
-// flows through theme.cardTheme.color so the banner inherits app-wide
-// surface tokens.
+// Shared 80dp banner surface — one Material+InkWell card with a left accent
+// border in primary green, label / headline / subline rows, and a trailing
+// play glyph. Background flows through theme.cardTheme.color so the banner
+// inherits app-wide surface tokens.
 // ---------------------------------------------------------------------------
 
 class _HeroBanner extends StatelessWidget {
@@ -333,26 +282,22 @@ class _HeroBanner extends StatelessWidget {
     this.subline,
     required this.onTap,
     this.semanticsIdentifier,
-    this.labelIdentifier,
   });
 
-  /// Small uppercase label, e.g. "UP NEXT", "YOUR FIRST WORKOUT", "NO PLAN",
-  /// "NEW WEEK".
+  /// Small uppercase eyebrow label, e.g. "INICIAR", "TREINO LIVRE",
+  /// "BEM-VINDO".
   final String label;
 
-  /// Primary content line, e.g. routine name, "Plan your week", "Start new
-  /// week".
+  /// Primary content line — routine name template ("Iniciar Push Day"),
+  /// "Treino livre", "Criar primeira rotina".
   final String headline;
 
-  /// Optional metadata line below the headline (exercises x duration, "Y of Y
-  /// done", etc.). When null the banner renders only the label + headline.
+  /// Optional metadata line below the headline. When null the banner
+  /// renders only the label + headline; the slot collapses.
   final String? subline;
 
-  /// Optional Semantics identifier for locale-independent E2E selectors.
+  /// Per-branch Semantics identifier for locale-independent E2E selectors.
   final String? semanticsIdentifier;
-
-  /// Optional Semantics identifier for the label Text widget.
-  final String? labelIdentifier;
 
   final VoidCallback onTap;
 
@@ -363,6 +308,7 @@ class _HeroBanner extends StatelessWidget {
 
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: semanticsIdentifier,
       child: Material(
         color: theme.cardTheme.color ?? theme.colorScheme.surface,
@@ -391,9 +337,10 @@ class _HeroBanner extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Bare container prevents AOM merging label into
+                          // the headline's accessible text node.
                           Semantics(
                             container: true,
-                            identifier: labelIdentifier,
                             child: Text(
                               label,
                               style: theme.textTheme.labelSmall?.copyWith(
@@ -404,8 +351,6 @@ class _HeroBanner extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          // Bare container prevents AOM merging headline
-                          // into the label's accessible text node.
                           Semantics(
                             container: true,
                             child: Text(
