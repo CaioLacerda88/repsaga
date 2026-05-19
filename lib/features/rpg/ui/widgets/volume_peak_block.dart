@@ -12,12 +12,20 @@ import 'body_part_localization.dart';
 /// Per-body-part Volume + Carga pico block for the stats deep-dive
 /// screen (Phase 26c). Two columns:
 ///   * Left: weekly volume ("X / Y séries") with history-aware delta.
-///   * Right: monthly peak EWMA ("N kg" with "30D" badge + delta), OR
-///     the generic-tip fallback ("Referência" + 10 séries + estimado)
-///     when the user has no personal history for this body part.
+///   * Right: heaviest single-set weight in kg lifted in the last 7 days
+///     ("N kg" with "30D" badge + monthly delta), OR the generic-tip
+///     fallback ("Referência" + 10 séries + estimado) when the user has
+///     no personal history for this body part.
 ///
 /// Pure presentation — the [VolumeDeltaView] + [PeakDeltaView] arguments
 /// encode the rendering state computed in the model layer.
+///
+/// Phase 27 L10 (PR L10): the peak column now consumes
+/// [VolumePeakRow.peakLoadKg] (actual heaviest lift in kg) instead of
+/// the pre-Phase-27 [VolumePeakRow.peakEwma] (dimensionless Vitality
+/// EWMA misrendered with a "kg" suffix). The Vitality EWMA still lives
+/// in the model; it powers the trend chart, where the dimensionless
+/// scaling is correct.
 class VolumePeakBlock extends StatelessWidget {
   const VolumePeakBlock({
     super.key,
@@ -37,7 +45,11 @@ class VolumePeakBlock extends StatelessWidget {
   /// personal history for this body part.
   static const int _schoenfeldFloor = 10;
 
-  bool get _useGenericTip => row.weeksOfHistory < 1 && row.peakEwma <= 0;
+  // Phase 27 L10: fall back to the Schoenfeld-floor "Referência" block
+  // when the user has neither weekly history nor a heaviest-lift signal
+  // in the window. Reading peakLoadKg (not peakEwma) keeps the fallback
+  // gate in lock-step with what the right column actually renders.
+  bool get _useGenericTip => row.weeksOfHistory < 1 && row.peakLoadKg <= 0;
 
   @override
   Widget build(BuildContext context) {
@@ -265,7 +277,11 @@ class _CargaPicoColumn extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.end,
           children: [
             Text(
-              AppNumberFormat.integer(row.peakEwma, locale: locale),
+              // Phase 27 L10: actual heaviest single-set weight in kg.
+              // AppNumberFormat.weight renders integer-valued kg without
+              // a trailing ",0" (so "80" not "80,0") and uses the locale
+              // decimal separator for half-kg increments ("82,5" in pt).
+              AppNumberFormat.weight(row.peakLoadKg, locale: locale),
               style: GoogleFonts.rajdhani(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
@@ -335,7 +351,10 @@ class _PeakDeltaLine extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Text(
-              '▲ +${AppNumberFormat.integer(delta.delta, locale: locale)} kg',
+              // Phase 27 L10: kg delta uses AppNumberFormat.weight so the
+              // 0.5 increments common in micro-loading render without
+              // forced-integer rounding noise.
+              '▲ +${AppNumberFormat.weight(delta.delta, locale: locale)} kg',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.vitalityHigh,
               ),

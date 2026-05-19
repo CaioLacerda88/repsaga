@@ -4,11 +4,13 @@ import 'package:repsaga/features/rpg/models/stats_deep_dive_state.dart';
 void main() {
   group('VolumePeakRow — extended history fields', () {
     test(
-      'should expose previousWeekVolumeSets / fourWeekMeanVolumeSets / peakEwma30dAgo / weeksOfHistory',
+      'should expose all extended fields (volume basis, peak-load delta, weeks of history)',
       () {
         const row = VolumePeakRow(
           weeklyVolumeSets: 12,
           peakEwma: 105.0,
+          peakLoadKg: 92.5,
+          peakLoadKg30dAgo: 87.5,
           previousWeekVolumeSets: 16,
           fourWeekMeanVolumeSets: 14.5,
           peakEwma30dAgo: 101.8,
@@ -16,6 +18,8 @@ void main() {
         );
         expect(row.weeklyVolumeSets, 12);
         expect(row.peakEwma, 105.0);
+        expect(row.peakLoadKg, 92.5);
+        expect(row.peakLoadKg30dAgo, 87.5);
         expect(row.previousWeekVolumeSets, 16);
         expect(row.fourWeekMeanVolumeSets, 14.5);
         expect(row.peakEwma30dAgo, 101.8);
@@ -24,12 +28,14 @@ void main() {
     );
 
     test(
-      'should default optional nullables to null and weeksOfHistory to 0',
+      'should default optional nullables to null and peakLoadKg + weeksOfHistory to 0',
       () {
         // Optional nullables omitted entirely — proves the model's
         // "no-data" contract is the default, not something the caller
         // must explicitly opt into.
         const row = VolumePeakRow(weeklyVolumeSets: 0, peakEwma: 0);
+        expect(row.peakLoadKg, 0);
+        expect(row.peakLoadKg30dAgo, isNull);
         expect(row.previousWeekVolumeSets, isNull);
         expect(row.fourWeekMeanVolumeSets, isNull);
         expect(row.peakEwma30dAgo, isNull);
@@ -114,40 +120,47 @@ void main() {
   });
 
   group('PeakDeltaView.fromRow', () {
-    test('should return suppressed state when peakEwma30dAgo is null', () {
+    test('should return suppressed state when peakLoadKg30dAgo is null', () {
       // Use a non-zero weeklyVolumeSets so the trigger is unambiguously
-      // peakEwma30dAgo == null, not "zero sets".
+      // peakLoadKg30dAgo == null, not "zero sets".
       const row = VolumePeakRow(
         weeklyVolumeSets: 12,
         peakEwma: 105,
+        peakLoadKg: 92.5,
         weeksOfHistory: 8,
       );
       final view = PeakDeltaView.fromRow(row);
       expect(view.state, PeakDeltaState.suppressed);
     });
 
-    test('should return up state with positive delta when peak increased', () {
-      const row = VolumePeakRow(
-        weeklyVolumeSets: 12,
-        peakEwma: 105,
-        peakEwma30dAgo: 101.8,
-        weeksOfHistory: 8,
-      );
-      final view = PeakDeltaView.fromRow(row);
-      expect(view.state, PeakDeltaState.up);
-      expect(view.delta, closeTo(3.2, 0.01));
-    });
+    test(
+      'should return up state with positive delta when heaviest lift increased',
+      () {
+        const row = VolumePeakRow(
+          weeklyVolumeSets: 12,
+          peakEwma: 105,
+          peakLoadKg: 92.5,
+          peakLoadKg30dAgo: 87.5,
+          weeksOfHistory: 8,
+        );
+        final view = PeakDeltaView.fromRow(row);
+        expect(view.state, PeakDeltaState.up);
+        expect(view.delta, closeTo(5.0, 0.01));
+      },
+    );
 
     test(
-      'should return flat state when delta would be non-positive (peak EWMA is monotonic; defensive)',
+      'should return flat state when heaviest lift dropped (deload week is not a failure)',
       () {
-        // peakEwma is documented monotonic-non-decreasing. A negative delta
-        // means data corruption — render as flat (no arrow) rather than
-        // down.
+        // Phase 27 L10: actual lift weight is NOT monotonic — a user on a
+        // deload week legitimately lifts less than the month prior.
+        // Rendering a red ▼ on those weeks punishes intentional
+        // periodization, so we flatten instead.
         const row = VolumePeakRow(
           weeklyVolumeSets: 12,
           peakEwma: 100,
-          peakEwma30dAgo: 105,
+          peakLoadKg: 80.0,
+          peakLoadKg30dAgo: 92.5,
           weeksOfHistory: 8,
         );
         final view = PeakDeltaView.fromRow(row);
@@ -156,12 +169,13 @@ void main() {
     );
 
     test(
-      'should return flat state when delta is exactly zero (no movement in the month)',
+      'should return flat state when heaviest lift is unchanged in the month',
       () {
         const row = VolumePeakRow(
           weeklyVolumeSets: 12,
           peakEwma: 100,
-          peakEwma30dAgo: 100,
+          peakLoadKg: 80.0,
+          peakLoadKg30dAgo: 80.0,
           weeksOfHistory: 8,
         );
         final view = PeakDeltaView.fromRow(row);
