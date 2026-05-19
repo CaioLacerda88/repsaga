@@ -67,9 +67,13 @@ class BucketRoutineRow extends StatelessWidget {
                     child: Text(
                       name,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      // L15: routine names in the bucket → Rajdhani per
+                      // mockup `.routine-name { font-family: 'Rajdhani'; }`.
+                      // See project_design_language_typography.
+                      style: AppTextStyles.headline.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: isDone ? AppColors.textCream : AppColors.textDim,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),

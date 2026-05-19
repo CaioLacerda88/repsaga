@@ -649,9 +649,11 @@ class _SetNumberCell extends StatelessWidget {
                   children: [
                     Text(
                       '${set.setNumber}',
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      // L15: numeric digit — Rajdhani 700, not Inter (per
+                      // project_design_language_typography). The set number
+                      // is the most-glanced numeral mid-workout.
+                      style: AppTextStyles.numeric.copyWith(
                         color: color,
-                        fontWeight: FontWeight.w700,
                         fontSize: 18,
                         // Underline hint for tap-to-copy on sets > 1. Note:
                         // the underline lives on the digit, NOT on the type

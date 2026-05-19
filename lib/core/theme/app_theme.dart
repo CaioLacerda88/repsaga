@@ -272,11 +272,20 @@ class AppTheme {
         backgroundColor: AppColors.primaryViolet,
         foregroundColor: AppColors.textCream,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textCream,
+        // L15: AppBar titles use Rajdhani 600 per mockup `.mock-appbar-title`
+        // (font-family: 'Rajdhani'; font-weight: 600; font-size: 18px;
+        // letter-spacing: 0.02em). Material's default falls back to Inter
+        // titleLarge — wrong for our display-font identity. See
+        // `project_design_language_typography`.
+        titleTextStyle: AppTextStyles.headline.copyWith(
+          fontSize: 18,
+          letterSpacing: 0.02 * 18,
+        ),
       ),
       dividerTheme: const DividerThemeData(color: AppColors.hair, thickness: 1),
     );

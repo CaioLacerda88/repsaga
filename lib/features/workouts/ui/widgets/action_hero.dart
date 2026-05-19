@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/connectivity/connectivity_provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../routines/models/routine.dart';
@@ -379,7 +380,11 @@ class _HeroBanner extends StatelessWidget {
                             container: true,
                             child: Text(
                               headline,
-                              style: theme.textTheme.titleLarge?.copyWith(
+                              // L15: ActionHero headline — Rajdhani 600 (the
+                              // primary home CTA carries display weight per
+                              // project_design_language_typography).
+                              style: AppTextStyles.headline.copyWith(
+                                fontSize: 20,
                                 color: theme.colorScheme.onSurface,
                                 fontWeight: FontWeight.w700,
                               ),

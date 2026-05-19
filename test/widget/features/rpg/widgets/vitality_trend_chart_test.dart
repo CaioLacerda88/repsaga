@@ -194,7 +194,10 @@ void main() {
         await tester.pump();
 
         final chart = tester.widget<LineChart>(find.byType(LineChart));
-        expect(chart.data.minY, 0);
+        // L9 round-2: both top + bottom carry headroom so ghost lines at
+        // exactly 0% or 100% don't hug the chart's visual edges. Y-axis
+        // labels still anchor at 0/100 via value-equality filter.
+        expect(chart.data.minY, lessThan(0));
         expect(chart.data.maxY, greaterThan(100));
       },
     );
