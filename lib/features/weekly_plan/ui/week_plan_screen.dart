@@ -564,21 +564,31 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   /// but the analytics event fires at most once per session at dispose.
   void _savePlan({required bool usedAutofill, required bool replacedExisting}) {
     _saveDebounce?.cancel();
-    _debouncedPlanNotifier = ref.read(weeklyPlanProvider.notifier);
+    final notifier = ref.read(weeklyPlanProvider.notifier);
+    _debouncedPlanNotifier = notifier;
+    // L5.2 — Optimistic provider-state update: push `_bucketRoutines` to
+    // `weeklyPlanProvider` SYNCHRONOUSLY so every consumer
+    // (`weeklyEngagementProvider`, Home's bucket chips, anything else
+    // watching the plan) sees the new bucket on the next frame instead of
+    // waiting for the 300ms debounce + Supabase roundtrip (= 400-800ms
+    // perceived latency for the bars to update).
+    //
+    // L5 (original) only invalidated the derived `weeklyEngagementProvider`
+    // — but that provider reads `ref.watch(weeklyPlanProvider).value` which
+    // hadn't changed yet, so the invalidate just re-fetched against a
+    // stale source. The combined fix is "invalidate derived provider
+    // + update source provider state". Cluster:
+    // `cluster_optimistic_ui_vs_async_provider` — patterns 1 + 2 together.
+    notifier.setOptimistic(_bucketRoutines);
     _saveDebounce = Timer(const Duration(milliseconds: 300), () {
       _flushDebouncedSave();
     });
-    // L5 — invalidate the engagement provider immediately on every local
-    // mutation so the bars rerender against the new `_bucketRoutines`
-    // without waiting for the 300ms debounce. Without this, the user sees
-    // "I added a routine but the bars didn't change" until the debounce
-    // fires and the provider chain catches up.
-    //
-    // We invalidate the whole family (no argument) so every variant
-    // (`includePlanned: true` from the editor + `false` from any future
-    // Stats surface) is dirtied uniformly. Per
-    // `cluster_optimistic_ui_vs_async_provider` — pattern 1 (invalidate on
-    // local mutation).
+    // Whole-family invalidate so every variant (`includePlanned: true`
+    // from the editor + `false` from any future Stats surface) is dirtied
+    // uniformly. Redundant for `weeklyEngagementProvider` (the
+    // `ref.watch(weeklyPlanProvider)` reactivity above already triggers
+    // its rebuild) but kept as defense-in-depth for any future autoDispose
+    // variant that may have been disposed between edits.
     ref.invalidate(weeklyEngagementProvider);
     _pendingAnalyticsEvent = true;
     // Sticky-OR: if any edit in the session used autofill or replaced an
