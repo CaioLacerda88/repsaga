@@ -24,6 +24,18 @@ final currentUserIdProvider = Provider<String?>((ref) {
   return Supabase.instance.client.auth.currentUser?.id;
 });
 
+/// Synchronous read of the signed-in user's email — companion to
+/// [currentUserIdProvider]. Same contract: read-time value, not reactive
+/// (the router-level auth stream handles sign-in/sign-out transitions).
+///
+/// Used by surfaces that need a name fallback when [Profile.displayName] is
+/// unset (e.g. [HomeGreeting] derives a name from the email prefix). Exposed
+/// as a Riverpod provider so widgets don't have to import `supabase_flutter`
+/// just to fall back to `auth.currentUser?.email`.
+final currentUserEmailProvider = Provider<String?>((ref) {
+  return Supabase.instance.client.auth.currentUser?.email;
+});
+
 /// Exposes the current auth state as a stream.
 /// Used by the router to decide redirects.
 ///

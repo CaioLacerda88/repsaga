@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
@@ -38,6 +39,7 @@ import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
 import 'package:repsaga/features/workouts/ui/widgets/bucket_chip_row.dart';
 import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
 import 'package:repsaga/features/workouts/ui/widgets/encouragement_nudge.dart';
+import 'package:repsaga/features/workouts/ui/widgets/home_greeting.dart';
 import 'package:repsaga/features/workouts/ui/widgets/last_session_line.dart';
 
 import '../../../../fixtures/test_factories.dart';
@@ -252,6 +254,11 @@ Widget _build({
       workoutCountProvider.overrideWith((ref) => Future.value(workoutCount)),
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
       profileProvider.overrideWith(() => _ProfileStub(profile)),
+      // HomeGreeting (Phase 27 L2) reads `currentUserEmailProvider` for its
+      // displayName-fallback. Default to a deterministic test value so the
+      // greeting always renders the profile's `displayName`; tests that
+      // need to exercise the email-prefix fallback can override locally.
+      currentUserEmailProvider.overrideWithValue('test@repsaga.test'),
       pendingSyncProvider.overrideWith(() => _ZeroPendingSyncNotifier()),
       characterSheetProvider.overrideWith((_) => AsyncData(resolvedSheet)),
       rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
@@ -275,7 +282,7 @@ void main() {
 
   group('HomeScreen - canonical composition', () {
     testWidgets(
-      'renders block order: CharacterCard → Nudge → ActionHero → BucketChipRow → LastSession → RoutinesList',
+      'renders block order: Greeting → CharacterCard → Nudge → ActionHero → BucketChipRow → LastSession → RoutinesList',
       (tester) async {
         tester.view.physicalSize = const Size(800, 3000);
         tester.view.devicePixelRatio = 1.0;
@@ -306,6 +313,7 @@ void main() {
         await tester.pump();
 
         // Each canonical block is on the tree exactly once.
+        expect(find.byType(HomeGreeting), findsOneWidget);
         expect(find.byType(CharacterCard), findsOneWidget);
         expect(find.byType(EncouragementNudge), findsOneWidget);
         expect(find.byType(ActionHero), findsOneWidget);
@@ -316,12 +324,14 @@ void main() {
         Offset offsetOf<T extends Widget>() =>
             tester.getTopLeft(find.byType(T));
 
+        final greetDy = offsetOf<HomeGreeting>().dy;
         final cardDy = offsetOf<CharacterCard>().dy;
         final nudgeDy = offsetOf<EncouragementNudge>().dy;
         final heroDy = offsetOf<ActionHero>().dy;
         final chipsDy = offsetOf<BucketChipRow>().dy;
         final lastDy = offsetOf<LastSessionLine>().dy;
 
+        expect(greetDy, lessThan(cardDy));
         expect(cardDy, lessThan(nudgeDy));
         expect(nudgeDy, lessThan(heroDy));
         expect(heroDy, lessThan(chipsDy));

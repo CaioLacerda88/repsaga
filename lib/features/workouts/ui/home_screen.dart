@@ -15,34 +15,37 @@ import 'widgets/action_hero.dart';
 import 'widgets/bucket_chip_row.dart';
 import 'widgets/character_card.dart';
 import 'widgets/encouragement_nudge.dart';
+import 'widgets/home_greeting.dart';
 import 'widgets/last_session_line.dart';
 
 /// The RepSaga home surface.
 ///
-/// **Phase 26f composition.** Replaces the W8 status-line + 7-day-bucket
-/// layout with a single-card character surface + chip row:
+/// **Phase 26f composition (+ Phase 27 L2 greeting).** Replaces the W8
+/// status-line + 7-day-bucket layout with a single-card character surface
+/// + chip row, prefixed by a top-of-home greeting:
 ///
 /// 1. Sync chrome             — `PendingSyncBadge` + `SyncFailureCard` for
 ///                              offline / failed-write affordances.
 /// 2. [_ConfirmBanner]        — "Same plan this week?" banner (shown when
 ///                              `weeklyPlanNeedsConfirmationProvider` is true).
-/// 3. [CharacterCard]         — tappable expanding character card. Collapsed
+/// 3. [HomeGreeting]          — date eyebrow + display name (Phase 27 L2).
+/// 4. [CharacterCard]         — tappable expanding character card. Collapsed
 ///                              shows level/class/title meta + closest-rank-up
 ///                              indicator; expanded reveals the full Saga
 ///                              character sheet (XP bar + 6 body-part rows).
-/// 4. [EncouragementNudge]    — one-line rotating-priority hint (cross-build
+/// 5. [EncouragementNudge]    — one-line rotating-priority hint (cross-build
 ///                              title close, body-part title close, remaining
 ///                              workouts, streak, or day-0 fallback).
-/// 5. [ActionHero]            — primary CTA. Phase 26f collapsed it into
+/// 6. [ActionHero]            — primary CTA. Phase 26f collapsed it into
 ///                              3 branches: create-first-routine / start-next-
 ///                              routine-in-bucket / free-workout (with
 ///                              week-complete subline when applicable).
-/// 6. [BucketChipRow]         — week-at-a-glance chip wrap. Hides chips when
+/// 7. [BucketChipRow]         — week-at-a-glance chip wrap. Hides chips when
 ///                              the bucket is empty but always surfaces the
 ///                              "Editar plano →" link.
-/// 7. [LastSessionLine]       — editorial "Last: ..." line (hidden when no
+/// 8. [LastSessionLine]       — editorial "Last: ..." line (hidden when no
 ///                              history).
-/// 8. [_HomeRoutinesList]     — user's routines, top 3 + "See all", only when
+/// 9. [_HomeRoutinesList]     — user's routines, top 3 + "See all", only when
 ///                              no active plan.
 ///
 /// Each block is its own ConsumerWidget — this build method intentionally
@@ -62,6 +65,7 @@ class HomeScreen extends StatelessWidget {
             PendingSyncBadge(),
             SyncFailureCard(),
             _ConfirmBanner(),
+            HomeGreeting(),
             CharacterCard(),
             SizedBox(height: 12),
             EncouragementNudge(),
