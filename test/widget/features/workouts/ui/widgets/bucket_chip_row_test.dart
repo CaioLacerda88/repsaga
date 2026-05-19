@@ -1,6 +1,6 @@
 /// Widget tests for [BucketChipRow].
 ///
-/// Covers ten cases:
+/// Covers:
 ///   1. Empty bucket: header + Editar plano link, no chip wrap.
 ///   2. Chip render order: planned (by `order` ascending) → spontaneous
 ///      appended in completion order.
@@ -16,6 +16,15 @@
 ///      (empty, partial, all-complete).
 ///  10. Chip with completedWorkoutId set but completedAt null renders
 ///      without crashing and without day-of-week meta (CH1 — I1 fix).
+///  11. Done chip routine name renders bold (FontWeight.w700) — visual
+///      emphasis for completed work.
+///  12. Pending chip routine name renders semi-bold (FontWeight.w600).
+///  13. Done chip border alpha is at least 0.40 — visually distinct from
+///      hair on dark surface.
+///  14. Header progress text renders in `AppColors.success` when
+///      `uniqueDays > 0` (green = progress signal).
+///  15. Header progress text stays in `AppColors.textDim` when
+///      `uniqueDays == 0` (no premature reward).
 ///
 /// Harness pattern follows `character_card_test.dart`: real [GoRouter]
 /// with placeholder routes for `/plan/week`, [ProviderScope] overrides
@@ -377,6 +386,112 @@ void main() {
         }
       },
     );
+
+    // -------------------------------------------------------------------
+    // L4 — Done-chip emphasis + progress green accent (Phase 27)
+    // -------------------------------------------------------------------
+    //
+    // Pins the user-visible contrast contract after the Galaxy S25 report
+    // that done chips were not distinguishable from pending chips, and
+    // that the "days trained" progress text needed a green accent when
+    // the user had logged at least one day. Tests assert RENDERED style
+    // values (fontWeight, color, border alpha) rather than private widget
+    // state — per CLAUDE.md A1 "behavior, not wiring".
+
+    testWidgets('done chip routine name renders with FontWeight.w700', (
+      tester,
+    ) async {
+      final mon = DateTime(2026, 5, 18, 9);
+      final plan = _plan([_planned('r-push', order: 1, completedAt: mon)]);
+      await tester.pumpWidget(
+        _harness(plan: plan, routines: [_routine('r-push', 'Push')]),
+      );
+      await tester.pumpAndSettle();
+
+      final nameText = tester.widget<Text>(find.text('Push'));
+      expect(nameText.style?.fontWeight, equals(FontWeight.w700));
+    });
+
+    testWidgets('pending chip routine name renders with FontWeight.w600', (
+      tester,
+    ) async {
+      final plan = _plan([_planned('r-push', order: 1, completedAt: null)]);
+      await tester.pumpWidget(
+        _harness(plan: plan, routines: [_routine('r-push', 'Push')]),
+      );
+      await tester.pumpAndSettle();
+
+      final nameText = tester.widget<Text>(find.text('Push'));
+      expect(nameText.style?.fontWeight, equals(FontWeight.w600));
+    });
+
+    testWidgets('done chip border alpha is at least 0.40', (tester) async {
+      final mon = DateTime(2026, 5, 18, 9);
+      final plan = _plan([_planned('r-push', order: 1, completedAt: mon)]);
+      await tester.pumpWidget(
+        _harness(plan: plan, routines: [_routine('r-push', 'Push')]),
+      );
+      await tester.pumpAndSettle();
+
+      // The chip border lives on the `Material` widget's `shape` — a
+      // `RoundedRectangleBorder` with a `BorderSide`. Walk from the chip-
+      // scoped `ConstrainedBox` (the only Material widget under it is the
+      // chip itself; other Materials in the tree live above it).
+      final material = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(ConstrainedBox),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      final shape = material.shape as RoundedRectangleBorder;
+      // Loose-bound — future tweaks (0.40, 0.50, 0.60…) all pass; only a
+      // regression back toward the pre-L4 0.30 value fails.
+      expect(
+        shape.side.color.a,
+        greaterThanOrEqualTo(0.40),
+        reason:
+            'Done chip border must be visually distinct from the hair color; '
+            'pre-L4 alpha of 0.30 read as ambient on Samsung One UI.',
+      );
+    });
+
+    testWidgets('progress text renders in success green when uniqueDays > 0', (
+      tester,
+    ) async {
+      // 2 done chips on 2 unique days → progress = "2 days trained".
+      final mon = DateTime(2026, 5, 18, 9);
+      final wed = DateTime(2026, 5, 20, 9);
+      final plan = _plan([
+        _planned('r-push', order: 1, completedAt: mon),
+        _planned('r-pull', order: 2, completedAt: wed),
+      ]);
+      await tester.pumpWidget(
+        _harness(
+          plan: plan,
+          routines: [_routine('r-push', 'Push'), _routine('r-pull', 'Pull')],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final progress = tester.widget<Text>(find.text('2 days trained'));
+      expect(progress.style?.color, equals(AppColors.success));
+    });
+
+    testWidgets('progress text renders in textDim when uniqueDays == 0', (
+      tester,
+    ) async {
+      // Empty bucket — en plural for count=0 emits "No days trained" per
+      // `app_en.arb::homeBucketDaysTrained`.
+      await tester.pumpWidget(
+        _harness(plan: _plan(const []), routines: const []),
+      );
+      await tester.pumpAndSettle();
+
+      final progress = tester.widget<Text>(find.text('No days trained'));
+      expect(progress.style?.color, equals(AppColors.textDim));
+    });
 
     testWidgets('Editar plano link is present in every state variant', (
       tester,

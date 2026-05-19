@@ -72,6 +72,7 @@ class BucketChipRow extends ConsumerWidget {
           _Header(
             title: l10n.homeBucketSectionTitle,
             progressText: l10n.homeBucketDaysTrained(uniqueDays),
+            progressIsActive: uniqueDays > 0,
           ),
           if (orderedChips.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -126,10 +127,19 @@ class BucketChipRow extends ConsumerWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.progressText});
+  const _Header({
+    required this.title,
+    required this.progressText,
+    required this.progressIsActive,
+  });
 
   final String title;
   final String progressText;
+
+  /// True iff the user has at least one unique training day this week.
+  /// Controls whether the progress counter renders in the success-green
+  /// "you're making progress" tint or the muted textDim baseline. See L4.
+  final bool progressIsActive;
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +162,11 @@ class _Header extends StatelessWidget {
             style: AppTextStyles.bodySmall.copyWith(
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              color: AppColors.textDim,
+              // L4 (Phase 27): "you're making progress" green accent when
+              // the user has logged at least one day this week. Falls back
+              // to textDim on the empty/day-zero state so the unfilled
+              // counter doesn't read as a premature reward.
+              color: progressIsActive ? AppColors.success : AppColors.textDim,
               letterSpacing: 0.06 * 10,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
@@ -214,10 +228,15 @@ class _BucketChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // L4 (Phase 27): bumped done-chip border alpha 0.30 → 0.50. The
+    // mockup spec'd 0.30 but on-device (Galaxy S25, One UI) the ring
+    // read as ambient against the surface. 0.50 gives the done chip a
+    // visually distinct ring without competing with the brand-violet
+    // CTAs higher in the page.
     final borderColor = _isDone
         ? (entry.isSpontaneous
-              ? AppColors.hotViolet.withValues(alpha: 0.30)
-              : AppColors.success.withValues(alpha: 0.30))
+              ? AppColors.hotViolet.withValues(alpha: 0.50)
+              : AppColors.success.withValues(alpha: 0.50))
         : AppColors.hair;
 
     // completedWorkoutId and completedAt are independently nullable; guard avoids crash if server delivers one without the other
@@ -260,7 +279,11 @@ class _BucketChip extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.label.copyWith(
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        // L4 (Phase 27): done chip bumps to w700 for stronger
+                        // "completed" emphasis. Pending stays w600 so the two
+                        // states read as distinctly hierarchical without the
+                        // pending chip looking demoted.
+                        fontWeight: _isDone ? FontWeight.w700 : FontWeight.w600,
                         letterSpacing: 0.02 * 11,
                         color: _isDone
                             ? AppColors.textCream
