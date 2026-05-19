@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/muscle_group_body_part.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/async_value_builder.dart';
@@ -139,8 +140,10 @@ class _MuscleGroupSelector extends ConsumerWidget {
             _MuscleGroupButton(
               label: l10n.all,
               // "All" is a UI meta-filter with no matching pixel asset; a
-              // Material icon is the correct affordance here.
+              // Material icon is the correct affordance here. No body-part
+              // hue applies — the "All" filter spans every group.
               icon: const Icon(Icons.grid_view_rounded, size: 24, weight: 600),
+              hueColor: null,
               isSelected: selected == null,
               onTap: () {
                 ref.read(selectedMuscleGroupProvider.notifier).state = null;
@@ -151,6 +154,11 @@ class _MuscleGroupSelector extends ConsumerWidget {
               (group) => _MuscleGroupButton(
                 label: group.localizedName(l10n),
                 icon: AppIcons.render(group.svgIcon, size: 24),
+                // Phase 27 L7 — propagate the Phase 26a body-part hue
+                // tokens to the Exercises tab. Six strength pillars get
+                // their identity hue; cardio falls back to neutral via
+                // null. See feedback_design_token_sweep_on_new_tokens.
+                hueColor: group.hueColor,
                 isSelected: selected == group,
                 onTap: () {
                   ref.read(selectedMuscleGroupProvider.notifier).state = group;
@@ -169,6 +177,7 @@ class _MuscleGroupButton extends StatelessWidget {
   const _MuscleGroupButton({
     required this.label,
     required this.icon,
+    required this.hueColor,
     required this.isSelected,
     required this.onTap,
     required this.theme,
@@ -180,6 +189,13 @@ class _MuscleGroupButton extends StatelessWidget {
   /// [Icon] (`Icons.grid_view_rounded`); real muscle groups render their
   /// [MuscleGroup.svgIcon] via [AppIcons.render].
   final Widget icon;
+
+  /// Body-part identity hue for this muscle group, resolved via
+  /// `core/theme/muscle_group_body_part.dart`. Non-null for the six v1
+  /// strength pillars (chest, back, legs, shoulders, arms, core), null
+  /// for "All" and cardio. When null the button falls back to the
+  /// neutral primary/onSurface palette (Phase 27 L7).
+  final Color? hueColor;
   final bool isSelected;
   final VoidCallback onTap;
   final ThemeData theme;
@@ -187,6 +203,16 @@ class _MuscleGroupButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = theme.colorScheme.primary;
+    // Identity-color resolution (Phase 27 L7):
+    //   * Selected + has hue → full hue.
+    //   * Unselected + has hue → hue at 60% alpha (mirrors the dim/active
+    //     contrast used on Saga's BodyPartRankRow dots and the Stats
+    //     trend-chart ghost lines).
+    //   * No hue → neutral primary/onSurface fallback (pre-L7 behaviour
+    //     preserved for "All" and cardio).
+    final iconColor = hueColor != null
+        ? (isSelected ? hueColor! : hueColor!.withValues(alpha: 0.60))
+        : (isSelected ? primary : theme.colorScheme.onSurface);
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -222,12 +248,7 @@ class _MuscleGroupButton extends StatelessWidget {
                     width: 24,
                     height: 24,
                     child: IconTheme(
-                      data: IconThemeData(
-                        color: isSelected
-                            ? primary
-                            : theme.colorScheme.onSurface,
-                        size: 24,
-                      ),
+                      data: IconThemeData(color: iconColor, size: 24),
                       child: icon,
                     ),
                   ),
@@ -239,6 +260,9 @@ class _MuscleGroupButton extends StatelessWidget {
                       // nearest-match to w400/w600 with runtime fetching off.
                       // Use w600 (bundled SemiBold) to render deterministically.
                       fontWeight: FontWeight.w600,
+                      // Label color stays on the neutral primary/onSurface
+                      // pair — body-part identity reads on the icon; doubling
+                      // it on the text would overload the chip visually.
                       color: isSelected ? primary : theme.colorScheme.onSurface,
                     ),
                   ),
@@ -418,12 +442,22 @@ class _ExerciseCard extends StatelessWidget {
                                     l10n,
                                   ),
                                   svgIcon: exercise.muscleGroup.svgIcon,
+                                  // Phase 27 L7 — muscle-group chip carries
+                                  // the body-part hue identity. Null for
+                                  // cardio / future non-pillar groups → chip
+                                  // falls back to the neutral onSurface tint.
+                                  iconColor: exercise.muscleGroup.hueColor,
                                 ),
                                 _InfoChip(
                                   label: exercise.equipmentType.localizedName(
                                     l10n,
                                   ),
                                   svgIcon: exercise.equipmentType.svgIcon,
+                                  // Equipment is not a body-part axis — keep
+                                  // it on the neutral tint so the muscle-
+                                  // group hue is the only identity signal in
+                                  // the chip row.
+                                  iconColor: null,
                                 ),
                               ],
                             );
@@ -448,7 +482,11 @@ class _ExerciseCard extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label, required this.svgIcon});
+  const _InfoChip({
+    required this.label,
+    required this.svgIcon,
+    required this.iconColor,
+  });
 
   final String label;
 
@@ -457,9 +495,18 @@ class _InfoChip extends StatelessWidget {
   /// so a single asset recolors with the theme.
   final String svgIcon;
 
+  /// Optional identity hue for the icon (Phase 27 L7). Non-null on the
+  /// muscle-group chip when the group maps to one of the six v1 body-
+  /// part identities (chest, back, legs, shoulders, arms, core); null
+  /// for cardio + the equipment-type chip, both of which fall back to
+  /// the neutral 0.75-alpha onSurface tint.
+  final Color? iconColor;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final effectiveIconColor =
+        iconColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.75);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -470,11 +517,7 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppIcons.render(
-            svgIcon,
-            size: 16,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
-          ),
+          AppIcons.render(svgIcon, size: 16, color: effectiveIconColor),
           const SizedBox(width: 6),
           Text(
             label,
