@@ -196,7 +196,20 @@ class VitalityTrendChart extends StatelessWidget {
                 // from leaking into the surrounding padding.
                 minY: -8,
                 maxY: 108,
-                clipData: const FlClipData.all(),
+                // L18.2: leave the RIGHT side unclipped so the selected
+                // line's 4.5dp terminal dot can extend past the plot
+                // boundary into the 24dp outer right padding (which is
+                // still on-screen). With `FlClipData.all()` the dot was
+                // sliced in half at the plot's right edge — the user
+                // surfaces it as "the dot is cut at the phone screen."
+                // Left/top/bottom stay clipped so the original L9 fix
+                // (ghost lines bleeding past the plot frame) holds.
+                clipData: const FlClipData(
+                  top: true,
+                  bottom: true,
+                  left: true,
+                  right: false,
+                ),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
                 lineTouchData: const LineTouchData(enabled: false),
@@ -381,6 +394,20 @@ class _TerminalPctLabel extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: color,
                     height: 1,
+                    // L18.2: multi-pass abyss-colored halo around the
+                    // glyphs masks the chart line where it passes behind
+                    // the label — without this the label and the line
+                    // (same body-part color) visually merge into an
+                    // ambiguous shape whenever the line is flat near the
+                    // label's Y position. Three passes is what's needed
+                    // for the blur to fully blanket the line at typical
+                    // 2.5sp stroke widths; one or two passes leaves a
+                    // faint stripe behind the digits.
+                    shadows: const [
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                    ],
                   ),
                 ),
               ),
