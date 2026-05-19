@@ -344,6 +344,69 @@ void main() {
       },
     );
 
+    // Regression test for L13.4 — the shell MUST keep the framework's
+    // `canHandlePop` signal sticky-true regardless of what the inner
+    // `_CustomNavigator` reports about its own pop-ability. On real-device
+    // Android, `WidgetsApp` forwards the last NavigationNotification value
+    // to `SystemNavigator.setFrameworkHandlesBack` → if `false` reaches it,
+    // the OS un-registers Flutter's OnBackInvokedCallback and back-press
+    // exits the activity NATIVELY — no widget callback (PopScope or
+    // BackButtonListener) ever fires. The shell's
+    // `NotificationListener<NavigationNotification>` wrap is what intercepts
+    // descendant `canHandlePop:false` notifications and re-dispatches `true`
+    // at the boundary. This test asserts exactly that: every notification
+    // leaving the shell (i.e., reaching the test harness above MaterialApp)
+    // carries `canHandlePop:true`.
+    testWidgets(
+      'shell wraps its body in a NotificationListener<NavigationNotification>',
+      (tester) async {
+        final router = _buildRouter(initialLocation: '/exercises');
+        await tester.pumpWidget(_wrap(router));
+        await tester.pumpAndSettle();
+
+        // The fix lives in `_ShellScaffoldState.build`: every Scaffold the
+        // shell renders MUST be wrapped in a
+        // `NotificationListener<NavigationNotification>` so that descendant
+        // `canHandlePop:false` notifications (dispatched by the inner
+        // `_CustomNavigator` on every history change) are intercepted and
+        // re-emitted as `true` before reaching `WidgetsApp`. Without it the
+        // platform calls `setFrameworkHandlesBack(false)`, un-registers
+        // Flutter's OnBackInvokedCallback, and the next back press exits
+        // the activity natively — no widget callback (PopScope or
+        // BackButtonListener) ever fires. This was the device-only failure
+        // L13.0–L13.3 chased.
+        //
+        // Asserting structurally — walking the element tree from
+        // ShellScaffold down — is the right test surface here because the
+        // behavioral assertion (back-press routing) lives in the
+        // `setFrameworkHandlesBack` ↔ Android OS contract, which is
+        // unreachable from `tester.binding.handlePopRoute()`.
+        final shellElement = tester.element(find.byType(ShellScaffold));
+        var foundWrap = false;
+        void visit(Element element) {
+          if (element.widget is NotificationListener<NavigationNotification>) {
+            foundWrap = true;
+            return;
+          }
+          element.visitChildren(visit);
+        }
+
+        shellElement.visitChildren(visit);
+        expect(
+          foundWrap,
+          isTrue,
+          reason:
+              'ShellScaffold must wrap its body in a '
+              'NotificationListener<NavigationNotification> that intercepts '
+              'descendant canHandlePop:false and re-dispatches true. Without '
+              'this wrap, real-device back-press exits the activity natively '
+              '(setFrameworkHandlesBack(false) un-registers Flutter\'s '
+              'OnBackInvokedCallback). See lib/core/router/app_router.dart '
+              'in `_ShellScaffoldState.build`.',
+        );
+      },
+    );
+
     testWidgets(
       'back from deeper sub-route /home/history/wid pops (not jump-to-home)',
       (tester) async {

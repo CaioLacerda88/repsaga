@@ -372,30 +372,6 @@ class _RouterRefreshListenable extends ChangeNotifier {
 /// either become responsive or move back to a measure-and-cache pattern.
 const double _kOfflineBannerHeight = 42;
 
-/// Tab roots considered part of the bottom-nav (Material Pattern A). When
-/// the user presses back while on one of these (other than `/home`) they
-/// are routed to Home rather than exiting the app — matches the canonical
-/// Android navigation model where Home is the always-reachable default.
-///
-/// `/saga/titles` is intentionally absent — it's a sub-screen of the Saga
-/// tab (reached from the character sheet), not a tab root in its own right.
-const Set<String> _tabRoots = <String>{
-  '/home',
-  '/exercises',
-  '/routines',
-  '/records',
-  '/profile',
-  '/saga/stats',
-  '/plan/week',
-};
-
-bool _isTabRoot(String location) {
-  // Strip query string so deep links like `/saga/stats?body_part=chest`
-  // still classify as a tab root.
-  final path = Uri.parse(location).path;
-  return _tabRoots.contains(path);
-}
-
 /// Bottom-nav shell. Public for `@visibleForTesting` access from
 /// `test/widget/core/router/shell_back_nav_test.dart` — the back-press
 /// contract lives entirely inside `_handleBackButton` and there is no Flutter Web
@@ -443,9 +419,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   /// Centralized back-press intercept (Pattern A — Material/Android
   /// "always-back-to-home"):
   ///
-  ///   1. Sub-route inside a tab (path is NOT in [_tabRoots]) → `context.pop()`
-  ///      walks the navigator stack normally (e.g. `/exercises/abc123` →
-  ///      `/exercises`).
+  ///   1. Sub-route inside a tab (inner navigator can pop) → return `false`
+  ///      so GoRouter's `RouterDelegate.popRoute()` runs the normal pop
+  ///      (e.g. `/exercises/abc123` → `/exercises`).
   ///   2. Non-home tab root → `context.go('/home')` jumps to Home as the
   ///      default destination.
   ///   3. `/home` → first press shows a localized exit hint snackbar and arms
@@ -457,12 +433,24 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   /// (Flutter then skips the default exit-activity behavior); `false`
   /// when we want to let the inner navigator pop normally.
   ///
-  /// L13.3: switched from PopScope to BackButtonListener because PopScope
-  /// inside GoRouter's ShellRoute doesn't register with the route the
-  /// Flutter engine consults on real-device Android (logcat diagnostic
-  /// confirmed `_handlePop` never fired even with `canPop: false`).
-  /// BackButtonListener hooks the Router's BackButtonDispatcher directly,
-  /// which fires before GoRouter's `RouterDelegate.popRoute()` runs.
+  /// L13.4: the real fix isn't WHICH back-press primitive we use — it's that
+  /// the Flutter framework was being told `canHandlePop: false` and forwarding
+  /// that to the Android OS via `SystemNavigator.setFrameworkHandlesBack`.
+  /// At a tab root the inner `_CustomNavigator` (managed by GoRouter inside
+  /// the ShellRoute) has only one page, so it dispatches
+  /// `NavigationNotification(canHandlePop: false)` on every history change.
+  /// That bubbles up past us to `WidgetsApp._defaultOnNavigationNotification`,
+  /// which calls `setFrameworkHandlesBack(false)`, which unregisters Flutter's
+  /// `OnBackInvokedCallback` — after which Android handles back natively
+  /// (= `Activity.finish()`) and Flutter never sees the press. PopScope and
+  /// BackButtonListener BOTH appeared "not to fire" in L13.0/.2/.3 for the
+  /// same reason: the framework's back-press handler is never invoked at all.
+  /// Fix lives in `build` below — a `NotificationListener<NavigationNotification>`
+  /// that intercepts descendant `canHandlePop:false` notifications and
+  /// re-dispatches `canHandlePop:true` at the shell boundary, so
+  /// `setFrameworkHandlesBack(true)` stays sticky. This callback (and the
+  /// `BackButtonListener` it sits inside) is the same as L13.3 — the only
+  /// thing changing is whether it ever gets to run on device.
   Future<bool> _handleBackButton() async {
     // Case 1: sub-route on top of a tab root — let GoRouter pop normally.
     // `context.canPop()` is the right discriminator here because
@@ -575,141 +563,174 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     // semantics survive. The child receives `Padding` while offline so the
     // top of the active tab is not covered. Verified end-to-end with
     // Playwright `page.context().setOffline(true)` driving OFFLINE-008/009.
-    // Phase 27 L13.3: centralized back-press intercept (Pattern A —
-    // "always-back-to-home"). Implemented via [BackButtonListener] rather
-    // than [PopScope] — on real-device Android with GoRouter's ShellRoute,
-    // PopScope inside the shell builder doesn't register with the route
-    // the Flutter engine consults on system-back. Logcat verified
-    // `_handlePop` never fired even with `canPop: false`.
-    // BackButtonListener hooks the [Router]'s [BackButtonDispatcher] before
-    // GoRouter's [RouterDelegate.popRoute] runs. Returning `true` from
-    // [_handleBackButton] tells Flutter the press was handled (skip default
-    // exit-activity); `false` lets the inner navigator pop normally.
+    // Phase 27 L13.4: centralized back-press intercept (Pattern A —
+    // "always-back-to-home"). Cluster: `nested-nav-back-gate`.
+    // The [BackButtonListener] hooks the
+    // [Router]'s [BackButtonDispatcher] before GoRouter's
+    // [RouterDelegate.popRoute] runs; the outer
+    // [NotificationListener] is what makes that callback reachable on
+    // real-device Android.
+    //
+    // Why the [NotificationListener] is load-bearing: at a tab root the
+    // inner `_CustomNavigator` (built by GoRouter inside the ShellRoute)
+    // holds a single page and reports
+    // `NavigationNotification(canHandlePop: false)` on every history
+    // change. That bubbles up to `WidgetsApp._defaultOnNavigationNotification`
+    // → `SystemNavigator.setFrameworkHandlesBack(false)` →
+    // `FlutterActivity.unregisterOnBackInvokedCallback()` — after which
+    // Android handles back natively (`Activity.finish()`) and Flutter
+    // never sees the press. We intercept the false notification HERE,
+    // before it can leave the shell, and re-dispatch as `true` so the
+    // platform keeps routing back-press into Flutter. This is the same
+    // shape `NavigatorPopHandler` uses for nested navigators, adapted
+    // for the "always intercept at the shell" pattern. Without it,
+    // PopScope/BackButtonListener BOTH appear silent on device (the
+    // dispatcher chain is never invoked at all). With it, [_handleBackButton]
+    // fires as expected on every back press.
+    //
     // Sub-routes pop normally via `false`; tab-root presses (other than
     // /home) go to /home; /home arms a 3 s two-tap-to-exit window.
-    return BackButtonListener(
-      onBackButtonPressed: _handleBackButton,
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: isOnline ? 0 : _kOfflineBannerHeight,
-                ),
-                child: widget.child,
-              ),
-            ),
-            if (!isOnline)
-              Align(
-                alignment: Alignment.topCenter,
-                // Pin the banner to `TextScaler.noScaling` so its rendered
-                // height stays equal to `_kOfflineBannerHeight` (42dp)
-                // regardless of system font scaling. The banner is a short,
-                // high-contrast visual marker — letting it scale would either
-                // wrap the row (worse a11y) or push it past the padded body
-                // and overlap content. Other text in the app respects the
-                // user's text-scale preference; this banner is the one
-                // exception, by design. See `_kOfflineBannerHeight` for the
-                // height contract this pin protects.
-                child: MediaQuery(
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(textScaler: TextScaler.noScaling),
-                  child: const OfflineBanner(),
+    return NotificationListener<NavigationNotification>(
+      onNotification: (notification) {
+        if (notification.canHandlePop) {
+          return false;
+        }
+        // Re-dispatch as canHandlePop:true so `WidgetsApp` doesn't tell the
+        // platform to disable framework back-handling. The shell owns the
+        // back-press contract; the inner navigator's view of "can I pop?"
+        // is irrelevant to the platform gate.
+        const NavigationNotification(canHandlePop: true).dispatch(context);
+        return true; // stop the original
+      },
+      child: BackButtonListener(
+        onBackButtonPressed: _handleBackButton,
+        child: Scaffold(
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: isOnline ? 0 : _kOfflineBannerHeight,
+                  ),
+                  child: widget.child,
                 ),
               ),
-          ],
-        ),
-        bottomNavigationBar: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (activeState != null) _ActiveWorkoutBanner(state: activeState),
-            NavigationBar(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              indicatorColor: isOnTab
-                  ? Theme.of(
+              if (!isOnline)
+                Align(
+                  alignment: Alignment.topCenter,
+                  // Pin the banner to `TextScaler.noScaling` so its rendered
+                  // height stays equal to `_kOfflineBannerHeight` (42dp)
+                  // regardless of system font scaling. The banner is a short,
+                  // high-contrast visual marker — letting it scale would either
+                  // wrap the row (worse a11y) or push it past the padded body
+                  // and overlap content. Other text in the app respects the
+                  // user's text-scale preference; this banner is the one
+                  // exception, by design. See `_kOfflineBannerHeight` for the
+                  // height contract this pin protects.
+                  child: MediaQuery(
+                    data: MediaQuery.of(
                       context,
-                    ).colorScheme.primary.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              selectedIndex: isOnTab ? tabIndex : 0,
-              onDestinationSelected: (index) {
-                const routes = ['/home', '/exercises', '/routines', '/profile'];
-                final target = routes[index];
+                    ).copyWith(textScaler: TextScaler.noScaling),
+                    child: const OfflineBanner(),
+                  ),
+                ),
+            ],
+          ),
+          bottomNavigationBar: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (activeState != null) _ActiveWorkoutBanner(state: activeState),
+              NavigationBar(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                indicatorColor: isOnTab
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                selectedIndex: isOnTab ? tabIndex : 0,
+                onDestinationSelected: (index) {
+                  const routes = [
+                    '/home',
+                    '/exercises',
+                    '/routines',
+                    '/profile',
+                  ];
+                  final target = routes[index];
 
-                // Always go(target). This replaces the entire match list with
-                // the target branch root, discarding any sub-routes previously
-                // pushed via context.push (e.g. /profile/settings, /saga/stats,
-                // /home/history). The result is consistent "tap tab to return
-                // to branch root" semantics across all tabs.
-                //
-                // We deliberately do NOT add a `current == target` no-op guard.
-                // Inside a ShellRoute, RouteMatchList.uri ignores
-                // ImperativeRouteMatch entries (see go_router match.dart:547),
-                // so a user sitting on /profile/settings reports "currently
-                // /profile" — and a guarded tap would be silently dropped.
-                // Re-going to the same location with no pushed routes is a
-                // cheap no-op for GoRouter (identical match list → no rebuild),
-                // so removing the guard is safe.
-                context.go(target);
-              },
-              destinations: [
-                Semantics(
-                  container: true,
-                  identifier: 'nav-home',
-                  child: NavigationDestination(
-                    icon: const _NavIcon(svg: AppIcons.home),
-                    selectedIcon: const _NavIcon(
-                      svg: AppIcons.home,
-                      color: AppColors.hotViolet,
+                  // Always go(target). This replaces the entire match list with
+                  // the target branch root, discarding any sub-routes previously
+                  // pushed via context.push (e.g. /profile/settings, /saga/stats,
+                  // /home/history). The result is consistent "tap tab to return
+                  // to branch root" semantics across all tabs.
+                  //
+                  // We deliberately do NOT add a `current == target` no-op guard.
+                  // Inside a ShellRoute, RouteMatchList.uri ignores
+                  // ImperativeRouteMatch entries (see go_router match.dart:547),
+                  // so a user sitting on /profile/settings reports "currently
+                  // /profile" — and a guarded tap would be silently dropped.
+                  // Re-going to the same location with no pushed routes is a
+                  // cheap no-op for GoRouter (identical match list → no rebuild),
+                  // so removing the guard is safe.
+                  context.go(target);
+                },
+                destinations: [
+                  Semantics(
+                    container: true,
+                    identifier: 'nav-home',
+                    child: NavigationDestination(
+                      icon: const _NavIcon(svg: AppIcons.home),
+                      selectedIcon: const _NavIcon(
+                        svg: AppIcons.home,
+                        color: AppColors.hotViolet,
+                      ),
+                      label: AppLocalizations.of(context).navHome,
+                      tooltip: '',
                     ),
-                    label: AppLocalizations.of(context).navHome,
-                    tooltip: '',
                   ),
-                ),
-                Semantics(
-                  container: true,
-                  identifier: 'nav-exercises',
-                  child: NavigationDestination(
-                    icon: const _NavIcon(svg: AppIcons.lift),
-                    selectedIcon: const _NavIcon(
-                      svg: AppIcons.lift,
-                      color: AppColors.hotViolet,
+                  Semantics(
+                    container: true,
+                    identifier: 'nav-exercises',
+                    child: NavigationDestination(
+                      icon: const _NavIcon(svg: AppIcons.lift),
+                      selectedIcon: const _NavIcon(
+                        svg: AppIcons.lift,
+                        color: AppColors.hotViolet,
+                      ),
+                      label: AppLocalizations.of(context).navExercises,
+                      tooltip: '',
                     ),
-                    label: AppLocalizations.of(context).navExercises,
-                    tooltip: '',
                   ),
-                ),
-                Semantics(
-                  container: true,
-                  identifier: 'nav-routines',
-                  child: NavigationDestination(
-                    icon: const _NavIcon(svg: AppIcons.plan),
-                    selectedIcon: const _NavIcon(
-                      svg: AppIcons.plan,
-                      color: AppColors.hotViolet,
+                  Semantics(
+                    container: true,
+                    identifier: 'nav-routines',
+                    child: NavigationDestination(
+                      icon: const _NavIcon(svg: AppIcons.plan),
+                      selectedIcon: const _NavIcon(
+                        svg: AppIcons.plan,
+                        color: AppColors.hotViolet,
+                      ),
+                      label: AppLocalizations.of(context).navRoutines,
+                      tooltip: '',
                     ),
-                    label: AppLocalizations.of(context).navRoutines,
-                    tooltip: '',
                   ),
-                ),
-                Semantics(
-                  container: true,
-                  identifier: 'nav-profile',
-                  child: NavigationDestination(
-                    icon: const _NavIcon(svg: AppIcons.hero),
-                    selectedIcon: const _NavIcon(
-                      svg: AppIcons.hero,
-                      color: AppColors.hotViolet,
+                  Semantics(
+                    container: true,
+                    identifier: 'nav-profile',
+                    child: NavigationDestination(
+                      icon: const _NavIcon(svg: AppIcons.hero),
+                      selectedIcon: const _NavIcon(
+                        svg: AppIcons.hero,
+                        color: AppColors.hotViolet,
+                      ),
+                      label: AppLocalizations.of(context).sagaTabLabel,
+                      tooltip: '',
                     ),
-                    label: AppLocalizations.of(context).sagaTabLabel,
-                    tooltip: '',
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -71,6 +71,7 @@ auto-memory entry of the same slug.
 | `flutter-web-identifier-transition-stale` | Web | Identifier-only mutations skip setAttribute; force fresh node mount |
 | `flutter-web-popscope-unreachable` | Web | GoRouter consumes popstate; PopScope contracts owned by widget tests |
 | `gorouter-context-go-vs-push` | Routing | `go` replaces stack, `push` adds; choose by back-button intent |
+| `nested-nav-back-gate` | Android | Inner nested nav's `NavigationNotification(canHandlePop:false)` → `setFrameworkHandlesBack(false)` → OS finishes activity natively; wrap shell in `NotificationListener<NavigationNotification>` that re-emits `true` |
 | `persist-eats-duration` | SnackBar | `persist = action != null` silently; pass `persist: false` |
 | `action-not-snackbaraction` | SnackBar | Plain TextButton loses auto-dismiss; call `hideCurrentSnackBar` manually |
 | `route-scoped-messenger-queue` | SnackBar | Snacks survive `context.go`; route-scope the messenger |
