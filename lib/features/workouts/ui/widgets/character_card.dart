@@ -260,7 +260,7 @@ class _HeaderRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               if (hasTitle) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 // `sheet.activeTitle` is the raw slug from
                 // `earned_titles.title_id` (e.g. `chest_r5_initiate_of_the_forge`).
                 // It MUST be resolved through `localizedTitleCopy` before
@@ -268,15 +268,27 @@ class _HeaderRow extends StatelessWidget {
                 // intentional: a freshly-shipped DB title without an l10n
                 // entry should degrade to the slug rather than crash. See
                 // `cluster_slug_rendered_as_display_name`.
-                Text(
-                  localizedTitleCopy(sheet.activeTitle!, l10n)?.name ??
-                      sheet.activeTitle!,
-                  key: const ValueKey('character-card-title'),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textDim,
+                //
+                // L12 (Phase 27, 2026-05-19) — wrap the resolved title in
+                // a neutral pill chip matching mockup `.cc-title-pill`:
+                //   background: var(--surface2)     ⇒ AppColors.surface2
+                //   border-radius: 10px             ⇒ BorderRadius.circular(10)
+                //   padding: 3px 8px                ⇒ EdgeInsets.symmetric(8,3)
+                //   display: inline-block           ⇒ Align(start) + min-width
+                //
+                // The pill is intentionally single-style (no tier variants)
+                // — mockup uses one neutral surface tone for every equipped
+                // title. The `Align(centerStart)` + `Container` pair keeps
+                // the pill from stretching to the column's full width:
+                // without it the Column's stretch crossAxis would force the
+                // pill into a full-row strip.
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _TitlePill(
+                    label:
+                        localizedTitleCopy(sheet.activeTitle!, l10n)?.name ??
+                        sheet.activeTitle!,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ],
@@ -408,35 +420,126 @@ class _ClosestRankUpRow extends StatelessWidget {
       xpToRank.ceil(),
       closest.rank + 1,
     );
-    // The ARB template starts with `◆ ` — split the leading two chars off
-    // so the diamond glyph renders in the body-part hue while the rest of
-    // the line stays at the muted body-text color. Tests pin the merged
-    // text via `find.text(fullLine)`, which still resolves because
-    // `Text.rich` exposes a joined `data` to the AOM.
+    // The ARB template starts with `◆ ` then the body-part name then a
+    // `· {xp} XP ...` tail. We slice into three spans so the diamond stays
+    // in the body-part hue, the body-part name takes the bold-cream
+    // emphasis (mockup `.cc-closest .indicator strong`), and the tail
+    // stays muted. Tests pin the merged text via `find.text(fullLine)`,
+    // which still resolves because `Text.rich` exposes a joined `data` to
+    // the AOM. The bold-cream fragment is the body-part name — locate it
+    // in the rendered line via `String.indexOf` so locale-driven word
+    // order changes still work (defensive fallback to whole-line if not
+    // found).
+    //
+    // L11.b (Phase 27, 2026-05-19) — adds the bold-cream body-part span.
     const diamondPrefix = '◆ ';
-    final remainder = fullLine.startsWith(diamondPrefix)
-        ? fullLine.substring(diamondPrefix.length)
-        : fullLine;
+    final baseStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: AppColors.textDim,
+    );
+    final boldStyle = baseStyle?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: AppColors.textCream,
+    );
+    final diamondStyle = theme.textTheme.bodyMedium?.copyWith(color: color);
+    // Body-part name lookup starts AFTER the diamond prefix (skips the
+    // glyph) and bails to a single muted span if the name isn't present
+    // — should never happen since we generate the line from this same
+    // name, but the fallback keeps the row rendering instead of crashing.
+    final nameStart = fullLine.indexOf(
+      bodyPartName,
+      fullLine.startsWith(diamondPrefix) ? diamondPrefix.length : 0,
+    );
+    final spans = <TextSpan>[];
+    if (fullLine.startsWith(diamondPrefix)) {
+      spans.add(TextSpan(text: diamondPrefix, style: diamondStyle));
+    }
+    if (nameStart >= 0) {
+      final headEnd = nameStart;
+      final tailStart = nameStart + bodyPartName.length;
+      // `head` covers anything between the diamond prefix and the body-
+      // part name (typically empty for both en/pt; the diamond prefix
+      // sits flush against the name).
+      final headStart = fullLine.startsWith(diamondPrefix)
+          ? diamondPrefix.length
+          : 0;
+      if (headEnd > headStart) {
+        spans.add(
+          TextSpan(
+            text: fullLine.substring(headStart, headEnd),
+            style: baseStyle,
+          ),
+        );
+      }
+      spans.add(TextSpan(text: bodyPartName, style: boldStyle));
+      if (tailStart < fullLine.length) {
+        spans.add(
+          TextSpan(text: fullLine.substring(tailStart), style: baseStyle),
+        );
+      }
+    } else {
+      // Defensive: body-part name not found in the rendered string. Fall
+      // back to a single muted span carrying everything after the diamond
+      // prefix.
+      final remainder = fullLine.startsWith(diamondPrefix)
+          ? fullLine.substring(diamondPrefix.length)
+          : fullLine;
+      spans.add(TextSpan(text: remainder, style: baseStyle));
+    }
 
     return Semantics(
       container: true,
       explicitChildNodes: true,
       identifier: 'home-closest-rank-up',
       child: Text.rich(
-        TextSpan(
-          children: [
-            if (fullLine.startsWith(diamondPrefix))
-              TextSpan(
-                text: diamondPrefix,
-                style: theme.textTheme.bodyMedium?.copyWith(color: color),
-              ),
-            TextSpan(
-              text: remainder,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textDim,
-              ),
-            ),
-          ],
+        TextSpan(children: spans),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+/// Phase 27 L12 pill chip wrapping the active title on the character card
+/// header. Mockup `.cc-title-pill`:
+///
+///   background: var(--surface2)   ⇒ AppColors.surface2 (#241640)
+///   padding: 3px 8px              ⇒ EdgeInsets.symmetric(8,3)
+///   border-radius: 10px           ⇒ BorderRadius.circular(10)
+///   font-size: 9px                ⇒ labelSmall + letterSpacing 1.2
+///   color: var(--text-dim)        ⇒ AppColors.textDim
+///   text-transform: uppercase     ⇒ `.toUpperCase()` on the label
+///
+/// Single neutral style — the mockup does not vary the background per
+/// title tier; the surface2 fill reads as a quiet badge against the
+/// surrounding `AppColors.surface` card. The label uppercases the
+/// localized title because the mockup specifies `text-transform: uppercase`
+/// + 0.14em letter-spacing — a tracked-out brand-badge treatment. UPPER
+/// is done here (presentation) not in the localization layer because the
+/// raw localized string still flows unchanged into accessibility / clipboard
+/// copy paths. `ValueKey('character-card-title')` stays on the inner Text
+/// so existing widget tests anchored to that key (ellipsis + slug-resolution
+/// pins) keep resolving.
+class _TitlePill extends StatelessWidget {
+  const _TitlePill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        key: const ValueKey('character-card-title'),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: AppColors.textDim,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w600,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
