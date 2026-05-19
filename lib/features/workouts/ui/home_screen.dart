@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../routines/ui/start_routine_action.dart';
 import '../../routines/ui/widgets/routine_action_sheet.dart';
@@ -46,7 +47,12 @@ import 'widgets/last_session_line.dart';
 /// 8. [LastSessionLine]       — editorial "Last: ..." line (hidden when no
 ///                              history).
 /// 9. [_HomeRoutinesList]     — user's routines, top 3 + "See all", only when
-///                              no active plan.
+///                              no active plan. When the user has no custom
+///                              routines yet, falls back to a preview of up
+///                              to 3 seeded default routines via
+///                              [_DefaultRoutinesPreview] (Phase 27 L3) —
+///                              ActionHero owns the "create a routine"
+///                              primary CTA on that surface.
 ///
 /// Each block is its own ConsumerWidget — this build method intentionally
 /// watches NO providers, so a change in (for example)
@@ -168,7 +174,13 @@ class _HomeRoutinesList extends ConsumerWidget {
             .where((r) => r.userId != null && !r.isDefault)
             .toList();
         if (userRoutines.isEmpty) {
-          return const _CreateRoutineCta();
+          // Phase 27 L3: the empty-state CTA on this surface used to
+          // duplicate ActionHero's day-0 "Criar primeira rotina" call. UX-
+          // critic Option B+ (locked 2026-05-18) moved that responsibility
+          // back to ActionHero alone and replaced this slot with a preview
+          // of the seeded default routines, so day-0 users can start
+          // lifting without first walking through the routine-builder.
+          return const _DefaultRoutinesPreview();
         }
 
         final shown = userRoutines.take(_homeRoutineLimit).toList();
@@ -213,43 +225,68 @@ class _HomeRoutinesList extends ConsumerWidget {
   }
 }
 
-class _CreateRoutineCta extends StatelessWidget {
-  const _CreateRoutineCta();
+/// Day-0 "starter kit" preview shown when the user has no custom routines.
+///
+/// Renders up to 3 seeded default routines as tappable cards using the same
+/// [RoutineCard] widget the populated MY ROUTINES list uses — so the visual
+/// language is consistent across both states and the empty→populated
+/// transition needs no animation work (the state IS the transition).
+///
+/// **Behavior** — tapping a card calls [startRoutineWorkout] for that
+/// default routine. It does NOT auto-create a user-owned copy; the user
+/// can keep using the seeded routine until they choose to customize via
+/// the routine library. ActionHero's `_CreateFirstRoutineHero` branch
+/// still owns the "build your own" primary CTA on day-0 (see
+/// [ActionHero] class doc for the L3 gate tightening).
+///
+/// **Anti-patterns (UX-critic Option B+, locked 2026-05-18)** — no
+/// uppercase header, no divider, no leading icon, no "See all" chevron
+/// (the bottom-nav routines tab covers discovery), no animation, and no
+/// curation/filter on which 3 defaults appear (first 3 in the list).
+///
+/// **Empty defaults edge case** — if the seed RPC hasn't run yet (or
+/// returned zero defaults), renders [SizedBox.shrink] so ActionHero owns
+/// the day-0 message alone. Graceful no-op, never broken layout.
+class _DefaultRoutinesPreview extends ConsumerWidget {
+  const _DefaultRoutinesPreview();
+
+  /// Cap on how many seeded defaults render. Mirrors [_homeRoutineLimit]
+  /// for the populated MY ROUTINES list — keeps both states at the same
+  /// visual weight on Home.
+  static const int _previewLimit = 3;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
+    final defaults = routines.where((r) => r.isDefault).toList();
+    if (defaults.isEmpty) return const SizedBox.shrink();
+
+    final shown = defaults.take(_previewLimit).toList();
     final theme = Theme.of(context);
 
-    return Material(
-      color: theme.cardTheme.color ?? theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(kRadiusMd),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kRadiusMd),
-        onTap: () => context.go('/routines/create'),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 72),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.add_rounded,
-                  color: theme.colorScheme.primary,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  AppLocalizations.of(context).createYourFirstRoutine,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          AppLocalizations.of(context).homeStarterRoutinesLabel,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        for (final r in shown)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: RoutineCard(
+              routine: r,
+              // Same tap path as the populated MY ROUTINES card — the
+              // seeded routine starts a real workout, identical to a
+              // user-owned routine. Reuses [startRoutineWorkout]'s
+              // offline / resume-vs-start guards.
+              onTap: () => startRoutineWorkout(context, ref, r),
+            ),
+          ),
+      ],
     );
   }
 }

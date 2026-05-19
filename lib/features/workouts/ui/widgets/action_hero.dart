@@ -21,12 +21,20 @@ import 'resume_workout_dialog.dart';
 /// brand-new / lapsed / week-complete) into 3 deterministic branches keyed
 /// off the user's workout history + bucket state:
 ///
-/// 1. **Day-0 user** (`workoutCountProvider == 0` — never recorded a
-///    workout) → `_CreateFirstRoutineHero` points the user at
-///    `/routines/create`. Preserves the legacy `_BrandNewHero` semantics —
-///    default routines ship seeded for every user, so a `routines.isEmpty`
-///    gate would never fire in production. "Has the user ever lifted?" is
-///    the real onboarding signal. L1 fix (visual verification, 2026-05-18).
+/// 1. **Day-0 user with no custom routines** (`workoutCountProvider == 0`
+///    AND no user-owned routine exists) → `_CreateFirstRoutineHero` points
+///    the user at `/routines/create`. Preserves the legacy `_BrandNewHero`
+///    semantics — default routines ship seeded for every user, so the gate
+///    explicitly filters them out with the same `!r.isDefault` filter
+///    `_HomeRoutinesList` uses. "Has the user ever lifted?" is the real
+///    onboarding signal, AND "has the user already built a routine?" is the
+///    de-duplication guard so the day-0 CTA doesn't redundantly tell a
+///    routine-having user to go create one (Phase 27 L3 fix —
+///    `_DefaultRoutinesPreview` shows the seeded starter kit on the routines
+///    surface; this hero owns the create-routine call-to-action only when
+///    the user genuinely has no routine yet). L1 fix (visual verification,
+///    2026-05-18) introduced the workout-count gate; L3 (2026-05-19)
+///    tightened it with the user-routine check.
 /// 2. **Bucket has an uncompleted entry** (`suggestedNextProvider != null`)
 ///    → `_StartNextRoutineHero` shows `Iniciar {routineName}` and starts
 ///    the routine on tap (resume-vs-start guard preserved via
@@ -65,8 +73,24 @@ class ActionHero extends ConsumerWidget {
     // see class doc.
     final workoutCount = ref.watch(workoutCountProvider).value ?? 0;
 
+    // L3 tightening (Phase 27, 2026-05-19): also gate on "user hasn't built
+    // a routine yet". Same `!r.isDefault` filter used by `_HomeRoutinesList`
+    // — seeded default routines don't count as user-built. A loading/error
+    // value defaults to `const []` so the gate behaves the same as day-0
+    // (preserves the L1 optimistic-first-paint behavior). Without this
+    // tightening, a day-0 user who has already created a custom routine
+    // would still see "Criar primeira rotina" duplicated against the
+    // routines list — the original bug L3 fixes.
+    final userRoutines =
+        ref
+            .watch(routineListProvider)
+            .value
+            ?.where((r) => r.userId != null && !r.isDefault)
+            .toList() ??
+        const <Routine>[];
+
     final Widget branch;
-    if (workoutCount == 0) {
+    if (workoutCount == 0 && userRoutines.isEmpty) {
       branch = const _CreateFirstRoutineHero();
     } else {
       final next = ref.watch(suggestedNextProvider);

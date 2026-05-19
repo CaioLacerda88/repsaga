@@ -1190,6 +1190,12 @@ abstract class AppLocalizations {
   /// **'Create Your First Routine'**
   String get createYourFirstRoutine;
 
+  /// Sentence-case muted label above the seeded starter-routines preview on Home (day-0 users). Phase 27 L3.
+  ///
+  /// In en, this message translates to:
+  /// **'Starter Routines'**
+  String get homeStarterRoutinesLabel;
+
   /// Action hero label: up next
   ///
   /// In en, this message translates to:

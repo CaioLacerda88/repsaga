@@ -642,6 +642,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get createYourFirstRoutine => 'Crie Seu Primeiro Treino';
 
   @override
+  String get homeStarterRoutinesLabel => 'Rotinas iniciais';
+
+  @override
   String get heroUpNext => 'PRÓXIMO';
 
   @override

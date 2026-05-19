@@ -637,6 +637,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get createYourFirstRoutine => 'Create Your First Routine';
 
   @override
+  String get homeStarterRoutinesLabel => 'Starter Routines';
+
+  @override
   String get heroUpNext => 'UP NEXT';
 
   @override
