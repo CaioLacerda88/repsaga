@@ -6,16 +6,22 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
-        android:enableOnBackInvokedCallback="true"
         tools:replace="android:allowBackup">
-        <!-- enableOnBackInvokedCallback (Android 14+): without this flag,
-             Flutter PopScope.canPop=false doesn't intercept system back on
-             Android 13+ devices. Symptom: tapping back on a bottom-nav tab
-             (Exercises / Saga / etc.) closes the app instead of firing the
-             ShellScaffold's `_handlePop` that should route to /home.
-             Phase 27 L13 — see project_design_language_typography for the
-             companion Rajdhani fix and `cluster_gorouter_context_go_vs_push`
-             for the cluster context. -->
+        <!-- enableOnBackInvokedCallback is deliberately UNSET (Phase 27 L13.2).
+             On Android 14+ with this flag set to "true", Flutter routes back
+             gestures via `commitBackGesture` (the predictive-back animation
+             path) instead of the legacy `popRoute`. PopScope reliably
+             intercepts `popRoute` but the predictive-back integration with
+             PopScope inside a GoRouter ShellRoute is incomplete in Flutter
+             3.41 — symptom: back press exits the app instead of firing the
+             ShellScaffold's `_handlePop`. Logcat shows
+             `WindowOnBackDispatcher sendCancelIfRunning` but `_handlePop`
+             never runs. Leaving the flag unset forces Android 14+ to use
+             the legacy `onBackPressed` path which `FlutterActivity` forwards
+             to `popRoute`, where PopScope works correctly. Trade-off: no
+             predictive-back gesture preview animation on Android 14+.
+             Revisit when Flutter framework's predictive-back integration
+             reaches GA inside nested navigators. -->
 
         <!-- allowBackup=false: prevents Android auto-backup from restoring
              stale Hive box files across uninstall→reinstall cycles. The on-disk
