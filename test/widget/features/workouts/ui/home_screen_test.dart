@@ -8,6 +8,8 @@
 /// `home_screen_last_session_test.dart`, `home_screen_routines_test.dart`).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -278,6 +280,107 @@ Widget _build({
 void main() {
   setUpAll(() {
     registerFallbackValue(BodyPart.chest);
+  });
+
+  group('HomeScreen - homeReadyProvider skeleton gate', () {
+    testWidgets(
+      'renders the skeleton (not HomeGreeting / ActionHero / BucketChipRow) '
+      'while any critical-path provider is still loading, then swaps to '
+      'the real tree on resolution',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 3000);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        // Hold `workoutCountProvider` open via a Completer so the
+        // `Future.wait` in `homeReadyProvider` cannot resolve.
+        // Everything else resolves immediately; only the gate holds.
+        final block = Completer<int>();
+        final pulseStorage = _MockPulseStorage();
+        when(
+          () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              weeklyPlanProvider.overrideWith(() => _PlanStub(null)),
+              weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
+              routineListProvider.overrideWith(() => _RoutineStub(const [])),
+              workoutHistoryProvider.overrideWith(() => _HistoryStub(const [])),
+              workoutCountProvider.overrideWith((ref) => block.future),
+              activeWorkoutProvider.overrideWith(
+                () => _NullActiveWorkoutNotifier(),
+              ),
+              profileProvider.overrideWith(
+                () => _ProfileStub(
+                  const Profile(
+                    id: 'user-001',
+                    displayName: 'Alex',
+                    weightUnit: 'kg',
+                  ),
+                ),
+              ),
+              currentUserEmailProvider.overrideWithValue('test@repsaga.test'),
+              pendingSyncProvider.overrideWith(
+                () => _ZeroPendingSyncNotifier(),
+              ),
+              characterSheetProvider.overrideWith(
+                (_) => AsyncData(_dayZeroSheet()),
+              ),
+              rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+              streakProvider.overrideWith((ref) => 0),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const Scaffold(body: HomeScreen()),
+            ),
+          ),
+        );
+        // Drain the resolved stubs but leave the blocked completer pending —
+        // this is the user-visible state during cold mount with the slowest
+        // critical provider mid-flight.
+        await tester.pump();
+        await tester.pump();
+
+        // The four real widgets that watch critical providers MUST be
+        // absent — they would render the wrong default state without the
+        // gate (workoutCount → 0 → false day-0 branch; routines/plan →
+        // empty bucket header; profile null → empty greeting name).
+        expect(
+          find.byType(HomeGreeting),
+          findsNothing,
+          reason:
+              'HomeGreeting must be skeleton-gated; rendering it pre-resolve '
+              'shows an empty name slot for ~300-800ms until profile loads.',
+        );
+        expect(
+          find.byType(ActionHero),
+          findsNothing,
+          reason:
+              'ActionHero must be skeleton-gated; pre-resolve `.value ?? 0` '
+              'falsely satisfies the day-0 branch for returning users.',
+        );
+        expect(
+          find.byType(BucketChipRow),
+          findsNothing,
+          reason:
+              'BucketChipRow must be skeleton-gated; pre-resolve it renders '
+              'an empty bucket under the "ESTA SEMANA" header.',
+        );
+
+        // Resolve the blocked critical provider — `homeReadyProvider`
+        // now completes, gate opens, real tree renders.
+        block.complete(0);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(HomeGreeting), findsOneWidget);
+        expect(find.byType(ActionHero), findsOneWidget);
+        expect(find.byType(BucketChipRow), findsOneWidget);
+      },
+    );
   });
 
   group('HomeScreen - canonical composition', () {

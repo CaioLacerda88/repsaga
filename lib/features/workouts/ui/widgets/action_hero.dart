@@ -66,22 +66,20 @@ class ActionHero extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Day-0 gate: user has never recorded a workout. `workoutCountProvider`
-    // is `keepAlive`, so once it resolves the value is cached for the
-    // session. During the first-frame load `.value` is null → we default to
-    // 0 (show the create-first-routine hero); the rebuild on hydrate swaps
-    // to the correct branch. For a real day-0 user that "swap" is a no-op
-    // (resolves to 0). Mirrors the legacy `_BrandNewHero` gate. L1 fix —
-    // see class doc.
+    // is `keepAlive` and is awaited by the Phase-27 `homeReadyProvider`
+    // gate in HomeScreen — in production this `.value` is always
+    // non-null on first paint (HomeScreen holds the skeleton until the
+    // four critical providers resolve, including this one). The `?? 0`
+    // default survives as a safety net for tests that render this widget
+    // outside the gate; in production it's dead code.
     final workoutCount = ref.watch(workoutCountProvider).value ?? 0;
 
     // L3 tightening (Phase 27, 2026-05-19): also gate on "user hasn't built
     // a routine yet". Same `!r.isDefault` filter used by `_HomeRoutinesList`
-    // — seeded default routines don't count as user-built. A loading/error
-    // value defaults to `const []` so the gate behaves the same as day-0
-    // (preserves the L1 optimistic-first-paint behavior). Without this
-    // tightening, a day-0 user who has already created a custom routine
-    // would still see "Criar primeira rotina" duplicated against the
-    // routines list — the original bug L3 fixes.
+    // — seeded default routines don't count as user-built. Like
+    // `workoutCount` above, the `homeReadyProvider` gate makes the `??`
+    // fallback dead code in production; it's preserved for direct-widget
+    // tests that don't construct the full HomeScreen tree.
     final userRoutines =
         ref
             .watch(routineListProvider)
@@ -193,6 +191,8 @@ class _StartNextRoutineHero extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Guaranteed-present after the `homeReadyProvider` gate in production;
+    // `?? const []` survives for direct-widget test rendering.
     final routines = ref.watch(routineListProvider).value ?? const <Routine>[];
     final routine = routines.cast<Routine?>().firstWhere(
       (r) => r?.id == bucketEntry.routineId,

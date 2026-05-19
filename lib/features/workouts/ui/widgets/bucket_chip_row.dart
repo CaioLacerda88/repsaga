@@ -51,6 +51,12 @@ class BucketChipRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // Both providers are awaited by `homeReadyProvider` in HomeScreen, so
+    // in production `.value` is always non-null here on first paint. The
+    // `?? default` survives for direct-widget tests that pump this row
+    // outside the full Home tree. `plan` itself can still legitimately
+    // be null (no plan exists yet for this week); in that case the
+    // bucket reads empty, which is the correct representation.
     final plan = ref.watch(weeklyPlanProvider).value;
     final routines = ref.watch(routineListProvider).value ?? const [];
 
