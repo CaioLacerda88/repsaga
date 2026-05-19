@@ -428,29 +428,14 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   ///      a 3-second timer. Second press inside the window calls
   ///      `SystemNavigator.pop()`; otherwise the flag resets.
   ///
-  /// The shell's `PopScope` declares `canPop: false`, so this callback
-  /// owns the entire decision. Returns `true` when the back was handled
-  /// (Flutter then skips the default exit-activity behavior); `false`
-  /// when we want to let the inner navigator pop normally.
+  /// Returns `true` when the back was handled (Flutter skips the default
+  /// exit-activity behavior); `false` when we want to let the inner navigator
+  /// pop normally.
   ///
-  /// L13.4: the real fix isn't WHICH back-press primitive we use — it's that
-  /// the Flutter framework was being told `canHandlePop: false` and forwarding
-  /// that to the Android OS via `SystemNavigator.setFrameworkHandlesBack`.
-  /// At a tab root the inner `_CustomNavigator` (managed by GoRouter inside
-  /// the ShellRoute) has only one page, so it dispatches
-  /// `NavigationNotification(canHandlePop: false)` on every history change.
-  /// That bubbles up past us to `WidgetsApp._defaultOnNavigationNotification`,
-  /// which calls `setFrameworkHandlesBack(false)`, which unregisters Flutter's
-  /// `OnBackInvokedCallback` — after which Android handles back natively
-  /// (= `Activity.finish()`) and Flutter never sees the press. PopScope and
-  /// BackButtonListener BOTH appeared "not to fire" in L13.0/.2/.3 for the
-  /// same reason: the framework's back-press handler is never invoked at all.
-  /// Fix lives in `build` below — a `NotificationListener<NavigationNotification>`
-  /// that intercepts descendant `canHandlePop:false` notifications and
-  /// re-dispatches `canHandlePop:true` at the shell boundary, so
-  /// `setFrameworkHandlesBack(true)` stays sticky. This callback (and the
-  /// `BackButtonListener` it sits inside) is the same as L13.3 — the only
-  /// thing changing is whether it ever gets to run on device.
+  /// Pairs with the `NotificationListener<NavigationNotification>` wrap in
+  /// [build] — that wrap is what makes this callback reachable on real-device
+  /// Android (cluster `nested-nav-back-gate`). See the comment block on the
+  /// listener for the platform-gate causal chain.
   Future<bool> _handleBackButton() async {
     // Case 1: sub-route on top of a tab root — let GoRouter pop normally.
     // `context.canPop()` is the right discriminator here because
@@ -598,7 +583,12 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
         // Re-dispatch as canHandlePop:true so `WidgetsApp` doesn't tell the
         // platform to disable framework back-handling. The shell owns the
         // back-press contract; the inner navigator's view of "can I pop?"
-        // is irrelevant to the platform gate.
+        // is irrelevant to the platform gate. `dispatch` walks ANCESTORS of
+        // [context] (this widget's BuildContext), so the re-dispatch can't
+        // re-enter our own listener (no infinite loop). Fragility worth
+        // naming: any future wrap that adds a NotificationListener<Navigation-
+        // Notification> ABOVE this shell must propagate canHandlePop:true
+        // (return false from its onNotification) or this gate breaks again.
         const NavigationNotification(canHandlePop: true).dispatch(context);
         return true; // stop the original
       },
