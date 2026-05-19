@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../models/routine.dart';
@@ -54,7 +55,7 @@ class RoutineCard extends StatelessWidget {
                     children: [
                       Text(
                         routine.name,
-                        style: theme.textTheme.titleMedium,
+                        style: AppTextStyles.title,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),

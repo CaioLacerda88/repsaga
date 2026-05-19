@@ -255,14 +255,11 @@ class _MuscleGroupButton extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      // Inter-Medium (w500) isn't bundled; google_fonts would
-                      // nearest-match to w400/w600 with runtime fetching off.
-                      // Use w600 (bundled SemiBold) to render deterministically.
-                      fontWeight: FontWeight.w600,
-                      // Label color stays on the neutral primary/onSurface
-                      // pair — body-part identity reads on the icon; doubling
-                      // it on the text would overload the chip visually.
+                    // [AppTextStyles.label] = Inter 600 11dp with +0.12em
+                    // tracking — chip register. Color stays on the neutral
+                    // primary/onSurface pair since body-part identity is on
+                    // the icon; tinting the text too would overload the chip.
+                    style: AppTextStyles.label.copyWith(
                       color: isSelected ? primary : theme.colorScheme.onSurface,
                     ),
                   ),
@@ -424,12 +421,7 @@ class _ExerciseCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          exercise.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        Text(exercise.name, style: AppTextStyles.title),
                         const SizedBox(height: 8),
                         Builder(
                           builder: (context) {
@@ -519,13 +511,7 @@ class _InfoChip extends StatelessWidget {
         children: [
           AppIcons.render(svgIcon, size: 16, color: effectiveIconColor),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
+          Text(label, style: AppTextStyles.label.copyWith(fontSize: 12)),
         ],
       ),
     );
@@ -569,9 +555,7 @@ class _EmptyState extends StatelessWidget {
                 hasFilters
                     ? l10n.noExercisesMatchFilters
                     : l10n.yourExercisesWillAppear,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTextStyles.title,
                 textAlign: TextAlign.center,
               ),
             ),

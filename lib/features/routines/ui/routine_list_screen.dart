@@ -184,10 +184,7 @@ class _CustomRoutinesEmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               l10n.routinesEmptyTitle,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: AppColors.textCream,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.title,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),

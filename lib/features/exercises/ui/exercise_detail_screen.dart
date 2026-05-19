@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/exceptions/app_exception.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/exercise_image.dart';
@@ -197,10 +198,10 @@ class _ExerciseDetailBody extends ConsumerWidget {
               identifier: 'exercise-detail-custom-badge',
               child: Text(
                 l10n.customExercise,
-                style: theme.textTheme.labelLarge?.copyWith(
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 12,
+                  letterSpacing: 0.12 * 12,
                   color: primary.withValues(alpha: 0.8),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -453,9 +454,7 @@ class _PRSection extends ConsumerWidget {
                     const Spacer(),
                     Text(
                       _formatValue(r.recordType, r.value, weightUnit, l10n),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTextStyles.numeric,
                     ),
                   ],
                 ),

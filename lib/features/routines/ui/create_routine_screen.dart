@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../exercises/models/exercise.dart';
@@ -260,7 +261,7 @@ class _ExerciseCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(exerciseName, style: theme.textTheme.titleMedium),
+                        Text(exerciseName, style: AppTextStyles.title),
                         if (muscleGroup != null) ...[
                           const SizedBox(height: 4),
                           Container(
@@ -276,7 +277,8 @@ class _ExerciseCard extends StatelessWidget {
                             ),
                             child: Text(
                               muscleGroup,
-                              style: theme.textTheme.bodySmall?.copyWith(
+                              style: AppTextStyles.label.copyWith(
+                                fontSize: 11,
                                 color: theme.colorScheme.primary,
                               ),
                             ),
@@ -322,7 +324,7 @@ class _ExerciseCard extends StatelessWidget {
                     child: Text(
                       '${entry.setCount}',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium,
+                      style: AppTextStyles.numeric.copyWith(fontSize: 18),
                     ),
                   ),
                   IconButton(
