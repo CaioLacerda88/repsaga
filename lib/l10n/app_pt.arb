@@ -64,6 +64,7 @@
   "add": "Adicionar",
   "skip": "Pular",
   "back": "Voltar",
+  "backExitHint": "Pressione voltar novamente para sair",
   "close": "Fechar",
   "start": "Iniciar",
   "remove": "Remover",

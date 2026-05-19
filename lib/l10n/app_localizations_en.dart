@@ -209,6 +209,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get back => 'Back';
 
   @override
+  String get backExitHint => 'Press back again to exit';
+
+  @override
   String get close => 'Close';
 
   @override

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -168,7 +171,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         builder: (context, state, child) =>
-            SagaIntroGate(child: _ShellScaffold(child: child)),
+            SagaIntroGate(child: ShellScaffold(child: child)),
         routes: [
           GoRoute(
             path: '/home',
@@ -369,10 +372,58 @@ class _RouterRefreshListenable extends ChangeNotifier {
 /// either become responsive or move back to a measure-and-cache pattern.
 const double _kOfflineBannerHeight = 42;
 
-class _ShellScaffold extends ConsumerWidget {
-  const _ShellScaffold({required this.child});
+/// Tab roots considered part of the bottom-nav (Material Pattern A). When
+/// the user presses back while on one of these (other than `/home`) they
+/// are routed to Home rather than exiting the app — matches the canonical
+/// Android navigation model where Home is the always-reachable default.
+///
+/// `/saga/titles` is intentionally absent — it's a sub-screen of the Saga
+/// tab (reached from the character sheet), not a tab root in its own right.
+const Set<String> _tabRoots = <String>{
+  '/home',
+  '/exercises',
+  '/routines',
+  '/records',
+  '/profile',
+  '/saga/stats',
+  '/plan/week',
+};
+
+bool _isTabRoot(String location) {
+  // Strip query string so deep links like `/saga/stats?body_part=chest`
+  // still classify as a tab root.
+  final path = Uri.parse(location).path;
+  return _tabRoots.contains(path);
+}
+
+/// Bottom-nav shell. Public for `@visibleForTesting` access from
+/// `test/widget/core/router/shell_back_nav_test.dart` — the back-press
+/// contract lives entirely inside `_handlePop` and there is no Flutter Web
+/// path to drive it via E2E (see `cluster-flutter-web-popscope-unreachable`).
+@visibleForTesting
+class ShellScaffold extends ConsumerStatefulWidget {
+  const ShellScaffold({super.key, required this.child});
 
   final Widget child;
+
+  @override
+  ConsumerState<ShellScaffold> createState() => _ShellScaffoldState();
+}
+
+class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
+  /// True after the first back-press on `/home` and until the 3-second
+  /// `_exitTimer` resets it. A second press while this is true triggers
+  /// `SystemNavigator.pop()`. Local widget state — no Riverpod — because the
+  /// concern is purely ephemeral UI bookkeeping that lives and dies with
+  /// the shell's mount.
+  bool _exitPending = false;
+  Timer? _exitTimer;
+
+  @override
+  void dispose() {
+    _exitTimer?.cancel();
+    super.dispose();
+  }
 
   /// Returns the selected tab index, or -1 for non-tab routes (e.g. /records,
   /// /plan/week) so the bottom nav does not falsely highlight a tab.
@@ -389,8 +440,74 @@ class _ShellScaffold extends ConsumerWidget {
     return -1;
   }
 
+  /// Centralized back-press intercept (Pattern A — Material/Android
+  /// "always-back-to-home"):
+  ///
+  ///   1. Sub-route inside a tab (path is NOT in [_tabRoots]) → `context.pop()`
+  ///      walks the navigator stack normally (e.g. `/exercises/abc123` →
+  ///      `/exercises`).
+  ///   2. Non-home tab root → `context.go('/home')` jumps to Home as the
+  ///      default destination.
+  ///   3. `/home` → first press shows a localized exit hint snackbar and arms
+  ///      a 3-second timer. Second press inside the window calls
+  ///      `SystemNavigator.pop()`; otherwise the flag resets.
+  ///
+  /// The shell's `PopScope` declares `canPop: false`, so this callback
+  /// owns the entire decision — `didPop` is never `true` on entry, and we
+  /// never let Navigator pop us automatically.
+  void _handlePop(bool didPop, Object? _) {
+    if (didPop) return; // Shouldn't happen with canPop:false — defensive.
+
+    final location = GoRouterState.of(context).matchedLocation;
+    final path = Uri.parse(location).path;
+
+    // Case 3: on Home — two-tap-to-exit.
+    if (path == '/home') {
+      if (_exitPending) {
+        // Second press inside the window — exit.
+        SystemNavigator.pop();
+        return;
+      }
+      _arm();
+      return;
+    }
+
+    // Case 2: on another tab root — go Home (no stack push).
+    if (_isTabRoot(location)) {
+      context.go('/home');
+      return;
+    }
+
+    // Case 1: sub-route inside a tab — normal pop.
+    if (context.canPop()) {
+      context.pop();
+    }
+  }
+
+  void _arm() {
+    setState(() => _exitPending = true);
+    _exitTimer?.cancel();
+    _exitTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _exitPending = false);
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    // Clear any prior queued snackbar so repeated presses don't stack —
+    // see cluster `route-scoped-messenger-queue` for the queue-survival
+    // bug class this defends against.
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context).backExitHint),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final activeState = ref.watch(activeWorkoutProvider).value;
     final isOnline = ref.watch(isOnlineProvider);
     ref.watch(cacheRefreshProvider);
@@ -451,125 +568,138 @@ class _ShellScaffold extends ConsumerWidget {
     // semantics survive. The child receives `Padding` while offline so the
     // top of the active tab is not covered. Verified end-to-end with
     // Playwright `page.context().setOffline(true)` driving OFFLINE-008/009.
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: isOnline ? 0 : _kOfflineBannerHeight,
-              ),
-              child: child,
-            ),
-          ),
-          if (!isOnline)
-            Align(
-              alignment: Alignment.topCenter,
-              // Pin the banner to `TextScaler.noScaling` so its rendered
-              // height stays equal to `_kOfflineBannerHeight` (42dp)
-              // regardless of system font scaling. The banner is a short,
-              // high-contrast visual marker — letting it scale would either
-              // wrap the row (worse a11y) or push it past the padded body
-              // and overlap content. Other text in the app respects the
-              // user's text-scale preference; this banner is the one
-              // exception, by design. See `_kOfflineBannerHeight` for the
-              // height contract this pin protects.
-              child: MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: TextScaler.noScaling),
-                child: const OfflineBanner(),
+    // Phase 27 L13: centralized back-press intercept (Pattern A —
+    // "always-back-to-home"). canPop is hard-coded to false so `_handlePop`
+    // owns the decision every time. Sub-routes pop normally via
+    // `context.pop()`; tab-root presses (other than /home) go to /home; /home
+    // arms a 3 s two-tap-to-exit window. The PopScope lives at the SHELL
+    // level — never duplicate it on individual screens (see
+    // cluster-flutter-web-popscope-unreachable for why E2E can't reach it).
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePop,
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: isOnline ? 0 : _kOfflineBannerHeight,
+                ),
+                child: widget.child,
               ),
             ),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (activeState != null) _ActiveWorkoutBanner(state: activeState),
-          NavigationBar(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            indicatorColor: isOnTab
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            selectedIndex: isOnTab ? tabIndex : 0,
-            onDestinationSelected: (index) {
-              const routes = ['/home', '/exercises', '/routines', '/profile'];
-              final target = routes[index];
+            if (!isOnline)
+              Align(
+                alignment: Alignment.topCenter,
+                // Pin the banner to `TextScaler.noScaling` so its rendered
+                // height stays equal to `_kOfflineBannerHeight` (42dp)
+                // regardless of system font scaling. The banner is a short,
+                // high-contrast visual marker — letting it scale would either
+                // wrap the row (worse a11y) or push it past the padded body
+                // and overlap content. Other text in the app respects the
+                // user's text-scale preference; this banner is the one
+                // exception, by design. See `_kOfflineBannerHeight` for the
+                // height contract this pin protects.
+                child: MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: TextScaler.noScaling),
+                  child: const OfflineBanner(),
+                ),
+              ),
+          ],
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (activeState != null) _ActiveWorkoutBanner(state: activeState),
+            NavigationBar(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              indicatorColor: isOnTab
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              selectedIndex: isOnTab ? tabIndex : 0,
+              onDestinationSelected: (index) {
+                const routes = ['/home', '/exercises', '/routines', '/profile'];
+                final target = routes[index];
 
-              // Always go(target). This replaces the entire match list with
-              // the target branch root, discarding any sub-routes previously
-              // pushed via context.push (e.g. /profile/settings, /saga/stats,
-              // /home/history). The result is consistent "tap tab to return
-              // to branch root" semantics across all tabs.
-              //
-              // We deliberately do NOT add a `current == target` no-op guard.
-              // Inside a ShellRoute, RouteMatchList.uri ignores
-              // ImperativeRouteMatch entries (see go_router match.dart:547),
-              // so a user sitting on /profile/settings reports "currently
-              // /profile" — and a guarded tap would be silently dropped.
-              // Re-going to the same location with no pushed routes is a
-              // cheap no-op for GoRouter (identical match list → no rebuild),
-              // so removing the guard is safe.
-              context.go(target);
-            },
-            destinations: [
-              Semantics(
-                container: true,
-                identifier: 'nav-home',
-                child: NavigationDestination(
-                  icon: const _NavIcon(svg: AppIcons.home),
-                  selectedIcon: const _NavIcon(
-                    svg: AppIcons.home,
-                    color: AppColors.hotViolet,
+                // Always go(target). This replaces the entire match list with
+                // the target branch root, discarding any sub-routes previously
+                // pushed via context.push (e.g. /profile/settings, /saga/stats,
+                // /home/history). The result is consistent "tap tab to return
+                // to branch root" semantics across all tabs.
+                //
+                // We deliberately do NOT add a `current == target` no-op guard.
+                // Inside a ShellRoute, RouteMatchList.uri ignores
+                // ImperativeRouteMatch entries (see go_router match.dart:547),
+                // so a user sitting on /profile/settings reports "currently
+                // /profile" — and a guarded tap would be silently dropped.
+                // Re-going to the same location with no pushed routes is a
+                // cheap no-op for GoRouter (identical match list → no rebuild),
+                // so removing the guard is safe.
+                context.go(target);
+              },
+              destinations: [
+                Semantics(
+                  container: true,
+                  identifier: 'nav-home',
+                  child: NavigationDestination(
+                    icon: const _NavIcon(svg: AppIcons.home),
+                    selectedIcon: const _NavIcon(
+                      svg: AppIcons.home,
+                      color: AppColors.hotViolet,
+                    ),
+                    label: AppLocalizations.of(context).navHome,
+                    tooltip: '',
                   ),
-                  label: AppLocalizations.of(context).navHome,
-                  tooltip: '',
                 ),
-              ),
-              Semantics(
-                container: true,
-                identifier: 'nav-exercises',
-                child: NavigationDestination(
-                  icon: const _NavIcon(svg: AppIcons.lift),
-                  selectedIcon: const _NavIcon(
-                    svg: AppIcons.lift,
-                    color: AppColors.hotViolet,
+                Semantics(
+                  container: true,
+                  identifier: 'nav-exercises',
+                  child: NavigationDestination(
+                    icon: const _NavIcon(svg: AppIcons.lift),
+                    selectedIcon: const _NavIcon(
+                      svg: AppIcons.lift,
+                      color: AppColors.hotViolet,
+                    ),
+                    label: AppLocalizations.of(context).navExercises,
+                    tooltip: '',
                   ),
-                  label: AppLocalizations.of(context).navExercises,
-                  tooltip: '',
                 ),
-              ),
-              Semantics(
-                container: true,
-                identifier: 'nav-routines',
-                child: NavigationDestination(
-                  icon: const _NavIcon(svg: AppIcons.plan),
-                  selectedIcon: const _NavIcon(
-                    svg: AppIcons.plan,
-                    color: AppColors.hotViolet,
+                Semantics(
+                  container: true,
+                  identifier: 'nav-routines',
+                  child: NavigationDestination(
+                    icon: const _NavIcon(svg: AppIcons.plan),
+                    selectedIcon: const _NavIcon(
+                      svg: AppIcons.plan,
+                      color: AppColors.hotViolet,
+                    ),
+                    label: AppLocalizations.of(context).navRoutines,
+                    tooltip: '',
                   ),
-                  label: AppLocalizations.of(context).navRoutines,
-                  tooltip: '',
                 ),
-              ),
-              Semantics(
-                container: true,
-                identifier: 'nav-profile',
-                child: NavigationDestination(
-                  icon: const _NavIcon(svg: AppIcons.hero),
-                  selectedIcon: const _NavIcon(
-                    svg: AppIcons.hero,
-                    color: AppColors.hotViolet,
+                Semantics(
+                  container: true,
+                  identifier: 'nav-profile',
+                  child: NavigationDestination(
+                    icon: const _NavIcon(svg: AppIcons.hero),
+                    selectedIcon: const _NavIcon(
+                      svg: AppIcons.hero,
+                      color: AppColors.hotViolet,
+                    ),
+                    label: AppLocalizations.of(context).sagaTabLabel,
+                    tooltip: '',
                   ),
-                  label: AppLocalizations.of(context).sagaTabLabel,
-                  tooltip: '',
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

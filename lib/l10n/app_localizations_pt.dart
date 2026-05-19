@@ -210,6 +210,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get back => 'Voltar';
 
   @override
+  String get backExitHint => 'Pressione voltar novamente para sair';
+
+  @override
   String get close => 'Fechar';
 
   @override

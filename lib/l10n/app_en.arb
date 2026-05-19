@@ -129,6 +129,8 @@
   "@skip": { "description": "Skip button label" },
   "back": "Back",
   "@back": { "description": "Back button label" },
+  "backExitHint": "Press back again to exit",
+  "@backExitHint": { "description": "Two-tap-to-exit hint shown on Home when the user presses back once. A second back press within 3 seconds exits the app." },
   "close": "Close",
   "@close": { "description": "Close button label" },
   "start": "Start",

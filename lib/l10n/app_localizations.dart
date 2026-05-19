@@ -470,6 +470,12 @@ abstract class AppLocalizations {
   /// **'Back'**
   String get back;
 
+  /// Two-tap-to-exit hint shown on Home when the user presses back once. A second back press within 3 seconds exits the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Press back again to exit'**
+  String get backExitHint;
+
   /// Close button label
   ///
   /// In en, this message translates to:
