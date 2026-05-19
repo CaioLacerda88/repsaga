@@ -184,7 +184,17 @@ class VitalityTrendChart extends StatelessWidget {
                 minX: 0,
                 maxX: xMax,
                 minY: 0,
-                maxY: 100,
+                // L9 fix: 8-unit top headroom keeps the terminal `%` callout
+                // and any ghost line sustained at 100% (e.g. a body part at
+                // full vitality, like Braços-100% in the launch screenshot)
+                // visibly inside the plot area. Without it, the y=100 ghost
+                // line sits flush against the chart's visual top edge and
+                // reads as an "ugly border" frame artifact even with
+                // `borderData(show: false)`. Pair with the empty-spots
+                // fallback in `_buildSpots` which kills the analogous
+                // y=0 bottom-edge artifact for body parts with no trend
+                // data in the window.
+                maxY: 108,
                 clipData: const FlClipData.all(),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
@@ -288,33 +298,29 @@ class VitalityTrendChart extends StatelessWidget {
   /// outside the window are filtered out (defensive — the provider should
   /// already trim to window).
   ///
-  /// Empty inputs (the user has never trained this body part in the window)
-  /// return a flat-zero line at the two endpoints — keeps the chart's draw
-  /// path consistent and avoids "vanishing line" gaps.
+  /// Empty inputs (the user has never trained this body part in the window,
+  /// or all known points fall outside the window) return an empty spot list
+  /// so fl_chart paints nothing for that bar. The L9 fix: the previous
+  /// fallback emitted a `[(0, 0), (spanDays, 0)]` flat-zero baseline which
+  /// fl_chart rendered as a horizontal line at y=0 spanning the full chart
+  /// width — read as an "ugly bottom border" frame artifact on the deep-dive
+  /// screen. Returning empty is safe: fl_chart's `drawBarLine` is a no-op on
+  /// empty spots, the bar still occupies its slot in `lineBarsData` so per-
+  /// body-part ordering stays stable, and selection swaps continue to find
+  /// the right bar by color.
   static List<FlSpot> _buildSpots({
     required List<TrendPoint> points,
     required DateTime windowStart,
     required int spanDays,
   }) {
     if (points.isEmpty) {
-      // Flat zero across the window — two endpoints suffice.
-      return [
-        const FlSpot(0, 0),
-        FlSpot(spanDays <= 0 ? 1 : spanDays.toDouble(), 0),
-      ];
+      return const <FlSpot>[];
     }
     final spots = <FlSpot>[];
     for (final p in points) {
       final dayOffset = p.date.difference(windowStart).inDays;
       if (dayOffset < 0 || dayOffset > spanDays) continue;
       spots.add(FlSpot(dayOffset.toDouble(), p.pct * 100));
-    }
-    if (spots.isEmpty) {
-      // All points outside window — still draw a flat-zero baseline.
-      return [
-        const FlSpot(0, 0),
-        FlSpot(spanDays <= 0 ? 1 : spanDays.toDouble(), 0),
-      ];
     }
     return spots;
   }
