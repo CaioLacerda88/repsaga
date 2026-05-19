@@ -278,7 +278,7 @@ void main() {
     //
     // The four numeric nudge variants (cross-build, body-part title, remaining
     // workouts, streak) render their key fragment in `FontWeight.w700`
-    // `AppColors.textCream` via `Text.rich`. The rest of the line stays
+    // `AppColors.success` via `Text.rich`. The rest of the line stays
     // muted (`AppColors.textDim`). A leading `◆ ` diamond prefix is rendered
     // in `AppColors.hotViolet` for every variant that surfaces a real nudge
     // (i.e. anything except `NudgeFirstStep`, which stays static-styled).
@@ -350,7 +350,7 @@ void main() {
 
         final span = findSpan(tester, '3 workouts');
         expect(span.style?.fontWeight, FontWeight.w700);
-        expect(span.style?.color, AppColors.textCream);
+        expect(span.style?.color, AppColors.success);
 
         // Leading diamond rendered in hotViolet.
         final diamond = findSpan(tester, '◆');
@@ -385,7 +385,7 @@ void main() {
         // wraps it entirely (there's no surrounding sentence).
         final span = findSpan(tester, '3-day streak');
         expect(span.style?.fontWeight, FontWeight.w700);
-        expect(span.style?.color, AppColors.textCream);
+        expect(span.style?.color, AppColors.success);
 
         final diamond = findSpan(tester, '◆');
         expect(diamond.style?.color, AppColors.hotViolet);
@@ -424,11 +424,11 @@ void main() {
         // Both Chest (body part) AND Iron-Chested (title name) bold.
         final bodyPartSpan = findSpan(tester, 'Chest');
         expect(bodyPartSpan.style?.fontWeight, FontWeight.w700);
-        expect(bodyPartSpan.style?.color, AppColors.textCream);
+        expect(bodyPartSpan.style?.color, AppColors.success);
 
         final titleSpan = findSpan(tester, 'Iron-Chested');
         expect(titleSpan.style?.fontWeight, FontWeight.w700);
-        expect(titleSpan.style?.color, AppColors.textCream);
+        expect(titleSpan.style?.color, AppColors.success);
       });
 
       testWidgets('NudgeCrossBuildClose bolds the title fragment', (
@@ -467,7 +467,7 @@ void main() {
 
         final titleSpan = findSpan(tester, 'Iron-Bound');
         expect(titleSpan.style?.fontWeight, FontWeight.w700);
-        expect(titleSpan.style?.color, AppColors.textCream);
+        expect(titleSpan.style?.color, AppColors.success);
       });
 
       testWidgets('NudgeFirstStep stays static (no bold span, no diamond)', (

@@ -182,17 +182,19 @@ class VitalityTrendChart extends StatelessWidget {
               LineChartData(
                 minX: 0,
                 maxX: xMax,
-                minY: 0,
-                // L9 fix: 8-unit top headroom keeps the terminal `%` callout
-                // and any ghost line sustained at 100% (e.g. a body part at
-                // full vitality, like Braços-100% in the launch screenshot)
-                // visibly inside the plot area. Without it, the y=100 ghost
-                // line sits flush against the chart's visual top edge and
-                // reads as an "ugly border" frame artifact even with
-                // `borderData(show: false)`. Pair with the empty-spots
-                // fallback in `_buildSpots` which kills the analogous
-                // y=0 bottom-edge artifact for body parts with no trend
-                // data in the window.
+                // L9 round 2: both top AND bottom now carry headroom because
+                // ghost lines at exactly 0% (untrained or zero-vitality body
+                // parts) and exactly 100% (peaking body parts like
+                // Braços-100% in the launch screenshot) draw flush against
+                // the chart's visual edges and read as "ugly borders" no
+                // matter how the frame/grid is configured. Pushing the
+                // plot range to -8..108 keeps the 0 and 100 axis labels
+                // anchored (the Y-titles widget filters to value == 0 / 100
+                // explicitly so the labels don't shift), while the lines
+                // themselves render visibly INSIDE the plot area with
+                // breathing room. `clipData: FlClipData.all()` keeps them
+                // from leaking into the surrounding padding.
+                minY: -8,
                 maxY: 108,
                 clipData: const FlClipData.all(),
                 gridData: const FlGridData(show: false),

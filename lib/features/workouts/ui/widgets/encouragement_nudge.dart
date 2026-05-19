@@ -215,14 +215,23 @@ class EncouragementNudge extends ConsumerWidget {
       ),
     };
 
-    final baseStyle = AppTextStyles.body.copyWith(
-      fontSize: 13,
+    // Mockup spec (`docs/phase-26-mockups.html` `.nudge`):
+    //   `font-family: 'Rajdhani'; font-weight: 500; font-size: 11px;
+    //    color: var(--text-dim); letter-spacing: 0.04em; line-height: 1.4;`
+    //   `.nudge strong { color: var(--success); font-weight: 700; }`
+    // Base text is Rajdhani 500 textDim; the bold span flips to SUCCESS GREEN
+    // (not textCream — that was a misread of the L11 spec) at weight 700.
+    final baseStyle = const TextStyle(
+      fontFamily: 'Rajdhani',
+      fontWeight: FontWeight.w500,
+      fontSize: 11,
       color: AppColors.textDim,
-      letterSpacing: 0.02 * 13,
+      letterSpacing: 0.04 * 11,
+      height: 1.4,
     );
     final boldStyle = baseStyle.copyWith(
       fontWeight: FontWeight.w700,
-      color: AppColors.textCream,
+      color: AppColors.success,
     );
     final diamondStyle = baseStyle.copyWith(color: AppColors.hotViolet);
 
