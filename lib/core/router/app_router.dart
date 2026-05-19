@@ -398,7 +398,7 @@ bool _isTabRoot(String location) {
 
 /// Bottom-nav shell. Public for `@visibleForTesting` access from
 /// `test/widget/core/router/shell_back_nav_test.dart` — the back-press
-/// contract lives entirely inside `_handlePop` and there is no Flutter Web
+/// contract lives entirely inside `_handleBackButton` and there is no Flutter Web
 /// path to drive it via E2E (see `cluster-flutter-web-popscope-unreachable`).
 @visibleForTesting
 class ShellScaffold extends ConsumerStatefulWidget {
@@ -453,35 +453,42 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   ///      `SystemNavigator.pop()`; otherwise the flag resets.
   ///
   /// The shell's `PopScope` declares `canPop: false`, so this callback
-  /// owns the entire decision — `didPop` is never `true` on entry, and we
-  /// never let Navigator pop us automatically.
-  void _handlePop(bool didPop, Object? _) {
-    if (didPop) return; // Shouldn't happen with canPop:false — defensive.
+  /// owns the entire decision. Returns `true` when the back was handled
+  /// (Flutter then skips the default exit-activity behavior); `false`
+  /// when we want to let the inner navigator pop normally.
+  ///
+  /// L13.3: switched from PopScope to BackButtonListener because PopScope
+  /// inside GoRouter's ShellRoute doesn't register with the route the
+  /// Flutter engine consults on real-device Android (logcat diagnostic
+  /// confirmed `_handlePop` never fired even with `canPop: false`).
+  /// BackButtonListener hooks the Router's BackButtonDispatcher directly,
+  /// which fires before GoRouter's `RouterDelegate.popRoute()` runs.
+  Future<bool> _handleBackButton() async {
+    // Case 1: sub-route on top of a tab root — let GoRouter pop normally.
+    // `context.canPop()` is the right discriminator here because
+    // `matchedLocation` from the SHELL'S context only reports the active
+    // tab (`/exercises`, never `/exercises/abc123`), making it useless for
+    // tab-root vs sub-route classification.
+    if (context.canPop()) {
+      return false; // not handled — RouterDelegate.popRoute() will pop.
+    }
 
     final location = GoRouterState.of(context).matchedLocation;
     final path = Uri.parse(location).path;
 
     // Case 3: on Home — two-tap-to-exit.
-    if (path == '/home') {
+    if (path == '/home' || path == '/') {
       if (_exitPending) {
-        // Second press inside the window — exit.
         SystemNavigator.pop();
-        return;
+        return true;
       }
       _arm();
-      return;
+      return true;
     }
 
     // Case 2: on another tab root — go Home (no stack push).
-    if (_isTabRoot(location)) {
-      context.go('/home');
-      return;
-    }
-
-    // Case 1: sub-route inside a tab — normal pop.
-    if (context.canPop()) {
-      context.pop();
-    }
+    context.go('/home');
+    return true;
   }
 
   void _arm() {
@@ -568,16 +575,20 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     // semantics survive. The child receives `Padding` while offline so the
     // top of the active tab is not covered. Verified end-to-end with
     // Playwright `page.context().setOffline(true)` driving OFFLINE-008/009.
-    // Phase 27 L13: centralized back-press intercept (Pattern A —
-    // "always-back-to-home"). canPop is hard-coded to false so `_handlePop`
-    // owns the decision every time. Sub-routes pop normally via
-    // `context.pop()`; tab-root presses (other than /home) go to /home; /home
-    // arms a 3 s two-tap-to-exit window. The PopScope lives at the SHELL
-    // level — never duplicate it on individual screens (see
-    // cluster-flutter-web-popscope-unreachable for why E2E can't reach it).
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: _handlePop,
+    // Phase 27 L13.3: centralized back-press intercept (Pattern A —
+    // "always-back-to-home"). Implemented via [BackButtonListener] rather
+    // than [PopScope] — on real-device Android with GoRouter's ShellRoute,
+    // PopScope inside the shell builder doesn't register with the route
+    // the Flutter engine consults on system-back. Logcat verified
+    // `_handlePop` never fired even with `canPop: false`.
+    // BackButtonListener hooks the [Router]'s [BackButtonDispatcher] before
+    // GoRouter's [RouterDelegate.popRoute] runs. Returning `true` from
+    // [_handleBackButton] tells Flutter the press was handled (skip default
+    // exit-activity); `false` lets the inner navigator pop normally.
+    // Sub-routes pop normally via `false`; tab-root presses (other than
+    // /home) go to /home; /home arms a 3 s two-tap-to-exit window.
+    return BackButtonListener(
+      onBackButtonPressed: _handleBackButton,
       child: Scaffold(
         body: Stack(
           children: [
