@@ -519,6 +519,15 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   }
 
   Future<void> _confirmClear(BuildContext ctx) async {
+    // Cancel any pending debounced save BEFORE prompting. Otherwise an
+    // edit-then-clear race writes the (now-discarded) bucket back to
+    // Postgres ~300ms after the clear lands — the edit wins, the user's
+    // "Clear Week" intent is silently overwritten. We also flush the
+    // analytics-event flag so the deleted-then-clobbered edit doesn't
+    // leave a `week_plan_saved` ghost in the funnel.
+    _saveDebounce?.cancel();
+    _pendingAnalyticsEvent = false;
+
     final confirmed = await showDialog<bool>(
       context: ctx,
       builder: (dialogCtx) {

@@ -388,21 +388,25 @@ class _TerminalPctLabel extends StatelessWidget {
                 top: (dotY - 22).clamp(0, plotHeight - 18),
                 child: Text(
                   '${pct.round()}%',
-                  style: TextStyle(
-                    fontFamily: 'Rajdhani',
+                  // Route through `AppTextStyles.numeric` per the
+                  // typography call-site rule (memory:
+                  // `project_design_language_typography`). The pre-L13.4
+                  // build raw-instantiated `TextStyle(fontFamily:
+                  // 'Rajdhani', ...)` here; the L13.4 shadow halo
+                  // extension preserved that anti-pattern. Now reaches
+                  // the same Rajdhani 700 tabular figures via the
+                  // sanctioned entry point, with the chart-specific
+                  // overrides (smaller 14sp size, per-body-part color,
+                  // tight 1.0 line height) layered via `copyWith`. The
+                  // L18.2 multi-pass abyss-colored halo (three Shadow
+                  // passes) masks the chart line where it passes behind
+                  // the label — without it the line and label (same
+                  // body-part color) visually merge whenever the line
+                  // is flat near the label's Y position.
+                  style: AppTextStyles.numeric.copyWith(
                     fontSize: 14,
-                    fontWeight: FontWeight.w700,
                     color: color,
                     height: 1,
-                    // L18.2: multi-pass abyss-colored halo around the
-                    // glyphs masks the chart line where it passes behind
-                    // the label — without this the label and the line
-                    // (same body-part color) visually merge into an
-                    // ambiguous shape whenever the line is flat near the
-                    // label's Y position. Three passes is what's needed
-                    // for the blur to fully blanket the line at typical
-                    // 2.5sp stroke widths; one or two passes leaves a
-                    // faint stripe behind the digits.
                     shadows: const [
                       Shadow(color: AppColors.abyss, blurRadius: 3),
                       Shadow(color: AppColors.abyss, blurRadius: 3),

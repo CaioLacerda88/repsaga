@@ -314,9 +314,22 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
   }
 
   /// Clear the current week's plan.
+  ///
+  /// If the cached state holds a synthetic optimistic placeholder (see
+  /// [setOptimistic]), the corresponding Postgres row has not been
+  /// persisted yet — `DELETE WHERE id = 'optimistic-…'` would match zero
+  /// rows and silently succeed, leaving the real row (when the in-flight
+  /// debounced upsert lands moments later) un-deleted. The placeholder
+  /// branch resets state directly; the caller is responsible for also
+  /// cancelling any pending debounce on the same edit session
+  /// (`WeekPlanScreen._confirmClear` does this).
   Future<void> clearPlan() async {
     final plan = state.value;
     if (plan == null) return;
+    if (plan.id.startsWith('optimistic-')) {
+      state = const AsyncData(null);
+      return;
+    }
     final repo = ref.read(weeklyPlanRepositoryProvider);
     await repo.deletePlan(plan.id);
     state = const AsyncData(null);

@@ -152,6 +152,59 @@ void main() {
       );
     });
 
+    test('clearPlan does NOT issue DELETE when state holds an optimistic '
+        'placeholder id (reviewer Warning A1, PR #244)', () async {
+      // No real plan in DB yet; the screen has only made local edits,
+      // so the cached state is a synthetic optimistic plan.
+      when(
+        () => mockRepo.getPlanForWeek(any(), any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => mockRepo.getPreviousWeekPlan(any(), any()),
+      ).thenAnswer((_) async => null);
+
+      final container = _container(mockAuth: mockAuth, mockRepo: mockRepo);
+      addTearDown(container.dispose);
+
+      await container.read(weeklyPlanProvider.future);
+      container.read(weeklyPlanProvider.notifier).setOptimistic([
+        const BucketRoutine(routineId: 'r1', order: 1),
+      ]);
+      final synthetic = container.read(weeklyPlanProvider).value!;
+      expect(synthetic.id, startsWith('optimistic-'));
+
+      // Without the guard: clearPlan would issue
+      // `DELETE FROM weekly_plans WHERE id = 'optimistic-...'`
+      // which matches zero rows. Postgres silently succeeds; the
+      // in-flight debounced upsert lands moments later and the real
+      // row survives un-deleted. Symptom: user taps Clear Week, screen
+      // resets, navigates back to plan editor and finds the prior
+      // edits still there.
+      await container.read(weeklyPlanProvider.notifier).clearPlan();
+      verifyNever(() => mockRepo.deletePlan(any()));
+      expect(container.read(weeklyPlanProvider).value, isNull);
+    });
+
+    test(
+      'clearPlan DOES issue DELETE when state holds a real persisted id',
+      () async {
+        // Real plan returned from DB → cached state has a real UUID id.
+        when(
+          () => mockRepo.getPlanForWeek(any(), any()),
+        ).thenAnswer((_) async => _plan(id: 'real-uuid-001'));
+        when(() => mockRepo.deletePlan(any())).thenAnswer((_) async {});
+
+        final container = _container(mockAuth: mockAuth, mockRepo: mockRepo);
+        addTearDown(container.dispose);
+
+        await container.read(weeklyPlanProvider.future);
+        await container.read(weeklyPlanProvider.notifier).clearPlan();
+
+        verify(() => mockRepo.deletePlan('real-uuid-001')).called(1);
+        expect(container.read(weeklyPlanProvider).value, isNull);
+      },
+    );
+
     test(
       'is a no-op when no user is authenticated and no plan is cached',
       () async {
