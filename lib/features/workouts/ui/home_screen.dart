@@ -121,15 +121,36 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ready = ref.watch(homeReadyProvider);
-    return ready.when(
-      data: (_) => const _HomeBody(),
-      // Treat the error case the same as the data case — the underlying
-      // providers each surface their own errors inside the tree (the
-      // SyncFailureCard at the top of the body picks up offline-write
-      // failures, individual widgets handle their own error states).
-      // Holding the skeleton on error would silently hide the screen.
-      error: (_, _) => const _HomeBody(),
-      loading: () => const _HomeSkeleton(),
+    // [PendingSyncBadge] + [SyncFailureCard] are rendered OUTSIDE the
+    // skeleton gate so they remain mounted regardless of
+    // [homeReadyProvider]'s state. Without this lift, going offline
+    // would hang the gate (Supabase futures never resolve) and the
+    // user would see only the skeleton — losing the very offline /
+    // sync-failure affordances they need precisely in that state.
+    // Both widgets are internally `SizedBox.shrink` when there's
+    // nothing to show, so the unconditional mount has zero visible
+    // cost in the steady state.
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const PendingSyncBadge(),
+            const SyncFailureCard(),
+            // Gate-dependent content below — skeleton on first cold mount,
+            // real tree once the four critical providers resolve, real
+            // tree on error too (per the comment on the original gate:
+            // holding the skeleton on error would silently hide the
+            // screen with no path back).
+            ready.when(
+              data: (_) => const _HomeBody(),
+              error: (_, _) => const _HomeBody(),
+              loading: () => const _HomeSkeleton(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -139,31 +160,24 @@ class _HomeBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            PendingSyncBadge(),
-            SyncFailureCard(),
-            _ConfirmBanner(),
-            HomeGreeting(),
-            CharacterCard(),
-            SizedBox(height: 12),
-            EncouragementNudge(),
-            SizedBox(height: 12),
-            ActionHero(),
-            SizedBox(height: 16),
-            BucketChipRow(),
-            SizedBox(height: 16),
-            LastSessionLine(),
-            SizedBox(height: 16),
-            _HomeRoutinesList(),
-            SizedBox(height: 24),
-          ],
-        ),
-      ),
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ConfirmBanner(),
+        HomeGreeting(),
+        CharacterCard(),
+        SizedBox(height: 12),
+        EncouragementNudge(),
+        SizedBox(height: 12),
+        ActionHero(),
+        SizedBox(height: 16),
+        BucketChipRow(),
+        SizedBox(height: 16),
+        LastSessionLine(),
+        SizedBox(height: 16),
+        _HomeRoutinesList(),
+        SizedBox(height: 24),
+      ],
     );
   }
 }
@@ -188,29 +202,24 @@ class _HomeSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _GreetingSkeleton(),
-            _SkeletonBlock(height: 118, radius: kRadiusLg), // CharacterCard
-            SizedBox(height: 12),
-            _SkeletonBlock(height: 24, radius: kRadiusSm), // EncouragementNudge
-            SizedBox(height: 12),
-            _SkeletonBlock(height: 80, radius: kRadiusMd), // ActionHero
-            SizedBox(height: 16),
-            _BucketHeaderSkeleton(),
-            SizedBox(height: 16),
-            // LastSessionLine and _HomeRoutinesList both render
-            // SizedBox.shrink while their best-effort sources load;
-            // omitting their skeletons keeps the placeholder height
-            // bounded to the visible-on-load area.
-            SizedBox(height: 24),
-          ],
-        ),
-      ),
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GreetingSkeleton(),
+        _SkeletonBlock(height: 118, radius: kRadiusLg), // CharacterCard
+        SizedBox(height: 12),
+        _SkeletonBlock(height: 24, radius: kRadiusSm), // EncouragementNudge
+        SizedBox(height: 12),
+        _SkeletonBlock(height: 80, radius: kRadiusMd), // ActionHero
+        SizedBox(height: 16),
+        _BucketHeaderSkeleton(),
+        SizedBox(height: 16),
+        // LastSessionLine and _HomeRoutinesList both render
+        // SizedBox.shrink while their best-effort sources load;
+        // omitting their skeletons keeps the placeholder height
+        // bounded to the visible-on-load area.
+        SizedBox(height: 24),
+      ],
     );
   }
 }

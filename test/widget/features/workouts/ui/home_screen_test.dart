@@ -36,6 +36,8 @@ import 'package:repsaga/features/workouts/providers/streak_provider.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/core/offline/pending_sync_provider.dart';
+import 'package:repsaga/shared/widgets/pending_sync_badge.dart';
+import 'package:repsaga/shared/widgets/sync_failure_card.dart';
 import 'package:repsaga/features/workouts/ui/home_screen.dart';
 import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
 import 'package:repsaga/features/workouts/ui/widgets/bucket_chip_row.dart';
@@ -370,6 +372,31 @@ void main() {
               'an empty bucket under the "ESTA SEMANA" header.',
         );
 
+        // PendingSyncBadge and SyncFailureCard MUST mount even while
+        // the gate is loading — they're the offline / sync-failure
+        // affordances the user needs precisely when a critical provider
+        // is unreachable (network down → Supabase future never resolves
+        // → gate hangs forever). QA-found regression (PR #244): the
+        // initial skeleton-gate landing put these inside `_HomeBody`
+        // which is gated, so going offline meant the user saw the
+        // skeleton forever with no way to manage the sync queue.
+        expect(
+          find.byType(PendingSyncBadge),
+          findsOneWidget,
+          reason:
+              'PendingSyncBadge must be rendered OUTSIDE the skeleton '
+              'gate — the offline state IS the gate-hangs state, and '
+              'the badge is the affordance the user needs in that '
+              'state. Internal `SizedBox.shrink` handles the empty case.',
+        );
+        expect(
+          find.byType(SyncFailureCard),
+          findsOneWidget,
+          reason:
+              'SyncFailureCard must be rendered OUTSIDE the skeleton '
+              'gate — same reasoning as PendingSyncBadge.',
+        );
+
         // Resolve the blocked critical provider — `homeReadyProvider`
         // now completes, gate opens, real tree renders.
         block.complete(0);
@@ -379,6 +406,11 @@ void main() {
         expect(find.byType(HomeGreeting), findsOneWidget);
         expect(find.byType(ActionHero), findsOneWidget);
         expect(find.byType(BucketChipRow), findsOneWidget);
+        // PendingSyncBadge and SyncFailureCard are still present post-
+        // hydrate — they were never removed, just sat above the gated
+        // body the whole time.
+        expect(find.byType(PendingSyncBadge), findsOneWidget);
+        expect(find.byType(SyncFailureCard), findsOneWidget);
       },
     );
   });
