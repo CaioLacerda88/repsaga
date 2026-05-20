@@ -184,7 +184,6 @@ class _HeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final isStubClass = sheet.characterClass == null;
     final classLabel = isStubClass
@@ -232,9 +231,10 @@ class _HeaderRow extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       'LVL',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.textDim,
+                      style: AppTextStyles.label.copyWith(
+                        fontSize: 10,
                         letterSpacing: 1.2,
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
@@ -247,9 +247,10 @@ class _HeaderRow extends StatelessWidget {
               Text(
                 isStubClass ? classLabel : classLabel.toUpperCase(),
                 key: const ValueKey('character-card-class'),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: classTextColor(sheet.characterClass),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 10,
                   letterSpacing: 1.8,
+                  color: classTextColor(sheet.characterClass),
                   fontStyle: isStubClass ? FontStyle.italic : FontStyle.normal,
                 ),
                 maxLines: 1,
@@ -331,7 +332,6 @@ class _DominantColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final color =
         VitalityStateStyles.bodyPartColor[entry.bodyPart] ?? AppColors.textDim;
@@ -353,9 +353,10 @@ class _DominantColumn extends StatelessWidget {
         Text(
           bodyPartName,
           key: const ValueKey('character-card-dominant-name'),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: color,
+          style: AppTextStyles.label.copyWith(
+            fontSize: 10,
             letterSpacing: 1.2,
+            color: color,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -525,7 +526,6 @@ class _TitlePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -535,10 +535,10 @@ class _TitlePill extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         key: const ValueKey('character-card-title'),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: AppColors.textDim,
+        style: AppTextStyles.label.copyWith(
+          fontSize: 9,
           letterSpacing: 1.2,
-          fontWeight: FontWeight.w600,
+          color: AppColors.textDim,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

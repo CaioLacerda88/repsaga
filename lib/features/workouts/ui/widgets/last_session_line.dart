@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/workout_formatters.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../providers/workout_history_providers.dart';
@@ -58,20 +59,20 @@ class LastSessionLine extends ConsumerWidget {
               children: [
                 TextSpan(
                   text: l10n.lastSessionPrefix,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
                 TextSpan(
                   text: last.name,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 TextSpan(
                   text: ', $relativeDate',
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),

@@ -41,7 +41,6 @@ class SagaHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final isStubClass = characterClass == null;
     final classLabel = isStubClass
@@ -96,9 +95,10 @@ class SagaHeader extends StatelessWidget {
                 // drift on a 3-char brand mark.)
                 Text(
                   'LVL',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textDim,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 10,
                     letterSpacing: 1.2,
+                    color: AppColors.textDim,
                   ),
                 ),
               ],
@@ -143,9 +143,10 @@ class SagaHeader extends StatelessWidget {
                     child: Text(
                       isStubClass ? classLabel : classLabel.toUpperCase(),
                       key: const ValueKey('saga-header-class'),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: classTextColor(characterClass),
+                      style: AppTextStyles.label.copyWith(
+                        fontSize: 10,
                         letterSpacing: 1.8,
+                        color: classTextColor(characterClass),
                         fontStyle: isStubClass
                             ? FontStyle.italic
                             : FontStyle.normal,
@@ -171,9 +172,7 @@ class SagaHeader extends StatelessWidget {
                         localizedTitleCopy(activeTitle!, l10n)?.name ??
                             activeTitle!,
                         key: const ValueKey('saga-header-title'),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textDim,
-                        ),
+                        style: AppTextStyles.bodySmall,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

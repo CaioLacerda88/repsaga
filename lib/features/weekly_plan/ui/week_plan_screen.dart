@@ -215,10 +215,9 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
                 children: [
                   Text(
                     l10n.thisWeek,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.textDim,
+                    style: AppTextStyles.label.copyWith(
                       letterSpacing: 1.2,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDim,
                     ),
                   ),
                   const Spacer(),
@@ -282,7 +281,7 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
                       ),
                       child: Text(
                         l10n.addWorkout,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: AppTextStyles.body.copyWith(
                           color: AppColors.hotViolet,
                           fontWeight: FontWeight.w600,
                         ),
@@ -699,7 +698,6 @@ class _CounterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Semantics(
       container: true,
       identifier: 'weekly-plan-counter',
@@ -711,9 +709,10 @@ class _CounterPill extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: AppTextStyles.label.copyWith(
+            fontSize: 10,
+            letterSpacing: 0.12 * 10,
             color: AppColors.textCream,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../providers/profile_providers.dart';
@@ -31,7 +32,7 @@ class WeeklyGoalRow extends ConsumerWidget {
               Expanded(
                 child: Text(
                   l10n.perWeekLabel(frequency),
-                  style: theme.textTheme.titleMedium,
+                  style: AppTextStyles.title,
                 ),
               ),
               Icon(
@@ -58,14 +59,17 @@ class WeeklyGoalRow extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.weeklyGoal, style: theme.textTheme.titleLarge),
+                Text(
+                  l10n.weeklyGoal,
+                  style: AppTextStyles.title.copyWith(fontSize: 20),
+                ),
                 const SizedBox(height: 4),
                 Semantics(
                   container: true,
                   identifier: 'profile-goal-sheet-title',
                   child: Text(
                     l10n.frequencyQuestion,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: AppTextStyles.body.copyWith(
                       color: theme.colorScheme.onSurface.withValues(
                         alpha: 0.55,
                       ),

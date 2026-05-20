@@ -87,7 +87,6 @@ class VitalityTrendChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final spanDays = windowEnd.difference(windowStart).inDays;
     // Guard against degenerate empty window — shouldn't happen but a 0-span
@@ -229,7 +228,10 @@ class VitalityTrendChart extends StatelessWidget {
                           padding: const EdgeInsets.only(right: 4),
                           child: Text(
                             '${value.round()}%',
-                            style: theme.textTheme.labelSmall?.copyWith(
+                            // Y-axis percentage — numeric data, Rajdhani.
+                            style: AppTextStyles.numeric.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.textDim,
                             ),
                           ),
@@ -259,7 +261,9 @@ class VitalityTrendChart extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
                               _leftLabel(l10n: l10n, spanDays: spanDays),
-                              style: theme.textTheme.labelSmall?.copyWith(
+                              style: AppTextStyles.label.copyWith(
+                                fontSize: 10,
+                                letterSpacing: 0.12 * 10,
                                 color: AppColors.textDim,
                               ),
                             ),
@@ -270,7 +274,9 @@ class VitalityTrendChart extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
                               l10n.chartXLabelToday,
-                              style: theme.textTheme.labelSmall?.copyWith(
+                              style: AppTextStyles.label.copyWith(
+                                fontSize: 10,
+                                letterSpacing: 0.12 * 10,
                                 color: AppColors.textDim,
                               ),
                             ),

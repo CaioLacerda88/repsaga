@@ -165,7 +165,8 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                       // AOM contract.
                       child: Text(
                         timerState.exerciseName ?? l10n.restTimerLabel,
-                        style: theme.textTheme.titleLarge?.copyWith(
+                        style: AppTextStyles.title.copyWith(
+                          fontSize: 20,
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.6,
                           ),
@@ -225,7 +226,7 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                               backgroundColor: AppColors.textCream.withValues(
                                 alpha: 0.12,
                               ),
-                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                              textStyle: AppTextStyles.title.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                               shape: RoundedRectangleBorder(
@@ -247,7 +248,7 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                               // reads as the dominant CTA in the row.
                               minimumSize: const Size(120, 48),
                               foregroundColor: theme.colorScheme.onSurface,
-                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                              textStyle: AppTextStyles.title.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                               shape: RoundedRectangleBorder(
@@ -276,7 +277,7 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                               backgroundColor: AppColors.textCream.withValues(
                                 alpha: 0.12,
                               ),
-                              textStyle: theme.textTheme.titleMedium?.copyWith(
+                              textStyle: AppTextStyles.title.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                               shape: RoundedRectangleBorder(
