@@ -560,7 +560,7 @@ class _ClassHeadline extends StatelessWidget {
                     child: Text(
                       chars[i],
                       textAlign: TextAlign.center,
-                      style: GoogleFontsRajdhani.headline,
+                      style: _ClassChangeHeadlineStyle.headline,
                     ),
                   ),
               ],
@@ -609,20 +609,28 @@ class _ClassHeadline extends StatelessWidget {
 }
 
 /// Local typography token — the class-change name uses a 36sp Rajdhani 700
-/// face that's two steps above the standard `AppTextStyles.headline` (24sp).
-/// Defined here as a private const because it's a single-use overlay style;
-/// promoting it to AppTheme would invite drift across surfaces with
-/// subtly different sizes.
-class GoogleFontsRajdhani {
-  const GoogleFontsRajdhani._();
+/// face for the 1600ms class-change moment.
+///
+/// **Naming history:** the class was previously named `GoogleFontsRajdhani`
+/// even though it never used the `google_fonts` package; it just stamped a
+/// `AppTextStyles.headline.copyWith(...)`. Phase 28a renamed to
+/// `_ClassChangeHeadlineStyle` (private) so future grep doesn't suggest a
+/// google_fonts dependency that doesn't exist.
+///
+/// **Why not the global [AppTextStyles.celebrationSize] token directly:**
+/// the class-change moment uses 0.06em tracking (`letterSpacing: 0.06 *
+/// 36 = 2.16`) which is HEAVIER than the 0.04em tracking carried by
+/// [AppTextStyles.display] (and therefore by `celebrationSize`). The
+/// per-glyph letter-reveal choreography was tuned against that wider
+/// tracking — a tighter 0.04em packs the glyphs too close during the
+/// 700-1000ms reveal beat. We compose: route through `celebrationSize(36)`
+/// for the base register (Rajdhani 700 36sp height 1.0) then override the
+/// tracking on top, so the celebration-tier identity is shared but the
+/// per-beat tuning is preserved.
+class _ClassChangeHeadlineStyle {
+  const _ClassChangeHeadlineStyle._();
 
-  /// Rajdhani 700 36sp uppercase, 0.06em tracking. Scaled-up sibling of
-  /// `AppTextStyles.headline` — same family + weight, just sized up for
-  /// the 1600ms class-change moment.
-  static TextStyle get headline => AppTextStyles.headline.copyWith(
-    fontSize: 36,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 0.06 * 36,
-    color: AppColors.textCream,
-  );
+  /// Rajdhani 700 36sp uppercase, 0.06em tracking.
+  static TextStyle get headline =>
+      AppTextStyles.celebrationSize(36).copyWith(letterSpacing: 0.06 * 36);
 }

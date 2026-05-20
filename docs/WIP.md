@@ -40,17 +40,28 @@ gym registers without feeling like a generic safe default.
   invited the 80 violations). Key finding: `theme.textTheme.*` and
   `AppTextStyles.*` are two parallel paths to the same TextStyle; the
   shorter "wrong" path wins (225 vs 154 calls).
-- [ ] **Phase 28a — Foundation** (pre-Barlow, ~6–8h):
-  - 4 new CI gates: `w800`/`w900`, raw `'Inter'`/`'Barlow'` literals,
-    `GoogleFonts.*` calls, `google_fonts` import
-  - Fix 6 forbidden-weight violations (WeightStepper default, PR
-    celebration ×2, set_row ×2, rest_timer)
-  - 3 new tokens: `numericSmall`, `appBarTitle`, `celebrationDisplay`
-    (parameterized helper)
-  - Property pins for all 9 tokens in `arcane_theme_test.dart`
-  - Fix 2 dead doc links (`tasks/mockups/...` references in
-    `app_theme.dart:9` + `README.md:4`)
-  - Add "when to use" dartdoc clause to each `AppTextStyles` getter
+- [x] **Phase 28a — Foundation** (pre-Barlow, ~6–8h):
+  - [x] Task #16 — Extended `scripts/check_typography_call_sites.sh`
+        with 4 new gates (`w800`/`w900`, raw `'Inter'` literals,
+        `GoogleFonts.*` calls, `google_fonts` import); smoke-tested
+        each fires on a temp violation
+  - [x] Task #17 — Fixed all 6 forbidden-weight violations
+        (WeightStepper default + dartdoc, set_row ×2,
+        rest_timer_overlay, pr_celebration_screen ×2)
+  - [x] Task #18 — Added 3 tokens (`numericSmall`, `appBarTitle`,
+        `celebrationSize(double)`) + migrated 3 numericSmall sites,
+        wired `appBarTitle` into theme, migrated 3 celebration
+        overlays. Renamed `class_change_overlay`'s
+        `GoogleFontsRajdhani` → `_ClassChangeHeadlineStyle` (misnamed;
+        never used google_fonts package).
+  - [x] Task #19 — Property pins for all 12 tokens (9 existing + 3
+        new); appBar wiring test pins token ↔ theme equivalence
+  - [x] Task #20 — Fixed dead doc refs (`lib/core/theme/README.md:4` +
+        `lib/core/theme/app_theme.dart:9` + outdated google_fonts
+        narrative at `lib/core/theme/README.md:64`); added "Use for: /
+        Not for:" dartdoc prescription to every `AppTextStyles` getter
+  - [x] format + analyze + 4 gates clean; 2954 tests pass; Android
+        debug APK builds clean
 - [ ] **Phase 28d — `_textTheme` shim research** (pre-28b, ~2h):
   - Inventory which Material widgets read which `textTheme` slots
     (Dialog, SnackBar, InputDecoration, ListTile, SegmentedButton)

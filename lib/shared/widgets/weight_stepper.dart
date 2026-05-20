@@ -45,10 +45,12 @@ class WeightStepper extends StatefulWidget {
 
   /// Optional override for the value-text font weight (Phase 20 commit 4).
   ///
-  /// Defaults to [FontWeight.w800]. The set-row PR treatment uses this to
-  /// keep the value at w800 (Rajdhani's bundled bold) while the dim/normal
-  /// states use a lighter weight in the future. Currently every state ships
-  /// w800; the param exists for symmetry with [valueColor].
+  /// Defaults to [FontWeight.w700]. Rajdhani's bundled assets cover only
+  /// w500/w600/w700 (see `pubspec.yaml > flutter.fonts:`); higher weights
+  /// such as w800/w900 are not present and silently nearest-match to w700
+  /// at runtime — i.e. the override would be visual noise that survives
+  /// review. Phase 28a forbid-w800-gate (see
+  /// `scripts/check_typography_call_sites.sh`) keeps this honest.
   final FontWeight? valueFontWeight;
 
   /// Optional override for the value-text shadow (Phase 20 commit 4).
@@ -262,7 +264,7 @@ class _WeightStepperState extends State<WeightStepper> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontSize: 26,
-                          fontWeight: widget.valueFontWeight ?? FontWeight.w800,
+                          fontWeight: widget.valueFontWeight ?? FontWeight.w700,
                           color: widget.valueColor ?? theme.colorScheme.primary,
                           // Halo only on the default (violet) state. PR rows
                           // pass an explicit `valueColor` and want a clean

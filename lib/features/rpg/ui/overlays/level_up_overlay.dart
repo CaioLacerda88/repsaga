@@ -96,14 +96,15 @@ class _LevelUpOverlayState extends State<LevelUpOverlay>
               children: [
                 // The glyph IS the numeral. 64sp Rajdhani 700 in heroGold,
                 // wrapped in RewardAccent so the gold pixel emission is
-                // grouped with its narrative.
+                // grouped with its narrative. Phase 28a: routed through
+                // [AppTextStyles.celebrationSize] so all three celebration
+                // overlays (level-up 64sp / class-change 36sp / rank-up 24sp)
+                // share a single token for the "the surface IS the numeral"
+                // register.
                 RewardAccent(
                   child: Text(
                     '${widget.newLevel}',
-                    style: AppTextStyles.display.copyWith(
-                      fontSize: 64,
-                      height: 1.0,
-                    ),
+                    style: AppTextStyles.celebrationSize(64),
                   ),
                 ),
                 const SizedBox(height: 8),

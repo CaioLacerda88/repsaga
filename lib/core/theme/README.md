@@ -1,9 +1,11 @@
 # `lib/core/theme/` — Arcane Ascent Design System
 
 RepSaga's Material Design 3 theme, palette, typography and icon system.
-Direction locked in `tasks/mockups/material-saga-comparison-v2.html`
-(Direction B — Arcane Ascent), replacing the pixel-art direction that
-shipped and was torn down in Phase 17.0c.
+Direction is the locked "Arcane Ascent" design language (Direction B in
+the Phase 17.0c material-vs-pixel review), replacing the pixel-art
+direction that shipped and was torn down in Phase 17.0c. See
+`docs/PROJECT.md` Phase 17 and Phase 26 entries for the design-language
+history.
 
 ---
 
@@ -61,11 +63,22 @@ intentional.
 
 ## Typography
 
-Two families, from `google_fonts`:
+Two families, bundled directly via `pubspec.yaml > flutter.fonts:`:
 
 - **Rajdhani** — display, headline, numeric. Condensed humanist sans,
-  reads fast under gym fatigue at 18+ dp.
-- **Inter** — title, body, label. Covers 11-16 dp reading.
+  reads fast under gym fatigue at 18+ dp. Bundled weights: 500/600/700.
+- **Inter** — title, body, label. Covers 11-16 dp reading. Bundled
+  weights: 400/600.
+
+Both families load synchronously through `TextStyle(fontFamily:
+'Rajdhani')` / `'Inter'` references inside `AppTextStyles`. The
+`google_fonts` package is forbidden in production code paths (Phase 27
+L14: its async API silently fell back to Inter on real-device release
+builds, breaking the entire two-family identity). `main.dart` locks
+`GoogleFonts.config.allowRuntimeFetching = false` as defence-in-depth;
+`scripts/check_typography_call_sites.sh` lints out `GoogleFonts.*` calls
+and stray `google_fonts` imports under `lib/features/` + `lib/shared/`.
+See `AppTextStyles` dartdoc in `app_theme.dart` for the loading contract.
 
 One display family, one body family, one numeric family. Three families
 max. See `AppTextStyles` for the token set.

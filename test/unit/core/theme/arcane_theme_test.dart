@@ -1,9 +1,11 @@
 /// Locks in the Arcane Ascent palette (§17.0c) and typography rhythm.
 ///
-/// The 12 color tokens + 7 text styles are the single source of truth every
-/// screen paints through. If this test ever has to change to make CI pass,
-/// treat that as a palette-change review — update the design doc first, not
-/// the assertion.
+/// The 12 color tokens + 12 typography tokens (`display`, `headline`,
+/// `title`, `titleDisplay`, `body`, `bodySmall`, `label`, `sectionHeader`,
+/// `numeric`, `numericSmall`, `appBarTitle`, `celebrationSize`) are the
+/// single source of truth every screen paints through. If this test ever
+/// has to change to make CI pass, treat that as a palette-change review
+/// — update the design doc first, not the assertion.
 library;
 
 import 'package:flutter/material.dart';
@@ -67,102 +69,356 @@ void main() {
     });
   });
 
-  group('AppTextStyles — font families', () {
-    // GoogleFonts stamps the family as "<Family>_<Variant>" (see
-    // google_fonts/src/google_fonts_family_with_variant.dart). Locking a
-    // `startsWith` assertion is resilient to fallback renames while still
-    // failing loudly if someone swaps the family in app_theme.dart.
+  group('AppTextStyles — token property pins', () {
+    // Each token pins family + weight + size + height + letterSpacing +
+    // baked color (where set). When the codebase swaps the body family
+    // (Inter → Barlow in Phase 28b) ONLY the family assertions should
+    // need to flip; every other property is independent of which font
+    // backs the token.
+    //
+    // Family assertions use `startsWith` to stay resilient to any future
+    // fallback-rename strategy (e.g. google_fonts' historic
+    // "<Family>_<Variant>" stamping) while still failing loudly if
+    // someone swaps the family in app_theme.dart.
 
-    test('display uses Rajdhani', () {
-      expect(AppTextStyles.display.fontFamily, startsWith('Rajdhani'));
+    group('display (Rajdhani 700 32dp)', () {
+      final style = AppTextStyles.display;
+      test('family is Rajdhani', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w700', () {
+        expect(style.fontWeight, FontWeight.w700);
+      });
+      test('size is 32', () {
+        expect(style.fontSize, 32.0);
+      });
+      test('height is 1.1', () {
+        expect(style.height, closeTo(1.1, 0.001));
+      });
+      test('letterSpacing is 0.04 * 32 = 1.28', () {
+        expect(style.letterSpacing, closeTo(1.28, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
     });
 
-    test('headline uses Rajdhani', () {
-      expect(AppTextStyles.headline.fontFamily, startsWith('Rajdhani'));
+    group('headline (Rajdhani 600 24dp)', () {
+      final style = AppTextStyles.headline;
+      test('family is Rajdhani', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w600', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 24', () {
+        expect(style.fontSize, 24.0);
+      });
+      test('height is 1.2', () {
+        expect(style.height, closeTo(1.2, 0.001));
+      });
+      test('letterSpacing is 0.02 * 24 = 0.48', () {
+        expect(style.letterSpacing, closeTo(0.48, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
     });
 
-    test('title uses Inter', () {
-      expect(AppTextStyles.title.fontFamily, startsWith('Inter'));
+    group('title (Inter 600 16dp)', () {
+      final style = AppTextStyles.title;
+      test('family is Inter', () {
+        expect(style.fontFamily, startsWith('Inter'));
+      });
+      test('weight is w600', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 16', () {
+        expect(style.fontSize, 16.0);
+      });
+      test('height is 1.3', () {
+        expect(style.height, closeTo(1.3, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
     });
 
-    test('body uses Inter', () {
-      expect(AppTextStyles.body.fontFamily, startsWith('Inter'));
+    group('titleDisplay (Rajdhani 600 16dp — Phase 27 L18.4)', () {
+      // titleDisplay is the Rajdhani variant of the 16dp list-title slot.
+      // It is the ONLY token that diverges from Inter at this size — Routines
+      // (action surfaces) use it; exercise/settings rows stay on [title]
+      // (Inter). Locks family / weight / size / tracking / height.
+      final style = AppTextStyles.titleDisplay;
+      test('family is Rajdhani', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w600', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 16', () {
+        expect(style.fontSize, 16.0);
+      });
+      test('height matches title (1.3) so row layout is stable', () {
+        expect(style.height, AppTextStyles.title.height);
+      });
+      test('letterSpacing is 0.02 * 16 = 0.32', () {
+        expect(style.letterSpacing, closeTo(0.32, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
+
+      test('is NOT in _textTheme (must not become a Material default)', () {
+        // titleDisplay is deliberately excluded from the Material TextTheme
+        // so it can never be accidentally applied via Theme.of(context).
+        // textTheme. Verify no slot in AppTheme.dark's TextTheme resolves to
+        // a Rajdhani 600 16dp style (which would indicate titleDisplay
+        // leaked into the theme as titleMedium or similar).
+        final textTheme = AppTheme.dark.textTheme;
+        final slots = [
+          textTheme.titleMedium,
+          textTheme.titleSmall,
+          textTheme.titleLarge,
+          textTheme.bodyMedium,
+          textTheme.bodySmall,
+          textTheme.bodyLarge,
+          textTheme.labelMedium,
+          textTheme.labelSmall,
+          textTheme.labelLarge,
+        ];
+        for (final s in slots) {
+          final isRajdhani = s?.fontFamily?.startsWith('Rajdhani') ?? false;
+          final is16dp = s?.fontSize == 16.0;
+          final isW600 = s?.fontWeight == FontWeight.w600;
+          expect(
+            isRajdhani && is16dp && isW600,
+            isFalse,
+            reason:
+                'titleDisplay (Rajdhani 600 16dp) must not be wired into the '
+                'Material TextTheme. Found a matching slot: $s',
+          );
+        }
+      });
     });
 
-    test('bodySmall uses Inter', () {
-      expect(AppTextStyles.bodySmall.fontFamily, startsWith('Inter'));
+    group('body (Inter 400 14dp)', () {
+      final style = AppTextStyles.body;
+      test('family is Inter', () {
+        expect(style.fontFamily, startsWith('Inter'));
+      });
+      test('weight is w400', () {
+        expect(style.fontWeight, FontWeight.w400);
+      });
+      test('size is 14', () {
+        expect(style.fontSize, 14.0);
+      });
+      test('height is 1.5', () {
+        expect(style.height, closeTo(1.5, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
     });
 
-    test('label uses Inter', () {
-      expect(AppTextStyles.label.fontFamily, startsWith('Inter'));
+    group('bodySmall (Inter 400 12dp textDim)', () {
+      final style = AppTextStyles.bodySmall;
+      test('family is Inter', () {
+        expect(style.fontFamily, startsWith('Inter'));
+      });
+      test('weight is w400', () {
+        expect(style.fontWeight, FontWeight.w400);
+      });
+      test('size is 12', () {
+        expect(style.fontSize, 12.0);
+      });
+      test('height is 1.5', () {
+        expect(style.height, closeTo(1.5, 0.001));
+      });
+      test('color is textDim', () {
+        expect(style.color, AppColors.textDim);
+      });
     });
 
-    test('titleDisplay uses Rajdhani', () {
-      expect(AppTextStyles.titleDisplay.fontFamily, startsWith('Rajdhani'));
+    group('label (Inter 600 11dp eyebrow)', () {
+      final style = AppTextStyles.label;
+      test('family is Inter', () {
+        expect(style.fontFamily, startsWith('Inter'));
+      });
+      test('weight is w600', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 11', () {
+        expect(style.fontSize, 11.0);
+      });
+      test('height is 1.2', () {
+        expect(style.height, closeTo(1.2, 0.001));
+      });
+      test('letterSpacing is 0.12 * 11 = 1.32 (eyebrow tracking)', () {
+        expect(style.letterSpacing, closeTo(1.32, 0.001));
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
     });
 
-    test('numeric uses Rajdhani with tabular figures', () {
-      expect(AppTextStyles.numeric.fontFamily, startsWith('Rajdhani'));
-      expect(
-        AppTextStyles.numeric.fontFeatures,
-        contains(const FontFeature.tabularFigures()),
-      );
+    group('sectionHeader (Inter 600 12dp eyebrow)', () {
+      // Derived from `label` via `.copyWith(fontSize: 12, letterSpacing:
+      // 0.12 * 12)` — one step up from the chip/tab register so a heading
+      // can hold its own next to body copy without competing with [title].
+      // Color is intentionally NOT baked — call sites pick (e.g.
+      // hotViolet for /saga/stats sections), so the assertion lets the
+      // call site own it.
+      final style = AppTextStyles.sectionHeader;
+      test('family inherits Inter from label', () {
+        expect(style.fontFamily, startsWith('Inter'));
+      });
+      test('weight is w600 (inherited from label)', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 12', () {
+        expect(style.fontSize, 12.0);
+      });
+      test('letterSpacing is 0.12 * 12 = 1.44', () {
+        expect(style.letterSpacing, closeTo(1.44, 0.001));
+      });
+    });
+
+    group('numeric (Rajdhani 700 20dp tabular)', () {
+      final style = AppTextStyles.numeric;
+      test('family is Rajdhani', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w700', () {
+        expect(style.fontWeight, FontWeight.w700);
+      });
+      test('size is 20', () {
+        expect(style.fontSize, 20.0);
+      });
+      test('height is 1.1', () {
+        expect(style.height, closeTo(1.1, 0.001));
+      });
+      test('fontFeatures contain tabularFigures', () {
+        expect(
+          style.fontFeatures,
+          contains(const FontFeature.tabularFigures()),
+        );
+      });
+      test('color is textCream', () {
+        expect(style.color, AppColors.textCream);
+      });
+    });
+
+    group('numericSmall (Rajdhani 600 11dp textDim — Phase 28a)', () {
+      // Promotes the repeated 5-property override stack
+      //   `numeric.copyWith(fontSize: 11, w600, textDim,
+      //    letterSpacing: 0.04 * 11)`
+      // into a single token. Inherits `fontFeatures` (tabular figures)
+      // from [numeric] so sub-bar numerals don't jitter as digits change.
+      final style = AppTextStyles.numericSmall;
+      test('family is Rajdhani', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w600', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 11', () {
+        expect(style.fontSize, 11.0);
+      });
+      test('letterSpacing is 0.04 * 11 = 0.44', () {
+        expect(style.letterSpacing, closeTo(0.44, 0.001));
+      });
+      test('height is 1.4', () {
+        expect(style.height, closeTo(1.4, 0.001));
+      });
+      test('color is textDim', () {
+        expect(style.color, AppColors.textDim);
+      });
+      test('inherits tabular figures from numeric', () {
+        expect(
+          style.fontFeatures,
+          contains(const FontFeature.tabularFigures()),
+        );
+      });
+    });
+
+    group('appBarTitle (Rajdhani 600 18dp — Phase 28a)', () {
+      // Promotes the pre-Phase-28a inline
+      //   `AppTextStyles.headline.copyWith(fontSize: 18, letterSpacing:
+      //    0.02 * 18)`
+      // (sitting in `AppTheme.dark.appBarTheme.titleTextStyle`) into a
+      // named token. Property pins assert the contract; the
+      // theme-wiring group below pins that the AppBarTheme reads through
+      // this same token.
+      final style = AppTextStyles.appBarTitle;
+      test('family is Rajdhani (inherited from headline)', () {
+        expect(style.fontFamily, startsWith('Rajdhani'));
+      });
+      test('weight is w600 (inherited from headline)', () {
+        expect(style.fontWeight, FontWeight.w600);
+      });
+      test('size is 18', () {
+        expect(style.fontSize, 18.0);
+      });
+      test('letterSpacing is 0.02 * 18 = 0.36', () {
+        expect(style.letterSpacing, closeTo(0.36, 0.001));
+      });
+      test('height inherits headline (1.2)', () {
+        expect(style.height, AppTextStyles.headline.height);
+      });
+      test('color is textCream (inherited from headline)', () {
+        expect(style.color, AppColors.textCream);
+      });
+    });
+
+    group('celebrationSize(size) (Rajdhani 700 hero-sized — Phase 28a)', () {
+      // Parameterized helper for celebration overlay numerals.
+      // Spot-checked at the three canonical sizes used by the overlay
+      // tier (level-up 64sp / class-change 36sp / rank-up 24sp).
+
+      test('at 24sp — Rajdhani 700 height 1.0', () {
+        final style = AppTextStyles.celebrationSize(24);
+        expect(style.fontFamily, startsWith('Rajdhani'));
+        expect(style.fontWeight, FontWeight.w700);
+        expect(style.fontSize, 24.0);
+        expect(style.height, closeTo(1.0, 0.001));
+      });
+
+      test('at 36sp — Rajdhani 700 height 1.0', () {
+        final style = AppTextStyles.celebrationSize(36);
+        expect(style.fontFamily, startsWith('Rajdhani'));
+        expect(style.fontWeight, FontWeight.w700);
+        expect(style.fontSize, 36.0);
+        expect(style.height, closeTo(1.0, 0.001));
+      });
+
+      test('at 64sp — Rajdhani 700 height 1.0', () {
+        final style = AppTextStyles.celebrationSize(64);
+        expect(style.fontFamily, startsWith('Rajdhani'));
+        expect(style.fontWeight, FontWeight.w700);
+        expect(style.fontSize, 64.0);
+        expect(style.height, closeTo(1.0, 0.001));
+      });
+
+      test('inherits color from display (textCream)', () {
+        expect(AppTextStyles.celebrationSize(64).color, AppColors.textCream);
+      });
     });
   });
 
-  group('AppTextStyles — titleDisplay contract (Phase 27 L18.4)', () {
-    // titleDisplay is the Rajdhani variant of the 16dp list-title slot.
-    // It is the ONLY token that diverges from Inter at this size — Routines
-    // (action surfaces) use it; exercise/settings rows stay on [title] (Inter).
-    // These assertions lock the five properties the UX-critic verdict locked:
-    // family (Rajdhani), weight (600), size (16dp), tracking (0.32 = 0.02*16),
-    // and height (1.3 — same line-box as [title] so routine card layout is
-    // stable when the two tokens share a parent Column).
-    test('is Rajdhani 600 at 16dp', () {
-      expect(AppTextStyles.titleDisplay.fontFamily, startsWith('Rajdhani'));
-      expect(AppTextStyles.titleDisplay.fontWeight, FontWeight.w600);
-      expect(AppTextStyles.titleDisplay.fontSize, 16.0);
-    });
-
-    test('letter-spacing is 0.02 * 16 = 0.32', () {
-      expect(AppTextStyles.titleDisplay.letterSpacing, closeTo(0.32, 0.001));
-    });
-
-    test('height matches title (1.3) so row layout is stable', () {
-      expect(AppTextStyles.titleDisplay.height, AppTextStyles.title.height);
-    });
-
-    test('is NOT in _textTheme (must not become a Material default)', () {
-      // titleDisplay is deliberately excluded from the Material TextTheme so
-      // it can never be accidentally applied via Theme.of(context).textTheme.
-      // Verify no slot in AppTheme.dark's TextTheme resolves to a Rajdhani
-      // 600 16dp style (which would indicate titleDisplay leaked into the
-      // theme as titleMedium or similar).
-      final textTheme = AppTheme.dark.textTheme;
-      final slots = [
-        textTheme.titleMedium,
-        textTheme.titleSmall,
-        textTheme.titleLarge,
-        textTheme.bodyMedium,
-        textTheme.bodySmall,
-        textTheme.bodyLarge,
-        textTheme.labelMedium,
-        textTheme.labelSmall,
-        textTheme.labelLarge,
-      ];
-      // None of the theme slots should be Rajdhani 600 at 16dp.
-      for (final style in slots) {
-        final isRajdhani = style?.fontFamily?.startsWith('Rajdhani') ?? false;
-        final is16dp = style?.fontSize == 16.0;
-        final isW600 = style?.fontWeight == FontWeight.w600;
-        expect(
-          isRajdhani && is16dp && isW600,
-          isFalse,
-          reason:
-              'titleDisplay (Rajdhani 600 16dp) must not be wired into the '
-              'Material TextTheme. Found a matching slot: $style',
-        );
-      }
+  group('AppTheme.dark — typography wiring', () {
+    // The appBarTheme's titleTextStyle must route through the named
+    // [AppTextStyles.appBarTitle] token (not an inline copyWith) so the
+    // contract is testable from one place.
+    test('appBarTheme.titleTextStyle equals AppTextStyles.appBarTitle', () {
+      final wired = AppTheme.dark.appBarTheme.titleTextStyle;
+      final token = AppTextStyles.appBarTitle;
+      expect(wired?.fontFamily, token.fontFamily);
+      expect(wired?.fontWeight, token.fontWeight);
+      expect(wired?.fontSize, token.fontSize);
+      expect(wired?.letterSpacing, token.letterSpacing);
+      expect(wired?.height, token.height);
+      expect(wired?.color, token.color);
     });
   });
 

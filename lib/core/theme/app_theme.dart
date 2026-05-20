@@ -5,9 +5,11 @@ import 'radii.dart';
 /// Arcane Ascent palette for RepSaga.
 ///
 /// These tokens are the single source of truth for every color in the app.
-/// They were chosen for the Material Design direction B in
-/// `tasks/mockups/material-saga-comparison-v2.html` and the reward-scarcity
-/// framework documented in `lib/core/theme/README.md`.
+/// They were chosen for the locked "Arcane Ascent" design direction
+/// (Direction B in the Phase 17.0c material-vs-pixel review; see
+/// `docs/PROJECT.md` Phase 17 and Phase 26 entries for the design-language
+/// history) and the reward-scarcity framework documented in
+/// `lib/core/theme/README.md`.
 ///
 /// **Reward scarcity rule.** [heroGold] is rendered ONLY through the
 /// `RewardAccent` widget — it is a variable-ratio reward signal for PRs,
@@ -132,6 +134,12 @@ class AppTextStyles {
   const AppTextStyles._();
 
   /// Rajdhani 700 — hero copy, splash wordmark, primary CTA.
+  ///
+  /// **Use for:** splash wordmark, primary CTA hero text, action-hero
+  /// headline (e.g. the "Treino livre" hero on Home).
+  ///
+  /// **Not for:** AppBar titles (use [appBarTitle]); in-screen section
+  /// headers (use [headline]); standalone numerals (use [numeric]).
   static TextStyle get display => const TextStyle(
     fontFamily: 'Rajdhani',
     fontSize: 32,
@@ -142,6 +150,15 @@ class AppTextStyles {
   );
 
   /// Rajdhani 600 — card titles, overlay titles, section headers.
+  ///
+  /// **Use for:** page-section heroes (the "Treino livre" action-hero
+  /// uses [display]; smaller hero-tier cards use this), overlay-card
+  /// titles (rank-up / level-up text-only beats before they reach
+  /// celebration-tier size).
+  ///
+  /// **Not for:** AppBar titles (use [appBarTitle]); list-item titles
+  /// (use [title] or [titleDisplay]); the "the surface IS the numeral"
+  /// celebration register (use [celebrationSize]).
   static TextStyle get headline => const TextStyle(
     fontFamily: 'Rajdhani',
     fontSize: 24,
@@ -156,6 +173,13 @@ class AppTextStyles {
   /// **Routine names use [titleDisplay] instead** (the Rajdhani variant).
   /// See the dartdoc on [titleDisplay] for the design-language rationale
   /// (Phase 27 L18.4 locked decision).
+  ///
+  /// **Use for:** list-item titles in reference surfaces (exercise list
+  /// cards, settings rows), dialog titles, card sub-titles.
+  ///
+  /// **Not for:** action surfaces where the row IS the daily-driver CTA
+  /// (use [titleDisplay]); numerals embedded in a value role (use
+  /// [numeric]).
   static TextStyle get title => const TextStyle(
     fontFamily: 'Inter',
     fontSize: 16,
@@ -198,6 +222,13 @@ class AppTextStyles {
   );
 
   /// Inter 400 — paragraph copy, descriptions.
+  ///
+  /// **Use for:** paragraph prose, form tips, exercise descriptions,
+  /// dialog body text, snackbar copy, mixed-string cardinality lines
+  /// like "3 exercícios".
+  ///
+  /// **Not for:** standalone numerals (use [numeric]); eyebrow / chip
+  /// / section delimiters (use [label] or [sectionHeader]).
   static TextStyle get body => const TextStyle(
     fontFamily: 'Inter',
     fontSize: 14,
@@ -207,6 +238,12 @@ class AppTextStyles {
   );
 
   /// Inter 400 — small meta, captions.
+  ///
+  /// **Use for:** secondary metadata (timestamps, sub-titles,
+  /// caption-context, "last session" lines).
+  ///
+  /// **Not for:** numeric data — even at this size, that's
+  /// [numericSmall]'s register. Eyebrow labels stay on [label].
   static TextStyle get bodySmall => const TextStyle(
     fontFamily: 'Inter',
     fontSize: 12,
@@ -216,6 +253,13 @@ class AppTextStyles {
   );
 
   /// Inter 600 uppercase with +0.12em tracking — chips, tabs, metadata rails.
+  ///
+  /// **Use for:** 11sp uppercase tracked eyebrow / chip / tab labels,
+  /// metadata-rail delimiters. Call sites pass an already-uppercased
+  /// string (ARB key supplies the casing).
+  ///
+  /// **Not for:** data values, even small ones (use [numericSmall]);
+  /// section eyebrows above tables (use [sectionHeader]).
   static TextStyle get label => const TextStyle(
     fontFamily: 'Inter',
     fontSize: 11,
@@ -231,10 +275,24 @@ class AppTextStyles {
   /// without competing with [title]. Color is left to the call site
   /// (sections currently use [AppColors.hotViolet]; future sections may
   /// pick a state-color).
+  ///
+  /// **Use for:** 12sp uppercase tracked section eyebrows above
+  /// tables / cards (e.g. "VITALIDADE ATUAL").
+  ///
+  /// **Not for:** chips / tabs (use [label]); list-item titles (use
+  /// [title]).
   static TextStyle get sectionHeader =>
       label.copyWith(fontSize: 12, letterSpacing: 0.12 * 12);
 
   /// Rajdhani 700 tabular — XP counts, level numbers, weight/rep numerals.
+  ///
+  /// **Use for:** ALL numeric data — LVL, XP, weight, reps, %, rank values,
+  /// set counts, PR values, weight-stepper output. Anywhere a numeral is
+  /// the load-bearing piece of information.
+  ///
+  /// **Not for:** mixed-string cardinality (e.g. "3 exercícios" — that's
+  /// prose with a number embedded; use [body]). Not for non-data text
+  /// even when monospace would technically look fine.
   static TextStyle get numeric => const TextStyle(
     fontFamily: 'Rajdhani',
     fontSize: 20,
@@ -243,6 +301,70 @@ class AppTextStyles {
     height: 1.1,
     color: AppColors.textCream,
   );
+
+  /// Rajdhani 600 11sp tabular textDim — small numeric metadata lines
+  /// where the value is data but the visual register is supporting-text.
+  ///
+  /// Promotes the 5-property override stack
+  ///   `numeric.copyWith(fontSize: 11, fontWeight: w600, color: textDim,
+  ///    letterSpacing: 0.04 * 11)`
+  /// (repeated in body-part rank rows + character-card closest-rank
+  /// indicator) into a single token so the next surface that needs the
+  /// same register reaches for one name instead of copy-pasting five
+  /// overrides.
+  ///
+  /// **Use for:** sub-bar XP labels (`X XP` / `Y restantes`),
+  /// character-card closest-rank indicator (`X XP for rank Y`), rank
+  /// progress meta.
+  ///
+  /// **Not for:** standalone numerals (use [numeric] at full size). Not
+  /// for prose with a number embedded (use [body] or [bodySmall]).
+  static TextStyle get numericSmall => numeric.copyWith(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textDim,
+    letterSpacing: 0.04 * 11,
+    height: 1.4,
+  );
+
+  /// Rajdhani 600 18sp — AppBar titles across all screens.
+  ///
+  /// Wired into [AppTheme.dark]'s `appBarTheme.titleTextStyle` so every
+  /// AppBar that doesn't pass an explicit `title:` style picks this up
+  /// automatically. Defining it as a named token (rather than the
+  /// pre-Phase-28a inline `headline.copyWith(fontSize: 18, letterSpacing:
+  /// 0.02 * 18)`) gives unit tests something to assert against and lets
+  /// future call sites pin the AppBar register without re-deriving the
+  /// size/tracking math.
+  ///
+  /// **Use for:** any AppBar's `title:` widget.
+  ///
+  /// **Not for:** in-screen section headers (use [headline] or
+  /// [sectionHeader]); overlay-card titles (use [headline]).
+  static TextStyle get appBarTitle =>
+      headline.copyWith(fontSize: 18, letterSpacing: 0.02 * 18);
+
+  /// Rajdhani 700 hero-sized — celebration overlay numerals.
+  ///
+  /// Parameterized by [size] because each celebration tier has its own
+  /// visual weight in the choreography:
+  ///   * Level-up: 64sp glyph numeral
+  ///   * Class-change: 36sp class-name display
+  ///   * Rank-up: 24sp rank-line display
+  ///
+  /// `height: 1.0` because celebration overlays sit in `Column`s with
+  /// hand-tuned `SizedBox(height: ...)` gaps below the numeral — letting
+  /// `display`'s default 1.1 leading bleed through here would offset the
+  /// caller's vertical spacing math.
+  ///
+  /// **Use for:** standalone overlay-dominant text where the whole
+  /// surface IS the text (level-up burst, rank-up label, class-change
+  /// announcement).
+  ///
+  /// **Not for:** inline-screen display text (use [display] or
+  /// [headline]). Not for numerals embedded in a data row (use [numeric]).
+  static TextStyle celebrationSize(double size) =>
+      display.copyWith(fontSize: size, height: 1.0);
 }
 
 /// App-wide Material 3 theme.
@@ -318,11 +440,10 @@ class AppTheme {
         // (font-family: 'Rajdhani'; font-weight: 600; font-size: 18px;
         // letter-spacing: 0.02em). Material's default falls back to Inter
         // titleLarge — wrong for our display-font identity. See
-        // `project_design_language_typography`.
-        titleTextStyle: AppTextStyles.headline.copyWith(
-          fontSize: 18,
-          letterSpacing: 0.02 * 18,
-        ),
+        // `project_design_language_typography`. Phase 28a: routed through
+        // the named [AppTextStyles.appBarTitle] token so the contract is
+        // testable and call-site overrides share a single derivation.
+        titleTextStyle: AppTextStyles.appBarTitle,
       ),
       dividerTheme: const DividerThemeData(color: AppColors.hair, thickness: 1),
     );
