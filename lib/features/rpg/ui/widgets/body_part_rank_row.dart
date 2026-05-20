@@ -76,10 +76,6 @@ class _TrainedRow extends StatelessWidget {
     final fraction = entry.xpForNextRank <= 0
         ? 1.0
         : (entry.xpInRank / entry.xpForNextRank).clamp(0.0, 1.0);
-    final remaining = (entry.xpForNextRank - entry.xpInRank).clamp(
-      0.0,
-      double.infinity,
-    );
 
     // Semantics MUST wrap the InkWell directly (single build method, no
     // intervening widget boundaries) so Flutter merges them into one
@@ -148,25 +144,43 @@ class _TrainedRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
-                      // Phase 28a: collapsed the 5-property override stack
-                      // (`numeric.copyWith(fontSize: 11, w600, textDim,
-                      // letterSpacing: 0.04 * 11)`) into the canonical
-                      // [AppTextStyles.numericSmall] token. Same rendered
-                      // pixels, one named contract for the sub-bar XP register.
+                // Sub-bar XP progress: single fraction format
+                // (`53/107 XP`) replacing the prior two-label split
+                // (`54 XP | 53 restantes`). UX-critic recommendation:
+                // hands the user the "rank cost" answer directly without
+                // forcing mental subtraction, while preserving motivational
+                // salience via color split (earned in textCream pops,
+                // total in textDim recedes).
+                //
+                // Base style is [AppTextStyles.numericSmall] (Rajdhani 600
+                // 11sp tabular textDim) — locked Phase 28a. The first span
+                // overrides color to textCream for the earned figure; the
+                // second span inherits textDim from the parent token.
+                //
+                // Suppressed entirely at max rank (`xpForNextRank <= 0`)
+                // so we don't render the nonsense `0/0 XP`. Day-zero
+                // (`xpInRank = 0`) reads cleanly as `0/X XP`.
+                if (entry.xpForNextRank > 0) ...[
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    TextSpan(
                       style: AppTextStyles.numericSmall,
+                      children: [
+                        TextSpan(
+                          text: AppNumberFormat.integer(
+                            entry.xpInRank,
+                            locale: locale,
+                          ),
+                          style: const TextStyle(color: AppColors.textCream),
+                        ),
+                        TextSpan(
+                          text:
+                              '/${AppNumberFormat.integer(entry.xpForNextRank, locale: locale)} XP',
+                        ),
+                      ],
                     ),
-                    Text(
-                      '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
-                      style: AppTextStyles.numericSmall,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),
