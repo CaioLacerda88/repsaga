@@ -337,8 +337,18 @@ class _DetailChip extends StatelessWidget {
           // Inter 600 12dp chip register — matches the list-screen
           // `_InfoChip` exactly so the chip language reads as one design
           // across browse + detail (prior `bodyMedium + w600` rendered
-          // at 14dp, breaking parity).
-          Text(label, style: AppTextStyles.label.copyWith(fontSize: 12)),
+          // at 14dp, breaking parity). `letterSpacing` is recomputed
+          // for 12dp (`0.12 * 12 = 1.44`) — `AppTextStyles.label`'s
+          // base `letterSpacing` derives from its 11dp default, so
+          // copying just `fontSize` leaves tracking under-scaled.
+          // Same pattern `AppTextStyles.sectionHeader` uses.
+          Text(
+            label,
+            style: AppTextStyles.label.copyWith(
+              fontSize: 12,
+              letterSpacing: 0.12 * 12,
+            ),
+          ),
         ],
       ),
     );

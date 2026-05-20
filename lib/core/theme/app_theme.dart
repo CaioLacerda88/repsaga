@@ -183,6 +183,11 @@ class AppTextStyles {
   ///
   /// Letter-spacing follows [headline]'s 2% multiplier so the two
   /// Rajdhani sizes read as the same family rhythm.
+  ///
+  /// **Not wired into [_textTheme]** — deliberately excluded so it
+  /// cannot become a Material theme default (`titleMedium`). Call
+  /// sites that need this register must reach for `AppTextStyles.titleDisplay`
+  /// directly, which keeps the design-language opt-in explicit.
   static TextStyle get titleDisplay => const TextStyle(
     fontFamily: 'Rajdhani',
     fontSize: 16,

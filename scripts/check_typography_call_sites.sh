@@ -47,8 +47,16 @@ cd "$ROOT"
 # to Dart sources; `-E` for the extended regex.
 #
 # Pattern: matches a `fontFamily:` assignment to `'Rajdhani'` (single or
-# double quote). We additionally exclude lines starting with `//` so
-# dartdoc comments that name the literal in prose don't trip the gate.
+# double quote).
+#
+# The second pipe filters out lines where the pattern only appears INSIDE
+# a comment. Two cases are excluded:
+#   1. Lines starting with `//` (standalone dartdoc / commentary).
+#   2. Lines where a `//` precedes the `fontFamily:` literal mid-line —
+#      e.g. trailing comments like `someCode(); // fontFamily: 'Rajdhani'
+#      was the old approach`. Without this branch the gate would
+#      false-positive on any maintainer's discussion of the rule in a
+#      trailing comment (reviewer Critical, PR #245).
 #
 # `|| true` swallows grep's exit-1-on-no-match — we want to evaluate
 # the captured output ourselves rather than let grep's status fail
@@ -56,7 +64,7 @@ cd "$ROOT"
 HITS=$(
   grep -rEn "fontFamily:\s*['\"]Rajdhani['\"]" lib/features lib/shared \
     --include='*.dart' \
-    | grep -vE "^[^:]+:[0-9]+:\s*//" \
+    | grep -vE "^[^:]+:[0-9]+:(\s*//|.*//[^'\"]*fontFamily:\s*['\"]Rajdhani['\"])" \
     || true
 )
 
