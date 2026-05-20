@@ -610,6 +610,90 @@ void main() {
     );
   });
 
+  group('ExerciseDetailScreen _DetailChip (Phase 27 L18.4)', () {
+    // L18.4 added an optional `iconColor` param to _DetailChip.
+    // The muscle-group chip passes `exercise.muscleGroup.hueColor` (a non-null
+    // body-part hue for the 6 strength pillars); the equipment chip passes
+    // null (neutral). The user-visible contract is that BOTH chips render
+    // their labels regardless of whether iconColor is null or non-null.
+    testWidgets(
+      'muscle-group chip renders label for a strength-pillar muscle group',
+      (tester) async {
+        // chest → hueColor is non-null (bodyPartChest) — exercises the
+        // iconColor != null branch introduced in L18.4.
+        final exercise = Exercise.fromJson(
+          TestExerciseFactory.create(
+            muscleGroup: 'chest',
+            equipmentType: 'barbell',
+          ),
+        );
+        when(
+          () => mockRepo.getExerciseById(
+            locale: 'en',
+            userId: 'user-001',
+            id: 'exercise-001',
+          ),
+        ).thenAnswer((_) async => exercise);
+
+        await tester.pumpWidget(buildTestWidget(exerciseId: 'exercise-001'));
+        await pumpAndResolve(tester);
+
+        // 'Chest' is the localized label for MuscleGroup.chest in en.
+        expect(find.text('Chest'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'equipment chip renders label alongside the muscle-group chip',
+      (tester) async {
+        // equipment chip passes iconColor: null — exercises the null branch.
+        final exercise = Exercise.fromJson(
+          TestExerciseFactory.create(
+            muscleGroup: 'back',
+            equipmentType: 'dumbbell',
+          ),
+        );
+        when(
+          () => mockRepo.getExerciseById(
+            locale: 'en',
+            userId: 'user-001',
+            id: 'exercise-001',
+          ),
+        ).thenAnswer((_) async => exercise);
+
+        await tester.pumpWidget(buildTestWidget(exerciseId: 'exercise-001'));
+        await pumpAndResolve(tester);
+
+        expect(find.text('Back'), findsOneWidget);
+        expect(find.text('Dumbbell'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'muscle-group chip renders for cardio (hueColor is null — neutral fallback)',
+      (tester) async {
+        // cardio has no identity hue in v1 (hueColor returns null) — exercises
+        // the iconColor-null fallback path inside _DetailChip even when a
+        // muscle group IS present. Confirms the null guard doesn't crash.
+        final exercise = Exercise.fromJson(
+          TestExerciseFactory.create(muscleGroup: 'cardio'),
+        );
+        when(
+          () => mockRepo.getExerciseById(
+            locale: 'en',
+            userId: 'user-001',
+            id: 'exercise-001',
+          ),
+        ).thenAnswer((_) async => exercise);
+
+        await tester.pumpWidget(buildTestWidget(exerciseId: 'exercise-001'));
+        await pumpAndResolve(tester);
+
+        expect(find.text('Cardio'), findsOneWidget);
+      },
+    );
+  });
+
   group('ExerciseDetailScreen P9 hierarchy', () {
     testWidgets('Created <date> line is no longer rendered', (tester) async {
       final exercise = Exercise.fromJson(

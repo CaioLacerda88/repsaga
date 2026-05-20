@@ -11,4 +11,4 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-_No in-flight work. Phase 26 complete (last sub-phase 26f shipped via PR #242). Next: Launch Phase (see PROJECT.md §3)._
+_No in-flight work. Phase 27 + L18.4 complete (PRs #244 + #245). Phase 26 complete (last sub-phase 26f shipped via PR #242). Next: Launch Phase (see PROJECT.md §3)._
