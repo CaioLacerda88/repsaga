@@ -3,7 +3,8 @@
 /// The row is the mini-XP-block per `docs/PROJECT.md` §3 Phase 26 → 26b
 /// acceptance criteria:
 ///   * Trained: 6dp body-part-hue dot · UPPERCASE 10sp name · 20sp
-///     Rajdhani rank num · 4dp XP bar · 9sp "X XP / Y to next rank" label.
+///     Rajdhani rank num · 4dp XP bar · 11sp `X/Y XP` fraction label
+///     (UX-critic spec: earned in textCream, `/total XP` in textDim).
 ///   * Untrained: 0.4 opacity, `—` rank, no bar, no label row.
 ///   * Whole row InkWell-tappable → `/saga/stats?body_part=<dbValue>`.
 ///   * Every trained dot is wrapped in [AmbientPulseDot] (Phase 27 L8 —
@@ -112,10 +113,10 @@ void main() {
       expect(find.text('16'), findsOneWidget);
       // Body-part name (pt-BR for chest → "Peito", upper-cased by widget).
       expect(find.text('PEITO'), findsOneWidget);
-      // XP-in-rank (formatted thousand-separator, pt locale → 1.420).
-      expect(find.textContaining('1.420 XP'), findsOneWidget);
-      // Remaining to next rank (580) + pt-BR suffix.
-      expect(find.textContaining('580 para o próximo rank'), findsOneWidget);
+      // XP fraction label (single Text.rich, pt locale → "1.420/2.000 XP").
+      // Earned figure renders in textCream, `/total XP` recedes in textDim
+      // (the token-baked color on AppTextStyles.numericSmall).
+      expect(find.textContaining('1.420/2.000 XP'), findsOneWidget);
       // Bar present on trained rows.
       expect(find.byKey(const ValueKey('body-part-row-bar')), findsOneWidget);
     });
