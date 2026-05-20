@@ -67,13 +67,29 @@ gym registers without feeling like a generic safe default.
     (Dialog, SnackBar, InputDecoration, ListTile, SegmentedButton)
   - Output: narrowed shim covering only the inherited slots
   - User locked direction: narrow to compat shim (not full deletion)
-- [ ] **Phase 28b — Barlow swap + textTheme migration** (pre-launch, ~12–18h, single PR):
-  - Bundle Barlow Regular/SemiBold + Barlow Condensed Medium/SemiBold
-  - Swap `fontFamily: 'Inter'` → `'Barlow'` in token definitions
-  - Reconcile `sectionHeader` 12dp ↔ `SectionHeader` widget 13dp
-  - **Migrate all 225 `theme.textTheme.*` call sites to `AppTextStyles.*`**
-    (user locked: bundle this with the Barlow PR rather than defer)
-  - Narrow `_textTheme` to compat shim (per 28d research)
-  - Add `theme.textTheme.*` CI gate after migration
-  - Update auto-memory `project_design_language_typography.md`
-  - Visual verification 320/360/412dp on 6 surfaces
+- [x] **Phase 28d — `_textTheme` shim research** — recommendation locked:
+  KEEP `bodyLarge/Medium/Small`, `labelLarge/Medium`, `titleMedium`. DROP
+  the rest. Critical sequencing: migrate call sites BEFORE narrowing shim.
+- [ ] **Phase 28b — Barlow swap + textTheme migration** (branch:
+  `feature/28b-barlow-texttheme-shim`, ~12–18h, single PR):
+  - [ ] Step 1 — Bundle Barlow Regular/SemiBold + Barlow Condensed
+        Medium/SemiBold TTFs in `assets/fonts/` + `pubspec.yaml`
+  - [ ] Step 2 — Migrate all 220 `theme.textTheme.*` call sites in
+        `lib/features/` + `lib/shared/` to `AppTextStyles.*` (FIRST;
+        narrowing-after dependency per Phase 28d). File order:
+        volume_peak_block (16) → exercise_card (11) →
+        workout_detail_screen (9) → pr_celebration_screen (8) → ...
+  - [ ] Step 2.6 — Reconcile `sectionHeader` 12dp ↔ `SectionHeader`
+        widget 13dp by promoting token to 13dp
+  - [ ] Step 3 — Swap `fontFamily: 'Inter'` → `'Barlow'` (body/title/
+        bodySmall) and `'Barlow Condensed'` (label/sectionHeader) in
+        `AppTextStyles`. Update `arcane_theme_test.dart` family pins.
+  - [ ] Step 4 — Narrow `_textTheme` shim to KEEP set per Phase 28d
+        (`bodyLarge`/`bodyMedium`/`bodySmall`/`labelLarge`/`labelMedium`/
+        `titleMedium`)
+  - [ ] Step 5 — Add Gate 6 to `check_typography_call_sites.sh` —
+        `theme.textTheme.*` forbidden in `lib/features/` + `lib/shared/`
+  - [ ] Step 6 — Update auto-memory
+        `project_design_language_typography.md`
+  - [ ] Step 7 — Visual verification 320/360/412dp on 6 surfaces
+        (Saga, Home, Stats, Exercises, Routines, Workout-log)

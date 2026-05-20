@@ -104,6 +104,29 @@ flutter:
           weight: 600
         - asset: assets/fonts/Rajdhani-Bold.ttf
           weight: 700
+    # Phase 28b: Barlow replaces Inter as the body tier. Bundled weights
+    # 400/600 to match the previous Inter ramp exactly so per-site weight
+    # overrides remain stable across the swap.
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Barlow-SemiBold.ttf
+          weight: 600
+    # Phase 28b: Barlow Condensed picks up Rajdhani's verticality at
+    # micro-copy size for the label / sectionHeader tier (uppercase tracked
+    # eyebrows). 500/600 lets `label` (w600 default) inherit the SemiBold
+    # while leaving room for future `.copyWith(fontWeight: w500)` callouts.
+    - family: Barlow Condensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
+    # Inter retained as a passive fallback during the Barlow swap rollout.
+    # Once Phase 28b ships and visual-verification confirms Barlow renders
+    # cleanly across the 6 audited surfaces, the Inter block + the two
+    # `Inter-*.ttf` assets can be removed in a follow-up cleanup.
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf
