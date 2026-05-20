@@ -32,7 +32,6 @@ import '../../../../shared/widgets/reward_accent.dart';
 /// ```
 ///
 /// Spec source: docs/PROJECT.md §3 Phase 26 → 26c acceptance criteria.
-/// Visual reference: docs/phase-26-mockups.html section `#vitality-explainer`.
 class VitalityExplainerSheet extends StatelessWidget {
   const VitalityExplainerSheet({super.key});
 

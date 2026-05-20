@@ -384,14 +384,10 @@ class _ClosestRankUpRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final closest = closestRankUp(sheet.bodyPartProgress);
 
-    // Mockup spec (`docs/phase-26-mockups.html` `.cc-closest .indicator`):
-    //   `font-family: 'Rajdhani'; font-weight: 600; font-size: 11px;
-    //    color: var(--text-dim); letter-spacing: 0.04em;`
-    //   `.cc-closest .indicator strong { color: var(--text-cream); }`
-    // L17 — was inheriting `theme.textTheme.bodyMedium` (Inter 14) which
-    // mismatched both font and size. Phase 27 L18.4 — routed through
-    // [AppTextStyles.numeric] (Rajdhani family + tabular figures) with
-    // the indicator-specific 11dp w600 + dim color + tracking overrides.
+    // Closest-rank indicator typography: Rajdhani 600 / 11dp / textDim /
+    // 0.04em tracking, with the emphasized fragment flipping to textCream.
+    // Routed through [AppTextStyles.numeric] (Rajdhani family + tabular
+    // figures) with indicator-specific size/weight/color/tracking overrides.
     final fallbackStyle = AppTextStyles.numeric.copyWith(
       fontWeight: FontWeight.w600,
       fontSize: 11,
