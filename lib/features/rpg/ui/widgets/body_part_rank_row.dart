@@ -121,13 +121,14 @@ class _TrainedRow extends StatelessWidget {
                     const Spacer(),
                     Text(
                       '${entry.rank}',
-                      style: const TextStyle(
-                        fontFamily: 'Rajdhani',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textCream,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                      ),
+                      // [AppTextStyles.numeric] = Rajdhani 700 20dp
+                      // tabular figures — exactly what was being
+                      // built by hand. Routing through the token so
+                      // the typography call-site CI gate
+                      // (`scripts/check_typography_call_sites.sh`)
+                      // can lock raw `fontFamily: 'Rajdhani'` literals
+                      // out of `lib/features/`.
+                      style: AppTextStyles.numeric,
                     ),
                   ],
                 ),
@@ -153,8 +154,11 @@ class _TrainedRow extends StatelessWidget {
                   children: [
                     Text(
                       '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
-                      style: const TextStyle(
-                        fontFamily: 'Rajdhani',
+                      // Smaller Rajdhani variant (11dp w600) below the bar.
+                      // Same family/weight intent as [AppTextStyles.numeric],
+                      // just shrunken — routed through the token so the
+                      // typography call-site CI gate stays clean.
+                      style: AppTextStyles.numeric.copyWith(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textDim,
@@ -162,8 +166,7 @@ class _TrainedRow extends StatelessWidget {
                     ),
                     Text(
                       '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
-                      style: const TextStyle(
-                        fontFamily: 'Rajdhani',
+                      style: AppTextStyles.numeric.copyWith(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textDim,
@@ -246,7 +249,16 @@ class _UntrainedRow extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Text('—', style: TextStyle(color: dimmedTextDim)),
+                Text(
+                  '—',
+                  // The em-dash sits in the same slot the trained rows
+                  // render their Rajdhani rank numeral. Render it in
+                  // [AppTextStyles.numeric] so the rank column has one
+                  // consistent typeface across trained + untrained rows
+                  // (previously fell back to Material's default Inter,
+                  // creating a row-by-row typeface flicker).
+                  style: AppTextStyles.numeric.copyWith(color: dimmedTextDim),
+                ),
               ],
             ),
           ),

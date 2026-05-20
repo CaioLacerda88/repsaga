@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/date_format.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../personal_records/providers/pr_providers.dart'
@@ -105,9 +106,13 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            // Stat values ("42 workouts", "8 PRs", "Jan 24") are
+            // data-display numerals — Rajdhani-tabular per the design
+            // language. `titleMedium + w700` was Inter promoted to a
+            // non-bundled weight, which read as "form field" rather
+            // than "scoreboard" (UX-critic Phase 27 L18.4 ranked this
+            // the biggest identity gap on the settings screen).
+            style: AppTextStyles.numeric.copyWith(fontSize: 16),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

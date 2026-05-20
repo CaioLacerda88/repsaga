@@ -50,10 +50,14 @@ class DormantCardioRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.muscleGroupCardio,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: AppColors.textDim,
-                  ),
+                  // Cardio body-part label sits in the same slot as
+                  // the six trained body-part labels on the rank rail
+                  // (e.g. "CHEST", "BACK") which all use
+                  // [AppTextStyles.label] UPPERCASE. Aligning the
+                  // cardio row to the same register removes a typeface
+                  // inconsistency in the rank-rail family.
+                  l10n.muscleGroupCardio.toUpperCase(),
+                  style: AppTextStyles.label.copyWith(color: AppColors.textDim),
                 ),
                 const SizedBox(height: 2),
                 Text(

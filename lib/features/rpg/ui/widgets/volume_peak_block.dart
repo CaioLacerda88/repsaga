@@ -152,13 +152,12 @@ class _VolumeColumn extends StatelessWidget {
           children: [
             Text(
               '${row.weeklyVolumeSets}',
-              style: const TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textCream,
-                height: 1,
-              ),
+              // Routed through [AppTextStyles.numeric] (Rajdhani 700
+              // tabular + textCream + height 1) with the block's
+              // 24dp size override. Eliminates raw `fontFamily:
+              // 'Rajdhani'` literals so the typography call-site CI
+              // gate stays clean.
+              style: AppTextStyles.numeric.copyWith(fontSize: 24),
             ),
             if (targetText != null) ...[
               const SizedBox(width: 4),
@@ -282,13 +281,12 @@ class _CargaPicoColumn extends StatelessWidget {
               // a trailing ",0" (so "80" not "80,0") and uses the locale
               // decimal separator for half-kg increments ("82,5" in pt).
               AppNumberFormat.weight(row.peakLoadKg, locale: locale),
-              style: const TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textCream,
-                height: 1,
-              ),
+              // Routed through [AppTextStyles.numeric] (Rajdhani 700
+              // tabular + textCream + height 1) with the block's
+              // 24dp size override. Eliminates raw `fontFamily:
+              // 'Rajdhani'` literals so the typography call-site CI
+              // gate stays clean.
+              style: AppTextStyles.numeric.copyWith(fontSize: 24),
             ),
             const SizedBox(width: 4),
             Padding(
@@ -396,15 +394,12 @@ class _ReferenciaColumn extends StatelessWidget {
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.end,
           children: [
-            const Text(
+            Text(
               '${VolumePeakBlock._schoenfeldFloor}',
-              style: TextStyle(
-                fontFamily: 'Rajdhani',
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textCream,
-                height: 1,
-              ),
+              // Routed through [AppTextStyles.numeric] (Rajdhani 700
+              // tabular + textCream + height 1) with the block's
+              // 24dp size override.
+              style: AppTextStyles.numeric.copyWith(fontSize: 24),
             ),
             const SizedBox(width: 4),
             Padding(

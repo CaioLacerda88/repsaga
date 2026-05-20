@@ -45,7 +45,7 @@ class ManageDataScreen extends ConsumerWidget {
             // WORKOUT HISTORY section
             Text(
               l10n.workoutHistorySection,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: AppTextStyles.sectionHeader.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
               ),
             ),
@@ -61,7 +61,7 @@ class ManageDataScreen extends ConsumerWidget {
             // DANGER section
             Text(
               l10n.dangerSection,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: AppTextStyles.sectionHeader.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
               ),
             ),
@@ -72,9 +72,12 @@ class ManageDataScreen extends ConsumerWidget {
               onTap: () => _showResetAllModal(context, ref),
               semanticsIdentifier: 'manage-data-reset-all',
               danger: true,
-              titleStyle: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              // [AppTextStyles.title] = Inter 600 16dp — the bundled
+              // SemiBold. Prior `titleMedium + w700` requested Inter
+              // Bold (700), which isn't bundled — google_fonts would
+              // nearest-match to w600 silently. Routing through the
+              // sanctioned token makes this deterministic.
+              titleStyle: AppTextStyles.title,
             ),
             const SizedBox(height: 8),
             _DataManagementTile(
@@ -82,9 +85,12 @@ class ManageDataScreen extends ConsumerWidget {
               subtitle: l10n.deleteAccountSubtitle,
               onTap: () => _showDeleteAccountModal(context, ref),
               danger: true,
-              titleStyle: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              // [AppTextStyles.title] = Inter 600 16dp — the bundled
+              // SemiBold. Prior `titleMedium + w700` requested Inter
+              // Bold (700), which isn't bundled — google_fonts would
+              // nearest-match to w600 silently. Routing through the
+              // sanctioned token makes this deterministic.
+              titleStyle: AppTextStyles.title,
             ),
           ],
         ),

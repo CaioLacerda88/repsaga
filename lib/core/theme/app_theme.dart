@@ -151,11 +151,48 @@ class AppTextStyles {
     color: AppColors.textCream,
   );
 
-  /// Inter 600 — list-item titles, routine names, card sub-titles.
+  /// Inter 600 — list-item titles, card sub-titles.
+  ///
+  /// **Routine names use [titleDisplay] instead** (the Rajdhani variant).
+  /// See the dartdoc on [titleDisplay] for the design-language rationale
+  /// (Phase 27 L18.4 locked decision).
   static TextStyle get title => const TextStyle(
     fontFamily: 'Inter',
     fontSize: 16,
     fontWeight: FontWeight.w600,
+    height: 1.3,
+    color: AppColors.textCream,
+  );
+
+  /// Rajdhani 600 — the action-surface variant of [title].
+  ///
+  /// Same 16dp slot as [title] (so it drops into list-item rows without
+  /// reflowing layout) but routes the family to Rajdhani so the call site
+  /// reads as an "Arcane Ascent" performance artifact rather than as
+  /// reference content. Reserved for surfaces where the list item IS the
+  /// primary action — tapping starts a workout, opens a celebration, etc.
+  /// `RoutineCard` is the canonical user: the card is the daily-driver
+  /// CTA on Home and the start-the-workout affordance on `/routines`.
+  ///
+  /// Do NOT use this for reference-browse surfaces (exercise list,
+  /// settings rows). Those stay on [title] (Inter) so the screen-title
+  /// Rajdhani at the top of the screen retains its tier separation —
+  /// promoting every list-item to Rajdhani collapses the hierarchy
+  /// into a single-typeface "word wall" (UX-critic Phase-27-L18.4
+  /// reasoning).
+  ///
+  /// Letter-spacing follows [headline]'s 2% multiplier so the two
+  /// Rajdhani sizes read as the same family rhythm.
+  ///
+  /// **Not wired into [_textTheme]** — deliberately excluded so it
+  /// cannot become a Material theme default (`titleMedium`). Call
+  /// sites that need this register must reach for `AppTextStyles.titleDisplay`
+  /// directly, which keeps the design-language opt-in explicit.
+  static TextStyle get titleDisplay => const TextStyle(
+    fontFamily: 'Rajdhani',
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.02 * 16,
     height: 1.3,
     color: AppColors.textCream,
   );

@@ -55,7 +55,14 @@ class RoutineCard extends StatelessWidget {
                     children: [
                       Text(
                         routine.name,
-                        style: AppTextStyles.title,
+                        // [titleDisplay] = Rajdhani 600 at the 16dp list-
+                        // title slot. Routines are action surfaces (tap →
+                        // starts a workout), not reference content — they
+                        // earn the Arcane Ascent register that Inter [title]
+                        // doesn't carry. Per UX-critic Phase 27 L18.4
+                        // verdict: Routines change to Rajdhani, Exercises
+                        // (a reference library surface) stay on [title].
+                        style: AppTextStyles.titleDisplay,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),

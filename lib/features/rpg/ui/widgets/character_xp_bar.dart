@@ -48,7 +48,6 @@ class CharacterXpBar extends StatelessWidget {
       'must be >= lifetimeXp ($lifetimeXp). The xpForNextCharacterLevel '
       'helper guarantees this; if this fires the caller bypassed the helper.',
     );
-    final theme = Theme.of(context);
     // MaterialApp guarantees a Localizations ancestor everywhere this widget
     // is composed (Saga screen, Home expanded card in 26f). If the widget is
     // ever previewed outside a full MaterialApp (e.g. a Storybook harness),
@@ -95,8 +94,18 @@ class CharacterXpBar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
+                  // XP labels under the bar are NUMERAL displays —
+                  // Rajdhani-tabular per the design language. Previously
+                  // rendered as `bodySmall` (Inter 400 12dp) which made
+                  // the character-level bar inconsistent with the
+                  // per-body-part rank bar (which uses Rajdhani) and
+                  // dropped the entire XP signal out of the "Arcane
+                  // Ascent" register (Phase 27 L18.4).
                   '${AppNumberFormat.volume(lifetimeXp, locale: locale)} XP',
-                  style: theme.textTheme.bodySmall,
+                  style: AppTextStyles.numeric.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textCream,
+                  ),
                 ),
                 Text(
                   // Suffix "para LVL N" is identical across en + pt in spec
@@ -104,7 +113,8 @@ class CharacterXpBar extends StatelessWidget {
                   // swap to an AppLocalizations entry.
                   '${AppNumberFormat.volume(remaining, locale: locale)} '
                   'para LVL ${characterLevel + 1}',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: AppTextStyles.numeric.copyWith(
+                    fontSize: 12,
                     color: AppColors.hotViolet,
                   ),
                 ),
