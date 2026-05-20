@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n/locale_provider.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/profile_providers.dart';
@@ -79,7 +80,12 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // Weight unit section
               Text(
                 l10n.weightUnit,
-                style: theme.textTheme.titleMedium,
+                // [sectionHeader] — Inter 600 12dp +0.12em tracking.
+                // Section labels are eyebrow register, not list-item
+                // titles; prior `titleMedium` rendered at 16dp which
+                // gave them the same weight as `RoutineCard` titles
+                // and broke the section rhythm (Phase 27 L18.4).
+                style: AppTextStyles.sectionHeader,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -95,7 +101,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // bodyweight exercises like pull-ups, dips, push-ups).
               Text(
                 l10n.profileBodyweightLabel,
-                style: theme.textTheme.titleMedium,
+                style: AppTextStyles.sectionHeader,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -112,7 +118,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
                 identifier: 'profile-goal-label',
                 child: Text(
                   l10n.weeklyGoal,
-                  style: theme.textTheme.titleMedium,
+                  style: AppTextStyles.sectionHeader,
                 ),
               ),
               const SizedBox(height: 12),
@@ -127,7 +133,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // Preferences section
               Text(
                 l10n.preferences,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: AppTextStyles.sectionHeader.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
               ),
@@ -137,7 +143,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // Data management section
               Text(
                 l10n.dataManagement,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: AppTextStyles.sectionHeader.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
               ),
@@ -147,7 +153,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // Legal section
               Text(
                 l10n.legal,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: AppTextStyles.sectionHeader.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
               ),
@@ -167,7 +173,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               // Privacy section
               Text(
                 l10n.privacySection,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: AppTextStyles.sectionHeader.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
               ),

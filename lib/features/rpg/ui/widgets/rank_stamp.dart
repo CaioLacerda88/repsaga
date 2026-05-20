@@ -40,14 +40,10 @@ class RankStamp extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         '$rank',
-        style: const TextStyle(
-          fontFamily: 'Rajdhani',
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textCream,
-          height: 1,
-          fontFeatures: [FontFeature.tabularFigures()],
-        ),
+        // Rank-stamp numeral on the rank pip overlay. Layered on
+        // [AppTextStyles.numeric] (Rajdhani 700 tabular + textCream
+        // + height 1) with the stamp-specific 22dp size.
+        style: AppTextStyles.numeric.copyWith(fontSize: 22),
         textAlign: TextAlign.center,
         maxLines: 1,
         overflow: TextOverflow.clip,

@@ -224,14 +224,10 @@ class _HeaderRow extends StatelessWidget {
                   children: [
                     Text(
                       '${sheet.characterLevel}',
-                      style: const TextStyle(
-                        fontFamily: 'Rajdhani',
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textCream,
-                        height: 1,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                      ),
+                      // Character-level numeral, collapsed card. Routed
+                      // through [AppTextStyles.numeric] with the card-
+                      // specific 28dp size override.
+                      style: AppTextStyles.numeric.copyWith(fontSize: 28),
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -348,14 +344,10 @@ class _DominantColumn extends StatelessWidget {
         Text(
           '${entry.rank}',
           key: const ValueKey('character-card-dominant-rank'),
-          style: TextStyle(
-            fontFamily: 'Rajdhani',
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: color,
-            height: 1,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
+          // Dominant body-part rank numeral. Routed through
+          // [AppTextStyles.numeric] with the card's 28dp size +
+          // body-part hue color overrides.
+          style: AppTextStyles.numeric.copyWith(fontSize: 28, color: color),
         ),
         const SizedBox(height: 2),
         Text(
@@ -397,9 +389,10 @@ class _ClosestRankUpRow extends StatelessWidget {
     //    color: var(--text-dim); letter-spacing: 0.04em;`
     //   `.cc-closest .indicator strong { color: var(--text-cream); }`
     // L17 — was inheriting `theme.textTheme.bodyMedium` (Inter 14) which
-    // mismatched both font and size. Rebuilt as a direct Rajdhani style.
-    const fallbackStyle = TextStyle(
-      fontFamily: 'Rajdhani',
+    // mismatched both font and size. Phase 27 L18.4 — routed through
+    // [AppTextStyles.numeric] (Rajdhani family + tabular figures) with
+    // the indicator-specific 11dp w600 + dim color + tracking overrides.
+    final fallbackStyle = AppTextStyles.numeric.copyWith(
       fontWeight: FontWeight.w600,
       fontSize: 11,
       color: AppColors.textDim,
@@ -448,7 +441,9 @@ class _ClosestRankUpRow extends StatelessWidget {
     // mockup `.cc-closest .indicator` is the same style for both branches.
     // Bold span lifts to w700 + textCream so the body-part name reads as
     // distinct emphasis (matches L11.b's original contract pinned by tests).
-    const baseStyle = fallbackStyle;
+    // `final` (was `const`) because L18.4 routed `fallbackStyle` through
+    // `AppTextStyles.numeric.copyWith(...)` which is not a const expression.
+    final baseStyle = fallbackStyle;
     final boldStyle = baseStyle.copyWith(
       fontWeight: FontWeight.w700,
       color: AppColors.textCream,

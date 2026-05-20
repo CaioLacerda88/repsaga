@@ -78,13 +78,16 @@ class SagaHeader extends StatelessWidget {
               children: [
                 Text(
                   '$characterLevel',
-                  style: const TextStyle(
-                    fontFamily: 'Rajdhani',
+                  // Hero-scale character-level numeral. 56dp is larger
+                  // than any token in [AppTextStyles], so we layer on
+                  // top of [AppTextStyles.numeric] (Rajdhani 700 tabular)
+                  // — same family + weight + tabular figures + textCream
+                  // color, just upsized. Stays one route through the
+                  // sanctioned token so the typography call-site CI gate
+                  // doesn't trip on a raw `fontFamily: 'Rajdhani'`.
+                  style: AppTextStyles.numeric.copyWith(
                     fontSize: 56,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textCream,
                     height: 1,
-                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
                 // 'LVL' is a brand token, intentionally not localized per

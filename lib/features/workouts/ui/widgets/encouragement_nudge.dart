@@ -221,8 +221,10 @@ class EncouragementNudge extends ConsumerWidget {
     //   `.nudge strong { color: var(--success); font-weight: 700; }`
     // Base text is Rajdhani 500 textDim; the bold span flips to SUCCESS GREEN
     // (not textCream — that was a misread of the L11 spec) at weight 700.
-    const baseStyle = TextStyle(
-      fontFamily: 'Rajdhani',
+    // Phase 27 L18.4 — routed through [AppTextStyles.numeric] (Rajdhani
+    // tabular figures) with nudge-specific 500-weight + 11dp + dim +
+    // tracking + 1.4 line-height overrides.
+    final baseStyle = AppTextStyles.numeric.copyWith(
       fontWeight: FontWeight.w500,
       fontSize: 11,
       color: AppColors.textDim,

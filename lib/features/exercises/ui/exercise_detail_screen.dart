@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/exceptions/app_exception.dart';
 import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/muscle_group_body_part.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/exercise_image.dart';
@@ -223,6 +224,11 @@ class _ExerciseDetailBody extends ConsumerWidget {
               _DetailChip(
                 svgIcon: exercise.muscleGroup.svgIcon,
                 label: exercise.muscleGroup.localizedName(l10n),
+                // Muscle-group chip carries the body-part hue on the icon
+                // so the detail screen matches the list-screen `_InfoChip`
+                // identity affordance (Phase 27 L18.4). Equipment chip
+                // stays neutral — equipment is taxonomy, not identity.
+                iconColor: exercise.muscleGroup.hueColor,
               ),
               _DetailChip(
                 svgIcon: exercise.equipmentType.svgIcon,
@@ -289,12 +295,23 @@ class _ExerciseDetailBody extends ConsumerWidget {
 }
 
 class _DetailChip extends StatelessWidget {
-  const _DetailChip({required this.svgIcon, required this.label});
+  const _DetailChip({
+    required this.svgIcon,
+    required this.label,
+    this.iconColor,
+  });
 
   /// Inline-SVG glyph string from [AppMuscleIcons] / [AppEquipmentIcons] (or
   /// the reused [AppIcons.lift] for barbell).
   final String svgIcon;
   final String label;
+
+  /// Optional tint for the leading icon. When `null`, falls back to the
+  /// neutral `onSurface @ 75% alpha` used for taxonomy chips (equipment
+  /// type). Body-part chips pass the corresponding hue from
+  /// `MuscleGroup.hueColor` so the chip carries identity in the same way
+  /// the list-screen `_InfoChip` does — Phase 27 L18.4.
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -312,15 +329,16 @@ class _DetailChip extends StatelessWidget {
           AppIcons.render(
             svgIcon,
             size: 18,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+            color:
+                iconColor ??
+                theme.colorScheme.onSurface.withValues(alpha: 0.75),
           ),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          // Inter 600 12dp chip register — matches the list-screen
+          // `_InfoChip` exactly so the chip language reads as one design
+          // across browse + detail (prior `bodyMedium + w600` rendered
+          // at 14dp, breaking parity).
+          Text(label, style: AppTextStyles.label.copyWith(fontSize: 12)),
         ],
       ),
     );
@@ -435,7 +453,7 @@ class _PRSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.personalRecords, style: theme.textTheme.titleMedium),
+            Text(l10n.personalRecords, style: AppTextStyles.sectionHeader),
             const SizedBox(height: 8),
             ...filtered.map(
               (r) => Padding(

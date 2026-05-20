@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../features/auth/providers/auth_providers.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -43,9 +44,14 @@ class IdentityCard extends StatelessWidget {
                         ? email[0]
                         : '?')
                     .toUpperCase(),
-                style: theme.textTheme.headlineMedium?.copyWith(
+                // [AppTextStyles.headline] = Rajdhani 600 24dp — the
+                // bundled SemiBold weight. Prior `headlineMedium +
+                // FontWeight.bold` requested Rajdhani 700, which IS
+                // bundled but the call site mixed token + raw weight
+                // override; routing through the token directly avoids
+                // unbundled-weight risk and reads cleaner.
+                style: AppTextStyles.headline.copyWith(
                   color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),

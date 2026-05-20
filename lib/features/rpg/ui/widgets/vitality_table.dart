@@ -167,13 +167,12 @@ class _VitalityTableRow extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(
                   pctText,
-                  style: TextStyle(
-                    fontFamily: 'Rajdhani',
+                  // Vitality % numeral. Routed through [AppTextStyles.numeric]
+                  // (Rajdhani 700 tabular) with the table-row 24dp override
+                  // and the HP-drain ramp color from `pctColor`.
+                  style: AppTextStyles.numeric.copyWith(
                     fontSize: 24,
-                    fontWeight: FontWeight.w700,
                     color: pctColor,
-                    height: 1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
