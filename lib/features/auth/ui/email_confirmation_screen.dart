@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/gradient_button.dart';
 import '../providers/notifiers/auth_notifier.dart';
@@ -83,7 +84,8 @@ class _EmailConfirmationScreenState
                 const SizedBox(height: 32),
                 Text(
                   l10n.checkYourInbox,
-                  style: theme.textTheme.headlineLarge?.copyWith(
+                  style: AppTextStyles.headline.copyWith(
+                    fontSize: 28,
                     color: theme.colorScheme.primary,
                   ),
                   textAlign: TextAlign.center,
@@ -93,7 +95,8 @@ class _EmailConfirmationScreenState
                   email.isNotEmpty
                       ? l10n.confirmationSentTo
                       : l10n.confirmationSent,
-                  style: theme.textTheme.bodyLarge?.copyWith(
+                  style: AppTextStyles.body.copyWith(
+                    fontSize: 16,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   textAlign: TextAlign.center,
@@ -102,7 +105,7 @@ class _EmailConfirmationScreenState
                   const SizedBox(height: 8),
                   Text(
                     email,
-                    style: theme.textTheme.titleMedium?.copyWith(
+                    style: AppTextStyles.title.copyWith(
                       color: theme.colorScheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
@@ -111,7 +114,7 @@ class _EmailConfirmationScreenState
                 const SizedBox(height: 8),
                 Text(
                   l10n.tapLinkToVerify,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                   textAlign: TextAlign.center,
@@ -122,7 +125,7 @@ class _EmailConfirmationScreenState
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Text(
                       l10n.emailResent,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: AppTextStyles.body.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),

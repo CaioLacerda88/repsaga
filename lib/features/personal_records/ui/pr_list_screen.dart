@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
@@ -31,7 +32,7 @@ class PRListScreen extends ConsumerWidget {
         error: (error, _) => Center(
           child: Text(
             l10n.failedToLoadRecords,
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: AppTextStyles.body.copyWith(fontSize: 16),
           ),
         ),
         data: (records) {
@@ -66,7 +67,7 @@ class _EmptyState extends StatelessWidget {
               identifier: 'pr-display-empty-title',
               child: Text(
                 l10n.noRecordsYetTitle,
-                style: theme.textTheme.headlineMedium,
+                style: AppTextStyles.headline,
               ),
             ),
             const SizedBox(height: 8),
@@ -75,7 +76,8 @@ class _EmptyState extends StatelessWidget {
               identifier: 'pr-display-empty',
               child: Text(
                 l10n.completeWorkoutToTrack,
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style: AppTextStyles.body.copyWith(
+                  fontSize: 16,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
                 textAlign: TextAlign.center,
@@ -165,7 +167,6 @@ class _ExerciseRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final first = records.first;
 
@@ -181,7 +182,10 @@ class _ExerciseRecordCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(first.exerciseName, style: theme.textTheme.titleLarge),
+                Text(
+                  first.exerciseName,
+                  style: AppTextStyles.title.copyWith(fontSize: 20),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
@@ -240,18 +244,14 @@ class _RecordTile extends StatelessWidget {
                 'pr-display-${label.toLowerCase().replaceAll(' ', '-')}',
             child: Text(
               label,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: AppTextStyles.bodySmall.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          // PR value — Rajdhani 700 tabular (numeric register).
+          Text(value, style: AppTextStyles.numeric.copyWith(fontSize: 16)),
         ],
       ),
     );

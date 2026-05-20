@@ -72,11 +72,13 @@ class WeekReviewSection extends StatelessWidget {
                     : 'weekly-plan-this-week',
                 child: Text(
                   isAllComplete ? l10n.weekComplete : l10n.thisWeek,
-                  style: theme.textTheme.labelLarge?.copyWith(
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 13,
+                    letterSpacing: 0.12 * 13,
+                    fontWeight: FontWeight.w700,
                     color: isAllComplete
                         ? _completeHeaderColor
                         : theme.colorScheme.onSurface.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -92,7 +94,9 @@ class WeekReviewSection extends StatelessWidget {
                   ),
                   child: Text(
                     l10n.newWeekLink,
-                    style: theme.textTheme.labelLarge?.copyWith(
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: 13,
+                      letterSpacing: 0.12 * 13,
                       color: _newWeekLinkColor,
                     ),
                   ),
@@ -109,7 +113,7 @@ class WeekReviewSection extends StatelessWidget {
             l10n,
             Localizations.localeOf(context).languageCode,
           ),
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: AppTextStyles.body.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           ),
         ),
@@ -185,16 +189,18 @@ class WeekStatsChip extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // WeekStatsChip value — Rajdhani numeric (since the value is a
+          // numerical chip stat).
           Text(
             value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+            style: AppTextStyles.numeric.copyWith(
+              fontSize: 16,
               color: valueColor,
             ),
           ),
           Text(
             label,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: AppTextStyles.bodySmall.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
             ),
           ),

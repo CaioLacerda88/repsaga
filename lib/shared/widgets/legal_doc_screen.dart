@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
 /// A scrollable screen that loads a markdown document from an asset and
@@ -57,17 +58,17 @@ class _LegalDocScreenState extends State<LegalDocScreen> {
             padding: const EdgeInsets.all(20),
             selectable: true,
             styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-              h1: theme.textTheme.headlineSmall?.copyWith(
+              // H1/H2/H3 of legal docs are content headings — Rajdhani
+              // [headline] register sized down for inline hierarchy. H2/H3
+              // drop to [title] (Inter→Barlow) for paragraph-tier readability.
+              h1: AppTextStyles.headline.copyWith(
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
-              h2: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              h3: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              p: theme.textTheme.bodyMedium,
-              listBullet: theme.textTheme.bodyMedium,
+              h2: AppTextStyles.title.copyWith(fontSize: 20),
+              h3: AppTextStyles.title,
+              p: AppTextStyles.body,
+              listBullet: AppTextStyles.body,
               blockSpacing: 12,
             ),
           );

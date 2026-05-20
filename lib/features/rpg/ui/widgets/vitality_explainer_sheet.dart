@@ -37,7 +37,6 @@ class VitalityExplainerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Semantics(
       // Cluster: semantics-identifier-pair-rule — explicitChildNodes:true
@@ -78,17 +77,14 @@ class VitalityExplainerSheet extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 l10n.vitalityExplainerTitle,
-                style: theme.textTheme.headlineSmall,
+                style: AppTextStyles.headline.copyWith(fontSize: 20),
               ),
               const SizedBox(height: 12),
-              Text(
-                l10n.vitalityExplainerDefinition,
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text(l10n.vitalityExplainerDefinition, style: AppTextStyles.body),
               const SizedBox(height: 16),
               Text(
                 l10n.vitalityExplainerHowItMoves,
-                style: theme.textTheme.titleSmall,
+                style: AppTextStyles.title.copyWith(fontSize: 14),
               ),
               const SizedBox(height: 8),
               _BandRow(
@@ -125,9 +121,7 @@ class VitalityExplainerSheet extends StatelessWidget {
                         padding: const EdgeInsets.all(14),
                         child: Text(
                           l10n.vitalityExplainerRankSafety,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: gold,
-                          ),
+                          style: AppTextStyles.body.copyWith(color: gold),
                         ),
                       ),
                     );
@@ -150,7 +144,6 @@ class _BandRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Row(
       children: [
         Container(
@@ -159,7 +152,7 @@ class _BandRow extends StatelessWidget {
           decoration: BoxDecoration(shape: BoxShape.circle, color: color),
         ),
         const SizedBox(width: 10),
-        Expanded(child: Text(copy, style: theme.textTheme.bodySmall)),
+        Expanded(child: Text(copy, style: AppTextStyles.bodySmall)),
       ],
     );
   }
