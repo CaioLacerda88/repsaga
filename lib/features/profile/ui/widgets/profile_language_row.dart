@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 import 'language_picker_sheet.dart';
@@ -36,14 +37,11 @@ class ProfileLanguageRow extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    l10n.language,
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  child: Text(l10n.language, style: AppTextStyles.title),
                 ),
                 Text(
                   displayName,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),

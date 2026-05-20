@@ -33,7 +33,6 @@ class ElapsedTimer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final elapsed = ref.watch(elapsedTimerProvider(startedAt));
 
     return Text(
@@ -42,12 +41,15 @@ class ElapsedTimer extends ConsumerWidget {
         loading: () => '00:00',
         error: (_, _) => '00:00',
       ),
-      style: theme.textTheme.bodyMedium?.copyWith(
+      // Elapsed timer reads as a continuously-updating numeric — Rajdhani
+      // tabular so the digits don't jitter on the second-by-second tick.
+      style: AppTextStyles.numeric.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
         // M7 (PR-5) — hotViolet for AA contrast on abyss (~5.9:1).
         // Do NOT swap back to `theme.colorScheme.primary` (primaryViolet)
         // without re-checking contrast against the active background.
         color: AppColors.hotViolet,
-        fontWeight: FontWeight.w600,
       ),
     );
   }

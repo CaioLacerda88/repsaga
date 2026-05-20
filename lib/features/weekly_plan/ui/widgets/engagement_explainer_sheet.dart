@@ -35,7 +35,6 @@ class EngagementExplainerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       child: Column(
@@ -55,7 +54,7 @@ class EngagementExplainerSheet extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(
+            style: AppTextStyles.title.copyWith(
               color: AppColors.textCream,
               fontWeight: FontWeight.w700,
             ),
@@ -63,7 +62,7 @@ class EngagementExplainerSheet extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             body,
-            style: theme.textTheme.bodyMedium?.copyWith(
+            style: AppTextStyles.body.copyWith(
               color: AppColors.textDim,
               height: 1.4,
             ),

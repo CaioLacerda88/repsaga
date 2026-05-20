@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 
 /// Tappable list tile used in the legal section of the profile settings
@@ -35,7 +36,7 @@ class LegalTile extends StatelessWidget {
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 12),
-              Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
+              Expanded(child: Text(title, style: AppTextStyles.title)),
               Icon(
                 Icons.chevron_right,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.3),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/connectivity/connectivity_provider.dart';
 import '../../core/offline/sync_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/radii.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -50,7 +51,8 @@ class SyncFailureCard extends ConsumerWidget {
                   children: [
                     Text(
                       label,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: AppTextStyles.title.copyWith(
+                        fontSize: 14,
                         color: theme.colorScheme.error,
                       ),
                     ),
@@ -59,7 +61,7 @@ class SyncFailureCard extends ConsumerWidget {
                       identifier: 'offline-failure-subtitle',
                       child: Text(
                         l10n.savedLocallyRetry,
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: AppTextStyles.bodySmall.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.65,
                           ),

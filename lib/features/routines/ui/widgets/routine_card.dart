@@ -68,7 +68,7 @@ class RoutineCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         _buildSubtitle(l10n),
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: AppTextStyles.body.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.6,
                           ),

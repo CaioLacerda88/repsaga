@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Shows a compact bottom sheet asking if the user wants to add
@@ -44,7 +45,7 @@ class _AddToPlanPromptContent extends StatelessWidget {
                 Expanded(
                   child: Text(
                     l10n.addToPlanPrompt(routineName),
-                    style: theme.textTheme.bodyLarge,
+                    style: AppTextStyles.body.copyWith(fontSize: 16),
                   ),
                 ),
               ],

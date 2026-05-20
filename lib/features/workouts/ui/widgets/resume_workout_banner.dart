@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../providers/workout_providers.dart';
 
 /// Prominent banner shown on the home screen when there is an active workout
@@ -64,15 +65,15 @@ class ResumeWorkoutBanner extends ConsumerWidget {
                   children: [
                     Text(
                       state.workout.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      style: AppTextStyles.title.copyWith(
+                        fontWeight: FontWeight.w700,
                         color: theme.colorScheme.onPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _formatDuration(elapsed),
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: AppTextStyles.bodySmall.copyWith(
                         color: theme.colorScheme.onPrimary.withValues(
                           alpha: 0.85,
                         ),

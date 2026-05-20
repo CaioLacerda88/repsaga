@@ -147,7 +147,6 @@ class _FirstSetAwakensBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -174,7 +173,7 @@ class _FirstSetAwakensBanner extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.firstSetAwakensCopy,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: AppColors.textCream,
                     fontStyle: FontStyle.italic,
                   ),
@@ -277,7 +276,6 @@ class _CharacterSheetError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
@@ -301,7 +299,7 @@ class _CharacterSheetError extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               l10n.error,
-              style: theme.textTheme.bodyMedium,
+              style: AppTextStyles.body,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),

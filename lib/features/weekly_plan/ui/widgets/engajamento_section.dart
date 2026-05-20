@@ -55,7 +55,6 @@ class EngajamentoSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
 
     // Shared max-scale: largest planned value across all 6 bars, so every
     // bar uses a consistent x-axis. Falls back to 1 so empty plans render
@@ -78,7 +77,8 @@ class EngajamentoSection extends StatelessWidget {
             children: [
               Text(
                 headerLabel,
-                style: theme.textTheme.titleSmall?.copyWith(
+                style: AppTextStyles.title.copyWith(
+                  fontSize: 14,
                   color: AppColors.textCream,
                   fontWeight: FontWeight.w700,
                 ),
@@ -161,8 +161,11 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dim = theme.textTheme.labelSmall?.copyWith(color: AppColors.textDim);
+    final dim = AppTextStyles.label.copyWith(
+      fontSize: 10,
+      letterSpacing: 0.12 * 10,
+      color: AppColors.textDim,
+    );
 
     Widget swatch(double opacity) => Container(
       width: 10,

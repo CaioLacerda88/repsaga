@@ -18,7 +18,6 @@ class SagaStubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -43,7 +42,8 @@ class SagaStubScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   l10n.comingSoonStub,
-                  style: theme.textTheme.bodyLarge?.copyWith(
+                  style: AppTextStyles.body.copyWith(
+                    fontSize: 16,
                     color: AppColors.textDim,
                   ),
                 ),

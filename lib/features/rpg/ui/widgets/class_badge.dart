@@ -93,7 +93,6 @@ class ClassBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final cls = characterClass;
 
@@ -142,7 +141,7 @@ class ClassBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: theme.textTheme.titleMedium?.copyWith(
+        style: AppTextStyles.title.copyWith(
           color: textColor,
           fontStyle: isStub ? FontStyle.italic : FontStyle.normal,
         ),

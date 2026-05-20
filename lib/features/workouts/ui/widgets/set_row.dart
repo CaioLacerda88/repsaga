@@ -702,9 +702,8 @@ class _SetNumberCell extends StatelessWidget {
                 // surface — aligning here minimizes surface change.
                 Text(
                   _localizedSetTypeAbbr(set.setType, l10n),
-                  style: theme.textTheme.labelSmall?.copyWith(
+                  style: AppTextStyles.label.copyWith(
                     fontSize: 9,
-                    fontWeight: FontWeight.w600,
                     letterSpacing: 1.2,
                     color: typeLabelColor,
                   ),
@@ -963,11 +962,10 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
             padding: const EdgeInsets.only(right: 4),
             child: Text(
               widget.weightUnit,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: unitColor,
+              style: AppTextStyles.label.copyWith(
                 fontSize: 10,
-                fontWeight: FontWeight.w600,
                 letterSpacing: 0.6,
+                color: unitColor,
               ),
             ),
           ),

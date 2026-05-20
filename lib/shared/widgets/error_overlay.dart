@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
 class ErrorOverlay extends StatelessWidget {
@@ -23,7 +24,7 @@ class ErrorOverlay extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
+              style: AppTextStyles.body.copyWith(fontSize: 16),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),

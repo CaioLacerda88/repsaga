@@ -129,7 +129,7 @@ class FinishBottomBar extends StatelessWidget {
                     child: Text(
                       AppLocalizations.of(context).finishWorkoutDisabledHint,
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: AppTextStyles.bodySmall.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.55,
                         ),

@@ -48,8 +48,6 @@ class BucketRoutineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -87,9 +85,10 @@ class BucketRoutineRow extends StatelessWidget {
             if (isDone && completionDayLabel != null) ...[
               Text(
                 completionDayLabel!,
-                style: theme.textTheme.labelSmall?.copyWith(
+                style: AppTextStyles.numeric.copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
                   color: AppColors.textDim,
-                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
               const SizedBox(width: 12),
@@ -164,7 +163,6 @@ class _SpontaneousTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       key: const ValueKey('bucket-row-spontaneous-tag'),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -174,9 +172,10 @@ class _SpontaneousTag extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: theme.textTheme.labelSmall?.copyWith(
+        style: AppTextStyles.label.copyWith(
+          fontSize: 10,
+          letterSpacing: 0.12 * 10,
           color: AppColors.hotViolet,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

@@ -32,7 +32,6 @@ class MuscleBarRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final donePct = maxScale > 0 ? doneSets / maxScale : 0.0;
     final plannedPct = maxScale > 0 ? plannedSets / maxScale : 0.0;
 
@@ -57,10 +56,10 @@ class MuscleBarRow extends StatelessWidget {
             width: 72,
             child: Text(
               name.toUpperCase(),
-              style: theme.textTheme.labelSmall?.copyWith(
+              style: AppTextStyles.label.copyWith(
                 fontSize: 10,
-                color: AppColors.textDim,
                 letterSpacing: 0.5,
+                color: AppColors.textDim,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -113,9 +112,9 @@ class MuscleBarRow extends StatelessWidget {
             child: Text(
               '$doneSets / $plannedSets',
               textAlign: TextAlign.right,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.textCream,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              style: AppTextStyles.numeric.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

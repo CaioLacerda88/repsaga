@@ -69,7 +69,6 @@ class _TrainedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
     final dotColor =
@@ -113,9 +112,10 @@ class _TrainedRow extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       _localizedName(entry.bodyPart, l10n).toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.textCream,
+                      style: AppTextStyles.label.copyWith(
+                        fontSize: 10,
                         letterSpacing: _nameLetterSpacing,
+                        color: AppColors.textCream,
                       ),
                     ),
                     const Spacer(),
@@ -199,7 +199,6 @@ class _UntrainedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     // Element-level alpha (0.4) instead of an Opacity wrapper — Opacity
     // creates a compositing layer that the InkWell splash paints THROUGH
@@ -236,9 +235,10 @@ class _UntrainedRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   _localizedName(entry.bodyPart, l10n).toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: dimmedTextDim,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 10,
                     letterSpacing: _nameLetterSpacing,
+                    color: dimmedTextDim,
                   ),
                 ),
                 const Spacer(),

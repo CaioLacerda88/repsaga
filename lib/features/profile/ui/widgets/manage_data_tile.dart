@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -28,10 +29,7 @@ class ManageDataTile extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    l10n.manageData,
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  child: Text(l10n.manageData, style: AppTextStyles.title),
                 ),
                 Icon(
                   Icons.chevron_right,

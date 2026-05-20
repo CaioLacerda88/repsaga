@@ -306,10 +306,7 @@ class _ExerciseCard extends StatelessWidget {
                   Semantics(
                     container: true,
                     identifier: 'create-routine-sets',
-                    child: Text(
-                      l10n.setsLabel,
-                      style: theme.textTheme.bodyMedium,
-                    ),
+                    child: Text(l10n.setsLabel, style: AppTextStyles.body),
                   ),
                   const Spacer(),
                   IconButton(
@@ -342,7 +339,7 @@ class _ExerciseCard extends StatelessWidget {
               Semantics(
                 container: true,
                 identifier: 'create-routine-rest',
-                child: Text(l10n.restLabel, style: theme.textTheme.bodyMedium),
+                child: Text(l10n.restLabel, style: AppTextStyles.body),
               ),
               const SizedBox(height: 8),
               Wrap(

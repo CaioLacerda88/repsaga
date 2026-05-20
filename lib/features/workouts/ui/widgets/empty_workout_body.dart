@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Empty-state body shown when the active workout has zero exercises.
@@ -33,14 +34,15 @@ class EmptyWorkoutBody extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).addFirstExercise,
-              style: theme.textTheme.titleLarge?.copyWith(
+              style: AppTextStyles.title.copyWith(
+                fontSize: 20,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               AppLocalizations.of(context).tapButtonToStart,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: AppTextStyles.body.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),

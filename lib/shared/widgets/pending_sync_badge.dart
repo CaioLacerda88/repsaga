@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/offline/pending_sync_provider.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/radii.dart';
 import '../../l10n/app_localizations.dart';
 import 'pending_sync_sheet.dart';
@@ -65,8 +66,9 @@ class PendingSyncBadge extends ConsumerWidget {
                           Expanded(
                             child: Text(
                               label,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
+                              style: AppTextStyles.label.copyWith(
+                                fontSize: 13,
+                                letterSpacing: 0.12 * 13,
                                 color: theme.colorScheme.onSurface,
                               ),
                             ),
