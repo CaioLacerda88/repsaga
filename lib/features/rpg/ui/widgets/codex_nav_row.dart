@@ -25,12 +25,11 @@ class CodexNavRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final inner = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: theme.textTheme.titleMedium)),
+          Expanded(child: Text(label, style: AppTextStyles.title)),
           const Icon(Icons.chevron_right, color: AppColors.textDim),
         ],
       ),

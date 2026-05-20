@@ -48,10 +48,7 @@ class ProfileSettingsScreen extends ConsumerWidget {
               Semantics(
                 container: true,
                 identifier: 'profile-heading',
-                child: Text(
-                  l10n.profile,
-                  style: theme.textTheme.headlineMedium,
-                ),
+                child: Text(l10n.profile, style: AppTextStyles.headline),
               ),
               const SizedBox(height: 24),
               // Identity card

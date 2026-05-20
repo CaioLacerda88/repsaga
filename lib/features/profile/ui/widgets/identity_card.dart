@@ -69,7 +69,9 @@ class IdentityCard extends StatelessWidget {
                               Flexible(
                                 child: Text(
                                   name,
-                                  style: theme.textTheme.titleLarge,
+                                  style: AppTextStyles.title.copyWith(
+                                    fontSize: 20,
+                                  ),
                                 ),
                               ),
                               if (onEditName != null) ...[
@@ -89,7 +91,7 @@ class IdentityCard extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             email,
-                            style: theme.textTheme.bodyMedium?.copyWith(
+                            style: AppTextStyles.body.copyWith(
                               color: theme.colorScheme.onSurface.withValues(
                                 alpha: 0.6,
                               ),

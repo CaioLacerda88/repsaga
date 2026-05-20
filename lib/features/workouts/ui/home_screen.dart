@@ -347,7 +347,7 @@ class _ConfirmBanner extends ConsumerWidget {
               Expanded(
                 child: Text(
                   AppLocalizations.of(context).samePlanThisWeek,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
                   ),
                 ),
@@ -417,7 +417,9 @@ class _HomeRoutinesList extends ConsumerWidget {
           children: [
             Text(
               AppLocalizations.of(context).myRoutines,
-              style: theme.textTheme.labelLarge?.copyWith(
+              style: AppTextStyles.label.copyWith(
+                fontSize: 13,
+                letterSpacing: 0.12 * 13,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
               ),
             ),
@@ -494,7 +496,9 @@ class _DefaultRoutinesPreview extends ConsumerWidget {
       children: [
         Text(
           AppLocalizations.of(context).homeStarterRoutinesLabel,
-          style: theme.textTheme.labelLarge?.copyWith(
+          style: AppTextStyles.label.copyWith(
+            fontSize: 13,
+            letterSpacing: 0.12 * 13,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
           ),
         ),

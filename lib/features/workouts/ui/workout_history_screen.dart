@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/workout.dart';
@@ -64,10 +65,7 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                l10n.failedToLoadHistory,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text(l10n.failedToLoadHistory, style: AppTextStyles.title),
               const SizedBox(height: 8),
               Semantics(
                 container: true,
@@ -144,7 +142,8 @@ class _EmptyHistoryBody extends StatelessWidget {
               identifier: 'history-empty',
               child: Text(
                 l10n.noWorkoutsYet,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: AppTextStyles.title.copyWith(
+                  fontSize: 20,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
@@ -152,7 +151,7 @@ class _EmptyHistoryBody extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               l10n.completedWorkoutsAppear,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: AppTextStyles.body.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
@@ -212,7 +211,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
                     children: [
                       Text(
                         workout.name,
-                        style: theme.textTheme.titleMedium,
+                        style: AppTextStyles.title,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (workout.exerciseSummary != null &&
@@ -220,7 +219,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           workout.exerciseSummary!,
-                          style: theme.textTheme.bodySmall?.copyWith(
+                          style: AppTextStyles.bodySmall.copyWith(
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.5,
                             ),
@@ -232,7 +231,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         durationText,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: AppTextStyles.body.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.6,
                           ),
@@ -243,7 +242,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
                 ),
                 Text(
                   dateText,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),

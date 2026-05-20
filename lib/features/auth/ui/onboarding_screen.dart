@@ -209,7 +209,7 @@ class _WelcomePage extends StatelessWidget {
                   identifier: 'onboarding-welcome',
                   child: Text(
                     l10n.onboardingHeadline,
-                    style: theme.textTheme.displayMedium?.copyWith(
+                    style: AppTextStyles.display.copyWith(
                       color: theme.colorScheme.primary,
                     ),
                     textAlign: TextAlign.center,
@@ -218,7 +218,8 @@ class _WelcomePage extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   l10n.onboardingSubtitle,
-                  style: theme.textTheme.bodyLarge?.copyWith(
+                  style: AppTextStyles.body.copyWith(
+                    fontSize: 16,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   textAlign: TextAlign.center,
@@ -287,13 +288,14 @@ class _ProfileSetupPage extends StatelessWidget {
           const SizedBox(height: 32),
           Text(
             l10n.setupProfile,
-            style: theme.textTheme.headlineLarge,
+            style: AppTextStyles.headline.copyWith(fontSize: 28),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             l10n.tellUsAboutYourself,
-            style: theme.textTheme.bodyLarge?.copyWith(
+            style: AppTextStyles.body.copyWith(
+              fontSize: 16,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
             textAlign: TextAlign.center,
@@ -309,7 +311,7 @@ class _ProfileSetupPage extends StatelessWidget {
             semanticsIdentifier: 'onboarding-display-name',
           ),
           const SizedBox(height: 24),
-          Text(l10n.fitnessLevel, style: theme.textTheme.titleMedium),
+          Text(l10n.fitnessLevel, style: AppTextStyles.title),
           const SizedBox(height: 12),
           // BUG-028: branded pill replacement for the previous M3 ChoiceChip.
           // Uses surface2 (idle) → hotViolet (selected) per Arcane Ascent
@@ -332,11 +334,11 @@ class _ProfileSetupPage extends StatelessWidget {
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text(l10n.howOftenTrain, style: theme.textTheme.titleMedium),
+          Text(l10n.howOftenTrain, style: AppTextStyles.title),
           const SizedBox(height: 4),
           Text(
             l10n.weeklyGoalHint,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: AppTextStyles.bodySmall.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
             ),
           ),

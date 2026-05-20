@@ -35,7 +35,7 @@ class ExerciseDescriptionSection extends StatelessWidget {
           description!,
           // P9: body prose at full opacity — the description is not
           // metadata, it's primary content.
-          style: theme.textTheme.bodyMedium?.copyWith(color: onSurface),
+          style: AppTextStyles.body.copyWith(color: onSurface),
         ),
       ],
     );
@@ -104,9 +104,7 @@ class ExerciseFormTipsSection extends StatelessWidget {
                 Expanded(
                   child: Text(
                     tips[index],
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: onSurface,
-                    ),
+                    style: AppTextStyles.body.copyWith(color: onSurface),
                   ),
                 ),
               ],

@@ -21,7 +21,6 @@ class DormantCardioRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Container(
       height: 56,
@@ -62,8 +61,7 @@ class DormantCardioRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   l10n.dormantCardioCopy,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textDim,
+                  style: AppTextStyles.bodySmall.copyWith(
                     fontStyle: FontStyle.italic,
                   ),
                   maxLines: 1,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/format/number_format.dart';
 import '../../../../core/format/weight_unit.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../features/auth/providers/auth_providers.dart';
@@ -58,12 +59,12 @@ class BodyweightRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     l10n.profileBodyweightLabel,
-                    style: theme.textTheme.titleMedium,
+                    style: AppTextStyles.title,
                   ),
                 ),
                 Text(
                   subtitle,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
@@ -251,12 +252,12 @@ class _BodyweightEditorSheetState extends ConsumerState<BodyweightEditorSheet> {
             children: [
               Text(
                 l10n.profileBodyweightLabel,
-                style: theme.textTheme.titleLarge,
+                style: AppTextStyles.title.copyWith(fontSize: 20),
               ),
               const SizedBox(height: 8),
               Text(
                 l10n.profileBodyweightHelper,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: AppTextStyles.body.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                 ),
               ),

@@ -47,7 +47,6 @@ class _ExerciseListScreenState extends ConsumerState<ExerciseListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final exercises = ref.watch(filteredExerciseListProvider);
 
@@ -62,7 +61,7 @@ class _ExerciseListScreenState extends ConsumerState<ExerciseListScreen> {
                 identifier: 'exercise-list-heading',
                 child: Text(
                   l10n.exercises,
-                  style: theme.textTheme.headlineLarge,
+                  style: AppTextStyles.headline.copyWith(fontSize: 28),
                 ),
               ),
             ),

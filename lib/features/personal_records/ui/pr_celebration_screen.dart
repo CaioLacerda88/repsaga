@@ -275,14 +275,15 @@ class _PRCelebrationScreenState extends ConsumerState<PRCelebrationScreen>
           identifier: 'pr-first-workout',
           child: Text(
             l10n.firstWorkoutComplete,
-            style: theme.textTheme.headlineLarge,
+            style: AppTextStyles.headline.copyWith(fontSize: 28),
             textAlign: TextAlign.center,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           l10n.startingBenchmarks,
-          style: theme.textTheme.bodyLarge?.copyWith(
+          style: AppTextStyles.body.copyWith(
+            fontSize: 16,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
           textAlign: TextAlign.center,
@@ -312,10 +313,10 @@ class _PRCelebrationScreenState extends ConsumerState<PRCelebrationScreen>
             child: Text(
               l10n.newPrHeading,
               // Phase 28a forbid-w900 gate: dropped `fontWeight: w900`.
-              // displayMedium is already Rajdhani 700 (the heaviest weight
-              // bundled in pubspec.yaml > flutter.fonts); w900 was a silent
-              // nearest-match to w700 at runtime.
-              style: theme.textTheme.displayMedium?.copyWith(
+              // [AppTextStyles.display] is already Rajdhani 700 (the heaviest
+              // weight bundled in pubspec.yaml > flutter.fonts); w900 was a
+              // silent nearest-match to w700 at runtime.
+              style: AppTextStyles.display.copyWith(
                 color: theme.colorScheme.primary,
                 shadows: [
                   Shadow(
@@ -367,7 +368,10 @@ class _ExerciseRecordGroup extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(exerciseName, style: theme.textTheme.titleLarge),
+            Text(
+              exerciseName,
+              style: AppTextStyles.title.copyWith(fontSize: 20),
+            ),
             const SizedBox(height: 8),
             ...records.map(
               (r) => Padding(
@@ -382,14 +386,14 @@ class _ExerciseRecordGroup extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       r.recordType.localizedName(AppLocalizations.of(context)),
-                      style: theme.textTheme.bodyMedium,
+                      style: AppTextStyles.body,
                     ),
                     const Spacer(),
+                    // PR benchmark value — Rajdhani 700 tabular (numeric
+                    // register) since the formatted string is mostly numeral.
                     Text(
                       formatValue(r),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTextStyles.numeric.copyWith(fontSize: 16),
                     ),
                   ],
                 ),
@@ -431,12 +435,12 @@ class _AnimatedRecordCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(exerciseName, style: theme.textTheme.titleMedium),
+                  Text(exerciseName, style: AppTextStyles.title),
                   Text(
                     record.recordType.localizedName(
                       AppLocalizations.of(context),
                     ),
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: AppTextStyles.body.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),

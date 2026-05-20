@@ -113,7 +113,6 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final asyncExercise = ref.watch(exerciseByIdProvider(widget.exerciseId));
 
     final l10n = AppLocalizations.of(context);
@@ -131,7 +130,10 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(l10n.failedToLoadExercise, style: theme.textTheme.bodyLarge),
+              Text(
+                l10n.failedToLoadExercise,
+                style: AppTextStyles.body.copyWith(fontSize: 16),
+              ),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () =>
@@ -191,7 +193,10 @@ class _ExerciseDetailBody extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(exercise.name, style: theme.textTheme.headlineLarge),
+          Text(
+            exercise.name,
+            style: AppTextStyles.headline.copyWith(fontSize: 28),
+          ),
           if (!exercise.isDefault) ...[
             const SizedBox(height: 4),
             Semantics(
@@ -364,7 +369,7 @@ class _ExerciseImageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final labelStyle = theme.textTheme.bodySmall?.copyWith(
+    final labelStyle = AppTextStyles.bodySmall.copyWith(
       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
     );
 
@@ -477,7 +482,7 @@ class _PRSection extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Text(
                       r.recordType.localizedName(l10n),
-                      style: theme.textTheme.bodyMedium,
+                      style: AppTextStyles.body,
                     ),
                     const Spacer(),
                     Text(
@@ -505,7 +510,7 @@ class _PRSection extends ConsumerWidget {
         const SizedBox(width: 4),
         Text(
           l10n.noRecordsYet,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: AppTextStyles.body.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
           ),
         ),

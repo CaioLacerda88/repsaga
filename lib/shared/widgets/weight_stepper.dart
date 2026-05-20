@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/format/number_format.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/dialog_button_style.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -262,7 +263,9 @@ class _WeightStepperState extends State<WeightStepper> {
                       child: Text(
                         formatted,
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.headlineSmall?.copyWith(
+                        // Weight value — Rajdhani 700 tabular (the load-bearing
+                        // numeral the lifter glances at between sets).
+                        style: AppTextStyles.numeric.copyWith(
                           fontSize: 26,
                           fontWeight: widget.valueFontWeight ?? FontWeight.w700,
                           color: widget.valueColor ?? theme.colorScheme.primary,

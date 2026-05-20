@@ -86,7 +86,6 @@ class _VitalityTableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     // Phase 26c (Task 6): the percentage numeral colors by the HP-drain ramp
     // (vitalityHigh/Mid/Low) — the conditioning signal — while the chip-form
@@ -146,7 +145,7 @@ class _VitalityTableRow extends StatelessWidget {
                     children: [
                       Text(
                         localizedName,
-                        style: theme.textTheme.titleSmall,
+                        style: AppTextStyles.title.copyWith(fontSize: 14),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -154,9 +153,7 @@ class _VitalityTableRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           stateCopy,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textDim,
-                          ),
+                          style: AppTextStyles.bodySmall,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

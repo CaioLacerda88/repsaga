@@ -368,10 +368,11 @@ class _HeroBanner extends StatelessWidget {
                             container: true,
                             child: Text(
                               label,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: mutedColor,
+                              style: AppTextStyles.label.copyWith(
+                                fontSize: 10,
                                 letterSpacing: 1.2,
                                 fontWeight: FontWeight.w700,
+                                color: mutedColor,
                               ),
                             ),
                           ),
@@ -396,7 +397,7 @@ class _HeroBanner extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               subline!,
-                              style: theme.textTheme.bodySmall?.copyWith(
+                              style: AppTextStyles.bodySmall.copyWith(
                                 color: mutedColor,
                               ),
                               overflow: TextOverflow.ellipsis,

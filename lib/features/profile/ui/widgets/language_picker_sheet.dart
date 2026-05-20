@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/l10n/locale_provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -23,7 +24,6 @@ class LanguagePickerSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final currentLocale = ref.watch(localeProvider);
 
@@ -37,7 +37,10 @@ class LanguagePickerSheet extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.language, style: theme.textTheme.titleLarge),
+              Text(
+                l10n.language,
+                style: AppTextStyles.title.copyWith(fontSize: 20),
+              ),
               const SizedBox(height: 16),
               for (final option in _options) ...[
                 _LanguageTile(
@@ -89,10 +92,7 @@ class _LanguageTile extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    option.displayName,
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  child: Text(option.displayName, style: AppTextStyles.title),
                 ),
                 if (isSelected)
                   Icon(Icons.check, color: theme.colorScheme.primary, size: 20),

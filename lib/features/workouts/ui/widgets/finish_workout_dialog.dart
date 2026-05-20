@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -65,7 +66,7 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
                 Expanded(
                   child: Text(
                     l10n.incompleteSetsWarning(widget.incompleteCount),
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: AppTextStyles.body.copyWith(
                       color: theme.colorScheme.error,
                     ),
                   ),

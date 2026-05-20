@@ -17,7 +17,6 @@ class ActiveTitlePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final t = title;
     if (t == null || t.isEmpty) return const SizedBox.shrink();
 
@@ -42,9 +41,7 @@ class ActiveTitlePill extends StatelessWidget {
           t,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: AppColors.hotViolet,
-          ),
+          style: AppTextStyles.label.copyWith(color: AppColors.hotViolet),
         ),
       ),
     );

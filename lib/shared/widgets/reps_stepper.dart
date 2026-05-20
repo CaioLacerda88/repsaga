@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/dialog_button_style.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -172,7 +173,9 @@ class _RepsStepperState extends State<RepsStepper> {
                     child: Text(
                       widget.value.toString(),
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.titleLarge?.copyWith(
+                      // Reps numeral — Rajdhani 700 tabular. Tabular figures
+                      // pinned via the canonical [AppTextStyles.numeric].
+                      style: AppTextStyles.numeric.copyWith(
                         fontSize: 18,
                         fontWeight: widget.valueFontWeight ?? FontWeight.w700,
                         color: widget.valueColor ?? theme.colorScheme.onSurface,

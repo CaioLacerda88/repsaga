@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../routines/models/routine.dart';
@@ -148,14 +149,14 @@ class _AddRoutinesSheetState extends State<AddRoutinesSheet> {
                     identifier: 'weekly-plan-add-sheet-title',
                     child: Text(
                       l10n.addRoutinesSheet,
-                      style: theme.textTheme.titleLarge,
+                      style: AppTextStyles.title.copyWith(fontSize: 20),
                     ),
                   ),
                   const Spacer(),
                   if (widget.availableRoutines.isEmpty)
                     Text(
                       l10n.allRoutinesInPlan,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: AppTextStyles.bodySmall.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.55,
                         ),
@@ -268,9 +269,9 @@ class _CreateNewRoutineRow extends StatelessWidget {
             icon: Icon(Icons.add, size: 18, color: theme.colorScheme.primary),
             label: Text(
               l10n.createNewRoutine,
-              style: theme.textTheme.titleSmall?.copyWith(
+              style: AppTextStyles.title.copyWith(
+                fontSize: 14,
                 color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -299,10 +300,7 @@ class _EmptyStateCreateNew extends StatelessWidget {
         icon: Icon(Icons.add, color: theme.colorScheme.primary),
         label: Text(
           l10n.createNewRoutine,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.title.copyWith(color: theme.colorScheme.primary),
         ),
       ),
     );
@@ -342,15 +340,10 @@ class _RoutineSelectTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        routine.name,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Text(routine.name, style: AppTextStyles.title),
                       Text(
                         l10n.exercisesCount(routine.exercises.length),
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: AppTextStyles.bodySmall.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.55,
                           ),

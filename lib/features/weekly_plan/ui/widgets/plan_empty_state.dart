@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Empty-state placeholder shown on the plan management screen when the
@@ -35,7 +36,8 @@ class PlanEmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             l10n.noRoutinesPlanned,
-            style: theme.textTheme.bodyLarge?.copyWith(
+            style: AppTextStyles.body.copyWith(
+              fontSize: 16,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
             ),
           ),

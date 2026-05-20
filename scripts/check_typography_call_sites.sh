@@ -11,7 +11,7 @@
 # literals is `lib/core/theme/app_theme.dart`; every other call site
 # MUST route through `AppTextStyles.*` (or `.copyWith(...)` on one).
 #
-# Gates (Phase 28a):
+# Gates (Phase 28a + 28b):
 #   1. Raw `TextStyle(... fontFamily: 'Rajdhani' ...)` outside app_theme.dart
 #   2. Raw `TextStyle(... fontFamily: 'Inter' ...)` outside app_theme.dart
 #   3. `FontWeight.w800` / `FontWeight.w900` anywhere in `lib/` — these
@@ -27,6 +27,14 @@
 #      `lib/main.dart` and `lib/core/theme/app_theme.dart`. Importing
 #      the package re-introduces the async-loading vector even if the
 #      file doesn't currently call `GoogleFonts.*`.
+#   6. `theme.textTheme.*` / `Theme.of(context).textTheme.*` in
+#      `lib/features/` + `lib/shared/` (Phase 28b). App code routes
+#      typography through `AppTextStyles.*` directly. The narrow
+#      `_textTheme` Material-widget compat shim in `app_theme.dart` exists
+#      ONLY so Flutter's internal Material widgets (Dialog/SnackBar/
+#      InputDecoration/ListTile/Chip/NavigationBar/PopupMenuItem) inherit
+#      a brand-consistent style. Any direct `textTheme.*` read in app code
+#      regresses the locked typography contract.
 #
 # Why: this is the sixth typography sweep on this branch family
 # (Phase 27 L15 → L17 → 378a4c3 → L18.2 → L18.4 → Phase 28a). Each sweep
@@ -180,8 +188,38 @@ if [ -n "$HITS_GF_IMPORT" ]; then
   echo
 fi
 
+# ─── Gate 6: `theme.textTheme.*` / `Theme.of(context).textTheme.*` ──
+#
+# Scope is `lib/features/` + `lib/shared/`. The narrow `_textTheme` shim
+# in `lib/core/theme/app_theme.dart` exists for Flutter's internal
+# Material widget defaults only (Dialog/SnackBar/InputDecoration/
+# ListTile/Chip/NavigationBar/PopupMenuItem). App code MUST route
+# typography through `AppTextStyles.*` directly so the call-site contract
+# is enforceable from one place.
+HITS_TEXTTHEME=$(
+  grep -rEn "theme\.textTheme\.|Theme\.of\(context\)\.textTheme\." \
+    lib/features lib/shared --include='*.dart' \
+    | grep -vE "^[^:]+:[0-9]+:(\s*//|.*//[^'\"]*theme\.textTheme\.)" \
+    || true
+)
+
+if [ -n "$HITS_TEXTTHEME" ]; then
+  FAILED=1
+  echo "check_typography_call_sites: theme.textTheme.* in lib/features+lib/shared"
+  echo
+  echo "App code reads typography through \`AppTextStyles.*\` directly."
+  echo "The narrow \`_textTheme\` shim in \`app_theme.dart\` is for Flutter's"
+  echo "internal Material widget inheritance ONLY. Migrate the call site to"
+  echo "the corresponding AppTextStyles token (see the dartdoc for the"
+  echo "size/weight/letterSpacing override pattern)."
+  echo
+  echo "Violations:"
+  echo "$HITS_TEXTTHEME"
+  echo
+fi
+
 if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 
-echo "check_typography_call_sites: clean (0 raw 'Rajdhani'/'Inter' literals; 0 FontWeight.w800/w900; 0 GoogleFonts.* calls; 0 stray google_fonts imports)."
+echo "check_typography_call_sites: clean (0 raw 'Rajdhani'/'Inter' literals; 0 FontWeight.w800/w900; 0 GoogleFonts.* calls; 0 stray google_fonts imports; 0 theme.textTheme.* reads in app code)."

@@ -156,7 +156,6 @@ class _CreateExerciseScreenState extends ConsumerState<CreateExerciseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
@@ -187,7 +186,7 @@ class _CreateExerciseScreenState extends ConsumerState<CreateExerciseScreen> {
                   },
                 ),
                 const SizedBox(height: 24),
-                Text(l10n.muscleGroup, style: theme.textTheme.titleMedium),
+                Text(l10n.muscleGroup, style: AppTextStyles.title),
                 const SizedBox(height: 12),
                 _SelectableGrid<MuscleGroup>(
                   values: MuscleGroup.values,
@@ -198,7 +197,7 @@ class _CreateExerciseScreenState extends ConsumerState<CreateExerciseScreen> {
                   semanticPrefix: l10n.muscleGroupSemanticsPrefix,
                 ),
                 const SizedBox(height: 24),
-                Text(l10n.equipmentType, style: theme.textTheme.titleMedium),
+                Text(l10n.equipmentType, style: AppTextStyles.title),
                 const SizedBox(height: 12),
                 _SelectableGrid<EquipmentType>(
                   values: EquipmentType.values,

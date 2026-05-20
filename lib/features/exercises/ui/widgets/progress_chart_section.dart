@@ -211,7 +211,7 @@ class _ChartBody extends StatelessWidget {
             identifier: 'exercise-detail-chart-empty',
             child: Text(
               AppLocalizations.of(context).logFirstSetToTrack,
-              style: theme.textTheme.bodyMedium?.copyWith(color: onSurface70),
+              style: AppTextStyles.body.copyWith(color: onSurface70),
               textAlign: TextAlign.center,
             ),
           ),
@@ -394,7 +394,7 @@ class _TrendRow extends StatelessWidget {
             Expanded(
               child: Text(
                 trendText,
-                style: theme.textTheme.bodyMedium?.copyWith(color: trendColor),
+                style: AppTextStyles.body.copyWith(color: trendColor),
               ),
             ),
             const SizedBox(width: 8),
@@ -441,7 +441,10 @@ class _TrendRow extends StatelessWidget {
                   foregroundColor: theme.colorScheme.onSurface.withValues(
                     alpha: 0.70,
                   ),
-                  textStyle: theme.textTheme.labelSmall,
+                  textStyle: AppTextStyles.label.copyWith(
+                    fontSize: 10,
+                    letterSpacing: 0.12 * 10,
+                  ),
                 ),
                 child: Text(metricLabel),
               ),
@@ -563,7 +566,9 @@ class _LineChart extends StatelessWidget {
                       locale: locale,
                       unit: weightUnit,
                     ),
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    style: AppTextStyles.numeric.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                       color: onSurface.withValues(alpha: 0.55),
                     ),
                   ),
@@ -594,7 +599,9 @@ class _LineChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     AppDateFormat.monthDay(points[i].date, locale: locale),
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: 10,
+                      letterSpacing: 0.12 * 10,
                       color: onSurface.withValues(alpha: 0.55),
                     ),
                   ),

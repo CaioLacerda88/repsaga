@@ -77,7 +77,6 @@ class RoutineChip extends StatelessWidget {
   }
 
   Widget _buildNext(BuildContext context) {
-    final theme = Theme.of(context);
     final hasExerciseCount = exerciseCount != null && exerciseCount! > 0;
 
     return Material(
@@ -104,11 +103,12 @@ class RoutineChip extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
+                // Sequence numeral — Rajdhani 700 tabular.
                 child: Text(
                   '$sequenceNumber',
-                  style: theme.textTheme.labelSmall?.copyWith(
+                  style: AppTextStyles.numeric.copyWith(
+                    fontSize: 12,
                     color: AppColors.abyss,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -120,7 +120,7 @@ class RoutineChip extends StatelessWidget {
                   children: [
                     Text(
                       routineName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: AppTextStyles.body.copyWith(
                         color: AppColors.abyss,
                         fontWeight: FontWeight.w600,
                       ),
@@ -132,7 +132,7 @@ class RoutineChip extends StatelessWidget {
                         AppLocalizations.of(
                           context,
                         ).exercisesCount(exerciseCount!),
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.abyss.withValues(alpha: 0.54),
                           fontSize: 11,
                         ),
@@ -148,7 +148,6 @@ class RoutineChip extends StatelessWidget {
   }
 
   Widget _buildRemaining(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       color: _cardColor,
       borderRadius: BorderRadius.circular(kRadiusLg),
@@ -178,9 +177,9 @@ class RoutineChip extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Text(
                   '$sequenceNumber',
-                  style: theme.textTheme.labelSmall?.copyWith(
+                  style: AppTextStyles.numeric.copyWith(
+                    fontSize: 11,
                     color: AppColors.textCream.withValues(alpha: 0.55),
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -188,7 +187,7 @@ class RoutineChip extends StatelessWidget {
               Flexible(
                 child: Text(
                   routineName,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.body.copyWith(
                     color: AppColors.textCream.withValues(alpha: 0.55),
                     fontWeight: FontWeight.w600,
                   ),

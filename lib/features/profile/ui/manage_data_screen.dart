@@ -392,14 +392,15 @@ class _ResetAllDialogState extends State<_ResetAllDialog> {
               const SizedBox(height: 24),
               Text(
                 l10n.resetAccountWarning,
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style: AppTextStyles.body.copyWith(
+                  fontSize: 16,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                 ),
               ),
               const SizedBox(height: 32),
               Text(
                 l10n.typeResetToConfirm,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: AppTextStyles.body.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
@@ -506,14 +507,15 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               const SizedBox(height: 24),
               Text(
                 l10n.deleteAccountWarning,
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style: AppTextStyles.body.copyWith(
+                  fontSize: 16,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                 ),
               ),
               const SizedBox(height: 32),
               Text(
                 l10n.typeDeleteToConfirm,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: AppTextStyles.body.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),

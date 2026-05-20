@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../exercises/models/exercise.dart';
@@ -91,7 +92,10 @@ class _SheetBodyState extends ConsumerState<_SheetBody> {
           // Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(l10n.addExercise, style: theme.textTheme.titleLarge),
+            child: Text(
+              l10n.addExercise,
+              style: AppTextStyles.title.copyWith(fontSize: 20),
+            ),
           ),
           const SizedBox(height: 12),
 
@@ -147,7 +151,7 @@ class _SheetBodyState extends ConsumerState<_SheetBody> {
                 child: Center(
                   child: Text(
                     l10n.failedToLoadExercises,
-                    style: theme.textTheme.bodyLarge,
+                    style: AppTextStyles.body.copyWith(fontSize: 16),
                   ),
                 ),
               ),
@@ -171,7 +175,7 @@ class _SheetBodyState extends ConsumerState<_SheetBody> {
                             const SizedBox(height: 16),
                             Text(
                               l10n.noExercisesFound,
-                              style: theme.textTheme.bodyLarge,
+                              style: AppTextStyles.body.copyWith(fontSize: 16),
                             ),
                             const SizedBox(height: 16),
                             FilledButton.icon(
@@ -271,7 +275,7 @@ class _ExercisePickerTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         contentPadding: EdgeInsets.zero,
-        title: Text(exercise.name, style: theme.textTheme.titleMedium),
+        title: Text(exercise.name, style: AppTextStyles.title),
         subtitle: Row(
           children: [
             _Badge(label: exercise.muscleGroup.localizedName(l10n)),
@@ -303,10 +307,7 @@ class _Badge extends StatelessWidget {
         color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        label,
-        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
-      ),
+      child: Text(label, style: AppTextStyles.bodySmall),
     );
   }
 }

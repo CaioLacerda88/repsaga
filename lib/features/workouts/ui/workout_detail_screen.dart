@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/number_format.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/reward_accent.dart';
@@ -36,10 +37,7 @@ class WorkoutDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                l10n.failedToLoadWorkout,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text(l10n.failedToLoadWorkout, style: AppTextStyles.title),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () =>
@@ -92,7 +90,7 @@ class _WorkoutDetailBody extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 '$dateText  ·  $durationText',
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: AppTextStyles.body.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
@@ -123,11 +121,11 @@ class _WorkoutDetailBody extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(l10n.notes, style: theme.textTheme.titleMedium),
+                      Text(l10n.notes, style: AppTextStyles.title),
                       const SizedBox(height: 8),
                       Text(
                         workout.notes!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: AppTextStyles.body.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.7,
                           ),
@@ -160,7 +158,7 @@ class _WorkoutDetailBody extends ConsumerWidget {
                       locale: locale,
                     ),
                   ),
-                  style: theme.textTheme.titleMedium?.copyWith(
+                  style: AppTextStyles.title.copyWith(
                     color: theme.colorScheme.primary,
                   ),
                 ),
@@ -201,7 +199,7 @@ class _ReadOnlyExerciseCard extends ConsumerWidget {
           children: [
             Text(
               exercise.exercise?.name ?? l10n.exerciseGeneric,
-              style: theme.textTheme.titleMedium,
+              style: AppTextStyles.title,
             ),
             if (sets.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -231,10 +229,12 @@ class _SetColumnHeaders extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final style = theme.textTheme.bodyMedium?.copyWith(
+    // Data-table eyebrow: 11dp tracked label. Drop tracking very slightly
+    // (0.6 vs the default 0.12em) — see _SetColumnHeaders in
+    // `exercise_card.dart` for the same kerning constraint at 360dp.
+    final style = AppTextStyles.label.copyWith(
+      letterSpacing: 0.6,
       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
     );
 
     return Padding(
@@ -298,7 +298,12 @@ class _ReadOnlySetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textStyle = theme.textTheme.bodyMedium;
+    // Set-number cell — Inter body register (set number used as label, not
+    // as a glanced-at performance datum here since the row reads as a list
+    // entry, not a live stepper). Weight + reps cells route to the numeric
+    // (Rajdhani 700 tabular) register so the column reads as data.
+    final labelStyle = AppTextStyles.body;
+    final dataStyle = AppTextStyles.numeric.copyWith(fontSize: 14);
     final locale = Localizations.localeOf(context).languageCode;
     final weightText = set.weight == null
         ? '- $weightUnit'
@@ -320,7 +325,7 @@ class _ReadOnlySetRow extends StatelessWidget {
                   )
                 : Text(
                     '${set.setNumber}.',
-                    style: textStyle?.copyWith(
+                    style: labelStyle.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
@@ -328,14 +333,14 @@ class _ReadOnlySetRow extends StatelessWidget {
           Expanded(
             child: Text(
               weightText,
-              style: textStyle,
+              style: dataStyle,
               textAlign: TextAlign.center,
             ),
           ),
           Expanded(
             child: Text(
               '${set.reps ?? '-'}',
-              style: textStyle,
+              style: dataStyle,
               textAlign: TextAlign.center,
             ),
           ),
@@ -350,10 +355,9 @@ class _ReadOnlySetRow extends StatelessWidget {
                 ),
                 child: Text(
                   _typeLabel(AppLocalizations.of(context)),
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: AppTextStyles.label.copyWith(
                     color: _typeColor(theme),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
+                    letterSpacing: 0.6,
                   ),
                 ),
               ),

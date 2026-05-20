@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
 /// A banner shown at the top of the app when the device is offline.
@@ -39,7 +40,7 @@ class OfflineBanner extends StatelessWidget {
             Flexible(
               child: Text(
                 l10n.offlineBanner,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: AppTextStyles.bodySmall.copyWith(
                   color: colorScheme.onErrorContainer,
                 ),
                 maxLines: 1,

@@ -516,7 +516,7 @@ class _ExerciseCardHeader extends ConsumerWidget {
                         Flexible(
                           child: Text(
                             exercise?.name ?? l10n.exerciseGeneric,
-                            style: theme.textTheme.titleMedium,
+                            style: AppTextStyles.title,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -692,7 +692,7 @@ class _FillRemainingButton extends StatelessWidget {
           onPressed: onPressed,
           child: Text(
             l10n.fillRemaining,
-            style: theme.textTheme.bodyMedium?.copyWith(
+            style: AppTextStyles.body.copyWith(
               color: theme.colorScheme.primary.withValues(alpha: 0.7),
               fontWeight: FontWeight.w600,
             ),
@@ -714,10 +714,14 @@ class _SetColumnHeaders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = theme.textTheme.bodyMedium?.copyWith(
+    // Column headers (SET/WEIGHT/REPS) are the data-table eyebrow register —
+    // 11dp tracked label. Drop tracking very slightly vs the default label
+    // token (0.6 instead of 1.32) because these run in a tight three-column
+    // table where the standard 0.12em eyebrow spacing was kerning past the
+    // column width on 360dp Brazilian-mid-market screens.
+    final style = AppTextStyles.label.copyWith(
+      letterSpacing: 0.6,
       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
     );
 
     // Phase 20 commit 2: column widths mirror the new SetRow geometry —
@@ -817,7 +821,7 @@ class _ExerciseDetailSheet extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 children: [
                   // Exercise name
-                  Text(exercise.name, style: theme.textTheme.headlineMedium),
+                  Text(exercise.name, style: AppTextStyles.headline),
                   const SizedBox(height: 12),
                   // Muscle group + equipment chips
                   Wrap(
@@ -857,7 +861,7 @@ class _ExerciseDetailSheet extends ConsumerWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     l10n.imageStart,
-                                    style: theme.textTheme.bodySmall?.copyWith(
+                                    style: AppTextStyles.bodySmall.copyWith(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
                                     ),
@@ -883,7 +887,7 @@ class _ExerciseDetailSheet extends ConsumerWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     l10n.imageEnd,
-                                    style: theme.textTheme.bodySmall?.copyWith(
+                                    style: AppTextStyles.bodySmall.copyWith(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
                                     ),
@@ -943,9 +947,7 @@ class _SheetChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1002,7 +1004,7 @@ class _SheetPRSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.personalRecords, style: theme.textTheme.titleMedium),
+            Text(l10n.personalRecords, style: AppTextStyles.title),
             const SizedBox(height: 8),
             ...filtered.map(
               (r) => Padding(
@@ -1016,14 +1018,14 @@ class _SheetPRSection extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       r.recordType.localizedName(l10n),
-                      style: theme.textTheme.bodyMedium,
+                      style: AppTextStyles.body,
                     ),
                     const Spacer(),
+                    // PR value — Rajdhani 700 tabular (numeric register) since
+                    // the formatted string is mostly the numeral with a unit.
                     Text(
                       _formatValue(r.recordType, r.value, l10n),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTextStyles.numeric.copyWith(fontSize: 16),
                     ),
                   ],
                 ),
@@ -1047,7 +1049,7 @@ class _SheetPRSection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Text(
         l10n.noRecordsYet,
-        style: theme.textTheme.bodyMedium?.copyWith(
+        style: AppTextStyles.body.copyWith(
           color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
           fontStyle: FontStyle.italic,
         ),

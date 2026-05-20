@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Result of the resume workout dialog.
@@ -157,18 +158,13 @@ class ResumeWorkoutDialog extends StatelessWidget {
           ? Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(
-                    text: '"$workoutName"',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  TextSpan(text: '"$workoutName"', style: AppTextStyles.title),
                   const TextSpan(text: '\n'),
                   TextSpan(
                     text: l10n.workoutInterrupted(
                       formatResumeAge(startedAt, effectiveNow, l10n: l10n),
                     ),
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: AppTextStyles.body.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),

@@ -115,11 +115,17 @@ class AppColors {
 
 /// Typography tokens for the app, layered on top of the Material `TextTheme`.
 ///
-/// Two families: Rajdhani (display/headline/numeric) and Inter (title/body/
-/// label). Rajdhani is a condensed humanist sans that scans fast under gym
-/// fatigue at 18+ dp; Inter covers paragraph readability below 16 dp.
+/// Three families: Rajdhani (display/headline/numeric/celebration), Barlow
+/// (title/body/bodySmall), and Barlow Condensed (label/sectionHeader). Phase
+/// 28b swapped the body tier from Inter to Barlow — Inter is retained in
+/// pubspec.fonts only as a passive fallback during rollout and will be
+/// removed in a follow-up cleanup. Rajdhani is a condensed humanist sans
+/// that scans fast under gym fatigue at 18+ dp; Barlow covers paragraph
+/// readability below 16 dp with a slightly warmer rhythm than Inter;
+/// Barlow Condensed picks up Rajdhani's verticality at micro-copy size for
+/// the uppercase tracked eyebrow / chip / section-header tier.
 ///
-/// **Loading contract (Phase 27 L14):** both families are bundled via
+/// **Loading contract (Phase 27 L14):** all three families are bundled via
 /// `pubspec.yaml > flutter.fonts:` and read here through direct
 /// `TextStyle(fontFamily: ...)` calls — NOT via the `google_fonts` package's
 /// async API. The package's asset-manifest lookup was silently falling back
@@ -168,7 +174,7 @@ class AppTextStyles {
     color: AppColors.textCream,
   );
 
-  /// Inter 600 — list-item titles, card sub-titles.
+  /// Barlow 600 — list-item titles, card sub-titles.
   ///
   /// **Routine names use [titleDisplay] instead** (the Rajdhani variant).
   /// See the dartdoc on [titleDisplay] for the design-language rationale
@@ -180,8 +186,10 @@ class AppTextStyles {
   /// **Not for:** action surfaces where the row IS the daily-driver CTA
   /// (use [titleDisplay]); numerals embedded in a value role (use
   /// [numeric]).
+  ///
+  /// Family swap (Phase 28b): Inter → Barlow. Weight ramp stays 600.
   static TextStyle get title => const TextStyle(
-    fontFamily: 'Inter',
+    fontFamily: 'Barlow',
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.3,
@@ -221,7 +229,7 @@ class AppTextStyles {
     color: AppColors.textCream,
   );
 
-  /// Inter 400 — paragraph copy, descriptions.
+  /// Barlow 400 — paragraph copy, descriptions.
   ///
   /// **Use for:** paragraph prose, form tips, exercise descriptions,
   /// dialog body text, snackbar copy, mixed-string cardinality lines
@@ -229,30 +237,35 @@ class AppTextStyles {
   ///
   /// **Not for:** standalone numerals (use [numeric]); eyebrow / chip
   /// / section delimiters (use [label] or [sectionHeader]).
+  ///
+  /// Family swap (Phase 28b): Inter → Barlow. Weight 400 stays.
   static TextStyle get body => const TextStyle(
-    fontFamily: 'Inter',
+    fontFamily: 'Barlow',
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.textCream,
   );
 
-  /// Inter 400 — small meta, captions.
+  /// Barlow 400 — small meta, captions.
   ///
   /// **Use for:** secondary metadata (timestamps, sub-titles,
   /// caption-context, "last session" lines).
   ///
   /// **Not for:** numeric data — even at this size, that's
   /// [numericSmall]'s register. Eyebrow labels stay on [label].
+  ///
+  /// Family swap (Phase 28b): Inter → Barlow.
   static TextStyle get bodySmall => const TextStyle(
-    fontFamily: 'Inter',
+    fontFamily: 'Barlow',
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.textDim,
   );
 
-  /// Inter 600 uppercase with +0.12em tracking — chips, tabs, metadata rails.
+  /// Barlow Condensed 600 uppercase with +0.12em tracking — chips, tabs,
+  /// metadata rails.
   ///
   /// **Use for:** 11sp uppercase tracked eyebrow / chip / tab labels,
   /// metadata-rail delimiters. Call sites pass an already-uppercased
@@ -260,8 +273,13 @@ class AppTextStyles {
   ///
   /// **Not for:** data values, even small ones (use [numericSmall]);
   /// section eyebrows above tables (use [sectionHeader]).
+  ///
+  /// Family swap (Phase 28b): Inter → Barlow Condensed. The condensed
+  /// width-axis picks up Rajdhani's verticality at micro-copy size — gives
+  /// uppercase tracked labels an engineered feel without escalating to the
+  /// display register.
   static TextStyle get label => const TextStyle(
-    fontFamily: 'Inter',
+    fontFamily: 'Barlow Condensed',
     fontSize: 11,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.12 * 11,
@@ -269,20 +287,27 @@ class AppTextStyles {
     color: AppColors.textCream,
   );
 
-  /// `[label]` at 12px — section headers above tables/cards on the
+  /// `[label]` at 13px — section headers above tables/cards on the
   /// numeric face of the saga (`/saga/stats`). One step up from the
   /// chip/tab register so a heading can hold its own next to body copy
   /// without competing with [title]. Color is left to the call site
   /// (sections currently use [AppColors.hotViolet]; future sections may
   /// pick a state-color).
   ///
-  /// **Use for:** 12sp uppercase tracked section eyebrows above
+  /// **Use for:** 13sp uppercase tracked section eyebrows above
   /// tables / cards (e.g. "VITALIDADE ATUAL").
   ///
   /// **Not for:** chips / tabs (use [label]); list-item titles (use
   /// [title]).
+  ///
+  /// Phase 28b: standardized at 13dp (was 12dp). Reconciles the prior
+  /// inconsistency where the `SectionHeader` widget hand-rolled 13dp on
+  /// top of `label.copyWith(fontSize: 13, …)` while the token sat at 12dp.
+  /// 13dp matches the `ElevatedButton/FilledButton/OutlinedButton.textStyle`
+  /// derivation (`label.copyWith(fontSize: 13)`) — promoted section headers
+  /// read at the same size as button text, intentional visual rhythm.
   static TextStyle get sectionHeader =>
-      label.copyWith(fontSize: 12, letterSpacing: 0.12 * 12);
+      label.copyWith(fontSize: 13, letterSpacing: 0.12 * 13);
 
   /// Rajdhani 700 tabular — XP counts, level numbers, weight/rep numerals.
   ///
@@ -456,22 +481,48 @@ class AppTheme {
     );
   }
 
+  /// Narrow `TextTheme` compatibility shim — Phase 28b Step 4.
+  ///
+  /// **This shim is intentionally narrow.** App code MUST route through
+  /// `AppTextStyles.*` directly (enforced by Gate 6 in
+  /// `scripts/check_typography_call_sites.sh`). The slots wired here exist
+  /// ONLY so Flutter's Material widgets can inherit a brand-consistent
+  /// style from their internal `*Defaults*M3` classes when RepSaga doesn't
+  /// override the component theme:
+  ///
+  ///   * `bodyLarge` — `InputDecoration` M3 hint (`input_decorator.dart` 2202-2204),
+  ///     `ListTile` M3 title (`list_tile.dart` 1786).
+  ///   * `bodyMedium` — `Dialog` M3 content (`dialog.dart:1825`),
+  ///     `SnackBar` M3 content (`snack_bar.dart:973-977`),
+  ///     `ListTile` M3 subtitle (`list_tile.dart:1787`).
+  ///   * `bodySmall` — `InputDecoration` M3 helper / error / counter
+  ///     (`input_decorator.dart` 5839-5855, 6028-6053).
+  ///   * `labelLarge` — `Chip` / `FilterChip` M3 label
+  ///     (`chip.dart:2505`, `filter_chip.dart:332`).
+  ///   * `labelMedium` — `NavigationBar` M3 destination label
+  ///     (`navigation_bar.dart:1471`).
+  ///   * `titleMedium` — `PopupMenuItem` M3 (`popup_menu.dart:1817`),
+  ///     `InputDecoration` base size for `floatingLabelStyle`
+  ///     (`input_decorator.dart:2188`).
+  ///
+  /// Slots dropped at narrowing time (no Material widget RepSaga uses
+  /// inherits them, or RepSaga overrides the component theme entirely —
+  /// e.g. `ElevatedButton`/`FilledButton`/`OutlinedButton` set
+  /// `textStyle: AppTextStyles.label.copyWith(fontSize: 13)` directly):
+  /// `displayLarge`, `displayMedium`, `displaySmall`, `headlineLarge`,
+  /// `headlineMedium`, `headlineSmall`, `titleLarge`, `titleSmall`,
+  /// `labelSmall`.
+  ///
+  /// If a future Material widget unexpectedly inherits from a dropped slot
+  /// and falls back to Flutter's M3 defaults (which would NOT be Rajdhani /
+  /// Barlow), RESTORE the slot here and document the inheriting widget.
   static TextTheme get _textTheme => TextTheme(
-    displayLarge: AppTextStyles.display.copyWith(fontSize: 40),
-    displayMedium: AppTextStyles.display.copyWith(fontSize: 32),
-    displaySmall: AppTextStyles.display.copyWith(fontSize: 24),
-    headlineLarge: AppTextStyles.headline.copyWith(fontSize: 28),
-    headlineMedium: AppTextStyles.headline,
-    headlineSmall: AppTextStyles.headline.copyWith(fontSize: 20),
-    titleLarge: AppTextStyles.title.copyWith(fontSize: 20),
-    titleMedium: AppTextStyles.title,
-    titleSmall: AppTextStyles.title.copyWith(fontSize: 14),
     bodyLarge: AppTextStyles.body.copyWith(fontSize: 16),
     bodyMedium: AppTextStyles.body,
     bodySmall: AppTextStyles.bodySmall,
     labelLarge: AppTextStyles.label.copyWith(fontSize: 13),
     labelMedium: AppTextStyles.label,
-    labelSmall: AppTextStyles.label.copyWith(fontSize: 10),
+    titleMedium: AppTextStyles.title,
   );
 
   static CardThemeData get _cardTheme => CardThemeData(

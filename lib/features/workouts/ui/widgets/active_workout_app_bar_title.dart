@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import 'elapsed_timer.dart';
 
@@ -64,7 +65,7 @@ class ActiveWorkoutAppBarTitle extends StatelessWidget {
               maxLength: 80,
               textAlign: TextAlign.center,
               textCapitalization: TextCapitalization.sentences,
-              style: theme.textTheme.titleMedium,
+              style: AppTextStyles.title,
               decoration: const InputDecoration(
                 isDense: true,
                 counterText: '',
@@ -87,7 +88,7 @@ class ActiveWorkoutAppBarTitle extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(name, style: theme.textTheme.titleMedium),
+                  Text(name, style: AppTextStyles.title),
                   const SizedBox(width: 4),
                   // M8 (PR-5) — bumped from 14dp α=0.4 to 16dp α=0.6.
                   // Pre-fix the pencil sat at the visibility threshold —
