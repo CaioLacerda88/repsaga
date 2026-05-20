@@ -106,7 +106,11 @@ fi
 #
 # Scope is all of `lib/` (including app_theme.dart) — these weights are
 # never bundled, period. Comment exclusion identical to the family
-# gates.
+# gates: the trailing-comment branch suppresses violations on lines that
+# ALSO have a self-referential `// FontWeight.w800` comment. Inherited
+# tradeoff from the Rajdhani gate (PR #245 reviewer note); the precedent
+# is acceptable because intentional self-referential comments are rare
+# and a real violation would be caught by the next sweep anyway.
 HITS_WEIGHTS=$(
   grep -rEn "FontWeight\.w(800|900)" lib \
     --include='*.dart' \

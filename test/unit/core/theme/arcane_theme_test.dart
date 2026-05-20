@@ -375,29 +375,41 @@ void main() {
       // Parameterized helper for celebration overlay numerals.
       // Spot-checked at the three canonical sizes used by the overlay
       // tier (level-up 64sp / class-change 36sp / rank-up 24sp).
+      //
+      // `letterSpacing: 1.28` (= 0.04 * 32 from display) is INHERITED
+      // size-agnostic — that's intentional. At 64sp it reads as 0.02em,
+      // at 24sp as 0.053em. Pinning it here catches any future change to
+      // [display]'s tracking silently rippling through all three
+      // celebration overlays. The `class_change_overlay` overrides this
+      // with `.copyWith(letterSpacing: 0.06 * 36)` to preserve its
+      // per-glyph letter-reveal choreography — the override is on the
+      // call site, not on the token.
 
-      test('at 24sp — Rajdhani 700 height 1.0', () {
+      test('at 24sp — Rajdhani 700 height 1.0 + display tracking', () {
         final style = AppTextStyles.celebrationSize(24);
         expect(style.fontFamily, startsWith('Rajdhani'));
         expect(style.fontWeight, FontWeight.w700);
         expect(style.fontSize, 24.0);
         expect(style.height, closeTo(1.0, 0.001));
+        expect(style.letterSpacing, closeTo(0.04 * 32, 0.001));
       });
 
-      test('at 36sp — Rajdhani 700 height 1.0', () {
+      test('at 36sp — Rajdhani 700 height 1.0 + display tracking', () {
         final style = AppTextStyles.celebrationSize(36);
         expect(style.fontFamily, startsWith('Rajdhani'));
         expect(style.fontWeight, FontWeight.w700);
         expect(style.fontSize, 36.0);
         expect(style.height, closeTo(1.0, 0.001));
+        expect(style.letterSpacing, closeTo(0.04 * 32, 0.001));
       });
 
-      test('at 64sp — Rajdhani 700 height 1.0', () {
+      test('at 64sp — Rajdhani 700 height 1.0 + display tracking', () {
         final style = AppTextStyles.celebrationSize(64);
         expect(style.fontFamily, startsWith('Rajdhani'));
         expect(style.fontWeight, FontWeight.w700);
         expect(style.fontSize, 64.0);
         expect(style.height, closeTo(1.0, 0.001));
+        expect(style.letterSpacing, closeTo(0.04 * 32, 0.001));
       });
 
       test('inherits color from display (textCream)', () {

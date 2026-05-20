@@ -305,13 +305,20 @@ class AppTextStyles {
   /// Rajdhani 600 11sp tabular textDim — small numeric metadata lines
   /// where the value is data but the visual register is supporting-text.
   ///
-  /// Promotes the 5-property override stack
+  /// Promotes the 6-property override stack
   ///   `numeric.copyWith(fontSize: 11, fontWeight: w600, color: textDim,
-  ///    letterSpacing: 0.04 * 11)`
+  ///    letterSpacing: 0.04 * 11, height: 1.4)`
   /// (repeated in body-part rank rows + character-card closest-rank
   /// indicator) into a single token so the next surface that needs the
-  /// same register reaches for one name instead of copy-pasting five
-  /// overrides.
+  /// same register reaches for one name instead of copy-pasting overrides.
+  ///
+  /// **`height: 1.4` is intentional and is a delta from the previous
+  /// override stacks** on `body_part_rank_row.dart:161,169`, which inherited
+  /// [numeric]'s `1.1` line-height by not overriding it. Sub-bar XP labels
+  /// sit under a 4dp progress bar and benefit from the extra ~3.3px of
+  /// leading at 11sp; if visual verification surfaces a layout regression
+  /// here, the fix is either a per-call-site `.copyWith(height: 1.1)`
+  /// override OR splitting `numericSmall` into two tier-specific tokens.
   ///
   /// **Use for:** sub-bar XP labels (`X XP` / `Y restantes`),
   /// character-card closest-rank indicator (`X XP for rank Y`), rank
@@ -542,11 +549,13 @@ class AppTheme {
             if (states.contains(WidgetState.selected)) {
               return AppTextStyles.label.copyWith(fontWeight: FontWeight.w600);
             }
-            // w600 (SemiBold) is bundled via google_fonts; w500 (Medium) is
-            // not, so with `allowRuntimeFetching = false` Flutter nearest-
-            // matches to w400/w600 unpredictably. Using w600 here gives the
-            // "slightly heavier than body" intent for the unselected label
-            // while matching a bundled weight exactly.
+            // w600 (SemiBold) is bundled via `pubspec.yaml > flutter.fonts:`;
+            // w500 (Medium) is not, so Flutter nearest-matches to w400/w600
+            // unpredictably for Inter. Using w600 here gives the "slightly
+            // heavier than body" intent for the unselected label while
+            // matching a bundled weight exactly. (Post-Phase-27-L14: the
+            // `google_fonts` async API is forbidden in production paths —
+            // see `lib/core/theme/README.md` typography section.)
             return AppTextStyles.label.copyWith(fontWeight: FontWeight.w600);
           }),
           side: WidgetStateProperty.resolveWith((states) {
