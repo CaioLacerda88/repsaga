@@ -97,12 +97,72 @@ void main() {
       expect(AppTextStyles.label.fontFamily, startsWith('Inter'));
     });
 
+    test('titleDisplay uses Rajdhani', () {
+      expect(AppTextStyles.titleDisplay.fontFamily, startsWith('Rajdhani'));
+    });
+
     test('numeric uses Rajdhani with tabular figures', () {
       expect(AppTextStyles.numeric.fontFamily, startsWith('Rajdhani'));
       expect(
         AppTextStyles.numeric.fontFeatures,
         contains(const FontFeature.tabularFigures()),
       );
+    });
+  });
+
+  group('AppTextStyles — titleDisplay contract (Phase 27 L18.4)', () {
+    // titleDisplay is the Rajdhani variant of the 16dp list-title slot.
+    // It is the ONLY token that diverges from Inter at this size — Routines
+    // (action surfaces) use it; exercise/settings rows stay on [title] (Inter).
+    // These assertions lock the five properties the UX-critic verdict locked:
+    // family (Rajdhani), weight (600), size (16dp), tracking (0.32 = 0.02*16),
+    // and height (1.3 — same line-box as [title] so routine card layout is
+    // stable when the two tokens share a parent Column).
+    test('is Rajdhani 600 at 16dp', () {
+      expect(AppTextStyles.titleDisplay.fontFamily, startsWith('Rajdhani'));
+      expect(AppTextStyles.titleDisplay.fontWeight, FontWeight.w600);
+      expect(AppTextStyles.titleDisplay.fontSize, 16.0);
+    });
+
+    test('letter-spacing is 0.02 * 16 = 0.32', () {
+      expect(AppTextStyles.titleDisplay.letterSpacing, closeTo(0.32, 0.001));
+    });
+
+    test('height matches title (1.3) so row layout is stable', () {
+      expect(AppTextStyles.titleDisplay.height, AppTextStyles.title.height);
+    });
+
+    test('is NOT in _textTheme (must not become a Material default)', () {
+      // titleDisplay is deliberately excluded from the Material TextTheme so
+      // it can never be accidentally applied via Theme.of(context).textTheme.
+      // Verify no slot in AppTheme.dark's TextTheme resolves to a Rajdhani
+      // 600 16dp style (which would indicate titleDisplay leaked into the
+      // theme as titleMedium or similar).
+      final textTheme = AppTheme.dark.textTheme;
+      final slots = [
+        textTheme.titleMedium,
+        textTheme.titleSmall,
+        textTheme.titleLarge,
+        textTheme.bodyMedium,
+        textTheme.bodySmall,
+        textTheme.bodyLarge,
+        textTheme.labelMedium,
+        textTheme.labelSmall,
+        textTheme.labelLarge,
+      ];
+      // None of the theme slots should be Rajdhani 600 at 16dp.
+      for (final style in slots) {
+        final isRajdhani = style?.fontFamily?.startsWith('Rajdhani') ?? false;
+        final is16dp = style?.fontSize == 16.0;
+        final isW600 = style?.fontWeight == FontWeight.w600;
+        expect(
+          isRajdhani && is16dp && isW600,
+          isFalse,
+          reason:
+              'titleDisplay (Rajdhani 600 16dp) must not be wired into the '
+              'Material TextTheme. Found a matching slot: $style',
+        );
+      }
     });
   });
 
