@@ -154,23 +154,16 @@ class _TrainedRow extends StatelessWidget {
                   children: [
                     Text(
                       '${AppNumberFormat.integer(entry.xpInRank, locale: locale)} XP',
-                      // Smaller Rajdhani variant (11dp w600) below the bar.
-                      // Same family/weight intent as [AppTextStyles.numeric],
-                      // just shrunken — routed through the token so the
-                      // typography call-site CI gate stays clean.
-                      style: AppTextStyles.numeric.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textDim,
-                      ),
+                      // Phase 28a: collapsed the 5-property override stack
+                      // (`numeric.copyWith(fontSize: 11, w600, textDim,
+                      // letterSpacing: 0.04 * 11)`) into the canonical
+                      // [AppTextStyles.numericSmall] token. Same rendered
+                      // pixels, one named contract for the sub-bar XP register.
+                      style: AppTextStyles.numericSmall,
                     ),
                     Text(
                       '${AppNumberFormat.integer(remaining, locale: locale)} ${l10n.withinRankXpSuffix}',
-                      style: AppTextStyles.numeric.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textDim,
-                      ),
+                      style: AppTextStyles.numericSmall,
                     ),
                   ],
                 ),

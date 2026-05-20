@@ -307,10 +307,16 @@ class _RankUpCard extends StatelessWidget {
           // overflows the 280dp card on long body-part names like
           // "SHOULDERS"). FittedBox guards against pt-BR strings that
           // run longer than en — the type scales down rather than wraps.
+          // Phase 28a: routed through [AppTextStyles.celebrationSize] so
+          // all three celebration overlays share one token. `height: 1.0`
+          // is acceptable here because the FittedBox.scaleDown absorbs
+          // the small leading delta from the previous `1.1`, and a
+          // single-line Row inside a FittedBox derives its height from
+          // the glyph extents rather than line-leading.
           FittedBox(
             fit: BoxFit.scaleDown,
             child: DefaultTextStyle.merge(
-              style: AppTextStyles.display.copyWith(fontSize: 24, height: 1.1),
+              style: AppTextStyles.celebrationSize(24),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.baseline,

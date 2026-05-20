@@ -124,12 +124,20 @@ class _RestTimerOverlayState extends ConsumerState<RestTimerOverlay> {
                               ),
                             ),
                           ),
-                          // Countdown text
+                          // Countdown text — routed through AppTextStyles.numeric
+                          // so the digits carry tabular figures (FontFeature
+                          // .tabularFigures()). Without tabular figures the
+                          // countdown's 1/2/3/4 glyphs render at proportional
+                          // widths and the digits would visibly jitter on the
+                          // 00:30 → 00:29 → 00:28 ticks. Phase 28a forbid-w900
+                          // gate replaced the prior `fontWeight: w900` override
+                          // (Rajdhani only bundles up to w700, so w900 was a
+                          // silent nearest-match anyway).
                           Text(
                             timeText,
-                            style: theme.textTheme.displayLarge?.copyWith(
+                            style: AppTextStyles.numeric.copyWith(
                               fontSize: 72,
-                              fontWeight: FontWeight.w900,
+                              height: 1.0,
                               color: theme.colorScheme.primary,
                             ),
                           ),

@@ -384,16 +384,11 @@ class _ClosestRankUpRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final closest = closestRankUp(sheet.bodyPartProgress);
 
-    // Closest-rank indicator typography: Rajdhani 600 / 11dp / textDim /
-    // 0.04em tracking, with the emphasized fragment flipping to textCream.
-    // Routed through [AppTextStyles.numeric] (Rajdhani family + tabular
-    // figures) with indicator-specific size/weight/color/tracking overrides.
-    final fallbackStyle = AppTextStyles.numeric.copyWith(
-      fontWeight: FontWeight.w600,
-      fontSize: 11,
-      color: AppColors.textDim,
-      letterSpacing: 0.04 * 11,
-    );
+    // Phase 28a: collapsed the 5-property override stack into the canonical
+    // [AppTextStyles.numericSmall] token (Rajdhani 600 / 11dp / textDim /
+    // 0.04em tracking, tabular figures inherited from `numeric`). The
+    // emphasized fragment below flips `color` to `textCream` via copyWith.
+    final fallbackStyle = AppTextStyles.numericSmall;
 
     if (closest == null) {
       return Semantics(

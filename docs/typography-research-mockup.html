@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RepSaga · Typography Unification — Round 1 Mockup</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;600&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --abyss: #0D0319;
+  --surface: #1A0F2E;
+  --surface2: #241640;
+  --primary-violet: #6A2FA8;
+  --hot-violet: #B36DFF;
+  --hero-gold: #FFB800;
+  --text-cream: #EEE7FA;
+  --text-dim: #9C8DB8;
+  --success: #62C46D;
+  --warning: #FFB84D;
+  --error: #FF6B6B;
+  --bp-chest: #F472B6;
+  --bp-back: #38BDF8;
+  --bp-legs: #4ADE80;
+  --bp-shoulders: #FBBF24;
+  --bp-arms: #F87171;
+  --bp-core: #A78BFA;
+  --hair: rgba(179,109,255,0.14);
+  --xp-track: rgba(179,109,255,0.10);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--abyss); color: var(--text-cream); }
+body {
+  font-family: 'Inter', sans-serif;
+  line-height: 1.5;
+  padding: 32px 24px 96px;
+  max-width: 1640px;
+  margin: 0 auto;
+}
+
+/* ─── Doc-level typography (always Inter so the document itself stays neutral) ─── */
+.doc h1 { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 40px; letter-spacing: 0.04em; line-height: 1.1; margin: 0 0 8px; }
+.doc h2 { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 28px; letter-spacing: 0.02em; line-height: 1.2; margin: 48px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--hair); }
+.doc h3 { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: 0.02em; line-height: 1.2; margin: 24px 0 8px; color: var(--hot-violet); }
+.doc p, .doc li { font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6; color: var(--text-cream); }
+.doc .lede { font-size: 16px; color: var(--text-dim); margin-bottom: 24px; }
+.doc strong { color: var(--text-cream); font-weight: 600; }
+.doc code { background: var(--surface2); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--hot-violet); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.doc ul { padding-left: 20px; }
+
+.doc .eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hot-violet);
+  margin-bottom: 6px;
+}
+
+/* ─── Phone column ─── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 1200px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px)  { .grid { grid-template-columns: 1fr; } }
+
+.col-head {
+  text-align: center;
+  margin-bottom: 8px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+}
+.col-head .name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 0.02em; color: var(--text-cream); }
+.col-head .tag { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 4px; }
+.tag-baseline { color: var(--error); }
+.tag-primary  { color: var(--success); }
+.tag-safe     { color: var(--warning); }
+.tag-bold     { color: var(--bp-chest); }
+
+/* Phone preview frame — matches 360dp baseline */
+.phone {
+  background: var(--abyss);
+  border: 1px solid var(--hair);
+  border-radius: 18px;
+  padding: 16px 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.phone .surface-label {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: -4px 0 10px;
+  text-align: center;
+}
+
+/* ─── Body-font scope variants ──────────────────────────────────────── */
+.bf-baseline { --body-font: 'Inter', sans-serif; --body-condensed: 'Inter', sans-serif; }
+.bf-barlow   { --body-font: 'Barlow', sans-serif; --body-condensed: 'Barlow Condensed', sans-serif; }
+.bf-dm       { --body-font: 'DM Sans', sans-serif; --body-condensed: 'DM Sans', sans-serif; }
+.bf-chakra   { --body-font: 'Chakra Petch', sans-serif; --body-condensed: 'Chakra Petch', sans-serif; }
+
+/* ─── Production text-style tokens (Rajdhani always; body via var) ─── */
+.t-display      { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 32px; letter-spacing: 0.04em; line-height: 1.1; color: var(--text-cream); }
+.t-headline     { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 24px; letter-spacing: 0.02em; line-height: 1.2; color: var(--text-cream); }
+.t-numeric      { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text-cream); }
+.t-numeric-lg   { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 56px; line-height: 1.0; font-variant-numeric: tabular-nums; color: var(--text-cream); }
+.t-numeric-md   { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text-cream); }
+.t-title-display{ font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.02em; line-height: 1.3; color: var(--text-cream); }
+.t-appbar       { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 18px; letter-spacing: 0.02em; color: var(--text-cream); }
+
+.t-title        { font-family: var(--body-font); font-weight: 600; font-size: 16px; line-height: 1.3; color: var(--text-cream); }
+.t-body         { font-family: var(--body-font); font-weight: 400; font-size: 14px; line-height: 1.5; color: var(--text-cream); }
+.t-body-sm      { font-family: var(--body-font); font-weight: 400; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+.t-label        { font-family: var(--body-condensed); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; line-height: 1.2; text-transform: uppercase; color: var(--text-cream); }
+.t-section      { font-family: var(--body-condensed); font-weight: 600; font-size: 12px; letter-spacing: 0.12em; line-height: 1.2; text-transform: uppercase; color: var(--hot-violet); }
+.t-eyebrow      { font-family: var(--body-condensed); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; line-height: 1.2; text-transform: uppercase; color: var(--text-dim); }
+
+/* ─── Surface stylings shared across all columns ───────────────────── */
+.appbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair);
+}
+.appbar .left { display: flex; align-items: center; gap: 8px; }
+.appbar .back { color: var(--text-dim); font-size: 18px; }
+.appbar .gear { color: var(--text-dim); font-size: 16px; }
+
+.row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+.row + .row { border-top: 1px solid var(--hair); }
+.row .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.xp-bar {
+  height: 6px; width: 100%;
+  background: var(--xp-track);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+.xp-bar .fill { height: 100%; background: linear-gradient(90deg, var(--primary-violet), var(--hot-violet)); }
+
+.chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-family: var(--body-condensed);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-cream);
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+.chip-active { background: var(--hot-violet); border-color: var(--hot-violet); color: var(--abyss); }
+
+.action-hero {
+  background: linear-gradient(135deg, rgba(106,47,168,0.6), rgba(179,109,255,0.4));
+  border: 1px solid var(--hair);
+  border-radius: 16px;
+  padding: 18px 16px;
+  margin-bottom: 8px;
+}
+
+.spacer-8 { height: 8px; }
+.spacer-16 { height: 16px; }
+
+/* ─── Diagnosis block layout ───────────────────────────────────────── */
+.diagnosis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+@media (max-width: 900px) { .diagnosis-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.diag-cell {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 16px;
+}
+.diag-cell .label-tag {
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.diag-cell .pair-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-top: 1px solid var(--hair); }
+.diag-cell .pair-row:first-of-type { border-top: 0; padding-top: 0; }
+.diag-cell .raj { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 22px; line-height: 1; color: var(--text-cream); }
+.diag-cell .body-i      { font-family: 'Inter', sans-serif;        font-weight: 400; font-size: 14px; color: var(--text-cream); }
+.diag-cell .body-barlow { font-family: 'Barlow', sans-serif;       font-weight: 400; font-size: 14px; color: var(--text-cream); }
+.diag-cell .body-dm     { font-family: 'DM Sans', sans-serif;      font-weight: 400; font-size: 14px; color: var(--text-cream); }
+.diag-cell .body-chakra { font-family: 'Chakra Petch', sans-serif; font-weight: 400; font-size: 14px; color: var(--text-cream); }
+
+/* ─── Weight-ramp diagnostic ───────────────────────────────────────── */
+.ramp { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--hair); }
+.ramp:last-child { border-bottom: 0; }
+.ramp .legend { font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); min-width: 120px; }
+.ramp .swatch { font-size: 24px; line-height: 1; color: var(--text-cream); }
+
+/* ─── Comparison table at the bottom ───────────────────────────────── */
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+.cmp-table th, .cmp-table td {
+  border: 1px solid var(--hair);
+  padding: 10px 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  vertical-align: top;
+}
+.cmp-table th {
+  background: var(--surface);
+  font-weight: 600;
+  text-align: left;
+  color: var(--hot-violet);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cmp-table td .verdict-good { color: var(--success); font-weight: 600; }
+.cmp-table td .verdict-warn { color: var(--warning); font-weight: 600; }
+.cmp-table td .verdict-bad  { color: var(--error);   font-weight: 600; }
+
+.callout {
+  background: rgba(255,184,0,0.06);
+  border-left: 3px solid var(--hero-gold);
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+.callout strong { color: var(--hero-gold); }
+
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 32px;
+}
+.toc ol { margin: 8px 0 0; padding-left: 20px; }
+.toc a { color: var(--hot-violet); text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+
+footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--hair); color: var(--text-dim); font-size: 12px; }
+</style>
+</head>
+<body class="doc">
+
+<header>
+  <div class="eyebrow">Pre-launch · Typography Unification · Round 1</div>
+  <h1>One designer's hand</h1>
+  <p class="lede">The current Rajdhani + Inter pairing reads as "two moments in the app." Rajdhani stays — it's the RPG voice. The body font needs to evolve from a safe default into a believable sibling that shares Rajdhani's DNA. Three candidates, rendered side-by-side against real RepSaga surfaces at production sizes.</p>
+</header>
+
+<nav class="toc">
+  <div class="eyebrow">Sections</div>
+  <ol>
+    <li><a href="#diagnosis">Why the current pairing reads as disjointed</a></li>
+    <li><a href="#letterforms">Letterform DNA — side-by-side</a></li>
+    <li><a href="#surfaces">Production surfaces — 4-column comparison</a></li>
+    <li><a href="#tradeoffs">Trade-off matrix</a></li>
+    <li><a href="#recommendation">Recommendation</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     1. DIAGNOSIS
+     ══════════════════════════════════════════════════════════════════ -->
+<section id="diagnosis">
+  <h2>1 · The diagnosis</h2>
+  <p>The Rajdhani + Inter pairing is broken on <strong>four measurable axes</strong>, not on vibes:</p>
+  <ul>
+    <li><strong>X-height ratio.</strong> Rajdhani sits at ~68–70% of cap-height. Inter sits at ~75–78% — one of the highest in Google Fonts, by design (engineered for small-screen UI legibility). Result: in a list row where Inter title (16sp) follows a Rajdhani header (24sp), the Inter lowercase looks <em>taller than expected</em>, breaking the visual hierarchy the size numbers were meant to create.</li>
+    <li><strong>Aperture philosophy.</strong> Rajdhani has tight, armored apertures — closed <code>c</code>, <code>e</code>, <code>s</code>; terminals cut at steep flat angles. Inter has the opposite — wide-mouthed <code>c</code>, fully open double-storey <code>a</code>, deliberately spacious. Adjacent, Inter reads slack against Rajdhani's blade-cut precision.</li>
+    <li><strong>Weight ramp gap.</strong> Rajdhani ramp is <code>500 → 600 → 700</code> (three uniform steps). Inter ramp is <code>400 → 600</code> — skips 500 entirely. Inter 400 is optically <em>lighter</em> than Rajdhani 500, so body prose feels underpowered next to display.</li>
+    <li><strong>Geometric vs humanist DNA.</strong> Rajdhani's <code>R</code>, <code>K</code>, <code>G</code> are constructed from geometric arcs and straight spurs — built, not drawn. Inter's <code>g</code>, <code>y</code>, <code>f</code>, <code>j</code> retain humanist pen-angle memory. Two different construction philosophies in the same scan path.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>The fix isn't a "better humanist sans."</strong> A condensed-geometric display font pairs cleanly only with a body that shares its <em>terminal style</em>, <em>monolinear stroke</em>, and <em>matched x-height</em> — and ideally interlocks the weight ramp. Inter fails on all four. The candidates below pass on all four.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     2. LETTERFORM DNA
+     ══════════════════════════════════════════════════════════════════ -->
+<section id="letterforms">
+  <h2>2 · Letterform DNA — what changes</h2>
+  <p>Same word, same size, four body fonts. Look at the x-height match against the Rajdhani sample above each, then look at the <code>a</code>, <code>g</code>, and the lowercase terminals.</p>
+
+  <div class="diagnosis-grid">
+    <div class="diag-cell">
+      <div class="label-tag">Current — Inter</div>
+      <div class="pair-row"><div class="raj">Aspirante</div><div class="body-i">aspirante 8 reps</div></div>
+      <div class="pair-row"><div class="raj">Vitalidade</div><div class="body-i">vitalidade média</div></div>
+      <div class="pair-row"><div class="raj">62%</div><div class="body-i">stagnant six days</div></div>
+    </div>
+    <div class="diag-cell">
+      <div class="label-tag">Candidate A — Barlow</div>
+      <div class="pair-row"><div class="raj">Aspirante</div><div class="body-barlow">aspirante 8 reps</div></div>
+      <div class="pair-row"><div class="raj">Vitalidade</div><div class="body-barlow">vitalidade média</div></div>
+      <div class="pair-row"><div class="raj">62%</div><div class="body-barlow">stagnant six days</div></div>
+    </div>
+    <div class="diag-cell">
+      <div class="label-tag">Candidate B — DM Sans</div>
+      <div class="pair-row"><div class="raj">Aspirante</div><div class="body-dm">aspirante 8 reps</div></div>
+      <div class="pair-row"><div class="raj">Vitalidade</div><div class="body-dm">vitalidade média</div></div>
+      <div class="pair-row"><div class="raj">62%</div><div class="body-dm">stagnant six days</div></div>
+    </div>
+    <div class="diag-cell">
+      <div class="label-tag">Candidate C — Chakra Petch</div>
+      <div class="pair-row"><div class="raj">Aspirante</div><div class="body-chakra">aspirante 8 reps</div></div>
+      <div class="pair-row"><div class="raj">Vitalidade</div><div class="body-chakra">vitalidade média</div></div>
+      <div class="pair-row"><div class="raj">62%</div><div class="body-chakra">stagnant six days</div></div>
+    </div>
+  </div>
+
+  <h3>Weight-ramp interlock</h3>
+  <p>The body's regular weight must sit optically close to Rajdhani's lightest weight. With Inter 400 the gap is visible; with the candidates it closes.</p>
+  <div class="diag-cell">
+    <div class="ramp">
+      <div class="legend">Rajdhani 500</div>
+      <div class="swatch" style="font-family:'Rajdhani'; font-weight: 500;">Aspirante</div>
+    </div>
+    <div class="ramp">
+      <div class="legend">Inter 400</div>
+      <div class="swatch" style="font-family:'Inter'; font-weight: 400;">aspirante</div>
+    </div>
+    <div class="ramp">
+      <div class="legend">Barlow 500</div>
+      <div class="swatch" style="font-family:'Barlow'; font-weight: 500;">aspirante</div>
+    </div>
+    <div class="ramp">
+      <div class="legend">DM Sans 500</div>
+      <div class="swatch" style="font-family:'DM Sans'; font-weight: 500;">aspirante</div>
+    </div>
+    <div class="ramp">
+      <div class="legend">Chakra Petch 500</div>
+      <div class="swatch" style="font-family:'Chakra Petch'; font-weight: 500;">aspirante</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     3. PRODUCTION SURFACES — 4-column side-by-side
+     ══════════════════════════════════════════════════════════════════ -->
+<section id="surfaces">
+  <h2>3 · Production surfaces — 4-column comparison</h2>
+  <p>Each column renders the same six surfaces at 360dp width using the production color palette. Same data, same layout, same Rajdhani — the only variable is the body-font tier (the slot Inter currently occupies).</p>
+
+  <div class="grid">
+    <!-- ─── Column 1: BASELINE (Inter) ─── -->
+    <div>
+      <div class="col-head">
+        <div class="name">Current</div>
+        <div class="tag tag-baseline">BASELINE · Inter</div>
+      </div>
+
+      <!-- SAGA -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Saga · character sheet</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Saga</span></div><span class="gear">⚙</span></div>
+        <div style="display:flex; align-items:center; gap:14px; margin: 8px 0 12px;">
+          <div style="width:36px; height:36px; background: var(--surface2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Rajdhani'; font-weight:700; color: var(--hot-violet);">⚔</div>
+          <div class="t-numeric-lg">12</div>
+          <div style="flex:1; min-width:0;">
+            <div class="t-label" style="color: var(--text-dim);">Lvl · Aprendiz</div>
+            <div class="t-title">Striker</div>
+          </div>
+        </div>
+        <div class="t-body-sm" style="display:flex; justify-content:space-between;"><span>XP</span><span class="t-numeric-md">2,140 / 3,000</span></div>
+        <div class="xp-bar"><div class="fill" style="width:71%;"></div></div>
+
+        <div class="spacer-8"></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md">A · 65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md">A · 66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md">B · 43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md">A · 67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md">S · 100%</span></div>
+      </div>
+
+      <!-- HOME -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Home · character card + action hero</div>
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="t-title-display">Lvl 12 · Striker</div>
+            <div class="t-numeric-md" style="color: var(--text-dim); font-size: 11px; font-weight: 600;">1 RANK ATÉ ASPIRANTE</div>
+          </div>
+          <div class="t-body-sm" style="margin-top:4px;">Próximo: <strong style="color: var(--text-cream);">+340 XP</strong> em Costas</div>
+        </div>
+        <div class="action-hero">
+          <div class="t-headline" style="font-size: 20px;">Treino livre</div>
+          <div class="t-body" style="margin-top:4px;">Comece um workout sem plano — você joga o roteiro depois.</div>
+        </div>
+        <div class="t-body-sm" style="text-align:center; font-style: italic;">— faltam 2 treinos para o próximo rank em Costas —</div>
+      </div>
+
+      <!-- STATS -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Stats · vitality table</div>
+        <div class="t-section" style="margin-bottom: 8px;">Vitalidade atual</div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md" style="color: var(--success);">65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md" style="color: var(--success);">66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md" style="color: var(--warning);">43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md" style="color: var(--success);">67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md" style="color: var(--success);">100%</span></div>
+      </div>
+
+      <!-- EXERCISE LIST -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Exercises · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Exercícios</span></div></div>
+        <div style="margin-bottom:8px;"><span class="chip chip-active">PEITO</span><span class="chip">COSTAS</span><span class="chip">PERNAS</span></div>
+        <div class="card"><div class="t-title">Supino reto com barra</div><div class="t-body-sm">Peito · Barra · Avançado</div></div>
+        <div class="card"><div class="t-title">Crucifixo com halteres</div><div class="t-body-sm">Peito · Halter · Intermediário</div></div>
+        <div class="card"><div class="t-title">Flexão diamante</div><div class="t-body-sm">Peito · Peso corporal · Iniciante</div></div>
+      </div>
+
+      <!-- ROUTINES -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Routines · list (Rajdhani names — post-L18.4)</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Treinos</span></div></div>
+        <div class="card"><div class="t-title-display">Empurrar pesado</div><div class="t-body-sm">7 exercícios · último treino há 3 dias</div></div>
+        <div class="card"><div class="t-title-display">Puxar e abdômen</div><div class="t-body-sm">6 exercícios · último treino há 5 dias</div></div>
+        <div class="card"><div class="t-title-display">Pernas — Quad foco</div><div class="t-body-sm">8 exercícios · último treino há 1 semana</div></div>
+      </div>
+
+      <!-- WORKOUT LOG -->
+      <div class="phone bf-baseline">
+        <div class="surface-label">Workout · set row + form tip</div>
+        <div class="t-title-display" style="font-size: 18px; margin-bottom: 4px;">Supino reto com barra</div>
+        <div class="t-body-sm" style="margin-bottom: 10px;">Peito · Barra · 3 séries · 6–8 reps</div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 1</span>
+          <span><span class="t-numeric" style="font-size:18px;">80</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">8</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 2</span>
+          <span><span class="t-numeric" style="font-size:18px;">82.5</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">7</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div class="spacer-8"></div>
+        <div class="t-eyebrow" style="margin-bottom: 4px;">Forma</div>
+        <div class="t-body">Mantenha os pés firmes no chão e contraia o core antes de descer a barra. Não estoure o quadril.</div>
+      </div>
+    </div>
+
+    <!-- ─── Column 2: BARLOW ─── -->
+    <div>
+      <div class="col-head">
+        <div class="name">Barlow</div>
+        <div class="tag tag-primary">PRIMARY · convergent #1</div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Saga · character sheet</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Saga</span></div><span class="gear">⚙</span></div>
+        <div style="display:flex; align-items:center; gap:14px; margin: 8px 0 12px;">
+          <div style="width:36px; height:36px; background: var(--surface2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Rajdhani'; font-weight:700; color: var(--hot-violet);">⚔</div>
+          <div class="t-numeric-lg">12</div>
+          <div style="flex:1; min-width:0;">
+            <div class="t-label" style="color: var(--text-dim);">Lvl · Aprendiz</div>
+            <div class="t-title">Striker</div>
+          </div>
+        </div>
+        <div class="t-body-sm" style="display:flex; justify-content:space-between;"><span>XP</span><span class="t-numeric-md">2,140 / 3,000</span></div>
+        <div class="xp-bar"><div class="fill" style="width:71%;"></div></div>
+
+        <div class="spacer-8"></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md">A · 65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md">A · 66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md">B · 43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md">A · 67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md">S · 100%</span></div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Home · character card + action hero</div>
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="t-title-display">Lvl 12 · Striker</div>
+            <div class="t-numeric-md" style="color: var(--text-dim); font-size: 11px; font-weight: 600;">1 RANK ATÉ ASPIRANTE</div>
+          </div>
+          <div class="t-body-sm" style="margin-top:4px;">Próximo: <strong style="color: var(--text-cream);">+340 XP</strong> em Costas</div>
+        </div>
+        <div class="action-hero">
+          <div class="t-headline" style="font-size: 20px;">Treino livre</div>
+          <div class="t-body" style="margin-top:4px;">Comece um workout sem plano — você joga o roteiro depois.</div>
+        </div>
+        <div class="t-body-sm" style="text-align:center; font-style: italic;">— faltam 2 treinos para o próximo rank em Costas —</div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Stats · vitality table</div>
+        <div class="t-section" style="margin-bottom: 8px;">Vitalidade atual</div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md" style="color: var(--success);">65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md" style="color: var(--success);">66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md" style="color: var(--warning);">43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md" style="color: var(--success);">67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md" style="color: var(--success);">100%</span></div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Exercises · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Exercícios</span></div></div>
+        <div style="margin-bottom:8px;"><span class="chip chip-active">PEITO</span><span class="chip">COSTAS</span><span class="chip">PERNAS</span></div>
+        <div class="card"><div class="t-title">Supino reto com barra</div><div class="t-body-sm">Peito · Barra · Avançado</div></div>
+        <div class="card"><div class="t-title">Crucifixo com halteres</div><div class="t-body-sm">Peito · Halter · Intermediário</div></div>
+        <div class="card"><div class="t-title">Flexão diamante</div><div class="t-body-sm">Peito · Peso corporal · Iniciante</div></div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Routines · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Treinos</span></div></div>
+        <div class="card"><div class="t-title-display">Empurrar pesado</div><div class="t-body-sm">7 exercícios · último treino há 3 dias</div></div>
+        <div class="card"><div class="t-title-display">Puxar e abdômen</div><div class="t-body-sm">6 exercícios · último treino há 5 dias</div></div>
+        <div class="card"><div class="t-title-display">Pernas — Quad foco</div><div class="t-body-sm">8 exercícios · último treino há 1 semana</div></div>
+      </div>
+
+      <div class="phone bf-barlow">
+        <div class="surface-label">Workout · set row + form tip</div>
+        <div class="t-title-display" style="font-size: 18px; margin-bottom: 4px;">Supino reto com barra</div>
+        <div class="t-body-sm" style="margin-bottom: 10px;">Peito · Barra · 3 séries · 6–8 reps</div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 1</span>
+          <span><span class="t-numeric" style="font-size:18px;">80</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">8</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 2</span>
+          <span><span class="t-numeric" style="font-size:18px;">82.5</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">7</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div class="spacer-8"></div>
+        <div class="t-eyebrow" style="margin-bottom: 4px;">Forma</div>
+        <div class="t-body">Mantenha os pés firmes no chão e contraia o core antes de descer a barra. Não estoure o quadril.</div>
+      </div>
+    </div>
+
+    <!-- ─── Column 3: DM SANS ─── -->
+    <div>
+      <div class="col-head">
+        <div class="name">DM Sans</div>
+        <div class="tag tag-safe">SAFE · runner-up</div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Saga · character sheet</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Saga</span></div><span class="gear">⚙</span></div>
+        <div style="display:flex; align-items:center; gap:14px; margin: 8px 0 12px;">
+          <div style="width:36px; height:36px; background: var(--surface2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Rajdhani'; font-weight:700; color: var(--hot-violet);">⚔</div>
+          <div class="t-numeric-lg">12</div>
+          <div style="flex:1; min-width:0;">
+            <div class="t-label" style="color: var(--text-dim);">Lvl · Aprendiz</div>
+            <div class="t-title">Striker</div>
+          </div>
+        </div>
+        <div class="t-body-sm" style="display:flex; justify-content:space-between;"><span>XP</span><span class="t-numeric-md">2,140 / 3,000</span></div>
+        <div class="xp-bar"><div class="fill" style="width:71%;"></div></div>
+
+        <div class="spacer-8"></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md">A · 65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md">A · 66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md">B · 43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md">A · 67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md">S · 100%</span></div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Home · character card + action hero</div>
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="t-title-display">Lvl 12 · Striker</div>
+            <div class="t-numeric-md" style="color: var(--text-dim); font-size: 11px; font-weight: 600;">1 RANK ATÉ ASPIRANTE</div>
+          </div>
+          <div class="t-body-sm" style="margin-top:4px;">Próximo: <strong style="color: var(--text-cream);">+340 XP</strong> em Costas</div>
+        </div>
+        <div class="action-hero">
+          <div class="t-headline" style="font-size: 20px;">Treino livre</div>
+          <div class="t-body" style="margin-top:4px;">Comece um workout sem plano — você joga o roteiro depois.</div>
+        </div>
+        <div class="t-body-sm" style="text-align:center; font-style: italic;">— faltam 2 treinos para o próximo rank em Costas —</div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Stats · vitality table</div>
+        <div class="t-section" style="margin-bottom: 8px;">Vitalidade atual</div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md" style="color: var(--success);">65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md" style="color: var(--success);">66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md" style="color: var(--warning);">43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md" style="color: var(--success);">67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md" style="color: var(--success);">100%</span></div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Exercises · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Exercícios</span></div></div>
+        <div style="margin-bottom:8px;"><span class="chip chip-active">PEITO</span><span class="chip">COSTAS</span><span class="chip">PERNAS</span></div>
+        <div class="card"><div class="t-title">Supino reto com barra</div><div class="t-body-sm">Peito · Barra · Avançado</div></div>
+        <div class="card"><div class="t-title">Crucifixo com halteres</div><div class="t-body-sm">Peito · Halter · Intermediário</div></div>
+        <div class="card"><div class="t-title">Flexão diamante</div><div class="t-body-sm">Peito · Peso corporal · Iniciante</div></div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Routines · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Treinos</span></div></div>
+        <div class="card"><div class="t-title-display">Empurrar pesado</div><div class="t-body-sm">7 exercícios · último treino há 3 dias</div></div>
+        <div class="card"><div class="t-title-display">Puxar e abdômen</div><div class="t-body-sm">6 exercícios · último treino há 5 dias</div></div>
+        <div class="card"><div class="t-title-display">Pernas — Quad foco</div><div class="t-body-sm">8 exercícios · último treino há 1 semana</div></div>
+      </div>
+
+      <div class="phone bf-dm">
+        <div class="surface-label">Workout · set row + form tip</div>
+        <div class="t-title-display" style="font-size: 18px; margin-bottom: 4px;">Supino reto com barra</div>
+        <div class="t-body-sm" style="margin-bottom: 10px;">Peito · Barra · 3 séries · 6–8 reps</div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 1</span>
+          <span><span class="t-numeric" style="font-size:18px;">80</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">8</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 2</span>
+          <span><span class="t-numeric" style="font-size:18px;">82.5</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">7</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div class="spacer-8"></div>
+        <div class="t-eyebrow" style="margin-bottom: 4px;">Forma</div>
+        <div class="t-body">Mantenha os pés firmes no chão e contraia o core antes de descer a barra. Não estoure o quadril.</div>
+      </div>
+    </div>
+
+    <!-- ─── Column 4: CHAKRA PETCH ─── -->
+    <div>
+      <div class="col-head">
+        <div class="name">Chakra Petch</div>
+        <div class="tag tag-bold">BOLD · high-character</div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Saga · character sheet</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Saga</span></div><span class="gear">⚙</span></div>
+        <div style="display:flex; align-items:center; gap:14px; margin: 8px 0 12px;">
+          <div style="width:36px; height:36px; background: var(--surface2); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Rajdhani'; font-weight:700; color: var(--hot-violet);">⚔</div>
+          <div class="t-numeric-lg">12</div>
+          <div style="flex:1; min-width:0;">
+            <div class="t-label" style="color: var(--text-dim);">Lvl · Aprendiz</div>
+            <div class="t-title">Striker</div>
+          </div>
+        </div>
+        <div class="t-body-sm" style="display:flex; justify-content:space-between;"><span>XP</span><span class="t-numeric-md">2,140 / 3,000</span></div>
+        <div class="xp-bar"><div class="fill" style="width:71%;"></div></div>
+
+        <div class="spacer-8"></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md">A · 65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md">A · 66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md">B · 43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md">A · 67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md">S · 100%</span></div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Home · character card + action hero</div>
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="t-title-display">Lvl 12 · Striker</div>
+            <div class="t-numeric-md" style="color: var(--text-dim); font-size: 11px; font-weight: 600;">1 RANK ATÉ ASPIRANTE</div>
+          </div>
+          <div class="t-body-sm" style="margin-top:4px;">Próximo: <strong style="color: var(--text-cream);">+340 XP</strong> em Costas</div>
+        </div>
+        <div class="action-hero">
+          <div class="t-headline" style="font-size: 20px;">Treino livre</div>
+          <div class="t-body" style="margin-top:4px;">Comece um workout sem plano — você joga o roteiro depois.</div>
+        </div>
+        <div class="t-body-sm" style="text-align:center; font-style: italic;">— faltam 2 treinos para o próximo rank em Costas —</div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Stats · vitality table</div>
+        <div class="t-section" style="margin-bottom: 8px;">Vitalidade atual</div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-chest);"></span><span class="t-title">Peito</span></div><span class="t-numeric-md" style="color: var(--success);">65%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-back);"></span><span class="t-title">Costas</span></div><span class="t-numeric-md" style="color: var(--success);">66%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-legs);"></span><span class="t-title">Pernas</span></div><span class="t-numeric-md" style="color: var(--warning);">43%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-shoulders);"></span><span class="t-title">Ombros</span></div><span class="t-numeric-md" style="color: var(--success);">67%</span></div>
+        <div class="row"><div class="left"><span class="dot" style="background: var(--bp-arms);"></span><span class="t-title">Braços</span></div><span class="t-numeric-md" style="color: var(--success);">100%</span></div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Exercises · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Exercícios</span></div></div>
+        <div style="margin-bottom:8px;"><span class="chip chip-active">PEITO</span><span class="chip">COSTAS</span><span class="chip">PERNAS</span></div>
+        <div class="card"><div class="t-title">Supino reto com barra</div><div class="t-body-sm">Peito · Barra · Avançado</div></div>
+        <div class="card"><div class="t-title">Crucifixo com halteres</div><div class="t-body-sm">Peito · Halter · Intermediário</div></div>
+        <div class="card"><div class="t-title">Flexão diamante</div><div class="t-body-sm">Peito · Peso corporal · Iniciante</div></div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Routines · list</div>
+        <div class="appbar"><div class="left"><span class="back">←</span><span class="t-appbar">Treinos</span></div></div>
+        <div class="card"><div class="t-title-display">Empurrar pesado</div><div class="t-body-sm">7 exercícios · último treino há 3 dias</div></div>
+        <div class="card"><div class="t-title-display">Puxar e abdômen</div><div class="t-body-sm">6 exercícios · último treino há 5 dias</div></div>
+        <div class="card"><div class="t-title-display">Pernas — Quad foco</div><div class="t-body-sm">8 exercícios · último treino há 1 semana</div></div>
+      </div>
+
+      <div class="phone bf-chakra">
+        <div class="surface-label">Workout · set row + form tip</div>
+        <div class="t-title-display" style="font-size: 18px; margin-bottom: 4px;">Supino reto com barra</div>
+        <div class="t-body-sm" style="margin-bottom: 10px;">Peito · Barra · 3 séries · 6–8 reps</div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 1</span>
+          <span><span class="t-numeric" style="font-size:18px;">80</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">8</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div style="display:flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--hair);">
+          <span class="t-body-sm">Série 2</span>
+          <span><span class="t-numeric" style="font-size:18px;">82.5</span><span class="t-label" style="margin-left:4px;">KG</span></span>
+          <span><span class="t-numeric" style="font-size:18px;">7</span><span class="t-label" style="margin-left:4px;">REPS</span></span>
+        </div>
+        <div class="spacer-8"></div>
+        <div class="t-eyebrow" style="margin-bottom: 4px;">Forma</div>
+        <div class="t-body">Mantenha os pés firmes no chão e contraia o core antes de descer a barra. Não estoure o quadril.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     4. TRADE-OFF MATRIX
+     ══════════════════════════════════════════════════════════════════ -->
+<section id="tradeoffs">
+  <h2>4 · Trade-off matrix</h2>
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th>Axis</th>
+        <th>Current · Inter</th>
+        <th>Barlow</th>
+        <th>DM Sans</th>
+        <th>Chakra Petch</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>x-height match</strong></td>
+        <td><span class="verdict-bad">~78% — too tall</span><br>Breaks size hierarchy</td>
+        <td><span class="verdict-good">~72%</span><br>Closer to Rajdhani's 68–70%</td>
+        <td><span class="verdict-good">~71%</span><br>Tight match</td>
+        <td><span class="verdict-good">~68%</span><br>Exact match</td>
+      </tr>
+      <tr>
+        <td><strong>terminal style</strong></td>
+        <td><span class="verdict-bad">ink-trap humanist</span></td>
+        <td><span class="verdict-good">flat blade-cut</span><br>Matches Rajdhani</td>
+        <td><span class="verdict-warn">flat-angled</span><br>Close, slightly rounded</td>
+        <td><span class="verdict-good">flat geometric</span><br>Identical philosophy</td>
+      </tr>
+      <tr>
+        <td><strong>weight-ramp interlock</strong></td>
+        <td><span class="verdict-bad">400/600 — skips 500</span></td>
+        <td><span class="verdict-good">100–900 variable</span><br>400/500/600 ramp available</td>
+        <td><span class="verdict-good">100–900 variable</span></td>
+        <td><span class="verdict-good">300–700</span><br>300/400/500/600 ramp</td>
+      </tr>
+      <tr>
+        <td><strong>RPG-gym personality</strong></td>
+        <td><span class="verdict-bad">neutral utility</span><br>"lazy default" perception confirmed</td>
+        <td><span class="verdict-good">technical-industrial</span><br>ESPN/esports adjacent</td>
+        <td><span class="verdict-warn">sophisticated utility</span><br>Fixes dissonance but adds little</td>
+        <td><span class="verdict-good">strongest RPG character</span><br>Most "same designer's hand"</td>
+      </tr>
+      <tr>
+        <td><strong>body-prose legibility (14sp)</strong></td>
+        <td><span class="verdict-good">excellent</span><br>It's what Inter was built for</td>
+        <td><span class="verdict-good">excellent</span><br>Highway-signage DNA</td>
+        <td><span class="verdict-good">excellent</span><br>UI-density optimized</td>
+        <td><span class="verdict-warn">good but compressed</span><br>~120ch max comfortable line</td>
+      </tr>
+      <tr>
+        <td><strong>micro-copy (11sp uppercase tracked)</strong></td>
+        <td><span class="verdict-warn">soft terminals</span></td>
+        <td><span class="verdict-good">Barlow Condensed cut available</span><br>Bonus width-axis tier</td>
+        <td><span class="verdict-warn">slightly thin at 400</span><br>Bump to 500</td>
+        <td><span class="verdict-good">outstanding</span><br>Sharper than normal-width alts</td>
+      </tr>
+      <tr>
+        <td><strong>Portuguese diacritics</strong></td>
+        <td><span class="verdict-good">full coverage</span></td>
+        <td><span class="verdict-good">full coverage</span></td>
+        <td><span class="verdict-good">full coverage</span></td>
+        <td><span class="verdict-good">full coverage</span></td>
+      </tr>
+      <tr>
+        <td><strong>license + bundling</strong></td>
+        <td>OFL · bundled · already in pubspec</td>
+        <td>OFL · Google Fonts · bundle 4 weights</td>
+        <td>OFL · Google Fonts · bundle 4 weights</td>
+        <td>OFL · Google Fonts · bundle 3–4 weights</td>
+      </tr>
+      <tr>
+        <td><strong>"already used by" risk</strong></td>
+        <td>Strong, Hevy, Fitbod, every Material app</td>
+        <td>ESPN graphics, esports brands · zero in fitness</td>
+        <td>DeepMind product · zero in fitness</td>
+        <td>Niche · zero entrenched usage</td>
+      </tr>
+      <tr>
+        <td><strong>implementation cost</strong></td>
+        <td>—</td>
+        <td>Token swap in <code>AppTextStyles</code> + asset bundle. Optionally introduce Condensed cut for <code>label</code>/<code>sectionHeader</code>.</td>
+        <td>Token swap in <code>AppTextStyles</code> + asset bundle. Bump body weights 400→500 at small sizes.</td>
+        <td>Token swap + asset bundle. Audit description copy for max line length on 360dp.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     5. RECOMMENDATION
+     ══════════════════════════════════════════════════════════════════ -->
+<section id="recommendation">
+  <h2>5 · Recommendation</h2>
+
+  <p>Both research lenses (competitor scan + typographic-principle critique) independently ranked <strong>Barlow</strong> as #1. It is the only Google Fonts face that passes all four diagnosis axes simultaneously — terminal style, x-height, weight ramp, and DNA — without introducing new trade-offs that need surface-by-surface verification.</p>
+
+  <h3>The pick — Barlow</h3>
+  <ul>
+    <li><strong>Closest DNA match.</strong> California highway signage origin: condensed-to-normal width geometric sans, monolinear strokes, flat blade-cut terminals — nearly identical to Rajdhani's construction philosophy.</li>
+    <li><strong>Bonus width axis.</strong> Barlow ships <em>Condensed / Semi-Condensed / Regular</em> from the same designer's hand. <code>Barlow Condensed</code> for the <code>label</code>/<code>sectionHeader</code> 11–12sp tracked uppercase slots picks up Rajdhani's verticality at micro-copy size, then Barlow Regular handles 14–16sp prose. Same font, two width axes — instantly reads as <em>one design system</em>.</li>
+    <li><strong>Weight-ramp interlock.</strong> 400/500/600 body ramp plugs into Rajdhani 500/600/700 display ramp with zero perceptual gap.</li>
+    <li><strong>No fitness-app entrenchment.</strong> Heavy use in esports/sports-graphics (ESPN score plates, several esports brand identities) but no major fitness app has claimed it. RepSaga gets the "engineered + competitive" register without inheriting a competitor's identity.</li>
+  </ul>
+
+  <h3>Runner-ups</h3>
+  <ul>
+    <li><strong>DM Sans · safe.</strong> If post-iteration the team finds Barlow's industrial register too cold for the BR market, DM Sans is the cleanest fallback. It loses some personality but solves the dissonance and outperforms Barlow at 12sp <code>textDim</code> micro-copy.</li>
+    <li><strong>Chakra Petch · bold.</strong> Strongest <em>"same designer's hand"</em> continuity with Rajdhani — highest RPG character of the three. The trade-off is real: paragraph prose at 14sp on narrow containers compresses noticeably. Viable only if form-tip / description copy is short (1–3 sentences), which it currently is.</li>
+  </ul>
+
+  <h3>What we explicitly considered and rejected</h3>
+  <ul>
+    <li><strong>Exo 2</strong> — PO's #2, but UX-critic's anti-rec. Looks like a match (geometric, sci-fi-adjacent, has Condensed cut), but x-height is too tall (~76%) and the lowercase <code>a</code>/<code>g</code> are subtly humanist. It would repeat Inter's size-hierarchy break.</li>
+    <li><strong>Oswald</strong> — another condensed geometric, but its x-height (~63%) is too low and stroke contrast too high. At 14sp prose it degrades into a "word wall" — two condensed fonts in the same hierarchy without a width-axis differentiator.</li>
+    <li><strong>Nunito Sans</strong> — rounded terminals + humanist warmth pull in the <em>opposite</em> direction from Rajdhani's cold geometric precision. The dissonance would be smaller than Inter but the tonal mismatch remains.</li>
+  </ul>
+
+  <h3>Implementation footprint (if Barlow wins)</h3>
+  <ol>
+    <li>Bundle <code>Barlow-Regular.ttf</code>, <code>Barlow-Medium.ttf</code>, <code>Barlow-SemiBold.ttf</code>, <code>Barlow-Bold.ttf</code>, plus <code>BarlowCondensed-SemiBold.ttf</code> via <code>pubspec.yaml &gt; flutter.fonts</code> (same loading contract as Rajdhani — direct <code>TextStyle(fontFamily: ...)</code>, NOT the <code>google_fonts</code> async API).</li>
+    <li>In <code>lib/core/theme/app_theme.dart &gt; AppTextStyles</code>: swap <code>fontFamily: 'Inter'</code> → <code>'Barlow'</code> for <code>title</code>, <code>body</code>, <code>bodySmall</code>. Swap <code>'Inter'</code> → <code>'Barlow Condensed'</code> for <code>label</code>, <code>sectionHeader</code>. Promote <code>body</code> weight 400 → 500 at <code>textDim</code> contexts (preserves perceived weight on dark surface).</li>
+    <li>Update <code>project_design_language_typography</code> auto-memory: rule becomes <em>"Rajdhani owns every number, every title, every label you read in a glance. Barlow (Condensed for micro-copy, Regular for prose) owns everything you read in a sentence."</em></li>
+    <li>Update <code>scripts/check_typography_call_sites.sh</code> CI gate to also forbid <code>fontFamily: 'Inter'</code> outside <code>app_theme.dart</code> — same one-sanctioned-entry-point pattern.</li>
+    <li>Visual-verification pass at 320 / 360 / 412dp on Saga, Home, Stats, Exercises, Routines, Workout-log, Profile-settings before merge (per CLAUDE.md visual-verification protocol).</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Decision point.</strong> Pick one (Barlow / DM Sans / Chakra Petch / "keep Inter, the dissonance is fine") or ask for round 2 with different candidates. If Barlow looks right at a glance but you want to see how it handles a specific surface (PR celebration, rank-up animation, onboarding flow) before locking in, name it and I'll add it to round 2.
+  </div>
+</section>
+
+<footer class="doc-footer">
+  Generated 2026-05-20. Branch <code>feature/typography-research-pre-launch</code>. Research sources: <code>product-owner</code> competitor scan (Persona 5, Diablo IV, Habitica, Hevy, Nike Training Club) + <code>ui-ux-critic</code> typographic-principle analysis. Implementation plan locked once direction is picked.
+</footer>
+
+</body>
+</html>

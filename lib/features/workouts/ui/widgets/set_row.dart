@@ -932,8 +932,11 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
         valueFontWeight = FontWeight.w700;
       } else {
         // Predicted or standing — pull gold from the ancestor RewardAccent.
+        // Phase 28a: weight pinned to w700 (Rajdhani's bundled bold). w800
+        // was a silent nearest-match to w700 at runtime; see
+        // `scripts/check_typography_call_sites.sh` gate 3.
         valueColor = RewardAccent.of(context)?.color;
-        valueFontWeight = FontWeight.w800;
+        valueFontWeight = FontWeight.w700;
       }
     }
 
@@ -1024,8 +1027,11 @@ class _RepsStepperCell extends ConsumerWidget {
         valueColor = AppColors.textCream;
         valueFontWeight = FontWeight.w700;
       } else {
+        // Phase 28a: weight pinned to w700 (Rajdhani's bundled bold). w800
+        // was a silent nearest-match to w700 at runtime; see
+        // `scripts/check_typography_call_sites.sh` gate 3.
         valueColor = RewardAccent.of(context)?.color;
-        valueFontWeight = FontWeight.w800;
+        valueFontWeight = FontWeight.w700;
       }
     }
 

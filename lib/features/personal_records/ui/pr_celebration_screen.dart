@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/device/platform_info.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/reward_accent.dart';
@@ -310,9 +311,12 @@ class _PRCelebrationScreenState extends ConsumerState<PRCelebrationScreen>
             identifier: 'pr-new-heading',
             child: Text(
               l10n.newPrHeading,
+              // Phase 28a forbid-w900 gate: dropped `fontWeight: w900`.
+              // displayMedium is already Rajdhani 700 (the heaviest weight
+              // bundled in pubspec.yaml > flutter.fonts); w900 was a silent
+              // nearest-match to w700 at runtime.
               style: theme.textTheme.displayMedium?.copyWith(
                 color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w900,
                 shadows: [
                   Shadow(
                     color: theme.colorScheme.primary.withValues(alpha: 0.6),
@@ -448,9 +452,15 @@ class _AnimatedRecordCard extends StatelessWidget {
               },
               child: Text(
                 formattedValue,
-                style: theme.textTheme.headlineMedium?.copyWith(
+                // Phase 28a: the PR value is numeric data, so the canonical
+                // token is `AppTextStyles.numeric` (Rajdhani 700 with tabular
+                // figures) rather than the `headline` text register. 24sp
+                // sizes it as a headline-tier emphasis; w900 was a silent
+                // nearest-match to w700 against the bundled Rajdhani assets
+                // (see `scripts/check_typography_call_sites.sh` gate 3).
+                style: AppTextStyles.numeric.copyWith(
+                  fontSize: 24,
                   color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
