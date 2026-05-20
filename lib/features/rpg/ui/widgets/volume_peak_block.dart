@@ -52,7 +52,6 @@ class VolumePeakBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
     final dotColor =
@@ -83,7 +82,7 @@ class VolumePeakBlock extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   localizedBodyPartName(bodyPart, l10n),
-                  style: theme.textTheme.titleSmall,
+                  style: AppTextStyles.title.copyWith(fontSize: 14),
                 ),
               ],
             ),
@@ -135,14 +134,17 @@ class _VolumeColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final targetText = _targetText();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           l10n.volumePeakBlockVolumeLabel,
-          style: theme.textTheme.labelSmall?.copyWith(color: AppColors.textDim),
+          style: AppTextStyles.label.copyWith(
+            fontSize: 10,
+            letterSpacing: 0.12 * 10,
+            color: AppColors.textDim,
+          ),
         ),
         const SizedBox(height: 2),
         // Value row: "12 / 16 séries"  OR  "12 séries" (no target if delta is
@@ -161,20 +163,13 @@ class _VolumeColumn extends StatelessWidget {
             ),
             if (targetText != null) ...[
               const SizedBox(width: 4),
-              Text(
-                '/ $targetText',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textDim,
-                ),
-              ),
+              Text('/ $targetText', style: AppTextStyles.bodySmall),
             ] else
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 2),
                 child: Text(
                   l10n.volumePeakBlockSeries,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textDim,
-                  ),
+                  style: AppTextStyles.bodySmall,
                 ),
               ),
           ],
@@ -207,31 +202,28 @@ class _VolumeDeltaLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     switch (delta.state) {
       case VolumeDeltaState.suppressed:
         return Text(
           l10n.volumePeakBlockDeltaNoHistory,
-          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textDim),
+          style: AppTextStyles.bodySmall,
         );
       case VolumeDeltaState.met:
         return Text(
           '● ${_basisLabel()}',
-          style: theme.textTheme.bodySmall?.copyWith(
+          style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.vitalityHigh,
           ),
         );
       case VolumeDeltaState.underTarget:
         return Text(
           '▼ ${delta.delta.round()} ${_basisLabel()}',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.vitalityLow,
-          ),
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.vitalityLow),
         );
       case VolumeDeltaState.overTarget:
         return Text(
           '▲ +${delta.delta.round()} ${l10n.volumePeakBlockDeltaAboveTarget}',
-          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.warning),
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
         );
     }
   }
@@ -263,13 +255,16 @@ class _CargaPicoColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           l10n.volumePeakBlockCargaPicoLabel,
-          style: theme.textTheme.labelSmall?.copyWith(color: AppColors.textDim),
+          style: AppTextStyles.label.copyWith(
+            fontSize: 10,
+            letterSpacing: 0.12 * 10,
+            color: AppColors.textDim,
+          ),
         ),
         const SizedBox(height: 2),
         Wrap(
@@ -295,9 +290,7 @@ class _CargaPicoColumn extends StatelessWidget {
                 // Phase 26c v1 fixed-unit; locale-aware unit comes with the
                 // future settings work.
                 'kg',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textDim,
-                ),
+                style: AppTextStyles.bodySmall,
               ),
             ),
           ],
@@ -322,13 +315,12 @@ class _PeakDeltaLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     switch (delta.state) {
       case PeakDeltaState.suppressed:
       case PeakDeltaState.flat:
         return Text(
           l10n.volumePeakBlockDeltaNoHistory,
-          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textDim),
+          style: AppTextStyles.bodySmall,
         );
       case PeakDeltaState.up:
         return Row(
@@ -342,9 +334,10 @@ class _PeakDeltaLine extends StatelessWidget {
               ),
               child: Text(
                 l10n.volumePeakBlockBadge30D,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: AppColors.textDim,
+                style: AppTextStyles.label.copyWith(
                   fontSize: 9,
+                  letterSpacing: 0.12 * 9,
+                  color: AppColors.textDim,
                 ),
               ),
             ),
@@ -354,7 +347,7 @@ class _PeakDeltaLine extends StatelessWidget {
               // 0.5 increments common in micro-loading render without
               // forced-integer rounding noise.
               '▲ +${AppNumberFormat.weight(delta.delta, locale: locale)} kg',
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.vitalityHigh,
               ),
             ),
@@ -371,7 +364,6 @@ class _ReferenciaColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -379,7 +371,9 @@ class _ReferenciaColumn extends StatelessWidget {
           children: [
             Text(
               l10n.volumePeakBlockReferenciaLabel,
-              style: theme.textTheme.labelSmall?.copyWith(
+              style: AppTextStyles.label.copyWith(
+                fontSize: 10,
+                letterSpacing: 0.12 * 10,
                 color: AppColors.textDim,
               ),
             ),
@@ -406,9 +400,7 @@ class _ReferenciaColumn extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 l10n.volumePeakBlockSeries,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textDim,
-                ),
+                style: AppTextStyles.bodySmall,
               ),
             ),
           ],
@@ -416,7 +408,7 @@ class _ReferenciaColumn extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           l10n.volumePeakBlockDeltaEstimated,
-          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textDim),
+          style: AppTextStyles.bodySmall,
         ),
       ],
     );

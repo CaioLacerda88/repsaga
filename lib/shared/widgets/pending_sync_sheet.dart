@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/offline/pending_action.dart';
 import '../../core/offline/pending_sync_provider.dart';
 import '../../core/offline/sync_error_mapper.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/radii.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -71,14 +72,14 @@ class _PendingSyncSheetState extends ConsumerState<PendingSyncSheet> {
               children: [
                 Text(
                   l10n.pendingSyncTitle,
-                  style: theme.textTheme.titleMedium?.copyWith(
+                  style: AppTextStyles.title.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const Spacer(),
                 Text(
                   l10n.itemCount(actions.length),
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: AppTextStyles.bodySmall.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
@@ -92,7 +93,7 @@ class _PendingSyncSheetState extends ConsumerState<PendingSyncSheet> {
                 ? Center(
                     child: Text(
                       l10n.allSynced,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: AppTextStyles.body.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.5,
                         ),
@@ -252,14 +253,14 @@ class _ActionRow extends StatelessWidget {
                   children: [
                     Text(
                       _label(l10n),
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: AppTextStyles.body.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
                       '${l10n.queuedAt(_formatTime(action.queuedAt))}'
                       '${action.retryCount > 0 ? ' · ${l10n.retryCount(action.retryCount)}' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: AppTextStyles.bodySmall.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.5,
                         ),
@@ -290,7 +291,7 @@ class _ActionRow extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               bodyError,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: AppTextStyles.bodySmall.copyWith(
                 color: theme.colorScheme.error,
               ),
               maxLines: 2,

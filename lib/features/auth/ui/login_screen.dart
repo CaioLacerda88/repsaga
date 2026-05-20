@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/gradient_button.dart';
@@ -190,7 +191,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 16),
                   Text(
                     l10n.appName,
-                    style: theme.textTheme.displayMedium?.copyWith(
+                    style: AppTextStyles.display.copyWith(
                       color: theme.colorScheme.primary,
                     ),
                     textAlign: TextAlign.center,
@@ -201,7 +202,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     identifier: 'auth-welcome-back',
                     child: Text(
                       _isSignUp ? l10n.createYourAccount : l10n.welcomeBack,
-                      style: theme.textTheme.bodyLarge?.copyWith(
+                      style: AppTextStyles.body.copyWith(
+                        fontSize: 16,
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.7,
                         ),
@@ -238,7 +240,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Expanded(
                               child: Text(
                                 _errorMessage!,
-                                style: theme.textTheme.bodyMedium?.copyWith(
+                                style: AppTextStyles.body.copyWith(
                                   color: theme.colorScheme.error,
                                 ),
                               ),
@@ -282,7 +284,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           child: Text(
                             l10n.forgotPassword,
-                            style: theme.textTheme.bodyMedium?.copyWith(
+                            style: AppTextStyles.body.copyWith(
                               color: theme.colorScheme.primary.withValues(
                                 alpha: 0.8,
                               ),
@@ -315,7 +317,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           l10n.or,
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          style: AppTextStyles.body.copyWith(
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.5,
                             ),
@@ -390,8 +392,8 @@ class _LegalFooter extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
     final linkColor = theme.colorScheme.primary.withValues(alpha: 0.85);
-    final baseStyle = theme.textTheme.bodySmall?.copyWith(color: mutedColor);
-    final linkStyle = theme.textTheme.bodySmall?.copyWith(
+    final baseStyle = AppTextStyles.bodySmall.copyWith(color: mutedColor);
+    final linkStyle = AppTextStyles.bodySmall.copyWith(
       color: linkColor,
       fontWeight: FontWeight.w600,
     );
