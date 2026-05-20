@@ -125,10 +125,10 @@ void main() {
       });
     });
 
-    group('title (Inter 600 16dp)', () {
+    group('title (Barlow 600 16dp)', () {
       final style = AppTextStyles.title;
-      test('family is Inter', () {
-        expect(style.fontFamily, startsWith('Inter'));
+      test('family is Barlow', () {
+        expect(style.fontFamily, startsWith('Barlow'));
       });
       test('weight is w600', () {
         expect(style.fontWeight, FontWeight.w600);
@@ -202,10 +202,10 @@ void main() {
       });
     });
 
-    group('body (Inter 400 14dp)', () {
+    group('body (Barlow 400 14dp)', () {
       final style = AppTextStyles.body;
-      test('family is Inter', () {
-        expect(style.fontFamily, startsWith('Inter'));
+      test('family is Barlow', () {
+        expect(style.fontFamily, startsWith('Barlow'));
       });
       test('weight is w400', () {
         expect(style.fontWeight, FontWeight.w400);
@@ -221,10 +221,10 @@ void main() {
       });
     });
 
-    group('bodySmall (Inter 400 12dp textDim)', () {
+    group('bodySmall (Barlow 400 12dp textDim)', () {
       final style = AppTextStyles.bodySmall;
-      test('family is Inter', () {
-        expect(style.fontFamily, startsWith('Inter'));
+      test('family is Barlow', () {
+        expect(style.fontFamily, startsWith('Barlow'));
       });
       test('weight is w400', () {
         expect(style.fontWeight, FontWeight.w400);
@@ -240,10 +240,10 @@ void main() {
       });
     });
 
-    group('label (Inter 600 11dp eyebrow)', () {
+    group('label (Barlow Condensed 600 11dp eyebrow)', () {
       final style = AppTextStyles.label;
-      test('family is Inter', () {
-        expect(style.fontFamily, startsWith('Inter'));
+      test('family is Barlow Condensed', () {
+        expect(style.fontFamily, startsWith('Barlow Condensed'));
       });
       test('weight is w600', () {
         expect(style.fontWeight, FontWeight.w600);
@@ -262,25 +262,29 @@ void main() {
       });
     });
 
-    group('sectionHeader (Inter 600 12dp eyebrow)', () {
-      // Derived from `label` via `.copyWith(fontSize: 12, letterSpacing:
-      // 0.12 * 12)` — one step up from the chip/tab register so a heading
+    group('sectionHeader (Barlow Condensed 600 13dp eyebrow)', () {
+      // Derived from `label` via `.copyWith(fontSize: 13, letterSpacing:
+      // 0.12 * 13)` — one step up from the chip/tab register so a heading
       // can hold its own next to body copy without competing with [title].
       // Color is intentionally NOT baked — call sites pick (e.g.
       // hotViolet for /saga/stats sections), so the assertion lets the
       // call site own it.
+      //
+      // Phase 28b: bumped from 12dp to 13dp to match the `SectionHeader`
+      // widget's rendered size + the button text-style derivation
+      // (`label.copyWith(fontSize: 13)`). Reconciles a token / widget drift.
       final style = AppTextStyles.sectionHeader;
-      test('family inherits Inter from label', () {
-        expect(style.fontFamily, startsWith('Inter'));
+      test('family inherits Barlow Condensed from label', () {
+        expect(style.fontFamily, startsWith('Barlow Condensed'));
       });
       test('weight is w600 (inherited from label)', () {
         expect(style.fontWeight, FontWeight.w600);
       });
-      test('size is 12', () {
-        expect(style.fontSize, 12.0);
+      test('size is 13', () {
+        expect(style.fontSize, 13.0);
       });
-      test('letterSpacing is 0.12 * 12 = 1.44', () {
-        expect(style.letterSpacing, closeTo(1.44, 0.001));
+      test('letterSpacing is 0.12 * 13 = 1.56', () {
+        expect(style.letterSpacing, closeTo(1.56, 0.001));
       });
     });
 

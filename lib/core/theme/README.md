@@ -63,25 +63,37 @@ intentional.
 
 ## Typography
 
-Two families, bundled directly via `pubspec.yaml > flutter.fonts:`:
+Three families, bundled directly via `pubspec.yaml > flutter.fonts:`
+(Phase 28b — Inter swapped to Barlow + Barlow Condensed):
 
-- **Rajdhani** — display, headline, numeric. Condensed humanist sans,
-  reads fast under gym fatigue at 18+ dp. Bundled weights: 500/600/700.
-- **Inter** — title, body, label. Covers 11-16 dp reading. Bundled
-  weights: 400/600.
+- **Rajdhani** — display, headline, numeric, celebration overlays.
+  Condensed humanist sans, reads fast under gym fatigue at 18+ dp.
+  Bundled weights: 500/600/700.
+- **Barlow** — title, body, bodySmall. Humanist sans with a slightly
+  warmer rhythm than Inter. Bundled weights: 400/600.
+- **Barlow Condensed** — label, sectionHeader. Condensed-humanist sans
+  for uppercase tracked eyebrow / chip / section copy at 9-13 dp. Picks
+  up Rajdhani's verticality at micro-copy size, gives tracked labels an
+  engineered feel without escalating to display weight. Bundled weights:
+  500/600.
+- **Inter** — passive fallback only. Retained in `pubspec.fonts` during
+  the Barlow rollout; removal scheduled in a follow-up cleanup once
+  visual verification on Barlow ships clean.
 
-Both families load synchronously through `TextStyle(fontFamily:
-'Rajdhani')` / `'Inter'` references inside `AppTextStyles`. The
-`google_fonts` package is forbidden in production code paths (Phase 27
-L14: its async API silently fell back to Inter on real-device release
-builds, breaking the entire two-family identity). `main.dart` locks
+All families load synchronously through `TextStyle(fontFamily: ...)`
+references inside `AppTextStyles`. The `google_fonts` package is
+forbidden in production code paths (Phase 27 L14: its async API silently
+fell back to Inter on real-device release builds, breaking the entire
+family identity). `main.dart` locks
 `GoogleFonts.config.allowRuntimeFetching = false` as defence-in-depth;
-`scripts/check_typography_call_sites.sh` lints out `GoogleFonts.*` calls
-and stray `google_fonts` imports under `lib/features/` + `lib/shared/`.
-See `AppTextStyles` dartdoc in `app_theme.dart` for the loading contract.
+`scripts/check_typography_call_sites.sh` lints out raw `fontFamily`
+literals (Gates 1-2), forbidden weights `w800/w900` (Gate 3),
+`GoogleFonts.*` calls (Gate 4), stray `google_fonts` imports (Gate 5),
+and `theme.textTheme.*` reads in app code (Gate 6, Phase 28b). See
+`AppTextStyles` dartdoc in `app_theme.dart` for the loading contract.
 
-One display family, one body family, one numeric family. Three families
-max. See `AppTextStyles` for the token set.
+One display family, one body family, one tracked-label family — three
+TTF families total. See `AppTextStyles` for the token set.
 
 PressStart2P, Cinzel and Cormorant are explicitly rejected (see PROJECT.md
 §17.0c for rationale).
