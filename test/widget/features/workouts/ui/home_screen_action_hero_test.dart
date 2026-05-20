@@ -558,30 +558,48 @@ void main() {
     // `workoutCountProvider == 0` — "user has never recorded a workout" —
     // not on `routines.isEmpty`. Default routines ship seeded for every
     // user in production, so the empty-routines gate never fires.
-    testWidgets('shows when workoutCount is 0 (day-0 user)', (tester) async {
-      // Seed routines AND a plan to prove the gate is purely workout-count
-      // driven: even with full routines + a bucket, a zero-history user
-      // still sees the create-first-routine CTA.
-      await tester.pumpWidget(
-        _buildWithRouter(
-          workoutCount: 0,
-          plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
-          routines: [_routine(id: 'r-1', name: 'Push Day')],
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
+    testWidgets(
+      'shows when workoutCount is 0 AND no custom routines (day-0 user)',
+      (tester) async {
+        // Phase 27 L3 gate: hero fires when day-0 user has not created any
+        // custom routines yet. Seed a DEFAULT routine plus a bucket
+        // referencing it — the default doesn't count as a user-owned routine
+        // (same `!r.isDefault` filter as `_HomeRoutinesList`), so the
+        // create-first-routine CTA still wins even with a populated bucket.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 0,
+            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+            routines: [
+              _routine(
+                id: 'r-1',
+                name: 'Push Day',
+                isDefault: true,
+                userId: null,
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
 
-      expect(
-        _findByIdentifier('home-action-hero-create-first-routine'),
-        findsOneWidget,
-      );
-      expect(find.text('Criar primeira rotina'), findsOneWidget);
-      expect(find.text('BEM-VINDO'), findsOneWidget);
-      // Other branches not in the tree — day-0 gate wins over the bucket.
-      expect(_findByIdentifier('home-action-hero-start-routine'), findsNothing);
-      expect(_findByIdentifier('home-action-hero-free-workout'), findsNothing);
-    });
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsOneWidget,
+        );
+        expect(find.text('Criar primeira rotina'), findsOneWidget);
+        expect(find.text('BEM-VINDO'), findsOneWidget);
+        // Other branches not in the tree — day-0 gate wins over the bucket.
+        expect(
+          _findByIdentifier('home-action-hero-start-routine'),
+          findsNothing,
+        );
+        expect(
+          _findByIdentifier('home-action-hero-free-workout'),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('tap navigates to /routines/create', (tester) async {
       String? lastPushed;
@@ -628,6 +646,69 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Treino livre'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'does NOT show when workoutCount == 0 but user has a custom routine (L3 gate)',
+      (tester) async {
+        // Phase 27 L3 gate tightening: day-0 user who has already created a
+        // custom routine should NOT see the create-first-routine CTA. They
+        // already have a routine — the hero should fall through to
+        // free-workout / start-next so the user can lift, not push them back
+        // to /routines/create. Without this gate, the home shows "Criar
+        // primeira rotina" duplicated by the routines list's own CTA.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 0,
+            plan: null,
+            routines: [
+              _routine(id: 'u-1', name: 'My Push', userId: 'user-001'),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsNothing,
+        );
+        expect(
+          _findByIdentifier('home-action-hero-free-workout'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'still shows when workoutCount == 0 and only default (seeded) routines exist',
+      (tester) async {
+        // Default routines (`isDefault == true`, `userId == null`) ship for
+        // every user. They must NOT satisfy the "user has a routine" gate —
+        // otherwise the create-first-routine hero would never fire for any
+        // day-0 user. Same `!r.isDefault` filter as `_HomeRoutinesList`.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 0,
+            plan: null,
+            routines: [
+              _routine(
+                id: 'd-1',
+                name: 'Full Body',
+                isDefault: true,
+                userId: null,
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsOneWidget,
+        );
       },
     );
   });

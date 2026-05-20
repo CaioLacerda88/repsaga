@@ -171,22 +171,73 @@ void main() {
       expect(chart.data.lineTouchData.enabled, isFalse);
     });
 
-    testWidgets('Y-axis is locked 0..100', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          trendByBodyPart: _allRamps(start: windowStart, days: 91),
-          selected: BodyPart.chest,
-          windowStart: windowStart,
-          windowEnd: today,
-          useNarrowWindow: false,
-        ),
-      );
-      await tester.pump();
+    testWidgets(
+      'Y-axis labels anchor at 0%/100% with breathing room above 100%',
+      (tester) async {
+        // Vitality % is conceptually a 0..100 scale (the labels read "0%" and
+        // "100%" — see the X/Y label widget filter). The chart's `maxY`
+        // carries a small headroom margin so the terminal `%` callout and any
+        // ghost line sustained at 100% (e.g. a body part at full vitality)
+        // sit visibly inside the plot area instead of bleeding into the
+        // section above. Regression guard for the L9 "ugly borders" fix —
+        // killing the headroom puts the y=100 ghost line at the chart's
+        // visual top edge again, where it reads as a frame artifact.
+        await tester.pumpWidget(
+          _wrap(
+            trendByBodyPart: _allRamps(start: windowStart, days: 91),
+            selected: BodyPart.chest,
+            windowStart: windowStart,
+            windowEnd: today,
+            useNarrowWindow: false,
+          ),
+        );
+        await tester.pump();
 
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      expect(chart.data.minY, 0);
-      expect(chart.data.maxY, 100);
-    });
+        final chart = tester.widget<LineChart>(find.byType(LineChart));
+        // L9 round-2: both top + bottom carry headroom so ghost lines at
+        // exactly 0% or 100% don't hug the chart's visual edges. Y-axis
+        // labels still anchor at 0/100 via value-equality filter.
+        expect(chart.data.minY, lessThan(0));
+        expect(chart.data.maxY, greaterThan(100));
+      },
+    );
+
+    testWidgets(
+      'body part with empty trace draws no line (no spurious flat-zero baseline)',
+      (tester) async {
+        // L9 regression: prior to the fix, `_buildSpots` returned a flat-zero
+        // fallback `[(0, 0), (spanDays, 0)]` for body parts with no points in
+        // the window. fl_chart painted those as a horizontal line at y=0
+        // spanning the full chart width — read as an "ugly bottom border" in
+        // the deep-dive screen screenshot. The fallback now returns an empty
+        // spot list so fl_chart paints nothing.
+        await tester.pumpWidget(
+          _wrap(
+            trendByBodyPart: const {BodyPart.chest: <TrendPoint>[]},
+            selected: BodyPart.chest,
+            windowStart: windowStart,
+            windowEnd: today,
+            useNarrowWindow: false,
+          ),
+        );
+        await tester.pump();
+
+        final chart = tester.widget<LineChart>(find.byType(LineChart));
+        // Every active body part still contributes a `LineChartBarData` so
+        // the chart's bar count stays stable across selection changes — but
+        // each empty-trend bar carries zero spots, drawing nothing.
+        expect(chart.data.lineBarsData.length, activeBodyParts.length);
+        for (final bar in chart.data.lineBarsData) {
+          expect(
+            bar.spots,
+            isEmpty,
+            reason:
+                'empty trend should map to empty spots — a flat-zero '
+                'fallback re-introduces the L9 bottom-border artifact',
+          );
+        }
+      },
+    );
 
     testWidgets('X-axis labels show "90 days ago" + "Today" in 90-day mode', (
       tester,
@@ -297,30 +348,6 @@ void main() {
             )
             .length;
         expect(chestStillVivid, 0);
-      },
-    );
-
-    testWidgets(
-      'body part with empty trace renders a flat zero line (no crash)',
-      (tester) async {
-        // Chest selected but empty (user has never trained chest in window).
-        await tester.pumpWidget(
-          _wrap(
-            trendByBodyPart: const {BodyPart.chest: <TrendPoint>[]},
-            selected: BodyPart.chest,
-            windowStart: windowStart,
-            windowEnd: today,
-            useNarrowWindow: false,
-          ),
-        );
-        await tester.pump();
-
-        final chart = tester.widget<LineChart>(find.byType(LineChart));
-        // Six bars regardless — every active body part has a flat-zero
-        // baseline when its data is missing or empty.
-        expect(chart.data.lineBarsData.length, activeBodyParts.length);
-        // No exception thrown.
-        expect(tester.takeException(), isNull);
       },
     );
 

@@ -138,6 +138,50 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
     ref.read(weeklyPlanNeedsConfirmationProvider.notifier).state = true;
   }
 
+  /// Synchronously replaces the provider's state with a copy of the
+  /// current plan carrying the given routines, WITHOUT persisting to
+  /// Supabase. Used by the plan editor to keep dependent providers
+  /// ([weeklyEngagementProvider], the Home screen's bucket chips, etc.)
+  /// in sync with local edits — they all `ref.watch(weeklyPlanProvider)`
+  /// and react to `state` mutations, so updating `state` here makes their
+  /// next rebuild see the new bucket on the very next frame instead of
+  /// waiting for the 300ms debounce + Supabase roundtrip to complete.
+  ///
+  /// Caller is responsible for following up with [upsertPlan] (the editor's
+  /// `_savePlan` does this via debounce). On upsert success this method's
+  /// optimistic state is overwritten with the persisted plan — same data,
+  /// no observable change. On upsert failure state goes to AsyncError, at
+  /// which point the next read or rebuild reconciles against the server
+  /// truth — the optimistic state is intentionally NOT preserved, because
+  /// "shown locally" without "committed" is the worse-of-both-worlds story.
+  ///
+  /// When no plan exists yet for this week, a synthetic plan with a
+  /// placeholder `id` is published; the next upsert returns the real `id`
+  /// from Supabase and the state catches up. Consumers must not rely on
+  /// `id` being stable across an optimistic → committed transition (the
+  /// engagement provider doesn't; routine lookups go by `routineId`, not
+  /// `plan.id`).
+  void setOptimistic(List<BucketRoutine> routines) {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(routines: routines));
+      return;
+    }
+    final userId = ref.read(authRepositoryProvider).currentUser?.id;
+    if (userId == null) return;
+    final now = DateTime.now().toUtc();
+    state = AsyncData(
+      WeeklyPlan(
+        id: 'optimistic-${currentWeekMonday().toIso8601String()}',
+        userId: userId,
+        weekStart: currentWeekMonday(),
+        routines: routines,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+  }
+
   /// Create or update the current week's plan with the given routines.
   Future<void> upsertPlan(List<BucketRoutine> routines) async {
     final userId = ref.read(authRepositoryProvider).currentUser?.id;
@@ -270,9 +314,22 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
   }
 
   /// Clear the current week's plan.
+  ///
+  /// If the cached state holds a synthetic optimistic placeholder (see
+  /// [setOptimistic]), the corresponding Postgres row has not been
+  /// persisted yet — `DELETE WHERE id = 'optimistic-…'` would match zero
+  /// rows and silently succeed, leaving the real row (when the in-flight
+  /// debounced upsert lands moments later) un-deleted. The placeholder
+  /// branch resets state directly; the caller is responsible for also
+  /// cancelling any pending debounce on the same edit session
+  /// (`WeekPlanScreen._confirmClear` does this).
   Future<void> clearPlan() async {
     final plan = state.value;
     if (plan == null) return;
+    if (plan.id.startsWith('optimistic-')) {
+      state = const AsyncData(null);
+      return;
+    }
     final repo = ref.read(weeklyPlanRepositoryProvider);
     await repo.deletePlan(plan.id);
     state = const AsyncData(null);

@@ -1,6 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -183,9 +182,34 @@ class VitalityTrendChart extends StatelessWidget {
               LineChartData(
                 minX: 0,
                 maxX: xMax,
-                minY: 0,
-                maxY: 100,
-                clipData: const FlClipData.all(),
+                // L9 round 2: both top AND bottom now carry headroom because
+                // ghost lines at exactly 0% (untrained or zero-vitality body
+                // parts) and exactly 100% (peaking body parts like
+                // Braços-100% in the launch screenshot) draw flush against
+                // the chart's visual edges and read as "ugly borders" no
+                // matter how the frame/grid is configured. Pushing the
+                // plot range to -8..108 keeps the 0 and 100 axis labels
+                // anchored (the Y-titles widget filters to value == 0 / 100
+                // explicitly so the labels don't shift), while the lines
+                // themselves render visibly INSIDE the plot area with
+                // breathing room. `clipData: FlClipData.all()` keeps them
+                // from leaking into the surrounding padding.
+                minY: -8,
+                maxY: 108,
+                // L18.2: leave the RIGHT side unclipped so the selected
+                // line's 4.5dp terminal dot can extend past the plot
+                // boundary into the 24dp outer right padding (which is
+                // still on-screen). With `FlClipData.all()` the dot was
+                // sliced in half at the plot's right edge — the user
+                // surfaces it as "the dot is cut at the phone screen."
+                // Left/top/bottom stay clipped so the original L9 fix
+                // (ghost lines bleeding past the plot frame) holds.
+                clipData: const FlClipData(
+                  top: true,
+                  bottom: true,
+                  left: true,
+                  right: false,
+                ),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
                 lineTouchData: const LineTouchData(enabled: false),
@@ -288,33 +312,29 @@ class VitalityTrendChart extends StatelessWidget {
   /// outside the window are filtered out (defensive — the provider should
   /// already trim to window).
   ///
-  /// Empty inputs (the user has never trained this body part in the window)
-  /// return a flat-zero line at the two endpoints — keeps the chart's draw
-  /// path consistent and avoids "vanishing line" gaps.
+  /// Empty inputs (the user has never trained this body part in the window,
+  /// or all known points fall outside the window) return an empty spot list
+  /// so fl_chart paints nothing for that bar. The L9 fix: the previous
+  /// fallback emitted a `[(0, 0), (spanDays, 0)]` flat-zero baseline which
+  /// fl_chart rendered as a horizontal line at y=0 spanning the full chart
+  /// width — read as an "ugly bottom border" frame artifact on the deep-dive
+  /// screen. Returning empty is safe: fl_chart's `drawBarLine` is a no-op on
+  /// empty spots, the bar still occupies its slot in `lineBarsData` so per-
+  /// body-part ordering stays stable, and selection swaps continue to find
+  /// the right bar by color.
   static List<FlSpot> _buildSpots({
     required List<TrendPoint> points,
     required DateTime windowStart,
     required int spanDays,
   }) {
     if (points.isEmpty) {
-      // Flat zero across the window — two endpoints suffice.
-      return [
-        const FlSpot(0, 0),
-        FlSpot(spanDays <= 0 ? 1 : spanDays.toDouble(), 0),
-      ];
+      return const <FlSpot>[];
     }
     final spots = <FlSpot>[];
     for (final p in points) {
       final dayOffset = p.date.difference(windowStart).inDays;
       if (dayOffset < 0 || dayOffset > spanDays) continue;
       spots.add(FlSpot(dayOffset.toDouble(), p.pct * 100));
-    }
-    if (spots.isEmpty) {
-      // All points outside window — still draw a flat-zero baseline.
-      return [
-        const FlSpot(0, 0),
-        FlSpot(spanDays <= 0 ? 1 : spanDays.toDouble(), 0),
-      ];
     }
     return spots;
   }
@@ -368,11 +388,30 @@ class _TerminalPctLabel extends StatelessWidget {
                 top: (dotY - 22).clamp(0, plotHeight - 18),
                 child: Text(
                   '${pct.round()}%',
-                  style: GoogleFonts.rajdhani(
+                  // Route through `AppTextStyles.numeric` per the
+                  // typography call-site rule (memory:
+                  // `project_design_language_typography`). The pre-L13.4
+                  // build raw-instantiated `TextStyle(fontFamily:
+                  // 'Rajdhani', ...)` here; the L13.4 shadow halo
+                  // extension preserved that anti-pattern. Now reaches
+                  // the same Rajdhani 700 tabular figures via the
+                  // sanctioned entry point, with the chart-specific
+                  // overrides (smaller 14sp size, per-body-part color,
+                  // tight 1.0 line height) layered via `copyWith`. The
+                  // L18.2 multi-pass abyss-colored halo (three Shadow
+                  // passes) masks the chart line where it passes behind
+                  // the label — without it the line and label (same
+                  // body-part color) visually merge whenever the line
+                  // is flat near the label's Y position.
+                  style: AppTextStyles.numeric.copyWith(
                     fontSize: 14,
-                    fontWeight: FontWeight.w700,
                     color: color,
                     height: 1,
+                    shadows: const [
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                      Shadow(color: AppColors.abyss, blurRadius: 3),
+                    ],
                   ),
                 ),
               ),

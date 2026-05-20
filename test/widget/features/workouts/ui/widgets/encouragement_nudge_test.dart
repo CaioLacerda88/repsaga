@@ -166,8 +166,14 @@ void main() {
         await tester.pump();
         await tester.pump();
 
+        // First-step is rendered through Text.rich (single muted span) —
+        // `findRichText: true` walks the joined data. The first-step
+        // variant is the only one that omits the leading `◆ ` prefix.
         expect(
-          find.text('Begin your journey — first set awaits'),
+          find.text(
+            'Begin your journey — first set awaits',
+            findRichText: true,
+          ),
           findsOneWidget,
         );
       },
@@ -204,9 +210,15 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Duplicate first-step copy must NOT render.
+        // Duplicate first-step copy must NOT render. Pass
+        // `findRichText: true` so the assertion catches the Text.rich
+        // rendering path (L11.a wired the nudge through Text.rich); a
+        // plain `find.text` would falsely pass even if the line came back.
         expect(
-          find.text('Begin your journey — first set awaits'),
+          find.text(
+            'Begin your journey — first set awaits',
+            findRichText: true,
+          ),
           findsNothing,
         );
         // The semantics container is still mounted at the reserved 24dp
@@ -254,7 +266,276 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('3-day streak'), findsOneWidget);
+      // Merged Text.rich exposes the joined line. We use `findRichText: true`
+      // so `find.text` walks both `Text` and `Text.rich` widgets — without
+      // it the helper only matches plain-data `Text` widgets, missing the
+      // L11.a Text.rich rendering path. The leading `◆ ` prefix is part of
+      // the rendered phrase and shows up in the joined text.
+      expect(find.text('◆ 3-day streak', findRichText: true), findsOneWidget);
+    });
+
+    // L11.a — Visual emphasis on numeric nudges.
+    //
+    // The four numeric nudge variants (cross-build, body-part title, remaining
+    // workouts, streak) render their key fragment in `FontWeight.w700`
+    // `AppColors.success` via `Text.rich`. The rest of the line stays
+    // muted (`AppColors.textDim`). A leading `◆ ` diamond prefix is rendered
+    // in `AppColors.hotViolet` for every variant that surfaces a real nudge
+    // (i.e. anything except `NudgeFirstStep`, which stays static-styled).
+    //
+    // Tests walk the `Text.rich` TextSpan children to assert that the
+    // expected fragment appears in a bold-cream span. This is behavior-
+    // not-wiring: a future refactor that changes the helper shape but keeps
+    // the same visual contract still passes.
+    group('L11.a — bold span + leading diamond on numeric nudges', () {
+      /// Collects all leaf TextSpans into a flat list. `Text.rich` may nest
+      /// spans arbitrarily — the tests need the leaves' text + style.
+      List<TextSpan> flattenSpans(InlineSpan root) {
+        final out = <TextSpan>[];
+        void walk(InlineSpan span) {
+          if (span is TextSpan) {
+            if (span.text != null && span.text!.isNotEmpty) out.add(span);
+            for (final child in span.children ?? const <InlineSpan>[]) {
+              walk(child);
+            }
+          }
+        }
+
+        walk(root);
+        return out;
+      }
+
+      /// Returns the first leaf span whose joined text contains [fragment].
+      /// Asserts via test failure if no leaf carries it.
+      TextSpan findSpan(WidgetTester tester, String fragment) {
+        final richFinder = find.byWidgetPredicate(
+          (w) => w is RichText || w is Text,
+        );
+        for (final w in tester.widgetList(richFinder)) {
+          InlineSpan? root;
+          if (w is RichText) root = w.text;
+          if (w is Text) root = w.textSpan;
+          if (root == null) continue;
+          final leaves = flattenSpans(root);
+          for (final leaf in leaves) {
+            if ((leaf.text ?? '').contains(fragment)) return leaf;
+          }
+        }
+        fail('No TextSpan leaf contained fragment "$fragment"');
+      }
+
+      testWidgets('NudgeRemainingWorkouts bolds "{count} workouts"', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 1),
+              completedCountProvider.overrideWith((ref) => 1),
+              totalBucketCountProvider.overrideWith((ref) => 4),
+              titleCatalogProvider.overrideWith(
+                (ref) async => const <rpg.Title>[],
+              ),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(RpgProgressSnapshot.empty),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        final span = findSpan(tester, '3 workouts');
+        expect(span.style?.fontWeight, FontWeight.w700);
+        expect(span.style?.color, AppColors.success);
+
+        // Leading diamond rendered in hotViolet.
+        final diamond = findSpan(tester, '◆');
+        expect(diamond.style?.color, AppColors.hotViolet);
+      });
+
+      testWidgets('NudgeStreak bolds "{count}-day streak" core fragment', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 3),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith(
+                (ref) async => const <rpg.Title>[],
+              ),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(RpgProgressSnapshot.empty),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // The whole streak fragment in en is "3-day streak" — bold span
+        // wraps it entirely (there's no surrounding sentence).
+        final span = findSpan(tester, '3-day streak');
+        expect(span.style?.fontWeight, FontWeight.w700);
+        expect(span.style?.color, AppColors.success);
+
+        final diamond = findSpan(tester, '◆');
+        expect(diamond.style?.color, AppColors.hotViolet);
+      });
+
+      testWidgets('NudgeBodyPartTitleClose bolds body-part + title fragments', (
+        tester,
+      ) async {
+        const catalog = <rpg.Title>[
+          rpg.BodyPartTitle(
+            slug: 'chest_r20_iron_chested',
+            bodyPart: BodyPart.chest,
+            rankThreshold: 20,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 0),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith((ref) async => catalog),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () =>
+                    _RpgProgressStub(_snapshotWithRanks({BodyPart.chest: 19})),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Both Chest (body part) AND Iron-Chested (title name) bold.
+        final bodyPartSpan = findSpan(tester, 'Chest');
+        expect(bodyPartSpan.style?.fontWeight, FontWeight.w700);
+        expect(bodyPartSpan.style?.color, AppColors.success);
+
+        final titleSpan = findSpan(tester, 'Iron-Chested');
+        expect(titleSpan.style?.fontWeight, FontWeight.w700);
+        expect(titleSpan.style?.color, AppColors.success);
+      });
+
+      testWidgets('NudgeCrossBuildClose bolds the title fragment', (
+        tester,
+      ) async {
+        const catalog = <rpg.Title>[
+          rpg.CrossBuildTitle(
+            slug: 'iron_bound',
+            triggerId: rpg.CrossBuildTriggerId.ironBound,
+          ),
+        ];
+
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 0),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith((ref) async => catalog),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(
+                  _snapshotWithRanks({
+                    BodyPart.chest: 59,
+                    BodyPart.back: 59,
+                    BodyPart.legs: 59,
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final titleSpan = findSpan(tester, 'Iron-Bound');
+        expect(titleSpan.style?.fontWeight, FontWeight.w700);
+        expect(titleSpan.style?.color, AppColors.success);
+      });
+
+      testWidgets('NudgeFirstStep stays static (no bold span, no diamond)', (
+        tester,
+      ) async {
+        // Past day-0, no streak/bucket/titles → falls through to first-step
+        // copy. First-step variant has no fragment to emphasize; the whole
+        // line stays in `AppColors.textDim` w500. We assert this by walking
+        // every leaf TextSpan within the nudge widget and confirming none
+        // carries `w700`.
+        await tester.pumpWidget(
+          _harness(
+            overrides: [
+              streakProvider.overrideWith((ref) => 0),
+              completedCountProvider.overrideWith((ref) => 0),
+              totalBucketCountProvider.overrideWith((ref) => 0),
+              titleCatalogProvider.overrideWith(
+                (ref) async => const <rpg.Title>[],
+              ),
+              earnedTitlesProvider.overrideWith(
+                (ref) async => const <EarnedTitleEntry>[],
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _RpgProgressStub(RpgProgressSnapshot.empty),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Locate the nudge container by its Semantics identifier and walk
+        // the descendant Text widgets — none of them should expose a bold
+        // weight on any leaf span.
+        final nudgeFinder = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.identifier == 'home-encouragement-nudge',
+        );
+        expect(nudgeFinder, findsOneWidget);
+
+        final textsInside = find.descendant(
+          of: nudgeFinder,
+          matching: find.byType(Text),
+        );
+        for (final w in tester.widgetList<Text>(textsInside)) {
+          final root = w.textSpan;
+          if (root == null) continue;
+          void walk(InlineSpan span) {
+            if (span is TextSpan) {
+              expect(
+                span.style?.fontWeight,
+                isNot(FontWeight.w700),
+                reason:
+                    'First-step variant must not bold any fragment '
+                    '(literal "${span.text}" was bolded).',
+              );
+              for (final child in span.children ?? const <InlineSpan>[]) {
+                walk(child);
+              }
+            }
+          }
+
+          walk(root);
+        }
+        // Also: no leading diamond on first-step.
+        expect(find.textContaining('◆'), findsNothing);
+      });
     });
 
     testWidgets('shows remaining-workouts when bucket is partially complete '
@@ -280,7 +561,13 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Need 2 workouts to close the week'), findsOneWidget);
+      // `findRichText: true` walks Text.rich joined data (L11.a uses
+      // Text.rich for the bold span). Leading `◆ ` prefix included in the
+      // rendered phrase.
+      expect(
+        find.text('◆ Need 2 workouts to close the week', findRichText: true),
+        findsOneWidget,
+      );
       // Priority guard — streak copy must NOT render alongside.
       expect(find.textContaining('streak'), findsNothing);
     });
@@ -321,7 +608,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Chest title within reach: Iron-Chested'),
+          find.text(
+            '◆ Chest title within reach: Iron-Chested',
+            findRichText: true,
+          ),
           findsOneWidget,
         );
         // Priority guard — remaining-workouts copy must NOT render.
@@ -376,7 +666,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Cross-build title within reach: Iron-Bound'),
+        find.text(
+          '◆ Cross-build title within reach: Iron-Bound',
+          findRichText: true,
+        ),
         findsOneWidget,
       );
       // Priority guards — none of the lower-priority slots should render.

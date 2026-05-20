@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -7,6 +6,7 @@ import '../../models/character_class.dart';
 import '../../models/vitality_state.dart';
 import 'class_localization.dart';
 import 'rune_halo.dart';
+import 'title_localization.dart';
 
 /// Option B v4 three-column header for the Saga character sheet (Phase 26b).
 ///
@@ -78,12 +78,13 @@ class SagaHeader extends StatelessWidget {
               children: [
                 Text(
                   '$characterLevel',
-                  style: GoogleFonts.rajdhani(
+                  style: const TextStyle(
+                    fontFamily: 'Rajdhani',
                     fontSize: 56,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textCream,
                     height: 1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
                 // 'LVL' is a brand token, intentionally not localized per
@@ -154,11 +155,18 @@ class SagaHeader extends StatelessWidget {
                     const SizedBox(height: 2),
                     // ValueKey for widget tests; Semantics identifier for E2E.
                     // Replaces the legacy ActiveTitlePill identifier.
+                    //
+                    // `activeTitle` is the raw slug from `earned_titles.title_id`
+                    // (e.g. `chest_r5_initiate_of_the_forge`). Resolve through
+                    // `localizedTitleCopy` before rendering; fall back to the
+                    // slug if a future DB title lacks an l10n entry (preferable
+                    // to a crash). See `cluster_slug_rendered_as_display_name`.
                     Semantics(
                       container: true,
                       identifier: 'saga-header-title',
                       child: Text(
-                        activeTitle!,
+                        localizedTitleCopy(activeTitle!, l10n)?.name ??
+                            activeTitle!,
                         key: const ValueKey('saga-header-title'),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppColors.textDim,

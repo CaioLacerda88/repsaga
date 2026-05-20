@@ -85,12 +85,31 @@ flutter:
     # CrossBuildTitle).
     - assets/rpg/titles_character_level.json
     - assets/rpg/titles_cross_build.json
-    # Bundled Rajdhani (display) + Inter (body) TTFs. google_fonts picks these
-    # up via its asset-manifest lookup (lib/src/google_fonts_base.dart) and
-    # skips the CDN entirely — faster first paint on slow networks and makes
-    # widget tests deterministic (no unhandled-future errors from fetch
-    # attempts inside tester.runAsync blocks).
+    # Bundled Rajdhani (display) + Inter (body) TTFs. Both families are ALSO
+    # declared under `flutter.fonts:` below so Flutter's native font loader
+    # registers them synchronously at app start. `AppTextStyles` reads them
+    # via direct `TextStyle(fontFamily: ...)` — google_fonts is only kept as
+    # a fallback for any legacy call site, and `GoogleFonts.config
+    # .allowRuntimeFetching` is locked to false in `main.dart` so a missing
+    # bundled weight raises a clear error instead of silently network-fetching
+    # (the silent-fetch race was the Phase 27 L14 root cause).
     - assets/fonts/
+
+  fonts:
+    - family: Rajdhani
+      fonts:
+        - asset: assets/fonts/Rajdhani-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Rajdhani-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Rajdhani-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
 
 flutter_launcher_icons:
   image_path: "assets/app_icon/arcane_sigil_1024.png"

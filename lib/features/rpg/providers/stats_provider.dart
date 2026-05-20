@@ -39,7 +39,40 @@ final statsProvider = FutureProvider<StatsDeepDiveState>((ref) async {
   final since = now.subtract(const Duration(days: 90));
   final events = await _fetchRecentEvents(rpgRepo, since: since);
 
-  return assembleStatsState(now: now, snapshot: snapshot, events: events);
+  // Phase 27 L10: heaviest-weight-per-body-part replaces the prior
+  // EWMA-as-kg readout in the "Carga pico" column. Two round trips:
+  //   * Current 7-day window — drives the kg value.
+  //   * 30-days-ago snapshot (7-day window anchored 30 days back) —
+  //     drives the monthly delta + "30D" badge.
+  //
+  // We only fetch the 30-days-ago snapshot when the user has enough
+  // history for a meaningful baseline (earliest activity is older than
+  // 30 days). Without this gate, the snapshot would always be empty for
+  // fresh accounts and the empty round-trip would still cost a network
+  // hop.
+  final peakLoadKgByBodyPart = await rpgRepo.getPeakLoadPerBodyPart(
+    days: 7,
+    endDate: now,
+  );
+  Map<BodyPart, double> peakLoadKgByBodyPart30dAgo = const <BodyPart, double>{};
+  final earliestEvent = events.isEmpty
+      ? null
+      : events.map((e) => e.occurredAt).reduce((a, b) => a.isBefore(b) ? a : b);
+  final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+  if (earliestEvent != null && !earliestEvent.isAfter(thirtyDaysAgo)) {
+    peakLoadKgByBodyPart30dAgo = await rpgRepo.getPeakLoadPerBodyPart(
+      days: 7,
+      endDate: thirtyDaysAgo,
+    );
+  }
+
+  return assembleStatsState(
+    now: now,
+    snapshot: snapshot,
+    events: events,
+    peakLoadKgByBodyPart: peakLoadKgByBodyPart,
+    peakLoadKgByBodyPart30dAgo: peakLoadKgByBodyPart30dAgo,
+  );
 });
 
 /// Pure assembler — extracted so unit tests can pin the algorithm without
@@ -58,6 +91,8 @@ StatsDeepDiveState assembleStatsState({
   required DateTime now,
   required RpgProgressSnapshot snapshot,
   required List<XpEvent> events,
+  Map<BodyPart, double> peakLoadKgByBodyPart = const <BodyPart, double>{},
+  Map<BodyPart, double> peakLoadKgByBodyPart30dAgo = const <BodyPart, double>{},
 }) {
   // ---------------------------------------------------------------------------
   // 1. Earliest activity + window selection.
@@ -207,9 +242,23 @@ StatsDeepDiveState assembleStatsState({
       }
     }
 
+    // Phase 27 L10: heaviest single-set weight in kg per body part.
+    // The repo returns only body parts that had non-zero-weight sets in
+    // the window — absent body parts default to 0 (untrained). The
+    // 30-days-ago snapshot is `null` when the map is empty (caller
+    // decided the user has insufficient history to have a baseline) OR
+    // when the body part is missing from a populated map (user is
+    // trained but didn't lift this body part 30 days ago).
+    final peakLoadKg = peakLoadKgByBodyPart[bp] ?? 0.0;
+    final peakLoadKg30dAgo = peakLoadKgByBodyPart30dAgo.isEmpty
+        ? null
+        : peakLoadKgByBodyPart30dAgo[bp];
+
     volumePeak[bp] = VolumePeakRow(
       weeklyVolumeSets: setsLast7d,
       peakEwma: peak,
+      peakLoadKg: peakLoadKg,
+      peakLoadKg30dAgo: peakLoadKg30dAgo,
       previousWeekVolumeSets: previousWeekVolumeSets,
       fourWeekMeanVolumeSets: fourWeekMeanVolumeSets,
       peakEwma30dAgo: peakEwma30dAgo,

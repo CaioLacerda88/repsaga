@@ -470,6 +470,12 @@ abstract class AppLocalizations {
   /// **'Back'**
   String get back;
 
+  /// Two-tap-to-exit hint shown on Home when the user presses back once. A second back press within 3 seconds exits the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Press back again to exit'**
+  String get backExitHint;
+
   /// Close button label
   ///
   /// In en, this message translates to:
@@ -1189,6 +1195,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create Your First Routine'**
   String get createYourFirstRoutine;
+
+  /// Sentence-case muted label above the seeded starter-routines preview on Home (day-0 users). Phase 27 L3.
+  ///
+  /// In en, this message translates to:
+  /// **'Starter Routines'**
+  String get homeStarterRoutinesLabel;
 
   /// Action hero label: up next
   ///

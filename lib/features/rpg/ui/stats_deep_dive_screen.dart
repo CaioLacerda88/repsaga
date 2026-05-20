@@ -129,7 +129,12 @@ class _Body extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          // L18: extra right padding so the rightmost X-axis label
+          // ("Hoje" / "Today") isn't clipped — fl_chart centers labels on
+          // their data position, so the rightmost label (at x=xMax) renders
+          // half-overflow off the right edge of the chart without external
+          // padding to absorb it.
+          padding: const EdgeInsets.only(left: 8, right: 24),
           child: VitalityTrendChart(
             trendByBodyPart: state.trendByBodyPart,
             selectedBodyPart: selectedBodyPart,

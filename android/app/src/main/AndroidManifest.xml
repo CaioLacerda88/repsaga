@@ -7,6 +7,26 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         tools:replace="android:allowBackup">
+        <!-- enableOnBackInvokedCallback is deliberately UNSET — but note
+             this is a no-op on this app's compile/target SDK (36): the
+             Android attribute defaults to "true" for targetSdk >= 34
+             (predictive back is opt-OUT, not opt-IN, post-API-34). The
+             real fix for the L13 "back exits the app" symptom lives in
+             `lib/core/router/app_router.dart` — see the
+             NotificationListener<NavigationNotification> wrap around
+             `BackButtonListener` in `_ShellScaffoldState.build`. The
+             chain that was failing: inner `_CustomNavigator`'s
+             `NavigationNotification(canHandlePop: false)` bubbled to
+             `WidgetsApp._defaultOnNavigationNotification` → called
+             `SystemNavigator.setFrameworkHandlesBack(false)` →
+             unregistered Flutter's OnBackInvokedCallback → Android
+             handled back natively (`Activity.finish()`) and Flutter
+             never saw the press. PopScope + the manifest flag tweaks
+             were both treating symptoms; the actual gate is the
+             NavigationNotification → setFrameworkHandlesBack contract. -->
+        <!-- allowBackup retained per below comment. -->
+        <!-- (Manifest flag intentionally not set, kept for explicitness.) -->
+
         <!-- allowBackup=false: prevents Android auto-backup from restoring
              stale Hive box files across uninstall→reinstall cycles. The on-disk
              Hive binary embeds typeIds — if backup-restored data references

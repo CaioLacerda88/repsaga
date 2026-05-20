@@ -94,7 +94,7 @@ CharacterSheetState _trainedSheet() {
       _untrained(BodyPart.arms),
       _untrained(BodyPart.core),
     ],
-    activeTitle: 'Plate-Bearer',
+    activeTitle: 'chest_r5_initiate_of_the_forge',
     characterClass: CharacterClass.bulwark,
   );
 }
@@ -206,8 +206,16 @@ void main() {
         expect(find.text('14'), findsOneWidget);
         // Bulwark in en uppercases to "BULWARK" (matches SagaHeader treatment).
         expect(find.text('BULWARK'), findsOneWidget);
-        // Active title rendered verbatim.
-        expect(find.text('Plate-Bearer'), findsOneWidget);
+        // Active title resolves through `localizedTitleCopy(slug, l10n)?.name`.
+        // The provider chain forwards the raw slug
+        // (`chest_r5_initiate_of_the_forge`) from `earned_titles.title_id` —
+        // the widget MUST resolve it to the localized display name. Pin both
+        // sides: the localized name renders (uppercased by the L12 title
+        // pill — mockup `.cc-title-pill { text-transform: uppercase }`), and
+        // the raw slug does NOT.
+        // See `cluster_slug_rendered_as_display_name`.
+        expect(find.text('INITIATE OF THE FORGE'), findsOneWidget);
+        expect(find.text('chest_r5_initiate_of_the_forge'), findsNothing);
       },
     );
 
@@ -221,6 +229,55 @@ void main() {
       //   '◆ {bodyPart} · {xp} XP for rank {rank}'
       // bodyPart = "Chest", xp = 20, rank = 16 + 1 = 17.
       expect(find.text('◆ Chest · 20 XP for rank 17'), findsOneWidget);
+    });
+
+    testWidgets('closest-rank-up indicator bolds body-part name span (L11.b)', (
+      tester,
+    ) async {
+      // Mockup `.cc-closest .indicator strong { color: var(--text-cream); }`
+      // — only the body-part name (here "Chest") wears the bold + cream
+      // emphasis. The leading `◆ ` diamond stays in the body-part hue;
+      // the `· 20 XP for rank 17` suffix stays muted (`AppColors.textDim`).
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      // Walk the indicator's Text.rich span tree and find the leaf whose
+      // text equals "Chest" — assert its style.
+      final indicatorFinder = find.byWidgetPredicate(
+        (w) =>
+            w is Semantics && w.properties.identifier == 'home-closest-rank-up',
+      );
+      expect(indicatorFinder, findsOneWidget);
+
+      TextSpan? boldLeaf;
+      final richInside = find.descendant(
+        of: indicatorFinder,
+        matching: find.byType(RichText),
+      );
+      for (final w in tester.widgetList<RichText>(richInside)) {
+        void walk(InlineSpan span) {
+          if (span is TextSpan) {
+            if ((span.text ?? '').contains('Chest') &&
+                span.style?.fontWeight == FontWeight.w700) {
+              boldLeaf = span;
+            }
+            for (final child in span.children ?? const <InlineSpan>[]) {
+              walk(child);
+            }
+          }
+        }
+
+        walk(w.text);
+      }
+      expect(
+        boldLeaf,
+        isNotNull,
+        reason:
+            'Closest-rank-up indicator must wrap the body-part name '
+            '("Chest") in a FontWeight.w700 span; mockup '
+            '.cc-closest .indicator strong → cream + bold.',
+      );
+      expect(boldLeaf!.style?.color, AppColors.textCream);
     });
 
     testWidgets('day-0 user (isZeroHistory true) shows first-step fallback', (
@@ -239,6 +296,81 @@ void main() {
       // No closest-rank-up indicator rendered alongside the fallback.
       expect(find.textContaining('XP for rank'), findsNothing);
     });
+
+    testWidgets('active title renders inside a surface2 pill container (L12)', (
+      tester,
+    ) async {
+      // Mockup `.cc-title-pill` spec:
+      //   padding: 3px 8px;
+      //   background: var(--surface2);   // #241640 == AppColors.surface2
+      //   border-radius: 10px;
+      //   display: inline-block;
+      //
+      // Pins the Container/DecoratedBox wrapper around the resolved title
+      // text. Trained sheet's `activeTitle` resolves through
+      // `localizedTitleCopy` to "Initiate of the Forge" (en). The wrapper
+      // anchors on the same ValueKey we already use for the title text
+      // (`character-card-title`) so a future refactor that swaps the
+      // wrapper widget but keeps the contract still passes.
+      await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+      await tester.pump();
+
+      final titleFinder = find.byKey(const ValueKey('character-card-title'));
+      expect(titleFinder, findsOneWidget);
+
+      // Walk ancestors of the title Text widget looking for a Container or
+      // DecoratedBox whose decoration has the surface2 fill + 10dp radius.
+      final wrapper = find.ancestor(
+        of: titleFinder,
+        matching: find.byWidgetPredicate((w) {
+          if (w is Container) {
+            final dec = w.decoration;
+            if (dec is BoxDecoration) {
+              return dec.color == AppColors.surface2 &&
+                  dec.borderRadius == BorderRadius.circular(10);
+            }
+          }
+          return false;
+        }),
+      );
+      expect(
+        wrapper,
+        findsOneWidget,
+        reason:
+            'Active title must be wrapped in a Container with '
+            'AppColors.surface2 fill and BorderRadius.circular(10) per '
+            'mockup .cc-title-pill.',
+      );
+    });
+
+    testWidgets(
+      'no title pill rendered when activeTitle is null (day-0 user) (L12)',
+      (tester) async {
+        // Day-0 user has no equipped title — the pill must NOT render
+        // (the `if (hasTitle)` gate already exists; this test pins it so
+        // the empty pill cannot regress into rendering).
+        await tester.pumpWidget(_harness(sheet: _dayZeroSheet()));
+        await tester.pump();
+
+        expect(
+          find.byKey(const ValueKey('character-card-title')),
+          findsNothing,
+        );
+        final emptyPill = find.byWidgetPredicate((w) {
+          if (w is Container) {
+            final dec = w.decoration;
+            if (dec is BoxDecoration) {
+              return dec.color == AppColors.surface2 &&
+                  dec.borderRadius == BorderRadius.circular(10);
+            }
+          }
+          return false;
+        });
+        // Header itself uses no surface2/10dp-radius container outside the
+        // pill — finding zero matches proves the pill was suppressed.
+        expect(emptyPill, findsNothing);
+      },
+    );
 
     testWidgets('class+title column ellipsizes on narrow viewport (320dp)', (
       tester,

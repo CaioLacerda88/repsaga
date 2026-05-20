@@ -1,9 +1,11 @@
 /// Widget tests for [VitalityTable] — Phase 18d.2.
 ///
 /// The table is the live-Vitality readout on the stats deep-dive screen:
-/// six rows, each row a localized body-part name + state copy + percentage
-/// numeral + state-color dot. Tapping a row drives the trend chart's
-/// selection above it.
+/// six rows, each row a body-part-tinted muscle icon + localized body-part
+/// name + state copy + percentage numeral. Tapping a row drives the trend
+/// chart's selection above it. (The trailing redundant identity dot was
+/// removed once the muscle icon picked up the same body-part tint — the
+/// dot encoded the same data twice.)
 ///
 /// **Layout-primitive locks under test (per UX-critic amendment):**
 ///   * Rows are NOT [ListTile]s — they're `Padding(EdgeInsets.symmetric(

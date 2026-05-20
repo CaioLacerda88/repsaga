@@ -367,6 +367,75 @@ void main() {
       expect(state.volumePeakByBodyPart[BodyPart.chest]!.peakEwma, 9850);
       expect(state.volumePeakByBodyPart[BodyPart.back]!.peakEwma, 0);
     });
+
+    test(
+      'should populate peakLoadKg + peakLoadKg30dAgo from the repo-supplied maps',
+      () {
+        // Phase 27 L10: assembler now accepts peak-load lookup tables from
+        // the repository (one for the current 7-day window, one for the
+        // 30-days-ago snapshot window) and threads the per-body-part value
+        // into the VolumePeakRow. The assembler does not itself query
+        // Supabase — it merges what the provider passed in.
+        final state = assembleStatsState(
+          now: now,
+          snapshot: RpgProgressSnapshot.empty,
+          events: const [],
+          peakLoadKgByBodyPart: const {
+            BodyPart.chest: 92.5,
+            BodyPart.legs: 140,
+          },
+          peakLoadKgByBodyPart30dAgo: const {
+            BodyPart.chest: 87.5,
+            BodyPart.legs: 130,
+          },
+        );
+        expect(state.volumePeakByBodyPart[BodyPart.chest]!.peakLoadKg, 92.5);
+        expect(
+          state.volumePeakByBodyPart[BodyPart.chest]!.peakLoadKg30dAgo,
+          87.5,
+        );
+        expect(state.volumePeakByBodyPart[BodyPart.legs]!.peakLoadKg, 140);
+        expect(
+          state.volumePeakByBodyPart[BodyPart.legs]!.peakLoadKg30dAgo,
+          130,
+        );
+        // Body parts with no peak-load entry default to 0 / null.
+        expect(state.volumePeakByBodyPart[BodyPart.back]!.peakLoadKg, 0);
+        expect(
+          state.volumePeakByBodyPart[BodyPart.back]!.peakLoadKg30dAgo,
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'should leave peakLoadKg30dAgo null when the user has < 30 days of history (no baseline)',
+      () {
+        // The provider only computes the 30-days-ago snapshot when there's
+        // a window to compare against. With < 30 days of activity, the
+        // baseline map should be empty and the row's peakLoadKg30dAgo
+        // should be null — the same gate that already governs
+        // peakEwma30dAgo.
+        final state = assembleStatsState(
+          now: now,
+          snapshot: RpgProgressSnapshot.empty,
+          events: [
+            _event(
+              occurredAt: now.subtract(const Duration(days: 5)),
+              attribution: const {'chest': 10.0},
+            ),
+          ],
+          peakLoadKgByBodyPart: const {BodyPart.chest: 60.0},
+          // Empty 30-days-ago map — provider decided not to fetch it.
+          peakLoadKgByBodyPart30dAgo: const {},
+        );
+        expect(state.volumePeakByBodyPart[BodyPart.chest]!.peakLoadKg, 60.0);
+        expect(
+          state.volumePeakByBodyPart[BodyPart.chest]!.peakLoadKg30dAgo,
+          isNull,
+        );
+      },
+    );
   });
 
   group('assembleStatsState — VolumePeakRow extended delta fields', () {

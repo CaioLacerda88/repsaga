@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/l10n/locale_provider.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/exercises/providers/exercise_providers.dart';
 import 'package:repsaga/features/exercises/ui/exercise_list_screen.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/stub_locale_notifier.dart';
@@ -328,5 +331,248 @@ void main() {
         reason: 'default cards should have no left accent',
       );
     });
+  });
+
+  // ----------------------------------------------------------------------
+  // Body-part hue tokens on muscle-group filter buttons + info chips
+  //
+  // The Phase 26a body-part hue tokens (`bodyPartChest` pink, `bodyPartBack`
+  // sky, etc.) must flow into the Exercises tab. Pre-fix, both surfaces
+  // rendered icons in neutral grey, breaking the body-part identity that
+  // Saga/Stats/Engajamento all surface. See feedback_design_token_sweep_on_
+  // new_tokens — propagation sweep for the Exercises surface.
+  // ----------------------------------------------------------------------
+
+  group('ExerciseListScreen body-part hue tokens', () {
+    /// Walks down from the filter button identifier to the [IconTheme] that
+    /// drives the SVG icon color (the icon delegates to
+    /// `IconTheme.of(context).color` when no `color:` is passed). The first
+    /// IconTheme below the filter button identifier is the per-button
+    /// override; ambient IconThemes from MaterialApp/Theme sit higher.
+    Color? filterIconColor(WidgetTester tester, String identifier) {
+      final scope = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.identifier == identifier,
+      );
+      expect(scope, findsOneWidget, reason: 'filter $identifier not found');
+      final iconThemes = tester
+          .widgetList<IconTheme>(
+            find.descendant(of: scope, matching: find.byType(IconTheme)),
+          )
+          .toList();
+      expect(iconThemes, isNotEmpty, reason: 'no IconTheme under $identifier');
+      return iconThemes.first.data.color;
+    }
+
+    /// Reads the [SvgPicture.colorFilter] for the muscle-group info chip
+    /// inside the card whose title matches [exerciseName]. The muscle-group
+    /// chip is the first SvgPicture under the card subtree; the equipment-
+    /// type chip is the second.
+    ///
+    /// Equality is via `toString()` because [ColorFilter] exposes no public
+    /// getters for the embedded color/mode. Round-tripping through the
+    /// constructor + `toString` is stable for the renderer-side surface
+    /// (which is what the user perceives).
+    ColorFilter? muscleChipColorFilter(WidgetTester tester, String name) {
+      final titleFinder = find.text(name);
+      expect(titleFinder, findsOneWidget);
+      final svgs = tester
+          .widgetList<SvgPicture>(
+            find.descendant(
+              of: find.ancestor(
+                of: titleFinder,
+                matching: find.byType(Material),
+              ),
+              matching: find.byType(SvgPicture),
+            ),
+          )
+          .toList();
+      expect(svgs, isNotEmpty, reason: 'no SvgPicture under $name');
+      return svgs.first.colorFilter;
+    }
+
+    testWidgets(
+      'muscle-group button: chest filter uses bodyPartChest hue when selected',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              filteredExerciseListProvider.overrideWith(
+                (ref) => const AsyncData(<Exercise>[]),
+              ),
+              selectedMuscleGroupProvider.overrideWith(
+                (ref) => MuscleGroup.chest,
+              ),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const ExerciseListScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final color = filterIconColor(tester, 'exercise-filter-chest');
+        expect(
+          color,
+          VitalityStateStyles.bodyPartColor[BodyPart.chest],
+          reason: 'selected chest filter must render at full bodyPartChest hue',
+        );
+      },
+    );
+
+    testWidgets(
+      'muscle-group button: chest filter uses bodyPartChest hue at reduced alpha when unselected',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              filteredExerciseListProvider.overrideWith(
+                (ref) => const AsyncData(<Exercise>[]),
+              ),
+              // selected = null → chest filter is unselected.
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const ExerciseListScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final color = filterIconColor(tester, 'exercise-filter-chest');
+        expect(color, isNotNull);
+        final expected = VitalityStateStyles.bodyPartColor[BodyPart.chest]!;
+        // Hue matches the body-part token (same RGB) but with reduced alpha.
+        expect(
+          color!.r,
+          expected.r,
+          reason: 'unselected chest filter must keep the chest hue (R)',
+        );
+        expect(color.g, expected.g);
+        expect(color.b, expected.b);
+        expect(
+          color.a,
+          lessThan(1.0),
+          reason: 'unselected chest filter must be at reduced alpha',
+        );
+      },
+    );
+
+    testWidgets(
+      'muscle-group button: cardio (non-mapped) falls back to neutral onSurface',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              filteredExerciseListProvider.overrideWith(
+                (ref) => const AsyncData(<Exercise>[]),
+              ),
+              selectedMuscleGroupProvider.overrideWith(
+                (ref) => MuscleGroup.cardio,
+              ),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const ExerciseListScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final color = filterIconColor(tester, 'exercise-filter-cardio');
+        final theme = AppTheme.dark;
+        // cardio has no body-part identity — falls back to the existing
+        // "primary when selected" neutral behaviour (theme primary color).
+        expect(
+          color,
+          theme.colorScheme.primary,
+          reason:
+              'cardio is not a v1 body-part identity — selected falls back to '
+              'theme.primary, not a hue token',
+        );
+      },
+    );
+
+    testWidgets(
+      'info chip: back muscle group renders icon in bodyPartBack hue',
+      (tester) async {
+        final exercises = [
+          Exercise.fromJson(
+            TestExerciseFactory.create(
+              id: 'exercise-back-001',
+              name: 'Pull Up',
+              muscleGroup: 'back',
+              equipmentType: 'bodyweight',
+            ),
+          ),
+        ];
+
+        await tester.pumpWidget(
+          buildTestWidget(exerciseValue: AsyncData(exercises)),
+        );
+        await tester.pumpAndSettle();
+
+        final filter = muscleChipColorFilter(tester, 'Pull Up');
+        final expected = ColorFilter.mode(
+          VitalityStateStyles.bodyPartColor[BodyPart.back]!,
+          BlendMode.srcIn,
+        );
+        expect(
+          filter.toString(),
+          expected.toString(),
+          reason:
+              'back muscle-group chip icon must render at the bodyPartBack hue',
+        );
+      },
+    );
+
+    testWidgets(
+      'info chip: cardio (non-mapped) falls back to neutral onSurface tint',
+      (tester) async {
+        final exercises = [
+          Exercise.fromJson(
+            TestExerciseFactory.create(
+              id: 'exercise-cardio-001',
+              name: 'Treadmill',
+              muscleGroup: 'cardio',
+              equipmentType: 'machine',
+              slug: 'treadmill',
+            ),
+          ),
+        ];
+
+        await tester.pumpWidget(
+          buildTestWidget(exerciseValue: AsyncData(exercises)),
+        );
+        await tester.pumpAndSettle();
+
+        final filter = muscleChipColorFilter(tester, 'Treadmill');
+        // cardio has no v1 identity hue — chip falls back to the neutral
+        // 0.75-alpha onSurface tint. Pinning the exact neutral via a
+        // round-trip through the same ColorFilter constructor keeps the
+        // expectation stable against any future Color toString format
+        // change while still asserting on a fixed numeric value.
+        final neutral = AppTheme.dark.colorScheme.onSurface.withValues(
+          alpha: 0.75,
+        );
+        final expected = ColorFilter.mode(neutral, BlendMode.srcIn);
+        expect(
+          filter.toString(),
+          expected.toString(),
+          reason: 'cardio chip must use the neutral onSurface@0.75 fallback',
+        );
+        // And: must NOT match any body-part hue identity token.
+        for (final bp in BodyPart.values) {
+          final h = VitalityStateStyles.bodyPartColor[bp]!;
+          if (h == AppColors.textDim) continue; // core uses textDim — neutral
+          final hueFilter = ColorFilter.mode(h, BlendMode.srcIn);
+          expect(
+            filter.toString(),
+            isNot(hueFilter.toString()),
+            reason: 'cardio chip must NOT render as ${bp.name} body-part hue',
+          );
+        }
+      },
+    );
   });
 }

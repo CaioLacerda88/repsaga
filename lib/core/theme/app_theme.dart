@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'radii.dart';
 
@@ -118,13 +117,23 @@ class AppColors {
 /// label). Rajdhani is a condensed humanist sans that scans fast under gym
 /// fatigue at 18+ dp; Inter covers paragraph readability below 16 dp.
 ///
+/// **Loading contract (Phase 27 L14):** both families are bundled via
+/// `pubspec.yaml > flutter.fonts:` and read here through direct
+/// `TextStyle(fontFamily: ...)` calls — NOT via the `google_fonts` package's
+/// async API. The package's asset-manifest lookup was silently falling back
+/// to Inter on real-device release builds, breaking the entire two-family
+/// identity. Direct `fontFamily` references Flutter's synchronous font
+/// loader and never races first paint. See
+/// `project_design_language_typography`.
+///
 /// See `lib/core/theme/README.md` for the reward-scarcity rule and the
 /// "one display, one body, one numeric" typographic rhythm.
 class AppTextStyles {
   const AppTextStyles._();
 
   /// Rajdhani 700 — hero copy, splash wordmark, primary CTA.
-  static TextStyle get display => GoogleFonts.rajdhani(
+  static TextStyle get display => const TextStyle(
+    fontFamily: 'Rajdhani',
     fontSize: 32,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.04 * 32,
@@ -133,7 +142,8 @@ class AppTextStyles {
   );
 
   /// Rajdhani 600 — card titles, overlay titles, section headers.
-  static TextStyle get headline => GoogleFonts.rajdhani(
+  static TextStyle get headline => const TextStyle(
+    fontFamily: 'Rajdhani',
     fontSize: 24,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.02 * 24,
@@ -142,7 +152,8 @@ class AppTextStyles {
   );
 
   /// Inter 600 — list-item titles, routine names, card sub-titles.
-  static TextStyle get title => GoogleFonts.inter(
+  static TextStyle get title => const TextStyle(
+    fontFamily: 'Inter',
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.3,
@@ -150,7 +161,8 @@ class AppTextStyles {
   );
 
   /// Inter 400 — paragraph copy, descriptions.
-  static TextStyle get body => GoogleFonts.inter(
+  static TextStyle get body => const TextStyle(
+    fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.5,
@@ -158,7 +170,8 @@ class AppTextStyles {
   );
 
   /// Inter 400 — small meta, captions.
-  static TextStyle get bodySmall => GoogleFonts.inter(
+  static TextStyle get bodySmall => const TextStyle(
+    fontFamily: 'Inter',
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.5,
@@ -166,7 +179,8 @@ class AppTextStyles {
   );
 
   /// Inter 600 uppercase with +0.12em tracking — chips, tabs, metadata rails.
-  static TextStyle get label => GoogleFonts.inter(
+  static TextStyle get label => const TextStyle(
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.12 * 11,
@@ -184,10 +198,11 @@ class AppTextStyles {
       label.copyWith(fontSize: 12, letterSpacing: 0.12 * 12);
 
   /// Rajdhani 700 tabular — XP counts, level numbers, weight/rep numerals.
-  static TextStyle get numeric => GoogleFonts.rajdhani(
+  static TextStyle get numeric => const TextStyle(
+    fontFamily: 'Rajdhani',
     fontSize: 20,
     fontWeight: FontWeight.w700,
-    fontFeatures: const [FontFeature.tabularFigures()],
+    fontFeatures: [FontFeature.tabularFigures()],
     height: 1.1,
     color: AppColors.textCream,
   );
@@ -257,11 +272,20 @@ class AppTheme {
         backgroundColor: AppColors.primaryViolet,
         foregroundColor: AppColors.textCream,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textCream,
+        // L15: AppBar titles use Rajdhani 600 per mockup `.mock-appbar-title`
+        // (font-family: 'Rajdhani'; font-weight: 600; font-size: 18px;
+        // letter-spacing: 0.02em). Material's default falls back to Inter
+        // titleLarge — wrong for our display-font identity. See
+        // `project_design_language_typography`.
+        titleTextStyle: AppTextStyles.headline.copyWith(
+          fontSize: 18,
+          letterSpacing: 0.02 * 18,
+        ),
       ),
       dividerTheme: const DividerThemeData(color: AppColors.hair, thickness: 1),
     );

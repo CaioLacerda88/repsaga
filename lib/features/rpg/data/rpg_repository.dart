@@ -183,6 +183,57 @@ class RpgRepository extends BaseRepository {
   }
 
   // -------------------------------------------------------------------------
+  // Peak load per body part (Phase 27 L10)
+  // -------------------------------------------------------------------------
+
+  /// Heaviest single-set weight (kg) lifted per body part within the window
+  /// `(endDate - days, endDate]`. Returns one entry per body part with at
+  /// least one non-zero-weight set in the window; absent body parts mean
+  /// the user has not trained that body part with weight in the window.
+  ///
+  /// Uses the `peak_load_per_body_part(p_user_id, p_days, p_end_date)` RPC
+  /// (migration 00064). Powers the post-Phase-27 "Carga pico" column on
+  /// the stats deep-dive screen, replacing the pre-Phase-27
+  /// EWMA-rendered-as-kg mislabel.
+  ///
+  /// **Attribution rule.** A set counts toward body part X iff the parent
+  /// exercise's `xp_attribution -> X` is strictly positive. This matches
+  /// the existing weekly-volume "any non-zero attribution counts" rule.
+  ///
+  /// Returns an empty map for an unauthenticated client (mirrors the
+  /// repository's other guards).
+  Future<Map<BodyPart, double>> getPeakLoadPerBodyPart({
+    required int days,
+    DateTime? endDate,
+  }) {
+    return mapException(() async {
+      final user = _client.auth.currentUser;
+      if (user == null) return const <BodyPart, double>{};
+
+      final params = <String, dynamic>{'p_user_id': user.id, 'p_days': days};
+      if (endDate != null) {
+        params['p_end_date'] = endDate.toUtc().toIso8601String();
+      }
+      final raw = await _client.rpc('peak_load_per_body_part', params: params);
+
+      // PostgREST serializes `RETURNS TABLE` as a List<Map>. Skip rows
+      // with unknown body-part tokens defensively — a future cardio peak
+      // entry would arrive here before the UI is ready for it.
+      final rows = (raw as List).cast<Map<String, dynamic>>();
+      final out = <BodyPart, double>{};
+      for (final row in rows) {
+        final token = row['body_part'] as String?;
+        final weight = row['peak_load_kg'];
+        if (token == null || weight == null) continue;
+        final bp = BodyPart.tryFromDbValue(token);
+        if (bp == null) continue;
+        out[bp] = (weight as num).toDouble();
+      }
+      return out;
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Backfill driver
   // -------------------------------------------------------------------------
 

@@ -8,6 +8,7 @@ import '../../../core/l10n/locale_provider.dart';
 import '../../../core/offline/pending_action.dart';
 import '../../../core/offline/pending_sync_provider.dart';
 import '../../../core/theme/app_icons.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_text_field.dart';
@@ -341,8 +342,8 @@ class _SelectableCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   label,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 12,
                     color: isSelected ? primary : theme.colorScheme.onSurface,
                   ),
                 ),

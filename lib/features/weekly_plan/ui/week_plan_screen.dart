@@ -519,6 +519,15 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   }
 
   Future<void> _confirmClear(BuildContext ctx) async {
+    // Cancel any pending debounced save BEFORE prompting. Otherwise an
+    // edit-then-clear race writes the (now-discarded) bucket back to
+    // Postgres ~300ms after the clear lands — the edit wins, the user's
+    // "Clear Week" intent is silently overwritten. We also flush the
+    // analytics-event flag so the deleted-then-clobbered edit doesn't
+    // leave a `week_plan_saved` ghost in the funnel.
+    _saveDebounce?.cancel();
+    _pendingAnalyticsEvent = false;
+
     final confirmed = await showDialog<bool>(
       context: ctx,
       builder: (dialogCtx) {
@@ -546,6 +555,10 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
 
     if (confirmed != true || !mounted) return;
     setState(() => _bucketRoutines = []);
+    // L5 — same invalidate-on-local-mutation contract as `_savePlan`; clear
+    // goes through `clearPlan()` instead of `upsertPlan()` so it needs its
+    // own invalidate call. Per `cluster_optimistic_ui_vs_async_provider`.
+    ref.invalidate(weeklyEngagementProvider);
     await ref.read(weeklyPlanProvider.notifier).clearPlan();
     if (!mounted) return;
     // ignore: use_build_context_synchronously
@@ -560,10 +573,32 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   /// but the analytics event fires at most once per session at dispose.
   void _savePlan({required bool usedAutofill, required bool replacedExisting}) {
     _saveDebounce?.cancel();
-    _debouncedPlanNotifier = ref.read(weeklyPlanProvider.notifier);
+    final notifier = ref.read(weeklyPlanProvider.notifier);
+    _debouncedPlanNotifier = notifier;
+    // L5.2 — Optimistic provider-state update: push `_bucketRoutines` to
+    // `weeklyPlanProvider` SYNCHRONOUSLY so every consumer
+    // (`weeklyEngagementProvider`, Home's bucket chips, anything else
+    // watching the plan) sees the new bucket on the next frame instead of
+    // waiting for the 300ms debounce + Supabase roundtrip (= 400-800ms
+    // perceived latency for the bars to update).
+    //
+    // L5 (original) only invalidated the derived `weeklyEngagementProvider`
+    // — but that provider reads `ref.watch(weeklyPlanProvider).value` which
+    // hadn't changed yet, so the invalidate just re-fetched against a
+    // stale source. The combined fix is "invalidate derived provider
+    // + update source provider state". Cluster:
+    // `cluster_optimistic_ui_vs_async_provider` — patterns 1 + 2 together.
+    notifier.setOptimistic(_bucketRoutines);
     _saveDebounce = Timer(const Duration(milliseconds: 300), () {
       _flushDebouncedSave();
     });
+    // Whole-family invalidate so every variant (`includePlanned: true`
+    // from the editor + `false` from any future Stats surface) is dirtied
+    // uniformly. Redundant for `weeklyEngagementProvider` (the
+    // `ref.watch(weeklyPlanProvider)` reactivity above already triggers
+    // its rebuild) but kept as defense-in-depth for any future autoDispose
+    // variant that may have been disposed between edits.
+    ref.invalidate(weeklyEngagementProvider);
     _pendingAnalyticsEvent = true;
     // Sticky-OR: if any edit in the session used autofill or replaced an
     // existing plan, the dispose-time event records that.

@@ -129,8 +129,28 @@ abstract class VolumePeakRow with _$VolumePeakRow {
     /// Set count attributed to this body part over the last 7 days.
     required int weeklyVolumeSets,
 
-    /// Lifetime peak EWMA — never decreases. Rendered with tabular figures.
+    /// Lifetime peak EWMA — never decreases. Internal Vitality model
+    /// signal; surfaced in the trend chart but NOT in the "Carga pico"
+    /// column post-Phase 27 L10. The widget reads [peakLoadKg] instead.
     required double peakEwma,
+
+    /// Heaviest single-set weight in kilograms the user lifted for any
+    /// exercise attributing to this body part within the last 7 days.
+    /// Drives the "Carga pico" column readout. `0` when the user has no
+    /// non-zero-weight sets in the window (e.g. body part untrained, or
+    /// only bodyweight-as-zero entries).
+    ///
+    /// Phase 27 L10: replaces the Vitality-EWMA-rendered-as-kg mislabel
+    /// (PR L10). The pre-Phase-27 widget used [peakEwma] as the kg value;
+    /// every existing call site now reads this field instead.
+    @Default(0) double peakLoadKg,
+
+    /// Heaviest single-set weight in kilograms for the user's "30 days ago"
+    /// snapshot — same 7-day window shape but anchored 30 days earlier.
+    /// Used to render the monthly peak-load delta in `VolumePeakBlock`.
+    /// Null when the user has < 30 days of history (no baseline to
+    /// compare against).
+    double? peakLoadKg30dAgo,
 
     /// Set count for the body part during the 7 days BEFORE the current
     /// week. Used by `VolumePeakBlock` to render the "vs semana passada"
@@ -144,9 +164,10 @@ abstract class VolumePeakRow with _$VolumePeakRow {
     /// user has < 5 weeks of history.
     double? fourWeekMeanVolumeSets,
 
-    /// Persisted EWMA value as of 30 days ago. Used by `VolumePeakBlock`
-    /// to render the monthly peak delta with the `30D` badge. Null when
-    /// the user has < 30 days of history.
+    /// Persisted EWMA value as of 30 days ago. Phase 27 L10 deprecated
+    /// the kg render that consumed this — kept in the model so the trend
+    /// chart (which still uses Vitality data) doesn't have to switch
+    /// data sources. The widget no longer reads it.
     double? peakEwma30dAgo,
 
     /// Distinct ISO-week count covered by the user's xp_events for this
@@ -253,16 +274,20 @@ abstract class PeakDeltaView with _$PeakDeltaView {
 
   /// Compute the view-state for [row]. Pure function.
   ///
-  /// Peak EWMA is documented monotonic-non-decreasing in the model — it's
-  /// a lifetime peak watermark. A negative delta indicates data drift
-  /// (clock skew, manual fixup); render as flat (no arrow) rather than
-  /// down. Zero delta also flattens — no monthly movement to surface.
+  /// Phase 27 L10: now compares actual heaviest single-set weight in kg
+  /// over the current 7-day window against the same shape 30 days ago.
+  /// Unlike Vitality peak EWMA, raw lift weight is NOT monotonic — a user
+  /// can absolutely lift less heavy this week than they did a month ago
+  /// (deload, illness, exercise variation). When delta is non-positive,
+  /// we render as flat (no arrow / no "down badge") rather than
+  /// discouraging — surfacing a red "▼" on a deload week is a UX trap that
+  /// punishes intentional periodization.
   factory PeakDeltaView.fromRow(VolumePeakRow row) {
-    final prior = row.peakEwma30dAgo;
+    final prior = row.peakLoadKg30dAgo;
     if (prior == null) {
       return const PeakDeltaView(state: PeakDeltaState.suppressed);
     }
-    final delta = row.peakEwma - prior;
+    final delta = row.peakLoadKg - prior;
     if (delta <= 0) {
       return const PeakDeltaView(state: PeakDeltaState.flat);
     }

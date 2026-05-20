@@ -129,6 +129,8 @@
   "@skip": { "description": "Skip button label" },
   "back": "Back",
   "@back": { "description": "Back button label" },
+  "backExitHint": "Press back again to exit",
+  "@backExitHint": { "description": "Two-tap-to-exit hint shown on Home when the user presses back once. A second back press within 3 seconds exits the app." },
   "close": "Close",
   "@close": { "description": "Close button label" },
   "start": "Start",
@@ -451,6 +453,8 @@
   "@seeAll": { "description": "Link to see all routines" },
   "createYourFirstRoutine": "Create Your First Routine",
   "@createYourFirstRoutine": { "description": "CTA for first routine creation" },
+  "homeStarterRoutinesLabel": "Starter Routines",
+  "@homeStarterRoutinesLabel": { "description": "Sentence-case muted label above the seeded starter-routines preview on Home (day-0 users). Phase 27 L3." },
 
   "heroUpNext": "UP NEXT",
   "@heroUpNext": { "description": "Action hero label: up next" },

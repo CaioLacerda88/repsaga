@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/format/date_format.dart';
 import '../../../../core/format/number_format.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/reward_accent.dart';
 import '../../../profile/providers/profile_providers.dart';
@@ -307,7 +308,7 @@ class _ChartBody extends StatelessWidget {
             locale: locale,
             unit: weightUnit,
           ),
-          style: theme.textTheme.titleLarge?.copyWith(
+          style: AppTextStyles.numeric.copyWith(
             color: theme.colorScheme.onSurface,
           ),
         ),

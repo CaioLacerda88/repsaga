@@ -353,11 +353,16 @@ test.describe('Home bucket chip row (planned routines)', () => {
     // `home-bucket-chip-*` prefix selector too, so we filter that out via
     // `:not()` on the row identifier — only true chip nodes (each carrying
     // a routine UUID suffix) remain.
-    const chipCount = await page
-      .locator(
-        '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
-      )
-      .count();
+    //
+    // Use waitFor({ state: 'attached' }) before .count() — the homeReadyProvider
+    // skeleton gate resolves the container (`home-bucket-chip-row`) before the
+    // individual chip flt-semantics-identifier attributes are committed to the
+    // DOM. .count() is a one-shot snapshot; without an explicit wait it races
+    // the Semantics tree hydration and returns 0.
+    const chipSelector =
+      '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])';
+    await page.locator(chipSelector).first().waitFor({ state: 'attached', timeout: 10_000 });
+    const chipCount = await page.locator(chipSelector).count();
     expect(chipCount).toBeGreaterThanOrEqual(1);
   });
 

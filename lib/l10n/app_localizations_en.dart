@@ -209,6 +209,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get back => 'Back';
 
   @override
+  String get backExitHint => 'Press back again to exit';
+
+  @override
   String get close => 'Close';
 
   @override
@@ -635,6 +638,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get createYourFirstRoutine => 'Create Your First Routine';
+
+  @override
+  String get homeStarterRoutinesLabel => 'Starter Routines';
 
   @override
   String get heroUpNext => 'UP NEXT';

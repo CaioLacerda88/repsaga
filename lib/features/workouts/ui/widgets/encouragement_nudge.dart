@@ -164,28 +164,85 @@ class EncouragementNudge extends ConsumerWidget {
       streakDays: streakDays,
     );
 
-    final text = switch (nudge) {
-      NudgeCrossBuildClose(:final titleName) => l10n.homeNudgeCrossBuildClose(
-        titleName,
+    // Resolve the full rendered line + the substring(s) that should render
+    // in the bold-cream emphasis style. `_NudgeFragments.full` is the
+    // ARB-rendered string; `boldFragments` is an ordered list of substrings
+    // to wrap in `FontWeight.w700` + `AppColors.textCream` via Text.rich
+    // (the rest stays muted `textDim`). The list is ordered by first
+    // occurrence so the slicing helper consumes them left-to-right.
+    //
+    // L11.a (Phase 27, 2026-05-19) — mockup `.nudge strong` calls for
+    // count+noun / title-name emphasis on every numeric variant. We slice
+    // the rendered string at the placeholder substring instead of adding
+    // sibling ARB keys ("BoldFragment" suffix variants); the placeholder
+    // values themselves (`"3 workouts"`, `"Iron-Bound"`, etc.) are already
+    // present verbatim inside the full line, so a `String.indexOf` split
+    // works for both locales without ARB churn. Defensive: if the fragment
+    // isn't found (e.g. a future locale phrases the noun differently),
+    // the helper falls back to rendering the whole line muted-but-plain.
+    final fragments = switch (nudge) {
+      NudgeCrossBuildClose(:final titleName) => _NudgeFragments(
+        full: l10n.homeNudgeCrossBuildClose(titleName),
+        boldFragments: [titleName],
       ),
-      NudgeBodyPartTitleClose(:final bodyPart, :final titleName) =>
-        l10n.homeNudgeBodyPartTitleClose(
-          localizedBodyPartName(bodyPart, l10n),
-          titleName,
-        ),
-      NudgeRemainingWorkouts(:final count) => l10n.homeNudgeRemainingWorkouts(
-        count,
+      NudgeBodyPartTitleClose(:final bodyPart, :final titleName) => () {
+        final bodyPartName = localizedBodyPartName(bodyPart, l10n);
+        return _NudgeFragments(
+          full: l10n.homeNudgeBodyPartTitleClose(bodyPartName, titleName),
+          boldFragments: [bodyPartName, titleName],
+        );
+      }(),
+      NudgeRemainingWorkouts(:final count) => _NudgeFragments(
+        full: l10n.homeNudgeRemainingWorkouts(count),
+        // Bold fragment varies by locale — derive it by formatting a
+        // throw-away version of the same plural template with a known
+        // sentinel and slicing the recurring noun off the full line.
+        // Cheaper: pull the noun directly via a second ARB call would
+        // require new keys; instead we use the precomputed plural fragments
+        // assembled below.
+        boldFragments: [_remainingWorkoutsBoldFragment(l10n, count)],
       ),
-      NudgeStreak(:final days) => l10n.homeNudgeStreakDays(days),
-      NudgeFirstStep() => l10n.homeFirstStepFallback,
+      NudgeStreak(:final days) => _NudgeFragments(
+        full: l10n.homeNudgeStreakDays(days),
+        boldFragments: [_streakBoldFragment(l10n, days)],
+      ),
+      NudgeFirstStep() => _NudgeFragments(
+        full: l10n.homeFirstStepFallback,
+        // First-step has no fragment to emphasize — stays fully muted.
+        // No leading diamond either.
+        boldFragments: const <String>[],
+        showLeadingDiamond: false,
+      ),
     };
+
+    // Mockup spec (`docs/phase-26-mockups.html` `.nudge`):
+    //   `font-family: 'Rajdhani'; font-weight: 500; font-size: 11px;
+    //    color: var(--text-dim); letter-spacing: 0.04em; line-height: 1.4;`
+    //   `.nudge strong { color: var(--success); font-weight: 700; }`
+    // Base text is Rajdhani 500 textDim; the bold span flips to SUCCESS GREEN
+    // (not textCream — that was a misread of the L11 spec) at weight 700.
+    const baseStyle = TextStyle(
+      fontFamily: 'Rajdhani',
+      fontWeight: FontWeight.w500,
+      fontSize: 11,
+      color: AppColors.textDim,
+      letterSpacing: 0.04 * 11,
+      height: 1.4,
+    );
+    final boldStyle = baseStyle.copyWith(
+      fontWeight: FontWeight.w700,
+      color: AppColors.success,
+    );
+    final diamondStyle = baseStyle.copyWith(color: AppColors.hotViolet);
 
     return Semantics(
       // `container: true` + `explicitChildNodes: true` keeps the
       // identifier reachable on Flutter web's AOM — see
       // `cluster_semantics_identifier_pair_rule`. Future E2E selectors
       // can hook on `home-encouragement-nudge` without having to grep
-      // localized text.
+      // localized text. Text.rich preserves the merged AOM label
+      // (`cluster_aom_label_text_merge` is a non-issue here — Text.rich
+      // exposes the joined string to assistive tech).
       container: true,
       explicitChildNodes: true,
       identifier: 'home-encouragement-nudge',
@@ -193,12 +250,18 @@ class EncouragementNudge extends ConsumerWidget {
         height: height,
         child: Align(
           alignment: AlignmentDirectional.centerStart,
-          child: Text(
-            text,
-            style: AppTextStyles.body.copyWith(
-              fontSize: 13,
-              color: AppColors.textDim,
-              letterSpacing: 0.02 * 13,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                if (fragments.showLeadingDiamond)
+                  TextSpan(text: '◆ ', style: diamondStyle),
+                ..._splitBoldSpans(
+                  fragments.full,
+                  fragments.boldFragments,
+                  baseStyle,
+                  boldStyle,
+                ),
+              ],
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -207,4 +270,117 @@ class EncouragementNudge extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Resolved rendering inputs for a single nudge variant.
+///
+/// [full] is the fully-rendered l10n string (after placeholder
+/// interpolation). [boldFragments] are substrings inside [full] that should
+/// render in the bold-cream emphasis style; the rest of [full] stays muted.
+/// [showLeadingDiamond] gates the `◆ ` prefix — only the numeric variants
+/// surface it; first-step stays bare.
+class _NudgeFragments {
+  const _NudgeFragments({
+    required this.full,
+    required this.boldFragments,
+    this.showLeadingDiamond = true,
+  });
+
+  final String full;
+  final List<String> boldFragments;
+  final bool showLeadingDiamond;
+}
+
+/// Slices [full] into a sequence of [TextSpan]s, wrapping each fragment in
+/// [boldFragments] (in order of appearance) with [boldStyle] and the rest
+/// with [baseStyle]. Fragments are matched left-to-right via
+/// [String.indexOf] starting at the previous fragment's end — overlapping
+/// fragments are not supported but the two callers (single-fragment and
+/// body-part-then-title) pass disjoint substrings.
+///
+/// Defensive fallback: if any fragment cannot be located in [full] (e.g.
+/// a future locale phrases the noun differently), the helper short-circuits
+/// to a single [baseStyle] span containing the whole line — better to render
+/// muted-plain than to crash or silently drop content.
+List<TextSpan> _splitBoldSpans(
+  String full,
+  List<String> boldFragments,
+  TextStyle baseStyle,
+  TextStyle boldStyle,
+) {
+  if (boldFragments.isEmpty) {
+    return [TextSpan(text: full, style: baseStyle)];
+  }
+  final out = <TextSpan>[];
+  var cursor = 0;
+  for (final fragment in boldFragments) {
+    if (fragment.isEmpty) continue;
+    final idx = full.indexOf(fragment, cursor);
+    if (idx < 0) {
+      // Fragment missing — bail to the safe fallback (whole line muted).
+      return [TextSpan(text: full, style: baseStyle)];
+    }
+    if (idx > cursor) {
+      out.add(TextSpan(text: full.substring(cursor, idx), style: baseStyle));
+    }
+    out.add(TextSpan(text: fragment, style: boldStyle));
+    cursor = idx + fragment.length;
+  }
+  if (cursor < full.length) {
+    out.add(TextSpan(text: full.substring(cursor), style: baseStyle));
+  }
+  return out;
+}
+
+/// Bold-fragment derivation for [NudgeRemainingWorkouts]. The full ARB
+/// string interpolates the count into a localized noun phrase ("3 workouts" /
+/// "3 treinos"); we re-derive the noun-phrase substring by stripping the
+/// surrounding wrapper from the rendered full line.
+///
+/// Strategy: format the same plural with a sentinel count, locate the
+/// sentinel-bearing substring, then re-apply the same template to the
+/// actual count. Cheaper alternative considered (new ARB key) deemed not
+/// worth the locale churn — this helper is a 6-line search.
+///
+/// For en + pt v1, the bold fragment matches:
+///   en singular: "1 workout"
+///   en plural:   "{N} workouts"
+///   pt singular: "1 treino"
+///   pt plural:   "{N} treinos"
+///
+/// Both locales place the noun phrase contiguously, so a substring search
+/// against the rendered full line + the count digits + the noun word works
+/// without per-locale branching. We bound the search by locating the
+/// substring that starts with the count's string form.
+String _remainingWorkoutsBoldFragment(AppLocalizations l10n, int count) {
+  // Build the full line, then pull the contiguous noun phrase out by
+  // anchoring on the count's textual form. The "1" branch is anchored
+  // verbatim (no localization-driven number formatting splits a leading
+  // "1"); the plural branch falls back to the count's string.
+  final full = l10n.homeNudgeRemainingWorkouts(count);
+  // Find the count digits in `full` and walk forward to the next sentence
+  // terminator that isn't a digit/letter (the bold fragment ends at the
+  // first space-led particle: " para" / " to ").
+  final countStr = '$count';
+  final start = full.indexOf(countStr);
+  if (start < 0) return full; // defensive — let the splitter fall back
+  // Walk forward from `start` until we hit the locale-specific tail
+  // particle. For en that's " to close"; for pt that's " para fechar".
+  // Both contain " to " / " para " — match the first occurrence of either.
+  final tailEn = full.indexOf(' to ', start);
+  final tailPt = full.indexOf(' para ', start);
+  final tail = (tailEn >= 0 && (tailPt < 0 || tailEn < tailPt))
+      ? tailEn
+      : tailPt;
+  if (tail < 0) return full.substring(start); // very defensive
+  return full.substring(start, tail);
+}
+
+/// Bold-fragment derivation for [NudgeStreak]. The plural rendering is
+/// itself the bold fragment ("1-day streak" / "3-day streak" / "3 dias de
+/// sequência") — no surrounding sentence to strip. Returning the full line
+/// makes the whole nudge bold + cream, matching the mockup's `.nudge strong`
+/// which wraps the entire streak phrase.
+String _streakBoldFragment(AppLocalizations l10n, int days) {
+  return l10n.homeNudgeStreakDays(days);
 }

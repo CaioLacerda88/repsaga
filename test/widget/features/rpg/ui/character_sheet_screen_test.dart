@@ -33,7 +33,10 @@ import 'package:repsaga/l10n/app_localizations.dart';
 // Hive-free stand-in: constructing the real RankUpPulseLocalStorage in a
 // widget test would crash because the 'rank_up_pulse' Hive box is never
 // opened in the test harness. The mock always returns false for isPulsing,
-// so rows never spawn RankUpPulse (which would also hang pumpAndSettle).
+// so trained rows mount AmbientPulseDot with `emphasized: false` (Phase 27
+// L8 — every trained dot pulses; the flag just sets the amplitude tier).
+// The animation controller runs repeat() in both modes, so this file uses
+// manual tester.pump() advances instead of pumpAndSettle (which would hang).
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
 
 BodyPartSheetEntry _entry({

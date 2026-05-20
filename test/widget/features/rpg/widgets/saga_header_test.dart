@@ -29,7 +29,10 @@ void main() {
             haloState: VitalityState.active,
             characterLevel: 14,
             characterClass: CharacterClass.bulwark,
-            activeTitle: 'Plate-Bearer',
+            // Pass a real title slug from `earned_titles.title_id` — the
+            // header MUST resolve it through `localizedTitleCopy(slug, l10n)`.
+            // See `cluster_slug_rendered_as_display_name`.
+            activeTitle: 'chest_r5_initiate_of_the_forge',
           ),
         ),
       );
@@ -42,8 +45,10 @@ void main() {
       // and Phase 26b mockup spec UPPERCASE-tracks earned class names so the
       // class label sits subordinate to the 56sp LVL numeral.
       expect(find.text('BALUARTE'), findsOneWidget);
-      // Active title verbatim
-      expect(find.text('Plate-Bearer'), findsOneWidget);
+      // Active title resolves to the pt-locale display name; the raw slug
+      // must NOT appear on screen.
+      expect(find.text('Iniciado da Forja'), findsOneWidget);
+      expect(find.text('chest_r5_initiate_of_the_forge'), findsNothing);
     });
 
     testWidgets('right-meta column ellipsizes long titles at 360dp', (

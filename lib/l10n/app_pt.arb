@@ -64,6 +64,7 @@
   "add": "Adicionar",
   "skip": "Pular",
   "back": "Voltar",
+  "backExitHint": "Pressione voltar novamente para sair",
   "close": "Fechar",
   "start": "Iniciar",
   "remove": "Remover",
@@ -198,6 +199,7 @@
   "myRoutines": "MINHAS TREINOS",
   "seeAll": "Ver tudo",
   "createYourFirstRoutine": "Crie Seu Primeiro Treino",
+  "homeStarterRoutinesLabel": "Rotinas iniciais",
 
   "heroUpNext": "PRÓXIMO",
   "heroYourFirstWorkout": "SEU PRIMEIRO TREINO",

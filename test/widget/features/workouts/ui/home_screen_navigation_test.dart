@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
@@ -205,6 +206,11 @@ Widget _buildTestApp({
       characterSheetProvider.overrideWith((_) => AsyncData(_dayZeroSheet())),
       rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
       streakProvider.overrideWith((ref) => 0),
+      // HomeGreeting (Phase 27 L2) reads `currentUserEmailProvider` for its
+      // displayName-fallback. Seed a stable value so the greeting renders
+      // the profile's `displayName` and doesn't crash on a missing auth
+      // subgraph. Mirrors the override seeded in `home_screen_test.dart`.
+      currentUserEmailProvider.overrideWithValue('test@repsaga.test'),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

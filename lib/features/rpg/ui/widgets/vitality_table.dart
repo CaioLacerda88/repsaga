@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_muscle_icons.dart';
@@ -168,24 +167,13 @@ class _VitalityTableRow extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(
                   pctText,
-                  style: GoogleFonts.rajdhani(
+                  style: TextStyle(
+                    fontFamily: 'Rajdhani',
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: pctColor,
                     height: 1,
                     fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // 8x8 body-part identity dot — the chip-form legend per row.
-                // Identity (which body part) is communicated by the dot;
-                // conditioning state is communicated by the percentage color.
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
                   ),
                 ),
               ],

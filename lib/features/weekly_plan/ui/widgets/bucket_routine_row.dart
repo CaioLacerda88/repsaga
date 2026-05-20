@@ -67,9 +67,13 @@ class BucketRoutineRow extends StatelessWidget {
                     child: Text(
                       name,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      // L15: routine names in the bucket → Rajdhani per
+                      // mockup `.routine-name { font-family: 'Rajdhani'; }`.
+                      // See project_design_language_typography.
+                      style: AppTextStyles.headline.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: isDone ? AppColors.textCream : AppColors.textDim,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -90,6 +94,12 @@ class BucketRoutineRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
             ],
+            // L6 — the row maps `onOverflowTap` straight to `_removeRoutine`
+            // (no menu, no disambiguation). The legacy `Icons.more_horiz`
+            // glyph wrongly implied a popup would open. `Icons.close` makes
+            // the direct-remove affordance honest. The Semantics identifier
+            // is kept as `bucket-row-overflow-$routineId` so E2E selectors
+            // and the IconButton's ValueKey stay stable across the swap.
             Semantics(
               container: true,
               explicitChildNodes: true,
@@ -97,7 +107,7 @@ class BucketRoutineRow extends StatelessWidget {
               identifier: 'bucket-row-overflow-$routineId',
               child: IconButton(
                 key: const ValueKey('bucket-row-overflow'),
-                icon: const Icon(Icons.more_horiz, size: 20),
+                icon: const Icon(Icons.close, size: 20),
                 color: AppColors.textDim,
                 visualDensity: VisualDensity.compact,
                 onPressed: onOverflowTap,

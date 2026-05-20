@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,6 +14,17 @@ import 'core/observability/sentry_report.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Phase 27 L14: lock `google_fonts` to never network-fetch. Both Rajdhani
+  // and Inter are bundled via `pubspec.yaml > flutter.fonts:` and read via
+  // direct `TextStyle(fontFamily: ...)` calls (see [AppTextStyles]). The
+  // package is kept as a transitive dep but no code path in `lib/` should
+  // call `GoogleFonts.*` — `AppTextStyles` is the only sanctioned entry
+  // point. If a future caller introduces a `GoogleFonts.*` reference, this
+  // lock makes the failure mode clear at debug time instead of silently
+  // network-fetching (the silent-fetch race was the root cause of the
+  // missing-Rajdhani-on-device bug surfaced during Phase 27 verification).
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   // Register the Game-Icons.net CC BY 3.0 attribution for the v3-silhouette
   // icon pack (AppIcons / AppMuscleIcons / AppEquipmentIcons). This makes
