@@ -215,15 +215,10 @@ class EncouragementNudge extends ConsumerWidget {
       ),
     };
 
-    // Mockup spec (`docs/phase-26-mockups.html` `.nudge`):
-    //   `font-family: 'Rajdhani'; font-weight: 500; font-size: 11px;
-    //    color: var(--text-dim); letter-spacing: 0.04em; line-height: 1.4;`
-    //   `.nudge strong { color: var(--success); font-weight: 700; }`
-    // Base text is Rajdhani 500 textDim; the bold span flips to SUCCESS GREEN
-    // (not textCream — that was a misread of the L11 spec) at weight 700.
-    // Phase 27 L18.4 — routed through [AppTextStyles.numeric] (Rajdhani
-    // tabular figures) with nudge-specific 500-weight + 11dp + dim +
-    // tracking + 1.4 line-height overrides.
+    // Nudge typography: Rajdhani 500 / 11dp / textDim / 0.04em tracking /
+    // 1.4 line-height. Bold fragment flips to SUCCESS GREEN at weight 700
+    // (not textCream — was the L11 misread). Routed through
+    // [AppTextStyles.numeric] with nudge-specific overrides.
     final baseStyle = AppTextStyles.numeric.copyWith(
       fontWeight: FontWeight.w500,
       fontSize: 11,

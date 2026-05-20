@@ -9,8 +9,7 @@ import '../../../../l10n/app_localizations.dart';
 /// Earned-but-not-equipped title with a body-part-hue dot, the title name,
 /// the body-part·threshold meta line, and an "Equipar" / "Equip" CTA. The
 /// whole row is tappable — tap-on-row opens the lore bottom sheet, while
-/// tap-on-CTA fires [onEquip] without bubbling to [onTap]. The dual-target
-/// shape mirrors the mockup at `docs/phase-26-mockups.html#titles`.
+/// tap-on-CTA fires [onEquip] without bubbling to [onTap].
 ///
 /// **Semantics shape (`cluster_semantics_identifier_pair_rule`):** the
 /// Semantics wrapper carries `container: true`, `explicitChildNodes: true`,
