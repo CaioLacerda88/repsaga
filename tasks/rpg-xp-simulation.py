@@ -1,21 +1,10 @@
 """
-RepSaga RPG XP simulation harness.
-
-Plays back synthetic 5-year training histories for several user archetypes
-(beginner / intermediate / advanced / perpetual-light / detraining cases)
-through the candidate XP + Vitality formulas to surface pacing problems
-before we lock the math.
-
-Tweak the constants in the CONFIG block below; re-run to see new
-trajectories. Output is a milestones table per archetype plus a Vitality
-trajectory for detraining scenarios.
-
-Usage:  python tasks/rpg-xp-simulation.py
+RepSaga RPG XP simulation harness — Phase 29 v2 + 29.6 LOCKED.
 
 ================================================================================
-PARITY WARNING — synchronized formula sites
+PARITY WARNING — synchronized formula sites (5 sites — Phase 29 v2 expansion)
 ================================================================================
-The XP formula is implemented in FOUR places that MUST stay byte-for-byte
+The XP formula is implemented in FIVE places that MUST stay byte-for-byte
 identical. Any change to a constant, multiplier order, or floor/ceiling here
 must land in the same PR as the matching change in:
 
@@ -23,75 +12,118 @@ must land in the same PR as the matching change in:
      (Dart `XpCalculator.computeSetXp` — live save path; the Dart calculator
      is bodyweight-agnostic — production callers pre-convert sets.weight to
      `effective_load` before invoking computeSetXp)
-  2. test/fixtures/generate_rpg_fixtures.py
+  2. lib/features/rpg/domain/implied_tier.dart (NEW in Phase 29 PR 2)
+     (Dart per-lift gender-aware tier table interpolator + abs_strength_premium
+     fraction calculator — must mirror this file's IMPLIED_TIER_TABLES_MALE /
+     IMPLIED_TIER_TABLES_FEMALE / EXERCISE_TIER_DISCOUNT / E_BONUS / E_FLOOR /
+     E_CEIL byte-for-byte)
+  3. tasks/rpg-xp-simulation.py (this file — the LOCKED BASELINE & ORACLE)
+  4. test/fixtures/generate_rpg_fixtures.py
      (regenerate `rpg_xp_fixtures.json` so Dart parity tests stay green)
-  3. supabase/migrations/00040_*.sql, 00050_*.sql, 00052_*.sql,
-     00054_record_xp_with_difficulty_mult.sql, and
-     00057_record_xp_with_bodyweight_load.sql
-     (PL/pgSQL `record_set_xp` / `record_session_xp_batch` /
-     `_rpg_backfill_chunk` — live persist path; per-exercise difficulty_mult
-     fetched from `exercises.difficulty_mult` and applied at the same
-     position in the chain; per-exercise `uses_bodyweight_load` from
-     `exercises.uses_bodyweight_load` (00056) drives effective_weight =
-     COALESCE(weight,0) + COALESCE(bodyweight,0) when TRUE — applied to
-     volume_load + strength_mult numerator BEFORE the chain in 00057)
+  5. supabase/migrations/*_record_set_xp.sql (Phase 29 PR 2 will add the
+     migration that updates `record_set_xp` / `record_session_xp_batch` /
+     `_rpg_backfill_chunk` for the Phase 29 v2 multiplier chain + Path C
+     premium + piecewise rank curve)
 
-Integration parity tests assert all four agree to 1e-4 absolute. If you only
+Integration parity tests assert all five agree to 1e-4 absolute. If you only
 change one site you'll get a build that compiles but produces silently
 inconsistent XP between client computation and server persistence.
 ================================================================================
+
+Phase 29 v2 + 29.6 LOCKED CONSTANTS — must match Dart/SQL/fixture byte-for-byte:
+
+  VOLUME_EXPONENT        = 0.60
+  NOVELTY_DENOMINATOR    = 15.0
+  WEEKLY_CAP_SETS        = 15.0
+  OVER_CAP_MULTIPLIER    = 0.3
+  STRENGTH_MULT_FLOOR    = 0.4
+  VOLUME_LOAD_FLOOR      = 1.0       (max(1.0, eff_weight * reps))
+
+  # Refinement #6 piecewise rank curve
+  XP_BASE                = 60
+  XP_GROWTH_BAND1        = 1.10      (ranks 1-20)
+  RANK_CURVE_BREAKPOINT  = 20
+  LINEAR_XP_PER_RANK     = 367.0     (LITERAL — derived 60 × 1.10^19 ≈ 366.957
+                                       would drift parity at high ranks)
+
+  # Phase 29.6 Path C absolute strength premium
+  E_BONUS                = 0.8
+  E_FLOOR                = 35.0
+  E_CEIL                 = 55.0
+
+  # Refinement #4 near-failure inference
+  NF_INTENSITY_BONUS     = 0.10
+  NF_TARGET_THRESHOLD    = 0.85      (actual_reps < target_reps × 0.85 →
+                                       inferred near-failure)
+
+  # Refinement #3 frequency_mult (INCLUDED — simple inline impl)
+  FREQUENCY_MULT_TABLE   = [1.00, 1.06, 1.10, 1.06, 1.00]
+                            (sessions 1/2/3/4/5+ per body-part per 7d window)
+
+  # Refinement #2 progressive overload reward (named physiological bands)
+  REP_BAND_HEAVY         = (1, 4)
+  REP_BAND_STRENGTH      = (5, 7)
+  REP_BAND_HYPERTROPHY   = (8, 12)
+  REP_BAND_ENDURANCE     = (13, +inf)
+
+  # Refinement #1 / Phase 29.6 — per-lift gender-aware Symmetric Strength tiers
+  IMPLIED_TIER_TABLES_MALE   (BENCH/SQUAT/DEADLIFT/OHP/ROW/ISOLATION)
+  IMPLIED_TIER_TABLES_FEMALE (BENCH/SQUAT/DEADLIFT/OHP/ROW/ISOLATION)
+  EXERCISE_TIER_DISCOUNT     (per-exercise variant discount, e.g. leg_press 0.65)
+
+Per-set XP chain (11 multipliers in this exact order — PR 2 Dart + SQL must
+match position-by-position):
+
+    set_xp = base
+           × intensity
+           × strength
+           × novelty
+           × cap
+           × difficulty_mult
+           × tier_diff_mult
+           × abs_strength_premium      (Phase 29.6 Path C)
+           × overload_mult
+           × frequency_mult
+           × attribution_share         (per body part)
+
+================================================================================
+
+Plays back synthetic training histories for several user archetypes through
+the locked Phase 29 v2 + 29.6 XP formula to surface pacing problems and act
+as the integration parity oracle.
+
+Usage:  python tasks/rpg-xp-simulation.py             # 13-persona panel
+        python tasks/rpg-xp-simulation.py --legacy    # legacy 5-archetype run
 """
 
 from __future__ import annotations
 
+import argparse
 import math
+import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 # ============================================================================
-# CONFIG — tunable XP math constants
+# CONFIG — locked formula constants (Phase 29 v2 + 29.6)
 # ============================================================================
-#
-# CANONICAL constants below are the SHIPPED values — must stay byte-for-byte
-# identical to:
-#   * `lib/features/rpg/domain/xp_calculator.dart`
-#   * `supabase/migrations/00040_*.sql`, `00050_*.sql`, `00052_*.sql`,
-#     `00054_*.sql`, `00057_*.sql`, `00059_*.sql` (PL/pgSQL hardcoded values)
-#   * `test/fixtures/rpg_xp_fixtures.json` (regenerated via
-#     `test/fixtures/generate_rpg_fixtures.py`, which imports THIS module
-#     and reads the constants directly)
-#
-# Changing a CANONICAL value here without the matching cross-system update
-# will break the Dart parity tests on the next `make ci`.
-#
-# Phase 24d (2026-05-15) propagated the iter-3 calibration sign-off into the
-# canonical constants — `VOLUME_EXPONENT` 0.65 → 0.60, `WEEKLY_CAP_SETS`
-# 20 → 15, `OVER_CAP_MULTIPLIER` 0.5 → 0.3, plus a per-slug `-0.05` delta
-# applied to 28 curated T4 slugs in `DIFFICULTY_MULT_BY_SLUG` below (and in
-# `supabase/migrations/00059_phase24d_calibration_propagation.sql`).
-# `_CALIBRATION_*` override scaffolding is no longer needed at the call
-# site — the 6 calibration archetypes now read canonical constants like
-# every other code path.
 
-# Per-rank XP curve: xp_to_next(n) = XP_BASE × XP_GROWTH^(n-1)
+# Per-rank XP curve (Refinement #6 piecewise)
 XP_BASE = 60
-XP_GROWTH = 1.10
+XP_GROWTH = 1.10                     # legacy alias (ranks 1-20 in piecewise)
+XP_GROWTH_BAND1 = 1.10               # explicit Phase 29 v2 name
+RANK_CURVE_BREAKPOINT = 20           # piecewise breakpoint
+LINEAR_XP_PER_RANK = 367.0           # LITERAL — derived ~366.957 would drift
 
-# Per-set XP formula (CANONICAL — Phase 24d propagation)
-VOLUME_EXPONENT = 0.60         # base = (weight × reps)^this; sub-linear so 10× vol ≠ 10× XP
-NOVELTY_DENOMINATOR = 15       # higher = slower diminishing returns within a session
-WEEKLY_CAP_SETS = 15           # effective sets per body part before over-cap multiplier kicks in
-OVER_CAP_MULTIPLIER = 0.3      # multiplier applied beyond weekly cap (Phase 24d: 0.5 → 0.3)
+# Per-set XP formula (CANONICAL — Phase 29 v2 inherits Phase 24d propagation)
+VOLUME_EXPONENT = 0.60               # base = (eff_weight × reps)^this
+NOVELTY_DENOMINATOR = 15             # higher = slower diminishing returns
+WEEKLY_CAP_SETS = 15                 # effective sets per body part before over-cap
+OVER_CAP_MULTIPLIER = 0.3            # multiplier beyond weekly cap
+STRENGTH_MULT_FLOOR = 0.4            # clamp current/peak below this → floor
+VOLUME_LOAD_FLOOR = 1.0              # max(1.0, eff_weight * reps)
 
-# Strength multiplier: clamp(current_load / peak_load, FLOOR, 1.0).
-# Anti-stagnation — a perpetual 5kg curl can't outrank a real lifter.
-STRENGTH_MULT_FLOOR = 0.4
-
-# Difficulty multiplier range (Phase 24a). Per-exercise composite carried on
-# `exercises.difficulty_mult`. Documented here for parity with the SQL CHECK
-# constraint and Dart `XpCalculator.difficultyMultFloor`/`Ceiling`. Values
-# OUTSIDE this range reaching `compute_set_xp` are a data-integrity bug —
-# the simulator does not silently clip.
+# Difficulty multiplier range (Phase 24a). Per-exercise composite in [0.85, 1.25].
 DIFFICULTY_MULT_FLOOR = 0.85
 DIFFICULTY_MULT_CEILING = 1.25
 
@@ -113,25 +145,50 @@ CHAR_LEVEL_DENOMINATOR = 4
 ASCENDANT_BALANCE_THRESHOLD = 0.30
 ASCENDANT_MIN_RANK = 5
 
-# Vitality (asymmetric EWMA on weekly volume per body part).
-# Time constants in WEEKS — converted from days (14d / 42d) by /7.
-VITALITY_TAU_UP_WEEKS = 2.0    # rebuild fast (myonuclei retention)
-VITALITY_TAU_DOWN_WEEKS = 6.0  # decay slow (Mujika & Padilla curves)
-VITALITY_PEAK_PERMANENT = True # peak never decays — saga is inviolate
+# Vitality (asymmetric EWMA on weekly volume per body part)
+VITALITY_TAU_UP_WEEKS = 2.0          # rebuild fast
+VITALITY_TAU_DOWN_WEEKS = 6.0        # decay slow
+VITALITY_PEAK_PERMANENT = True
 
-# Bodyweight progression (proxy for rep increases on bodyweight exercises)
+# Bodyweight progression (legacy consistency archetypes)
 PROGRESSION_RATES = {
-    'beginner': 1.025,      # 2.5% per week (newbie gains honeymoon, ~12 weeks)
-    'intermediate': 1.005,  # 0.5% per week
-    'advanced': 1.001,      # 0.1% per week (creep)
-    'stagnant': 1.000,      # zero progression — the "5kg forever" archetype
+    'beginner': 1.025,
+    'intermediate': 1.005,
+    'advanced': 1.001,
+    'stagnant': 1.000,
 }
-
-# Newbie-gains decay: progression rate decays toward intermediate after 12 weeks
 NEWBIE_DECAY_WEEKS = 12
 
+# Refinement #4 — near-failure inference
+NF_INTENSITY_BONUS = 0.10
+NF_TARGET_THRESHOLD = 0.85
+
+# Refinement #3 — frequency_mult (sessions per body part per 7d)
+FREQUENCY_MULT_TABLE = [1.00, 1.06, 1.10, 1.06, 1.00]
+# Persona-panel-v2 used (1.00, 1.10, 1.15, 1.10, 1.00) but the spec brief locks
+# (1.00, 1.06, 1.10, 1.06, 1.00) per the gentler PR-2-friendly impl. The
+# persona panel target bands accommodate both — we ship the gentler curve.
+
+# Refinement #2 — rep bands (heavy / strength / hypertrophy / endurance)
+REP_BAND_HEAVY_MAX = 4
+REP_BAND_STRENGTH_MAX = 7
+REP_BAND_HYPERTROPHY_MAX = 12
+# endurance: 13+
+
+# Phase 29.6 Path C — absolute strength premium
+E_BONUS = 0.8
+E_FLOOR = 35.0
+E_CEIL = 55.0
+
+# tier_diff_mult parameters (Pokemon Gen 5 adaptation — refinement carried
+# from Phase 29 tier-diff prototype)
+TIER_DIFF_OFFSET = 10.0
+TIER_DIFF_EXP = 2.5
+TIER_DIFF_MAX = 8.0
+TIER_DIFF_MIN = 0.25
+
 # ============================================================================
-# Exercise → body-part attribution map (literature-grounded draft)
+# Exercise → body-part attribution map
 # ============================================================================
 
 ATTRIBUTION = {
@@ -154,45 +211,19 @@ ATTRIBUTION = {
     # Core
     'plank':           {'core': 0.90, 'shoulders': 0.05, 'arms': 0.05},
     'leg_raise':       {'core': 1.00},
+    # Phase 29 v2 — machine-only + hypertrophy split additions
+    'machine_chest_press': {'chest': 0.75, 'shoulders': 0.15, 'arms': 0.10},
+    'seated_row':          {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+    'leg_extension':       {'legs': 1.00},
+    'leg_curl':            {'legs': 0.85, 'core': 0.15},
+    'romanian_deadlift':   {'legs': 0.55, 'back': 0.35, 'core': 0.10},
 }
 
 # ============================================================================
 # Per-exercise difficulty multiplier (Phase 24a)
 # ============================================================================
-#
-# Mirrors `exercises.difficulty_mult` populated by
-# `supabase/migrations/00053_add_exercise_difficulty_mult.sql`. Values are the
-# pre-clamped composite (tier_mult + secondary bump, framework §6) and live
-# in [0.85, 1.25]. The migration is the source of truth — if you change a
-# value here without updating the migration (or vice versa), integration
-# parity tests break.
-#
-# Slugs not in this map default to 1.0 (matches the SQL `COALESCE(..., 1.0)`
-# and the column DEFAULT 1.0 for user-created exercises).
-#
-# The simulator's archetype playback uses short aliases for exercise classes
-# (`bench`, `squat`, `row`, etc.) that don't appear here — those are
-# pre-Phase-24a synthetic identifiers and are looked up via
-# `SIM_ALIAS_DIFFICULTY_MULT` below using a plausible default-exercise
-# analog. The fixture generator's backfill replay maps each alias to a real
-# slug so the regenerated fixture exercises the actual per-slug values that
-# ship in the migration.
 
 DIFFICULTY_MULT_BY_SLUG = {
-    # Phase 24b additions (00055) — pistol_squat and archer_push_up are
-    # consumed by the Phase 24d bodyweight_only calibration archetype. The
-    # rest of the 49 Phase 24b new defaults aren't exercised by current
-    # archetypes (so are not mirrored here yet) — adding them is a no-op for
-    # fixture replay but a follow-up sweep can complete the parity later.
-    #
-    # Phase 24d propagation: 23 of the 28 curated T4 slugs were already in
-    # this dict; their values dropped by 0.05 to mirror migration 00059's
-    # `UPDATE exercises SET difficulty_mult = round(difficulty_mult - 0.05, 2)`
-    # on the 28-slug T4 set. The other 5 (`belt_squat`, `pendulum_squat`,
-    # `glute_ham_raise`, `cable_pullover`, `cable_overhead_extension`) are
-    # Phase-24b additions still absent from this mirror — they fall through
-    # to the 1.0 default for sim purposes; production reads the migrated
-    # column value (0.92, 0.92, 0.94, 0.96, 0.92 respectively).
     'archer_push_up': 1.21, 'pistol_squat': 1.17,
     'ab_rollout': 1.09, 'arnold_press': 1.09,
     'back_extension': 0.89, 'band_face_pull': 0.94, 'band_pull_apart': 0.89, 'band_squat': 0.92,
@@ -239,7 +270,7 @@ DIFFICULTY_MULT_BY_SLUG = {
     'reverse_hyperextension': 0.94, 'reverse_lunges': 1.07, 'reverse_pec_deck': 0.89,
     'reverse_wrist_curl': 0.87, 'romanian_deadlift': 1.09, 'rope_pushdown': 0.92,
     'rowing_machine': 0.85, 'russian_twist': 0.85,
-    'seal_row': 1.07, 'seated_calf_raise': 0.85, 'side_plank': 0.89,
+    'seal_row': 1.07, 'seated_calf_raise': 0.85, 'seated_row': 0.99, 'side_plank': 0.89,
     'single_leg_glute_bridge': 0.87, 'single_leg_leg_press': 0.92, 'sit_up': 0.85,
     'skull_crusher': 0.87, 'spider_curl': 0.87, 'stationary_bike': 0.85,
     'step_up': 1.07, 'straight_arm_pulldown': 0.89, 'sumo_deadlift': 1.21,
@@ -251,44 +282,39 @@ DIFFICULTY_MULT_BY_SLUG = {
     'zottman_curl': 0.87,
 }
 
-
-# Mapping from the simulator's short class aliases (used by DAY_TEMPLATES /
-# WEEK_SCHEDULES) onto a representative real default-exercise slug. This
-# lets the multi-week archetype playback exercise the actual per-exercise
-# multipliers that ship in the migration without rewriting the synthetic
-# day templates.
+# Mapping from the simulator's short class aliases onto representative real
+# default slugs (so per-exercise difficulty_mult flows through aliases).
 SIM_ALIAS_TO_DEFAULT_SLUG = {
-    'bench':           'barbell_bench_press',         # 1.09
-    'incline_bench':   'incline_barbell_bench_press', # 1.09
-    'overhead_press':  'overhead_press',              # 1.19
-    'lateral_raise':   'lateral_raise',               # 0.89
-    'tricep_pushdown': 'tricep_pushdown',             # 0.92
-    'row':             'barbell_bent_over_row',       # 1.19
-    'pulldown':        'lat_pulldown',                # 0.94
-    'pullup':          'pull_up',                     # 1.19
-    'curl':            'barbell_curl',                # 0.87
-    'squat':           'barbell_squat',               # 1.19
-    'deadlift':        'deadlift',                    # 1.21
-    'leg_press':       'leg_press',                   # 0.92
-    'lunge':           'walking_lunges',              # 1.07
-    'plank':           'plank',                       # 0.89
-    'leg_raise':       'leg_raise',                   # 0.85
+    'bench':           'barbell_bench_press',
+    'incline_bench':   'incline_barbell_bench_press',
+    'overhead_press':  'overhead_press',
+    'lateral_raise':   'lateral_raise',
+    'tricep_pushdown': 'tricep_pushdown',
+    'row':             'barbell_bent_over_row',
+    'pulldown':        'lat_pulldown',
+    'pullup':          'pull_up',
+    'curl':            'barbell_curl',
+    'squat':           'barbell_squat',
+    'deadlift':        'deadlift',
+    'leg_press':       'leg_press',
+    'lunge':           'walking_lunges',
+    'plank':           'plank',
+    'leg_raise':       'leg_raise',
+    # Phase 29 v2 — machine + hypertrophy direct slugs (identity mapping so
+    # the alias resolver finds them in DIFFICULTY_MULT_BY_SLUG).
+    'machine_chest_press': 'machine_chest_press',
+    'seated_row':          'seated_row',
+    'leg_extension':       'leg_extension',
+    'leg_curl':            'leg_curl',
+    'romanian_deadlift':   'romanian_deadlift',
 }
 
 
-def difficulty_mult_for_slug(slug: str) -> float:
-    """Per-exercise difficulty multiplier; defaults to 1.0 for user-created /
-    unmapped slugs (matches SQL `COALESCE(exercises.difficulty_mult, 1.0)`
-    and Dart `XpCalculator.computeSetXp` which receives whatever the column
-    default produced).
-    """
+def difficulty_mult_for_slug(slug):
     return DIFFICULTY_MULT_BY_SLUG.get(slug, 1.0)
 
 
-def difficulty_mult_for_alias(alias: str) -> float:
-    """Resolves a simulator short alias (e.g. 'bench') to a real slug
-    multiplier via `SIM_ALIAS_TO_DEFAULT_SLUG`. Falls back to 1.0 for
-    unmapped aliases (synthetic exercises with no real-world analog)."""
+def difficulty_mult_for_alias(alias):
     slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(alias)
     if slug is None:
         return 1.0
@@ -298,230 +324,496 @@ def difficulty_mult_for_alias(alias: str) -> float:
 # ============================================================================
 # Bodyweight-as-load semantics (Phase 24c)
 # ============================================================================
-#
-# Mirrors `exercises.uses_bodyweight_load` populated by
-# `supabase/migrations/00056_add_bodyweight_load_semantics.sql`. The 20-element
-# list is the canonical curation source — Python sim, SQL RPCs (00057), and
-# Dart Exercise model must agree.
-#
-# For exercises in this set, the live persist path (00057) computes:
-#
-#   effective_weight = COALESCE(sets.weight, 0) + COALESCE(profiles.bodyweight_kg, 0)
-#
-# which feeds `volume_load` and `strength_mult`'s numerator. For all other
-# exercises, effective_weight degrades to `COALESCE(sets.weight, 0)` —
-# pre-Phase-24c semantics. NULL bodyweight degrades gracefully to entered-only.
-#
-# Note: the Dart `XpCalculator.computeSetXp` is bodyweight-AGNOSTIC. Production
-# callers pre-convert and pass `effective_load` as `weight_kg`. The fixture
-# generator does the same — it computes `effective_load` here and feeds it
-# into `weight_kg` slots so the existing fixture-driven Dart parity tests
-# stay green without code change.
 
 USES_BODYWEIGHT_LOAD_BY_SLUG = frozenset({
-    # Pull family (T2)
     "pull_up", "chin_up", "wide_grip_pull_up",
-    # Dip family (T2)
     "dips", "ring_dip", "muscle_up",
-    # Push-up family (T3 + archer T2)
     "push_up", "wide_push_up", "incline_push_up", "decline_push_up",
     "diamond_push_up", "close_grip_push_up", "archer_push_up",
-    # Squat family
     "bodyweight_squat", "pistol_squat",
-    # Lunge
     "walking_lunges",
-    # Hanging
     "hanging_leg_raise",
-    # Olympic gymnastics
     "handstand_push_up",
-    # Body pull
     "inverted_row",
-    # Eccentric (judgment call — telemetry-flagged post-launch)
     "nordic_curl",
 })
 
 
-def uses_bodyweight_load(slug: str) -> bool:
-    """Mirrors `exercises.uses_bodyweight_load` from migration 00056. The
-    20-element list is the canonical source; Python sim, SQL RPCs (00057),
-    and Dart helpers must agree.
-
-    Slugs not in the curated set return False (matches the column DEFAULT
-    FALSE for user-created and non-curated exercises)."""
+def uses_bodyweight_load(slug):
     return slug in USES_BODYWEIGHT_LOAD_BY_SLUG
 
 
-def effective_weight(
-    slug: str,
-    entered_weight: float,
-    bodyweight_kg: float | None,
-) -> float:
+# ============================================================================
+# Refinement #5 — per-exercise bodyweight load ratio
+# Source: Suprak et al. 2011 JSCR for push-up variants; Youdas et al. 2010
+# JSCR for pull-up; Bryanton et al. 2012 for squat fractions.
+# ============================================================================
+
+BODYWEIGHT_LOAD_RATIO = {
+    'pull_up':            1.00,
+    'chin_up':            1.00,
+    'wide_grip_pull_up':  1.00,
+    'muscle_up':          1.00,
+    'dips':               0.95,
+    'ring_dip':           0.95,
+    'push_up':            0.64,
+    'wide_push_up':       0.65,
+    'decline_push_up':    0.74,
+    'incline_push_up':    0.41,
+    'diamond_push_up':    0.64,
+    'close_grip_push_up': 0.63,
+    'archer_push_up':     0.80,
+    'pistol_squat':       0.95,
+    'bodyweight_squat':   0.75,
+    'walking_lunges':     0.85,
+    'hanging_leg_raise':  1.00,
+    'handstand_push_up':  1.00,
+    'inverted_row':       0.70,
+    'nordic_curl':        1.00,
+}
+
+
+def effective_weight(slug, entered_weight, bodyweight_kg):
     """Compute effective load for the volume + strength formula.
 
-    Mirrors `00057_record_xp_with_bodyweight_load.sql`'s `v_effective_weight`
-    CASE expression byte-for-byte:
+    Phase 29 v2 (Refinement #5) extends Phase 24c: when slug is curated in
+    USES_BODYWEIGHT_LOAD_BY_SLUG, the load fraction comes from
+    BODYWEIGHT_LOAD_RATIO (per-exercise biomechanically grounded). For
+    non-curated slugs, falls through to entered weight only.
 
-        effective_weight = CASE WHEN uses_bodyweight_load
-                                THEN COALESCE(weight, 0) + COALESCE(bw, 0)
-                                ELSE COALESCE(weight, 0)
-                           END
-
-    NULL bodyweight degrades to entered-weight-only (graceful fallback) — a
-    user who hasn't set their bodyweight yet still earns XP, just slightly
-    under-counted until they enter their mass.
+    NULL bodyweight degrades gracefully to entered-only (matches 00057 SQL
+    COALESCE behavior).
     """
     if uses_bodyweight_load(slug):
-        return (entered_weight or 0.0) + (bodyweight_kg or 0.0)
+        ratio = BODYWEIGHT_LOAD_RATIO.get(slug, 1.00)
+        return (entered_weight or 0.0) + (bodyweight_kg or 0.0) * ratio
     return entered_weight or 0.0
 
 
 # ============================================================================
-# Day templates — weekly split layouts
+# Refinement #1 + Phase 29.6 — gender-aware per-lift Symmetric Strength tiers
 # ============================================================================
+#
+# Male tier tables: rigorous BW-relative strength standards per lift family,
+# calibrated against published normative strength data (Symmetric Strength,
+# Strength Standards). Legendary tier (rank 65+) is Phase 29 extension.
+#
+# Female tier tables: strengthlevel.com/strength-standards/female/kg snapshot
+# 2026-05-20 — empirical normative female ratios per lift family.
 
-DAY_TEMPLATES = {
-    'push':  [('bench', 4, 8), ('overhead_press', 3, 8), ('lateral_raise', 3, 12), ('tricep_pushdown', 3, 12)],
-    'pull':  [('row', 4, 8), ('pulldown', 3, 10), ('curl', 3, 12), ('plank', 2, 30)],
-    'legs':  [('squat', 4, 6), ('deadlift', 3, 5), ('leg_press', 3, 10), ('lunge', 3, 10)],
-    'upper': [('bench', 3, 8), ('row', 3, 8), ('overhead_press', 3, 8), ('curl', 3, 10), ('tricep_pushdown', 3, 10)],
+# Male tier tables — (rank, label, bodyweight-ratio)
+BENCH_TIERS_MALE = [
+    ( 0, 'Untrained',    0.50),
+    ( 8, 'Novice',       0.75),
+    (15, 'Beginner',     1.00),
+    (25, 'Intermediate', 1.25),
+    (35, 'Advanced',     1.50),
+    (45, 'Elite',        1.75),
+    (55, 'World-class',  2.00),
+    (65, 'Legendary',    2.50),
+]
+
+SQUAT_TIERS_MALE = [
+    ( 0, 'Untrained',    0.60),
+    ( 8, 'Novice',       1.00),
+    (15, 'Beginner',     1.25),
+    (25, 'Intermediate', 1.75),
+    (35, 'Advanced',     2.25),
+    (45, 'Elite',        2.75),
+    (55, 'World-class',  3.25),
+    (65, 'Legendary',    3.75),
+]
+
+DEADLIFT_TIERS_MALE = [
+    ( 0, 'Untrained',    0.80),
+    ( 8, 'Novice',       1.25),
+    (15, 'Beginner',     1.50),
+    (25, 'Intermediate', 2.00),
+    (35, 'Advanced',     2.50),
+    (45, 'Elite',        3.00),
+    (55, 'World-class',  3.50),
+    (65, 'Legendary',    3.75),
+]
+
+OHP_TIERS_MALE = [
+    ( 0, 'Untrained',    0.30),
+    ( 8, 'Novice',       0.45),
+    (15, 'Beginner',     0.60),
+    (25, 'Intermediate', 0.75),
+    (35, 'Advanced',     0.90),
+    (45, 'Elite',        1.05),
+    (55, 'World-class',  1.20),
+    (65, 'Legendary',    1.40),
+]
+
+ROW_TIERS_MALE = [
+    ( 0, 'Untrained',    0.60),
+    ( 8, 'Novice',       0.90),
+    (15, 'Beginner',     1.20),
+    (25, 'Intermediate', 1.55),
+    (35, 'Advanced',     1.90),
+    (45, 'Elite',        2.30),
+    (55, 'World-class',  2.70),
+    (65, 'Legendary',    3.00),
+]
+
+ISOLATION_TIERS_MALE = [
+    ( 0, 'Untrained',    0.08),
+    ( 8, 'Novice',       0.13),
+    (15, 'Beginner',     0.20),
+    (25, 'Intermediate', 0.30),
+    (35, 'Advanced',     0.40),
+    (45, 'Elite',        0.50),
+    (55, 'World-class',  0.60),
+    (65, 'Legendary',    0.70),
+]
+
+# Female tier tables — empirical (strengthlevel.com snapshot 2026-05-20)
+BENCH_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.28),
+    ( 8, 'Novice',       0.48),
+    (15, 'Beginner',     0.78),
+    (25, 'Intermediate', 1.13),
+    (35, 'Advanced',     1.53),
+    (45, 'Elite',        1.90),
+    (55, 'World-class',  2.30),
+    (65, 'Legendary',    2.80),
+]
+
+SQUAT_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.48),
+    ( 8, 'Novice',       0.78),
+    (15, 'Beginner',     1.17),
+    (25, 'Intermediate', 1.62),
+    (35, 'Advanced',     2.13),
+    (45, 'Elite',        2.70),
+    (55, 'World-class',  3.10),
+    (65, 'Legendary',    3.50),
+]
+
+DEADLIFT_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.62),
+    ( 8, 'Novice',       0.95),
+    (15, 'Beginner',     1.38),
+    (25, 'Intermediate', 1.88),
+    (35, 'Advanced',     2.43),
+    (45, 'Elite',        3.00),
+    (55, 'World-class',  3.40),
+    (65, 'Legendary',    3.80),
+]
+
+OHP_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.20),
+    ( 8, 'Novice',       0.35),
+    (15, 'Beginner',     0.53),
+    (25, 'Intermediate', 0.75),
+    (35, 'Advanced',     1.00),
+    (45, 'Elite',        1.25),
+    (55, 'World-class',  1.50),
+    (65, 'Legendary',    1.80),
+]
+
+ROW_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.48),
+    ( 8, 'Novice',       0.72),
+    (15, 'Beginner',     1.00),
+    (25, 'Intermediate', 1.35),
+    (35, 'Advanced',     1.70),
+    (45, 'Elite',        2.10),
+    (55, 'World-class',  2.50),
+    (65, 'Legendary',    2.80),
+]
+
+ISOLATION_TIERS_FEMALE = [
+    ( 0, 'Untrained',    0.05),
+    ( 8, 'Novice',       0.09),
+    (15, 'Beginner',     0.14),
+    (25, 'Intermediate', 0.22),
+    (35, 'Advanced',     0.32),
+    (45, 'Elite',        0.42),
+    (55, 'World-class',  0.52),
+    (65, 'Legendary',    0.62),
+]
+
+# Exercise → tier-table dispatch (per gender), and per-variant discount
+EXERCISE_TIER_FAMILY = {
+    'bench':                       'bench',
+    'incline_bench':               'bench',
+    'barbell_bench_press':         'bench',
+    'incline_barbell_bench_press': 'bench',
+    'machine_chest_press':         'bench',
+    'overhead_press':              'ohp',
+    'squat':                       'squat',
+    'barbell_squat':               'squat',
+    'leg_press':                   'squat',
+    'lunge':                       'squat',
+    'walking_lunges':              'squat',
+    'deadlift':                    'deadlift',
+    'romanian_deadlift':           'deadlift',
+    'row':                         'row',
+    'barbell_bent_over_row':       'row',
+    'pendlay_row':                 'row',
+    'pulldown':                    'row',
+    'lat_pulldown':                'row',
+    'pullup':                      'row',
+    'pull_up':                     'row',
+    'seated_row':                  'row',
+    'curl':                        'isolation',
+    'barbell_curl':                'isolation',
+    'tricep_pushdown':             'isolation',
+    'lateral_raise':               'isolation',
+    'plank':                       'isolation',
+    'leg_raise':                   'isolation',
+    'leg_extension':               'isolation',
+    'leg_curl':                    'isolation',
 }
 
-WEEK_SCHEDULES = {
-    3: ['push', 'pull', 'legs'],
-    4: ['push', 'pull', 'legs', 'upper'],
-    5: ['push', 'pull', 'legs', 'upper', 'legs'],
+IMPLIED_TIER_TABLES_MALE = {
+    'bench':     BENCH_TIERS_MALE,
+    'squat':     SQUAT_TIERS_MALE,
+    'deadlift':  DEADLIFT_TIERS_MALE,
+    'ohp':       OHP_TIERS_MALE,
+    'row':       ROW_TIERS_MALE,
+    'isolation': ISOLATION_TIERS_MALE,
 }
 
-# ============================================================================
-# User archetypes
-# ============================================================================
-
-@dataclass
-class Archetype:
-    name: str
-    sessions_per_week: int
-    starting_weights: dict[str, float]
-    progression: str  # key into PROGRESSION_RATES
-
-    # Optional layoff schedule: list of (start_week, end_week) inclusive
-    # ranges where the user does NO training. Used for detraining scenarios.
-    layoffs: list[tuple[int, int]] = field(default_factory=list)
-
-    # Phase 24c: user bodyweight in kg. Default 70 kg (framework example).
-    # Bodyweight is held constant across the simulation — gym training
-    # does not meaningfully shift bodyweight on a 5-year horizon for the
-    # archetypes we model (advanced lifters fluctuate ±2-3 kg around a
-    # set point). If we add cut/bulk archetypes later, this becomes a
-    # callable. NULL semantics live in the fixture generator, not here.
-    bodyweight_kg: float = 70.0
-
-
-ARCHETYPES = {
-    'beginner': Archetype(
-        name='beginner',
-        sessions_per_week=3,
-        progression='beginner',
-        starting_weights={
-            'bench': 40, 'incline_bench': 30, 'overhead_press': 25, 'row': 35, 'pulldown': 35,
-            'pullup': 0, 'squat': 50, 'deadlift': 60, 'leg_press': 60, 'lunge': 20,
-            'curl': 12, 'tricep_pushdown': 20, 'lateral_raise': 6, 'plank': 1, 'leg_raise': 1,
-        },
-    ),
-    'intermediate': Archetype(
-        name='intermediate',
-        sessions_per_week=4,
-        progression='intermediate',
-        starting_weights={
-            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
-            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
-            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
-        },
-    ),
-    'advanced': Archetype(
-        name='advanced',
-        sessions_per_week=5,
-        progression='advanced',
-        starting_weights={
-            'bench': 120, 'incline_bench': 95, 'overhead_press': 80, 'row': 100, 'pulldown': 100,
-            'pullup': 25, 'squat': 160, 'deadlift': 200, 'leg_press': 220, 'lunge': 60,
-            'curl': 25, 'tricep_pushdown': 50, 'lateral_raise': 14, 'plank': 1, 'leg_raise': 1,
-        },
-    ),
-    # The stagnation test — proves strength_mult prevents grinding past your peers
-    # on chronically light loads. Same volume as beginner but no progression.
-    'stagnant_lifter': Archetype(
-        name='stagnant_lifter',
-        sessions_per_week=3,
-        progression='stagnant',
-        starting_weights={
-            'bench': 20, 'incline_bench': 15, 'overhead_press': 15, 'row': 20, 'pulldown': 20,
-            'pullup': 0, 'squat': 25, 'deadlift': 30, 'leg_press': 40, 'lunge': 10,
-            'curl': 5, 'tricep_pushdown': 8, 'lateral_raise': 3, 'plank': 1, 'leg_raise': 1,
-        },
-    ),
-    # Detraining test: trains intermediate for 1yr, takes 6mo off, resumes
-    'comeback_kid': Archetype(
-        name='comeback_kid',
-        sessions_per_week=4,
-        progression='intermediate',
-        starting_weights={
-            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
-            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
-            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
-        },
-        layoffs=[(53, 78)],  # 6mo break after first year
-    ),
-    # Vacation pattern: 2 weeks off every 6 months (life happens)
-    'vacationer': Archetype(
-        name='vacationer',
-        sessions_per_week=4,
-        progression='intermediate',
-        starting_weights={
-            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
-            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
-            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
-        },
-        layoffs=[(27, 28), (53, 54), (79, 80), (105, 106), (131, 132), (157, 158),
-                 (183, 184), (209, 210), (235, 236)],
-    ),
+IMPLIED_TIER_TABLES_FEMALE = {
+    'bench':     BENCH_TIERS_FEMALE,
+    'squat':     SQUAT_TIERS_FEMALE,
+    'deadlift':  DEADLIFT_TIERS_FEMALE,
+    'ohp':       OHP_TIERS_FEMALE,
+    'row':       ROW_TIERS_FEMALE,
+    'isolation': ISOLATION_TIERS_FEMALE,
 }
 
-BODY_PARTS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core', 'cardio']
-ACTIVE_RANKS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core']  # v1: cardio earns nothing yet
-
-CLASS_BY_DOMINANT = {
-    'arms': 'Berserker', 'chest': 'Bulwark', 'back': 'Sentinel',
-    'legs': 'Pathfinder', 'shoulders': 'Atlas', 'core': 'Anchor',
-    'cardio': 'Wayfarer',
+# Per-exercise variant discount (e.g. leg_press is easier than back squat)
+EXERCISE_TIER_DISCOUNT = {
+    'leg_press':           0.65,
+    'pulldown':            0.75,
+    'lat_pulldown':        0.75,
+    'incline_bench':       0.90,
+    'incline_barbell_bench_press': 0.90,
+    'lunge':               0.80,
+    'walking_lunges':      0.80,
+    'plank':               0.50,
+    'leg_raise':           0.50,
+    'machine_chest_press': 0.60,
+    'seated_row':          0.75,
+    'leg_extension':       0.50,
+    'leg_curl':            0.50,
+    'romanian_deadlift':   0.90,
 }
 
+
+def _epley_1rm(weight, reps):
+    """Brzycki-style 1RM estimate (matches Symmetric Strength's curve)."""
+    if reps <= 1:
+        return weight
+    if reps >= 37:
+        return weight
+    return weight * 36.0 / (37.0 - reps)
+
+
+def _interp_tier(table, ratio):
+    """Linear interpolate (rank, ratio) pairs."""
+    if ratio <= table[0][2]:
+        return float(table[0][0])
+    if ratio >= table[-1][2]:
+        return float(table[-1][0])
+    for i in range(len(table) - 1):
+        lo = table[i]
+        hi = table[i + 1]
+        if lo[2] <= ratio <= hi[2]:
+            if hi[2] == lo[2]:
+                return float(lo[0])
+            return lo[0] + (ratio - lo[2]) / (hi[2] - lo[2]) * (hi[0] - lo[0])
+    return float(table[-1][0])
+
+
+def implied_tier(exercise, weight, reps, bodyweight_kg, female=False):
+    """Phase 29 v2 + 29.6 gender-aware per-lift implied tier.
+
+    Returns interpolated rank-equivalent (0-65) based on:
+      * Per-lift family table (BENCH / SQUAT / DEADLIFT / OHP / ROW / ISOLATION)
+      * Gender (male = SymStrength, female = strengthlevel.com)
+      * Per-variant discount (e.g. leg_press 0.65, incline_bench 0.90)
+      * Brzycki 1RM estimation: 1RM ≈ weight × 36 / (37 - reps)
+
+    Mirrors PR 2's `lib/features/rpg/domain/implied_tier.dart` byte-for-byte.
+    """
+    if bodyweight_kg <= 0:
+        return 15.0
+    family = EXERCISE_TIER_FAMILY.get(exercise, 'bench')
+    tables = IMPLIED_TIER_TABLES_FEMALE if female else IMPLIED_TIER_TABLES_MALE
+    table = tables[family]
+    discount = EXERCISE_TIER_DISCOUNT.get(exercise, 1.0)
+    one_rm = _epley_1rm(weight, reps)
+    ratio = one_rm / bodyweight_kg / discount
+    return _interp_tier(table, ratio)
+
+
+def abs_strength_premium_frac(lift_implied_tier):
+    """Phase 29.6 Path C — fraction of E_BONUS to apply.
+
+    frac = clamp((lift_implied_tier - E_FLOOR) / (E_CEIL - E_FLOOR), 0, 1)
+    abs_strength_premium = 1.0 + E_BONUS × frac
+
+    Yields:
+      lift_implied_tier ≤ E_FLOOR (35)  → frac=0   → premium=1.00
+      lift_implied_tier ≥ E_CEIL  (55)  → frac=1   → premium=1.80
+      linear interp between.
+    """
+    frac = max(0.0, min(1.0, (lift_implied_tier - E_FLOOR) / (E_CEIL - E_FLOOR)))
+    return frac
+
+
+def abs_strength_premium(lift_implied_tier):
+    """Multiplier applied to set XP — see abs_strength_premium_frac."""
+    return 1.0 + E_BONUS * abs_strength_premium_frac(lift_implied_tier)
+
+
 # ============================================================================
-# Math helpers
+# tier_diff_mult — Pokemon Gen 5 adaptation
 # ============================================================================
 
-def xp_for_rank(n: int) -> float:
-    """Cumulative XP to reach rank n (rank 1 = 0 XP)."""
+def tier_diff_mult(current_rank, lift_implied_tier):
+    """Reward for lifts that punch above the user's current rank.
+
+    Formula: mult = clamp(((2T + OFFSET) / (T + R + OFFSET))^EXP, MIN, MAX)
+      T = lift_implied_tier
+      R = current_rank
+    """
+    if lift_implied_tier <= 0:
+        return 1.0
+    rank = max(1.0, current_rank)
+    a = 2.0 * lift_implied_tier + TIER_DIFF_OFFSET
+    c = lift_implied_tier + rank + TIER_DIFF_OFFSET
+    if c <= 0:
+        return TIER_DIFF_MAX
+    raw = (a / c) ** TIER_DIFF_EXP
+    return max(TIER_DIFF_MIN, min(TIER_DIFF_MAX, raw))
+
+
+# ============================================================================
+# Refinement #2 — progressive overload reward (named physiological bands)
+# ============================================================================
+#
+# AND/OR logic (carried verbatim from Phase 29 prototype, locked by
+# ambiguity-resolution #2):
+#   * weight > prior weight in same band     → 1.15 (PR — new weight high)
+#   * reps > prior reps AND weight >= prior  → 1.10 (volume PR at same load)
+#   * reps > prior OR weight > prior         → 1.05 (modest improvement)
+#   * otherwise                              → 1.00 (no overload)
+
+REP_BANDS = ('heavy', 'strength', 'hypertrophy', 'endurance')
+
+
+def rep_band(reps):
+    """Physiological band — NOT mathematical floor(reps/3)."""
+    if reps <= REP_BAND_HEAVY_MAX:
+        return 'heavy'
+    if reps <= REP_BAND_STRENGTH_MAX:
+        return 'strength'
+    if reps <= REP_BAND_HYPERTROPHY_MAX:
+        return 'hypertrophy'
+    return 'endurance'
+
+
+def overload_mult(exercise, weight, reps, best_by_band):
+    """Returns (multiplier, updated_best_by_band).
+
+    `best_by_band` is a dict keyed (exercise, band) → (best_weight, best_reps).
+    Caller mutates it in-place across sets to track prior bests.
+    """
+    band = rep_band(reps)
+    key = (exercise, band)
+    prior = best_by_band.get(key)
+    mult = 1.0
+    if prior is not None:
+        pw, pr = prior
+        if weight > pw:
+            mult = 1.15
+        elif reps > pr and weight >= pw:
+            mult = 1.10
+        elif reps > pr or weight > pw:
+            mult = 1.05
+    # Update best if this set improved either dimension
+    if prior is None or weight > prior[0] or (weight >= prior[0] and reps > prior[1]):
+        best_by_band[key] = (weight, reps)
+    return mult, best_by_band
+
+
+# ============================================================================
+# Refinement #3 — frequency reward (per-body-part 7d window)
+# ============================================================================
+
+def frequency_mult(session_count):
+    """Sessions per body part in trailing 7d → multiplier.
+
+    FREQUENCY_MULT_TABLE = [1.00, 1.06, 1.10, 1.06, 1.00]
+    session_count is 1-indexed (1st session = 1.00, 2nd = 1.06, ...).
+    """
+    idx = max(1, min(session_count, len(FREQUENCY_MULT_TABLE))) - 1
+    return FREQUENCY_MULT_TABLE[idx]
+
+
+# ============================================================================
+# Refinement #4 — near-failure inference
+# ============================================================================
+
+def inferred_near_failure(actual_reps, target_reps):
+    """Mark a set as near-failure when the lifter fell short of the target by
+    more than (1 - NF_TARGET_THRESHOLD) of target. Returns True if so.
+
+    NULL target → not inferred.
+    """
+    if target_reps is None or target_reps <= 0:
+        return False
+    return actual_reps < target_reps * NF_TARGET_THRESHOLD
+
+
+# ============================================================================
+# Per-rank XP curve (Refinement #6 piecewise)
+# ============================================================================
+
+def _xp_geometric(n):
+    """Geometric XP sum for ranks 1..n (used for ranks 1-20)."""
     if n <= 1:
-        return 0
-    return XP_BASE * (XP_GROWTH ** (n - 1) - 1) / (XP_GROWTH - 1)
+        return 0.0
+    return XP_BASE * (XP_GROWTH_BAND1 ** (n - 1) - 1) / (XP_GROWTH_BAND1 - 1)
 
 
-def rank_for_xp(total_xp: float) -> int:
+_XP_AT_BREAKPOINT = _xp_geometric(RANK_CURVE_BREAKPOINT)
+
+
+def xp_for_rank(n):
+    """Cumulative XP to reach rank n.
+
+    Phase 29 v2 Refinement #6 piecewise:
+      ranks 1-20 : geometric (XP_BASE × XP_GROWTH^(n-1) cum)
+      ranks 21+  : linear at LINEAR_XP_PER_RANK (literal 367.0) per rank
+    """
+    if n <= 1:
+        return 0.0
+    if n <= RANK_CURVE_BREAKPOINT:
+        return _xp_geometric(n)
+    return _XP_AT_BREAKPOINT + (n - RANK_CURVE_BREAKPOINT) * LINEAR_XP_PER_RANK
+
+
+def rank_for_xp(total_xp):
     n = 1
     while n < 99 and xp_for_rank(n + 1) <= total_xp:
         n += 1
     return n
 
 
-def character_level(ranks: dict[str, int]) -> int:
-    """v1: cardio excluded from character level (deferred to v2). When cardio
-    ships, swap ACTIVE_RANKS to include it — denominator stays 4."""
+def character_level(ranks):
     active = {k: v for k, v in ranks.items() if k in ACTIVE_RANKS}
     total = sum(active.values())
     return max(1, (total - len(active)) // CHAR_LEVEL_DENOMINATOR + 1)
 
 
-def intensity_for_reps(reps: int) -> float:
+def intensity_for_reps(reps):
     matched = 1.0
     for r, mult in INTENSITY_BY_REPS:
         if reps >= r:
@@ -531,7 +823,27 @@ def intensity_for_reps(reps: int) -> float:
     return matched
 
 
-def dominant_class(ranks: dict[str, int]) -> str:
+def intensity_with_near_failure(reps, near_failure):
+    """Refinement #4: additive bonus when near_failure flagged."""
+    base = intensity_for_reps(reps)
+    return base + (NF_INTENSITY_BONUS if near_failure else 0.0)
+
+
+# ============================================================================
+# Body parts + class taxonomy
+# ============================================================================
+
+BODY_PARTS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core', 'cardio']
+ACTIVE_RANKS = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core']
+
+CLASS_BY_DOMINANT = {
+    'arms': 'Berserker', 'chest': 'Bulwark', 'back': 'Sentinel',
+    'legs': 'Pathfinder', 'shoulders': 'Atlas', 'core': 'Anchor',
+    'cardio': 'Wayfarer',
+}
+
+
+def dominant_class(ranks):
     strength = {k: v for k, v in ranks.items() if k != 'cardio'}
     vals = list(strength.values())
     if max(vals) > 0 and (max(vals) - min(vals)) / max(vals) <= ASCENDANT_BALANCE_THRESHOLD and min(vals) >= ASCENDANT_MIN_RANK:
@@ -541,66 +853,115 @@ def dominant_class(ranks: dict[str, int]) -> str:
 
 
 # ============================================================================
-# Per-set XP — strength_mult + Phase 24a difficulty_mult
+# Phase 24d calibration attribution overlay (real-slug splits)
+# ============================================================================
+
+_CALIBRATION_ATTRIBUTION = {
+    'barbell_bench_press':         {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.10},
+    'incline_barbell_bench_press': {'chest': 0.60, 'shoulders': 0.30, 'arms': 0.10},
+    'overhead_press':              {'shoulders': 0.60, 'arms': 0.20, 'core': 0.20},
+    'machine_chest_press':         {'chest': 0.75, 'shoulders': 0.15, 'arms': 0.10},
+    'machine_shoulder_press':      {'shoulders': 0.70, 'arms': 0.20, 'core': 0.10},
+    'cable_crossover':             {'chest': 0.85, 'shoulders': 0.10, 'arms': 0.05},
+    'push_up':                     {'chest': 0.65, 'shoulders': 0.20, 'arms': 0.10, 'core': 0.05},
+    'wide_push_up':                {'chest': 0.75, 'shoulders': 0.15, 'arms': 0.05, 'core': 0.05},
+    'close_grip_push_up':          {'arms': 0.50, 'chest': 0.40, 'shoulders': 0.05, 'core': 0.05},
+    'decline_push_up':             {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.05, 'core': 0.05},
+    'diamond_push_up':             {'chest': 0.50, 'arms': 0.40, 'shoulders': 0.05, 'core': 0.05},
+    'archer_push_up':              {'chest': 0.55, 'arms': 0.25, 'shoulders': 0.15, 'core': 0.05},
+    'dips':                        {'chest': 0.45, 'arms': 0.40, 'shoulders': 0.15},
+    'barbell_bent_over_row':       {'back': 0.70, 'arms': 0.20, 'core': 0.10},
+    'pendlay_row':                 {'back': 0.70, 'arms': 0.20, 'core': 0.10},
+    'barbell_curl':                {'arms': 0.90, 'back': 0.10},
+    'machine_row':                 {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+    'lat_pulldown':                {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+    'cable_curl':                  {'arms': 0.90, 'back': 0.10},
+    'pull_up':                     {'back': 0.65, 'arms': 0.25, 'core': 0.10},
+    'chin_up':                     {'back': 0.55, 'arms': 0.35, 'core': 0.10},
+    'barbell_squat':               {'legs': 0.80, 'core': 0.10, 'back': 0.10},
+    'romanian_deadlift':           {'legs': 0.55, 'back': 0.35, 'core': 0.10},
+    'hip_thrust':                  {'legs': 0.85, 'core': 0.15},
+    'walking_lunges':              {'legs': 0.90, 'core': 0.10},
+    'pistol_squat':                {'legs': 0.80, 'core': 0.20},
+    'leg_extension':               {'legs': 1.00},
+    'leg_curl':                    {'legs': 1.00},
+    'leg_abductor':                {'legs': 1.00},
+    'leg_adductor':                {'legs': 1.00},
+    'calf_raise':                  {'legs': 1.00},
+    'dumbbell_curl':               {'arms': 0.90, 'back': 0.10},
+    'hammer_curl':                 {'arms': 0.90, 'back': 0.10},
+    'cable_lateral_raise':         {'shoulders': 0.85, 'arms': 0.10, 'core': 0.05},
+    'dumbbell_fly':                {'chest': 0.85, 'shoulders': 0.10, 'arms': 0.05},
+    'hanging_leg_raise':           {'core': 0.85, 'arms': 0.10, 'back': 0.05},
+    'seated_row':                  {'back': 0.75, 'arms': 0.20, 'core': 0.05},
+}
+
+
+def _attribution_for(exercise):
+    if exercise in _CALIBRATION_ATTRIBUTION:
+        return _CALIBRATION_ATTRIBUTION[exercise]
+    return ATTRIBUTION.get(exercise, {})
+
+
+# ============================================================================
+# Per-set XP — Phase 29 v2 + 29.6 multiplier chain
 # ============================================================================
 
 def compute_set_xp(
-    exercise: str,
-    weight: float,
-    reps: int,
-    novelty_count: dict[str, float],
-    weekly_count: dict[str, float],
-    peak_loads: dict[str, float],
-    difficulty_mult: float,
-    bodyweight_kg: float | None = None,
-    slug: str | None = None,
-) -> tuple[dict[str, float], float]:
-    """Returns (xp_per_body_part, total_volume_load_for_vitality).
+    exercise,
+    weight,
+    reps,
+    novelty_count,
+    weekly_count,
+    peak_loads,
+    difficulty_mult,
+    bodyweight_kg=None,
+    slug=None,
+    current_ranks=None,
+    best_by_band=None,
+    bp_session_count=None,
+    near_failure=False,
+    female=False,
+    target_reps=None,
+):
+    """Phase 29 v2 + 29.6 LOCKED per-set XP.
 
-    `difficulty_mult` is required (no default) — same convention as Dart's
-    `XpCalculator.computeSetXp`. Caller resolves the value via
-    `difficulty_mult_for_slug(slug)` (real slug) or
-    `difficulty_mult_for_alias(alias)` (simulator short alias). Applied as
-    the final multiplier in the chain BEFORE the per-body-part attribution
-    split — mirrors `XpCalculator` byte-for-byte:
+    11-multiplier chain (in this exact order):
+        set_xp = base × intensity × strength × novelty × cap
+               × difficulty_mult × tier_diff_mult × abs_strength_premium
+               × overload_mult × frequency_mult × attribution_share
 
-        set_xp = base × intensity × strength × novelty × cap × difficulty_mult
-        per_bp_xp = set_xp × attribution[bp]
+    Returns (awarded_per_bp dict, volume_load, components dict, best_by_band).
 
-    Phase 24c bodyweight-as-load: if `slug` is curated in
-    `USES_BODYWEIGHT_LOAD_BY_SLUG`, `effective_weight = entered_weight +
-    (bodyweight_kg or 0)` is used for both `volume_load` and the
-    `strength_mult` numerator (mirrors 00057). Peak_loads still tracks
-    ENTERED weight only — see migration 00057 header for the rationale.
-    Default args (`bodyweight_kg=None, slug=None`) keep backward compat
-    for callers that don't yet thread bodyweight; in that case effective
-    weight degrades to entered weight (pre-24c semantics).
+    Phase 29 v2 changes from Phase 24d:
+      * effective_weight uses BODYWEIGHT_LOAD_RATIO per-exercise (Ref #5)
+      * implied_tier uses gender-aware per-lift Symmetric Strength tables (Ref #1)
+      * intensity gets +0.10 additive when near_failure (Ref #4)
+      * overload_mult layered on for in-band PRs (Ref #2)
+      * frequency_mult layered on for 7d-window per-bp session count (Ref #3)
+      * abs_strength_premium layered on for absolute strength rewards (29.6 Path C)
 
-    Phase 24d propagation: the formerly-provisional overrides
-    (`_CALIBRATION_VOLUME_EXPONENT/WEEKLY_CAP_SETS/OVER_CAP_MULTIPLIER`)
-    are now the canonical module constants. Every code path — calibration
-    archetypes, consistency archetypes, fixture-gen, Dart parity — reads
-    `VOLUME_EXPONENT`, `WEEKLY_CAP_SETS`, `OVER_CAP_MULTIPLIER` directly.
+    Backward compat: callers passing only the Phase 24c args (no current_ranks,
+    no best_by_band, etc.) get a neutral chain — tier_diff_mult uses rank=1
+    proxy, overload_mult=1.0, frequency_mult=1.0, abs_strength_premium uses
+    implied_tier=0 proxy (premium=1.0). This keeps fixture_gen's backfill
+    replay numerically stable across the Phase 24d → Phase 29 v2 transition.
     """
-    # Phase 24c: resolve slug. If not provided, fall back to `exercise` (the
-    # simulator's short alias). uses_bodyweight_load() returns False for the
-    # short aliases (they're not in the 20-slug curation set), which matches
-    # the desired backward-compat behavior — the simulator's archetype
-    # playback uses 'pullup' (alias) NOT 'pull_up' (real slug), so passing
-    # `slug=SIM_ALIAS_TO_DEFAULT_SLUG[exercise]` is the responsibility of
-    # the simulator caller (see `simulate()`).
+    # ---- Effective weight (Ref #5 per-exercise BW ratio) ----
     resolved_slug = slug if slug is not None else exercise
     eff_weight = effective_weight(resolved_slug, weight, bodyweight_kg)
 
-    # Phase 24c: volume_load + base_xp consume effective_weight.
-    volume_load = max(1.0, eff_weight * reps)
+    # ---- Base XP ----
+    volume_load = max(VOLUME_LOAD_FLOOR, eff_weight * reps)
     base_xp = volume_load ** VOLUME_EXPONENT
-    intensity = intensity_for_reps(reps)
 
-    # Phase 24c: peak_loads tracks ENTERED weight (not effective) — matches
-    # the 00057 writer-site guard. The strength_mult numerator is still
-    # effective_weight (favorable for weighted bodyweight, neutral for pure
-    # bodyweight since peak stays 0 → short-circuit returns 1.0).
+    # ---- Intensity (with Ref #4 near-failure bonus) ----
+    # If target_reps provided + actual < threshold, infer near-failure.
+    if not near_failure and target_reps is not None:
+        near_failure = inferred_near_failure(reps, target_reps)
+    intensity = intensity_with_near_failure(reps, near_failure)
+
+    # ---- Strength ----
     peak_load = peak_loads.get(exercise, weight)
     if weight > peak_load:
         peak_loads[exercise] = weight
@@ -610,46 +971,81 @@ def compute_set_xp(
     else:
         strength_mult = 1.0
 
-    # Phase 24d overlay: calibration archetypes use real default slugs
-    # (e.g. `barbell_bench_press`) that aren't in the alias-based
-    # `ATTRIBUTION` map. The overlay dict (populated below the function
-    # by the calibration block) is consulted FIRST so calibration runs
-    # see real-slug splits without mutating `ATTRIBUTION` itself —
-    # `test/fixtures/generate_rpg_fixtures.py` iterates `ATTRIBUTION`
-    # to build its parity cases, so adding entries there would break
-    # the byte-identical fixture regen check.
-    distribution = (
-        _CALIBRATION_ATTRIBUTION.get(exercise)
-        if exercise in _CALIBRATION_ATTRIBUTION
-        else ATTRIBUTION.get(exercise, {})
-    )
+    # ---- Attribution ----
+    distribution = _attribution_for(exercise)
+    if not distribution:
+        distribution = {'chest': 1.0}
+    dom_part = max(distribution, key=distribution.get)
 
-    awarded: dict[str, float] = {}
+    # ---- tier_diff_mult (Ref #1 lift-implied vs current rank) ----
+    lift_implied = implied_tier(exercise, weight, reps, bodyweight_kg or 0.0, female=female)
+    cr = float((current_ranks or {}).get(dom_part, 1))
+    td_mult = tier_diff_mult(cr, lift_implied)
+
+    # ---- abs_strength_premium (Phase 29.6 Path C) ----
+    asp_mult = abs_strength_premium(lift_implied)
+
+    # ---- overload_mult (Ref #2) ----
+    if best_by_band is None:
+        o_mult = 1.0
+    else:
+        o_mult, best_by_band = overload_mult(exercise, weight, reps, best_by_band)
+
+    # ---- frequency_mult (Ref #3) ----
+    if bp_session_count is None:
+        f_mult = 1.0
+    else:
+        f_mult = frequency_mult(bp_session_count.get(dom_part, 1))
+
+    # ---- Per-body-part XP ----
+    awarded = {}
     for body_part, share in distribution.items():
         novelty = math.exp(-novelty_count[body_part] / NOVELTY_DENOMINATOR)
         cap_mult = OVER_CAP_MULTIPLIER if weekly_count[body_part] >= WEEKLY_CAP_SETS else 1.0
-        xp = base_xp * intensity * strength_mult * novelty * cap_mult * difficulty_mult * share
+        xp = (
+            base_xp
+            * intensity
+            * strength_mult
+            * novelty
+            * cap_mult
+            * difficulty_mult
+            * td_mult
+            * asp_mult
+            * o_mult
+            * f_mult
+            * share
+        )
         awarded[body_part] = xp
 
+    # Update counters
     for body_part, share in distribution.items():
         novelty_count[body_part] += share
         weekly_count[body_part] += share
 
-    return awarded, volume_load
+    components = {
+        'volume_load': volume_load,
+        'base_xp': base_xp,
+        'intensity_mult': intensity,
+        'strength_mult': strength_mult,
+        'difficulty_mult': difficulty_mult,
+        'tier_diff_mult': td_mult,
+        'abs_strength_premium': asp_mult,
+        'overload_mult': o_mult,
+        'frequency_mult': f_mult,
+        'lift_implied_tier': lift_implied,
+        'eff_weight': eff_weight,
+        'dominant_part': dom_part,
+        'near_failure': near_failure,
+    }
+
+    return awarded, volume_load, components, best_by_band
 
 
 # ============================================================================
 # Vitality — asymmetric EWMA per body part
 # ============================================================================
 
-def update_vitality(
-    body_part: str,
-    weekly_volume: float,
-    ewma: dict[str, float],
-    peak: dict[str, float],
-) -> None:
-    """Update body-part EWMA with asymmetric time constants. Peak is permanent
-    (never decays). Vitality % is derived as ewma / peak when consumers ask."""
+def update_vitality(body_part, weekly_volume, ewma, peak):
     prior = ewma.get(body_part, 0.0)
     if weekly_volume >= prior:
         alpha = 1.0 - math.exp(-1.0 / VITALITY_TAU_UP_WEEKS)
@@ -661,7 +1057,7 @@ def update_vitality(
         peak[body_part] = new_ewma
 
 
-def vitality_pct(body_part: str, ewma: dict[str, float], peak: dict[str, float]) -> float:
+def vitality_pct(body_part, ewma, peak):
     p = peak.get(body_part, 0.0)
     if p <= 0:
         return 0.0
@@ -669,10 +1065,93 @@ def vitality_pct(body_part: str, ewma: dict[str, float], peak: dict[str, float])
 
 
 # ============================================================================
-# Simulation
+# Legacy consistency archetypes (Phase 24c — preserved for fixture backfill)
 # ============================================================================
 
-def progression_rate(archetype: Archetype, week: int) -> float:
+@dataclass
+class Archetype:
+    name: str
+    sessions_per_week: int
+    starting_weights: dict
+    progression: str
+    layoffs: list = field(default_factory=list)
+    bodyweight_kg: float = 70.0
+
+
+ARCHETYPES = {
+    'beginner': Archetype(
+        name='beginner', sessions_per_week=3, progression='beginner',
+        starting_weights={
+            'bench': 40, 'incline_bench': 30, 'overhead_press': 25, 'row': 35, 'pulldown': 35,
+            'pullup': 0, 'squat': 50, 'deadlift': 60, 'leg_press': 60, 'lunge': 20,
+            'curl': 12, 'tricep_pushdown': 20, 'lateral_raise': 6, 'plank': 1, 'leg_raise': 1,
+        },
+    ),
+    'intermediate': Archetype(
+        name='intermediate', sessions_per_week=4, progression='intermediate',
+        starting_weights={
+            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
+            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
+            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
+        },
+    ),
+    'advanced': Archetype(
+        name='advanced', sessions_per_week=5, progression='advanced',
+        starting_weights={
+            'bench': 120, 'incline_bench': 95, 'overhead_press': 80, 'row': 100, 'pulldown': 100,
+            'pullup': 25, 'squat': 160, 'deadlift': 200, 'leg_press': 220, 'lunge': 60,
+            'curl': 25, 'tricep_pushdown': 50, 'lateral_raise': 14, 'plank': 1, 'leg_raise': 1,
+        },
+    ),
+    'stagnant_lifter': Archetype(
+        name='stagnant_lifter', sessions_per_week=3, progression='stagnant',
+        starting_weights={
+            'bench': 20, 'incline_bench': 15, 'overhead_press': 15, 'row': 20, 'pulldown': 20,
+            'pullup': 0, 'squat': 25, 'deadlift': 30, 'leg_press': 40, 'lunge': 10,
+            'curl': 5, 'tricep_pushdown': 8, 'lateral_raise': 3, 'plank': 1, 'leg_raise': 1,
+        },
+    ),
+    'comeback_kid': Archetype(
+        name='comeback_kid', sessions_per_week=4, progression='intermediate',
+        starting_weights={
+            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
+            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
+            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
+        },
+        layoffs=[(53, 78)],
+    ),
+    'vacationer': Archetype(
+        name='vacationer', sessions_per_week=4, progression='intermediate',
+        starting_weights={
+            'bench': 80, 'incline_bench': 65, 'overhead_press': 50, 'row': 70, 'pulldown': 70,
+            'pullup': 10, 'squat': 100, 'deadlift': 120, 'leg_press': 140, 'lunge': 40,
+            'curl': 18, 'tricep_pushdown': 35, 'lateral_raise': 10, 'plank': 1, 'leg_raise': 1,
+        },
+        layoffs=[(27, 28), (53, 54), (79, 80), (105, 106), (131, 132), (157, 158),
+                 (183, 184), (209, 210), (235, 236)],
+    ),
+}
+
+# Legacy alias-based day templates (for Archetype-based simulate())
+DAY_TEMPLATES_LEGACY = {
+    'push':  [('bench', 4, 8), ('overhead_press', 3, 8), ('lateral_raise', 3, 12), ('tricep_pushdown', 3, 12)],
+    'pull':  [('row', 4, 8), ('pulldown', 3, 10), ('curl', 3, 12), ('plank', 2, 30)],
+    'legs':  [('squat', 4, 6), ('deadlift', 3, 5), ('leg_press', 3, 10), ('lunge', 3, 10)],
+    'upper': [('bench', 3, 8), ('row', 3, 8), ('overhead_press', 3, 8), ('curl', 3, 10), ('tricep_pushdown', 3, 10)],
+}
+
+# Backward-compat alias (some readers expected the literal name `DAY_TEMPLATES`)
+DAY_TEMPLATES = DAY_TEMPLATES_LEGACY
+
+WEEK_SCHEDULES_LEGACY = {
+    3: ['push', 'pull', 'legs'],
+    4: ['push', 'pull', 'legs', 'upper'],
+    5: ['push', 'pull', 'legs', 'upper', 'legs'],
+}
+WEEK_SCHEDULES = WEEK_SCHEDULES_LEGACY
+
+
+def progression_rate(archetype, week):
     base = PROGRESSION_RATES[archetype.progression]
     if archetype.progression != 'beginner':
         return base
@@ -683,41 +1162,44 @@ def progression_rate(archetype: Archetype, week: int) -> float:
     return max(intermediate_rate, base - (base - intermediate_rate) * min(1.0, decay))
 
 
-def is_layoff_week(archetype: Archetype, week: int) -> bool:
+def is_layoff_week(archetype, week):
     return any(start <= week <= end for start, end in archetype.layoffs)
 
 
-def simulate(archetype: Archetype, weeks: int) -> list[dict]:
+def simulate(archetype, weeks):
+    """Legacy Phase 24c consistency-archetype simulator. Preserved for
+    fixture-gen's `fx_backfill_replay()` (which feeds the parity oracle).
+
+    Uses the Phase 29 v2 + 29.6 multiplier chain via compute_set_xp(). Since
+    no `best_by_band` / `bp_session_count` are threaded, those multipliers
+    default to 1.0 — matches the documented backward-compat path. The result
+    is that legacy archetypes earn LESS XP than the new Phase 29 personas
+    (no overload + frequency bonuses), which is correct: this path is for
+    parity oracle stability, not user-realistic progression.
+    """
     xp_pool = {p: 0.0 for p in BODY_PARTS}
     weights = dict(archetype.starting_weights)
-    peak_loads: dict[str, float] = dict(archetype.starting_weights)
-    schedule = WEEK_SCHEDULES[archetype.sessions_per_week]
-    vit_ewma: dict[str, float] = {}
-    vit_peak: dict[str, float] = {}
+    peak_loads = dict(archetype.starting_weights)
+    schedule = WEEK_SCHEDULES_LEGACY[archetype.sessions_per_week]
+    vit_ewma = {}
+    vit_peak = {}
     snapshots = []
 
     for week in range(1, weeks + 1):
-        weekly_count: dict[str, float] = defaultdict(float)
-        weekly_volume_per_part: dict[str, float] = defaultdict(float)
+        weekly_count = defaultdict(float)
+        weekly_volume_per_part = defaultdict(float)
         layoff = is_layoff_week(archetype, week)
 
         if not layoff:
             for day in schedule:
-                novelty_count: dict[str, float] = defaultdict(float)
-                for exercise, n_sets, reps in DAY_TEMPLATES[day]:
+                novelty_count = defaultdict(float)
+                for exercise, n_sets, reps in DAY_TEMPLATES_LEGACY[day]:
                     w = weights.get(exercise, 1)
                     distribution = ATTRIBUTION.get(exercise, {})
                     diff_mult = difficulty_mult_for_alias(exercise)
-                    # Phase 24c: resolve simulator alias → real slug so
-                    # uses_bodyweight_load() consults the same 20-slug
-                    # curation set as the SQL RPCs (00057). For aliases
-                    # not in SIM_ALIAS_TO_DEFAULT_SLUG (synthetic, no
-                    # real-world analog) the resolved slug is the alias
-                    # itself — uses_bodyweight_load() returns False, so
-                    # behavior matches pre-24c.
                     real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
                     for _ in range(n_sets):
-                        awarded, vol = compute_set_xp(
+                        awarded, vol, _comp, _bbb = compute_set_xp(
                             exercise, w, reps, novelty_count, weekly_count, peak_loads,
                             difficulty_mult=diff_mult,
                             bodyweight_kg=archetype.bodyweight_kg,
@@ -750,47 +1232,477 @@ def simulate(archetype: Archetype, weeks: int) -> list[dict]:
 
 
 # ============================================================================
+# Phase 29 v2 13-persona panel (calibration ground truth)
+# ============================================================================
+
+@dataclass
+class Persona:
+    """Phase 29 v2 persona for the calibration panel.
+
+    name             : display label
+    bodyweight_kg    : user bodyweight
+    schedule_key     : key into WEEK_SCHEDULES_PANEL (e.g. 3, 4, 5, 'mach_3', 'hyp_4')
+    starting_weights : per-exercise starting load (kg)
+    progression_pct  : weekly progression rate (multiplicative)
+    reps_scheme      : per-exercise target reps (None → DEFAULT_REPS_PANEL)
+    smurf_session    : optional {exercise: (weight, reps)} for fake-1RM session 1
+    female           : True → female tier tables
+    tapering         : True → progression decays via half-life (beginner gains)
+    half_life_weeks  : tapering half-life
+    nf_rate          : probability a set is flagged near_failure
+    """
+    name: str
+    bodyweight_kg: float
+    schedule_key: object
+    starting_weights: dict
+    progression_pct: float
+    reps_scheme: dict = None
+    smurf_session: dict = None
+    female: bool = False
+    tapering: bool = False
+    half_life_weeks: float = 4.0
+    nf_rate: float = 0.10
+
+
+DEFAULT_REPS_PANEL = {
+    "bench": 5, "incline_bench": 5, "overhead_press": 5,
+    "row": 5, "pulldown": 8, "pullup": 5,
+    "squat": 5, "deadlift": 5, "leg_press": 8, "lunge": 8,
+    "curl": 10, "tricep_pushdown": 10, "lateral_raise": 12,
+    "plank": 30, "leg_raise": 15,
+    # Machine + hypertrophy aliases
+    "machine_chest_press": 10, "seated_row": 10,
+    "leg_extension": 12, "leg_curl": 12, "romanian_deadlift": 8,
+}
+
+# Panel day templates (extended with machine + hypertrophy sessions)
+DAY_TEMPLATES_PANEL = {
+    "push":  [("bench", 4), ("overhead_press", 3), ("lateral_raise", 3), ("tricep_pushdown", 3)],
+    "pull":  [("row", 4), ("pulldown", 3), ("curl", 3), ("plank", 2)],
+    "legs":  [("squat", 4), ("deadlift", 3), ("leg_press", 3), ("lunge", 3)],
+    "upper": [("bench", 3), ("row", 3), ("overhead_press", 3), ("curl", 3), ("tricep_pushdown", 3)],
+    # Machine-only 3-day split
+    "mp": [("machine_chest_press", 4), ("overhead_press", 3), ("lateral_raise", 3), ("tricep_pushdown", 3)],
+    "ml": [("pulldown", 4), ("seated_row", 4), ("curl", 3)],
+    "mq": [("leg_press", 4), ("leg_curl", 3), ("leg_extension", 3), ("lunge", 3)],
+    # Hypertrophy bodybuilder 4-day split
+    "hp": [("bench", 4), ("incline_bench", 3), ("overhead_press", 3), ("lateral_raise", 3), ("tricep_pushdown", 3)],
+    "hl": [("row", 4), ("pulldown", 3), ("curl", 3)],
+    "hq": [("squat", 4), ("lunge", 3), ("leg_press", 3), ("deadlift", 2)],
+    "ha": [("curl", 4), ("tricep_pushdown", 4), ("lateral_raise", 3), ("overhead_press", 2)],
+}
+
+WEEK_SCHEDULES_PANEL = {
+    3:        ["push", "pull", "legs"],
+    4:        ["push", "pull", "legs", "upper"],
+    5:        ["push", "pull", "legs", "upper", "legs"],
+    "mach_3": ["mp", "ml", "mq"],
+    "hyp_4":  ["hp", "hl", "hq", "ha"],
+}
+
+SESSION_BODY_PARTS = {
+    "push":  {"chest", "shoulders", "arms"},
+    "pull":  {"back", "arms", "core"},
+    "legs":  {"legs", "core", "back"},
+    "upper": {"chest", "back", "shoulders", "arms"},
+    "mp":    {"chest", "shoulders", "arms"},
+    "ml":    {"back", "arms"},
+    "mq":    {"legs", "core"},
+    "hp":    {"chest", "shoulders", "arms"},
+    "hl":    {"back", "arms"},
+    "hq":    {"legs", "core", "back"},
+    "ha":    {"arms", "shoulders"},
+}
+
+
+# The 13 personas (locked Phase 29 v2 + 29.6 calibration ground truth)
+PERSONAS = {
+    "beginner": Persona(
+        name="True Beginner (0yr, 75kg)", bodyweight_kg=75.0, schedule_key=3,
+        starting_weights={
+            "bench": 40, "incline_bench": 30, "overhead_press": 25,
+            "row": 35, "pulldown": 35, "pullup": 0,
+            "squat": 60, "deadlift": 80, "leg_press": 60, "lunge": 20,
+            "curl": 12, "tricep_pushdown": 15, "lateral_raise": 6,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.030, tapering=True, half_life_weeks=4.0, nf_rate=0.05,
+    ),
+    "diego": Persona(
+        name="Diego (4yr returning, 80kg)", bodyweight_kg=80.0, schedule_key=4,
+        starting_weights={
+            "bench": 85, "incline_bench": 65, "overhead_press": 50,
+            "row": 70, "pulldown": 70, "pullup": 10,
+            "squat": 108, "deadlift": 139, "leg_press": 140, "lunge": 45,
+            "curl": 18, "tricep_pushdown": 32, "lateral_raise": 10,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.001, nf_rate=0.15,
+    ),
+    "strong_intermediate": Persona(
+        name="Strong Intermediate (6yr, 85kg)", bodyweight_kg=85.0, schedule_key=4,
+        starting_weights={
+            "bench": 100, "incline_bench": 80, "overhead_press": 65,
+            "row": 90, "pulldown": 85, "pullup": 20,
+            "squat": 130, "deadlift": 170, "leg_press": 180, "lunge": 55,
+            "curl": 22, "tricep_pushdown": 40, "lateral_raise": 12,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.0005, nf_rate=0.20,
+    ),
+    "advanced": Persona(
+        name="Advanced (8yr, 90kg)", bodyweight_kg=90.0, schedule_key=5,
+        starting_weights={
+            "bench": 130, "incline_bench": 100, "overhead_press": 80,
+            "row": 110, "pulldown": 105, "pullup": 30,
+            "squat": 170, "deadlift": 210, "leg_press": 220, "lunge": 70,
+            "curl": 28, "tricep_pushdown": 50, "lateral_raise": 15,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.0002, nf_rate=0.25,
+    ),
+    "elite": Persona(
+        # Phase 29.6 Path C — real competitive powerlifter 95kg, 10yr.
+        # bench 180×3 → implied_tier ~55 → frac=1.0 (full premium).
+        name="Elite Path C (10yr competitive, 95kg)", bodyweight_kg=95.0, schedule_key=5,
+        reps_scheme={
+            "bench": 3, "incline_bench": 3, "overhead_press": 3,
+            "row": 3, "pulldown": 3, "pullup": 3, "squat": 3, "deadlift": 3,
+            "leg_press": 5, "lunge": 5, "curl": 8, "tricep_pushdown": 8,
+            "lateral_raise": 10, "plank": 30, "leg_raise": 10,
+        },
+        starting_weights={
+            "bench": 180, "incline_bench": 145, "overhead_press": 115,
+            "row": 155, "pulldown": 140, "pullup": 65,
+            "squat": 240, "deadlift": 310, "leg_press": 320, "lunge": 110,
+            "curl": 42, "tricep_pushdown": 72, "lateral_raise": 24,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.0001, nf_rate=0.30,
+    ),
+    "smurf": Persona(
+        name="Smurf attempt (fake 1RM, 70kg)", bodyweight_kg=70.0, schedule_key=3,
+        starting_weights={
+            "bench": 60, "incline_bench": 45, "overhead_press": 35,
+            "row": 50, "pulldown": 50, "pullup": 0,
+            "squat": 70, "deadlift": 90, "leg_press": 90, "lunge": 25,
+            "curl": 14, "tricep_pushdown": 18, "lateral_raise": 7,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.005, smurf_session={"bench": (140, 1)}, nf_rate=0.10,
+    ),
+    "weak_consistent": Persona(
+        name="Weak+Consistent (75kg, 5×/wk)", bodyweight_kg=75.0, schedule_key=5,
+        starting_weights={
+            "bench": 60, "incline_bench": 45, "overhead_press": 37,
+            "row": 55, "pulldown": 55, "pullup": 0,
+            "squat": 80, "deadlift": 95, "leg_press": 100, "lunge": 30,
+            "curl": 14, "tricep_pushdown": 20, "lateral_raise": 7,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.015, nf_rate=0.10,
+    ),
+    "strong_inconsistent": Persona(
+        name="Strong+Inconsistent (90kg, 3×/wk)", bodyweight_kg=90.0, schedule_key=3,
+        reps_scheme={
+            "bench": 5, "incline_bench": 5, "overhead_press": 5,
+            "row": 5, "pulldown": 5, "pullup": 5, "squat": 5, "deadlift": 5,
+            "leg_press": 8, "lunge": 8, "curl": 8, "tricep_pushdown": 8,
+            "lateral_raise": 12, "plank": 30, "leg_raise": 12,
+        },
+        starting_weights={
+            "bench": 115, "incline_bench": 90, "overhead_press": 70,
+            "row": 95, "pulldown": 90, "pullup": 20,
+            "squat": 150, "deadlift": 185, "leg_press": 190, "lunge": 60,
+            "curl": 24, "tricep_pushdown": 42, "lateral_raise": 12,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.001, nf_rate=0.20,
+    ),
+    "female_beginner": Persona(
+        name="Female Beginner (0yr, 58kg)", bodyweight_kg=58.0, schedule_key=3, female=True,
+        starting_weights={
+            "bench": 28, "incline_bench": 20, "overhead_press": 18,
+            "row": 25, "pulldown": 28, "pullup": 0,
+            "squat": 40, "deadlift": 52, "leg_press": 55, "lunge": 15,
+            "curl": 7, "tricep_pushdown": 10, "lateral_raise": 3,
+            "plank": 1, "leg_raise": 1,
+        },
+        reps_scheme={
+            "bench": 8, "incline_bench": 10, "overhead_press": 8,
+            "row": 8, "pulldown": 10, "pullup": 8, "squat": 8, "deadlift": 6,
+            "leg_press": 12, "lunge": 10, "curl": 12, "tricep_pushdown": 12,
+            "lateral_raise": 15, "plank": 30, "leg_raise": 12,
+        },
+        progression_pct=0.025, tapering=True, half_life_weeks=3.0, nf_rate=0.05,
+    ),
+    "female_intermediate": Persona(
+        name="Female Intermediate (2yr, 60kg)", bodyweight_kg=60.0, schedule_key=3, female=True,
+        starting_weights={
+            "bench": 45, "incline_bench": 35, "overhead_press": 30,
+            "row": 40, "pulldown": 40, "pullup": 0,
+            "squat": 68, "deadlift": 85, "leg_press": 90, "lunge": 25,
+            "curl": 10, "tricep_pushdown": 14, "lateral_raise": 5,
+            "plank": 1, "leg_raise": 1,
+        },
+        reps_scheme={
+            "bench": 8, "incline_bench": 10, "overhead_press": 8,
+            "row": 8, "pulldown": 10, "pullup": 8, "squat": 8, "deadlift": 6,
+            "leg_press": 12, "lunge": 10, "curl": 12, "tricep_pushdown": 12,
+            "lateral_raise": 15, "plank": 30, "leg_raise": 12,
+        },
+        progression_pct=0.0015, nf_rate=0.10,
+    ),
+    "older_lifter": Persona(
+        name="Older Lifter (55yo, 5yr, 80kg)", bodyweight_kg=80.0, schedule_key=3,
+        starting_weights={
+            "bench": 75, "incline_bench": 58, "overhead_press": 45,
+            "row": 65, "pulldown": 65, "pullup": 5,
+            "squat": 100, "deadlift": 130, "leg_press": 140, "lunge": 38,
+            "curl": 14, "tricep_pushdown": 22, "lateral_raise": 8,
+            "plank": 1, "leg_raise": 1,
+        },
+        reps_scheme={
+            "bench": 8, "incline_bench": 8, "overhead_press": 8,
+            "row": 8, "pulldown": 10, "pullup": 5, "squat": 6, "deadlift": 5,
+            "leg_press": 10, "lunge": 10, "curl": 12, "tricep_pushdown": 12,
+            "lateral_raise": 15, "plank": 30, "leg_raise": 12,
+        },
+        progression_pct=0.0005, nf_rate=0.10,
+    ),
+    "machine_tourist": Persona(
+        name="Machine-Only Gym Tourist (1yr, 78kg)", bodyweight_kg=78.0, schedule_key="mach_3",
+        starting_weights={
+            "machine_chest_press": 40, "overhead_press": 25, "lateral_raise": 8, "tricep_pushdown": 25,
+            "pulldown": 45, "seated_row": 45, "curl": 12,
+            "leg_press": 80, "leg_curl": 28, "leg_extension": 30, "lunge": 22,
+        },
+        reps_scheme={
+            "machine_chest_press": 12, "overhead_press": 12, "lateral_raise": 15, "tricep_pushdown": 12,
+            "pulldown": 12, "seated_row": 12, "curl": 12,
+            "leg_press": 12, "leg_curl": 12, "leg_extension": 12, "lunge": 12,
+        },
+        progression_pct=0.005, nf_rate=0.05,
+    ),
+    "hypertrophy_bb": Persona(
+        name="Hypertrophy BB Split (4yr, 82kg)", bodyweight_kg=82.0, schedule_key="hyp_4",
+        starting_weights={
+            "bench": 90, "incline_bench": 70, "overhead_press": 50,
+            "row": 75, "pulldown": 70, "pullup": 0,
+            "squat": 110, "deadlift": 100, "leg_press": 160, "lunge": 45,
+            "curl": 22, "tricep_pushdown": 38, "lateral_raise": 11,
+            "plank": 1, "leg_raise": 1,
+        },
+        reps_scheme={
+            "bench": 10, "incline_bench": 10, "overhead_press": 8,
+            "row": 10, "pulldown": 12, "pullup": 8, "squat": 10, "deadlift": 10,
+            "leg_press": 12, "lunge": 12, "curl": 12, "tricep_pushdown": 12,
+            "lateral_raise": 15, "plank": 30, "leg_raise": 15,
+        },
+        progression_pct=0.003, nf_rate=0.15,
+    ),
+}
+
+# Display order for the panel (sorted by expected avg_rank ascending)
+PANEL_ORDER = [
+    "female_beginner", "beginner", "machine_tourist", "older_lifter",
+    "weak_consistent", "female_intermediate", "smurf", "strong_inconsistent",
+    "diego", "hypertrophy_bb", "strong_intermediate", "advanced", "elite",
+]
+
+# Target band per persona (lo, hi) — 13/13 PASS criterion
+PANEL_TARGET_BANDS = {
+    "beginner":             (14, 18),
+    "diego":                (24, 28),
+    "strong_intermediate":  (28, 38),
+    "advanced":             (35, 45),
+    "elite":                (50, 65),
+    "smurf":                (13, 20),
+    "weak_consistent":      (17, 26),
+    "strong_inconsistent":  (24, 32),
+    "female_intermediate":  (17, 27),
+    "female_beginner":      (9, 17),
+    "older_lifter":         (14, 24),
+    "machine_tourist":      (11, 23),
+    "hypertrophy_bb":       (22, 33),
+}
+
+
+def _tapered_progression(base_rate, half_life_weeks, week):
+    """Beginner gains taper: rate(week) = base × exp(-ln2 / hl × (week-1))."""
+    return base_rate * math.exp(-math.log(2.0) / half_life_weeks * (week - 1))
+
+
+def simulate_persona(persona_key, weeks=12, seed=42):
+    """Phase 29 v2 + 29.6 LOCKED persona simulator.
+
+    Uses the full 11-multiplier chain via compute_set_xp() with all refinements
+    enabled (current_ranks, best_by_band, bp_session_count, near_failure,
+    female flag).
+    """
+    rng = random.Random(seed)
+    persona = PERSONAS[persona_key]
+    nf_rate = persona.nf_rate
+
+    xp_pool = {p: 0.0 for p in BODY_PARTS}
+    weights = dict(persona.starting_weights)
+    peak_loads = dict(persona.starting_weights)
+    best_by_band = {}
+    schedule = WEEK_SCHEDULES_PANEL[persona.schedule_key]
+    reps_scheme = persona.reps_scheme or DEFAULT_REPS_PANEL
+    snapshots = []
+    session_num = 0
+    smurf_done = False
+
+    for week in range(1, weeks + 1):
+        weekly_count = defaultdict(float)
+        weekly_xp = defaultdict(float)
+        bp_session = defaultdict(int)
+        prog = (
+            _tapered_progression(persona.progression_pct, persona.half_life_weeks, week)
+            if persona.tapering
+            else persona.progression_pct
+        )
+
+        for day in schedule:
+            session_num += 1
+            for bp in SESSION_BODY_PARTS.get(day, set()):
+                bp_session[bp] += 1
+            novelty_count = defaultdict(float)
+
+            for exercise, n_sets in DAY_TEMPLATES_PANEL[day]:
+                r = reps_scheme.get(exercise, DEFAULT_REPS_PANEL.get(exercise, 5))
+                diff_m = difficulty_mult_for_alias(exercise)
+                real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+
+                # Smurf override on session 1
+                use_smurf = (
+                    not smurf_done and session_num == 1
+                    and persona.smurf_session
+                    and exercise in persona.smurf_session
+                )
+                if use_smurf:
+                    sw, sr = persona.smurf_session[exercise]
+                    for _ in range(n_sets):
+                        cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+                        nf = rng.random() < nf_rate
+                        awarded, _, _comp, best_by_band = compute_set_xp(
+                            exercise, sw, sr, novelty_count, weekly_count, peak_loads,
+                            difficulty_mult=diff_m,
+                            bodyweight_kg=persona.bodyweight_kg,
+                            slug=real_slug,
+                            current_ranks=cr,
+                            best_by_band=best_by_band,
+                            bp_session_count=bp_session,
+                            near_failure=nf,
+                            female=persona.female,
+                        )
+                        for bp2, xp in awarded.items():
+                            xp_pool[bp2] += xp
+                            weekly_xp[bp2] += xp
+                    smurf_done = True
+                    continue
+
+                w = weights.get(exercise, 1.0)
+                for _ in range(n_sets):
+                    cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+                    nf = rng.random() < nf_rate
+                    awarded, _, _comp, best_by_band = compute_set_xp(
+                        exercise, w, r, novelty_count, weekly_count, peak_loads,
+                        difficulty_mult=diff_m,
+                        bodyweight_kg=persona.bodyweight_kg,
+                        slug=real_slug,
+                        current_ranks=cr,
+                        best_by_band=best_by_band,
+                        bp_session_count=bp_session,
+                        near_failure=nf,
+                        female=persona.female,
+                    )
+                    for bp2, xp in awarded.items():
+                        xp_pool[bp2] += xp
+                        weekly_xp[bp2] += xp
+
+        # Apply progression after the week
+        for ex in weights:
+            weights[ex] *= (1.0 + prog)
+
+        ranks = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+        snapshots.append({
+            "week": week,
+            "ranks": ranks,
+            "character_level": character_level(ranks),
+            "cumulative_xp": int(sum(xp_pool.values())),
+            "weekly_xp": {p: int(v) for p, v in weekly_xp.items()},
+            "prog_rate": prog,
+        })
+
+    return snapshots
+
+
+def avg_active_rank(snapshot):
+    return sum(snapshot["ranks"][bp] for bp in ACTIVE_RANKS) / len(ACTIVE_RANKS)
+
+
+# ============================================================================
 # Reporting
 # ============================================================================
 
-def print_archetype(name: str, snapshots: list[dict], milestones: list[int]) -> None:
-    print(f"\n=== {name.upper()} ===")
-    archetype = ARCHETYPES[name]
-    layoff_note = f"  |  Layoffs: {archetype.layoffs}" if archetype.layoffs else ""
-    print(f"Schedule: {archetype.sessions_per_week} sessions/week  |  "
-          f"Progression: {PROGRESSION_RATES[archetype.progression]}× per week{layoff_note}")
-    header = f"{'Wk':>4} {'Lvl':>4}  {'Chst':>4} {'Back':>4} {'Legs':>4} {'Shld':>4} {'Arms':>4} {'Core':>4}    {'Class':<11}  {'Total XP':>10}"
-    print(header)
-    print('-' * len(header))
-    for snap in snapshots:
-        if snap['week'] not in milestones:
-            continue
-        r = snap['ranks']
-        total_xp = sum(snap['total_xp'].values())
-        marker = '*' if snap['is_layoff'] else ' '
-        print(f"{snap['week']:>3}{marker} {snap['character_level']:>4}  "
-              f"{r['chest']:>4} {r['back']:>4} {r['legs']:>4} {r['shoulders']:>4} {r['arms']:>4} {r['core']:>4}    "
-              f"{snap['class']:<11}  {total_xp:>10,}")
+def print_persona_panel(weeks=12):
+    sep = "=" * 110
+    print()
+    print(sep)
+    print(f"  RepSaga Phase 29 v2 + 29.6 LOCKED — 13-persona panel ({weeks}-week simulation)")
+    print(f"  E_BONUS={E_BONUS} E_FLOOR={E_FLOOR} E_CEIL={E_CEIL} | "
+          f"V_exp={VOLUME_EXPONENT} cap={WEEKLY_CAP_SETS} over_cap={OVER_CAP_MULTIPLIER}")
+    print(sep)
+
+    results = {}
+    for pk in PANEL_ORDER:
+        results[pk] = simulate_persona(pk, weeks=weeks)[-1]
+
+    hdr = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5}  {:<7}  {:>4}  {:>8}"
+    row = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5.1f}  {:<7}  {:>4}  {:>8}"
+    print()
+    print(hdr.format(
+        "Persona", "Ch", "Bk", "Lg", "Sh", "Ar", "Co",
+        "Lv", "AvgRk", "Target", "Pass", "CumXP"))
+    print("  " + "-" * 108)
+
+    passes = 0
+    for pk in PANEL_ORDER:
+        s = results[pk]
+        r = s["ranks"]
+        ar = avg_active_rank(s)
+        p = PERSONAS[pk]
+        lo, hi = PANEL_TARGET_BANDS[pk]
+        ok = "PASS" if lo <= ar <= hi else "FAIL"
+        if ok == "PASS":
+            passes += 1
+        print(row.format(
+            p.name[:42],
+            r["chest"], r["back"], r["legs"],
+            r["shoulders"], r["arms"], r["core"],
+            s["character_level"], ar, f"{lo}-{hi}", ok,
+            f"{s['cumulative_xp']:,}"))
+
+    print()
+    print(f"  Verdict: {passes}/{len(PANEL_ORDER)} PASS")
+
+    sa = avg_active_rank(results["smurf"])
+    ba = avg_active_rank(results["beginner"])
+    fi = avg_active_rank(results["female_intermediate"])
+    fb = avg_active_rank(results["female_beginner"])
+    di = avg_active_rank(results["diego"])
+    print(f"  Anti-cheese: Smurf {sa:.1f} vs TrueBeg {ba:.1f}: {'OK' if sa <= ba else 'FAIL'}")
+    print(f"  Female ordering: FBeg {fb:.1f} < FInt {fi:.1f} < Diego {di:.1f}: "
+          f"{'OK' if fb < fi < di else 'FAIL'}")
+    return results, passes
 
 
-def print_vitality_trajectory(name: str, snapshots: list[dict], parts: list[str]) -> None:
-    print(f"\n--- VITALITY TRAJECTORY ({name}) ---")
-    header = f"{'Wk':>4} " + ' '.join(f"{bp[:4]:>6}" for bp in parts) + "   note"
-    print(header)
-    print('-' * len(header))
-    sample_weeks = list(range(1, len(snapshots) + 1, max(1, len(snapshots) // 30)))
-    if snapshots:
-        sample_weeks.append(len(snapshots))
-    for w in sorted(set(sample_weeks)):
-        snap = snapshots[w - 1]
-        vits = ' '.join(f"{int(snap['vitality'][bp] * 100):>5}%" for bp in parts)
-        marker = ' (layoff)' if snap['is_layoff'] else ''
-        print(f"{w:>4} {vits}{marker}")
-
-
-def print_xp_curve_summary() -> None:
-    print("\n=== RANK XP CURVE (cumulative XP needed to reach rank N) ===")
-    samples = [2, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 99]
+def print_xp_curve_summary():
+    print()
+    print("=== Phase 29 v2 RANK XP CURVE (Refinement #6 piecewise) ===")
+    samples = [2, 5, 10, 15, 20, 21, 30, 40, 50, 60, 70, 80, 90, 99]
     print(f"{'Rank':>5}  {'XP cum':>14}  {'XP delta':>14}")
     prev = 0
     for n in samples:
@@ -800,1006 +1712,40 @@ def print_xp_curve_summary() -> None:
 
 
 # ============================================================================
-# Phase 24d — Calibration archetypes (6 profiles × 12 weeks)
+# CLI
 # ============================================================================
-#
-# CONSISTENCY archetypes above (beginner / intermediate / advanced /
-# stagnant_lifter / comeback_kid / vacationer) validate detraining + the
-# strength_mult anti-stagnation invariant over a 5-year horizon. They also
-# back the fixture replay in `test/fixtures/generate_rpg_fixtures.py` — so
-# their shape MUST NOT CHANGE.
-#
-# CALIBRATION archetypes here validate Phase 24's pass criteria
-# (docs/PROJECT.md §3 → Phase 24d) — does the formula produce sensible
-# 12-week progression curves across the realistic user spectrum?
-#
-# Six archetypes per the spec table:
-#   beginner_24d              — light starting weights, progressive overload
-#   intermediate_compound     — 5×5 T2/T3 mix
-#   advanced_powerlifter      — heavy low-rep T2 near 90% 1RM
-#   hypertrophy_bodybuilder   — 5-6×/wk high-volume T3+T5 isolation-heavy
-#   bodyweight_only           — T2/T3 bodyweight curated set (uses 00056 load)
-#   machine_only              — T4/T5 machine-only
-#
-# Design choices:
-#   * Each calibration archetype carries its own per-day template list
-#     (`day_templates: dict[str, list[tuple[str, int, int]]]`). The classic
-#     `DAY_TEMPLATES` / `WEEK_SCHEDULES` pair is fine for the homogeneous
-#     consistency archetypes but the calibration set is intentionally
-#     heterogeneous (a powerlifter does NOT do the bodybuilder's day) so
-#     each archetype self-describes.
-#   * Exercise IDs in calibration day templates are REAL DEFAULT SLUGS
-#     (`barbell_bench_press`, `pull_up`, etc.) — not short aliases. This
-#     keeps the data closer to production semantics + lets
-#     `uses_bodyweight_load` resolve against the canonical 20-slug curation
-#     set without an alias hop. The simulator's existing alias lookup is
-#     extended below (`SIM_ALIAS_TO_DEFAULT_SLUG`) with identity entries so
-#     real slugs flow through the same `difficulty_mult_for_alias()` path.
-#   * Per-archetype progression rate per the spec: ~2.5 kg/wk compound,
-#     ~1 kg/wk isolation for the beginner; ~1 kg/wk compound for
-#     intermediate; ~0.5 kg/wk for advanced powerlifter; modest progression
-#     for hypertrophy bodybuilder; bodyweight progression via added reps
-#     (modeled here as bodyweight_kg fixed + entered_weight increment to
-#     proxy weighted-vest progression, since the simulator's weekly cap is
-#     per-set not per-rep). Machine-only progression is on entered weight.
-#   * The existing `simulate()` function uses a SHARED `DAY_TEMPLATES` +
-#     `WEEK_SCHEDULES` lookup. Calibration uses a parallel function
-#     `simulate_calibration()` that consumes the archetype's own templates
-#     + schedule. Two functions, one shared per-set / per-week / vitality
-#     core — keeps the calibration path additive (zero blast radius on
-#     fixture replay).
 
-# Identity entries so real default slugs flow through `difficulty_mult_for_alias()`
-# (which looks up via SIM_ALIAS_TO_DEFAULT_SLUG). Without these, real slugs
-# would fall through to the 1.0 default. Listed alphabetically by source
-# archetype usage; comment lists the difficulty_mult value resolved via
-# DIFFICULTY_MULT_BY_SLUG to make the table easy to audit at a glance.
-_CALIBRATION_REAL_SLUG_IDENTITY = {
-    # Already in SIM_ALIAS_TO_DEFAULT_SLUG via alias (skip): barbell_bench_press,
-    # incline_barbell_bench_press, overhead_press, lateral_raise, tricep_pushdown,
-    # barbell_bent_over_row, lat_pulldown, pull_up, barbell_curl, barbell_squat,
-    # deadlift, leg_press, walking_lunges, plank, leg_raise.
-    'archer_push_up':           'archer_push_up',           # 1.21 (T2 bodyweight)
-    'cable_crossover':          'cable_crossover',          # 0.94 (T4)
-    'cable_curl':               'cable_curl',               # 0.87 (T5)
-    'cable_lateral_raise':      'cable_lateral_raise',      # 0.89 (T5)
-    'calf_raise':               'calf_raise',               # 0.85 (T5)
-    'chin_up':                  'chin_up',                  # 1.19 (T2 bodyweight)
-    'close_grip_push_up':       'close_grip_push_up',       # 1.11 (T3 bodyweight)
-    'decline_push_up':          'decline_push_up',          # 1.11 (T3 bodyweight)
-    'diamond_push_up':          'diamond_push_up',          # 1.11 (T3 bodyweight)
-    'dips':                     'dips',                     # 1.19 (T2 bodyweight)
-    'dumbbell_curl':            'dumbbell_curl',            # 0.87 (T5)
-    'dumbbell_fly':             'dumbbell_fly',             # 0.89 (T5)
-    'hammer_curl':              'hammer_curl',              # 0.87 (T5)
-    'hanging_leg_raise':        'hanging_leg_raise',        # 1.09 (T3 bodyweight)
-    'hip_thrust':               'hip_thrust',               # 1.07 (T3)
-    'leg_abductor':             'leg_abductor',             # 0.85 (T5)
-    'leg_adductor':             'leg_adductor',             # 0.85 (T5)
-    'leg_curl':                 'leg_curl',                 # 0.85 (T5)
-    'leg_extension':            'leg_extension',            # 0.85 (T5)
-    'machine_chest_press':      'machine_chest_press',      # 0.94 (T4)
-    'machine_row':              'machine_row',              # 0.94 (T4)
-    'machine_shoulder_press':   'machine_shoulder_press',   # 0.94 (T4)
-    'pendlay_row':              'pendlay_row',              # 1.19 (T2)
-    'pistol_squat':             'pistol_squat',             # 1.17 (T2 bodyweight)
-    'push_up':                  'push_up',                  # 1.11 (T3 bodyweight)
-    'romanian_deadlift':        'romanian_deadlift',        # 1.09 (T3)
-    'wide_push_up':             'wide_push_up',             # 1.11 (T3 bodyweight)
-}
-SIM_ALIAS_TO_DEFAULT_SLUG.update(_CALIBRATION_REAL_SLUG_IDENTITY)
+def main():
+    parser = argparse.ArgumentParser(
+        description="RepSaga Phase 29 v2 + 29.6 LOCKED XP simulator")
+    parser.add_argument("--weeks", type=int, default=12,
+                        help="Number of weeks to simulate (default 12)")
+    parser.add_argument("--legacy", action="store_true",
+                        help="Run legacy Phase 24c Archetype simulation instead "
+                             "of the 13-persona panel")
+    parser.add_argument("--xp-curve", action="store_true",
+                        help="Print piecewise rank XP curve summary")
+    args = parser.parse_args()
 
+    if args.xp_curve:
+        print_xp_curve_summary()
+        return
 
-# Body-part attribution for the real default slugs used by calibration
-# archetypes. Authoritative source for every split is the production
-# migration's `xp_attribution` jsonb column:
-#
-#   * `supabase/migrations/00040_rpg_system_v1.sql` (lines 1762-1925) for
-#     the original 150 default exercises.
-#   * `supabase/migrations/00055_phase24b_new_default_exercises.sql` for the
-#     50 Phase-24b additions (`pistol_squat`, `archer_push_up`, etc.).
-#
-# This dict MUST stay byte-equivalent to the migration's jsonb payloads for
-# the slugs it lists — calibration is meant to reflect production XP
-# attribution, not a synthetic proxy. The Phase 24d-2 audit (May 2026) caught
-# 21 slugs where the calibration map either was missing entirely (silent
-# zero-XP bug — six slugs) or had drifted from the migration (15 slugs).
-# All 21 corrected below.
-#
-# Lookup order: `_calibration_attribution()` consults this map FIRST so
-# real-slug splits never fall through to the alias-based `ATTRIBUTION` dict
-# (which is keyed by Python-sim aliases like `pullup`, `squat`, `row` and
-# does not resolve real slugs like `pull_up`, `barbell_squat`,
-# `barbell_bent_over_row`). Mutating `ATTRIBUTION` itself would change the
-# fixture-replay surface — calibration adds the fix here so blast radius is
-# zero for `test/fixtures/generate_rpg_fixtures.py`.
-_CALIBRATION_ATTRIBUTION = {
-    # Push (free weight) — 00040 lines 1772-1790
-    'barbell_bench_press':         {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.10},
-    'incline_barbell_bench_press': {'chest': 0.60, 'shoulders': 0.30, 'arms': 0.10},
-    'overhead_press':              {'shoulders': 0.60, 'arms': 0.20, 'core': 0.20},
-    # Push (machine / cable) — 00040 lines 1780-1798
-    'machine_chest_press':         {'chest': 0.75, 'shoulders': 0.15, 'arms': 0.10},
-    'machine_shoulder_press':      {'shoulders': 0.70, 'arms': 0.20, 'core': 0.10},
-    'cable_crossover':             {'chest': 0.85, 'shoulders': 0.10, 'arms': 0.05},
-    # Push (bodyweight push-up family) — 00040 lines 1784-1816
-    'push_up':                     {'chest': 0.65, 'shoulders': 0.20, 'arms': 0.10, 'core': 0.05},
-    'wide_push_up':                {'chest': 0.75, 'shoulders': 0.15, 'arms': 0.05, 'core': 0.05},
-    'close_grip_push_up':          {'arms': 0.50, 'chest': 0.40, 'shoulders': 0.05, 'core': 0.05},
-    'decline_push_up':             {'chest': 0.70, 'shoulders': 0.20, 'arms': 0.05, 'core': 0.05},
-    'diamond_push_up':             {'chest': 0.50, 'arms': 0.40, 'shoulders': 0.05, 'core': 0.05},
-    # Push (Phase 24b) — 00055 line 213
-    'archer_push_up':              {'chest': 0.55, 'arms': 0.25, 'shoulders': 0.15, 'core': 0.05},
-    # Push (dip — T2 bodyweight) — 00040 line 1818
-    'dips':                        {'chest': 0.45, 'arms': 0.40, 'shoulders': 0.15},
-    # Pull (free weight) — 00040 lines 1821-1822, 1844
-    'barbell_bent_over_row':       {'back': 0.70, 'arms': 0.20, 'core': 0.10},
-    'pendlay_row':                 {'back': 0.70, 'arms': 0.20, 'core': 0.10},
-    'barbell_curl':                {'arms': 0.90, 'back': 0.10},
-    # Pull (machine / cable) — 00040 lines 1828, 1831, 1850
-    'machine_row':                 {'back': 0.75, 'arms': 0.20, 'core': 0.05},
-    'lat_pulldown':                {'back': 0.75, 'arms': 0.20, 'core': 0.05},
-    'cable_curl':                  {'arms': 0.90, 'back': 0.10},
-    # Pull (bodyweight) — 00040 lines 1834-1835
-    'pull_up':                     {'back': 0.65, 'arms': 0.25, 'core': 0.10},
-    'chin_up':                     {'back': 0.55, 'arms': 0.35, 'core': 0.10},
-    # Legs (free weight / hip hinge) — 00040 lines 1860, 1869, 1871
-    'barbell_squat':               {'legs': 0.80, 'core': 0.10, 'back': 0.10},
-    'romanian_deadlift':           {'legs': 0.55, 'back': 0.35, 'core': 0.10},
-    'hip_thrust':                  {'legs': 0.85, 'core': 0.15},
-    # Legs (bodyweight) — 00040 line 1878 + 00055 line 201
-    'walking_lunges':              {'legs': 0.90, 'core': 0.10},
-    'pistol_squat':                {'legs': 0.80, 'core': 0.20},
-    # Legs (machine isolation) — 00040 lines 1885-1891
-    'leg_extension':               {'legs': 1.00},
-    'leg_curl':                    {'legs': 1.00},
-    'leg_abductor':                {'legs': 1.00},
-    'leg_adductor':                {'legs': 1.00},
-    'calf_raise':                  {'legs': 1.00},
-    # Arms (cable / isolation) — 00040 lines 1846-1850
-    'dumbbell_curl':               {'arms': 0.90, 'back': 0.10},
-    'hammer_curl':                 {'arms': 0.90, 'back': 0.10},
-    # Shoulders (cable / isolation) — 00040 line 1798
-    'cable_lateral_raise':         {'shoulders': 0.85, 'arms': 0.10, 'core': 0.05},
-    # Chest (isolation) — 00040 line 1778
-    'dumbbell_fly':                {'chest': 0.85, 'shoulders': 0.10, 'arms': 0.05},
-    # Core (bodyweight) — 00040 line 1901
-    'hanging_leg_raise':           {'core': 0.85, 'arms': 0.10, 'back': 0.05},
-}
+    if args.legacy:
+        for key in ['beginner', 'intermediate', 'advanced',
+                    'stagnant_lifter', 'comeback_kid', 'vacationer']:
+            arch = ARCHETYPES[key]
+            snaps = simulate(arch, args.weeks)
+            final = snaps[-1]
+            r = final['ranks']
+            print(f"  {key:<20} wk{args.weeks}: lvl={final['character_level']} "
+                  f"ranks=Ch{r['chest']} Bk{r['back']} Lg{r['legs']} "
+                  f"Sh{r['shoulders']} Ar{r['arms']} Co{r['core']} "
+                  f"cum={sum(final['total_xp'].values()):,}")
+        return
 
+    print_persona_panel(weeks=args.weeks)
 
-def _calibration_attribution(exercise: str) -> dict[str, float]:
-    """Resolves attribution for a calibration archetype's exercise.
-
-    Lookup order: `_CALIBRATION_ATTRIBUTION` (real-slug authoritative) →
-    `ATTRIBUTION` (alias-based, pre-Phase-24a synthetic). Fixture-replay
-    parity REQUIRES that we never mutate the global `ATTRIBUTION` dict —
-    `test/fixtures/generate_rpg_fixtures.py` iterates it to produce the
-    `attribution` test cases, so adding entries would change the fixture
-    surface and fail the byte-identical regen check.
-    """
-    if exercise in _CALIBRATION_ATTRIBUTION:
-        return _CALIBRATION_ATTRIBUTION[exercise]
-    return ATTRIBUTION.get(exercise, {})
-
-
-@dataclass
-class CalibrationArchetype:
-    """A calibration archetype self-describes its sessions per week, day
-    templates (per session label), schedule (ordered list of session labels),
-    starting weights, progression strategy, and bodyweight.
-
-    Distinct from `Archetype` so the existing fixture replay's archetype
-    consumers don't accidentally pick these up. The two structures share
-    the simulate-set internals (`compute_set_xp`) — calibration just brings
-    its own scheduling shape.
-    """
-    name: str
-    description: str
-    sessions_per_week: int
-    day_templates: dict[str, list[tuple[str, int, int]]]
-    schedule: list[str]
-    starting_weights: dict[str, float]
-    weekly_increment: dict[str, float]  # absolute kg/wk per exercise (clean per-spec rates)
-    bodyweight_kg: float = 75.0
-
-
-# Per-spec weekly increments:
-#   * beginner_24d:           +2.5 kg/wk compounds, +1.0 kg/wk isolation
-#   * intermediate_compound:  +1.0 kg/wk compounds, +0.5 kg/wk accessory
-#   * advanced_powerlifter:   +0.5 kg/wk T2, +0.25 kg/wk accessory
-#   * hypertrophy_bodybuilder: +0.5 kg/wk compounds, +0.25 kg/wk isolation
-#   * bodyweight_only:        added load via weighted-vest proxy (+0.5 kg/wk)
-#   * machine_only:           +1.0 kg/wk on machines
-
-CALIBRATION_ARCHETYPES: dict[str, CalibrationArchetype] = {
-    'beginner_24d': CalibrationArchetype(
-        name='beginner_24d',
-        description='3×/wk, light starting weights, full-body progressive overload (~2.5 kg/wk compound, ~1 kg/wk isolation).',
-        sessions_per_week=3,
-        day_templates={
-            'full_body_a': [
-                ('barbell_squat', 3, 5),
-                ('barbell_bench_press', 3, 5),
-                ('barbell_bent_over_row', 3, 5),
-                ('barbell_curl', 2, 10),
-            ],
-            'full_body_b': [
-                ('deadlift', 1, 5),
-                ('overhead_press', 3, 5),
-                ('lat_pulldown', 3, 8),
-                ('tricep_pushdown', 2, 10),
-            ],
-            'full_body_c': [
-                ('barbell_squat', 3, 5),
-                ('barbell_bench_press', 3, 5),
-                ('barbell_bent_over_row', 3, 5),
-                ('lateral_raise', 2, 12),
-            ],
-        },
-        schedule=['full_body_a', 'full_body_b', 'full_body_c'],
-        starting_weights={
-            'barbell_squat': 40.0,
-            'barbell_bench_press': 30.0,
-            'barbell_bent_over_row': 30.0,
-            'deadlift': 50.0,
-            'overhead_press': 20.0,
-            'lat_pulldown': 30.0,
-            'barbell_curl': 10.0,
-            'tricep_pushdown': 15.0,
-            'lateral_raise': 5.0,
-        },
-        weekly_increment={
-            'barbell_squat': 2.5,
-            'barbell_bench_press': 2.5,
-            'barbell_bent_over_row': 2.5,
-            'deadlift': 2.5,
-            'overhead_press': 2.5,
-            'lat_pulldown': 2.5,
-            'barbell_curl': 1.0,
-            'tricep_pushdown': 1.0,
-            'lateral_raise': 1.0,
-        },
-    ),
-
-    'intermediate_compound': CalibrationArchetype(
-        name='intermediate_compound',
-        description='4×/wk, 5×5 mostly T2/T3 compounds. 5 sets × 5 reps at ~75% 1RM. Slow progression (~1 kg/wk).',
-        sessions_per_week=4,
-        day_templates={
-            'upper_a': [
-                ('barbell_bench_press', 5, 5),
-                ('pendlay_row', 5, 5),
-                ('overhead_press', 3, 5),
-            ],
-            'lower_a': [
-                ('barbell_squat', 5, 5),
-                ('romanian_deadlift', 3, 5),
-                ('hip_thrust', 3, 8),
-            ],
-            'upper_b': [
-                ('incline_barbell_bench_press', 5, 5),
-                ('barbell_bent_over_row', 5, 5),
-                ('overhead_press', 3, 5),
-            ],
-            'lower_b': [
-                ('deadlift', 3, 5),
-                ('barbell_squat', 3, 5),
-                ('romanian_deadlift', 3, 8),
-            ],
-        },
-        schedule=['upper_a', 'lower_a', 'upper_b', 'lower_b'],
-        starting_weights={
-            'barbell_bench_press': 80.0,
-            'incline_barbell_bench_press': 70.0,
-            'pendlay_row': 70.0,
-            'barbell_bent_over_row': 80.0,
-            'overhead_press': 45.0,
-            'barbell_squat': 110.0,
-            'deadlift': 140.0,
-            'romanian_deadlift': 100.0,
-            'hip_thrust': 100.0,
-        },
-        weekly_increment={
-            'barbell_bench_press': 1.0,
-            'incline_barbell_bench_press': 1.0,
-            'pendlay_row': 1.0,
-            'barbell_bent_over_row': 1.0,
-            'overhead_press': 0.5,
-            'barbell_squat': 1.0,
-            'deadlift': 1.0,
-            'romanian_deadlift': 1.0,
-            'hip_thrust': 1.0,
-        },
-    ),
-
-    'advanced_powerlifter': CalibrationArchetype(
-        name='advanced_powerlifter',
-        description='3×/wk, low reps (1-5) heavy T2 lifts at 85-92% 1RM. Tests strength_mult floor near peak.',
-        sessions_per_week=3,
-        day_templates={
-            'squat_day': [
-                ('barbell_squat', 5, 3),
-                ('barbell_squat', 1, 1),     # top single
-                ('romanian_deadlift', 3, 5),
-                ('hanging_leg_raise', 3, 8),
-            ],
-            'bench_day': [
-                ('barbell_bench_press', 5, 3),
-                ('barbell_bench_press', 1, 1),  # top single
-                ('overhead_press', 3, 3),
-                ('barbell_bent_over_row', 3, 5),
-            ],
-            'deadlift_day': [
-                ('deadlift', 5, 2),
-                ('deadlift', 1, 1),          # top single
-                ('barbell_squat', 3, 3),     # backoff
-                ('pendlay_row', 3, 5),
-            ],
-        },
-        schedule=['squat_day', 'bench_day', 'deadlift_day'],
-        starting_weights={
-            'barbell_squat': 200.0,
-            'barbell_bench_press': 140.0,
-            'deadlift': 240.0,
-            'overhead_press': 80.0,
-            'romanian_deadlift': 180.0,
-            'barbell_bent_over_row': 120.0,
-            'pendlay_row': 110.0,
-            'hanging_leg_raise': 0.0,
-        },
-        weekly_increment={
-            'barbell_squat': 0.5,
-            'barbell_bench_press': 0.5,
-            'deadlift': 0.5,
-            'overhead_press': 0.25,
-            'romanian_deadlift': 0.5,
-            'barbell_bent_over_row': 0.25,
-            'pendlay_row': 0.25,
-            'hanging_leg_raise': 0.0,
-        },
-    ),
-
-    'hypertrophy_bodybuilder': CalibrationArchetype(
-        name='hypertrophy_bodybuilder',
-        description='5×/wk high-volume T3+T5 mix, isolation-heavy. Tests cap_mult bites + novelty diminishes.',
-        sessions_per_week=5,
-        day_templates={
-            'chest_tris': [
-                ('barbell_bench_press', 4, 10),
-                ('incline_barbell_bench_press', 4, 10),
-                ('cable_crossover', 4, 12),
-                ('dumbbell_fly', 3, 12),
-                ('tricep_pushdown', 4, 12),
-            ],
-            'back_bis': [
-                ('lat_pulldown', 4, 10),
-                ('barbell_bent_over_row', 4, 10),
-                ('cable_curl', 4, 12),
-                ('dumbbell_curl', 3, 12),
-                ('hammer_curl', 3, 12),
-            ],
-            'legs': [
-                ('barbell_squat', 4, 10),
-                ('romanian_deadlift', 4, 10),
-                ('hip_thrust', 4, 12),
-                ('leg_extension', 4, 12),
-                ('leg_curl', 4, 12),
-                ('calf_raise', 4, 15),
-            ],
-            'shoulders': [
-                ('overhead_press', 4, 8),
-                ('lateral_raise', 4, 12),
-                ('cable_lateral_raise', 4, 15),
-                ('hanging_leg_raise', 3, 12),
-            ],
-            'arms': [
-                ('cable_curl', 4, 12),
-                ('hammer_curl', 4, 12),
-                ('tricep_pushdown', 4, 12),
-                ('dumbbell_curl', 3, 15),
-            ],
-        },
-        schedule=['chest_tris', 'back_bis', 'legs', 'shoulders', 'arms'],
-        starting_weights={
-            'barbell_bench_press': 90.0,
-            'incline_barbell_bench_press': 70.0,
-            'cable_crossover': 25.0,
-            'dumbbell_fly': 14.0,
-            'tricep_pushdown': 35.0,
-            'lat_pulldown': 70.0,
-            'barbell_bent_over_row': 80.0,
-            'cable_curl': 25.0,
-            'dumbbell_curl': 14.0,
-            'hammer_curl': 14.0,
-            'barbell_squat': 120.0,
-            'romanian_deadlift': 100.0,
-            'hip_thrust': 120.0,
-            'leg_extension': 60.0,
-            'leg_curl': 50.0,
-            'calf_raise': 60.0,
-            'overhead_press': 50.0,
-            'lateral_raise': 10.0,
-            'cable_lateral_raise': 10.0,
-            'hanging_leg_raise': 0.0,
-        },
-        weekly_increment={
-            'barbell_bench_press': 0.5,
-            'incline_barbell_bench_press': 0.5,
-            'cable_crossover': 0.25,
-            'dumbbell_fly': 0.25,
-            'tricep_pushdown': 0.25,
-            'lat_pulldown': 0.5,
-            'barbell_bent_over_row': 0.5,
-            'cable_curl': 0.25,
-            'dumbbell_curl': 0.25,
-            'hammer_curl': 0.25,
-            'barbell_squat': 0.5,
-            'romanian_deadlift': 0.5,
-            'hip_thrust': 0.5,
-            'leg_extension': 0.25,
-            'leg_curl': 0.25,
-            'calf_raise': 0.25,
-            'overhead_press': 0.25,
-            'lateral_raise': 0.25,
-            'cable_lateral_raise': 0.25,
-            'hanging_leg_raise': 0.0,
-        },
-    ),
-
-    'bodyweight_only': CalibrationArchetype(
-        name='bodyweight_only',
-        description='4×/wk T2/T3 bodyweight only. Tests bodyweight load (00056) + tier_mult.',
-        sessions_per_week=4,
-        day_templates={
-            'pull_day': [
-                ('pull_up', 4, 8),
-                ('chin_up', 3, 8),
-                ('archer_push_up', 3, 6),
-                ('hanging_leg_raise', 3, 10),
-            ],
-            'push_day': [
-                ('push_up', 4, 12),
-                ('decline_push_up', 3, 10),
-                ('diamond_push_up', 3, 10),
-                ('dips', 3, 8),
-            ],
-            'legs_day': [
-                ('pistol_squat', 4, 6),
-                ('walking_lunges', 3, 10),
-                ('hanging_leg_raise', 3, 10),
-            ],
-            'mixed_day': [
-                ('pull_up', 3, 8),
-                ('close_grip_push_up', 3, 12),
-                ('wide_push_up', 3, 12),
-                ('dips', 3, 8),
-                ('pistol_squat', 3, 6),
-            ],
-        },
-        schedule=['pull_day', 'push_day', 'legs_day', 'mixed_day'],
-        # Added load (weighted vest / belt) — many bodyweight athletes
-        # progress by adding mass. Starts at 0 across the board so the
-        # uses_bodyweight_load path is the dominant XP driver; weekly
-        # increment models adding load over time (proxy for adding reps
-        # since the simulator's reps are fixed per template).
-        starting_weights={
-            'pull_up': 0.0, 'chin_up': 0.0, 'archer_push_up': 0.0,
-            'hanging_leg_raise': 0.0, 'push_up': 0.0, 'decline_push_up': 0.0,
-            'diamond_push_up': 0.0, 'dips': 0.0, 'pistol_squat': 0.0,
-            'walking_lunges': 0.0, 'close_grip_push_up': 0.0, 'wide_push_up': 0.0,
-        },
-        weekly_increment={
-            'pull_up': 0.5, 'chin_up': 0.5, 'archer_push_up': 0.0,
-            'hanging_leg_raise': 0.0, 'push_up': 0.5, 'decline_push_up': 0.5,
-            'diamond_push_up': 0.5, 'dips': 0.5, 'pistol_squat': 0.0,
-            'walking_lunges': 0.0, 'close_grip_push_up': 0.5, 'wide_push_up': 0.5,
-        },
-        bodyweight_kg=75.0,
-    ),
-
-    'machine_only': CalibrationArchetype(
-        name='machine_only',
-        description='4×/wk T4/T5 machine work only. Tests T4/T5 multipliers — slower but feels productive.',
-        sessions_per_week=4,
-        day_templates={
-            'push_day': [
-                ('machine_chest_press', 4, 10),
-                ('machine_shoulder_press', 3, 10),
-                ('cable_lateral_raise', 4, 12),
-                ('tricep_pushdown', 4, 12),
-            ],
-            'pull_day': [
-                ('lat_pulldown', 4, 10),
-                ('machine_row', 4, 10),
-                ('cable_curl', 4, 12),
-            ],
-            'legs_day': [
-                ('leg_press', 4, 10),
-                ('leg_extension', 4, 12),
-                ('leg_curl', 4, 12),
-                ('leg_abductor', 3, 15),
-                ('leg_adductor', 3, 15),
-                ('calf_raise', 4, 15),
-            ],
-            'mixed_day': [
-                ('machine_chest_press', 3, 12),
-                ('machine_row', 3, 12),
-                ('lat_pulldown', 3, 10),
-                ('tricep_pushdown', 3, 12),
-                ('cable_curl', 3, 12),
-            ],
-        },
-        schedule=['push_day', 'pull_day', 'legs_day', 'mixed_day'],
-        starting_weights={
-            'machine_chest_press': 70.0,
-            'machine_shoulder_press': 50.0,
-            'cable_lateral_raise': 12.0,
-            'tricep_pushdown': 40.0,
-            'lat_pulldown': 70.0,
-            'machine_row': 70.0,
-            'cable_curl': 25.0,
-            'leg_press': 150.0,
-            'leg_extension': 60.0,
-            'leg_curl': 50.0,
-            'leg_abductor': 50.0,
-            'leg_adductor': 50.0,
-            'calf_raise': 80.0,
-        },
-        weekly_increment={
-            'machine_chest_press': 1.0,
-            'machine_shoulder_press': 0.5,
-            'cable_lateral_raise': 0.5,
-            'tricep_pushdown': 0.5,
-            'lat_pulldown': 1.0,
-            'machine_row': 1.0,
-            'cable_curl': 0.5,
-            'leg_press': 2.0,
-            'leg_extension': 0.5,
-            'leg_curl': 0.5,
-            'leg_abductor': 0.5,
-            'leg_adductor': 0.5,
-            'calf_raise': 0.5,
-        },
-    ),
-}
-
-
-def simulate_calibration(archetype: CalibrationArchetype, weeks: int = 12) -> list[dict]:
-    """Calibration-specific simulation loop.
-
-    Mirrors `simulate()` byte-for-byte at the per-set / vitality / rank
-    layer (it calls the same `compute_set_xp` + `update_vitality` helpers)
-    but consumes per-archetype day templates + schedule + absolute weekly
-    increments (not the % progression rates used by the consistency
-    archetypes). The split is intentional: changing the progression
-    semantics here cannot accidentally drift the fixture replay.
-
-    Returns one snapshot per week, same shape as `simulate()` plus an
-    `xp_earned_this_week` field (total XP awarded in just this week — the
-    consistency reporter derives this manually but the calibration
-    week-by-week report needs it per-row).
-
-    Phase 24d propagation: the iter-3 calibration sign-off has been baked
-    into the canonical module constants (`VOLUME_EXPONENT`,
-    `WEEKLY_CAP_SETS`, `OVER_CAP_MULTIPLIER`) and into per-slug
-    `DIFFICULTY_MULT_BY_SLUG` values (28 T4 slugs dropped by 0.05). The
-    calibration archetypes now consume the same canonical math as
-    production — no overrides, no per-slug deltas, no scaffolding — and
-    are kept around so future calibration phases can rerun them against
-    fresh tuning hypotheses without rebuilding the archetype set.
-    """
-    xp_pool = {p: 0.0 for p in BODY_PARTS}
-    weights = dict(archetype.starting_weights)
-    peak_loads: dict[str, float] = dict(archetype.starting_weights)
-    vit_ewma: dict[str, float] = {}
-    vit_peak: dict[str, float] = {}
-    snapshots: list[dict] = []
-    prev_total_xp = 0.0
-
-    for week in range(1, weeks + 1):
-        weekly_count: dict[str, float] = defaultdict(float)
-        weekly_volume_per_part: dict[str, float] = defaultdict(float)
-
-        for day in archetype.schedule:
-            novelty_count: dict[str, float] = defaultdict(float)
-            for exercise, n_sets, reps in archetype.day_templates[day]:
-                w = weights.get(exercise, 0.0)
-                distribution = _calibration_attribution(exercise)
-                diff_mult = difficulty_mult_for_alias(exercise)
-                # Calibration archetypes use REAL slugs (extended via
-                # identity entries in `_CALIBRATION_REAL_SLUG_IDENTITY`),
-                # so the resolved slug is the exercise itself for
-                # uses_bodyweight_load() lookup. Phase 24d propagation: the
-                # T4 -0.05 delta is now baked into DIFFICULTY_MULT_BY_SLUG
-                # itself, so `difficulty_mult_for_alias` returns the
-                # already-adjusted value — no per-call-site delta logic.
-                real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
-                for _ in range(n_sets):
-                    awarded, vol = compute_set_xp(
-                        exercise, w, reps, novelty_count, weekly_count, peak_loads,
-                        difficulty_mult=diff_mult,
-                        bodyweight_kg=archetype.bodyweight_kg,
-                        slug=real_slug,
-                    )
-                    for bp, xp in awarded.items():
-                        xp_pool[bp] += xp
-                    for bp, share in distribution.items():
-                        weekly_volume_per_part[bp] += vol * share
-
-        # Absolute weekly increments (not the % rate used by simulate()).
-        for ex, inc in archetype.weekly_increment.items():
-            if inc > 0:
-                weights[ex] = weights.get(ex, 0.0) + inc
-
-        for bp in ACTIVE_RANKS:
-            update_vitality(bp, weekly_volume_per_part.get(bp, 0.0), vit_ewma, vit_peak)
-
-        total_xp_now = sum(xp_pool.values())
-        ranks = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
-        snapshots.append({
-            'week': week,
-            'ranks': ranks,
-            'character_level': character_level(ranks),
-            'total_xp': {p: int(v) for p, v in xp_pool.items()},
-            'xp_earned_this_week': int(total_xp_now - prev_total_xp),
-            'cumulative_total_xp': int(total_xp_now),
-            'class': dominant_class(ranks),
-            'vitality': {p: vitality_pct(p, vit_ewma, vit_peak) for p in ACTIVE_RANKS},
-        })
-        prev_total_xp = total_xp_now
-
-    return snapshots
-
-
-def print_calibration_report(name: str, snapshots: list[dict]) -> None:
-    archetype = CALIBRATION_ARCHETYPES[name]
-    print(f"\n=== {name.upper()} ===")
-    print(archetype.description)
-    print(f"Sessions/week: {archetype.sessions_per_week}  |  Bodyweight: {archetype.bodyweight_kg} kg")
-    header = (
-        f"{'Wk':>3} {'Lvl':>3}  {'Chst':>4} {'Back':>4} {'Legs':>4} {'Shld':>4} {'Arms':>4} {'Core':>4}    "
-        f"{'XP/wk':>8}  {'TotalXP':>10}"
-    )
-    print(header)
-    print('-' * len(header))
-    for snap in snapshots:
-        r = snap['ranks']
-        print(
-            f"{snap['week']:>3} {snap['character_level']:>3}  "
-            f"{r['chest']:>4} {r['back']:>4} {r['legs']:>4} {r['shoulders']:>4} {r['arms']:>4} {r['core']:>4}    "
-            f"{snap['xp_earned_this_week']:>8,}  {snap['cumulative_total_xp']:>10,}"
-        )
-
-
-def calibration_assert_bodyweight_resolution() -> None:
-    """Sanity check: every exercise in the bodyweight_only archetype that
-    should consume bodyweight load actually does. Prints a one-line OK or
-    raises if curation is missing. Runs under `--calibration`."""
-    archetype = CALIBRATION_ARCHETYPES['bodyweight_only']
-    used_slugs: set[str] = set()
-    for day in archetype.day_templates.values():
-        for exercise, _, _ in day:
-            used_slugs.add(exercise)
-    expected_bw = {
-        'pull_up', 'chin_up', 'archer_push_up', 'hanging_leg_raise',
-        'push_up', 'decline_push_up', 'diamond_push_up', 'dips',
-        'pistol_squat', 'walking_lunges', 'close_grip_push_up',
-        'wide_push_up',
-    }
-    missing = [s for s in expected_bw if s in used_slugs and not uses_bodyweight_load(s)]
-    if missing:
-        raise AssertionError(
-            f"bodyweight_only archetype uses slugs that are NOT in "
-            f"USES_BODYWEIGHT_LOAD_BY_SLUG: {missing}. Either the slug is "
-            f"miscurated or the archetype's exercise list is wrong."
-        )
-    print(
-        f"[OK] bodyweight_only resolution: {len(used_slugs)} slugs, "
-        f"{sum(1 for s in used_slugs if uses_bodyweight_load(s))} consume bodyweight "
-        f"({archetype.bodyweight_kg} kg)."
-    )
-
-
-def write_baseline_doc(path: str) -> None:
-    """Generates `docs/xp-balance-baseline.md` — the launch baseline snapshot.
-
-    Pure side-effect; consumed by Phase 24d-2 (pass-criteria analysis).
-    """
-    # Run all 6 calibration archetypes for 12 weeks.
-    all_snaps: dict[str, list[dict]] = {
-        name: simulate_calibration(arch, weeks=12)
-        for name, arch in CALIBRATION_ARCHETYPES.items()
-    }
-
-    lines: list[str] = []
-    lines.append('# XP Balance Baseline — Phase 24d')
-    lines.append('')
-    lines.append(
-        '> Snapshot of the XP formula constants + per-slug `difficulty_mult` '
-        '+ `uses_bodyweight_load` curation as the **launch baseline**. '
-        'Generated by Phase 24d (`python tasks/rpg-xp-simulation.py --baseline-doc`). '
-        'Future tuning is a NEW PHASE.'
-    )
-    lines.append('>')
-    lines.append(
-        '> Six-archetype × 12-week simulation per `docs/PROJECT.md` §3 → '
-        'Phase 24d acceptance criteria. Pass-criteria analysis lives in '
-        'Task 24d-2; this file is the raw output the analysis reads.'
-    )
-    lines.append('')
-
-    # --- Constants snapshot ---
-    lines.append('## Constants snapshot')
-    lines.append('')
-    lines.append(
-        '> **Phase 24d propagation complete.** The iter-3 calibration sign-off '
-        'values are now canonical — `VOLUME_EXPONENT = 0.60`, '
-        '`WEEKLY_CAP_SETS = 15`, `OVER_CAP_MULTIPLIER = 0.3` — and a per-slug '
-        '`-0.05` delta has been baked into the 28 curated T4 slugs in '
-        '`exercises.difficulty_mult` (migration 00059). Dart + SQL + Python '
-        'sim + fixture all agree on the launch baseline; the 6 calibration '
-        'archetypes here exercise the same canonical math as production, no '
-        'overrides.'
-    )
-    lines.append('')
-    lines.append('| Constant | Value | Notes |')
-    lines.append('|---|---|---|')
-    rows = [
-        ('XP_BASE', XP_BASE, 'XP curve base'),
-        ('XP_GROWTH', XP_GROWTH, 'Per-rank multiplier'),
-        ('VOLUME_EXPONENT', VOLUME_EXPONENT,
-         'base_xp = volume_load^this (Phase 24d: 0.65 → 0.60)'),
-        ('NOVELTY_DENOMINATOR', NOVELTY_DENOMINATOR,
-         'novelty = exp(-cumulative/this) per session'),
-        ('WEEKLY_CAP_SETS', WEEKLY_CAP_SETS,
-         'Effective sets per body part before over-cap multiplier kicks in (Phase 24d: 20 → 15)'),
-        ('OVER_CAP_MULTIPLIER', OVER_CAP_MULTIPLIER,
-         'Multiplier applied beyond weekly cap (Phase 24d: 0.5 → 0.3)'),
-        ('STRENGTH_MULT_FLOOR', STRENGTH_MULT_FLOOR,
-         'Anti-stagnation floor for strength_mult'),
-        ('DIFFICULTY_MULT_FLOOR', DIFFICULTY_MULT_FLOOR,
-         'Per-exercise difficulty hard floor'),
-        ('DIFFICULTY_MULT_CEILING', DIFFICULTY_MULT_CEILING,
-         'Per-exercise difficulty hard ceiling'),
-        ('CHAR_LEVEL_DENOMINATOR', CHAR_LEVEL_DENOMINATOR,
-         'floor((Σ ranks − N) / this) + 1'),
-        ('ASCENDANT_BALANCE_THRESHOLD', ASCENDANT_BALANCE_THRESHOLD,
-         'Class threshold (balanced)'),
-        ('ASCENDANT_MIN_RANK', ASCENDANT_MIN_RANK,
-         'Min rank for Ascendant class'),
-        ('VITALITY_TAU_UP_WEEKS', VITALITY_TAU_UP_WEEKS,
-         'Vitality rise time constant'),
-        ('VITALITY_TAU_DOWN_WEEKS', VITALITY_TAU_DOWN_WEEKS,
-         'Vitality decay time constant'),
-        ('VITALITY_PEAK_PERMANENT', VITALITY_PEAK_PERMANENT,
-         'Peak never decays — saga inviolate'),
-    ]
-    for label, value, note in rows:
-        lines.append(f'| `{label}` | `{value}` | {note} |')
-    lines.append('')
-    lines.append('Intensity-by-reps table (lower reps = heavier load):')
-    lines.append('')
-    lines.append('| Reps ≥ | Intensity mult |')
-    lines.append('|---|---|')
-    for r, m in INTENSITY_BY_REPS:
-        lines.append(f'| {r} | {m} |')
-    lines.append('')
-
-    # --- Tier table ---
-    lines.append('## Tier table snapshot (framework §3)')
-    lines.append('')
-    lines.append('| Tier | Name | tier_mult | Defining characteristic |')
-    lines.append('|---|---|---|---|')
-    lines.append('| T1 | Olympic / ballistic | 1.25 | Triple extension, peak power, highest skill ceiling |')
-    lines.append('| T2 | Foundational compound (free weight, axial load) | 1.15 | Multi-joint, spine bears load, large stabilizer demand |')
-    lines.append('| T3 | Standard compound (free weight or supported) | 1.05 | Multi-joint, lower spinal load OR partial support |')
-    lines.append('| T4 | Machine compound / cable multi-joint | 0.90 | Fixed path, low stabilizer demand |')
-    lines.append('| T5 | Single-joint isolation | 0.85 | One articulation, minimal coordination |')
-    lines.append('')
-    lines.append(
-        'Composite: `difficulty_mult = clamp(tier_mult + min(secondary_count, 3) × 0.02, 0.85, 1.25)`. '
-        'Secondary bump = +0.02 per secondary, capped at +0.06 (i.e. first 3 secondaries count).'
-    )
-    lines.append('')
-
-    # --- difficulty_mult per slug (sourced from this file's DIFFICULTY_MULT_BY_SLUG) ---
-    lines.append('## difficulty_mult per slug')
-    lines.append('')
-    lines.append(
-        f'`{len(DIFFICULTY_MULT_BY_SLUG)}` curated slugs in the simulator\'s '
-        '`DIFFICULTY_MULT_BY_SLUG` mirror — sourced from '
-        '`supabase/migrations/00053_add_exercise_difficulty_mult.sql` (150 entries) '
-        'plus two Phase-24b additions (`archer_push_up`, `pistol_squat`) consumed '
-        'by the calibration `bodyweight_only` archetype. The remaining 47 Phase-24b '
-        'slugs in `00055_phase24b_new_default_exercises.sql` are not exercised by '
-        'the current archetype set; back-filling them is a follow-up sweep with '
-        'zero blast radius on fixture replay. User-created exercises and unmapped '
-        'slugs fall back to `1.0` (neutral) — matches SQL `COALESCE(..., 1.0)` and '
-        'the column DEFAULT.'
-    )
-    lines.append('')
-    lines.append('| Slug | difficulty_mult |')
-    lines.append('|---|---|')
-    for slug in sorted(DIFFICULTY_MULT_BY_SLUG.keys()):
-        lines.append(f'| `{slug}` | {DIFFICULTY_MULT_BY_SLUG[slug]} |')
-    lines.append('')
-
-    # --- uses_bodyweight_load per slug ---
-    lines.append('## uses_bodyweight_load per slug')
-    lines.append('')
-    lines.append(
-        f'`{len(USES_BODYWEIGHT_LOAD_BY_SLUG)}` curated slugs (sourced from '
-        '`supabase/migrations/00056_add_bodyweight_load_semantics.sql`). For these '
-        'slugs, `effective_load = entered_weight + bodyweight_kg`. All others use '
-        '`effective_load = entered_weight`.'
-    )
-    lines.append('')
-    lines.append('| Slug |')
-    lines.append('|---|')
-    for slug in sorted(USES_BODYWEIGHT_LOAD_BY_SLUG):
-        lines.append(f'| `{slug}` |')
-    lines.append('')
-
-    # --- Six-archetype summary table ---
-    lines.append('## Six-archetype results — week 12')
-    lines.append('')
-    lines.append(
-        '| Archetype | Sessions/wk | Bodyweight | Total XP | Char level | Max rank (body part) | Min rank (body part) |'
-    )
-    lines.append('|---|---|---|---|---|---|---|')
-    for name in CALIBRATION_ARCHETYPES.keys():
-        arch = CALIBRATION_ARCHETYPES[name]
-        wk12 = all_snaps[name][-1]
-        # Only consider ACTIVE_RANKS for max/min — cardio is structurally 1 in v1.
-        active = {bp: wk12['ranks'][bp] for bp in ACTIVE_RANKS}
-        max_bp = max(active, key=active.get)
-        min_bp = min(active, key=active.get)
-        total = wk12['cumulative_total_xp']
-        lines.append(
-            f'| `{name}` | {arch.sessions_per_week} | {arch.bodyweight_kg} kg | '
-            f'{total:,} | {wk12["character_level"]} | '
-            f'{active[max_bp]} ({max_bp}) | {active[min_bp]} ({min_bp}) |'
-        )
-    lines.append('')
-
-    # --- Per-archetype detail ---
-    lines.append('## Per-archetype detail')
-    lines.append('')
-    for name, arch in CALIBRATION_ARCHETYPES.items():
-        snaps = all_snaps[name]
-        lines.append(f'### {name}')
-        lines.append('')
-        lines.append(arch.description)
-        lines.append('')
-        lines.append(f'- Sessions/week: `{arch.sessions_per_week}`')
-        lines.append(f'- Schedule: `{arch.schedule}`')
-        lines.append(f'- Bodyweight: `{arch.bodyweight_kg}` kg')
-        lines.append('')
-        # Day-template summary.
-        lines.append('Day templates:')
-        lines.append('')
-        for day_name, template in arch.day_templates.items():
-            entries = ', '.join(f'{ex}×{n}×{r}' for ex, n, r in template)
-            lines.append(f'- `{day_name}` — {entries}')
-        lines.append('')
-        # Week-by-week.
-        lines.append('#### Week-by-week')
-        lines.append('')
-        lines.append('| Week | Char lvl | Chest | Back | Legs | Shld | Arms | Core | XP earned | Cumulative XP |')
-        lines.append('|---|---|---|---|---|---|---|---|---|---|')
-        for snap in snaps:
-            r = snap['ranks']
-            lines.append(
-                f'| {snap["week"]} | {snap["character_level"]} | '
-                f'{r["chest"]} | {r["back"]} | {r["legs"]} | {r["shoulders"]} | '
-                f'{r["arms"]} | {r["core"]} | {snap["xp_earned_this_week"]:,} | '
-                f'{snap["cumulative_total_xp"]:,} |'
-            )
-        lines.append('')
-        # Final state.
-        lines.append('#### Final state at week 12')
-        lines.append('')
-        wk12 = snaps[-1]
-        lines.append('| Body part | Total XP earned | Rank | Vitality % |')
-        lines.append('|---|---|---|---|')
-        for bp in BODY_PARTS:
-            xp = wk12['total_xp'][bp]
-            rank = wk12['ranks'][bp]
-            if bp in ACTIVE_RANKS:
-                vit = f'{int(wk12["vitality"][bp] * 100)}%'
-            else:
-                vit = 'n/a (cardio v2 deferred)'
-            lines.append(f'| {bp} | {xp:,} | {rank} | {vit} |')
-        lines.append('')
-        lines.append(f'- Class at week 12: `{wk12["class"]}`')
-        lines.append(f'- Total XP across all body parts: `{wk12["cumulative_total_xp"]:,}`')
-        lines.append('')
-
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(lines) + '\n')
-
-
-def run_calibration() -> None:
-    """Runs the 6 calibration archetypes × 12 weeks and prints reports.
-    Default behavior of the script (no `--calibration` flag) is unchanged.
-    """
-    print('RepSaga RPG XP Calibration Run — Phase 24d')
-    print('=' * 70)
-    print('Six archetypes × 12 weeks. See docs/xp-balance-baseline.md for the')
-    print('full baseline snapshot (constants + per-slug mults + raw weekly data).')
-    print()
-    calibration_assert_bodyweight_resolution()
-    for name, arch in CALIBRATION_ARCHETYPES.items():
-        snaps = simulate_calibration(arch, weeks=12)
-        print_calibration_report(name, snaps)
-    print('\n')
-    print('Done. Pass-criteria analysis is Task 24d-2 — this run produces')
-    print('the data; the next task reads and judges it.')
-
-
-# ============================================================================
-# Main
-# ============================================================================
 
 if __name__ == '__main__':
-    import sys
-
-    # Phase 24d: `--calibration` runs ONLY the 6 new calibration archetypes;
-    # `--baseline-doc [path]` (re)generates docs/xp-balance-baseline.md from
-    # the same 6-archetype 12-week run. Default behavior (no flag) is the
-    # original CONSISTENCY archetypes + detraining scenarios — unchanged.
-    if '--baseline-doc' in sys.argv:
-        # Optional path arg: --baseline-doc /custom/path.md
-        idx = sys.argv.index('--baseline-doc')
-        if idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith('--'):
-            out_path = sys.argv[idx + 1]
-        else:
-            out_path = 'docs/xp-balance-baseline.md'
-        write_baseline_doc(out_path)
-        print(f"Baseline doc written to {out_path}")
-        sys.exit(0)
-
-    if '--calibration' in sys.argv:
-        run_calibration()
-        sys.exit(0)
-
-    print("RepSaga RPG XP Simulation (with strength_mult + asymmetric Vitality)")
-    print("=" * 70)
-    print(f"XP curve: {XP_BASE} × {XP_GROWTH}^(n-1)")
-    print(f"Volume exp: {VOLUME_EXPONENT}  |  Novelty denom: {NOVELTY_DENOMINATOR}  |  Weekly cap: {WEEKLY_CAP_SETS} sets")
-    print(f"Strength_mult floor: {STRENGTH_MULT_FLOOR}")
-    print(f"Vitality tau_up: {VITALITY_TAU_UP_WEEKS}wk  |  tau_down: {VITALITY_TAU_DOWN_WEEKS}wk  |  peak permanent: {VITALITY_PEAK_PERMANENT}")
-    print(f"Char level denom: {CHAR_LEVEL_DENOMINATOR}")
-
-    print_xp_curve_summary()
-
-    milestones = [1, 2, 4, 8, 12, 26, 52, 104, 156, 208, 260]
-
-    print("\n\n" + "=" * 70)
-    print("BASELINE ARCHETYPES (no detraining)")
-    print("=" * 70)
-    for archetype_name in ['beginner', 'intermediate', 'advanced', 'stagnant_lifter']:
-        snapshots = simulate(ARCHETYPES[archetype_name], weeks=260)
-        print_archetype(archetype_name, snapshots, milestones)
-        last = snapshots[-1]
-        max_rank = max(last['ranks'].values())
-        avg_vit = sum(last['vitality'].values()) / len(last['vitality'])
-        print(f"\nFINAL: Lvl {last['character_level']}  |  max rank {max_rank}  |  "
-              f"class {last['class']}  |  avg Vitality {avg_vit*100:.0f}%  |  "
-              f"total XP {sum(last['total_xp'].values()):,}")
-
-    print("\n\n" + "=" * 70)
-    print("DETRAINING SCENARIOS")
-    print("=" * 70)
-
-    print("\n=== COMEBACK KID (1yr train -> 6mo off -> resume) ===")
-    snaps = simulate(ARCHETYPES['comeback_kid'], weeks=260)
-    detail_milestones = [4, 13, 26, 39, 52, 60, 65, 70, 78, 80, 85, 92, 104, 130, 156, 208, 260]
-    print_archetype('comeback_kid', snaps, detail_milestones)
-    print_vitality_trajectory('comeback_kid', snaps, ['chest', 'legs', 'arms'])
-
-    print("\n=== VACATIONER (2wk break every 6mo) ===")
-    snaps = simulate(ARCHETYPES['vacationer'], weeks=260)
-    print_archetype('vacationer', snaps, milestones)
-    print_vitality_trajectory('vacationer', snaps, ['chest', 'legs', 'arms'])
+    main()
