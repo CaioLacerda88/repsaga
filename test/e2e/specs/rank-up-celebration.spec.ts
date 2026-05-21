@@ -18,7 +18,7 @@
  *                          others at rank 1 (≥1 XP) — one bench set yields
  *                          [rankUp(chest, 10), levelUp(4), titleUnlock(chest_r10)]
  *                          with NO class change and NO first-awakening (BUG-017)
- *   rpgOverflowQueue     — all 6 body parts at rank 5, 358 XP (Phase 29 v2)
+ *   rpgOverflowQueue     — all 6 body parts at rank 5, 354 XP (Phase 29 v2)
  *   rpgFreshUser         — zero workout history (reused from 18a)
  *   smokePR              — prior PR at 100 kg bench press (reused)
  */
@@ -226,7 +226,8 @@ async function reseedRpgFreshUser(): Promise<void> {
 }
 
 // Reseed rpgOverflowQueue (Phase 29 v2): all 6 body parts at rank 5,
-// total_xp = 358 (80 XP into rank 5). The 4-exercise workout pushes all
+// total_xp = 354 (midpoint of the deterministic R6-crossing window).
+// The 4-exercise workout pushes all
 // 6 BPs to rank 6 without any BP skipping a rank, keeping class
 // Ascendant pre+post (no class-change overlay eating a queue slot).
 // See seedRpgOverflowQueueUser in global-setup.ts for the full
@@ -253,7 +254,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 354, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -294,7 +295,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
 }
 
 // Reseed rpgOverflowTapCard: same seeding contract as rpgOverflowQueue
-// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 358 XP) but on a
+// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 354 XP) but on a
 // dedicated user so the auto-dismiss and tap-card tests don't race on
 // shared XP state under --repeat-each=2.
 async function reseedOverflowTapCardUser(): Promise<void> {
@@ -319,7 +320,7 @@ async function reseedOverflowTapCardUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 354, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -618,7 +619,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 5 / 358 XP (Phase 29 v2 tuned —
+    // Reseed all 6 body parts back to rank 5 / 354 XP (Phase 29 v2 tuned —
     // see reseedOverflowQueueUser docstring above for the derivation). Also
     // clears prior workout history so record_session_xp_batch sees zero
     // historical sets and novelty discounting starts fresh on every repeat.
@@ -642,17 +643,20 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     test.slow();
 
     // rpgOverflowQueue is seeded with all 6 body parts at rank 5, total_xp =
-    // 358 (Phase 29 v2 calibration). The 4 compound lifts below — bench
-    // (chest 0.70 / shoulders 0.20 / arms 0.10), squat (legs 0.80 / core
-    // 0.10 / back 0.10), row (back 0.70 / arms 0.20 / core 0.10), OHP
-    // (shoulders 0.60 / arms 0.20 / core 0.20) — spread XP across ALL 6
-    // body parts via primary + secondary attribution. Under Phase 29 v2's
-    // `tier_diff_mult` at rank 5 (≈ 2.05 with the bodyweight-null implied
-    // tier of 15), each body part gains 20-100 XP — enough to cross the
-    // rank-6 threshold (366.31 XP cumulative), but not enough to skip a
-    // second rank (R7 = 462.94 XP). Result: 6 rank-ups, no skips, pre+post
-    // class both Ascendant (no class-change overlay). Cap-at-3 keeps top
-    // 3 rank-ups in the queue; overflow = 3.
+    // 354 (Phase 29 v2 deterministic R6-crossing window — midpoint of the
+    // (R6−smallestGain, R7−largestGain) interval). The 4 compound lifts
+    // below — bench (chest 0.70 / shoulders 0.20 / arms 0.10), squat
+    // (legs 0.80 / core 0.10 / back 0.10), row (back 0.70 / arms 0.20 /
+    // core 0.10), OHP (shoulders 0.60 / arms 0.20 / core 0.20) — spread
+    // XP across ALL 6 body parts via primary + secondary attribution.
+    // Under Phase 29 v2's `tier_diff_mult` at rank 5 (≈ 2.05 with the
+    // bodyweight-null implied tier of 15), each body part gains 36-86 XP.
+    // Per the share-count novelty semantics (matching the Python sim +
+    // Dart calculator + fixture oracle), the per-set values are EXACT
+    // (1e-4 absolute parity) — see seedRpgOverflowQueueUser dartdoc in
+    // global-setup.ts for the full per-bp breakdown. Result: 6 single-
+    // rank crossings (all 5 → 6), no skips, pre+post class both
+    // Ascendant. Cap-at-3 → 3 in queue, 3 overflow.
     await startEmptyWorkout(page);
     // BUG-020: Finish button only appears after first exercise is added.
     // Body part 1: chest (bench press)
@@ -697,12 +701,15 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     //   queue          = [top rank-up, 2nd rank-up, 3rd rank-up]
     //   overflow       = 6 − 3 = 3 rank-ups (folded into the overflow card)
     //
-    // What this test asserts at the e2e layer (intent, post-Phase-21 trim):
+    // What this test asserts at the e2e layer:
     //   1. The first rank-up overlay appears (queue began playing).
-    //   2. The overflow card appears with the correct "+N ranks" label
-    //      — that label is the cap-at-3 receipt. If cap-at-3 misfires, the
-    //      card never mounts (no overflow folding) OR mounts with the wrong
-    //      count.
+    //   2. The overflow card appears with the correct "+3 ranks" label
+    //      — the cap-at-3 receipt.
+    //   3. EXACT per-body-part XP totals match the Phase 29 v2 chain
+    //      (Dart calculator + Python sim + fixture oracle) within 1e-4
+    //      absolute. This is the parity drift detector — if the SQL
+    //      chain divergees from the oracle, this assertion catches it
+    //      before any flaky timing-based check.
     //
     // What we DO NOT assert here any more:
     //   * The 4 s auto-dismiss → covered by the widget test
@@ -729,6 +736,43 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     // seeding (6 rank-ups − 3 in the queue = 3 overflowed), the label MUST
     // read `3 more rank-ups` for cap-at-3 to be working end-to-end.
     await expect(overflowCard).toHaveAccessibleName(/3 more rank-ups/);
+
+    // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
+    // wrote, matching the Dart calculator + Python sim + fixture oracle at
+    // 1e-4 absolute. If a SQL helper drifts (novelty miscounts, rounding
+    // changes, etc.) the gate catches it BEFORE any flaky timing assertion
+    // upstream. The values are derived from seeding rank-5 / 354 XP per BP
+    // and applying the 4-exercise workout with implied_tier=15 (bodyweight-
+    // null fallback) — see `seedRpgOverflowQueueUser` in global-setup.ts
+    // for the per-set decomposition.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgOverflowQueue').email);
+    expect(userId).toBeTruthy();
+    const { data: bpRows } = await admin
+      .from('body_part_progress')
+      .select('body_part, total_xp, rank')
+      .eq('user_id', userId!)
+      .order('body_part');
+    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
+    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
+      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
+    }
+    // Exact post-state per the Phase 29 v2 chain (1e-4 absolute parity).
+    const expected: Record<string, { total_xp: number; rank: number }> = {
+      chest:     { total_xp: 422.4366, rank: 6 },
+      back:      { total_xp: 433.1780, rank: 6 },
+      legs:      { total_xp: 439.3888, rank: 6 },
+      shoulders: { total_xp: 421.2183, rank: 6 },
+      arms:      { total_xp: 399.1321, rank: 6 },
+      core:      { total_xp: 390.3483, rank: 6 },
+    };
+    for (const bp of Object.keys(expected)) {
+      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
+      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
+      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
+      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
+        .toBeLessThanOrEqual(1e-4);
+    }
   });
 
 });
@@ -748,7 +792,7 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 5 / 358 XP (Phase 29 v2 — same
+    // Reseed all 6 body parts back to rank 5 / 354 XP (Phase 29 v2 — same
     // contract as rpgOverflowQueue). Uses dedicated rpgOverflowTapCard user
     // (isolated from rpgOverflowQueue) so this describe block never races
     // with S4 on --repeat-each runs.

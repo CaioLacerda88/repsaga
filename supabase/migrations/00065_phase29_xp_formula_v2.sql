@@ -819,21 +819,43 @@ BEGIN
   LOOP
     IF v_attr_share <= 0 THEN CONTINUE; END IF;
 
-    SELECT COALESCE(SUM((e.attribution ->> v_attr_key)::numeric), 0)
+    -- Parity contract — session_vol / weekly_vol are SHARE-COUNT
+    -- accumulators (Python sim `novelty_count[bp] += share`), not XP.
+    -- Re-derive share by JOINing each prior xp_events row through
+    -- sets → workout_exercises → exercises.xp_attribution and reading
+    -- the share for v_attr_key. Without this, prior events' XP values
+    -- (typically 20–100 each) over-discount novelty by 10–100× vs the
+    -- Dart calculator + fixture oracle and trip the weekly cap on a
+    -- single working set.
+    SELECT COALESCE(SUM(
+      ((COALESCE(NULLIF(ex.xp_attribution, 'null'::jsonb),
+                 jsonb_build_object(ex.muscle_group::text, 1.0))
+        ->> v_attr_key))::numeric
+    ), 0)
     INTO v_session_vol
     FROM public.xp_events e
+    JOIN public.sets s               ON s.id = e.set_id
+    JOIN public.workout_exercises we ON we.id = s.workout_exercise_id
+    JOIN public.exercises ex          ON ex.id = we.exercise_id
     WHERE e.user_id = v_user_id
       AND e.session_id = v_workout_id
       AND e.id <> v_event_id
-      AND (e.attribution ? v_attr_key);
+      AND e.set_id IS NOT NULL;
 
-    SELECT COALESCE(SUM((e.attribution ->> v_attr_key)::numeric), 0)
+    SELECT COALESCE(SUM(
+      ((COALESCE(NULLIF(ex.xp_attribution, 'null'::jsonb),
+                 jsonb_build_object(ex.muscle_group::text, 1.0))
+        ->> v_attr_key))::numeric
+    ), 0)
     INTO v_weekly_vol
     FROM public.xp_events e
+    JOIN public.sets s               ON s.id = e.set_id
+    JOIN public.workout_exercises we ON we.id = s.workout_exercise_id
+    JOIN public.exercises ex          ON ex.id = we.exercise_id
     WHERE e.user_id = v_user_id
       AND e.occurred_at > v_now - interval '7 days'
       AND e.id <> v_event_id
-      AND (e.attribution ? v_attr_key);
+      AND e.set_id IS NOT NULL;
 
     v_novelty := exp(- v_session_vol / 15.0);
     v_cap     := CASE WHEN v_weekly_vol >= 15 THEN 0.3 ELSE 1.0 END;
@@ -1207,24 +1229,39 @@ BEGIN
         AND s.reps IS NOT NULL AND s.reps >= 1
     );
 
-  -- Prior weekly volume per body_part (xp_events outside this session).
+  -- Prior weekly SHARE-COUNT per body_part (xp_events outside this
+  -- session, in the trailing 7d window). Parity with Python sim
+  -- `weekly_count[body_part] += share` — the cap_mult fires at ≥ 15
+  -- EFFECTIVE SETS, not 15 XP. We can't read share directly from
+  -- xp_events.attribution (which stores XP), so we re-derive it by
+  -- JOINing through sets → workout_exercises → exercises.xp_attribution
+  -- and summing the share value the original session computed against.
   WITH agg AS (
-    SELECT kv.key AS bp_key, SUM(kv.value::float8) AS bp_sum
+    SELECT
+      kv.key                    AS bp_key,
+      SUM((kv.value)::float8)   AS bp_share
     FROM public.xp_events e
-    CROSS JOIN LATERAL jsonb_each_text(e.attribution) AS kv(key, value)
+    JOIN public.sets s              ON s.id = e.set_id
+    JOIN public.workout_exercises we ON we.id = s.workout_exercise_id
+    JOIN public.exercises ex         ON ex.id = we.exercise_id
+    CROSS JOIN LATERAL jsonb_each_text(
+      COALESCE(NULLIF(ex.xp_attribution, 'null'::jsonb),
+               jsonb_build_object(ex.muscle_group::text, 1.0))
+    ) AS kv(key, value)
     WHERE e.user_id = v_user_id
       AND e.occurred_at > v_now - interval '7 days'
       AND (e.session_id IS DISTINCT FROM p_workout_id)
+      AND e.set_id IS NOT NULL
     GROUP BY kv.key
   )
   SELECT
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'chest'),     0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'back'),      0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'legs'),      0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'shoulders'), 0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'arms'),      0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'core'),      0)::float8,
-    COALESCE(MAX(bp_sum) FILTER (WHERE bp_key = 'cardio'),    0)::float8
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'chest'),     0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'back'),      0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'legs'),      0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'shoulders'), 0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'arms'),      0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'core'),      0)::float8,
+    COALESCE(MAX(bp_share) FILTER (WHERE bp_key = 'cardio'),    0)::float8
   INTO v_weekly_chest, v_weekly_back, v_weekly_legs,
        v_weekly_shoulders, v_weekly_arms, v_weekly_core, v_weekly_cardio
   FROM agg;
@@ -1362,8 +1399,15 @@ BEGIN
       v_event_attribution := v_event_attribution
         || jsonb_build_object(v_attr_key, round(v_xp_for_bp_f::numeric, 4));
 
-      v_session_vol[v_bp_idx] := v_session_vol[v_bp_idx] + v_xp_for_bp_f;
-      v_weekly_vol[v_bp_idx]  := v_weekly_vol[v_bp_idx]  + v_xp_for_bp_f;
+      -- Parity contract — `session_vol` and `weekly_vol` are SHARE-COUNT
+      -- accumulators (Python sim `novelty_count[body_part] += share`),
+      -- NOT XP-earned. The novelty_denominator (15) and weekly_cap_sets
+      -- (15) are calibrated against effective-sets-per-body-part. Storing
+      -- XP here over-discounts novelty by 10–100× and would trigger the
+      -- weekly cap on a single working set. v_bp_total stays XP because
+      -- it's the materialized body_part_progress.total_xp delta.
+      v_session_vol[v_bp_idx] := v_session_vol[v_bp_idx] + v_attr_share;
+      v_weekly_vol[v_bp_idx]  := v_weekly_vol[v_bp_idx]  + v_attr_share;
       v_bp_total[v_bp_idx]    := v_bp_total[v_bp_idx]    + v_xp_for_bp_f;
     END LOOP;
 
@@ -1803,22 +1847,38 @@ BEGIN
     LOOP
       IF v_attr_share <= 0 THEN CONTINUE; END IF;
 
-      SELECT COALESCE(SUM((e.attribution ->> v_attr_key)::numeric), 0)
+      -- Parity contract — share-count, not XP. See record_set_xp /
+      -- record_session_xp_batch for the longer comment.
+      SELECT COALESCE(SUM(
+        ((COALESCE(NULLIF(ex.xp_attribution, 'null'::jsonb),
+                   jsonb_build_object(ex.muscle_group::text, 1.0))
+          ->> v_attr_key))::numeric
+      ), 0)
       INTO v_session_vol
       FROM public.xp_events e
+      JOIN public.sets s               ON s.id = e.set_id
+      JOIN public.workout_exercises we ON we.id = s.workout_exercise_id
+      JOIN public.exercises ex          ON ex.id = we.exercise_id
       WHERE e.user_id = p_user_id
         AND e.session_id = r_set.workout_id
         AND e.id <> v_event_id
-        AND (e.attribution ? v_attr_key);
+        AND e.set_id IS NOT NULL;
 
-      SELECT COALESCE(SUM((e.attribution ->> v_attr_key)::numeric), 0)
+      SELECT COALESCE(SUM(
+        ((COALESCE(NULLIF(ex.xp_attribution, 'null'::jsonb),
+                   jsonb_build_object(ex.muscle_group::text, 1.0))
+          ->> v_attr_key))::numeric
+      ), 0)
       INTO v_weekly_vol
       FROM public.xp_events e
+      JOIN public.sets s               ON s.id = e.set_id
+      JOIN public.workout_exercises we ON we.id = s.workout_exercise_id
+      JOIN public.exercises ex          ON ex.id = we.exercise_id
       WHERE e.user_id = p_user_id
         AND e.occurred_at > v_now - interval '7 days'
         AND e.occurred_at <= v_now
         AND e.id <> v_event_id
-        AND (e.attribution ? v_attr_key);
+        AND e.set_id IS NOT NULL;
 
       v_novelty := exp(- v_session_vol / 15.0);
       v_cap     := CASE WHEN v_weekly_vol >= 15 THEN 0.3 ELSE 1.0 END;
