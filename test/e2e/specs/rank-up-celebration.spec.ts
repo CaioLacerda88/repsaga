@@ -13,7 +13,10 @@
  * is the core engagement mechanic of Phase 18c.
  *
  * Seeding (see global-setup.ts):
- *   rpgRankUpThreshold   — chest at rank 4, 270 XP (~8 XP below R5 threshold)
+ *   rpgRankUpThreshold   — chest at rank 3, 157 XP (Phase 29 v2 single-rank-up
+ *                          deterministic window midpoint; one bench 80×5 lands
+ *                          chest at 238.3199 XP / rank 4, no title threshold
+ *                          crossed)
  *   rpgMultiCelebration  — chest at rank 9 (810 XP), 3 others at rank 2 + 2
  *                          others at rank 1 (≥1 XP) — one bench set yields
  *                          [rankUp(chest, 10), levelUp(4), titleUnlock(chest_r10)]
@@ -38,7 +41,12 @@ import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
-// Reseed rpgRankUpThreshold: chest rank 2 @ 120 XP, all others rank 1 @ 0 XP.
+// Reseed rpgRankUpThresholdUser (Phase 29 v2 single-rank-up deterministic
+// window): chest at rank 3 / 157 XP, all others rank 1 @ 0 XP. The single-
+// rank-up window for one bench 80x5 set at rank-3 dominance is
+// (117.28, 197.14) XP — midpoint 157 leaves ~40 XP margin on either side
+// so the post-state is unambiguously chest rank 4 (no skip to rank 5, no
+// title threshold crossed at rank 5 either since chest stays below 278.46).
 // Called in beforeEach so the test is repeatable with --repeat-each.
 async function reseedRankUpThresholdUser(): Promise<void> {
   const admin = getAdminClient();
@@ -61,8 +69,8 @@ async function reseedRankUpThresholdUser(): Promise<void> {
 
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
-    const xp = bp === 'chest' ? 120 : 0;
-    const rank = bp === 'chest' ? 2 : 1;
+    const xp = bp === 'chest' ? 157 : 0;
+    const rank = bp === 'chest' ? 3 : 1;
     await admin.from('body_part_progress').upsert(
       { user_id: userId, body_part: bp, total_xp: xp, rank },
       { onConflict: 'user_id,body_part' },
@@ -371,8 +379,9 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed RPG state so each repeat starts with chest at rank 2 / 120 XP
-    // and zero workout history (prevents novelty-discount drift on repeat runs).
+    // Reseed RPG state so each repeat starts with chest at rank 3 / 157 XP
+    // (Phase 29 v2 single-rank-up window midpoint) and zero workout history
+    // (prevents novelty-discount drift on repeat runs).
     await reseedRankUpThresholdUser();
     await login(
       page,
@@ -384,8 +393,11 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
   test('should show RankUpOverlay after crossing a rank threshold and auto-advance to home', async ({
     page,
   }) => {
-    // User is pre-seeded with chest at rank 4, 270 XP (8 XP below R5).
-    // One working bench press set earns ~10-15 XP and crosses the boundary.
+    // User is pre-seeded with chest at rank 3 / 157 XP (Phase 29 v2 single-
+    // rank-up window midpoint). One bench 80x5 set earns 81.3199 XP to chest
+    // (tier_diff_mult ~2.21 at rank=3 / implied_tier=15 fallback), landing
+    // chest at 238.3199 XP / rank 4. Window margin ~40 XP either side rules
+    // out skip-to-rank-5 + title threshold crossing.
     await startEmptyWorkout(page);
     // BUG-020: Finish button only appears after first exercise is added.
     await addExercise(page, SEED_EXERCISES.benchPress);
@@ -413,6 +425,41 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
     // After all overlays clear, the app navigates to the PR celebration or
     // home screen. Both are acceptable post-finish landing pages.
     await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 10_000 });
+
+    // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
+    // wrote, matching the Dart calculator + Python sim + fixture oracle at
+    // 1e-4 absolute. The values are derived from seeding chest rank 3 / 157
+    // XP and applying one bench 80x5 set with implied_tier=15 (bodyweight-
+    // null fallback). If a SQL helper drifts the parity gate catches it
+    // BEFORE any flaky overlay-timing assertion upstream.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgRankUpThreshold').email);
+    expect(userId).toBeTruthy();
+    const { data: bpRows } = await admin
+      .from('body_part_progress')
+      .select('body_part, total_xp, rank')
+      .eq('user_id', userId!)
+      .order('body_part');
+    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
+    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
+      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
+    }
+    // Exact post-state per the Phase 29 v2 chain (1e-4 absolute parity).
+    const expected: Record<string, { total_xp: number; rank: number }> = {
+      chest:     { total_xp: 238.3199, rank: 4 },
+      back:      { total_xp: 0.0,      rank: 1 },
+      legs:      { total_xp: 0.0,      rank: 1 },
+      shoulders: { total_xp: 23.2342,  rank: 1 },
+      arms:      { total_xp: 11.6171,  rank: 1 },
+      core:      { total_xp: 0.0,      rank: 1 },
+    };
+    for (const bp of Object.keys(expected)) {
+      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
+      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
+      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
+      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
+        .toBeLessThanOrEqual(1e-4);
+    }
   });
 });
 
@@ -518,6 +565,57 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     await expect(page.locator(SAGA.sagaHeaderTitle).first()).toBeVisible({
       timeout: 10_000,
     });
+
+    // Parity gate — assert the EXACT per-body-part XP totals + ranks the SQL
+    // chain wrote, matching the Dart calculator + Python sim + fixture oracle
+    // at 1e-4 absolute. Seed: chest 810/r9, back/legs/shoulders 65/r2,
+    // arms/core 1/r1. After one bench 80x5 set (chest gain 50.0489, shoulders
+    // +14.2997, arms +7.1498): chest 860.0489 (rank 10, crosses chest_r10
+    // title threshold), shoulders 79.2997 (still rank 2), arms 8.1498 (still
+    // rank 1), back/legs unchanged. Sum of ranks 10+2+2+2+1+1=18,
+    // character_level = floor((18-6)/4)+1 = 4.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgMultiCelebration').email);
+    expect(userId).toBeTruthy();
+    const { data: bpRows } = await admin
+      .from('body_part_progress')
+      .select('body_part, total_xp, rank')
+      .eq('user_id', userId!)
+      .order('body_part');
+    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
+    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
+      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
+    }
+    const expected: Record<string, { total_xp: number; rank: number }> = {
+      chest:     { total_xp: 860.0489, rank: 10 },
+      back:      { total_xp:  65.0,    rank:  2 },
+      legs:      { total_xp:  65.0,    rank:  2 },
+      shoulders: { total_xp:  79.2997, rank:  2 },
+      arms:      { total_xp:   8.1498, rank:  1 },
+      core:      { total_xp:   1.0,    rank:  1 },
+    };
+    for (const bp of Object.keys(expected)) {
+      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
+      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
+      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
+      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
+        .toBeLessThanOrEqual(1e-4);
+    }
+
+    // Title gate — chest_r10_plate_bearer row must exist AND be the active
+    // title (equip button was tapped above). The unique partial index on
+    // `earned_titles(user_id) WHERE is_active=TRUE` guarantees at most one
+    // active title per user; we additionally assert no OTHER title is active.
+    const { data: titleRows } = await admin
+      .from('earned_titles')
+      .select('title_id, is_active')
+      .eq('user_id', userId!);
+    const titles = (titleRows ?? []) as Array<{ title_id: string; is_active: boolean }>;
+    const r10 = titles.find((t) => t.title_id === 'chest_r10_plate_bearer');
+    expect(r10, 'chest_r10_plate_bearer earned_titles row missing').toBeDefined();
+    expect(r10!.is_active, 'chest_r10_plate_bearer must be active after EQUIP tap').toBe(true);
+    const otherActive = titles.filter((t) => t.is_active && t.title_id !== 'chest_r10_plate_bearer');
+    expect(otherActive, `unexpected other active title(s): ${JSON.stringify(otherActive)}`).toHaveLength(0);
   });
 });
 
@@ -605,6 +703,42 @@ test.describe('First awakening overlay', { tag: '@smoke' }, () => {
 
     // The app navigates to home or pr-celebration after the celebration queue.
     await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 15_000 });
+
+    // Parity gate — assert the EXACT per-body-part XP totals + ranks. Seed:
+    // all 0 XP / rank 1. Workout: bench 60x5 + squat 80x5. Attribution:
+    //   bench  (chest gain 82.3560, shoulders 23.5303, arms 11.7651)
+    //   squat  (legs 122.1155, core 15.2644, back 15.2644)
+    // Post: chest 82.3560 (rank 2), legs 122.1155 (rank 2), all secondary
+    // BPs rank 1 (touched but below 60 XP rank-2 threshold). Two rank-ups +
+    // one firstAwakening (chest, taken first in active order). The
+    // FirstAwakening break in the builder ensures only ONE awakening event.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgFreshUser').email);
+    expect(userId).toBeTruthy();
+    const { data: bpRows } = await admin
+      .from('body_part_progress')
+      .select('body_part, total_xp, rank')
+      .eq('user_id', userId!)
+      .order('body_part');
+    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
+    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
+      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
+    }
+    const expected: Record<string, { total_xp: number; rank: number }> = {
+      chest:     { total_xp:  82.3560, rank: 2 },
+      back:      { total_xp:  15.2644, rank: 1 },
+      legs:      { total_xp: 122.1155, rank: 2 },
+      shoulders: { total_xp:  23.5303, rank: 1 },
+      arms:      { total_xp:  11.7651, rank: 1 },
+      core:      { total_xp:  15.2644, rank: 1 },
+    };
+    for (const bp of Object.keys(expected)) {
+      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
+      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
+      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
+      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
+        .toBeLessThanOrEqual(1e-4);
+    }
   });
 });
 
@@ -868,6 +1002,40 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
     await overflowCard.click({ force: true });
 
     await page.waitForURL(/\/profile/, { timeout: 10_000 });
+
+    // Parity gate — same Phase 29 v2 XP chain as S4 (rpgOverflowQueue uses
+    // identical seeding contract). Asserting per-bp XP + rank here guards
+    // against a SQL drift that would silently corrupt the tap-card scenario
+    // even when the overflow card still renders. Values mirror the S4 block
+    // above (1e-4 absolute parity with Dart calculator + Python sim +
+    // fixture oracle).
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('rpgOverflowTapCard').email);
+    expect(userId).toBeTruthy();
+    const { data: bpRows } = await admin
+      .from('body_part_progress')
+      .select('body_part, total_xp, rank')
+      .eq('user_id', userId!)
+      .order('body_part');
+    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
+    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
+      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
+    }
+    const expected: Record<string, { total_xp: number; rank: number }> = {
+      chest:     { total_xp: 422.4366, rank: 6 },
+      back:      { total_xp: 433.1780, rank: 6 },
+      legs:      { total_xp: 439.3888, rank: 6 },
+      shoulders: { total_xp: 421.2183, rank: 6 },
+      arms:      { total_xp: 399.1321, rank: 6 },
+      core:      { total_xp: 390.3483, rank: 6 },
+    };
+    for (const bp of Object.keys(expected)) {
+      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
+      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
+      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
+      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
+        .toBeLessThanOrEqual(1e-4);
+    }
   });
 });
 

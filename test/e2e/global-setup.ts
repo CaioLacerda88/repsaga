@@ -869,14 +869,38 @@ async function seedRpgFreshUser(
 }
 
 /**
- * Seed rpgRankUpThreshold user:
- * chest body_part_progress at ~270 XP (Rank 5 threshold ≈ 278.46 XP).
- * One working bench-press set earns ~10-15 XP and crosses the boundary.
+ * Seed rpgRankUpThreshold user (Phase 29 v2 single-rank-up deterministic
+ * window): chest at rank 3 / 157 XP, all others rank 1 @ 0 XP.
+ *
+ * Deterministic-window derivation (mirrors the rpgOverflowQueue style):
+ *   * One bench 80x5 set at chest-rank-3 dominance earns 81.3199 XP to chest
+ *     (tier_diff_mult ≈ 2.21 at rank=3 / implied_tier=15 fallback).
+ *   * For a SINGLE rank-up (rank 3 → 4, no skip to 5), seed must satisfy:
+ *       rank_4_floor - gain < seed < rank_5_floor - gain
+ *       126.0 - 81.32 < seed < 278.46 - 81.32
+ *       (117.28, 197.14)  →  midpoint 157.21  →  rounded to 157
+ *   * Margin ≈ 40 XP on both ends absorbs any future formula tweaks within
+ *     the same family of multipliers.
+ *
+ * Post-state (1e-4 absolute parity with the Python sim + Dart calculator +
+ * fixture oracle):
+ *   * chest:     157.0 + 81.3199 = 238.3199 (rank 4)
+ *   * shoulders:   0.0 + 23.2342 =  23.2342 (rank 1, but firstAwakening fires)
+ *   * arms:        0.0 + 11.6171 =  11.6171 (rank 1, but touched)
+ *   * back/legs/core: 0.0 (untouched)
+ *
+ * Celebration queue: [rankUp(chest, 4), firstAwakening(shoulders)] — single
+ * rank-up overlay (no title at rank 4), then shoulders first-awakening
+ * (first untouched body part hit in `chest, back, legs, shoulders, arms, core`
+ * order). No class-change (Bulwark pre, Bulwark post since chest stays
+ * dominant). Character level stays at 1 (sum_post = 4+1+1+1+1+1 = 9,
+ * floor((9-6)/4)+1 = 1). No title threshold crossed (next chest title is at
+ * rank 5).
  *
  * Also seeds a prior minimal workout so the app lands in lapsed state
  * (Quick workout entry point visible).
  *
- * Idempotent: skips if body_part_progress row for chest already exists.
+ * Reseeds fully on every run: deletes all workouts + XP state for determinism.
  */
 async function seedRpgRankUpThresholdUser(
   supabase: SupabaseClient,
@@ -914,19 +938,14 @@ async function seedRpgRankUpThresholdUser(
     { onConflict: 'id' },
   );
 
-  // Seed chest body_part_progress at rank 2 with 120 XP.
-  // Rank 3 cumulative threshold = 126 XP (60 × (1.10² − 1) / 0.10).
-  // One bench press set earns ~8–12 XP for chest → crosses rank 3.
-  // No title is awarded at rank 3 (first title at rank 5), so the
-  // celebration queue contains only a FirstAwakeningOverlay (shoulders
-  // awakens from bench secondary XP) + a RankUpOverlay — no title sheet
-  // that would block navigation and fail S1.
-  // Character level with chest=2, others=1: floor((2+5-6)/4)+1 = 1.
-  // After chest→3: floor((3+5-6)/4)+1 = 1. No level-up. Clean queue.
+  // Seed chest at rank 3 / 157 XP (Phase 29 v2 single-rank-up window
+  // midpoint). See the function dartdoc above for the full derivation.
+  // Post bench 80x5: chest 238.3199 XP / rank 4 (single rank-up, no title
+  // at rank 4, no skip to rank 5). Character level stays at 1.
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
-    const xp = bp === 'chest' ? 120 : 0;
-    const rank = bp === 'chest' ? 2 : 1;
+    const xp = bp === 'chest' ? 157 : 0;
+    const rank = bp === 'chest' ? 3 : 1;
     const { error } = await supabase.from('body_part_progress').upsert(
       { user_id: userId, body_part: bp, total_xp: xp, rank },
       { onConflict: 'user_id,body_part' },
@@ -950,7 +969,7 @@ async function seedRpgRankUpThresholdUser(
   // Seed one prior minimal workout so the app shows Quick workout (lapsed state).
   await seedMinimalWorkout(supabase, userId);
 
-  console.log('[global-setup] Seeded rpgRankUpThresholdUser (chest at 120 XP, rank 2 → crosses rank 3 on bench set)');
+  console.log('[global-setup] Seeded rpgRankUpThresholdUser (chest at 157 XP / rank 3, Phase 29 v2 single-rank-up window — bench 80x5 crosses to rank 4)');
 }
 
 /**
