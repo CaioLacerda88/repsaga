@@ -58,6 +58,10 @@ async function reseedRankUpThresholdUser(): Promise<void> {
   await admin.from('xp_events').delete().eq('user_id', userId);
   await admin.from('body_part_progress').delete().eq('user_id', userId);
   await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  // Phase 29 v2: in-band per-(slug, rep_band) peaks drive overload_mult.
+  // Stale rows make every re-run look like "matched the band best" (mult
+  // = 1.0); deleting forces a fresh ladder per test fixture.
+  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
   await admin.from('earned_titles').delete().eq('user_id', userId);
   await admin.from('backfill_progress').delete().eq('user_id', userId);
 
@@ -114,6 +118,8 @@ async function reseedMultiCelebrationUser(): Promise<void> {
   await admin.from('xp_events').delete().eq('user_id', userId);
   await admin.from('body_part_progress').delete().eq('user_id', userId);
   await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  // Phase 29 v2: see reseedRankUpThresholdUser for rationale.
+  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
   await admin.from('personal_records').delete().eq('user_id', userId);
   await admin.from('earned_titles').delete().eq('user_id', userId);
   await admin.from('backfill_progress').delete().eq('user_id', userId);
@@ -178,6 +184,8 @@ async function reseedRpgFreshUser(): Promise<void> {
   await admin.from('xp_events').delete().eq('user_id', userId);
   await admin.from('body_part_progress').delete().eq('user_id', userId);
   await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  // Phase 29 v2: see reseedRankUpThresholdUser for rationale.
+  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
   await admin.from('earned_titles').delete().eq('user_id', userId);
   await admin.from('backfill_progress').delete().eq('user_id', userId);
   // Clear weekly plans so startEmptyWorkout lands on the quick-workout CTA,
@@ -249,6 +257,8 @@ async function reseedOverflowQueueUser(): Promise<void> {
   await admin.from('xp_events').delete().eq('user_id', userId);
   await admin.from('body_part_progress').delete().eq('user_id', userId);
   await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  // Phase 29 v2: see reseedRankUpThresholdUser for rationale.
+  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
   await admin.from('personal_records').delete().eq('user_id', userId);
   await admin.from('earned_titles').delete().eq('user_id', userId);
   await admin.from('backfill_progress').delete().eq('user_id', userId);
@@ -315,6 +325,8 @@ async function reseedOverflowTapCardUser(): Promise<void> {
   await admin.from('xp_events').delete().eq('user_id', userId);
   await admin.from('body_part_progress').delete().eq('user_id', userId);
   await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  // Phase 29 v2: see reseedRankUpThresholdUser for rationale.
+  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
   await admin.from('personal_records').delete().eq('user_id', userId);
   await admin.from('earned_titles').delete().eq('user_id', userId);
   await admin.from('backfill_progress').delete().eq('user_id', userId);

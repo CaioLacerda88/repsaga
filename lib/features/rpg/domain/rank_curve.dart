@@ -43,9 +43,13 @@ class RankCurve {
   static const int xpGrowthBreakpoint = 20;
 
   /// Phase 29 v2 — flat XP cost per rank in the linear band (above
-  /// [xpGrowthBreakpoint]). LITERAL value: the derived
-  /// `60 × 1.10^19 ≈ 366.957` would drift parity at high ranks, so the
-  /// persisted constant is 367.0.
+  /// [xpGrowthBreakpoint]).
+  ///
+  /// LITERAL 367.0 — intentionally NOT derived from
+  /// `60 × 1.10^19 ≈ 366.957`. The derived float would compound rounding
+  /// at high ranks across the 4 parity sites (Python sim / fixture /
+  /// Dart / SQL), so the persisted constant is the rounded integer
+  /// `367.0` shared by every implementation.
   static const double linearXpPerRank = 367.0;
 
   /// XP delta `xp_to_next(n)` — XP to advance from rank `n` to rank `n + 1`.

@@ -193,6 +193,10 @@ CREATE POLICY exercise_peak_loads_by_rep_range_select_own
   ON public.exercise_peak_loads_by_rep_range FOR SELECT
   TO authenticated
   USING (user_id = auth.uid());
+-- No INSERT/UPDATE/DELETE policy by design — all writes come through
+-- SECURITY DEFINER RPCs (record_set_xp, record_session_xp_batch,
+-- _rpg_backfill_chunk) that bypass RLS. Authenticated users only need
+-- SELECT to read their own ladder for rpg_overload_mult inputs.
 
 COMMENT ON TABLE public.exercise_peak_loads_by_rep_range IS
   'Phase 29 v2 Refinement #2 — per-(user, exercise, rep_band) best lift. '
@@ -215,9 +219,13 @@ COMMENT ON TABLE public.exercise_peak_loads_by_rep_range IS
 -- (pull_up, chin_up, etc. — no change from existing behavior).
 -- ---------------------------------------------------------------------------
 
+-- Slug list MUST stay byte-identical to tasks/rpg-xp-simulation.py
+-- `BODYWEIGHT_LOAD_RATIO` (20 slugs total across all UPDATEs below).
+-- These match 00056's `uses_bodyweight_load = TRUE` set exactly. Drift
+-- between the two would break parity vs the Python oracle.
 UPDATE public.exercises SET bodyweight_load_ratio = 1.00
   WHERE slug IN ('pull_up', 'chin_up', 'wide_grip_pull_up', 'muscle_up',
-                 'ring_muscle_up', 'hanging_leg_raise', 'handstand_push_up',
+                 'hanging_leg_raise', 'handstand_push_up',
                  'nordic_curl');
 
 UPDATE public.exercises SET bodyweight_load_ratio = 0.95
@@ -435,7 +443,8 @@ BEGIN
   END IF;
 
   -- Interp the (rank, ratio) pairs. v_tiers length is always 16 (8 pairs).
-  -- Endpoints clamp; interior linear interp.
+  -- v_tiers[odd index] = rank, v_tiers[even index] = ratio (1-based,
+  -- interleaved 8 pairs). Endpoints clamp; interior linear interp.
   IF v_ratio <= v_tiers[2] THEN RETURN v_tiers[1]; END IF;
   IF v_ratio >= v_tiers[16] THEN RETURN v_tiers[15]; END IF;
 
@@ -679,6 +688,11 @@ DECLARE
   v_dom_part        text;
   v_dom_share       numeric;
   v_rep_band        text;
+  -- Phase 29 v2 PR 2 reviewer fix — capture novelty/cap as resolved for
+  -- the dominant BP so they can be persisted in `xp_events.payload`,
+  -- matching SetXpComponents.toJson() (lib/features/rpg/domain/xp_calculator.dart).
+  v_dom_novelty     numeric;
+  v_dom_cap         numeric;
   -- Phase 26d Task 2 title detection state — restored after Phase 29 v2
   -- PR 2 dropped the title-award block. Mirrors the same captures in
   -- record_session_xp_batch so per-set diagnostic calls also award
@@ -730,13 +744,25 @@ BEGIN
   -- Phase 26d Task 2 — capture pre-rank map + pre-character-level ONCE
   -- before the body_part_progress write below. Missing rows COALESCE to
   -- rank 1 inside the threshold-crossing query.
+  --
+  -- character_level matches the canonical formula in the `character_state`
+  -- view (migration 00040 §9): floor((Σ active_ranks − N_active) / 4) + 1,
+  -- restricted to the 6 active body parts (cardio excluded). The earlier
+  -- `rpg_rank_for_xp(SUM(total_xp))` formula carried over from 00060 was a
+  -- bug — `rpg_rank_for_xp` is a PER-body-part XP→rank function, not a
+  -- character-level reduction; applied to a sum across body parts it
+  -- produced silently-incorrect title-threshold checks.
   SELECT
     COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
     COALESCE(SUM(total_xp), 0)
   INTO v_pre_ranks, v_pre_total_xp
   FROM public.body_part_progress
   WHERE user_id = v_user_id;
-  v_pre_char_level := public.rpg_rank_for_xp(v_pre_total_xp);
+  SELECT GREATEST(1, FLOOR((COALESCE(SUM(rank), 0) - COUNT(*)) / 4.0)::int + 1)
+  INTO v_pre_char_level
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id
+    AND body_part IN ('chest','back','legs','shoulders','arms','core');
 
   -- Resolve attribution + difficulty_mult + uses_bodyweight_load +
   -- bodyweight_load_ratio + slug. All on one exercise lookup.
@@ -813,6 +839,11 @@ BEGIN
 
   v_set_xp := 0;
   v_event_attribution := '{}'::jsonb;
+  -- Initialize dominant-BP captures — guards the rare case where every
+  -- attribution share is 0 (loop body skips, v_dom_novelty / v_dom_cap
+  -- otherwise undefined). Falls back to "no discount, no cap".
+  v_dom_novelty := 1.0;
+  v_dom_cap     := 1.0;
 
   FOR v_attr_key, v_attr_share IN
     SELECT key, value::numeric FROM jsonb_each_text(v_attribution)
@@ -859,6 +890,13 @@ BEGIN
 
     v_novelty := exp(- v_session_vol / 15.0);
     v_cap     := CASE WHEN v_weekly_vol >= 15 THEN 0.3 ELSE 1.0 END;
+
+    -- Persist the novelty/cap as resolved for the DOMINANT BP into the
+    -- payload below — matches the per-set diagnostic contract.
+    IF v_attr_key = v_dom_part THEN
+      v_dom_novelty := v_novelty;
+      v_dom_cap     := v_cap;
+    END IF;
 
     -- Phase 29 v2 full chain.
     v_xp_for_bp := v_base
@@ -910,12 +948,17 @@ BEGIN
   END LOOP;
 
   -- Payload — all 11 multipliers + implied_tier + near_failure, in
-  -- chain order, mirroring SetXpComponents.toJson() in Dart.
+  -- chain order, mirroring SetXpComponents.toJson() in Dart. The
+  -- novelty/cap values reflect the DOMINANT BP for the set; the
+  -- per-attribution-key values are not persisted (the per-bp XP in
+  -- `xp_events.attribution` already encodes them).
   v_event_payload := jsonb_build_object(
     'volume_load',         GREATEST(1.0, COALESCE(v_effective_weight, 0) * v_reps),
     'base_xp',             v_base,
     'intensity_mult',      v_intensity,
     'strength_mult',       v_strength,
+    'novelty_mult',        v_dom_novelty,
+    'cap_mult',            v_dom_cap,
     'difficulty_mult',     v_difficulty_mult,
     'tier_diff_mult',      v_tier_diff_mult,
     'abs_strength_premium', v_asp_mult,
@@ -981,14 +1024,20 @@ BEGIN
   -- Phase 26d Task 2 title detection — restored after Phase 29 v2 PR 2.
   -- Mirrors record_session_xp_batch's title-award block so the per-set
   -- diagnostic entry point also INSERTs earned_titles rows on threshold
-  -- crossings.
+  -- crossings. Capture post-state AFTER body_part_progress has been
+  -- updated (above) so the character-level reduction sees the new ranks.
   SELECT
     COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
     COALESCE(SUM(total_xp), 0)
   INTO v_post_ranks, v_post_total_xp
   FROM public.body_part_progress
   WHERE user_id = v_user_id;
-  v_post_char_level := public.rpg_rank_for_xp(v_post_total_xp);
+  -- See pre-snapshot above for the formula-correctness rationale.
+  SELECT GREATEST(1, FLOOR((COALESCE(SUM(rank), 0) - COUNT(*)) / 4.0)::int + 1)
+  INTO v_post_char_level
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id
+    AND body_part IN ('chest','back','legs','shoulders','arms','core');
 
   -- Step 8.1: body-part rank crossings. VALUES list mirrors
   -- lib/features/rpg/data/title_thresholds_table.dart row-for-row.
@@ -1179,6 +1228,11 @@ DECLARE
   v_event_id         uuid;
   v_dom_part         text;
   v_current_rank_n   int;
+  -- Phase 29 v2 PR 2 reviewer fix — capture novelty/cap as resolved for
+  -- the dominant BP so they can be persisted in `xp_events.payload`,
+  -- matching SetXpComponents.toJson() in Dart.
+  v_dom_novelty_f    float8;
+  v_dom_cap_f        float8;
   -- Phase 26d Task 2 title detection state — restored after 00065 PR 2
   -- accidentally dropped the title-award block when rewriting this
   -- function for the Phase 29 v2 11-multiplier chain. Without these
@@ -1207,13 +1261,22 @@ BEGIN
   -- Phase 26d Task 2 — capture pre-rank map + pre-character-level ONCE
   -- before any body_part_progress write happens. Missing rows COALESCE
   -- to rank 1 inside the threshold-crossing query at the bottom.
+  --
+  -- character_level matches the canonical formula in the `character_state`
+  -- view (migration 00040 §9): floor((Σ active_ranks − N_active) / 4) + 1,
+  -- restricted to the 6 active body parts. See record_set_xp for the bug
+  -- this replaces.
   SELECT
     COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
     COALESCE(SUM(total_xp), 0)
   INTO v_pre_ranks, v_pre_total_xp
   FROM public.body_part_progress
   WHERE user_id = v_user_id;
-  v_pre_char_level := public.rpg_rank_for_xp(v_pre_total_xp);
+  SELECT GREATEST(1, FLOOR((COALESCE(SUM(rank), 0) - COUNT(*)) / 4.0)::int + 1)
+  INTO v_pre_char_level
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id
+    AND body_part IN ('chest','back','legs','shoulders','arms','core');
 
   SELECT COALESCE(jsonb_object_agg(epl.exercise_id::text, epl.peak_weight), '{}'::jsonb)
   INTO v_peaks_map
@@ -1357,6 +1420,9 @@ BEGIN
 
     v_set_xp_f := 0;
     v_event_attribution := '{}'::jsonb;
+    -- Initialize dominant-BP captures — see record_set_xp for rationale.
+    v_dom_novelty_f := 1.0;
+    v_dom_cap_f     := 1.0;
 
     FOR v_attr_key, v_attr_share IN
       SELECT key, (value::text)::float8 FROM jsonb_each_text(v_attribution)
@@ -1382,6 +1448,13 @@ BEGIN
 
       v_novelty_f := exp(- v_session_vol[v_bp_idx] / 15.0);
       v_cap_f     := CASE WHEN v_weekly_vol[v_bp_idx] >= 15 THEN 0.3 ELSE 1.0 END;
+
+      -- Persist the novelty/cap as resolved for the DOMINANT BP into the
+      -- payload below — matches the per-set diagnostic contract.
+      IF v_attr_key = v_dom_part THEN
+        v_dom_novelty_f := v_novelty_f;
+        v_dom_cap_f     := v_cap_f;
+      END IF;
 
       v_xp_for_bp_f := v_base_f
                      * v_intensity_f
@@ -1411,11 +1484,14 @@ BEGIN
       v_bp_total[v_bp_idx]    := v_bp_total[v_bp_idx]    + v_xp_for_bp_f;
     END LOOP;
 
+    -- See record_set_xp for the dominant-BP semantics of novelty/cap.
     v_event_payload := jsonb_build_object(
       'volume_load',         GREATEST(1.0, v_effective_weight_f * v_set_record.reps),
       'base_xp',             round(v_base_f::numeric, 4),
       'intensity_mult',      round(v_intensity_f::numeric, 4),
       'strength_mult',       round(v_strength_f::numeric, 4),
+      'novelty_mult',        round(v_dom_novelty_f::numeric, 4),
+      'cap_mult',            round(v_dom_cap_f::numeric, 4),
       'difficulty_mult',     round(v_difficulty_mult_f::numeric, 4),
       'tier_diff_mult',      round(v_tier_diff_mult_f::numeric, 4),
       'abs_strength_premium', round(v_asp_mult_f::numeric, 4),
@@ -1552,7 +1628,12 @@ BEGIN
   INTO v_post_ranks, v_post_total_xp
   FROM public.body_part_progress
   WHERE user_id = v_user_id;
-  v_post_char_level := public.rpg_rank_for_xp(v_post_total_xp);
+  -- See pre-snapshot above for the formula-correctness rationale.
+  SELECT GREATEST(1, FLOOR((COALESCE(SUM(rank), 0) - COUNT(*)) / 4.0)::int + 1)
+  INTO v_post_char_level
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id
+    AND body_part IN ('chest','back','legs','shoulders','arms','core');
 
   -- Step 8.1: body-part rank crossings. VALUES list mirrors
   -- lib/features/rpg/data/title_thresholds_table.dart row-for-row; the
