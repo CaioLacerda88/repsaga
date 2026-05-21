@@ -284,5 +284,100 @@ void main() {
         148,
       );
     });
+
+    // ---------------------------------------------------------------------------
+    // Regression test — PR #252 character-level formula fix
+    //
+    // The buggy formula applied to character_level computation was:
+    //   `rpg_rank_for_xp(SUM(total_xp_per_body_part))`
+    //
+    // This is wrong because `rpg_rank_for_xp` is the PER-body-part XP→rank
+    // curve — applying it to a SUM across all body parts gives a result that
+    // drifts wildly from the canonical formula.
+    //
+    // Canonical formula (spec §7 / character_state view in migration 00040 §9):
+    //   character_level = GREATEST(1, FLOOR((SUM(rank) − COUNT(*)) / 4.0) + 1)
+    //
+    // This test pins a concrete divergence example so that if a future refactor
+    // re-introduces the buggy formula, the test fails immediately with a
+    // concrete signal. The test:
+    //   (a) asserts the canonical formula returns 4 for 6 BPs at rank 3
+    //   (b) asserts `rankForXp(sumXp)` returns 9 (the buggy result)
+    //   (c) asserts the two formulas DIVERGE at this input — if someone were
+    //       to use rankForXp(sumXp) for character_level the test would fail
+    //       because the wrong formula would produce 9, not 4.
+    // ---------------------------------------------------------------------------
+    test('regression PR#252: canonical formula diverges from rankForXp(sumXp) '
+        '— 6 BPs at rank 3 → char-level 4, NOT rankForXp(756) = 9', () {
+      // 6 body parts, each at rank 3.
+      // Canonical: floor((18 - 6) / 4) + 1 = floor(12/4) + 1 = 4.
+      const ranks = {
+        'chest': 3,
+        'back': 3,
+        'legs': 3,
+        'shoulders': 3,
+        'arms': 3,
+        'core': 3,
+      };
+      expect(characterLevel(ranks), 4);
+
+      // Per-BP XP at rank 3 = cumulativeXpForRank(3).
+      // = 60 × (1.10² − 1) / 0.10 = 60 × 2.1 = 126.0
+      final xpAtRank3 = RankCurve.cumulativeXpForRank(3);
+      expect(xpAtRank3, closeTo(126.0, 1e-6));
+
+      // SUM across 6 BPs → 756.0
+      final sumXp = 6 * xpAtRank3;
+      expect(sumXp, closeTo(756.0, 1e-6));
+
+      // The BUGGY formula: rpg_rank_for_xp applied to the sum.
+      // 756 is above cumulativeXpForRank(9) ≈ 685.7 and below
+      // cumulativeXpForRank(10) ≈ 814.8 → rankForXp(756) = 9.
+      final buggyLevel = RankCurve.rankForXp(sumXp);
+      expect(buggyLevel, 9);
+
+      // Critical assertion: the two formulas DISAGREE.
+      // If someone reintroduces the buggy `rankForXp(sumXp)` formula, this
+      // assertion would catch it (because rankForXp returns 9, not 4).
+      expect(
+        characterLevel(ranks),
+        isNot(buggyLevel),
+        reason:
+            'characterLevel(6×rank3) must NOT equal rankForXp(sumXp). '
+            'The canonical formula gives 4; rankForXp(756) gives 9. '
+            'These must diverge — if they are equal, the regression '
+            'from PR#252 has been reintroduced.',
+      );
+    });
+
+    test('regression PR#252: high-rank single-BP skew — 1 BP at rank 10, '
+        '5 at rank 1 → char-level 3 (not rankForXp-inflated)', () {
+      // One specialist at rank 10, 5 beginners at rank 1.
+      // Canonical: floor((10+1+1+1+1+1 - 6)/4) + 1 = floor(9/4) + 1 = 3.
+      const ranks = {
+        'chest': 10,
+        'back': 1,
+        'legs': 1,
+        'shoulders': 1,
+        'arms': 1,
+        'core': 1,
+      };
+      expect(characterLevel(ranks), 3);
+
+      // SUM(total_xp) ≈ cumulativeXpForRank(10) + 5×0 = 814.77
+      final xpAtRank10 = RankCurve.cumulativeXpForRank(10);
+      // rankForXp(814.77) → rank 10 (just crossed rank-10 threshold)
+      final buggyLevel = RankCurve.rankForXp(xpAtRank10);
+      expect(buggyLevel, 10);
+
+      // Canonical must disagree with the inflated buggy result.
+      expect(
+        characterLevel(ranks),
+        isNot(buggyLevel),
+        reason:
+            'characterLevel(chest=10, 5×rank1) must NOT equal '
+            'rankForXp(sumXp). canonical=3, buggy=10.',
+      );
+    });
   });
 }

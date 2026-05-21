@@ -175,50 +175,79 @@ void main() {
   // 3. Character-level crossing
   // -------------------------------------------------------------------------
 
-  test('should INSERT character-level "wanderer" title when total XP crosses '
-      'character level 10', () async {
+  test('should INSERT character-level "wanderer" title when character level '
+      'crosses 10 (canonical formula — PR#252 regression pin)', () async {
     final user = await freshUser();
     final admin = serviceRoleClient();
     final userClient = authenticatedClient(user);
 
-    // Character level = rpg_rank_for_xp(SUM(body_part_progress.total_xp)).
-    // Curve: cumulative(n) = 60 × (1.1^(n-1) - 1) / 0.10.
-    //   rank  9 begins at ≈ 686.15
-    //   rank 10 begins at ≈ 814.77
-    // Seed two body parts at 400 each (SUM = 800 → pre char level = 9,
-    // each part still at rank 6 — far below the body-part thresholds, so
-    // the body-part block won't accidentally fire). After the workout the
-    // chest delta pushes SUM > 814.77, triggering the rank-10 wanderer.
+    // Character level (canonical formula, migration 00040 §9 / 00065 §8):
+    //   character_level = GREATEST(1, FLOOR((SUM(rank) − N_active) / 4.0) + 1)
+    //
+    // The BUGGY pre-PR#252 formula was `rpg_rank_for_xp(SUM(total_xp))`, which
+    // applied the per-body-part XP→rank curve to a cross-BP sum and produced
+    // wildly inflated character levels. The old test seed (2 BPs at rank 6,
+    // total_xp ~800) relied on the buggy formula returning pre-level=9 and
+    // post-level=10; under the canonical formula the same seed gives level 3
+    // pre and 3 post — wanderer never fires.
+    //
+    // Correct seed for canonical formula (wanderer = char-level 10):
+    //   Pre-state:  5 BPs at rank 7, 1 BP (chest) at rank 6
+    //     → SUM(rank) = 5×7 + 6 = 41, N_active = 6
+    //     → char_level = floor((41 − 6) / 4) + 1 = floor(35/4) + 1 = 8+1 = 9
+    //   Post-state: bench workout bumps chest r6 → r7 (all 6 BPs at rank 7)
+    //     → SUM(rank) = 42, char_level = floor((42 − 6) / 4) + 1 = 9+1 = 10
+    //     → wanderer threshold 10 fires (pre=9, post=10, threshold between)
+    //
+    // XP seed values chosen to be self-consistent with the rank curve:
+    //   rank 7 = cumulativeXpForRank(7) = 60 × (1.10^6 − 1) / 0.10 ≈ 462.94
+    //   rank 6 = cumulativeXpForRank(6) = 60 × (1.10^5 − 1) / 0.10 ≈ 366.31
+    //   Chest seeded at 462.0 — just below the rank-7 threshold (462.94);
+    //   any positive XP from bench 80×5 crosses it.
+    //
+    // No body-part title should fire for rank 7 because the catalog jumps
+    // chest_r5 → chest_r10 (no rank-7 milestone), matching the title table.
+    const rank7Xp = 462.94; // cumulativeXpForRank(7) ≈ 462.94
+    const rank6Xp = 462.0; // just below rank-7 threshold
+
+    // 5 BPs at rank 7 (the already-levelled body parts).
+    for (final bp in ['back', 'legs', 'shoulders', 'arms', 'core']) {
+      await seedBodyPartProgress(
+        adminClient: admin,
+        userId: user.userId,
+        bodyPart: bp,
+        totalXp: rank7Xp,
+        rank: 7,
+      );
+    }
+    // Chest at rank 6, just below rank-7 threshold — the workout bumps it.
     await seedBodyPartProgress(
       adminClient: admin,
       userId: user.userId,
       bodyPart: 'chest',
-      totalXp: 400.0,
-      rank: 6,
-    );
-    await seedBodyPartProgress(
-      adminClient: admin,
-      userId: user.userId,
-      bodyPart: 'back',
-      totalXp: 400.0,
+      totalXp: rank6Xp,
       rank: 6,
     );
 
+    // Bench press: chest 0.70 / shoulders 0.20 / arms 0.10.
+    // Even a single set of 80×5 (base_xp ≈ 6.3 at tier_diff_mult ~1 with
+    // already-high rank, novelty=1.0 first set) gives chest ~4.4 XP attributed
+    // (0.70 × ~6.3), safely crossing the 0.94 XP gap to rank 7.
     final seed = await seedWorkout(
       adminClient: admin,
       userId: user.userId,
       exerciseSlug: 'barbell_bench_press',
       weightKg: 80,
-      reps: 8,
-      numSets: 5,
+      reps: 5,
+      numSets: 3,
     );
     await saveWorkoutRpc(
       userClient: userClient,
       seed: seed,
       userId: user.userId,
       weightKg: 80,
-      reps: 8,
-      numSets: 5,
+      reps: 5,
+      numSets: 3,
     );
 
     final rows = await admin
@@ -231,7 +260,10 @@ void main() {
       1,
       reason:
           'wanderer (character level 10) must be inserted when '
-          'SUM(body_part_progress.total_xp) crosses ≈ 814.77 (rank 10 threshold)',
+          'character_level crosses 9→10 under the canonical formula '
+          'GREATEST(1, FLOOR((SUM(rank) − N_active) / 4.0) + 1). '
+          'Pre-state: 5 BPs at rank 7 + 1 at rank 6 → char-level 9. '
+          'Post-state: chest crosses rank 6→7 → all 6 at rank 7 → char-level 10.',
     );
   });
 

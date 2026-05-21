@@ -343,6 +343,120 @@ void main() {
         expect(json['near_failure'], false);
       },
     );
+
+    // -------------------------------------------------------------------------
+    // Regression test — PR #252 payload shape parity fix
+    //
+    // The SQL RPCs (record_set_xp + record_session_xp_batch) were missing
+    // `novelty_mult` and `cap_mult` from their `xp_events.payload` jsonb
+    // objects. The fix added `v_dom_novelty` and `v_dom_cap` captures
+    // inside the per-attribution-key loop and emitted them into the payload.
+    //
+    // These tests pin:
+    //   1. novelty_mult and cap_mult are ALWAYS present in toJson() output,
+    //      even at neutral values (session_vol = 0 → novelty = 1.0).
+    //   2. novelty_mult and cap_mult carry the CORRECT non-trivial values
+    //      when the inputs are non-zero (i.e., they are not stuck at 1.0
+    //      due to a missing capture in the per-attribution loop).
+    //   3. The full key set of Dart toJson() matches the expected SQL payload
+    //      shape — neither side may drop a key the other emits.
+    //
+    // If someone re-removes novelty_mult or cap_mult from the loop capture,
+    // the test at (2) would silently pass only if the value defaults to 1.0.
+    // Test (2) uses a non-zero session_vol precisely to force novelty < 1.0,
+    // making the absence of the value observable.
+    // -------------------------------------------------------------------------
+    test(
+      'toJson() — novelty_mult and cap_mult are present and non-trivial '
+      'when session volume is non-zero (regression PR#252 payload parity)',
+      () {
+        // Session volume of 15 sets → novelty_mult = exp(-1) ≈ 0.3679,
+        // well below 1.0. If the dominant-BP capture was missing from the
+        // per-attribution loop (the pre-fix bug), the field would either be
+        // absent or stuck at 1.0 (the initial value).
+        final r = XpCalculator.computeSetXp(
+          weightKg: 100,
+          reps: 5,
+          peakLoad: 100,
+          sessionVolumeForBodyPart: 15, // non-zero → novelty < 1.0
+          weeklyVolumeForBodyPart: 0,
+          difficultyMult: 1.0,
+        );
+        final json = r.toJson();
+
+        // Both keys must be present.
+        expect(
+          json.containsKey('novelty_mult'),
+          isTrue,
+          reason:
+              'novelty_mult must be in xp_events payload (PR#252 fix). '
+              'If missing, the SQL→Dart payload shape parity is broken.',
+        );
+        expect(
+          json.containsKey('cap_mult'),
+          isTrue,
+          reason: 'cap_mult must be in xp_events payload (PR#252 fix).',
+        );
+
+        // novelty_mult must reflect the actual non-trivial computation,
+        // not the defaulted neutral value 1.0. At sv=15: exp(-15/15)=exp(-1).
+        expect(
+          (json['novelty_mult'] as double),
+          closeTo(XpCalculator.noveltyMult(15), 1e-9),
+          reason:
+              'novelty_mult in payload must carry the computed dominant-BP '
+              'value (≈0.368), not a stale 1.0 initializer. If equal to 1.0, '
+              'the dominant-BP capture in the per-attribution loop was removed.',
+        );
+        expect(
+          (json['novelty_mult'] as double),
+          isNot(closeTo(1.0, 1e-6)),
+          reason:
+              'novelty_mult at sv=15 must be < 1.0 (exp decay). '
+              'A value of 1.0 indicates the buggy initial-value was used.',
+        );
+
+        // cap_mult at weekly_vol=0 stays at 1.0, which is correct.
+        expect(
+          (json['cap_mult'] as double),
+          closeTo(1.0, 1e-9),
+          reason: 'cap_mult at weekly_vol=0 must be 1.0',
+        );
+      },
+    );
+
+    test('toJson() — cap_mult is non-trivial when weekly volume exceeds cap '
+        '(regression PR#252 payload parity: cap_mult = 0.3 past the cap)', () {
+      final r = XpCalculator.computeSetXp(
+        weightKg: 100,
+        reps: 5,
+        peakLoad: 100,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 15, // at-cap → cap_mult = 0.3
+        difficultyMult: 1.0,
+      );
+      final json = r.toJson();
+
+      expect(
+        json.containsKey('cap_mult'),
+        isTrue,
+        reason: 'cap_mult must be present in xp_events payload',
+      );
+      // Phase 24d: weekly_vol >= 15 sets → cap_mult = 0.3 (overCapMultiplier).
+      expect(
+        (json['cap_mult'] as double),
+        closeTo(0.3, 1e-9),
+        reason:
+            'cap_mult at weekly_vol=15 must be 0.3 (overCapMultiplier). '
+            'A value of 1.0 indicates the cap computation was skipped.',
+      );
+      expect(
+        (json['cap_mult'] as double),
+        isNot(closeTo(1.0, 1e-6)),
+        reason:
+            'cap_mult at weekly_vol=15 must NOT be 1.0 — the cap fires here.',
+      );
+    });
   });
 
   group('Boundary + edge cases', () {
