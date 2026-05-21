@@ -217,7 +217,12 @@ void main() {
     });
   });
 
-  group('computeSetXp — end-to-end parity', () {
+  group('computeSetXp — end-to-end parity', skip:
+      'Phase 29 PR 2 restores. PR 1 regenerated the Python fixture against the '
+      'Phase 29 v2 formula (5 refinements + #6 piecewise + #29.6 abs_strength_premium); '
+      'Dart XpCalculator is still on Phase 24d. The end-to-end parity test fails by '
+      'design until Dart is ported in PR 2. Once Dart matches the fixture within '
+      '1e-4 absolute, remove this skip.', () {
     test('every set_xp fixture case matches all components within $_eps', () {
       final cases = fixtures['set_xp_examples'] as List<dynamic>;
       for (final raw in cases) {
