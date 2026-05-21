@@ -1067,7 +1067,7 @@ async function seedRpgMultiCelebrationUser(
 
 /**
  * Seed rpgOverflowQueue user (Phase 29 v2 re-tuned):
- * All 6 body parts at rank 5, total_xp = 348 (70 XP into rank 5, ~18 XP
+ * All 6 body parts at rank 5, total_xp = 358 (80 XP into rank 5, ~8 XP
  * below the rank-6 threshold of 366.31). One bench + squat + row + OHP
  * workout pushes ALL 6 body parts to rank 6, no body part skipping a rank.
  *
@@ -1082,11 +1082,20 @@ async function seedRpgMultiCelebrationUser(
  *   * Seeding at rank 5+ pushes both pre and post into the Ascendant
  *     character class (balanced, min ≥ 5, spread ≤ 30%), so no class
  *     change fires regardless of which body part is the largest gainer.
- *   * Margins on the new seed:
- *     - core gap to R6 = 366.31 − 348 = 18.31 XP; core gain ≈ 21.24 XP →
- *       3 XP margin above threshold (all 6 cross).
- *     - legs headroom to R7 = 462.94 − 348 = 114.94 XP; legs gain ≈ 85.39 XP →
- *       29 XP headroom (no body part skips two ranks).
+ *   * Margin tuning history:
+ *     - Initial attempt at total_xp = 348 (18.31 XP gap to R6) was too
+ *       thin: core's actual CI XP gain (~16 XP) fell BELOW the gap so
+ *       only 5 of 6 body parts crossed and overflow read "2 more". The
+ *       Dart simulation over-predicted core's gain by ~5 XP, likely due
+ *       to compounding NUMERIC rounding in the SQL chain vs the pure
+ *       float arithmetic in the Dart calculator + per-set session_vol
+ *       SUM that materializes after each xp_events INSERT.
+ *     - Re-tuned to 358 (8.31 XP gap): even with the conservative ~16 XP
+ *       core gain seen in CI, margin is ~8 XP. Bench/squat/row/OHP
+ *       attribution still gives core ≥ 16 XP via the squat 0.10 +
+ *       row 0.10 + OHP 0.20 shares.
+ *     - legs headroom to R7 = 462.94 − 358 = 104.94 XP; legs gain ≈
+ *       80 XP in CI → ~25 XP headroom (no skip-rank).
  *   * `body_part_progress.rank` is set explicitly to 5 but the production
  *     UPSERT recomputes it via `rpg_rank_for_xp(total_xp)` on the first
  *     workout finish — the literal value here exists only so the pre-state
@@ -1094,7 +1103,7 @@ async function seedRpgMultiCelebrationUser(
  *
  * Resulting celebration queue for the 4-exercise workout:
  *   * 6 RankUpEvents (all 5 → 6)
- *   * 1 LevelUpEvent (character level 9 → 10)
+ *   * 1 LevelUpEvent (character level 8 → 9)
  *   * 0 ClassChangeEvent (Ascendant pre+post)
  *   * 0 TitleUnlockEvent (no rank-5 / r10 / etc threshold crossed by this
  *     transition — pre is already at rank 5, post lands at rank 6 which
@@ -1138,12 +1147,12 @@ async function seedRpgOverflowQueueUser(
     { onConflict: 'id' },
   );
 
-  // All 6 body parts seeded at rank 5, total_xp = 348 (70 XP into rank 5).
+  // All 6 body parts seeded at rank 5, total_xp = 358 (80 XP into rank 5).
   // See the function dartdoc above for the Phase 29 v2 calibration reasoning.
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
     if (error) {
@@ -1185,7 +1194,7 @@ async function seedRpgOverflowQueueUser(
 
   await seedMinimalWorkout(supabase, userId);
 
-  console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 5, 348 XP — Phase 29 v2 R6 boundary, Ascendant class)');
+  console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 5, 358 XP — Phase 29 v2 R6 boundary, Ascendant class)');
 }
 
 /**
@@ -1223,12 +1232,12 @@ async function seedRpgOverflowTapCardUser(
     { onConflict: 'id' },
   );
 
-  // All 6 body parts at rank 5, total_xp = 348 (Phase 29 v2 calibration —
+  // All 6 body parts at rank 5, total_xp = 358 (Phase 29 v2 calibration —
   // mirror seedRpgOverflowQueueUser for derivation).
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
     if (error) {
@@ -1262,7 +1271,7 @@ async function seedRpgOverflowTapCardUser(
 
   await seedMinimalWorkout(supabase, userId);
 
-  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 5, 348 XP — Phase 29 v2 R6 boundary, Ascendant class)');
+  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 5, 358 XP — Phase 29 v2 R6 boundary, Ascendant class)');
 }
 
 // ---------------------------------------------------------------------------

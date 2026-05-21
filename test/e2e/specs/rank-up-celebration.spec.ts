@@ -18,7 +18,7 @@
  *                          others at rank 1 (≥1 XP) — one bench set yields
  *                          [rankUp(chest, 10), levelUp(4), titleUnlock(chest_r10)]
  *                          with NO class change and NO first-awakening (BUG-017)
- *   rpgOverflowQueue     — all 6 body parts at rank 5, 348 XP (Phase 29 v2)
+ *   rpgOverflowQueue     — all 6 body parts at rank 5, 358 XP (Phase 29 v2)
  *   rpgFreshUser         — zero workout history (reused from 18a)
  *   smokePR              — prior PR at 100 kg bench press (reused)
  */
@@ -226,7 +226,7 @@ async function reseedRpgFreshUser(): Promise<void> {
 }
 
 // Reseed rpgOverflowQueue (Phase 29 v2): all 6 body parts at rank 5,
-// total_xp = 348 (70 XP into rank 5). The 4-exercise workout pushes all
+// total_xp = 358 (80 XP into rank 5). The 4-exercise workout pushes all
 // 6 BPs to rank 6 without any BP skipping a rank, keeping class
 // Ascendant pre+post (no class-change overlay eating a queue slot).
 // See seedRpgOverflowQueueUser in global-setup.ts for the full
@@ -253,7 +253,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -294,7 +294,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
 }
 
 // Reseed rpgOverflowTapCard: same seeding contract as rpgOverflowQueue
-// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 348 XP) but on a
+// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 358 XP) but on a
 // dedicated user so the auto-dismiss and tap-card tests don't race on
 // shared XP state under --repeat-each=2.
 async function reseedOverflowTapCardUser(): Promise<void> {
@@ -319,7 +319,7 @@ async function reseedOverflowTapCardUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
+      { user_id: userId, body_part: bp, total_xp: 358, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -618,7 +618,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 5 / 348 XP (Phase 29 v2 tuned —
+    // Reseed all 6 body parts back to rank 5 / 358 XP (Phase 29 v2 tuned —
     // see reseedOverflowQueueUser docstring above for the derivation). Also
     // clears prior workout history so record_session_xp_batch sees zero
     // historical sets and novelty discounting starts fresh on every repeat.
@@ -642,7 +642,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     test.slow();
 
     // rpgOverflowQueue is seeded with all 6 body parts at rank 5, total_xp =
-    // 348 (Phase 29 v2 calibration). The 4 compound lifts below — bench
+    // 358 (Phase 29 v2 calibration). The 4 compound lifts below — bench
     // (chest 0.70 / shoulders 0.20 / arms 0.10), squat (legs 0.80 / core
     // 0.10 / back 0.10), row (back 0.70 / arms 0.20 / core 0.10), OHP
     // (shoulders 0.60 / arms 0.20 / core 0.20) — spread XP across ALL 6
@@ -748,7 +748,7 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 5 / 348 XP (Phase 29 v2 — same
+    // Reseed all 6 body parts back to rank 5 / 358 XP (Phase 29 v2 — same
     // contract as rpgOverflowQueue). Uses dedicated rpgOverflowTapCard user
     // (isolated from rpgOverflowQueue) so this describe block never races
     // with S4 on --repeat-each runs.
