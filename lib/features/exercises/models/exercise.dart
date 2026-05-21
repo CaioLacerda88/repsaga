@@ -98,6 +98,17 @@ abstract class Exercise with _$Exercise {
     // Hive cache version bump in HiveService forces a one-shot wipe so the
     // first post-upgrade fetch repopulates with authoritative server values.
     @Default(false) bool usesBodyweightLoad,
+    // Phase 29 v2 Refinement #5 — per-exercise bodyweight load fraction.
+    // For curated bodyweight exercises, `effective_load = entered_weight +
+    // bodyweight × bodyweight_load_ratio` (e.g. push-up = 0.64, pull-up =
+    // 1.00, decline_push_up = 0.74). For non-bodyweight exercises the
+    // column defaults to 1.0 server-side and is ignored by the formula
+    // (the `uses_bodyweight_load` flag gates it). Sourced from Suprak et
+    // al. 2011 (push-ups), Youdas et al. 2010 (pull-ups), Bryanton et al.
+    // 2012 (squats). Defaults to 1.0 for legacy cache rows that pre-date
+    // the column; the Hive cache version bump (currentCacheSchemaVersion
+    // 1 → 2) wipes those rows on first launch.
+    @Default(1.0) double bodyweightLoadRatio,
     // Phase 26e — per-body-part XP share for this exercise, e.g.
     // `{"chest": 0.70, "shoulders": 0.20, "arms": 0.10}`. Keys are
     // `BodyPart.dbValue` tokens; values sum to ~1.0 (server-side invariant).

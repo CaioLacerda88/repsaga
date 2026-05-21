@@ -1,65 +1,89 @@
 import 'dart:math' as math;
 
-/// Rank curve (spec §6).
+/// Rank curve — Phase 29 v2 Refinement #6 piecewise.
 ///
 /// ```
-/// xp_to_next(n)            = 60 × 1.10^(n - 1)
-/// xp_cumulative_for_rank(n) = 60 × (1.10^(n - 1) - 1) / 0.10
+/// ranks 1-20  (geometric):  cumulative(n) = 60 × (1.10^(n-1) - 1) / 0.10
+/// ranks 21-99 (linear):     cumulative(n) = cumulative(20) + (n - 20) × 367.0
 /// ```
 ///
-/// The cumulative curve is precomputed for ranks 1..99 — the lookup table
-/// is loaded once at startup and never recomputed. The function form is
-/// kept for tests + sanity checks.
+/// The breakpoint at rank 20 is the dividing line between the "newcomer
+/// onboarding curve" (geometric, compounding) and the "long-tail steady
+/// state" (linear, predictable). 367.0 XP per rank above 20 is a LITERAL
+/// constant — derived `60 × 1.10^19 ≈ 366.957` would compound float
+/// rounding at high ranks, so the persisted value is locked. Pinned by
+/// the parity test: `cumulativeXpForRank(21) - cumulativeXpForRank(20)
+/// == 367.0` exactly.
+///
+/// The cumulative curve is precomputed for ranks 1..99 — the lookup
+/// table is loaded once at startup and never recomputed. The function
+/// form is kept for tests + sanity checks.
 class RankCurve {
   const RankCurve._();
 
-  /// Visible rank cap. The underlying XP formula keeps growing past this;
-  /// the UI clamps at 99.
+  /// Visible rank cap. The underlying XP formula keeps growing past this
+  /// via the linear band; the UI clamps at 99.
   static const int maxRank = 99;
 
   /// Base — XP needed for rank 2 (the first rank-up).
   static const double xpBase = 60.0;
 
-  /// Geometric growth factor between successive `xp_to_next` levels.
+  /// Geometric growth factor for the band 1-20 (Refinement #6).
+  /// Legacy alias `xpGrowth` is kept for the existing constants-parity
+  /// test that asserts against `fixtures.meta.xp_growth`.
   static const double xpGrowth = 1.10;
+
+  /// Explicit Phase 29 v2 name for the geometric growth factor (band 1).
+  /// Same value as [xpGrowth] — both exposed to make the call-site
+  /// intent self-documenting.
+  static const double xpGrowthBand1 = 1.10;
+
+  /// Phase 29 v2 — piecewise breakpoint. Ranks 1..20 use the geometric
+  /// curve; ranks 21..99 use the linear band.
+  static const int xpGrowthBreakpoint = 20;
+
+  /// Phase 29 v2 — flat XP cost per rank in the linear band (above
+  /// [xpGrowthBreakpoint]). LITERAL value: the derived
+  /// `60 × 1.10^19 ≈ 366.957` would drift parity at high ranks, so the
+  /// persisted constant is 367.0.
+  static const double linearXpPerRank = 367.0;
 
   /// XP delta `xp_to_next(n)` — XP to advance from rank `n` to rank `n + 1`.
   ///
-  /// Rank 1 → 2 needs `xpBase` (60 XP). The geometric factor compounds
-  /// thereafter. Asserts `n >= 1`.
+  /// Phase 29 v2 piecewise: within the geometric band, grows by 1.10×
+  /// each rank. At the breakpoint and above, it's the flat
+  /// [linearXpPerRank].
   static double xpToNext(int rank) {
     assert(rank >= 1, 'rank must be >= 1');
-    return xpBase * math.pow(xpGrowth, rank - 1).toDouble();
+    if (rank >= xpGrowthBreakpoint) return linearXpPerRank;
+    return xpBase * math.pow(xpGrowthBand1, rank - 1).toDouble();
   }
 
-  /// Cumulative XP at the start of rank `n`.
+  /// Cumulative XP at the start of rank `n` (Phase 29 v2 piecewise).
   ///
-  /// `cumulativeXpForRank(1) == 0` — every user starts at rank 1 with 0 XP.
-  /// `cumulativeXpForRank(2) == 60`, `cumulativeXpForRank(99)` ≈ 6.83M
-  /// per spec §6 table.
+  /// `cumulativeXpForRank(1) == 0` — every user starts at rank 1 with 0
+  /// XP. The breakpoint values:
+  ///   `cumulativeXpForRank(20) ≈ 3069.55`
+  ///   `cumulativeXpForRank(21) = cumulativeXpForRank(20) + 367.0`
   static double cumulativeXpForRank(int rank) {
     assert(rank >= 1, 'rank must be >= 1');
     if (rank == 1) return 0.0;
-    final geom = math.pow(xpGrowth, rank - 1).toDouble();
-    return xpBase * (geom - 1) / (xpGrowth - 1);
+    if (rank <= xpGrowthBreakpoint) {
+      // Geometric sum: 60 × (1.10^(n-1) - 1) / 0.10
+      final geom = math.pow(xpGrowthBand1, rank - 1).toDouble();
+      return xpBase * (geom - 1) / (xpGrowthBand1 - 1);
+    }
+    // Linear band: pivot at the breakpoint's geometric cumulative + flat
+    // per-rank cost.
+    final atBreakpoint = _cumulativeAtBreakpoint;
+    return atBreakpoint + (rank - xpGrowthBreakpoint) * linearXpPerRank;
   }
 
   /// Highest rank whose cumulative XP threshold `totalXp` has reached.
-  ///
-  /// Caps at [maxRank]. Total XP ≥ `cumulativeXpForRank(99)` returns 99.
-  /// Negative or zero XP returns 1.
-  ///
-  /// Implementation uses the lookup table — O(log n) binary search. The
-  /// closed-form inverse (`log(1 + totalXp × 0.10 / 60) / log(1.10) + 1`)
-  /// is mathematically correct but produces float drift at high ranks
-  /// (rank 99 has cumulative XP ≈ 6.8M; subtracting 60/0.10 then dividing by
-  /// log(1.10) loses ~6 digits of precision). Lookup-table is cheap (99
-  /// entries), exact, and keeps Dart parity with the SQL implementation
-  /// (which also uses a precomputed table for the same reason).
+  /// Caps at [maxRank]. Negative or zero XP returns 1.
   static int rankForXp(num totalXp) {
     if (totalXp <= 0) return 1;
     if (totalXp >= _cumulativeTable[maxRank - 1]) return maxRank;
-    // Binary search for the largest rank n where cumulativeXpForRank(n) <= totalXp.
     var lo = 0;
     var hi = _cumulativeTable.length - 1;
     var answer = 0;
@@ -72,22 +96,17 @@ class RankCurve {
         hi = mid - 1;
       }
     }
-    // _cumulativeTable[i] = cumulativeXpForRank(i + 1) → answer index 0 == rank 1.
     return answer + 1;
   }
 
-  /// XP earned within the user's current rank — `totalXp - cumulativeXpForRank(rank)`.
-  /// Returns 0 if `totalXp` is below the rank's threshold (defensive — this
-  /// shouldn't happen with a consistent rank value but UI code shouldn't
-  /// crash on stale state).
+  /// XP earned within the user's current rank.
   static double xpInRank(num totalXp, int rank) {
     final base = cumulativeXpForRank(rank);
     final delta = totalXp - base;
     return delta < 0 ? 0 : delta.toDouble();
   }
 
-  /// XP remaining to reach the next rank — `xpToNext(rank) - xpInRank(...)`.
-  /// At [maxRank] this returns 0 (no further progression on the visible bar).
+  /// XP remaining to reach the next rank. At [maxRank] returns 0.
   static double xpToNextRank(num totalXp, int rank) {
     if (rank >= maxRank) return 0;
     final inRank = xpInRank(totalXp, rank);
@@ -96,8 +115,8 @@ class RankCurve {
     return remaining < 0 ? 0 : remaining;
   }
 
-  /// Progress fraction within the current rank — `xpInRank / xpToNext(rank)`,
-  /// clamped to [0, 1]. At maxRank returns 1.0 (filled bar).
+  /// Progress fraction within the current rank — clamped to [0, 1].
+  /// At maxRank returns 1.0.
   static double progressFraction(num totalXp, int rank) {
     if (rank >= maxRank) return 1.0;
     final inRank = xpInRank(totalXp, rank);
@@ -111,26 +130,31 @@ class RankCurve {
 
   // ---- precomputed cumulative table ----------------------------------------
 
+  /// Precomputed `cumulativeXpForRank(20)` — used by the linear-band
+  /// branch of [cumulativeXpForRank] to avoid recomputing the geometric
+  /// sum for every rank > 20. Identical math; just memoized.
+  static final double _cumulativeAtBreakpoint =
+      _computeCumulativeAtBreakpoint();
+
+  static double _computeCumulativeAtBreakpoint() {
+    final geom = math.pow(xpGrowthBand1, xpGrowthBreakpoint - 1).toDouble();
+    return xpBase * (geom - 1) / (xpGrowthBand1 - 1);
+  }
+
   /// `_cumulativeTable[i]` = `cumulativeXpForRank(i + 1)`. Length 99.
   static final List<double> _cumulativeTable = List<double>.unmodifiable(
     List<double>.generate(maxRank, (i) => cumulativeXpForRank(i + 1)),
   );
 
-  /// Read-only view of the precomputed cumulative table — exposed for tests
-  /// and any consumer that needs a rank-by-rank list (e.g. progress bars
-  /// rendering threshold ticks).
+  /// Read-only view of the precomputed cumulative table.
   static List<double> get cumulativeTable => _cumulativeTable;
 }
 
 /// Character Level (spec §7).
 ///
-/// ```
-/// character_level = max(1, floor((Σ active_ranks - N_active) / 4) + 1)
-/// ```
+/// `character_level = max(1, floor((Σ active_ranks - N_active) / 4) + 1)`
 ///
 /// v1: `N_active = 6` (chest, back, legs, shoulders, arms, core).
-/// When cardio ships in v2 the constant flips to 7 and the formula is
-/// unchanged.
 int characterLevel(
   Map<String, int> ranks, {
   List<String> activeKeys = _activeKeys,
@@ -148,9 +172,6 @@ int characterLevel(
   return lvl < 1 ? 1 : lvl;
 }
 
-/// v1 active-rank keys. Matches `BodyPart.dbValue` for the six strength
-/// tracks. Kept as `String` instead of `BodyPart` so the helper is
-/// model-import-free and trivially testable.
 const List<String> _activeKeys = [
   'chest',
   'back',

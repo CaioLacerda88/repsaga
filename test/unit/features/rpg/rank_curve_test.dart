@@ -71,17 +71,53 @@ void main() {
       }
     });
 
-    test('spec milestones — rank 10 ≈ 814 (per spec §6 table)', () {
+    test('spec milestones — rank 10 ≈ 814 (geometric band)', () {
+      // Phase 29 v2: rank 10 still in the geometric band (1..20).
       // Python sim authoritative value (60 × (1.10^9 - 1) / 0.10).
       expect(RankCurve.cumulativeXpForRank(10), closeTo(814.768614, 1e-4));
     });
 
-    test('spec milestones — rank 50 ≈ 63_431', () {
-      expect(RankCurve.cumulativeXpForRank(50), closeTo(63431, 1.0));
+    test('spec milestones — rank 20 sits exactly at the piecewise '
+        'breakpoint', () {
+      // Phase 29 v2: cumulative for rank 20 ≈ 3069.55 (end of geometric
+      // band). Rank 21 = rank 20 cumulative + LINEAR_XP_PER_RANK exactly.
+      expect(
+        RankCurve.cumulativeXpForRank(RankCurve.xpGrowthBreakpoint),
+        closeTo(3069.545, 1e-3),
+      );
+      expect(
+        RankCurve.cumulativeXpForRank(RankCurve.xpGrowthBreakpoint + 1) -
+            RankCurve.cumulativeXpForRank(RankCurve.xpGrowthBreakpoint),
+        closeTo(RankCurve.linearXpPerRank, 1e-9),
+      );
+      expect(RankCurve.linearXpPerRank, 367.0);
     });
 
-    test('spec milestones — rank 99 ≈ 6_832_761', () {
-      expect(RankCurve.cumulativeXpForRank(99), closeTo(6832761, 5.0));
+    test('spec milestones — rank 50 in the linear band', () {
+      // Phase 29 v2 linear: cumulative(20) + (50 - 20) × 367 ≈ 14079.55
+      expect(RankCurve.cumulativeXpForRank(50), closeTo(14079.55, 1.0));
+    });
+
+    test('spec milestones — rank 99 in the linear band', () {
+      // Phase 29 v2 linear: cumulative(20) + (99 - 20) × 367 ≈ 32062.55
+      expect(RankCurve.cumulativeXpForRank(99), closeTo(32062.55, 1.0));
+    });
+
+    test('every linear-band step adds exactly LINEAR_XP_PER_RANK', () {
+      for (
+        var n = RankCurve.xpGrowthBreakpoint + 1;
+        n <= RankCurve.maxRank;
+        n++
+      ) {
+        final delta =
+            RankCurve.cumulativeXpForRank(n) -
+            RankCurve.cumulativeXpForRank(n - 1);
+        expect(
+          delta,
+          closeTo(RankCurve.linearXpPerRank, 1e-9),
+          reason: 'rank $n delta should be ${RankCurve.linearXpPerRank}',
+        );
+      }
     });
 
     test('cumulative XP is strictly monotonic', () {

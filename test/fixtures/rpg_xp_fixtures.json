@@ -1,4 +1,66 @@
 {
+  "abs_strength_premium": [
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 0.0
+    },
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 10.0
+    },
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 20.0
+    },
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 30.0
+    },
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 34.99
+    },
+    {
+      "abs_strength_premium": 1.0,
+      "frac": 0.0,
+      "implied_tier": 35.0
+    },
+    {
+      "abs_strength_premium": 1.2,
+      "frac": 0.25,
+      "implied_tier": 40.0
+    },
+    {
+      "abs_strength_premium": 1.4,
+      "frac": 0.5,
+      "implied_tier": 45.0
+    },
+    {
+      "abs_strength_premium": 1.6,
+      "frac": 0.75,
+      "implied_tier": 50.0
+    },
+    {
+      "abs_strength_premium": 1.8,
+      "frac": 1.0,
+      "implied_tier": 55.0
+    },
+    {
+      "abs_strength_premium": 1.8,
+      "frac": 1.0,
+      "implied_tier": 60.0
+    },
+    {
+      "abs_strength_premium": 1.8,
+      "frac": 1.0,
+      "implied_tier": 70.0
+    }
+  ],
   "attribution_distribution": [
     {
       "attribution": {
@@ -199,28 +261,92 @@
         "core": 100.0
       },
       "set_xp_input": 100.0
+    },
+    {
+      "attribution": {
+        "arms": 0.1,
+        "chest": 0.75,
+        "shoulders": 0.15
+      },
+      "exercise_slug": "machine_chest_press",
+      "expected_distribution": {
+        "arms": 10.0,
+        "chest": 75.0,
+        "shoulders": 15.0
+      },
+      "set_xp_input": 100.0
+    },
+    {
+      "attribution": {
+        "arms": 0.2,
+        "back": 0.75,
+        "core": 0.05
+      },
+      "exercise_slug": "seated_row",
+      "expected_distribution": {
+        "arms": 20.0,
+        "back": 75.0,
+        "core": 5.0
+      },
+      "set_xp_input": 100.0
+    },
+    {
+      "attribution": {
+        "legs": 1.0
+      },
+      "exercise_slug": "leg_extension",
+      "expected_distribution": {
+        "legs": 100.0
+      },
+      "set_xp_input": 100.0
+    },
+    {
+      "attribution": {
+        "core": 0.15,
+        "legs": 0.85
+      },
+      "exercise_slug": "leg_curl",
+      "expected_distribution": {
+        "core": 15.0,
+        "legs": 85.0
+      },
+      "set_xp_input": 100.0
+    },
+    {
+      "attribution": {
+        "back": 0.35,
+        "core": 0.1,
+        "legs": 0.55
+      },
+      "exercise_slug": "romanian_deadlift",
+      "expected_distribution": {
+        "back": 35.0,
+        "core": 10.0,
+        "legs": 55.00000000000001
+      },
+      "set_xp_input": 100.0
     }
   ],
   "backfill_replay": {
     "archetype": "intermediate",
     "bodyweight_kg": 75.0,
     "final_ranks": {
-      "arms": 34,
-      "back": 34,
+      "arms": 99,
+      "back": 99,
       "cardio": 1,
-      "chest": 28,
-      "core": 25,
-      "legs": 35,
-      "shoulders": 28
+      "chest": 92,
+      "core": 68,
+      "legs": 99,
+      "shoulders": 98
     },
     "final_xp_pool": {
-      "arms": 13980.253855928451,
-      "back": 13870.52571269603,
+      "arms": 71829.25867920248,
+      "back": 46202.135428512316,
       "cardio": 0.0,
-      "chest": 7618.768123801844,
-      "core": 5704.566302177427,
-      "legs": 16105.805911412685,
-      "shoulders": 7954.8881887489415
+      "chest": 29708.729318442936,
+      "core": 20691.015504465773,
+      "legs": 72262.4377255058,
+      "shoulders": 32054.12793696774
     },
     "total_sets": 1590,
     "weeks_simulated": 30
@@ -235,20 +361,24 @@
       "weekly_volume_for_body_part": 10
     },
     {
-      "cap_mult": 0.3,
-      "weekly_volume_for_body_part": 19
+      "cap_mult": 1.0,
+      "weekly_volume_for_body_part": 14
+    },
+    {
+      "cap_mult": 1.0,
+      "weekly_volume_for_body_part": 14.99
     },
     {
       "cap_mult": 0.3,
-      "weekly_volume_for_body_part": 19.99
+      "weekly_volume_for_body_part": 15
+    },
+    {
+      "cap_mult": 0.3,
+      "weekly_volume_for_body_part": 15.5
     },
     {
       "cap_mult": 0.3,
       "weekly_volume_for_body_part": 20
-    },
-    {
-      "cap_mult": 0.3,
-      "weekly_volume_for_body_part": 20.5
     },
     {
       "cap_mult": 0.3,
@@ -316,6 +446,198 @@
       }
     }
   ],
+  "frequency_mult": [
+    {
+      "expected": 1.0,
+      "frequency_mult": 1.0,
+      "session_count": 0
+    },
+    {
+      "expected": 1.0,
+      "frequency_mult": 1.0,
+      "session_count": 1
+    },
+    {
+      "expected": 1.06,
+      "frequency_mult": 1.06,
+      "session_count": 2
+    },
+    {
+      "expected": 1.1,
+      "frequency_mult": 1.1,
+      "session_count": 3
+    },
+    {
+      "expected": 1.06,
+      "frequency_mult": 1.06,
+      "session_count": 4
+    },
+    {
+      "expected": 1.0,
+      "frequency_mult": 1.0,
+      "session_count": 5
+    },
+    {
+      "expected": 1.0,
+      "frequency_mult": 1.0,
+      "session_count": 7
+    }
+  ],
+  "implied_tier": [
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "bench",
+      "female": false,
+      "implied_tier": 22.8125,
+      "name": "diego_bench_male",
+      "reps": 5,
+      "weight_kg": 85
+    },
+    {
+      "bodyweight_kg": 60.0,
+      "exercise": "bench",
+      "female": true,
+      "implied_tier": 19.31527093596059,
+      "name": "female_int_bench",
+      "reps": 8,
+      "weight_kg": 45
+    },
+    {
+      "bodyweight_kg": 95.0,
+      "exercise": "bench",
+      "female": false,
+      "implied_tier": 55.12383900928793,
+      "name": "elite_bench_male",
+      "reps": 3,
+      "weight_kg": 180
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "squat",
+      "female": false,
+      "implied_tier": 0.0,
+      "name": "untrained_squat_male",
+      "reps": 8,
+      "weight_kg": 30
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "squat",
+      "female": false,
+      "implied_tier": 18.125,
+      "name": "beg_squat_male",
+      "reps": 5,
+      "weight_kg": 100
+    },
+    {
+      "bodyweight_kg": 100.0,
+      "exercise": "deadlift",
+      "female": false,
+      "implied_tier": 48.52941176470588,
+      "name": "leg_deadlift_male",
+      "reps": 3,
+      "weight_kg": 300
+    },
+    {
+      "bodyweight_kg": 58.0,
+      "exercise": "deadlift",
+      "female": true,
+      "implied_tier": 13.440228963305037,
+      "name": "female_beg_deadlift",
+      "reps": 8,
+      "weight_kg": 60
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "leg_press",
+      "female": false,
+      "implied_tier": 65.0,
+      "name": "leg_press_discount",
+      "reps": 5,
+      "weight_kg": 200
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "incline_bench",
+      "female": false,
+      "implied_tier": 30.172413793103452,
+      "name": "incline_bench_discount",
+      "reps": 8,
+      "weight_kg": 80
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "bench",
+      "female": false,
+      "implied_tier": 22.8125,
+      "name": "gender_null_bench",
+      "reps": 5,
+      "weight_kg": 85
+    },
+    {
+      "bodyweight_kg": 0.0,
+      "exercise": "bench",
+      "female": false,
+      "implied_tier": 15.0,
+      "name": "bw_zero_default",
+      "reps": 5,
+      "weight_kg": 100
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "overhead_press",
+      "female": false,
+      "implied_tier": 31.25,
+      "name": "ohp_male_int",
+      "reps": 5,
+      "weight_kg": 60
+    },
+    {
+      "bodyweight_kg": 60.0,
+      "exercise": "overhead_press",
+      "female": true,
+      "implied_tier": 16.477272727272727,
+      "name": "ohp_female_int",
+      "reps": 5,
+      "weight_kg": 30
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "row",
+      "female": false,
+      "implied_tier": 16.18226600985222,
+      "name": "row_male_beg",
+      "reps": 8,
+      "weight_kg": 80
+    },
+    {
+      "bodyweight_kg": 70.0,
+      "exercise": "pullup",
+      "female": false,
+      "implied_tier": 0.0,
+      "name": "pullup_no_weight",
+      "reps": 10,
+      "weight_kg": 0
+    },
+    {
+      "bodyweight_kg": 80.0,
+      "exercise": "curl",
+      "female": false,
+      "implied_tier": 36.666666666666664,
+      "name": "curl_iso_male",
+      "reps": 10,
+      "weight_kg": 25
+    },
+    {
+      "bodyweight_kg": 60.0,
+      "exercise": "tricep_pushdown",
+      "female": true,
+      "implied_tier": 31.800000000000004,
+      "name": "pushdown_iso_female",
+      "reps": 12,
+      "weight_kg": 12
+    }
+  ],
   "intensity_lookup": [
     {
       "intensity_mult": 1.3,
@@ -375,6 +697,28 @@
     }
   ],
   "meta": {
+    "bodyweight_load_ratios": {
+      "archer_push_up": 0.8,
+      "bodyweight_squat": 0.75,
+      "chin_up": 1.0,
+      "close_grip_push_up": 0.63,
+      "decline_push_up": 0.74,
+      "diamond_push_up": 0.64,
+      "dips": 0.95,
+      "handstand_push_up": 1.0,
+      "hanging_leg_raise": 1.0,
+      "incline_push_up": 0.41,
+      "inverted_row": 0.7,
+      "muscle_up": 1.0,
+      "nordic_curl": 1.0,
+      "pistol_squat": 0.95,
+      "pull_up": 1.0,
+      "push_up": 0.64,
+      "ring_dip": 0.95,
+      "walking_lunges": 0.85,
+      "wide_grip_pull_up": 1.0,
+      "wide_push_up": 0.65
+    },
     "bodyweight_load_slugs": [
       "archer_push_up",
       "bodyweight_squat",
@@ -400,14 +744,85 @@
     "char_level_denominator": 4,
     "difficulty_mult_ceiling": 1.25,
     "difficulty_mult_floor": 0.85,
+    "e_bonus": 0.8,
+    "e_ceil": 55.0,
+    "e_floor": 35.0,
+    "frequency_mult_table": [
+      1.0,
+      1.06,
+      1.1,
+      1.06,
+      1.0
+    ],
+    "linear_xp_per_rank": 367.0,
+    "nf_intensity_bonus": 0.1,
+    "nf_target_threshold": 0.85,
     "novelty_denominator": 15,
     "over_cap_multiplier": 0.3,
+    "phase": "phase29_v2",
+    "rank_curve_breakpoint": 20,
     "strength_mult_floor": 0.4,
+    "tier_diff_exp": 2.5,
+    "tier_diff_max": 8.0,
+    "tier_diff_min": 0.25,
+    "tier_diff_offset": 10.0,
     "volume_exponent": 0.6,
     "weekly_cap_sets": 15,
     "xp_base": 60,
-    "xp_growth": 1.1
+    "xp_growth": 1.1,
+    "xp_growth_band1": 1.1
   },
+  "near_failure_inferred": [
+    {
+      "actual_reps": 5,
+      "expected": false,
+      "name": "null_target",
+      "near_failure_inferred": false,
+      "target_reps": null
+    },
+    {
+      "actual_reps": 5,
+      "expected": false,
+      "name": "zero_target",
+      "near_failure_inferred": false,
+      "target_reps": 0
+    },
+    {
+      "actual_reps": 10,
+      "expected": false,
+      "name": "hit_target",
+      "near_failure_inferred": false,
+      "target_reps": 10
+    },
+    {
+      "actual_reps": 9,
+      "expected": false,
+      "name": "just_above_threshold",
+      "near_failure_inferred": false,
+      "target_reps": 10
+    },
+    {
+      "actual_reps": 8,
+      "expected": true,
+      "name": "at_threshold_below",
+      "near_failure_inferred": true,
+      "target_reps": 10
+    },
+    {
+      "actual_reps": 4,
+      "expected": true,
+      "name": "far_below",
+      "near_failure_inferred": true,
+      "target_reps": 10
+    },
+    {
+      "actual_reps": 8,
+      "expected": true,
+      "name": "threshold_int_exact",
+      "near_failure_inferred": true,
+      "target_reps": 10
+    }
+  ],
   "novelty_mult": [
     {
       "novelty_mult": 1.0,
@@ -442,9 +857,82 @@
       "session_volume_for_body_part": 50
     }
   ],
+  "overload_mult": [
+    {
+      "exercise": "bench",
+      "expected": 1.0,
+      "name": "first_set_no_prior",
+      "overload_mult": 1.0,
+      "prior_reps": null,
+      "prior_weight_kg": null,
+      "reps": 5,
+      "weight_kg": 80
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.15,
+      "name": "new_weight_pr",
+      "overload_mult": 1.15,
+      "prior_reps": 5,
+      "prior_weight_kg": 80,
+      "reps": 5,
+      "weight_kg": 85
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.1,
+      "name": "volume_pr_same_load",
+      "overload_mult": 1.0,
+      "prior_reps": 5,
+      "prior_weight_kg": 80,
+      "reps": 8,
+      "weight_kg": 80
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.05,
+      "name": "reps_up_weight_down",
+      "overload_mult": 1.0,
+      "prior_reps": 5,
+      "prior_weight_kg": 80,
+      "reps": 10,
+      "weight_kg": 75
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.0,
+      "name": "no_change",
+      "overload_mult": 1.0,
+      "prior_reps": 5,
+      "prior_weight_kg": 80,
+      "reps": 5,
+      "weight_kg": 80
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.0,
+      "name": "different_band_no_prior",
+      "overload_mult": 1.0,
+      "prior_reps": 3,
+      "prior_weight_kg": 80,
+      "reps": 10,
+      "weight_kg": 80
+    },
+    {
+      "exercise": "bench",
+      "expected": 1.0,
+      "name": "regression",
+      "overload_mult": 1.0,
+      "prior_reps": 5,
+      "prior_weight_kg": 80,
+      "reps": 3,
+      "weight_kg": 60
+    }
+  ],
   "rank_curve": {
+    "breakpoint": 20,
     "cumulative": {
-      "1": 0,
+      "1": 0.0,
       "10": 814.7686146000003,
       "11": 956.2454760600006,
       "12": 1111.8700236660006,
@@ -457,93 +945,96 @@
       "19": 2735.9503880953416,
       "2": 60.0,
       "20": 3069.545426904876,
-      "21": 3436.499969595364,
-      "22": 3840.1499665549,
-      "23": 4284.164963210391,
-      "24": 4772.58145953143,
-      "25": 5309.839605484573,
-      "26": 5900.823566033031,
-      "27": 6550.905922636335,
-      "28": 7265.996514899969,
-      "29": 8052.596166389967,
+      "21": 3436.545426904876,
+      "22": 3803.545426904876,
+      "23": 4170.545426904876,
+      "24": 4537.545426904876,
+      "25": 4904.545426904876,
+      "26": 5271.545426904876,
+      "27": 5638.545426904876,
+      "28": 6005.545426904876,
+      "29": 6372.545426904876,
       "3": 126.00000000000001,
-      "30": 8917.855783028963,
-      "31": 9869.64136133186,
-      "32": 10916.605497465047,
-      "33": 12068.266047211553,
-      "34": 13335.09265193271,
-      "35": 14728.601917125983,
-      "36": 16261.462108838583,
-      "37": 17947.608319722443,
-      "38": 19802.369151694686,
-      "39": 21842.60606686416,
+      "30": 6739.545426904876,
+      "31": 7106.545426904876,
+      "32": 7473.545426904876,
+      "33": 7840.545426904876,
+      "34": 8207.545426904875,
+      "35": 8574.545426904875,
+      "36": 8941.545426904875,
+      "37": 9308.545426904875,
+      "38": 9675.545426904875,
+      "39": 10042.545426904875,
       "4": 198.60000000000008,
-      "40": 24086.866673550576,
-      "41": 26555.55334090564,
-      "42": 29271.1086749962,
-      "43": 32258.219542495826,
-      "44": 35544.041496745405,
-      "45": 39158.445646419954,
-      "46": 43134.29021106195,
-      "47": 47507.71923216815,
-      "48": 52318.49115538496,
-      "49": 57610.34027092347,
+      "40": 10409.545426904875,
+      "41": 10776.545426904875,
+      "42": 11143.545426904875,
+      "43": 11510.545426904875,
+      "44": 11877.545426904875,
+      "45": 12244.545426904875,
+      "46": 12611.545426904875,
+      "47": 12978.545426904875,
+      "48": 13345.545426904875,
+      "49": 13712.545426904875,
       "5": 278.46,
-      "50": 63431.37429801583,
-      "51": 69834.51172781741,
-      "52": 76877.96290059916,
-      "53": 84625.75919065908,
-      "54": 93148.335109725,
-      "55": 102523.1686206975,
-      "56": 112835.48548276727,
-      "57": 124179.03403104401,
-      "58": 136656.93743414842,
-      "59": 150382.63117756328,
+      "50": 14079.545426904875,
+      "51": 14446.545426904875,
+      "52": 14813.545426904875,
+      "53": 15180.545426904875,
+      "54": 15547.545426904875,
+      "55": 15914.545426904875,
+      "56": 16281.545426904875,
+      "57": 16648.545426904875,
+      "58": 17015.545426904875,
+      "59": 17382.545426904875,
       "6": 366.306,
-      "60": 165480.89429531962,
-      "61": 182088.98372485154,
-      "62": 200357.88209733673,
-      "63": 220453.67030707045,
-      "64": 242559.03733777752,
-      "65": 266874.9410715553,
-      "66": 293622.43517871085,
-      "67": 323044.6786965819,
-      "68": 355409.14656624023,
-      "69": 391010.06122286426,
+      "60": 17749.545426904875,
+      "61": 18116.545426904875,
+      "62": 18483.545426904875,
+      "63": 18850.545426904875,
+      "64": 19217.545426904875,
+      "65": 19584.545426904875,
+      "66": 19951.545426904875,
+      "67": 20318.545426904875,
+      "68": 20685.545426904875,
+      "69": 21052.545426904875,
       "7": 462.9366000000001,
-      "70": 430171.06734515063,
-      "71": 473248.1740796658,
-      "72": 520632.99148763245,
-      "73": 572756.2906363957,
-      "74": 630091.9197000354,
-      "75": 693161.1116700389,
-      "76": 762537.2228370429,
-      "77": 838850.9451207472,
-      "78": 922796.0396328222,
-      "79": 1015135.6435961043,
+      "70": 21419.545426904875,
+      "71": 21786.545426904875,
+      "72": 22153.545426904875,
+      "73": 22520.545426904875,
+      "74": 22887.545426904875,
+      "75": 23254.545426904875,
+      "76": 23621.545426904875,
+      "77": 23988.545426904875,
+      "78": 24355.545426904875,
+      "79": 24722.545426904875,
       "8": 569.2302600000002,
-      "80": 1116709.2079557148,
-      "81": 1228440.1287512865,
-      "82": 1351344.1416264153,
-      "83": 1486538.5557890565,
-      "84": 1635252.4113679626,
-      "85": 1798837.652504759,
-      "86": 1978781.4177552352,
-      "87": 2176719.5595307583,
-      "88": 2394451.515483835,
-      "89": 2633956.6670322185,
+      "80": 25089.545426904875,
+      "81": 25456.545426904875,
+      "82": 25823.545426904875,
+      "83": 26190.545426904875,
+      "84": 26557.545426904875,
+      "85": 26924.545426904875,
+      "86": 27291.545426904875,
+      "87": 27658.545426904875,
+      "88": 28025.545426904875,
+      "89": 28392.545426904875,
       "9": 686.1532860000003,
-      "90": 2897412.333735441,
-      "91": 3187213.5671089846,
-      "92": 3505994.9238198837,
-      "93": 3856654.4162018728,
-      "94": 4242379.85782206,
-      "95": 4666677.843604267,
-      "96": 5133405.627964694,
-      "97": 5646806.190761163,
-      "98": 6211546.80983728,
-      "99": 6832761.490821008
+      "90": 28759.545426904875,
+      "91": 29126.545426904875,
+      "92": 29493.545426904875,
+      "93": 29860.545426904875,
+      "94": 30227.545426904875,
+      "95": 30594.545426904875,
+      "96": 30961.545426904875,
+      "97": 31328.545426904875,
+      "98": 31695.545426904875,
+      "99": 32062.545426904875
     },
+    "cumulative_after_breakpoint": 3436.545426904876,
+    "cumulative_at_breakpoint": 3069.545426904876,
+    "linear_xp_per_rank": 367.0,
     "lookups": [
       {
         "rank": 1,
@@ -582,36 +1073,28 @@
         "total_xp": 3069
       },
       {
-        "rank": 29,
-        "total_xp": 8916
+        "rank": 19,
+        "total_xp": 3069
       },
       {
-        "rank": 29,
-        "total_xp": 8917
+        "rank": 20,
+        "total_xp": 3435
       },
       {
-        "rank": 49,
-        "total_xp": 63430
+        "rank": 20,
+        "total_xp": 3436
       },
       {
-        "rank": 49,
-        "total_xp": 63431
+        "rank": 21,
+        "total_xp": 3802
       },
       {
-        "rank": 69,
-        "total_xp": 430170
-      },
-      {
-        "rank": 69,
-        "total_xp": 430171
+        "rank": 21,
+        "total_xp": 3803
       },
       {
         "rank": 98,
-        "total_xp": 6832760
-      },
-      {
-        "rank": 98,
-        "total_xp": 6832761
+        "total_xp": 32062
       },
       {
         "rank": 99,
@@ -620,7 +1103,7 @@
     ],
     "milestones": [
       {
-        "cumulative_xp": 0,
+        "cumulative_xp": 0.0,
         "rank": 1
       },
       {
@@ -640,23 +1123,27 @@
         "rank": 20
       },
       {
-        "cumulative_xp": 8917.855783028963,
+        "cumulative_xp": 3436.545426904876,
+        "rank": 21
+      },
+      {
+        "cumulative_xp": 6739.545426904876,
         "rank": 30
       },
       {
-        "cumulative_xp": 63431.37429801583,
+        "cumulative_xp": 14079.545426904875,
         "rank": 50
       },
       {
-        "cumulative_xp": 430171.06734515063,
+        "cumulative_xp": 21419.545426904875,
         "rank": 70
       },
       {
-        "cumulative_xp": 2897412.333735441,
+        "cumulative_xp": 28759.545426904875,
         "rank": 90
       },
       {
-        "cumulative_xp": 6832761.490821008,
+        "cumulative_xp": 32062.545426904875,
         "rank": 99
       }
     ]
@@ -1053,6 +1540,5779 @@
       "set_xp": 15.182686303625283
     }
   ],
+  "set_xp_v2": [
+    {
+      "awarded_per_bp": {
+        "arms": 15.791639263400336,
+        "chest": 110.54147484380235,
+        "shoulders": 31.583278526800672
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 23.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.481551108436556,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 80
+      },
+      "name": "beginner__bench_80x5_wv0",
+      "set_xp_total": 157.91639263400336
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 19.25000826208501,
+        "chest": 79.05061200742334,
+        "shoulders": 38.50001652417002
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 23.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.481551108436556,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": [
+          [
+            "bench",
+            "strength"
+          ],
+          [
+            75,
+            4
+          ]
+        ],
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 8,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 80
+      },
+      "name": "beginner__bench_80x5_prior_wv10",
+      "set_xp_total": 136.80063679367836
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 16.59796862003374,
+        "chest": 116.18578034023616,
+        "shoulders": 33.19593724006748
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 30.63887062800405,
+        "difficulty_mult": 1.09,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.35,
+        "lift_implied_tier": 31.470588235294112,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.8655493221126207,
+        "volume_load": 300
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 100,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 105.0,
+        "persona": "beginner",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "beginner__bench_100x3_nf_wv0",
+      "set_xp_total": 165.97968620033737
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 18.94571696397936,
+        "chest": 95.02639584172144,
+        "shoulders": 37.89143392795872
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 51.80831860519864,
+        "difficulty_mult": 1.09,
+        "eff_weight": 60,
+        "frequency_mult": 1.1,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 21.080000000000005,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.3709946074098345,
+        "volume_load": 720
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 3,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 60,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "beginner",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 14,
+        "weight_kg": 60
+      },
+      "name": "beginner__bench_60x12_wv14",
+      "set_xp_total": 151.86354673365952
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 15.66575407973557,
+        "chest": 32.898083567444694,
+        "shoulders": 31.33150815947114
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 44.5566792727406,
+        "difficulty_mult": 1.09,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 21.3448275862069,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.3868915431038604,
+        "volume_load": 560
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 70,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "beginner",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 16,
+        "weight_kg": 70
+      },
+      "name": "beginner__bench_70x8_wv16",
+      "set_xp_total": 79.89534580665139
+    },
+    {
+      "awarded_per_bp": {
+        "back": 18.70430980505426,
+        "core": 18.70430980505426,
+        "legs": 149.6344784404341
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 20.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.30385345994252,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "beginner__squat_100x5_wv0",
+      "set_xp_total": 187.04309805054262
+    },
+    {
+      "awarded_per_bp": {
+        "back": 24.39954921136232,
+        "core": 24.39954921136232,
+        "legs": 149.50644947444172
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 18.444444444444446,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.200121315319675,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": [
+          [
+            "squat",
+            "hypertrophy"
+          ],
+          [
+            75,
+            9
+          ]
+        ],
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 80,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "beginner",
+        "reps": 10,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 80
+      },
+      "name": "beginner__squat_80x10_prior_wv8",
+      "set_xp_total": 198.30554789716635
+    },
+    {
+      "awarded_per_bp": {
+        "back": 11.374236217825269,
+        "core": 11.374236217825269,
+        "legs": 90.99388974260215
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 19.394421119744536,
+        "difficulty_mult": 1.19,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.4000000000000001,
+        "lift_implied_tier": 27.333333333333336,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.6962362668512787,
+        "volume_load": 140
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 140,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 147.0,
+        "persona": "beginner",
+        "reps": 1,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "beginner__squat_140x1_nf_wv0",
+      "set_xp_total": 113.74236217825269
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 19.23966890323617,
+        "back": 76.95867561294467,
+        "core": 19.23966890323617,
+        "legs": 76.95867561294467
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 24.529411764705884,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.5623938754088895,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 147.0,
+        "persona": "beginner",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "beginner__deadlift_140x3_wv0",
+      "set_xp_total": 192.3966890323617
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 24.624059302568682,
+        "back": 66.02400226112859,
+        "core": 24.624059302568682,
+        "legs": 98.49623721027473
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.21,
+        "eff_weight": 100,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 18.103448275862068,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.1761856505264663,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": [
+          [
+            "deadlift",
+            "hypertrophy"
+          ],
+          [
+            95,
+            7
+          ]
+        ],
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 100,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "beginner",
+        "reps": 8,
+        "session_volume_prior": 6,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 100
+      },
+      "name": "beginner__deadlift_100x8_prior_wv10",
+      "set_xp_total": 213.76835807654072
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 26.788893967936218,
+        "core": 26.788893967936218,
+        "shoulders": 80.36668190380865
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 27.46401358265294,
+        "difficulty_mult": 1.19,
+        "eff_weight": 50,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 25.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.586095690932794,
+        "volume_load": 250
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 50,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 52.5,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 50
+      },
+      "name": "beginner__overhead_press_50x5_wv0",
+      "set_xp_total": 133.9444698396811
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 30.169454847402672,
+        "core": 30.169454847402672,
+        "shoulders": 74.10198146149847
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.19,
+        "eff_weight": 40,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 22.40740740740741,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.4485612557310006,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 40,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 42.0,
+        "persona": "beginner",
+        "reps": 10,
+        "session_volume_prior": 3,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 6,
+        "weight_kg": 40
+      },
+      "name": "beginner__overhead_press_40x10_wv6",
+      "set_xp_total": 134.44089115630382
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 23.814325482813047,
+        "back": 83.35013918984565,
+        "core": 11.907162741406523
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 11.500000000000002,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.605124926903441,
+        "volume_load": 350
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 70
+      },
+      "name": "beginner__row_70x5_wv0",
+      "set_xp_total": 119.07162741406522
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 33.94673592164727,
+        "back": 85.13364712874088,
+        "core": 16.973367960823634
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 11.88888888888889,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.6455495987739472,
+        "volume_load": 600
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "row",
+            "hypertrophy"
+          ],
+          [
+            55,
+            9
+          ]
+        ],
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "beginner",
+        "reps": 10,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 60
+      },
+      "name": "beginner__row_60x10_prior_wv8",
+      "set_xp_total": 136.05375101121177
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 13.815853527535287,
+        "back": 35.92121917159175,
+        "core": 5.526341411014116
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 75.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 600.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 75.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 0,
+        "persona": "beginner",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 0,
+        "weight_kg": 0
+      },
+      "name": "beginner__pullup_0x8_wv0",
+      "set_xp_total": 55.263414110141156
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 15.50241698875939,
+        "back": 30.871725260574586,
+        "core": 6.200966795503756
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.76011932470927,
+        "difficulty_mult": 1.19,
+        "eff_weight": 85.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 425.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "pullup",
+            "strength"
+          ],
+          [
+            5,
+            4
+          ]
+        ],
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 85.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "beginner",
+        "reps": 5,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 6,
+        "weight_kg": 10
+      },
+      "name": "beginner__pullup_10x5_prior_wv6",
+      "set_xp_total": 52.57510904483773
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 74.70822844203359,
+        "back": 8.300914271337065
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 26.799503306491435,
+        "difficulty_mult": 0.87,
+        "eff_weight": 20,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 33.4,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.9350080467654847,
+        "volume_load": 240
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.9,
+          "back": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 0.87,
+        "dominant_part": "arms",
+        "effective_load": 20,
+        "exercise": "curl",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 21.0,
+        "persona": "beginner",
+        "reps": 12,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "arms",
+        "slug": "barbell_curl",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 20
+      },
+      "name": "beginner__curl_20x12_wv0",
+      "set_xp_total": 83.00914271337065
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 154.46364403742393,
+        "shoulders": 11.345862149615986
+      },
+      "components": {
+        "abs_strength_premium": 1.7040000000000004,
+        "base_xp": 34.18074312170107,
+        "difficulty_mult": 0.92,
+        "eff_weight": 30,
+        "frequency_mult": 1.06,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 52.60000000000001,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 4.415586619106256,
+        "volume_load": 360
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.95,
+          "shoulders": 0.05
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 0.92,
+        "dominant_part": "arms",
+        "effective_load": 30,
+        "exercise": "tricep_pushdown",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 31.5,
+        "persona": "beginner",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "arms",
+        "slug": "tricep_pushdown",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 30
+      },
+      "name": "beginner__tricep_pushdown_30x12_wv8",
+      "set_xp_total": 165.80950618703991
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 4.752230526033482,
+        "core": 2.376115263016741,
+        "shoulders": 35.351715579770435
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 20.214116085399308,
+        "difficulty_mult": 0.89,
+        "eff_weight": 10,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.9,
+        "lift_implied_tier": 16.818181818181817,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.0817650618569448,
+        "volume_load": 150
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "core": 0.05,
+          "shoulders": 0.85
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 75.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 0.89,
+        "dominant_part": "shoulders",
+        "effective_load": 10,
+        "exercise": "lateral_raise",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "beginner",
+        "reps": 15,
+        "session_volume_prior": 2,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "lateral_raise",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 4,
+        "weight_kg": 10
+      },
+      "name": "beginner__lateral_raise_10x15_wv4",
+      "set_xp_total": 42.48006136882066
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 7.013845976217026,
+        "chest": 49.096921833519175,
+        "shoulders": 14.027691952434052
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 20.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.5463285872731887,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 80
+      },
+      "name": "diego__bench_80x5_wv0",
+      "set_xp_total": 70.13845976217026
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 8.549878245008554,
+        "chest": 35.110276247937335,
+        "shoulders": 17.099756490017107
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 20.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.5463285872731887,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": [
+          [
+            "bench",
+            "strength"
+          ],
+          [
+            75,
+            4
+          ]
+        ],
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 8,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 80
+      },
+      "name": "diego__bench_80x5_prior_wv10",
+      "set_xp_total": 60.75991098296299
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 8.582613417769455,
+        "chest": 60.07829392438617,
+        "shoulders": 17.16522683553891
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 30.63887062800405,
+        "difficulty_mult": 1.09,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.35,
+        "lift_implied_tier": 27.941176470588232,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.998829871202995,
+        "volume_load": 300
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 100,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 105.0,
+        "persona": "diego",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "diego__bench_100x3_nf_wv0",
+      "set_xp_total": 85.82613417769453
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 8.04419900143379,
+        "chest": 40.34744317109604,
+        "shoulders": 16.08839800286758
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 51.80831860519864,
+        "difficulty_mult": 1.09,
+        "eff_weight": 60,
+        "frequency_mult": 1.1,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 18.200000000000003,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.4312971900889853,
+        "volume_load": 720
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 3,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 60,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "diego",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 14,
+        "weight_kg": 60
+      },
+      "name": "diego__bench_60x12_wv14",
+      "set_xp_total": 64.48004017539742
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 6.695025811708465,
+        "chest": 14.059554204587776,
+        "shoulders": 13.39005162341693
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 44.5566792727406,
+        "difficulty_mult": 1.09,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 18.448275862068968,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.4474455673901532,
+        "volume_load": 560
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 70,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "diego",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 16,
+        "weight_kg": 70
+      },
+      "name": "diego__bench_70x8_wv16",
+      "set_xp_total": 34.14463163971317
+    },
+    {
+      "awarded_per_bp": {
+        "back": 8.075373905132238,
+        "core": 8.075373905132238,
+        "legs": 64.60299124105791
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 18.125,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.426401310439762,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "diego__squat_100x5_wv0",
+      "set_xp_total": 80.75373905132238
+    },
+    {
+      "awarded_per_bp": {
+        "back": 10.1374509953559,
+        "core": 10.1374509953559,
+        "legs": 62.116487969008
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 16.66666666666667,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.329576736530034,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": [
+          [
+            "squat",
+            "hypertrophy"
+          ],
+          [
+            75,
+            9
+          ]
+        ],
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 80,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "diego",
+        "reps": 10,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 80
+      },
+      "name": "diego__squat_80x10_prior_wv8",
+      "set_xp_total": 82.3913899597198
+    },
+    {
+      "awarded_per_bp": {
+        "back": 5.66625350261584,
+        "core": 5.66625350261584,
+        "legs": 45.33002802092672
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 19.394421119744536,
+        "difficulty_mult": 1.19,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.4000000000000001,
+        "lift_implied_tier": 25.0,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.841337852709566,
+        "volume_load": 140
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 140,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 147.0,
+        "persona": "diego",
+        "reps": 1,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "diego__squat_140x1_nf_wv0",
+      "set_xp_total": 56.662535026158395
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 9.030684765549125,
+        "back": 36.1227390621965,
+        "core": 9.030684765549125,
+        "legs": 36.1227390621965
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 22.058823529411768,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.6721106928263894,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 147.0,
+        "persona": "diego",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "diego__deadlift_140x3_wv0",
+      "set_xp_total": 90.30684765549125
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 9.975038134035401,
+        "back": 26.745872084855467,
+        "core": 9.975038134035401,
+        "legs": 39.900152536141604
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.21,
+        "eff_weight": 100,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 16.03448275862069,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.2866510998644543,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": [
+          [
+            "deadlift",
+            "hypertrophy"
+          ],
+          [
+            95,
+            7
+          ]
+        ],
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 100,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "diego",
+        "reps": 8,
+        "session_volume_prior": 6,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 100
+      },
+      "name": "diego__deadlift_100x8_prior_wv10",
+      "set_xp_total": 86.59610088906787
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 12.408984926710993,
+        "core": 12.408984926710993,
+        "shoulders": 37.22695478013298
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 27.46401358265294,
+        "difficulty_mult": 1.19,
+        "eff_weight": 50,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 21.875,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.6611289524603128,
+        "volume_load": 250
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 50,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 52.5,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 50
+      },
+      "name": "diego__overhead_press_50x5_wv0",
+      "set_xp_total": 62.04492463355496
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 13.221755741256278,
+        "core": 13.221755741256278,
+        "shoulders": 32.475174105155645
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.19,
+        "eff_weight": 40,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 19.44444444444445,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.511331073519903,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 40,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 42.0,
+        "persona": "diego",
+        "reps": 10,
+        "session_volume_prior": 3,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 6,
+        "weight_kg": 40
+      },
+      "name": "diego__overhead_press_40x10_wv6",
+      "set_xp_total": 58.91868558766819
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 7.757725689993361,
+        "back": 27.152039914976758,
+        "core": 3.8788628449966804
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 9.96875,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.848642326051455,
+        "volume_load": 350
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 70
+      },
+      "name": "diego__row_70x5_wv0",
+      "set_xp_total": 38.7886284499668
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 11.241450346336167,
+        "back": 28.191979022936508,
+        "core": 5.620725173168084
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 10.333333333333332,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.8760728725739523,
+        "volume_load": 600
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "row",
+            "hypertrophy"
+          ],
+          [
+            55,
+            9
+          ]
+        ],
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "diego",
+        "reps": 10,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 60
+      },
+      "name": "diego__row_60x10_prior_wv8",
+      "set_xp_total": 45.054154542440756
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 14.361339680977485,
+        "back": 37.33948317054146,
+        "core": 5.744535872390994
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 48.273410692361296,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 640.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 80.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 0,
+        "persona": "diego",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 0,
+        "weight_kg": 0
+      },
+      "name": "diego__pullup_0x8_wv0",
+      "set_xp_total": 57.44535872390995
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 16.043294832337462,
+        "back": 31.948836797348605,
+        "core": 6.417317932934985
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 39.077566270460274,
+        "difficulty_mult": 1.19,
+        "eff_weight": 90.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 450.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "pullup",
+            "strength"
+          ],
+          [
+            5,
+            4
+          ]
+        ],
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 90.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "diego",
+        "reps": 5,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 6,
+        "weight_kg": 10
+      },
+      "name": "diego__pullup_10x5_prior_wv6",
+      "set_xp_total": 54.409449562621056
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 40.83799206174161,
+        "back": 4.537554673526845
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 26.799503306491435,
+        "difficulty_mult": 0.87,
+        "eff_weight": 20,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 30.999999999999996,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.1510057289256204,
+        "volume_load": 240
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.9,
+          "back": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 0.87,
+        "dominant_part": "arms",
+        "effective_load": 20,
+        "exercise": "curl",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 21.0,
+        "persona": "diego",
+        "reps": 12,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "arms",
+        "slug": "barbell_curl",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 20
+      },
+      "name": "diego__curl_20x12_wv0",
+      "set_xp_total": 45.37554673526846
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 91.39162355427534,
+        "shoulders": 6.713015020059853
+      },
+      "components": {
+        "abs_strength_premium": 1.5600000000000005,
+        "base_xp": 34.18074312170107,
+        "difficulty_mult": 0.92,
+        "eff_weight": 30,
+        "frequency_mult": 1.06,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 49.00000000000001,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.8537341798395155,
+        "volume_load": 360
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.95,
+          "shoulders": 0.05
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 0.92,
+        "dominant_part": "arms",
+        "effective_load": 30,
+        "exercise": "tricep_pushdown",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 31.5,
+        "persona": "diego",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "arms",
+        "slug": "tricep_pushdown",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 30
+      },
+      "name": "diego__tricep_pushdown_30x12_wv8",
+      "set_xp_total": 98.1046385743352
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.9225879535414288,
+        "core": 0.9612939767707144,
+        "shoulders": 14.302080283849142
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 20.214116085399308,
+        "difficulty_mult": 0.89,
+        "eff_weight": 10,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.9,
+        "lift_implied_tier": 15.454545454545451,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.246775456517337,
+        "volume_load": 150
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "core": 0.05,
+          "shoulders": 0.85
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 80.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 0.89,
+        "dominant_part": "shoulders",
+        "effective_load": 10,
+        "exercise": "lateral_raise",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "diego",
+        "reps": 15,
+        "session_volume_prior": 2,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "lateral_raise",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 4,
+        "weight_kg": 10
+      },
+      "name": "diego__lateral_raise_10x15_wv4",
+      "set_xp_total": 17.185962214161286
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.1339514178848158,
+        "chest": 7.937659925193709,
+        "shoulders": 2.2679028357696316
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 13.526315789473683,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 80
+      },
+      "name": "elite__bench_80x5_wv0",
+      "set_xp_total": 11.339514178848157
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.3822867784015904,
+        "chest": 5.6763931897959585,
+        "shoulders": 2.764573556803181
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 13.526315789473683,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": [
+          [
+            "bench",
+            "strength"
+          ],
+          [
+            75,
+            4
+          ]
+        ],
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 8,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 80
+      },
+      "name": "elite__bench_80x5_prior_wv10",
+      "set_xp_total": 9.82325352500073
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.2880299005177993,
+        "chest": 9.016209303624594,
+        "shoulders": 2.5760598010355986
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 30.63887062800405,
+        "difficulty_mult": 1.09,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.35,
+        "lift_implied_tier": 19.58204334365325,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.29997304024287547,
+        "volume_load": 300
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 100,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 105.0,
+        "persona": "elite",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "elite__bench_100x3_nf_wv0",
+      "set_xp_total": 12.880299005177992
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.405053935886941,
+        "chest": 7.047355966755513,
+        "shoulders": 2.810107871773882
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 51.80831860519864,
+        "difficulty_mult": 1.09,
+        "eff_weight": 60,
+        "frequency_mult": 1.1,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 12.465263157894737,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 720
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 3,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 60,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "elite",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 14,
+        "weight_kg": 60
+      },
+      "name": "elite__bench_60x12_wv14",
+      "set_xp_total": 11.262517774416335
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.1563519144592205,
+        "chest": 2.428339020364363,
+        "shoulders": 2.312703828918441
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 44.5566792727406,
+        "difficulty_mult": 1.09,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 12.611615245009075,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 560
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 70,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "elite",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 16,
+        "weight_kg": 70
+      },
+      "name": "elite__bench_70x8_wv16",
+      "set_xp_total": 5.8973947637420245
+    },
+    {
+      "awarded_per_bp": {
+        "back": 1.415340452583184,
+        "core": 1.415340452583184,
+        "legs": 11.322723620665473
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 13.157894736842103,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "elite__squat_100x5_wv0",
+      "set_xp_total": 14.15340452583184
+    },
+    {
+      "awarded_per_bp": {
+        "back": 1.9061425182973828,
+        "core": 1.9061425182973828,
+        "legs": 11.679748573805774
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 11.438596491228076,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": [
+          [
+            "squat",
+            "hypertrophy"
+          ],
+          [
+            75,
+            9
+          ]
+        ],
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 80,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "elite",
+        "reps": 10,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 80
+      },
+      "name": "elite__squat_80x10_prior_wv8",
+      "set_xp_total": 15.49203361040054
+    },
+    {
+      "awarded_per_bp": {
+        "back": 0.916067598989555,
+        "core": 0.916067598989555,
+        "legs": 7.32854079191644
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 19.394421119744536,
+        "difficulty_mult": 1.19,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.4000000000000001,
+        "lift_implied_tier": 19.473684210526315,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.29769051894369436,
+        "volume_load": 140
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 140,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 147.0,
+        "persona": "elite",
+        "reps": 1,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "elite__squat_140x1_nf_wv0",
+      "set_xp_total": 9.16067598989555
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.350192425102618,
+        "back": 5.400769700410472,
+        "core": 1.350192425102618,
+        "legs": 5.400769700410472
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 16.207430340557277,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 147.0,
+        "persona": "elite",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "elite__deadlift_140x3_wv0",
+      "set_xp_total": 13.50192425102618
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.9381785270082634,
+        "back": 5.196799677797867,
+        "core": 1.9381785270082634,
+        "legs": 7.752714108033054
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.21,
+        "eff_weight": 100,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 9.588021778584391,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": [
+          [
+            "deadlift",
+            "hypertrophy"
+          ],
+          [
+            95,
+            7
+          ]
+        ],
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 100,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "elite",
+        "reps": 8,
+        "session_volume_prior": 6,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 100
+      },
+      "name": "elite__deadlift_100x8_prior_wv10",
+      "set_xp_total": 16.825870839847447
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 1.8675529236203994,
+        "core": 1.8675529236203994,
+        "shoulders": 5.602658770861198
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 27.46401358265294,
+        "difficulty_mult": 1.19,
+        "eff_weight": 50,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 14.63157894736842,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 250
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 50,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 52.5,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 50
+      },
+      "name": "elite__overhead_press_50x5_wv0",
+      "set_xp_total": 9.337764618101996
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 2.187104462568664,
+        "core": 2.187104462568664,
+        "shoulders": 5.371949051097171
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.19,
+        "eff_weight": 40,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 13.198830409356729,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 40,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 42.0,
+        "persona": "elite",
+        "reps": 10,
+        "session_volume_prior": 3,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 6,
+        "weight_kg": 40
+      },
+      "name": "elite__overhead_press_40x10_wv6",
+      "set_xp_total": 9.7461579762345
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 2.285334307472131,
+        "back": 7.998670076152457,
+        "core": 1.1426671537360655
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 6.105263157894737,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 350
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 70
+      },
+      "name": "elite__row_70x5_wv0",
+      "set_xp_total": 11.426671537360653
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 3.207909609536289,
+        "back": 8.044986868531511,
+        "core": 1.6039548047681444
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 6.456140350877192,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 600
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "row",
+            "hypertrophy"
+          ],
+          [
+            55,
+            9
+          ]
+        ],
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "elite",
+        "reps": 10,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 60
+      },
+      "name": "elite__row_60x10_prior_wv8",
+      "set_xp_total": 12.856851282835944
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 15.921175346228898,
+        "back": 41.39505590019514,
+        "core": 6.36847013849156
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 53.516555785643355,
+        "difficulty_mult": 1.19,
+        "eff_weight": 95.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 760.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 95.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 0,
+        "persona": "elite",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 0,
+        "weight_kg": 0
+      },
+      "name": "elite__pullup_0x8_wv0",
+      "set_xp_total": 63.6847013849156
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 17.59793213351893,
+        "back": 35.044762785968025,
+        "core": 7.039172853407573
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 42.864284821626924,
+        "difficulty_mult": 1.19,
+        "eff_weight": 105.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 525.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "pullup",
+            "strength"
+          ],
+          [
+            5,
+            4
+          ]
+        ],
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 105.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "elite",
+        "reps": 5,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 6,
+        "weight_kg": 10
+      },
+      "name": "elite__pullup_10x5_prior_wv6",
+      "set_xp_total": 59.68186777289453
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 8.083444742981415,
+        "back": 0.8981605269979349
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 26.799503306491435,
+        "difficulty_mult": 0.87,
+        "eff_weight": 20,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 25.315789473684212,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.4257686304781849,
+        "volume_load": 240
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.9,
+          "back": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 0.87,
+        "dominant_part": "arms",
+        "effective_load": 20,
+        "exercise": "curl",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 21.0,
+        "persona": "elite",
+        "reps": 12,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "arms",
+        "slug": "barbell_curl",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 20
+      },
+      "name": "elite__curl_20x12_wv0",
+      "set_xp_total": 8.981605269979351
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 19.50732662595947,
+        "shoulders": 1.432877232600092
+      },
+      "components": {
+        "abs_strength_premium": 1.2189473684210526,
+        "base_xp": 34.18074312170107,
+        "difficulty_mult": 0.92,
+        "eff_weight": 30,
+        "frequency_mult": 1.06,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 40.473684210526315,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.7795509845373556,
+        "volume_load": 360
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.95,
+          "shoulders": 0.05
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 0.92,
+        "dominant_part": "arms",
+        "effective_load": 30,
+        "exercise": "tricep_pushdown",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 31.5,
+        "persona": "elite",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "arms",
+        "slug": "tricep_pushdown",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 30
+      },
+      "name": "elite__tricep_pushdown_30x12_wv8",
+      "set_xp_total": 20.940203858559563
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 0.3855120710572582,
+        "core": 0.1927560355286291,
+        "shoulders": 2.8678139694455607
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 20.214116085399308,
+        "difficulty_mult": 0.89,
+        "eff_weight": 10,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.9,
+        "lift_implied_tier": 12.224880382775117,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.25,
+        "volume_load": 150
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "core": 0.05,
+          "shoulders": 0.85
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 95.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 50,
+          "back": 50,
+          "cardio": 50,
+          "chest": 50,
+          "core": 50,
+          "legs": 50,
+          "shoulders": 50
+        },
+        "difficulty_mult": 0.89,
+        "dominant_part": "shoulders",
+        "effective_load": 10,
+        "exercise": "lateral_raise",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "elite",
+        "reps": 15,
+        "session_volume_prior": 2,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "lateral_raise",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 4,
+        "weight_kg": 10
+      },
+      "name": "elite__lateral_raise_10x15_wv4",
+      "set_xp_total": 3.446082076031448
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 9.164477195447274,
+        "chest": 64.15134036813092,
+        "shoulders": 18.32895439089455
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 34.25,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.020473948641903,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 80
+      },
+      "name": "female_int__bench_80x5_wv0",
+      "set_xp_total": 91.64477195447274
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 11.171497701250228,
+        "chest": 45.87601824892419,
+        "shoulders": 22.342995402500456
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 34.25,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.020473948641903,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": [
+          [
+            "bench",
+            "strength"
+          ],
+          [
+            75,
+            4
+          ]
+        ],
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 8,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 80
+      },
+      "name": "female_int__bench_80x5_prior_wv10",
+      "set_xp_total": 79.39051135267488
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 12.41939021087779,
+        "chest": 86.93573147614453,
+        "shoulders": 24.83878042175558
+      },
+      "components": {
+        "abs_strength_premium": 1.2537360890302067,
+        "base_xp": 30.63887062800405,
+        "difficulty_mult": 1.09,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.35,
+        "lift_implied_tier": 41.34340222575517,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.307015036361785,
+        "volume_load": 300
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 100,
+        "exercise": "bench",
+        "gender_female": true,
+        "near_failure": true,
+        "peak_load": 105.0,
+        "persona": "female_int",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "female_int__bench_100x3_nf_wv0",
+      "set_xp_total": 124.1939021087779
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 10.983490907434069,
+        "chest": 55.0901059420532,
+        "shoulders": 21.966981814868138
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 51.80831860519864,
+        "difficulty_mult": 1.09,
+        "eff_weight": 60,
+        "frequency_mult": 1.1,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 32.75000000000001,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.954282790663964,
+        "volume_load": 720
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 3,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 60,
+        "exercise": "bench",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "female_int",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 14,
+        "weight_kg": 60
+      },
+      "name": "female_int__bench_60x12_wv14",
+      "set_xp_total": 88.04057866435541
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 9.082155632810364,
+        "chest": 19.07252682890176,
+        "shoulders": 18.16431126562073
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 44.5566792727406,
+        "difficulty_mult": 1.09,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 32.95689655172414,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.9635362555389821,
+        "volume_load": 560
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 70,
+        "exercise": "bench",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "female_int",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 16,
+        "weight_kg": 70
+      },
+      "name": "female_int__bench_70x8_wv16",
+      "set_xp_total": 46.31899372733285
+    },
+    {
+      "awarded_per_bp": {
+        "back": 10.34568586159927,
+        "core": 10.34568586159927,
+        "legs": 82.76548689279416
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 30.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.8274200109798706,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "female_int__squat_100x5_wv0",
+      "set_xp_total": 103.45685861599269
+    },
+    {
+      "awarded_per_bp": {
+        "back": 13.229577080164923,
+        "core": 13.229577080164923,
+        "legs": 81.06326392222208
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 28.09368191721133,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.7351243352965455,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": [
+          [
+            "squat",
+            "hypertrophy"
+          ],
+          [
+            75,
+            9
+          ]
+        ],
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 80,
+        "exercise": "squat",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "female_int",
+        "reps": 10,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 80
+      },
+      "name": "female_int__squat_80x10_prior_wv8",
+      "set_xp_total": 107.52241808255192
+    },
+    {
+      "awarded_per_bp": {
+        "back": 7.735400055058014,
+        "core": 7.735400055058014,
+        "legs": 61.883200440464115
+      },
+      "components": {
+        "abs_strength_premium": 1.1426900584795323,
+        "base_xp": 19.394421119744536,
+        "difficulty_mult": 1.19,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.4000000000000001,
+        "lift_implied_tier": 38.567251461988306,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.1998436277568296,
+        "volume_load": 140
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 140,
+        "exercise": "squat",
+        "gender_female": true,
+        "near_failure": true,
+        "peak_load": 147.0,
+        "persona": "female_int",
+        "reps": 1,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "female_int__squat_140x1_nf_wv0",
+      "set_xp_total": 77.35400055058014
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 11.570394089189115,
+        "back": 46.28157635675646,
+        "core": 11.570394089189115,
+        "legs": 46.28157635675646
+      },
+      "components": {
+        "abs_strength_premium": 1.028482972136223,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 35.71207430340557,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.0830293395945416,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 147.0,
+        "persona": "female_int",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "female_int__deadlift_140x3_wv0",
+      "set_xp_total": 115.70394089189114
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 13.582399377099215,
+        "back": 36.41821830292633,
+        "core": 13.582399377099215,
+        "legs": 54.32959750839686
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.21,
+        "eff_weight": 100,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 28.43573667711599,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.7519541141115562,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": [
+          [
+            "deadlift",
+            "hypertrophy"
+          ],
+          [
+            95,
+            7
+          ]
+        ],
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 100,
+        "exercise": "deadlift",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "female_int",
+        "reps": 8,
+        "session_volume_prior": 6,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 100
+      },
+      "name": "female_int__deadlift_100x8_prior_wv10",
+      "set_xp_total": 117.91261456552164
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 14.514980475699804,
+        "core": 14.514980475699804,
+        "shoulders": 43.54494142709941
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 27.46401358265294,
+        "difficulty_mult": 1.19,
+        "eff_weight": 50,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 32.5,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.9430480780648192,
+        "volume_load": 250
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 50,
+        "exercise": "overhead_press",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 52.5,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 50
+      },
+      "name": "female_int__overhead_press_50x5_wv0",
+      "set_xp_total": 72.57490237849902
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 16.216399771291215,
+        "core": 16.216399771291215,
+        "shoulders": 39.83059559088861
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.19,
+        "eff_weight": 40,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 30.555555555555557,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.8536380004736632,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 40,
+        "exercise": "overhead_press",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 42.0,
+        "persona": "female_int",
+        "reps": 10,
+        "session_volume_prior": 3,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 6,
+        "weight_kg": 40
+      },
+      "name": "female_int__overhead_press_40x10_wv6",
+      "set_xp_total": 72.26339513347105
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 13.899393464187009,
+        "back": 48.64787712465453,
+        "core": 6.949696732093504
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 23.928571428571427,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.5204989286186206,
+        "volume_load": 350
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70,
+        "exercise": "row",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 70
+      },
+      "name": "female_int__row_70x5_wv0",
+      "set_xp_total": 69.49696732093504
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 19.91833252977109,
+        "back": 49.95238119200495,
+        "core": 9.959166264885544
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 24.52380952380952,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.5522828690807728,
+        "volume_load": 600
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "row",
+            "hypertrophy"
+          ],
+          [
+            55,
+            9
+          ]
+        ],
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60,
+        "exercise": "row",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "female_int",
+        "reps": 10,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 60
+      },
+      "name": "female_int__row_60x10_prior_wv8",
+      "set_xp_total": 79.82987998666158
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 12.084584212930029,
+        "back": 31.419918953618076,
+        "core": 4.833833685172012
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 40.62045113589926,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 480.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60.0,
+        "exercise": "pullup",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 0,
+        "persona": "female_int",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 0,
+        "weight_kg": 0
+      },
+      "name": "female_int__pullup_0x8_wv0",
+      "set_xp_total": 48.338336851720115
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 13.797705881362992,
+        "back": 27.47694024128689,
+        "core": 5.5190823525451975
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 350.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "pullup",
+            "strength"
+          ],
+          [
+            5,
+            4
+          ]
+        ],
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70.0,
+        "exercise": "pullup",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "female_int",
+        "reps": 5,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 6,
+        "weight_kg": 10
+      },
+      "name": "female_int__pullup_10x5_prior_wv6",
+      "set_xp_total": 46.79372847519508
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 82.08763382717996,
+        "back": 9.120848203019994
+      },
+      "components": {
+        "abs_strength_premium": 1.6400000000000001,
+        "base_xp": 26.799503306491435,
+        "difficulty_mult": 0.87,
+        "eff_weight": 20,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 51.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.6363986220212574,
+        "volume_load": 240
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.9,
+          "back": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 0.87,
+        "dominant_part": "arms",
+        "effective_load": 20,
+        "exercise": "curl",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 21.0,
+        "persona": "female_int",
+        "reps": 12,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "arms",
+        "slug": "barbell_curl",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 20
+      },
+      "name": "female_int__curl_20x12_wv0",
+      "set_xp_total": 91.20848203019995
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 111.52047177126421,
+        "shoulders": 8.191545055549414
+      },
+      "components": {
+        "abs_strength_premium": 1.8,
+        "base_xp": 34.18074312170107,
+        "difficulty_mult": 0.92,
+        "eff_weight": 30,
+        "frequency_mult": 1.06,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 65.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.017962336657171,
+        "volume_load": 360
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.95,
+          "shoulders": 0.05
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 0.92,
+        "dominant_part": "arms",
+        "effective_load": 30,
+        "exercise": "tricep_pushdown",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 31.5,
+        "persona": "female_int",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "arms",
+        "slug": "tricep_pushdown",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 30
+      },
+      "name": "female_int__tricep_pushdown_30x12_wv8",
+      "set_xp_total": 119.71201682681362
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 2.837875426411963,
+        "core": 1.4189377132059815,
+        "shoulders": 21.110879275688703
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 20.214116085399308,
+        "difficulty_mult": 0.89,
+        "eff_weight": 10,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.9,
+        "lift_implied_tier": 30.27272727272727,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.8403285133388645,
+        "volume_load": 150
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "core": 0.05,
+          "shoulders": 0.85
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 60.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 0.89,
+        "dominant_part": "shoulders",
+        "effective_load": 10,
+        "exercise": "lateral_raise",
+        "gender_female": true,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "female_int",
+        "reps": 15,
+        "session_volume_prior": 2,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "lateral_raise",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 4,
+        "weight_kg": 10
+      },
+      "name": "female_int__lateral_raise_10x15_wv4",
+      "set_xp_total": 25.367692415306646
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 17.344760960104946,
+        "chest": 121.41332672073462,
+        "shoulders": 34.68952192020989
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 30.384615384615383,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.8239647410244673,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 80
+      },
+      "name": "untrained_youth__bench_80x5_wv0",
+      "set_xp_total": 173.44760960104944
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 21.14326361036793,
+        "chest": 86.8253096558846,
+        "shoulders": 42.28652722073586
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 30.384615384615383,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.8239647410244673,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": [
+          [
+            "bench",
+            "strength"
+          ],
+          [
+            75,
+            4
+          ]
+        ],
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 8,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 80
+      },
+      "name": "untrained_youth__bench_80x5_prior_wv10",
+      "set_xp_total": 150.2551004869884
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 21.450651205072553,
+        "chest": 150.15455843550785,
+        "shoulders": 42.90130241014511
+      },
+      "components": {
+        "abs_strength_premium": 1.2063348416289592,
+        "base_xp": 30.63887062800405,
+        "difficulty_mult": 1.09,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.35,
+        "lift_implied_tier": 40.15837104072398,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 4.141225595452004,
+        "volume_load": 300
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 100,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 105.0,
+        "persona": "untrained_youth",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "untrained_youth__bench_100x3_nf_wv0",
+      "set_xp_total": 214.5065120507255
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 20.979922005126948,
+        "chest": 105.22939707048643,
+        "shoulders": 41.959844010253896
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 51.80831860519864,
+        "difficulty_mult": 1.09,
+        "eff_weight": 60,
+        "frequency_mult": 1.1,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 28.16923076923077,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.732938905274722,
+        "volume_load": 720
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 3,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 60,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "untrained_youth",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 14,
+        "weight_kg": 60
+      },
+      "name": "untrained_youth__bench_60x12_wv14",
+      "set_xp_total": 168.16916308586727
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 17.326870958189296,
+        "chest": 36.38642901219752,
+        "shoulders": 34.65374191637859
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 44.5566792727406,
+        "difficulty_mult": 1.09,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 28.47480106100796,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.7460202948451857,
+        "volume_load": 560
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 70,
+        "exercise": "bench",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "untrained_youth",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "chest",
+        "slug": "barbell_bench_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 16,
+        "weight_kg": 70
+      },
+      "name": "untrained_youth__bench_70x8_wv16",
+      "set_xp_total": 88.3670418867654
+    },
+    {
+      "awarded_per_bp": {
+        "back": 20.192739673810483,
+        "core": 20.192739673810483,
+        "legs": 161.54191739048386
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 24.615384615384617,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.566763678123531,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 100
+      },
+      "name": "untrained_youth__squat_100x5_wv0",
+      "set_xp_total": 201.92739673810482
+    },
+    {
+      "awarded_per_bp": {
+        "back": 26.46992470258735,
+        "core": 26.46992470258735,
+        "legs": 162.1925235527208
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.19,
+        "eff_weight": 80,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 22.820512820512825,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.471661280373593,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": [
+          [
+            "squat",
+            "hypertrophy"
+          ],
+          [
+            75,
+            9
+          ]
+        ],
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 80,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 84.0,
+        "persona": "untrained_youth",
+        "reps": 10,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 80
+      },
+      "name": "untrained_youth__squat_80x10_prior_wv8",
+      "set_xp_total": 215.13237295789548
+    },
+    {
+      "awarded_per_bp": {
+        "back": 12.07435529242423,
+        "core": 12.07435529242423,
+        "legs": 96.59484233939384
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 19.394421119744536,
+        "difficulty_mult": 1.19,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.4000000000000001,
+        "lift_implied_tier": 33.07692307692307,
+        "near_failure_resolved": true,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.9237509293823356,
+        "volume_load": 140
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 140,
+        "exercise": "squat",
+        "gender_female": false,
+        "near_failure": true,
+        "peak_load": 147.0,
+        "persona": "untrained_youth",
+        "reps": 1,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "legs",
+        "slug": "barbell_squat",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "untrained_youth__squat_140x1_nf_wv0",
+      "set_xp_total": 120.7435529242423
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 20.699986968843056,
+        "back": 82.79994787537223,
+        "core": 20.699986968843056,
+        "legs": 82.79994787537223
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 30.610859728506796,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.832784606103423,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 147.0,
+        "persona": "untrained_youth",
+        "reps": 3,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 140
+      },
+      "name": "untrained_youth__deadlift_140x3_wv0",
+      "set_xp_total": 206.99986968843058
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 27.074545659849036,
+        "back": 72.59444277241609,
+        "core": 27.074545659849036,
+        "legs": 108.29818263939615
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 55.18918645844858,
+        "difficulty_mult": 1.21,
+        "eff_weight": 100,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 23.196286472148543,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.4922667445966398,
+        "volume_load": 800
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "best_by_band_prior": [
+          [
+            "deadlift",
+            "hypertrophy"
+          ],
+          [
+            95,
+            7
+          ]
+        ],
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 100,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 105.0,
+        "persona": "untrained_youth",
+        "reps": 8,
+        "session_volume_prior": 6,
+        "session_volume_seed_bp": "back",
+        "slug": "deadlift",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 10,
+        "weight_kg": 100
+      },
+      "name": "untrained_youth__deadlift_100x8_prior_wv10",
+      "set_xp_total": 235.0417167315103
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 29.209710938984706,
+        "core": 29.209710938984706,
+        "shoulders": 87.62913281695411
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 27.46401358265294,
+        "difficulty_mult": 1.19,
+        "eff_weight": 50,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 32.69230769230769,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.9101583909010955,
+        "volume_load": 250
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 50,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 52.5,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 50
+      },
+      "name": "untrained_youth__overhead_press_50x5_wv0",
+      "set_xp_total": 146.04855469492352
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 33.2159068172111,
+        "core": 33.2159068172111,
+        "shoulders": 81.58465320786993
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.19,
+        "eff_weight": 40,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 29.700854700854705,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.7967901608824373,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "core": 0.2,
+          "shoulders": 0.6
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "shoulders",
+        "effective_load": 40,
+        "exercise": "overhead_press",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 42.0,
+        "persona": "untrained_youth",
+        "reps": 10,
+        "session_volume_prior": 3,
+        "session_volume_seed_bp": "shoulders",
+        "slug": "overhead_press",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 6,
+        "weight_kg": 40
+      },
+      "name": "untrained_youth__overhead_press_40x10_wv6",
+      "set_xp_total": 148.01646684229215
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 27.089251578637562,
+        "back": 94.81238052523146,
+        "core": 13.544625789318781
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 33.607857462825464,
+        "difficulty_mult": 1.19,
+        "eff_weight": 70,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 15.329670329670328,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 2.963379525050944,
+        "volume_load": 350
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 70,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 73.5,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 70
+      },
+      "name": "untrained_youth__row_70x5_wv0",
+      "set_xp_total": 135.4462578931878
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 38.60112603039262,
+        "back": 96.80620398463431,
+        "core": 19.30056301519631
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 46.43984379003458,
+        "difficulty_mult": 1.19,
+        "eff_weight": 60,
+        "frequency_mult": 1.06,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 15.879120879120881,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 3.0082772528597297,
+        "volume_load": 600
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.2,
+          "back": 0.7,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "row",
+            "hypertrophy"
+          ],
+          [
+            55,
+            9
+          ]
+        ],
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 60,
+        "exercise": "row",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 63.0,
+        "persona": "untrained_youth",
+        "reps": 10,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "back",
+        "slug": "barbell_bent_over_row",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 60
+      },
+      "name": "untrained_youth__row_60x10_prior_wv8",
+      "set_xp_total": 154.70789303022323
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 12.679116031169814,
+        "back": 32.965701681041516,
+        "core": 5.071646412467926
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 42.61887741569686,
+        "difficulty_mult": 1.19,
+        "eff_weight": 65.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.0,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 520.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 65.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 0,
+        "persona": "untrained_youth",
+        "reps": 8,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 0,
+        "weight_kg": 0
+      },
+      "name": "untrained_youth__pullup_0x8_wv0",
+      "set_xp_total": 50.716464124679256
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 14.380858633317231,
+        "back": 28.63823860891131,
+        "core": 5.752343453326893
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 35.02827580883506,
+        "difficulty_mult": 1.19,
+        "eff_weight": 75.0,
+        "frequency_mult": 1.0,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 0.0,
+        "near_failure_resolved": false,
+        "overload_mult": 1.15,
+        "strength_mult": 1.0,
+        "tier_diff_mult": 1.0,
+        "volume_load": 375.0
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.25,
+          "back": 0.65,
+          "core": 0.1
+        },
+        "best_by_band_prior": [
+          [
+            "pullup",
+            "strength"
+          ],
+          [
+            5,
+            4
+          ]
+        ],
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": 1.0,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "back",
+        "effective_load": 75.0,
+        "exercise": "pullup",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 10.5,
+        "persona": "untrained_youth",
+        "reps": 5,
+        "session_volume_prior": 4,
+        "session_volume_seed_bp": "back",
+        "slug": "pull_up",
+        "target_reps": null,
+        "uses_bodyweight_load": true,
+        "weekly_volume_prior": 6,
+        "weight_kg": 10
+      },
+      "name": "untrained_youth__pullup_10x5_prior_wv6",
+      "set_xp_total": 48.771440695555434
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 91.65396444908322,
+        "back": 10.183773827675914
+      },
+      "components": {
+        "abs_strength_premium": 1.1723076923076923,
+        "base_xp": 26.799503306491435,
+        "difficulty_mult": 0.87,
+        "eff_weight": 20,
+        "frequency_mult": 1.0,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 39.30769230769231,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 4.11800459524169,
+        "volume_load": 240
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.9,
+          "back": 0.1
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 1,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 0.87,
+        "dominant_part": "arms",
+        "effective_load": 20,
+        "exercise": "curl",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 21.0,
+        "persona": "untrained_youth",
+        "reps": 12,
+        "session_volume_prior": 0,
+        "session_volume_seed_bp": "arms",
+        "slug": "barbell_curl",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 0,
+        "weight_kg": 20
+      },
+      "name": "untrained_youth__curl_20x12_wv0",
+      "set_xp_total": 101.83773827675913
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 168.41193692493005,
+        "shoulders": 12.37041008974985
+      },
+      "components": {
+        "abs_strength_premium": 1.8,
+        "base_xp": 34.18074312170107,
+        "difficulty_mult": 0.92,
+        "eff_weight": 30,
+        "frequency_mult": 1.06,
+        "intensity_mult": 0.95,
+        "lift_implied_tier": 61.46153846153847,
+        "near_failure_resolved": false,
+        "overload_mult": 1.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 4.557556784062017,
+        "volume_load": 360
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.95,
+          "shoulders": 0.05
+        },
+        "best_by_band_prior": null,
+        "bodyweight_kg": 65.0,
+        "bodyweight_load_ratio": null,
+        "bp_session_count": 2,
+        "current_ranks": {
+          "arms": 1,
+          "back": 1,
+          "cardio": 1,
+          "chest": 1,
+          "core": 1,
+          "legs": 1,
+          "shoulders": 1
+        },
+        "difficulty_mult": 0.92,
+        "dominant_part": "arms",
+        "effective_load": 30,
+        "exercise": "tricep_pushdown",
+        "gender_female": false,
+        "near_failure": false,
+        "peak_load": 31.5,
+        "persona": "untrained_youth",
+        "reps": 12,
+        "session_volume_prior": 5,
+        "session_volume_seed_bp": "arms",
+        "slug": "tricep_pushdown",
+        "target_reps": null,
+        "uses_bodyweight_load": false,
+        "weekly_volume_prior": 8,
+        "weight_kg": 30
+      },
+      "name": "untrained_youth__tricep_pushdown_30x12_wv8",
+      "set_xp_total": 180.78234701467989
+    }
+  ],
   "strength_mult": [
     {
       "expected": 1.0,
@@ -1095,6 +7355,93 @@
       "peak_load": 0,
       "strength_mult": 1.0,
       "weight_kg": 50
+    }
+  ],
+  "tier_diff_mult": [
+    {
+      "current_rank": 1.0,
+      "implied_tier": 1.0,
+      "tier_diff_mult": 1.0
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 0.0,
+      "tier_diff_mult": 1.0
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 24.0,
+      "tier_diff_mult": 3.535085100118529
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 35.0,
+      "tier_diff_mult": 3.9886909543790514
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 46.0,
+      "tier_diff_mult": 4.28364320494897
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 55.0,
+      "tier_diff_mult": 4.457519751823088
+    },
+    {
+      "current_rank": 1.0,
+      "implied_tier": 70.0,
+      "tier_diff_mult": 4.666761436486774
+    },
+    {
+      "current_rank": 25.0,
+      "implied_tier": 5.0,
+      "tier_diff_mult": 0.25
+    },
+    {
+      "current_rank": 50.0,
+      "implied_tier": 1.0,
+      "tier_diff_mult": 0.25
+    },
+    {
+      "current_rank": 25.0,
+      "implied_tier": 25.0,
+      "tier_diff_mult": 1.0
+    },
+    {
+      "current_rank": 50.0,
+      "implied_tier": 50.0,
+      "tier_diff_mult": 1.0
+    },
+    {
+      "current_rank": 30.0,
+      "implied_tier": 10.0,
+      "tier_diff_mult": 0.278854800926934
+    },
+    {
+      "current_rank": 35.0,
+      "implied_tier": 45.0,
+      "tier_diff_mult": 1.3013488313450121
+    },
+    {
+      "current_rank": 50.0,
+      "implied_tier": 35.0,
+      "tier_diff_mult": 0.6507526633890727
+    },
+    {
+      "current_rank": 30.0,
+      "implied_tier": 60.0,
+      "tier_diff_mult": 1.9268964684175434
+    },
+    {
+      "current_rank": 5.0,
+      "implied_tier": 15.0,
+      "tier_diff_mult": 2.052800957118669
+    },
+    {
+      "current_rank": 8.0,
+      "implied_tier": 8.0,
+      "tier_diff_mult": 1.0
     }
   ],
   "vitality": {

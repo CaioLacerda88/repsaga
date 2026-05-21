@@ -42,6 +42,14 @@ class HiveService {
   /// - 1: initial baseline (Phase 24c — first PR to introduce the mechanism;
   ///   accompanies the addition of `Exercise.usesBodyweightLoad`. Pre-existing
   ///   installs have no version key and are treated as needing the wipe.)
+  /// - 2: Phase 29 v2 — adds `Exercise.bodyweightLoadRatio` (per-exercise
+  ///   biomechanical load fraction for the 20 curated bodyweight slugs).
+  ///   Legacy rows from version 1 would deserialize the new field with the
+  ///   Freezed `@Default(1.0)`, but that's WRONG for push-ups (0.64),
+  ///   pistol squats (0.95), etc. — leaving the stale 1.0 would skew XP
+  ///   for every bodyweight exercise until the cache TTL fires. The wipe
+  ///   forces a one-shot refresh against the migration's authoritative
+  ///   per-slug ratios.
   ///
   /// Adding `usesBodyweightLoad` with `@Default(false)` is technically
   /// backward-compatible at the Freezed level (legacy rows deserialize as
@@ -49,7 +57,7 @@ class HiveService {
   /// authoritative server flags — leaving stale `false`s in cache would let
   /// the 20 curated bodyweight exercises miss their effective-load math
   /// until the cache TTL fires.
-  static const int currentCacheSchemaVersion = 1;
+  static const int currentCacheSchemaVersion = 2;
 
   /// Hive boxes whose contents are model-serialized payloads from Supabase
   /// reads. These are wiped on cache schema version mismatch — the cost is

@@ -28,6 +28,7 @@ class ProfileRepository extends BaseRepository {
     int? trainingFrequencyPerWeek,
     String? locale,
     double? bodyweightKg,
+    Gender? gender,
   }) {
     return mapException(() async {
       final updates = <String, dynamic>{
@@ -48,6 +49,12 @@ class ProfileRepository extends BaseRepository {
         // the row (writing null would clobber it on every unrelated update).
         // ignore: use_null_aware_elements
         if (bodyweightKg != null) 'bodyweight_kg': bodyweightKg,
+        // Phase 29 v2 — same omit-on-null discipline as bodyweightKg. The
+        // SQL CHECK constraint accepts one of `male` / `female` / `other`
+        // or NULL; the enum's @JsonValue annotations serialize to the
+        // matching tokens.
+        // ignore: use_null_aware_elements
+        if (gender != null) 'gender': gender.name,
       };
       final data = await _client
           .from('profiles')

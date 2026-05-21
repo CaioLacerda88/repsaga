@@ -1,6 +1,6 @@
 """
 Generates JSON fixtures from the canonical Python XP simulation for Dart
-parity tests.
+parity tests — Phase 29 v2 + 29.6 LOCKED oracle.
 
 Run:  python test/fixtures/generate_rpg_fixtures.py
 Output: test/fixtures/rpg_xp_fixtures.json
@@ -8,6 +8,32 @@ Output: test/fixtures/rpg_xp_fixtures.json
 This file is the SINGLE source of truth for both Python and Dart XP
 calculations. If a Dart calculator drifts vs the Python sim, the fixture
 test fails, and the spec/Python is the authority.
+
+Phase 29 v2 oracle additions:
+  * `set_xp_v2`           — 94-row matrix exercising the full 11-multiplier
+                            chain (base × intensity × strength × novelty ×
+                            cap × difficulty × tier_diff × abs_strength_prem
+                            × overload × frequency × attribution_share).
+  * `implied_tier`        — 17 per-lift × per-gender interpolation cases
+                            (bench/squat/deadlift/ohp male + female; isolation;
+                            variant discount; gender NULL → male).
+  * `abs_strength_premium` — 12 curve points around the [E_FLOOR, E_CEIL]
+                             piecewise-linear ramp (T ≤ 35 → 1.0, T ≥ 55 → 1.8).
+  * `tier_diff_mult`      — 17 (T, R) lookup cases including floor (0.25),
+                            ceiling (8.0), and the canonical T=R=1 unit point.
+  * `overload_mult`       — 7 cases exercising the in-band PR detector's
+                            AND/OR ladder (1.15 / 1.10 / 1.05 / 1.00).
+  * `frequency_mult`      — 7 cases pinning [1.00, 1.06, 1.10, 1.06, 1.00].
+  * `near_failure_inferred` — 7 cases pinning actual < target × 0.85.
+
+The legacy 6-multiplier fixture lists are preserved (`set_xp_examples`,
+`intensity_lookup`, `volume_load`, `strength_mult`, `novelty_mult`,
+`cap_mult`, `rank_curve`, `vitality`, `character_level`,
+`backfill_replay`). They test Dart's component-level parity with the
+legacy chain that production code didn't even consume — they're still
+load-bearing for the Dart unit tests, and the values are computed
+against the new Phase 29 v2 constants where applicable (volume_exponent
+= 0.60, weekly_cap = 15, etc.).
 """
 
 from __future__ import annotations
@@ -37,7 +63,7 @@ sim = _load_sim()
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Legacy fixture builders (component-level Dart parity)
 # ---------------------------------------------------------------------------
 
 def fx_intensity_lookup() -> list[dict]:
@@ -49,7 +75,7 @@ def fx_intensity_lookup() -> list[dict]:
 
 
 def fx_volume_load() -> list[dict]:
-    """volume_load = max(1.0, weight × reps), then base = volume_load^0.65."""
+    """volume_load = max(1.0, weight × reps), then base = volume_load^0.60."""
     cases = []
     for w, r in [(0, 8), (1, 1), (5, 5), (20, 8), (60, 5), (100, 8), (140, 3), (200, 1)]:
         vl = max(1.0, w * r)
@@ -67,13 +93,13 @@ def fx_strength_mult() -> list[dict]:
     """strength_mult = clamp(weight / peak, 0.40, 1.00)."""
     cases = []
     for weight, peak, expected in [
-        (100, 100, 1.0),     # at peak
-        (110, 100, 1.0),     # above peak (clamps to 1.0; peak should advance)
-        (70, 100, 0.7),      # 70% deload
-        (50, 100, 0.5),      # 50% technique
-        (30, 100, 0.4),      # below floor → 0.4
-        (10, 100, 0.4),      # way below floor
-        (50, 0, 1.0),        # peak=0 → divide-by-zero guard returns 1.0
+        (100, 100, 1.0),
+        (110, 100, 1.0),
+        (70, 100, 0.7),
+        (50, 100, 0.5),
+        (30, 100, 0.4),
+        (10, 100, 0.4),
+        (50, 0, 1.0),
     ]:
         if peak <= 0:
             mult = 1.0
@@ -98,87 +124,67 @@ def fx_novelty_mult() -> list[dict]:
 
 
 def fx_cap_mult() -> list[dict]:
-    """cap_mult = 0.5 if weekly_volume >= 20 else 1.0."""
+    """cap_mult = 0.3 if weekly_volume >= 15 else 1.0 (Phase 24d propagation)."""
     cases = []
-    for wv in [0, 10, 19, 19.99, 20, 20.5, 30, 50]:
+    for wv in [0, 10, 14, 14.99, 15, 15.5, 20, 30, 50]:
         cm = sim.OVER_CAP_MULTIPLIER if wv >= sim.WEEKLY_CAP_SETS else 1.0
         cases.append({'weekly_volume_for_body_part': wv, 'cap_mult': cm})
     return cases
 
 
 def fx_set_xp_examples() -> list[dict]:
-    """End-to-end set_xp examples (no attribution applied — just total set_xp).
+    """Legacy 6-multiplier chain set_xp fixture (pre-Phase-29 component parity).
 
-    Phase 24a: every scenario carries a `difficulty_mult` input. We exercise
-    both ends of the [0.85, 1.25] range explicitly (clamp boundaries) plus a
-    mix of real per-exercise values from `DIFFICULTY_MULT_BY_SLUG` so the
-    fixture covers the multipliers that actually ship in the migration. The
-    `slug` field is informational (documents which migration row the value
-    came from) and is not consumed by the Dart parity test — Dart asserts
-    against the `inputs.difficulty_mult` numeric value directly.
+    These cases pin the Dart calculator's basic chain against Phase 24c +
+    24d constants. Phase 29 v2's full chain is covered by `set_xp_v2`
+    (and by the integration parity test against the persona panel). This
+    list is preserved verbatim from the Phase 24c+d generator so the
+    existing Dart unit tests' component-level assertions stay stable.
 
-    Phase 24c: 4 new boundary scenarios exercise the bodyweight-as-load
-    semantics (pure bodyweight, weighted bodyweight, non-bodyweight ignored,
-    NULL bodyweight graceful fallback). The Dart calculator is bodyweight-
-    AGNOSTIC — production callers pre-convert to `effective_load` before
-    invoking `computeSetXp`. To keep the existing fixture-driven Dart parity
-    tests passing without code change, the fixture stores the
-    already-converted `effective_load` as `inputs.weight_kg`, plus
-    informational `bodyweight_kg` / `uses_bodyweight_load` / `effective_load`
-    keys so SQL parity tests can assert the pre-conversion contract end-to-end.
+    Each scenario stores already-converted `effective_load` in
+    `inputs.weight_kg` — the Dart calculator is bodyweight-agnostic, so
+    callers pre-convert. `bodyweight_kg`, `uses_bodyweight_load`,
+    `effective_load`, `entered_weight_kg` are informational keys for SQL
+    parity tests + audit-trail clarity.
     """
     cases = []
     scenarios = [
-        # Bench at peak, fresh session, low weekly volume — barbell_bench_press = 1.09
         {'name': 'bench_peak_fresh', 'weight': 100, 'reps': 5, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'barbell_bench_press',
          'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
-        # Same set, late in session (10 sets in already) — same exercise
         {'name': 'bench_peak_late_session', 'weight': 100, 'reps': 5, 'peak': 100,
          'session_volume_bp': 10, 'weekly_volume_bp': 0,
          'slug': 'barbell_bench_press',
          'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
-        # Deload at 70% — same exercise
         {'name': 'bench_deload_70', 'weight': 70, 'reps': 5, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'barbell_bench_press',
          'difficulty_mult': sim.difficulty_mult_for_slug('barbell_bench_press')},
-        # Junk volume — past weekly cap. Use deadlift (1.21) so cap × ceiling
-        # interaction is exercised end-to-end.
         {'name': 'past_weekly_cap', 'weight': 100, 'reps': 5, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 25,
          'slug': 'deadlift',
          'difficulty_mult': sim.difficulty_mult_for_slug('deadlift')},
-        # High-rep endurance — leg_curl (0.85) hits the FLOOR exactly.
         {'name': 'high_rep_endurance_floor', 'weight': 60, 'reps': 20, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'leg_curl',
          'difficulty_mult': sim.difficulty_mult_for_slug('leg_curl')},
-        # 1RM attempt — push_press (1.25) hits the CEILING exactly.
         {'name': 'one_rm_ceiling', 'weight': 140, 'reps': 1, 'peak': 130,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'push_press',
          'difficulty_mult': sim.difficulty_mult_for_slug('push_press')},
-        # Bodyweight floor — push_up (1.11), volume_load floored at 1.0.
         {'name': 'bodyweight_floor', 'weight': 0, 'reps': 8, 'peak': 0,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'push_up',
          'difficulty_mult': sim.difficulty_mult_for_slug('push_up')},
-        # Stagnant lifter at very light weight — barbell_curl (0.87).
         {'name': 'stagnant_curl', 'weight': 5, 'reps': 12, 'peak': 5,
          'session_volume_bp': 5, 'weekly_volume_bp': 8,
          'slug': 'barbell_curl',
          'difficulty_mult': sim.difficulty_mult_for_slug('barbell_curl')},
-        # User-created / unmapped exercise — defaults to 1.0 (no-op multiplier;
-        # asserts that the column DEFAULT 1.0 path still produces sensible XP).
         {'name': 'user_created_default_1_0', 'weight': 80, 'reps': 8, 'peak': 80,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': None,
          'difficulty_mult': sim.difficulty_mult_for_slug('not_a_real_slug')},
-        # Explicit clamp boundaries — pin the literal 0.85 / 1.25 values
-        # independent of any single exercise so a future re-tier doesn't
-        # accidentally break the boundary contract.
         {'name': 'explicit_floor_0_85', 'weight': 100, 'reps': 8, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': None,
@@ -187,51 +193,27 @@ def fx_set_xp_examples() -> list[dict]:
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': None,
          'difficulty_mult': sim.DIFFICULTY_MULT_CEILING},
-        # ---- Phase 24c — bodyweight-as-load boundary scenarios -------------
-        # Pure bodyweight: 70 kg user, 0 kg added → effective = 70.
-        # Mirrors 00057's CASE WHEN uses_bodyweight_load THEN COALESCE(w,0) +
-        # COALESCE(bw,0). Peak stays 0 (writer-site guard skips entered=0)
-        # so strength_mult short-circuits to 1.0. difficulty_mult = 1.21
-        # (from DIFFICULTY_MULT_BY_SLUG['pull_up'], hand-mirrored as 1.19 in
-        # 00053; the framework's 24a tier puts pull_up at 1.19 — using 1.21
-        # here matches the WIP example exactly so the boundary contract is
-        # explicit; the per-slug 1.19 lookup is exercised by the existing
-        # bench/deadlift scenarios above).
+        # Phase 24c bodyweight-load boundary scenarios — using simple
+        # bodyweight + entered semantics here (legacy fixture; full
+        # per-exercise BW ratio is exercised by set_xp_v2).
         {'name': 'bodyweight_load_pure_bw', 'weight': 0, 'reps': 8, 'peak': 0,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'pull_up',
          'difficulty_mult': 1.21,
          'bodyweight_kg': 70,
          'uses_bodyweight_load': True},
-        # Weighted bodyweight: 70 kg user, +20 kg belt → effective = 90.
-        # Peak ratchets to entered weight (20) per the writer-site guard;
-        # strength_mult numerator = effective (90), so ratio = 90/25 > 1 →
-        # clamps to 1.0. This is the documented "favorable but consistent"
-        # behavior for weighted bodyweight (see 00057 header).
         {'name': 'bodyweight_load_weighted', 'weight': 20, 'reps': 5, 'peak': 25,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'ring_dip',
          'difficulty_mult': 1.21,
          'bodyweight_kg': 70,
          'uses_bodyweight_load': True},
-        # Non-bodyweight exercise: bodyweight kept on input but IGNORED by
-        # the formula because uses_bodyweight_load = False. Asserts the
-        # CASE branch elision contract — a stale `bodyweight_kg` value
-        # carried through the call site does NOT contaminate non-curated
-        # exercises. effective = entered (80).
         {'name': 'bodyweight_load_not_bw_exercise', 'weight': 80, 'reps': 8, 'peak': 100,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'barbell_bench_press',
          'difficulty_mult': 1.09,
          'bodyweight_kg': 70,
          'uses_bodyweight_load': False},
-        # NULL bodyweight (graceful fallback): user hasn't set their
-        # bodyweight yet but the exercise IS curated as bodyweight-load.
-        # 00057's COALESCE(bw, 0) keeps math defined → effective = entered
-        # (10). bodyweight_used flag stays TRUE for audit-trail clarity —
-        # the active-workout UI (Phase 24c-8) lazy-prompts on this exact
-        # condition. Strength_mult numerator = effective (10), peak = 10
-        # (entered), ratio = 1.0.
         {'name': 'bodyweight_load_null_bodyweight', 'weight': 10, 'reps': 5, 'peak': 10,
          'session_volume_bp': 0, 'weekly_volume_bp': 0,
          'slug': 'pull_up',
@@ -240,30 +222,16 @@ def fx_set_xp_examples() -> list[dict]:
          'uses_bodyweight_load': True},
     ]
     for s in scenarios:
-        # Phase 24c: compute effective_weight via the canonical sim helper.
-        # `uses_bodyweight_load` defaults to whatever the curation set says
-        # for the slug; explicit `uses_bodyweight_load` keys on the scenario
-        # override (used by `bodyweight_load_not_bw_exercise` to assert the
-        # FALSE branch even though the slug isn't curated). For backward-
-        # compat with the pre-24c scenarios that don't carry bodyweight,
-        # `bodyweight_kg=None + slug not in curation set` makes
-        # effective_weight() degrade to entered weight — pre-24c semantics.
-        bodyweight_kg = s.get('bodyweight_kg')  # None if absent
-        # Resolve the curation flag. Pre-24c scenarios pass slug=None and
-        # have no `uses_bodyweight_load` key — sim.uses_bodyweight_load(None)
-        # would be False, but we short-circuit on slug=None to keep that
-        # path explicit.
+        bodyweight_kg = s.get('bodyweight_kg')
         if 'uses_bodyweight_load' in s:
             uses_bw = s['uses_bodyweight_load']
         elif s['slug'] is None:
             uses_bw = False
         else:
             uses_bw = sim.uses_bodyweight_load(s['slug'])
-        # When uses_bw is True, mimic 00057's CASE; when False, effective ==
-        # entered. Direct inline computation (not sim.effective_weight) so
-        # the explicit override on `uses_bodyweight_load` (used by the
-        # not-bw scenario) takes effect — sim.effective_weight only consults
-        # the curation set, ignoring the override.
+        # Legacy fixture: simple BW + entered (matches the pre-Phase-29
+        # SQL CASE branch; Phase 29 v2's per-exercise BW ratio lives in
+        # `set_xp_v2`).
         if uses_bw:
             eff_weight = (s['weight'] or 0) + (bodyweight_kg or 0)
         else:
@@ -272,26 +240,16 @@ def fx_set_xp_examples() -> list[dict]:
         vl = max(1.0, eff_weight * s['reps'])
         base = vl ** sim.VOLUME_EXPONENT
         intensity = sim.intensity_for_reps(s['reps'])
-        # Peak still tracks ENTERED weight (matches 00057 writer-site guard).
-        # If entered == 0, peak stays 0 → strength_mult = 1.0 short-circuit.
         peak = s['peak'] if s['peak'] > 0 else s['weight']
         if peak <= 0:
             strength_mult = 1.0
         else:
-            # Phase 24c: numerator is effective weight, not entered.
             strength_mult = max(sim.STRENGTH_MULT_FLOOR,
                                 min(1.0, eff_weight / peak))
         novelty = math.exp(-s['session_volume_bp'] / sim.NOVELTY_DENOMINATOR)
         cap = sim.OVER_CAP_MULTIPLIER if s['weekly_volume_bp'] >= sim.WEEKLY_CAP_SETS else 1.0
         diff_mult = s['difficulty_mult']
         set_xp = base * intensity * strength_mult * novelty * cap * diff_mult
-        # Dart parity: the Dart calculator is bodyweight-agnostic, so the
-        # fixture must store the already-converted effective_load as
-        # `weight_kg` (the value the calculator consumes). Pre-24c scenarios
-        # have eff_weight == entered, so this is a no-op for them; new 24c
-        # scenarios store the bodyweight-aware value. Informational
-        # bodyweight_kg / uses_bodyweight_load / effective_load keys are
-        # carried alongside for SQL parity tests + audit-trail clarity.
         cases.append({
             'name': s['name'],
             'inputs': {
@@ -302,8 +260,6 @@ def fx_set_xp_examples() -> list[dict]:
                 'weekly_volume_for_body_part': s['weekly_volume_bp'],
                 'difficulty_mult': diff_mult,
                 'slug': s['slug'],
-                # Phase 24c informational keys. None for `bodyweight_kg`
-                # means "no bodyweight value provided" (graceful fallback).
                 'bodyweight_kg': bodyweight_kg,
                 'uses_bodyweight_load': uses_bw,
                 'entered_weight_kg': s['weight'],
@@ -316,10 +272,6 @@ def fx_set_xp_examples() -> list[dict]:
                 'strength_mult': strength_mult,
                 'novelty_mult': novelty,
                 'cap_mult': cap,
-                # Field name + position mirror Dart's `SetXpComponents.toJson()`
-                # (between cap_mult and set_xp). JSON output is sort_keys=True
-                # so on-disk ordering is alphabetical anyway — name match is
-                # the load-bearing contract.
                 'difficulty_mult': diff_mult,
             },
             'set_xp': set_xp,
@@ -341,27 +293,55 @@ def fx_attribution_distribution() -> list[dict]:
 
 
 def fx_rank_curve() -> dict:
-    """Cumulative XP for each rank (1..99) + rank_for_xp lookups."""
+    """Cumulative XP for each rank (1..99) + rank_for_xp lookups (Phase 29 v2
+    piecewise: geometric 1-20, linear 21+).
+    """
     cumulative = {}
     for n in range(1, 100):
         cumulative[str(n)] = sim.xp_for_rank(n)
+    # Lookups exercise the binary-search inverse. Includes piecewise breakpoint
+    # samples — `cumulative[20]` and `cumulative[20] + 1` straddle the
+    # geometric→linear transition.
+    cum_breakpoint = sim.xp_for_rank(sim.RANK_CURVE_BREAKPOINT)
+    cum_after_breakpoint = sim.xp_for_rank(sim.RANK_CURVE_BREAKPOINT + 1)
     lookups = []
-    for total in [0, 59, 60, 277, 278, 813, 814, 3068, 3069, 8916, 8917,
-                  63430, 63431, 430170, 430171, 6832760, 6832761, 9999999]:
-        lookups.append({'total_xp': total, 'rank': sim.rank_for_xp(total)})
+    boundary_pairs = [
+        (0, 1),
+        (59, 1), (60, 2),
+        (277, 2), (278, 3),
+        (813, 3), (814, 4),
+        (3068, 8), (3069, 8),
+        # Phase 29 v2 piecewise breakpoint: cumulative[20] = ~3404 → rank 20.
+        # cumulative[21] = cumulative[20] + 367.0.
+        (int(cum_breakpoint), 20),
+        (int(cum_after_breakpoint) - 1, 20),
+        (int(cum_after_breakpoint), 21),
+        # Linear band: each rank costs LINEAR_XP_PER_RANK = 367.0
+        (int(cum_after_breakpoint + 367.0) - 1, 21),
+        (int(cum_after_breakpoint + 367.0), 22),
+        # High-end saturation
+        (int(sim.xp_for_rank(99)), 99),
+        (9999999, 99),
+    ]
+    for total_xp, rank in boundary_pairs:
+        actual_rank = sim.rank_for_xp(total_xp)
+        lookups.append({'total_xp': total_xp, 'rank': actual_rank})
     milestones = []
-    for n in [1, 2, 5, 10, 20, 30, 50, 70, 90, 99]:
+    for n in [1, 2, 5, 10, 20, 21, 30, 50, 70, 90, 99]:
         milestones.append({'rank': n, 'cumulative_xp': sim.xp_for_rank(n)})
     return {
         'cumulative': cumulative,
         'lookups': lookups,
         'milestones': milestones,
+        'breakpoint': sim.RANK_CURVE_BREAKPOINT,
+        'linear_xp_per_rank': sim.LINEAR_XP_PER_RANK,
+        'cumulative_at_breakpoint': cum_breakpoint,
+        'cumulative_after_breakpoint': cum_after_breakpoint,
     }
 
 
 def fx_vitality() -> dict:
-    """
-    Vitality EWMA test cases — verifies asymmetric α + peak monotonicity.
+    """Vitality EWMA test cases — verifies asymmetric α + peak monotonicity.
 
     Uses τ_up = 2 weeks, τ_down = 6 weeks.
     α_up = 1 - exp(-1/2) ≈ 0.3935
@@ -370,8 +350,6 @@ def fx_vitality() -> dict:
     alpha_up = 1 - math.exp(-1 / sim.VITALITY_TAU_UP_WEEKS)
     alpha_down = 1 - math.exp(-1 / sim.VITALITY_TAU_DOWN_WEEKS)
 
-    # Trajectory: start at 0, train at 100 vol/wk for 10 weeks (rebuild),
-    # then 0 vol/wk for 20 weeks (decay). Capture EWMA + peak each week.
     trajectory = []
     ewma = 0.0
     peak = 0.0
@@ -392,8 +370,6 @@ def fx_vitality() -> dict:
             'pct': (ewma / peak) if peak > 0 else 0.0,
         })
 
-    # Comeback simulation — replays sim.simulate('comeback_kid', 260) and
-    # extracts the chest body-part EWMA at key weeks.
     snaps = sim.simulate(sim.ARCHETYPES['comeback_kid'], weeks=260)
     comeback_chest = []
     for w in [13, 26, 52, 60, 78, 80, 92, 104]:
@@ -430,38 +406,462 @@ def fx_character_level() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Backfill replay reference output — 1500-set fixture user
+# Phase 29 v2 oracle builders
+# ---------------------------------------------------------------------------
+
+def fx_implied_tier() -> list[dict]:
+    """17 cases for the per-lift × per-gender Symmetric Strength tier
+    interpolator, including:
+      * Untrained / Novice / Beginner / Intermediate / Advanced / Elite /
+        World-class / Legendary boundary pins per family
+      * Female table cases (separate empirical ratios)
+      * Per-exercise variant discount (e.g. leg_press 0.65, incline_bench 0.90)
+      * Gender NULL → male table fallback
+      * Bodyweight 0 → default tier (15.0)
+    """
+    cases = []
+    spec = [
+        # Diego — bench 85kg × 5 reps @ 80kg BW (male). Brzycki 1RM ≈ 95.6kg,
+        # ratio ≈ 1.20 → bench male tier ≈ 24-25 (Beginner→Intermediate).
+        ('diego_bench_male', 'bench', 85, 5, 80.0, False, None),
+        # Female Intermediate — bench 45kg × 8 @ 60kg BW. 1RM ≈ 55.9, ratio
+        # ≈ 0.93 → female bench tier ≈ 19-21 (Beginner→Intermediate).
+        ('female_int_bench', 'bench', 45, 8, 60.0, True, None),
+        # Elite — bench 180kg × 3 @ 95kg BW. 1RM ≈ 190.6, ratio ≈ 2.00 →
+        # male bench tier = 55 (World-class boundary).
+        ('elite_bench_male', 'bench', 180, 3, 95.0, False, None),
+        # Untrained male squat 30kg × 8 @ 80kg BW. 1RM ≈ 37.2, ratio ≈ 0.47
+        # (< 0.60 floor) → tier = 0 (Untrained floor).
+        ('untrained_squat_male', 'squat', 30, 8, 80.0, False, None),
+        # Beginner male squat 100kg × 5 @ 80kg BW. 1RM ≈ 112.5, ratio
+        # ≈ 1.41 → tier ≈ 19-20 (Beginner→Intermediate boundary).
+        ('beg_squat_male', 'squat', 100, 5, 80.0, False, None),
+        # Legendary male deadlift 300kg × 3 @ 100kg BW. 1RM ≈ 317.6, ratio
+        # ≈ 3.18 → tier ≈ 62-64 (World-class→Legendary).
+        ('leg_deadlift_male', 'deadlift', 300, 3, 100.0, False, None),
+        # Female beginner deadlift 60kg × 8 @ 58kg BW. 1RM ≈ 74.5, ratio
+        # ≈ 1.28 → tier ≈ 13-14 (Novice→Beginner).
+        ('female_beg_deadlift', 'deadlift', 60, 8, 58.0, True, None),
+        # Per-exercise discount — leg_press 200kg × 5 @ 80kg BW. With
+        # discount 0.65, effective ratio = (200×36/32)/80/0.65 ≈ 4.33 →
+        # uses squat tiers, far above World-class → 55 (saturated).
+        ('leg_press_discount', 'leg_press', 200, 5, 80.0, False, None),
+        # Incline bench discount 0.90 — 80kg × 8 @ 80kg BW. 1RM ≈ 99.3,
+        # ratio = 99.3 / 80 / 0.90 ≈ 1.38 → male bench tier between
+        # Intermediate (25) and Advanced (35) → ~30.
+        ('incline_bench_discount', 'incline_bench', 80, 8, 80.0, False, None),
+        # Gender NULL → male table fallback. Same inputs as `diego_bench_male`
+        # but passed without the female flag.
+        ('gender_null_bench', 'bench', 85, 5, 80.0, False, None),
+        # Bodyweight 0 → degraded path returns 15.0 default tier.
+        ('bw_zero_default', 'bench', 100, 5, 0.0, False, None),
+        # OHP male — 60kg × 5 @ 80kg BW. 1RM ≈ 67.5, ratio ≈ 0.84 → OHP
+        # male tier ≈ 28-30 (Intermediate→Advanced).
+        ('ohp_male_int', 'overhead_press', 60, 5, 80.0, False, None),
+        # OHP female — 30kg × 5 @ 60kg BW. 1RM ≈ 33.8, ratio ≈ 0.56 →
+        # OHP female ≈ 25-26 (Intermediate boundary).
+        ('ohp_female_int', 'overhead_press', 30, 5, 60.0, True, None),
+        # Row male — 80kg × 8 @ 80kg BW. 1RM ≈ 99.3, ratio ≈ 1.24 →
+        # row male tier ≈ 15-17 (Beginner→Intermediate).
+        ('row_male_beg', 'row', 80, 8, 80.0, False, None),
+        # Pull-up via 'pullup' alias (uses row family, no discount applied
+        # in EXERCISE_TIER_DISCOUNT). 0kg × 10 @ 70kg BW → uses Brzycki
+        # with entered weight 0 → 1RM 0 → ratio 0 → tier 0 (Untrained
+        # floor).
+        ('pullup_no_weight', 'pullup', 0, 10, 70.0, False, None),
+        # Isolation (curl) male — 25kg × 10 @ 80kg BW. 1RM ≈ 33.3, ratio
+        # ≈ 0.42 → isolation tier ≈ 45 (Elite — isolation ratios are
+        # much smaller because the family table starts at 0.08).
+        ('curl_iso_male', 'curl', 25, 10, 80.0, False, None),
+        # Tricep_pushdown (isolation) female — 12kg × 12 @ 60kg BW.
+        # 1RM ≈ 17.3, ratio ≈ 0.29 → isolation female tier (table tops
+        # at 0.62 World-class) → ~40.
+        ('pushdown_iso_female', 'tricep_pushdown', 12, 12, 60.0, True, None),
+    ]
+    for name, exercise, weight, reps, bw, female, _expected in spec:
+        tier = sim.implied_tier(exercise, weight, reps, bw, female=female)
+        cases.append({
+            'name': name,
+            'exercise': exercise,
+            'weight_kg': weight,
+            'reps': reps,
+            'bodyweight_kg': bw,
+            'female': female,
+            'implied_tier': tier,
+        })
+    return cases
+
+
+def fx_abs_strength_premium() -> list[dict]:
+    """12-row curve for `abs_strength_premium = 1 + 0.8 × frac` where
+    `frac = clamp((T - E_FLOOR) / (E_CEIL - E_FLOOR), 0, 1)`.
+
+    Covers:
+      * Below E_FLOOR (35) → frac = 0 → premium = 1.0
+      * Exactly E_FLOOR  → premium = 1.0
+      * Mid-band (T=40, 45, 50) → fractional premiums
+      * Exactly E_CEIL (55) → premium = 1.8
+      * Above E_CEIL → saturated at 1.8
+    """
+    cases = []
+    for T in [0.0, 10.0, 20.0, 30.0, 34.99, 35.0, 40.0, 45.0, 50.0, 55.0,
+              60.0, 70.0]:
+        frac = sim.abs_strength_premium_frac(T)
+        premium = sim.abs_strength_premium(T)
+        cases.append({
+            'implied_tier': T,
+            'frac': frac,
+            'abs_strength_premium': premium,
+        })
+    return cases
+
+
+def fx_tier_diff_mult() -> list[dict]:
+    """17 (T, R) cases for tier_diff_mult = clamp(((2T+10)/(T+R+10))^2.5,
+    0.25, 8.0).
+
+    Covers floor (lift far below current rank), ceiling (huge T at R=1),
+    canonical unit point (T=R=1 → 1.0), and the documented persona pins
+    (Diego wk1 ≈ T=24, R=1 → ~2.5×).
+    """
+    cases = []
+    spec = [
+        (1.0, 1.0),     # canonical unit — should produce 1.0
+        (0.0, 1.0),     # T=0 → returns 1.0 directly (early-exit)
+        (24.0, 1.0),    # Diego wk1-ish — strong tier punching above newcomer
+        (35.0, 1.0),    # mid-game — Advanced lift @ R=1
+        (46.0, 1.0),    # Elite-tier lift, fresh user
+        (55.0, 1.0),    # World-class lift, fresh user
+        (70.0, 1.0),    # Beyond Legendary, fresh — should saturate ceiling
+        (5.0, 25.0),    # weak lift @ Intermediate rank — floor side
+        (1.0, 50.0),    # Untrained lift @ Advanced rank — floor
+        (25.0, 25.0),   # at-parity Intermediate
+        (50.0, 50.0),   # at-parity Advanced
+        (10.0, 30.0),   # 30% below current
+        (45.0, 35.0),   # 28% above
+        (35.0, 50.0),   # 30% below
+        (60.0, 30.0),   # double current — strong premium
+        (15.0, 5.0),    # 3× current — strong premium for early-game
+        (8.0, 8.0),     # at-parity early-mid
+    ]
+    for T, R in spec:
+        mult = sim.tier_diff_mult(R, T)
+        cases.append({
+            'implied_tier': T,
+            'current_rank': R,
+            'tier_diff_mult': mult,
+        })
+    return cases
+
+
+def fx_overload_mult() -> list[dict]:
+    """7 cases for the in-band PR detector. AND/OR ladder:
+      * weight > prior_weight                       → 1.15 (new weight PR)
+      * reps > prior AND weight >= prior            → 1.10 (volume PR same load)
+      * reps > prior OR weight > prior              → 1.05 (modest improvement)
+      * else                                         → 1.00 (no overload)
+
+    `best_by_band` is keyed (exercise, band). Each case carries the prior
+    best as `prior_weight` / `prior_reps` (or null for "no prior").
+    """
+    cases = []
+    spec = [
+        # No prior → no overload (1.00)
+        ('first_set_no_prior', 'bench', 80, 5, None, None, 1.00),
+        # New weight PR (heavy band): 85 > 80, same exercise/band
+        ('new_weight_pr', 'bench', 85, 5, 80, 5, 1.15),
+        # Volume PR at same load: 8 > 5 reps, weight tied
+        ('volume_pr_same_load', 'bench', 80, 8, 80, 5, 1.10),
+        # Reps up + weight down → modest 1.05
+        ('reps_up_weight_down', 'bench', 75, 10, 80, 5, 1.05),
+        # Identical inputs → no overload
+        ('no_change', 'bench', 80, 5, 80, 5, 1.00),
+        # Different rep band — heavy vs hypertrophy. 80×10 vs prior 80×3
+        # lands in hypertrophy band, where there's no prior → 1.00.
+        ('different_band_no_prior', 'bench', 80, 10, 80, 3, 1.00),
+        # Weight down + reps down → 1.00
+        ('regression', 'bench', 60, 3, 80, 5, 1.00),
+    ]
+    for name, exercise, weight, reps, prior_w, prior_r, expected in spec:
+        best_by_band = {}
+        if prior_w is not None:
+            prior_band = sim.rep_band(prior_r)
+            best_by_band[(exercise, prior_band)] = (prior_w, prior_r)
+        mult, _ = sim.overload_mult(exercise, weight, reps, best_by_band)
+        cases.append({
+            'name': name,
+            'exercise': exercise,
+            'weight_kg': weight,
+            'reps': reps,
+            'prior_weight_kg': prior_w,
+            'prior_reps': prior_r,
+            'overload_mult': mult,
+            'expected': expected,
+        })
+    return cases
+
+
+def fx_frequency_mult() -> list[dict]:
+    """7 cases pinning the table [1.00, 1.06, 1.10, 1.06, 1.00] for
+    sessions 1/2/3/4/5+ per body part in a 7d window.
+    """
+    cases = []
+    spec = [
+        (0, 1.00),  # 0 → clamped to 1 (1st session = 1.00)
+        (1, 1.00),
+        (2, 1.06),
+        (3, 1.10),
+        (4, 1.06),
+        (5, 1.00),
+        (7, 1.00),  # past 5 → still 1.00 (clamped)
+    ]
+    for n, expected in spec:
+        mult = sim.frequency_mult(n)
+        cases.append({
+            'session_count': n,
+            'frequency_mult': mult,
+            'expected': expected,
+        })
+    return cases
+
+
+def fx_near_failure_inferred() -> list[dict]:
+    """7 cases for `actual < target × 0.85` → near_failure True."""
+    cases = []
+    spec = [
+        # Target NULL → never inferred
+        ('null_target', 5, None, False),
+        # Target 0 → never inferred (defensive)
+        ('zero_target', 5, 0, False),
+        # Hit target → not near-failure
+        ('hit_target', 10, 10, False),
+        # Just below threshold: 10 × 0.85 = 8.5 → 9 reps NOT inferred
+        ('just_above_threshold', 9, 10, False),
+        # At threshold: 8 < 8.5 → inferred (False boundary side: 8 not < 8.5? wait — 8 < 8.5 → True)
+        ('at_threshold_below', 8, 10, True),
+        # Far below — clearly near-failure
+        ('far_below', 4, 10, True),
+        # Exactly meets threshold-product boundary: 8.5 not <, but reps
+        # are integer so smallest below-threshold integer is 8.
+        ('threshold_int_exact', 8, 10, True),
+    ]
+    for name, actual, target, expected in spec:
+        inferred = sim.inferred_near_failure(actual, target)
+        cases.append({
+            'name': name,
+            'actual_reps': actual,
+            'target_reps': target,
+            'near_failure_inferred': inferred,
+            'expected': expected,
+        })
+    return cases
+
+
+def fx_set_xp_v2() -> list[dict]:
+    """Phase 29 v2 end-to-end fixture (94 rows).
+
+    Each case carries every input the new 11-multiplier chain consumes,
+    plus the expected per-component breakdown + per-body-part awarded
+    XP. Built by calling `sim.compute_set_xp` directly so the Dart
+    calculator's parity test can replay against authoritative oracle
+    values.
+
+    Layout: feed a small panel of personas through a panel of exercises,
+    varying rep schemes, weekly volume, novelty, near-failure flagging,
+    and gender to hit every multiplier path.
+    """
+    cases = []
+    # Persona presets — bodyweight, gender, schedule that drive the chain.
+    personas = [
+        # name, bw_kg, female, current_ranks_avg
+        ('beginner', 75.0, False, 1),
+        ('diego', 80.0, False, 12),
+        ('elite', 95.0, False, 50),
+        ('female_int', 60.0, True, 15),
+        ('untrained_youth', 65.0, False, 1),
+    ]
+    # Exercise scenarios per persona — exercise alias, weight, reps,
+    # session_vol_prior (chest), weekly_vol_prior (chest), near_failure,
+    # target_reps, with_prior_overload (bool), bp_session_count_for_chest.
+    scenarios = [
+        ('bench', 80, 5, 0, 0, False, None, False, 1),
+        ('bench', 80, 5, 8, 10, False, None, True, 2),
+        ('bench', 100, 3, 0, 0, True, None, False, 1),
+        ('bench', 60, 12, 5, 14, False, None, False, 3),
+        ('bench', 70, 8, 0, 16, False, None, False, 1),  # past weekly cap
+        ('squat', 100, 5, 0, 0, False, None, False, 1),
+        ('squat', 80, 10, 4, 8, False, None, True, 2),
+        ('squat', 140, 1, 0, 0, True, None, False, 1),
+        ('deadlift', 140, 3, 0, 0, False, None, False, 1),
+        ('deadlift', 100, 8, 6, 10, False, None, True, 2),
+        ('overhead_press', 50, 5, 0, 0, False, None, False, 1),
+        ('overhead_press', 40, 10, 3, 6, False, None, False, 2),
+        ('row', 70, 5, 0, 0, False, None, False, 1),
+        ('row', 60, 10, 5, 8, False, None, True, 2),
+        ('pullup', 0, 8, 0, 0, False, None, False, 1),  # pure bodyweight load
+        ('pullup', 10, 5, 4, 6, False, None, True, 1),  # weighted dip pattern
+        ('curl', 20, 12, 0, 0, False, None, False, 1),  # isolation
+        ('tricep_pushdown', 30, 12, 5, 8, False, None, False, 2),
+        ('lateral_raise', 10, 15, 2, 4, False, None, False, 1),
+    ]
+    # Per-persona rep_band PR seed — anchors at a known weight so the
+    # overload_mult path triggers deterministically when `with_prior_overload`
+    # is True.
+    for persona_name, bw, female, rank_avg in personas:
+        for s in scenarios[:19]:  # 19 scenarios × 5 personas = 95; trim to 94
+            (
+                exercise, weight, reps, sv, wv,
+                nf, target, with_prior, bp_count,
+            ) = s
+            from collections import defaultdict
+            novelty_count = defaultdict(float)
+            weekly_count = defaultdict(float)
+            # Seed session + weekly volumes — they're per-body-part dicts but
+            # we just need values for the dominant BP to flow through.
+            # Use a representative bp; compute_set_xp will pick the dominant
+            # one from the attribution map.
+            # For chest-leaning exercises seed chest; legs for squats; etc.
+            seed_bp = {
+                'bench': 'chest', 'overhead_press': 'shoulders',
+                'lateral_raise': 'shoulders', 'tricep_pushdown': 'arms',
+                'row': 'back', 'pullup': 'back', 'curl': 'arms',
+                'squat': 'legs', 'deadlift': 'back',
+            }.get(exercise, 'chest')
+            novelty_count[seed_bp] = sv
+            weekly_count[seed_bp] = wv
+
+            peak_loads = {}
+            # Anchor peak so strength_mult isn't always 1.0
+            if weight > 0:
+                peak_loads[exercise] = max(weight, weight * 1.05)
+            current_ranks = {bp: rank_avg for bp in sim.BODY_PARTS}
+
+            best_by_band = {}
+            # Capture the PRE-call prior — `sim.compute_set_xp` mutates the
+            # dict via the `overload_mult` helper, so reading
+            # `best_by_band` after the call would give the post-update
+            # value (the current weight/reps), not the prior we seeded.
+            pre_call_prior = None
+            if with_prior:
+                # Seed a prior PR at the same band 5% below current weight
+                # and 1 rep below — guarantees overload_mult kicks to 1.15
+                # (weight > prior_weight → new weight PR).
+                band = sim.rep_band(reps)
+                prior_w = max(0.0, weight - 5)
+                prior_r = max(1, reps - 1)
+                best_by_band[(exercise, band)] = (prior_w, prior_r)
+                pre_call_prior = [
+                    [exercise, band],
+                    [prior_w, prior_r],
+                ]
+
+            bp_session_count = defaultdict(int)
+            for bp in sim.BODY_PARTS:
+                bp_session_count[bp] = bp_count
+
+            diff_m = sim.difficulty_mult_for_alias(exercise)
+            real_slug = sim.SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+            awarded, vol, components, _bbb = sim.compute_set_xp(
+                exercise, weight, reps, novelty_count, weekly_count,
+                peak_loads, difficulty_mult=diff_m,
+                bodyweight_kg=bw, slug=real_slug,
+                current_ranks=current_ranks,
+                best_by_band=best_by_band,
+                bp_session_count=bp_session_count,
+                near_failure=nf,
+                female=female,
+                target_reps=target,
+            )
+
+            # Re-compute attribution distribution for the fixture (the
+            # awarded dict already has it, but the test wants both the
+            # totals and per-bp shares pinned).
+            distribution = sim._attribution_for(exercise)
+            if not distribution:
+                distribution = {'chest': 1.0}
+
+            cases.append({
+                'name': f'{persona_name}__{exercise}_{int(weight)}x{reps}'
+                        + ('_nf' if nf else '')
+                        + ('_prior' if with_prior else '')
+                        + f'_wv{int(wv)}',
+                'inputs': {
+                    'persona': persona_name,
+                    'exercise': exercise,
+                    'slug': real_slug,
+                    'weight_kg': weight,
+                    'reps': reps,
+                    'peak_load': peak_loads.get(exercise, weight),
+                    'session_volume_prior': sv,
+                    'weekly_volume_prior': wv,
+                    'session_volume_seed_bp': seed_bp,
+                    'difficulty_mult': diff_m,
+                    'bodyweight_kg': bw,
+                    'gender_female': female,
+                    'current_ranks': dict(current_ranks),
+                    # Pre-call prior — the value seeded INTO best_by_band
+                    # before compute_set_xp ran (the helper mutates the
+                    # dict, so the post-call value would be wrong as a
+                    # parity oracle).
+                    'best_by_band_prior': pre_call_prior,
+                    'bp_session_count': bp_count,
+                    'near_failure': nf,
+                    'target_reps': target,
+                    'uses_bodyweight_load': sim.uses_bodyweight_load(real_slug),
+                    'bodyweight_load_ratio': sim.BODYWEIGHT_LOAD_RATIO.get(
+                        real_slug, 1.0
+                    ) if sim.uses_bodyweight_load(real_slug) else None,
+                    'effective_load': components['eff_weight'],
+                    'attribution': distribution,
+                    'dominant_part': components['dominant_part'],
+                },
+                'components': {
+                    'volume_load': components['volume_load'],
+                    'base_xp': components['base_xp'],
+                    'intensity_mult': components['intensity_mult'],
+                    'strength_mult': components['strength_mult'],
+                    'difficulty_mult': components['difficulty_mult'],
+                    'tier_diff_mult': components['tier_diff_mult'],
+                    'abs_strength_premium': components['abs_strength_premium'],
+                    'overload_mult': components['overload_mult'],
+                    'frequency_mult': components['frequency_mult'],
+                    'lift_implied_tier': components['lift_implied_tier'],
+                    'near_failure_resolved': components['near_failure'],
+                    'eff_weight': components['eff_weight'],
+                },
+                'awarded_per_bp': dict(awarded),
+                'set_xp_total': sum(awarded.values()),
+            })
+
+    # Trim to exactly 94 cases for fixture stability
+    return cases[:94]
+
+
+# ---------------------------------------------------------------------------
+# Backfill replay reference output — neutral chain (legacy archetypes)
 # ---------------------------------------------------------------------------
 
 def fx_backfill_replay() -> dict:
-    """
-    Replays an intermediate archetype's first ~30 weeks of training (≈1500
-    sets) through the sim and emits the final state for each body part.
+    """Replays an intermediate archetype's first ~30 weeks through the legacy
+    chain (Phase 24c semantics: bodyweight-as-load + simple BW addition, no
+    per-exercise ratio, no Phase 29 multipliers). This path uses the
+    Python sim's backward-compat behavior (no current_ranks, no
+    best_by_band, no bp_session_count) so all Phase 29 multipliers
+    default to 1.0. The Dart calculator's backward-compat path (all new
+    optional parameters omitted or null) produces the same numbers.
 
-    The Dart + PG backfill tests must produce the same final state when fed
-    the same chronological set log.
-
-    Phase 24c: archetype carries bodyweight_kg = 75 (from the Archetype
-    dataclass field default 70 — overridden here to 75 to make the parity
-    contract numerically distinct from the per-scenario 70 above). Each set
-    is replayed with the alias-resolved real slug so `compute_set_xp` can
-    consult `USES_BODYWEIGHT_LOAD_BY_SLUG`. The intermediate archetype's
-    legs day uses 'lunge' which resolves to 'walking_lunges' — that IS in
-    the curated set, so legs ranks WILL shift versus pre-24c. None of the
-    other intermediate exercises (bench, row, overhead_press, lateral_raise,
-    tricep_pushdown, pulldown, curl, plank, squat, deadlift, leg_press)
-    are in the curated set, so non-leg ranks stay identical.
-
-    NOTE: emits the per-set log too so integration tests can replay it.
+    Phase 29 v2 note: legacy archetypes simulated this way use simple
+    `entered + bodyweight` for bodyweight-load exercises (the Python
+    sim's `effective_weight` uses per-slug `BODYWEIGHT_LOAD_RATIO`,
+    which for `walking_lunges` is 0.85 — so the replay WILL differ from
+    the pre-29 fixture for legs. This is forward-only; the parity
+    contract is "Dart Phase 29 v2 chain == sim Phase 29 v2 chain", not
+    "Phase 29 v2 == Phase 24d".
     """
     archetype = sim.ARCHETYPES['intermediate']
-    weeks = 30  # ~1500 sets at 4 sessions × 12-15 sets each
-    # Phase 24c: explicit bodyweight for the replay. 75 kg matches the
-    # docs/PROJECT.md §3 24c boundary inventory example.
+    weeks = 30
     bodyweight_kg = 75.0
 
-    # We need to instrument the sim to emit per-set events. Re-run inline
-    # here (mirrors `simulate` but logs).
     from collections import defaultdict
     xp_pool = {p: 0.0 for p in sim.BODY_PARTS}
     weights = dict(archetype.starting_weights)
@@ -477,25 +877,16 @@ def fx_backfill_replay() -> dict:
             session_set_index = 0
             for exercise, n_sets, reps in sim.DAY_TEMPLATES[day]:
                 w = weights.get(exercise, 1)
-                # Phase 24a: each set carries the multiplier its real-slug
-                # analog would use in the live save path. The alias resolver
-                # maps simulator short names ('bench', 'squat', etc.) onto
-                # the actual `exercises.difficulty_mult` value that ships in
-                # the migration, so the regenerated final ranks reflect the
-                # exact per-exercise weighting users will experience.
                 diff_mult = sim.difficulty_mult_for_alias(exercise)
-                # Phase 24c: resolve alias → real slug so compute_set_xp can
-                # consult USES_BODYWEIGHT_LOAD_BY_SLUG. Synthetic aliases
-                # without an analog fall through to the alias itself
-                # (uses_bodyweight_load returns False — no behavior change).
                 real_slug = sim.SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
                 uses_bw = sim.uses_bodyweight_load(real_slug)
                 eff_weight = sim.effective_weight(real_slug, w, bodyweight_kg)
                 for _ in range(n_sets):
                     set_index += 1
                     session_set_index += 1
-                    awarded, vol = sim.compute_set_xp(
-                        exercise, w, reps, novelty_count, weekly_count, peak_loads,
+                    awarded, vol, _comp, _bbb = sim.compute_set_xp(
+                        exercise, w, reps, novelty_count, weekly_count,
+                        peak_loads,
                         difficulty_mult=diff_mult,
                         bodyweight_kg=bodyweight_kg,
                         slug=real_slug,
@@ -511,9 +902,6 @@ def fx_backfill_replay() -> dict:
                         'weight_kg': w,
                         'reps': reps,
                         'difficulty_mult': diff_mult,
-                        # Phase 24c: per-set audit fields so integration
-                        # tests can verify the replay's bodyweight-aware
-                        # branch without re-deriving from the alias map.
                         'slug': real_slug,
                         'uses_bodyweight_load': uses_bw,
                         'effective_load': eff_weight,
@@ -541,6 +929,7 @@ def fx_backfill_replay() -> dict:
 def main() -> None:
     fixtures = {
         'meta': {
+            'phase': 'phase29_v2',
             'volume_exponent': sim.VOLUME_EXPONENT,
             'novelty_denominator': sim.NOVELTY_DENOMINATOR,
             'weekly_cap_sets': sim.WEEKLY_CAP_SETS,
@@ -549,14 +938,31 @@ def main() -> None:
             'difficulty_mult_floor': sim.DIFFICULTY_MULT_FLOOR,
             'difficulty_mult_ceiling': sim.DIFFICULTY_MULT_CEILING,
             'xp_base': sim.XP_BASE,
+            # Phase 29 v2: piecewise rank curve. `xp_growth` is the legacy
+            # alias preserved for the existing Dart test that pins it; the
+            # explicit Phase 29 v2 key is `xp_growth_band1`.
             'xp_growth': sim.XP_GROWTH,
+            'xp_growth_band1': sim.XP_GROWTH_BAND1,
+            'rank_curve_breakpoint': sim.RANK_CURVE_BREAKPOINT,
+            'linear_xp_per_rank': sim.LINEAR_XP_PER_RANK,
+            # Phase 29.6 Path C
+            'e_bonus': sim.E_BONUS,
+            'e_floor': sim.E_FLOOR,
+            'e_ceil': sim.E_CEIL,
+            # Phase 29 v2 Refinement #4
+            'nf_intensity_bonus': sim.NF_INTENSITY_BONUS,
+            'nf_target_threshold': sim.NF_TARGET_THRESHOLD,
+            # Phase 29 v2 Refinement #3
+            'frequency_mult_table': list(sim.FREQUENCY_MULT_TABLE),
+            # tier_diff_mult parameters
+            'tier_diff_offset': sim.TIER_DIFF_OFFSET,
+            'tier_diff_exp': sim.TIER_DIFF_EXP,
+            'tier_diff_min': sim.TIER_DIFF_MIN,
+            'tier_diff_max': sim.TIER_DIFF_MAX,
             'char_level_denominator': sim.CHAR_LEVEL_DENOMINATOR,
-            # Phase 24c: canonical 20-slug curation set for
-            # `exercises.uses_bodyweight_load = TRUE` (mirrors migration
-            # 00056). Sorted for stable on-disk diffs. Integration parity
-            # tests can read this to assert the SQL UPDATE list and the
-            # Python sim's USES_BODYWEIGHT_LOAD_BY_SLUG agree.
             'bodyweight_load_slugs': sorted(sim.USES_BODYWEIGHT_LOAD_BY_SLUG),
+            # Phase 29 v2 Refinement #5 — per-slug bodyweight load ratio
+            'bodyweight_load_ratios': dict(sim.BODYWEIGHT_LOAD_RATIO),
         },
         'intensity_lookup': fx_intensity_lookup(),
         'volume_load': fx_volume_load(),
@@ -564,6 +970,15 @@ def main() -> None:
         'novelty_mult': fx_novelty_mult(),
         'cap_mult': fx_cap_mult(),
         'set_xp_examples': fx_set_xp_examples(),
+        # Phase 29 v2 oracle additions
+        'set_xp_v2': fx_set_xp_v2(),
+        'implied_tier': fx_implied_tier(),
+        'abs_strength_premium': fx_abs_strength_premium(),
+        'tier_diff_mult': fx_tier_diff_mult(),
+        'overload_mult': fx_overload_mult(),
+        'frequency_mult': fx_frequency_mult(),
+        'near_failure_inferred': fx_near_failure_inferred(),
+        # Legacy lists still load-bearing for Dart parity
         'attribution_distribution': fx_attribution_distribution(),
         'rank_curve': fx_rank_curve(),
         'vitality': fx_vitality(),
@@ -574,16 +989,23 @@ def main() -> None:
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(fixtures, f, indent=2, sort_keys=True)
     print(f'Wrote {out}')
-    print(f'  intensity_lookup: {len(fixtures["intensity_lookup"])} cases')
-    print(f'  volume_load: {len(fixtures["volume_load"])} cases')
-    print(f'  strength_mult: {len(fixtures["strength_mult"])} cases')
-    print(f'  novelty_mult: {len(fixtures["novelty_mult"])} cases')
-    print(f'  cap_mult: {len(fixtures["cap_mult"])} cases')
-    print(f'  set_xp_examples: {len(fixtures["set_xp_examples"])} cases')
-    print(f'  attribution: {len(fixtures["attribution_distribution"])} exercises')
-    print(f'  rank_curve milestones: {len(fixtures["rank_curve"]["milestones"])}')
-    print(f'  vitality trajectory: {len(fixtures["vitality"]["rebuild_then_decay_trajectory"])} weeks')
-    print(f'  backfill_replay: {fixtures["backfill_replay"]["total_sets"]} sets')
+    print(f'  intensity_lookup:        {len(fixtures["intensity_lookup"])} cases')
+    print(f'  volume_load:             {len(fixtures["volume_load"])} cases')
+    print(f'  strength_mult:           {len(fixtures["strength_mult"])} cases')
+    print(f'  novelty_mult:            {len(fixtures["novelty_mult"])} cases')
+    print(f'  cap_mult:                {len(fixtures["cap_mult"])} cases')
+    print(f'  set_xp_examples (legacy): {len(fixtures["set_xp_examples"])} cases')
+    print(f'  set_xp_v2 (Phase 29 v2): {len(fixtures["set_xp_v2"])} cases')
+    print(f'  implied_tier:            {len(fixtures["implied_tier"])} cases')
+    print(f'  abs_strength_premium:    {len(fixtures["abs_strength_premium"])} cases')
+    print(f'  tier_diff_mult:          {len(fixtures["tier_diff_mult"])} cases')
+    print(f'  overload_mult:           {len(fixtures["overload_mult"])} cases')
+    print(f'  frequency_mult:          {len(fixtures["frequency_mult"])} cases')
+    print(f'  near_failure_inferred:   {len(fixtures["near_failure_inferred"])} cases')
+    print(f'  attribution:             {len(fixtures["attribution_distribution"])} exercises')
+    print(f'  rank_curve milestones:   {len(fixtures["rank_curve"]["milestones"])}')
+    print(f'  vitality trajectory:     {len(fixtures["vitality"]["rebuild_then_decay_trajectory"])} weeks')
+    print(f'  backfill_replay:         {fixtures["backfill_replay"]["total_sets"]} sets')
 
 
 if __name__ == '__main__':
