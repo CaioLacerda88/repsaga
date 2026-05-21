@@ -18,7 +18,7 @@
  *                          others at rank 1 (≥1 XP) — one bench set yields
  *                          [rankUp(chest, 10), levelUp(4), titleUnlock(chest_r10)]
  *                          with NO class change and NO first-awakening (BUG-017)
- *   rpgOverflowQueue     — all 6 body parts at rank 4, 270 XP
+ *   rpgOverflowQueue     — all 6 body parts at rank 5, 348 XP (Phase 29 v2)
  *   rpgFreshUser         — zero workout history (reused from 18a)
  *   smokePR              — prior PR at 100 kg bench press (reused)
  */
@@ -225,11 +225,12 @@ async function reseedRpgFreshUser(): Promise<void> {
   });
 }
 
-// Reseed rpgOverflowQueue: all 6 body parts rank 3 @ 196 XP.
-// Seeding at 196 XP (2.6 XP below rank-4 threshold of ~198.6) instead of
-// 190 XP ensures a single working set reliably crosses the boundary even
-// after novelty discounting. The previous 190 XP seed (8.6 XP gap) was
-// occasionally insufficient when XP attribution changed slightly between runs.
+// Reseed rpgOverflowQueue (Phase 29 v2): all 6 body parts at rank 5,
+// total_xp = 348 (70 XP into rank 5). The 4-exercise workout pushes all
+// 6 BPs to rank 6 without any BP skipping a rank, keeping class
+// Ascendant pre+post (no class-change overlay eating a queue slot).
+// See seedRpgOverflowQueueUser in global-setup.ts for the full
+// derivation + margin analysis.
 async function reseedOverflowQueueUser(): Promise<void> {
   const admin = getAdminClient();
   const userId = await getUserIdByEmail(admin, getUser('rpgOverflowQueue').email);
@@ -252,7 +253,7 @@ async function reseedOverflowQueueUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 196, rank: 3 },
+      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -292,11 +293,10 @@ async function reseedOverflowQueueUser(): Promise<void> {
   });
 }
 
-// Reseed rpgOverflowTapCard: same seeding contract as rpgOverflowQueue but
-// on a SEPARATE user. This prevents cross-worker state collisions when
-// --repeat-each=2 runs the overflow auto-dismiss test and the overflow tap-card
-// test on parallel workers — both workers shared rpgOverflowQueue previously,
-// causing XP state races that prevented the overflow card from appearing.
+// Reseed rpgOverflowTapCard: same seeding contract as rpgOverflowQueue
+// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 348 XP) but on a
+// dedicated user so the auto-dismiss and tap-card tests don't race on
+// shared XP state under --repeat-each=2.
 async function reseedOverflowTapCardUser(): Promise<void> {
   const admin = getAdminClient();
   const userId = await getUserIdByEmail(admin, getUser('rpgOverflowTapCard').email);
@@ -319,7 +319,7 @@ async function reseedOverflowTapCardUser(): Promise<void> {
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 196, rank: 3 },
+      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
   }
@@ -618,10 +618,10 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 3 / 196 XP and clear prior workout
-    // history so record_session_xp_batch sees zero historical sets on every
-    // repeat. 196 XP (2.6 XP below R4 threshold) ensures a single set reliably
-    // crosses the boundary after novelty discounting.
+    // Reseed all 6 body parts back to rank 5 / 348 XP (Phase 29 v2 tuned —
+    // see reseedOverflowQueueUser docstring above for the derivation). Also
+    // clears prior workout history so record_session_xp_batch sees zero
+    // historical sets and novelty discounting starts fresh on every repeat.
     await reseedOverflowQueueUser();
     await login(
       page,
@@ -641,13 +641,18 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     // delivery latency. Same reasoning as the standing-PR test below at line ~841.
     test.slow();
 
-    // rpgOverflowQueue is seeded with all 6 body parts at rank 3 (196 XP each,
-    // 2.6 XP below the rank-4 threshold of ~198.6 XP). We log 4 compound lifts
-    // (bench, squat, row, OHP) which spread XP across all body parts via primary
-    // + secondary attribution. Even after novelty discounting, a single working
-    // set reliably pushes 5+ body parts over the rank-4 threshold, producing
-    // 5 rank-ups + 1 level-up which exceeds cap-at-3 and triggers the overflow
-    // card.
+    // rpgOverflowQueue is seeded with all 6 body parts at rank 5, total_xp =
+    // 348 (Phase 29 v2 calibration). The 4 compound lifts below — bench
+    // (chest 0.70 / shoulders 0.20 / arms 0.10), squat (legs 0.80 / core
+    // 0.10 / back 0.10), row (back 0.70 / arms 0.20 / core 0.10), OHP
+    // (shoulders 0.60 / arms 0.20 / core 0.20) — spread XP across ALL 6
+    // body parts via primary + secondary attribution. Under Phase 29 v2's
+    // `tier_diff_mult` at rank 5 (≈ 2.05 with the bodyweight-null implied
+    // tier of 15), each body part gains 20-100 XP — enough to cross the
+    // rank-6 threshold (366.31 XP cumulative), but not enough to skip a
+    // second rank (R7 = 462.94 XP). Result: 6 rank-ups, no skips, pre+post
+    // class both Ascendant (no class-change overlay). Cap-at-3 keeps top
+    // 3 rank-ups in the queue; overflow = 3.
     await startEmptyWorkout(page);
     // BUG-020: Finish button only appears after first exercise is added.
     // Body part 1: chest (bench press)
@@ -684,11 +689,13 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
 
     await finishWorkout(page);
 
-    // CelebrationQueue capacity for this finish:
-    //   closersCount   = 1 (level-up, no titles at rank 4)
-    //   rankUpCapacity = cap(3) − 1 = 2
-    //   queue          = [rank-up₁, rank-up₂, level-up]
-    //   overflow       = 3 (the remaining rank-ups not in the queue)
+    // CelebrationQueue cap-at-3 allocation for this finish:
+    //   events         = 6 rank-ups + 1 level-up + 0 class-change + 0 titles
+    //   slot 1 (class) = 0 (no class change, Ascendant pre+post)
+    //   slot 2 (top)   = 1 (the highest-rank rank-up)
+    //   spillover      = take(2) additional rank-ups → 2 more in queue
+    //   queue          = [top rank-up, 2nd rank-up, 3rd rank-up]
+    //   overflow       = 6 − 3 = 3 rank-ups (folded into the overflow card)
     //
     // What this test asserts at the e2e layer (intent, post-Phase-21 trim):
     //   1. The first rank-up overlay appears (queue began playing).
@@ -719,7 +726,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     await expect(overflowCard).toBeVisible({ timeout: 45_000 });
 
     // The accessible label is `"{N} more rank-ups — open Saga"`. With this
-    // seeding (5 rank-ups − 2 in the queue = 3 overflowed), the label MUST
+    // seeding (6 rank-ups − 3 in the queue = 3 overflowed), the label MUST
     // read `3 more rank-ups` for cap-at-3 to be working end-to-end.
     await expect(overflowCard).toHaveAccessibleName(/3 more rank-ups/);
   });
@@ -741,9 +748,10 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 3 / 196 XP and clear prior workout
-    // history. Uses dedicated rpgOverflowTapCard user (isolated from rpgOverflowQueue)
-    // so this describe block never races with S4 on --repeat-each runs.
+    // Reseed all 6 body parts back to rank 5 / 348 XP (Phase 29 v2 — same
+    // contract as rpgOverflowQueue). Uses dedicated rpgOverflowTapCard user
+    // (isolated from rpgOverflowQueue) so this describe block never races
+    // with S4 on --repeat-each runs.
     await reseedOverflowTapCardUser();
     await login(
       page,

@@ -679,6 +679,16 @@ DECLARE
   v_dom_part        text;
   v_dom_share       numeric;
   v_rep_band        text;
+  -- Phase 26d Task 2 title detection state — restored after Phase 29 v2
+  -- PR 2 dropped the title-award block. Mirrors the same captures in
+  -- record_session_xp_batch so per-set diagnostic calls also award
+  -- titles. See the longer comment in that function.
+  v_pre_ranks       jsonb;
+  v_post_ranks      jsonb;
+  v_pre_total_xp    numeric;
+  v_post_total_xp   numeric;
+  v_pre_char_level  int;
+  v_post_char_level int;
 BEGIN
   -- Phase 29 v2 note: `target_reps` does not yet exist as a column on
   -- `sets`. Near-failure inference (Refinement #4) lands once the
@@ -716,6 +726,17 @@ BEGIN
   SELECT bodyweight_kg, gender INTO v_bodyweight_kg, v_gender
   FROM public.profiles
   WHERE id = v_user_id;
+
+  -- Phase 26d Task 2 — capture pre-rank map + pre-character-level ONCE
+  -- before the body_part_progress write below. Missing rows COALESCE to
+  -- rank 1 inside the threshold-crossing query.
+  SELECT
+    COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
+    COALESCE(SUM(total_xp), 0)
+  INTO v_pre_ranks, v_pre_total_xp
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id;
+  v_pre_char_level := public.rpg_rank_for_xp(v_pre_total_xp);
 
   -- Resolve attribution + difficulty_mult + uses_bodyweight_load +
   -- bodyweight_load_ratio + slug. All on one exercise lookup.
@@ -935,6 +956,130 @@ BEGIN
       updated_at = v_now;
   END IF;
 
+  -- Phase 26d Task 2 title detection — restored after Phase 29 v2 PR 2.
+  -- Mirrors record_session_xp_batch's title-award block so the per-set
+  -- diagnostic entry point also INSERTs earned_titles rows on threshold
+  -- crossings.
+  SELECT
+    COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
+    COALESCE(SUM(total_xp), 0)
+  INTO v_post_ranks, v_post_total_xp
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id;
+  v_post_char_level := public.rpg_rank_for_xp(v_post_total_xp);
+
+  -- Step 8.1: body-part rank crossings. VALUES list mirrors
+  -- lib/features/rpg/data/title_thresholds_table.dart row-for-row.
+  INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+  SELECT v_user_id, v.slug, v_now, FALSE
+  FROM (VALUES
+    ('arms_r5_vein_stirrer',       'arms',       5),
+    ('arms_r10_iron_fingered',     'arms',      10),
+    ('arms_r15_sinew_drawn',       'arms',      15),
+    ('arms_r20_marrow_cleaver',    'arms',      20),
+    ('arms_r25_steel_sleeved',     'arms',      25),
+    ('arms_r30_sinew_sworn',       'arms',      30),
+    ('arms_r40_iron_knuckled',     'arms',      40),
+    ('arms_r50_steel_forged',      'arms',      50),
+    ('arms_r60_sinew_bound',       'arms',      60),
+    ('arms_r70_iron_sleeved',      'arms',      70),
+    ('arms_r80_sinew_of_storms',   'arms',      80),
+    ('arms_r90_iron_untouched',    'arms',      90),
+    ('arms_r99_the_sinew',         'arms',      99),
+    ('back_r5_lattice_touched',    'back',       5),
+    ('back_r10_wing_marked',       'back',      10),
+    ('back_r15_rope_hauler',       'back',      15),
+    ('back_r20_lat_crowned',       'back',      20),
+    ('back_r25_talon_backed',      'back',      25),
+    ('back_r30_wing_spread',       'back',      30),
+    ('back_r40_lattice_hauled',    'back',      40),
+    ('back_r50_wing_crowned',      'back',      50),
+    ('back_r60_lattice_spread',    'back',      60),
+    ('back_r70_wing_storm',        'back',      70),
+    ('back_r80_wing_of_storms',    'back',      80),
+    ('back_r90_sky_lattice',       'back',      90),
+    ('back_r99_the_lattice',       'back',      99),
+    ('chest_r5_initiate_of_the_forge', 'chest',  5),
+    ('chest_r10_plate_bearer',     'chest',     10),
+    ('chest_r15_forge_marked',     'chest',     15),
+    ('chest_r20_iron_chested',     'chest',     20),
+    ('chest_r25_anvil_heart',      'chest',     25),
+    ('chest_r30_forge_born',       'chest',     30),
+    ('chest_r40_bulwark_chested',  'chest',     40),
+    ('chest_r50_forge_plated',     'chest',     50),
+    ('chest_r60_anvil_forged',     'chest',     60),
+    ('chest_r70_forge_heart',      'chest',     70),
+    ('chest_r80_heart_of_forge',   'chest',     80),
+    ('chest_r90_forge_untouched',  'chest',     90),
+    ('chest_r99_the_anvil',        'chest',     99),
+    ('core_r5_spine_tested',       'core',       5),
+    ('core_r10_core_forged',       'core',      10),
+    ('core_r15_pillar_spined',     'core',      15),
+    ('core_r20_iron_belted',       'core',      20),
+    ('core_r25_stonewall',         'core',      25),
+    ('core_r30_diamond_spine',     'core',      30),
+    ('core_r40_anchor_belted',     'core',      40),
+    ('core_r50_stone_cored',       'core',      50),
+    ('core_r60_marrow_carved',     'core',      60),
+    ('core_r70_stone_spined',      'core',      70),
+    ('core_r80_spine_of_storms',   'core',      80),
+    ('core_r90_marrow_untouched',  'core',      90),
+    ('core_r99_the_spine',         'core',      99),
+    ('legs_r5_ground_walker',      'legs',       5),
+    ('legs_r10_stone_stepper',     'legs',      10),
+    ('legs_r15_pillar_apprentice', 'legs',      15),
+    ('legs_r20_pillar_walker',     'legs',      20),
+    ('legs_r25_quarry_strider',    'legs',      25),
+    ('legs_r30_mountain_strider',  'legs',      30),
+    ('legs_r40_stone_strider',     'legs',      40),
+    ('legs_r50_mountain_footed',   'legs',      50),
+    ('legs_r60_mountain_rooted',   'legs',      60),
+    ('legs_r70_pillar_footed',     'legs',      70),
+    ('legs_r80_pillar_of_storms',  'legs',      80),
+    ('legs_r90_mountain_untouched','legs',      90),
+    ('legs_r99_the_pillar',        'legs',      99),
+    ('shoulders_r5_burden_tester',     'shoulders', 5),
+    ('shoulders_r10_yoke_apprentice',  'shoulders', 10),
+    ('shoulders_r15_sky_reach',        'shoulders', 15),
+    ('shoulders_r20_atlas_touched',    'shoulders', 20),
+    ('shoulders_r25_sky_vaulter',      'shoulders', 25),
+    ('shoulders_r30_yoke_crowned',     'shoulders', 30),
+    ('shoulders_r40_atlas_carried',    'shoulders', 40),
+    ('shoulders_r50_sky_yoked',        'shoulders', 50),
+    ('shoulders_r60_sky_vaulted',      'shoulders', 60),
+    ('shoulders_r70_sky_held',         'shoulders', 70),
+    ('shoulders_r80_sky_sundered',     'shoulders', 80),
+    ('shoulders_r90_sky_untouched',    'shoulders', 90),
+    ('shoulders_r99_the_atlas',        'shoulders', 99)
+  ) AS v(slug, body_part, rank_threshold)
+  WHERE v.rank_threshold > COALESCE((v_pre_ranks  ->> v.body_part)::int, 1)
+    AND v.rank_threshold <= COALESCE((v_post_ranks ->> v.body_part)::int, 1)
+  ON CONFLICT (user_id, title_id) DO NOTHING;
+
+  -- Step 8.2: character-level crossings.
+  IF v_post_char_level > v_pre_char_level THEN
+    INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+    SELECT v_user_id, v.slug, v_now, FALSE
+    FROM (VALUES
+      ('wanderer',     10),
+      ('path_trodden', 25),
+      ('path_sworn',   50),
+      ('path_forged',  75),
+      ('saga_scribed', 100),
+      ('saga_bound',   125),
+      ('saga_eternal', 148)
+    ) AS v(slug, level_threshold)
+    WHERE v.level_threshold >  v_pre_char_level
+      AND v.level_threshold <= v_post_char_level
+    ON CONFLICT (user_id, title_id) DO NOTHING;
+  END IF;
+
+  -- Step 8.3: cross-build distinction titles via 00043's helper.
+  INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+  SELECT v_user_id, cb.slug, v_now, FALSE
+  FROM public.evaluate_cross_build_titles_for_user(v_user_id) cb
+  ON CONFLICT (user_id, title_id) DO NOTHING;
+
   RETURN;
 END;
 $$;
@@ -1012,6 +1157,19 @@ DECLARE
   v_event_id         uuid;
   v_dom_part         text;
   v_current_rank_n   int;
+  -- Phase 26d Task 2 title detection state — restored after 00065 PR 2
+  -- accidentally dropped the title-award block when rewriting this
+  -- function for the Phase 29 v2 11-multiplier chain. Without these
+  -- captures, no `earned_titles` row is INSERTed when a workout crosses
+  -- a body-part / character-level title threshold, so the celebration
+  -- queue's TitleUnlockEvent fires client-side but `equip_title` finds
+  -- no row to flip → silent failure. See Multi-celebration E2E (S2).
+  v_pre_ranks       jsonb;
+  v_post_ranks      jsonb;
+  v_pre_total_xp    numeric;
+  v_post_total_xp   numeric;
+  v_pre_char_level  int;
+  v_post_char_level int;
 BEGIN
   SELECT user_id INTO v_user_id FROM public.workouts WHERE id = p_workout_id;
   IF v_user_id IS NULL THEN
@@ -1023,6 +1181,17 @@ BEGIN
   SELECT bodyweight_kg, gender INTO v_bodyweight_kg, v_gender
   FROM public.profiles WHERE id = v_user_id;
   v_bodyweight_f := COALESCE(v_bodyweight_kg, 0)::float8;
+
+  -- Phase 26d Task 2 — capture pre-rank map + pre-character-level ONCE
+  -- before any body_part_progress write happens. Missing rows COALESCE
+  -- to rank 1 inside the threshold-crossing query at the bottom.
+  SELECT
+    COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
+    COALESCE(SUM(total_xp), 0)
+  INTO v_pre_ranks, v_pre_total_xp
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id;
+  v_pre_char_level := public.rpg_rank_for_xp(v_pre_total_xp);
 
   SELECT COALESCE(jsonb_object_agg(epl.exercise_id::text, epl.peak_weight), '{}'::jsonb)
   INTO v_peaks_map
@@ -1329,6 +1498,130 @@ BEGIN
       ELSE exercise_peak_loads_by_rep_range.best_reps
     END,
     updated_at = v_now;
+
+  -- Phase 26d Task 2 title detection — restored after Phase 29 v2 PR 2.
+  -- Runs AFTER body_part_progress + peak writes have landed. Capture
+  -- post-state via a single re-SELECT (≤ 6 rows).
+  SELECT
+    COALESCE(jsonb_object_agg(body_part, rank), '{}'::jsonb),
+    COALESCE(SUM(total_xp), 0)
+  INTO v_post_ranks, v_post_total_xp
+  FROM public.body_part_progress
+  WHERE user_id = v_user_id;
+  v_post_char_level := public.rpg_rank_for_xp(v_post_total_xp);
+
+  -- Step 8.1: body-part rank crossings. VALUES list mirrors
+  -- lib/features/rpg/data/title_thresholds_table.dart row-for-row; the
+  -- Dart-side integrity test fails the suite if the two drift.
+  INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+  SELECT v_user_id, v.slug, v_now, FALSE
+  FROM (VALUES
+    ('arms_r5_vein_stirrer',       'arms',       5),
+    ('arms_r10_iron_fingered',     'arms',      10),
+    ('arms_r15_sinew_drawn',       'arms',      15),
+    ('arms_r20_marrow_cleaver',    'arms',      20),
+    ('arms_r25_steel_sleeved',     'arms',      25),
+    ('arms_r30_sinew_sworn',       'arms',      30),
+    ('arms_r40_iron_knuckled',     'arms',      40),
+    ('arms_r50_steel_forged',      'arms',      50),
+    ('arms_r60_sinew_bound',       'arms',      60),
+    ('arms_r70_iron_sleeved',      'arms',      70),
+    ('arms_r80_sinew_of_storms',   'arms',      80),
+    ('arms_r90_iron_untouched',    'arms',      90),
+    ('arms_r99_the_sinew',         'arms',      99),
+    ('back_r5_lattice_touched',    'back',       5),
+    ('back_r10_wing_marked',       'back',      10),
+    ('back_r15_rope_hauler',       'back',      15),
+    ('back_r20_lat_crowned',       'back',      20),
+    ('back_r25_talon_backed',      'back',      25),
+    ('back_r30_wing_spread',       'back',      30),
+    ('back_r40_lattice_hauled',    'back',      40),
+    ('back_r50_wing_crowned',      'back',      50),
+    ('back_r60_lattice_spread',    'back',      60),
+    ('back_r70_wing_storm',        'back',      70),
+    ('back_r80_wing_of_storms',    'back',      80),
+    ('back_r90_sky_lattice',       'back',      90),
+    ('back_r99_the_lattice',       'back',      99),
+    ('chest_r5_initiate_of_the_forge', 'chest',  5),
+    ('chest_r10_plate_bearer',     'chest',     10),
+    ('chest_r15_forge_marked',     'chest',     15),
+    ('chest_r20_iron_chested',     'chest',     20),
+    ('chest_r25_anvil_heart',      'chest',     25),
+    ('chest_r30_forge_born',       'chest',     30),
+    ('chest_r40_bulwark_chested',  'chest',     40),
+    ('chest_r50_forge_plated',     'chest',     50),
+    ('chest_r60_anvil_forged',     'chest',     60),
+    ('chest_r70_forge_heart',      'chest',     70),
+    ('chest_r80_heart_of_forge',   'chest',     80),
+    ('chest_r90_forge_untouched',  'chest',     90),
+    ('chest_r99_the_anvil',        'chest',     99),
+    ('core_r5_spine_tested',       'core',       5),
+    ('core_r10_core_forged',       'core',      10),
+    ('core_r15_pillar_spined',     'core',      15),
+    ('core_r20_iron_belted',       'core',      20),
+    ('core_r25_stonewall',         'core',      25),
+    ('core_r30_diamond_spine',     'core',      30),
+    ('core_r40_anchor_belted',     'core',      40),
+    ('core_r50_stone_cored',       'core',      50),
+    ('core_r60_marrow_carved',     'core',      60),
+    ('core_r70_stone_spined',      'core',      70),
+    ('core_r80_spine_of_storms',   'core',      80),
+    ('core_r90_marrow_untouched',  'core',      90),
+    ('core_r99_the_spine',         'core',      99),
+    ('legs_r5_ground_walker',      'legs',       5),
+    ('legs_r10_stone_stepper',     'legs',      10),
+    ('legs_r15_pillar_apprentice', 'legs',      15),
+    ('legs_r20_pillar_walker',     'legs',      20),
+    ('legs_r25_quarry_strider',    'legs',      25),
+    ('legs_r30_mountain_strider',  'legs',      30),
+    ('legs_r40_stone_strider',     'legs',      40),
+    ('legs_r50_mountain_footed',   'legs',      50),
+    ('legs_r60_mountain_rooted',   'legs',      60),
+    ('legs_r70_pillar_footed',     'legs',      70),
+    ('legs_r80_pillar_of_storms',  'legs',      80),
+    ('legs_r90_mountain_untouched','legs',      90),
+    ('legs_r99_the_pillar',        'legs',      99),
+    ('shoulders_r5_burden_tester',     'shoulders', 5),
+    ('shoulders_r10_yoke_apprentice',  'shoulders', 10),
+    ('shoulders_r15_sky_reach',        'shoulders', 15),
+    ('shoulders_r20_atlas_touched',    'shoulders', 20),
+    ('shoulders_r25_sky_vaulter',      'shoulders', 25),
+    ('shoulders_r30_yoke_crowned',     'shoulders', 30),
+    ('shoulders_r40_atlas_carried',    'shoulders', 40),
+    ('shoulders_r50_sky_yoked',        'shoulders', 50),
+    ('shoulders_r60_sky_vaulted',      'shoulders', 60),
+    ('shoulders_r70_sky_held',         'shoulders', 70),
+    ('shoulders_r80_sky_sundered',     'shoulders', 80),
+    ('shoulders_r90_sky_untouched',    'shoulders', 90),
+    ('shoulders_r99_the_atlas',        'shoulders', 99)
+  ) AS v(slug, body_part, rank_threshold)
+  WHERE v.rank_threshold > COALESCE((v_pre_ranks  ->> v.body_part)::int, 1)
+    AND v.rank_threshold <= COALESCE((v_post_ranks ->> v.body_part)::int, 1)
+  ON CONFLICT (user_id, title_id) DO NOTHING;
+
+  -- Step 8.2: character-level crossings.
+  IF v_post_char_level > v_pre_char_level THEN
+    INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+    SELECT v_user_id, v.slug, v_now, FALSE
+    FROM (VALUES
+      ('wanderer',     10),
+      ('path_trodden', 25),
+      ('path_sworn',   50),
+      ('path_forged',  75),
+      ('saga_scribed', 100),
+      ('saga_bound',   125),
+      ('saga_eternal', 148)
+    ) AS v(slug, level_threshold)
+    WHERE v.level_threshold >  v_pre_char_level
+      AND v.level_threshold <= v_post_char_level
+    ON CONFLICT (user_id, title_id) DO NOTHING;
+  END IF;
+
+  -- Step 8.3: cross-build distinction titles. Reuses 00043's helper.
+  INSERT INTO public.earned_titles (user_id, title_id, earned_at, is_active)
+  SELECT v_user_id, cb.slug, v_now, FALSE
+  FROM public.evaluate_cross_build_titles_for_user(v_user_id) cb
+  ON CONFLICT (user_id, title_id) DO NOTHING;
 END;
 $$;
 

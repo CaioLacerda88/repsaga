@@ -1066,15 +1066,42 @@ async function seedRpgMultiCelebrationUser(
 }
 
 /**
- * Seed rpgOverflowQueue user:
- * All 6 body-parts each seeded 8 XP below their respective rank thresholds.
- * One set per body part → 6 rank-ups in a single workout finish.
- * CelebrationQueue cap-at-3 fires: 3 overlays shown + overflow card "3 more rank-ups".
+ * Seed rpgOverflowQueue user (Phase 29 v2 re-tuned):
+ * All 6 body parts at rank 5, total_xp = 348 (70 XP into rank 5, ~18 XP
+ * below the rank-6 threshold of 366.31). One bench + squat + row + OHP
+ * workout pushes ALL 6 body parts to rank 6, no body part skipping a rank.
  *
- * Each body part is seeded at the XP level for its current rank - 1 set below
- * the next rank threshold. We use rank 4 → 5 boundary (≈ 270 XP) for all 6
- * body parts for simplicity. Each body part needs a different exercise so
- * XP attribution hits the right body part.
+ * Phase 29 v2 calibration notes (vs the pre-29 seed of rank 3 / 196 XP):
+ *   * The pre-29 seed assumed Phase 24d's flat XP curve where a single set
+ *     yielded ~10-50 XP per body part. Under Phase 29 v2 the same set at
+ *     rank 3 yields ~25-100 XP per body part because `tier_diff_mult` is
+ *     ≈ 2.44 when current_rank=3 and implied_tier=15 (the bodyweight-null
+ *     fallback). With those gains, legs and back skipped a full rank
+ *     (3 → 5), pre-class Initiate flipped to Pathfinder, and the queue
+ *     allocated a class-change slot — overflow then read "4 more" not "3".
+ *   * Seeding at rank 5+ pushes both pre and post into the Ascendant
+ *     character class (balanced, min ≥ 5, spread ≤ 30%), so no class
+ *     change fires regardless of which body part is the largest gainer.
+ *   * Margins on the new seed:
+ *     - core gap to R6 = 366.31 − 348 = 18.31 XP; core gain ≈ 21.24 XP →
+ *       3 XP margin above threshold (all 6 cross).
+ *     - legs headroom to R7 = 462.94 − 348 = 114.94 XP; legs gain ≈ 85.39 XP →
+ *       29 XP headroom (no body part skips two ranks).
+ *   * `body_part_progress.rank` is set explicitly to 5 but the production
+ *     UPSERT recomputes it via `rpg_rank_for_xp(total_xp)` on the first
+ *     workout finish — the literal value here exists only so the pre-state
+ *     ranks table reflects rank 5 even before the user touches the app.
+ *
+ * Resulting celebration queue for the 4-exercise workout:
+ *   * 6 RankUpEvents (all 5 → 6)
+ *   * 1 LevelUpEvent (character level 9 → 10)
+ *   * 0 ClassChangeEvent (Ascendant pre+post)
+ *   * 0 TitleUnlockEvent (no rank-5 / r10 / etc threshold crossed by this
+ *     transition — pre is already at rank 5, post lands at rank 6 which
+ *     has no title threshold)
+ *
+ * Queue cap-at-3 allocation: [top rank-up, 2nd rank-up, 3rd rank-up].
+ * Overflow rank-ups = 6 − 3 = 3 → card displays "3 more rank-ups". ✓
  */
 async function seedRpgOverflowQueueUser(
   supabase: SupabaseClient,
@@ -1111,27 +1138,12 @@ async function seedRpgOverflowQueueUser(
     { onConflict: 'id' },
   );
 
-  // All 6 body parts seeded at rank 3, 196 XP (2.6 XP below R4 threshold ≈ 198.6).
-  // Raised from 190 XP to 196 XP to reduce the novelty-discount risk: a single
-  // working set must earn only ~2.6 XP per body part to cross rank 4, ensuring
-  // the threshold is reached reliably even with novelty discounting.
-  //
-  // The S4 test uses bench_press (chest), barbell_squat (legs),
-  // barbell_bent_over_row (back), and overhead_press (shoulders) — 4 primary
-  // exercises. Secondary XP attribution also pushes arms and core over the
-  // rank-4 threshold, so all 6 body parts rank up in the single workout.
-  //
-  // Rank 4 threshold = 60 × (1.10³ − 1) / 0.10 ≈ 198.6 XP. No titles at rank 4
-  // (first title at rank 5), so titles do NOT eat into the cap-at-3 budget.
-  //
-  // CelebrationQueue with 6 rank-ups + 1 level-up + 0 titles:
-  //   closersCount = 1 (level-up), rankUpCapacity = 3 − 1 = 2
-  //   queue = [top-2 rank-ups, level-up], overflow = 4 remaining rank-ups.
-  // The test checks: 2 rank-up overlays, 1 level-up overlay, overflow card (4).
+  // All 6 body parts seeded at rank 5, total_xp = 348 (70 XP into rank 5).
+  // See the function dartdoc above for the Phase 29 v2 calibration reasoning.
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 196, rank: 3 },
+      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
     if (error) {
@@ -1173,7 +1185,7 @@ async function seedRpgOverflowQueueUser(
 
   await seedMinimalWorkout(supabase, userId);
 
-  console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 3, 196 XP — rank 4 boundary, no titles)');
+  console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 5, 348 XP — Phase 29 v2 R6 boundary, Ascendant class)');
 }
 
 /**
@@ -1211,11 +1223,12 @@ async function seedRpgOverflowTapCardUser(
     { onConflict: 'id' },
   );
 
-  // All 6 body parts at rank 3, 196 XP (2.6 XP below R4 threshold ~198.6).
+  // All 6 body parts at rank 5, total_xp = 348 (Phase 29 v2 calibration —
+  // mirror seedRpgOverflowQueueUser for derivation).
   const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
   for (const bp of bodyParts) {
     const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 196, rank: 3 },
+      { user_id: userId, body_part: bp, total_xp: 348, rank: 5 },
       { onConflict: 'user_id,body_part' },
     );
     if (error) {
@@ -1249,7 +1262,7 @@ async function seedRpgOverflowTapCardUser(
 
   await seedMinimalWorkout(supabase, userId);
 
-  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 3, 196 XP — rank 4 boundary, no titles)');
+  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 5, 348 XP — Phase 29 v2 R6 boundary, Ascendant class)');
 }
 
 // ---------------------------------------------------------------------------
