@@ -1,11 +1,17 @@
-/// Widget tests for [CelebrationPlayer.play] — Phase 18c reviewer fixes.
+/// Widget tests for [CelebrationPlayer.play] post-Path-A pivot (PR 29.5).
 ///
-/// Locks the new return contract:
-///   * Empty queue + no overflow → returns [CelebrationPlayResult.notTapped].
-///   * Overflow card auto-dismiss → returns `notTapped`.
-///   * Overflow card user-tap → returns [CelebrationPlayResult.tapped].
-///   * [TitleUnlockSheet] is barrier-dismissable (tap outside resolves
-///     gracefully without throwing; the player advances).
+/// **Path A contract (this PR):** the player no longer renders UI
+/// mid-workout. It is a pass-through that returns
+/// [CelebrationPlayResult.notTapped] synchronously for every input. The
+/// full celebration migrates to the post-session screen in PR 30a.
+///
+/// These tests pin the new contract:
+///   * Every [CelebrationEvent] variant resolves to `notTapped` without
+///     mounting any overlay / dialog / OverlayEntry.
+///   * Empty queue → `notTapped`.
+///   * Queue WITH overflow payload → still `notTapped` (no overflow
+///     card mounts — PR 30a's post-session screen owns that surface).
+///   * The deprecated `onEquipTitle` callback is never invoked.
 library;
 
 import 'package:flutter/material.dart';
@@ -13,12 +19,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/celebration_event.dart';
+import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/ui/celebration_player.dart';
 import 'package:repsaga/features/rpg/ui/overlays/celebration_overflow_card.dart';
-import 'package:repsaga/features/rpg/ui/overlays/level_up_overlay.dart';
-import 'package:repsaga/features/rpg/ui/overlays/rank_up_overlay.dart';
-import 'package:repsaga/features/rpg/ui/overlays/title_unlock_sheet.dart';
 
 import '../../../helpers/test_material_app.dart';
 
@@ -44,8 +48,6 @@ void main() {
                       queue: <CelebrationEvent>[],
                     ),
                     catalog: const <rpg.Title>[],
-                    hasPriorEarnedTitles: false,
-                    onEquipTitle: (_) async {},
                   );
                 },
                 child: const Text('go'),
@@ -61,48 +63,16 @@ void main() {
       expect(result.userTappedOverflow, isFalse);
     });
 
-    testWidgets('returns notTapped when the overflow card auto-dismisses', (
+    testWidgets('returns notTapped when the queue carries an overflow payload '
+        '(post-session screen owns the overflow surface in PR 30a)', (
       tester,
     ) async {
-      late CelebrationPlayResult result;
-      await tester.pumpWidget(
-        TestMaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: ElevatedButton(
-                onPressed: () async {
-                  result = await CelebrationPlayer.play(
-                    context,
-                    result: const CelebrationQueueResult(
-                      queue: <CelebrationEvent>[],
-                      overflow: OverflowPayload(remainingRankUps: 2),
-                    ),
-                    catalog: const <rpg.Title>[],
-                    hasPriorEarnedTitles: false,
-                    onEquipTitle: (_) async {},
-                  );
-                },
-                child: const Text('go'),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('go'));
-      await tester.pump();
-      // Card mounts.
-      expect(find.byType(CelebrationOverflowCard), findsOneWidget);
-      // Auto-dismiss after 4s.
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pump();
-
-      expect(result.userTappedOverflow, isFalse);
-    });
-
-    testWidgets('returns tapped when the user taps the overflow card', (
-      tester,
-    ) async {
+      // Path A pivot: the overflow card no longer mounts mid-workout.
+      // PR 30a's post-session screen consumes [CelebrationQueueResult]
+      // directly and renders the overflow surface as part of the
+      // ceremony. This test pins that the mid-workout player NEVER
+      // mounts CelebrationOverflowCard, even when overflow data is
+      // present.
       late CelebrationPlayResult result;
       await tester.pumpWidget(
         TestMaterialApp(
@@ -117,8 +87,6 @@ void main() {
                       overflow: OverflowPayload(remainingRankUps: 3),
                     ),
                     catalog: const <rpg.Title>[],
-                    hasPriorEarnedTitles: false,
-                    onEquipTitle: (_) async {},
                   );
                 },
                 child: const Text('go'),
@@ -130,187 +98,144 @@ void main() {
 
       await tester.tap(find.text('go'));
       await tester.pump();
-      expect(find.byType(CelebrationOverflowCard), findsOneWidget);
+      // No overflow card is mounted (Path A: no mid-workout UI).
+      expect(find.byType(CelebrationOverflowCard), findsNothing);
+      // Pump for a full second to make sure no late mount races us.
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(CelebrationOverflowCard), findsNothing);
 
-      // Tap the card — should resolve with userTappedOverflow == true.
-      await tester.tap(find.byType(CelebrationOverflowCard));
-      await tester.pump();
-
-      expect(result.userTappedOverflow, isTrue);
+      expect(result.userTappedOverflow, isFalse);
     });
   });
 
-  group('CelebrationPlayer multi-event sequence', () {
-    // Companion coverage for the BUG-017 e2e regression
-    // (`rank-up-celebration.spec.ts:431`). The actual root cause of that
-    // failure was the cap-at-3 queue dropping the title (see
-    // `CelebrationQueue` test "BUG-017 regression"), but this widget test
-    // pins the orchestration contract on the player side: given a queue
-    // that contains [RankUp, LevelUp, TitleUnlock], the player must
-    //   * play the rank-up overlay for its full 1100ms hold
-    //   * insert the 200ms inter-event gap
-    //   * play the level-up overlay for its full 1100ms hold
-    //   * mount the title sheet AFTER both overlays have played out
-    //   * NOT short-circuit through the title loop on `context.mounted`
-    //     checks while the route stack is mid-transition.
-    // Without this lock, a future `_playOverlay` refactor that races the
-    // pop-completer against the next-iteration await could silently drop
-    // the title sheet, regressing the spec.
+  group('CelebrationPlayer — variant pass-through contract (Path A)', () {
     testWidgets(
-      'plays rank-up → level-up → title sheet without dropping the title',
+      'every event variant resolves to notTapped without mounting UI',
       (tester) async {
-        late CelebrationPlayResult result;
-        var equipCalls = 0;
+        // Pin the Path A contract: the player accepts every variant the
+        // sealed union exposes today and returns `notTapped` without
+        // mounting any overlay / dialog / OverlayEntry. A future
+        // refactor that re-introduced mid-workout playback would fail
+        // this test (no widgets should mount during the play() call).
+        final variants = <CelebrationEvent>[
+          const CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 5),
+          const CelebrationEvent.levelUp(newLevel: 3),
+          const CelebrationEvent.firstAwakening(bodyPart: BodyPart.legs),
+          const CelebrationEvent.classChange(
+            fromClass: CharacterClass.initiate,
+            toClass: CharacterClass.bulwark,
+          ),
+          const CelebrationEvent.titleUnlock(
+            slug: 'chest_r5_initiate_of_the_forge',
+          ),
+          const CelebrationEvent.personalRecord(
+            exerciseId: 'abc-123',
+            exerciseName: 'Bench Press',
+            weight: 100,
+            reps: 5,
+            repBand: '1-5',
+          ),
+        ];
 
-        await tester.pumpWidget(
-          TestMaterialApp(
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: ElevatedButton(
-                  onPressed: () async {
-                    result = await CelebrationPlayer.play(
-                      context,
-                      result: const CelebrationQueueResult(
-                        queue: <CelebrationEvent>[
-                          CelebrationEvent.rankUp(
-                            bodyPart: BodyPart.chest,
-                            newRank: 5,
-                          ),
-                          CelebrationEvent.levelUp(newLevel: 2),
-                          CelebrationEvent.titleUnlock(
-                            slug: 'chest_r5_initiate_of_the_forge',
-                          ),
-                        ],
-                      ),
-                      catalog: const <rpg.Title>[_chestR5],
-                      hasPriorEarnedTitles: false,
-                      onEquipTitle: (_) async {
-                        equipCalls += 1;
-                      },
-                    );
-                  },
-                  child: const Text('go'),
+        for (final event in variants) {
+          late CelebrationPlayResult result;
+          await tester.pumpWidget(
+            TestMaterialApp(
+              home: Builder(
+                builder: (context) => Scaffold(
+                  body: ElevatedButton(
+                    onPressed: () async {
+                      result = await CelebrationPlayer.play(
+                        context,
+                        result: CelebrationQueueResult(
+                          queue: <CelebrationEvent>[event],
+                        ),
+                        catalog: const <rpg.Title>[_chestR5],
+                      );
+                    },
+                    child: const Text('go'),
+                  ),
                 ),
               ),
             ),
-          ),
-        );
+          );
 
-        await tester.tap(find.text('go'));
-        await tester.pump();
+          await tester.tap(find.text('go'));
+          await tester.pump();
+          // Allow any late-mounted widget a frame to surface.
+          await tester.pump(const Duration(milliseconds: 50));
 
-        // Phase 1: rank-up overlay mounts.
-        expect(find.byType(RankUpOverlay), findsOneWidget);
-        expect(find.byType(LevelUpOverlay), findsNothing);
-        expect(find.byType(TitleUnlockSheet), findsNothing);
-
-        // Hold for 1100ms (full rank-up window) then auto-pop.
-        await tester.pump(const Duration(milliseconds: 1100));
-        // After the auto-pop runs, the dialog route is popped — pump a
-        // frame to let the route transition complete.
-        await tester.pump(const Duration(milliseconds: 350));
-        // 200ms inter-event gap.
-        await tester.pump(const Duration(milliseconds: 200));
-        // showDialog re-mount frame.
-        await tester.pump(const Duration(milliseconds: 50));
-
-        // Phase 2: level-up overlay should now be on screen.
-        expect(find.byType(RankUpOverlay), findsNothing);
-        expect(find.byType(LevelUpOverlay), findsOneWidget);
-        expect(find.byType(TitleUnlockSheet), findsNothing);
-
-        // Pump JUST 200ms of the 1100ms hold and assert the level-up is
-        // STILL visible. Pins the per-event hold so a future scheduler
-        // change cannot accidentally short the level-up window (which
-        // would cut into the title sheet's mount frame).
-        await tester.pump(const Duration(milliseconds: 200));
-        expect(
-          find.byType(LevelUpOverlay),
-          findsOneWidget,
-          reason: 'level-up must hold for the full 1100ms hold window',
-        );
-
-        // Hold for the remaining 900ms then auto-pop.
-        await tester.pump(const Duration(milliseconds: 900));
-        await tester.pump(const Duration(milliseconds: 350));
-
-        // Phase 3: title-unlock sheet mounts.
-        await tester.pump(const Duration(milliseconds: 350));
-        expect(find.byType(LevelUpOverlay), findsNothing);
-        expect(
-          find.byType(TitleUnlockSheet),
-          findsOneWidget,
-          reason: 'title sheet must render after both overlays play through',
-        );
-
-        // Tap the equip CTA.
-        final equipButton = find.text('EQUIP TITLE');
-        expect(equipButton, findsOneWidget);
-        await tester.tap(equipButton);
-        await tester.pumpAndSettle();
-
-        expect(equipCalls, 1);
-        expect(result.userTappedOverflow, isFalse);
+          expect(
+            find.byType(CelebrationOverflowCard),
+            findsNothing,
+            reason:
+                '${event.runtimeType}: Path A pass-through must NOT mount '
+                'CelebrationOverflowCard mid-workout',
+          );
+          // Dialog routes have a Material barrier; pin none is present.
+          expect(
+            find.byType(Dialog),
+            findsNothing,
+            reason:
+                '${event.runtimeType}: Path A pass-through must NOT mount '
+                'any Dialog mid-workout',
+          );
+          expect(
+            result.userTappedOverflow,
+            isFalse,
+            reason:
+                '${event.runtimeType}: pass-through always returns '
+                'userTappedOverflow == false',
+          );
+        }
       },
     );
-  });
 
-  group('CelebrationPlayer title sheet dismiss', () {
-    testWidgets(
-      'title sheet is barrier-dismissable; player advances on tap-outside',
-      (tester) async {
-        late CelebrationPlayResult result;
-        var equipCalls = 0;
+    testWidgets('deprecated onEquipTitle callback is never invoked', (
+      tester,
+    ) async {
+      // PR 29.5 retired the title half-sheet's EQUIP CTA. PR 30a
+      // moves the affordance to the post-session summary panel. Pin
+      // that the mid-workout player NEVER invokes the deprecated
+      // callback even when a title-unlock event is in the queue.
+      var equipCalls = 0;
 
-        await tester.pumpWidget(
-          TestMaterialApp(
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: ElevatedButton(
-                  onPressed: () async {
-                    result = await CelebrationPlayer.play(
-                      context,
-                      result: const CelebrationQueueResult(
-                        queue: <CelebrationEvent>[
-                          CelebrationEvent.titleUnlock(
-                            slug: 'chest_r5_initiate_of_the_forge',
-                          ),
-                        ],
-                      ),
-                      catalog: const <rpg.Title>[_chestR5],
-                      hasPriorEarnedTitles: false,
-                      onEquipTitle: (_) async {
-                        equipCalls += 1;
-                      },
-                    );
-                  },
-                  child: const Text('go'),
-                ),
+      await tester.pumpWidget(
+        TestMaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () {
+                  CelebrationPlayer.play(
+                    context,
+                    result: const CelebrationQueueResult(
+                      queue: <CelebrationEvent>[
+                        CelebrationEvent.titleUnlock(
+                          slug: 'chest_r5_initiate_of_the_forge',
+                        ),
+                      ],
+                    ),
+                    catalog: const <rpg.Title>[_chestR5],
+                    // ignore: deprecated_member_use_from_same_package
+                    // Intentionally passes a non-null callback to
+                    // verify the pass-through never invokes it.
+                    onEquipTitle: (_) async {
+                      equipCalls += 1;
+                    },
+                  );
+                },
+                child: const Text('go'),
               ),
             ),
           ),
-        );
+        ),
+      );
 
-        await tester.tap(find.text('go'));
-        await tester.pump();
-        // Sheet route mounts; allow the modal animation to settle.
-        await tester.pump(const Duration(milliseconds: 350));
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
-        // The title sheet body is on screen.
-        expect(find.byType(TitleUnlockSheet), findsOneWidget);
-
-        // Tap outside the sheet (top of the screen) to dismiss via the
-        // barrier. Since enableDrag is disabled but isDismissible is true
-        // (default), the barrier tap should pop the sheet.
-        await tester.tapAt(const Offset(20, 20));
-        await tester.pumpAndSettle();
-
-        // Sheet is gone; the play() future has resolved without invoking
-        // onEquip.
-        expect(find.byType(TitleUnlockSheet), findsNothing);
-        expect(equipCalls, 0);
-        expect(result.userTappedOverflow, isFalse);
-      },
-    );
+      expect(equipCalls, 0);
+    });
   });
 }

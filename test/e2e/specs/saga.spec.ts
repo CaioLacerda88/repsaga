@@ -525,20 +525,11 @@ test.describe('Saga — class label updates after rank cross (S12)', () => {
     await completeSet(page, 0);
     await finishWorkout(page);
 
-    // BUG-011 (Cluster 3): the Initiate→Bulwark transition fires a
-    // ClassChangeOverlay (1600ms choreography) ahead of the rank-up
-    // overlay. We don't wait for it explicitly because the celebration
-    // player auto-dismisses after the timeline; the overlay surfaces
-    // and disappears within `dismissCelebrationIfPresent`'s 25s budget.
-    // Best-effort visibility check (don't fail the test if the rank-up
-    // overlay races us — the unit tests pin the queue order).
-    await page
-      .locator(CELEBRATION.classChangeOverlay)
-      .first()
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .catch(() => {});
-
-    // Dismiss any celebration overlays (rank-up, level-up, title-unlock, overflow).
+    // PR 29.5 Path A pivot: no mid-workout overlays mount. The finish
+    // flow lands on /home (or on /pr-celebration if a PR was set);
+    // dismissCelebrationIfPresent handles the latter and short-circuits
+    // when no PR route is pushed. The unit tests pin the queue order;
+    // the class-change beat lives in the post-session screen (PR 30a).
     await dismissCelebrationIfPresent(page, 25_000);
 
     // Navigate back to the character sheet — the rpgProgressProvider has been

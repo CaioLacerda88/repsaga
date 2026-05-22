@@ -122,26 +122,18 @@ class CelebrationOrchestrator {
       rootContext, // ignore: use_build_context_synchronously — root navigator context stays alive for full app session; intentionally used across async gaps (see rootContext capture comment above)
       result: celebration,
       catalog: catalog,
+      // ignore: deprecated_member_use_from_same_package
+      // Both params are documented dead arguments retained for one PR
+      // cycle so call-site changes are batched into PR 30a (post-session
+      // summary panel migration). Remove this `@Deprecated` plus the
+      // call-site arguments together in PR 30c.
       hasPriorEarnedTitles: hasPriorEarnedTitles,
+      // ignore: deprecated_member_use_from_same_package
       onEquipTitle: (title) async {
-        // Use ProviderScope.containerOf(rootContext) instead of
-        // `ref` because this callback fires inside CelebrationPlayer
-        // after _ActiveWorkoutScreenState may be disposed (invalidating
-        // the ConsumerStatefulWidget's ref). rootContext is the root
-        // navigator's context which stays alive for the full app
-        // session.
-        //
-        // Detection-time INSERT contract: equipTitle is a pure
-        // is_active toggle — the earned_titles row was already
-        // INSERTed server-side inside record_session_xp_batch during
-        // the save_workout call that produced this celebration. The
-        // client never needs to materialize the row; it just flips
-        // the active flag.
-        final container = ProviderScope.containerOf(rootContext);
-        final repo = container.read(titlesRepositoryProvider);
-        await repo.equipTitle(title.slug);
-        container.invalidate(earnedTitlesProvider);
-        container.invalidate(equippedTitleSlugProvider);
+        // No-op: EQUIP affordance migrated to post-session summary panel
+        // in PR 30a. Closure preserved here only to satisfy the deprecated
+        // CelebrationPlayer.play signature until the parameter is removed
+        // in PR 30c.
       },
     );
     // Phase 26b: write 24h pulse-window trigger timestamps for every

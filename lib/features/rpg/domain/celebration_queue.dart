@@ -1,5 +1,72 @@
 import '../models/celebration_event.dart';
 
+/// Per-variant slot policy attached to each [CelebrationEvent].
+///
+/// The policy names what [CelebrationQueue.build] already does today on a
+/// per-variant basis; promoting it to a first-class enum (rather than
+/// implicit conditionals scattered across the builder) means:
+///
+///   1. Future variants added to the sealed union have to make an explicit
+///      choice via the exhaustive [slotPolicyFor] switch — Dart fails the
+///      compile if a new variant is added without a slot decision.
+///   2. The mid-workout thin-flash overlay dispatch (PR 29.5) and the
+///      eventual post-session screen state machine (PR 30a) both read
+///      against the same policy without re-implementing the precedence
+///      rules.
+///   3. The behavior is unit-test-pinned per variant; refactors to the
+///      queue body can't silently demote a `serialize` variant to `drop`
+///      without failing the policy test.
+///
+/// Semantics:
+///   * [serialize] — the event holds its own slot. If multiple slots are
+///     available the variant fills them in canonical order.
+///   * [coalesce] — the event collapses into a summary surface when the
+///     visible cap is exceeded. The current implementation surfaces this
+///     for rank-up overflow only (cap-trimmed rank-ups condense into the
+///     overflow card flipbook). It is the queue's overflow strategy, not
+///     a per-event policy; no event currently carries [coalesce] as its
+///     own policy. The enum still names it because the post-session
+///     screen's elevated rank-up "fusion" beat (PR 30a) will read against
+///     this name when computing whether to coalesce ≥3 simultaneous
+///     body-part rank-ups into a cascade grid.
+///   * [drop] — silently absorbed when no slot is available; not surfaced
+///     to the user during this finish. Used only for level-up because the
+///     character level is a pure function of body-part ranks and is
+///     always re-derivable on the saga screen — dropping it costs less
+///     narrative continuity than any other variant.
+enum SlotPolicy { serialize, coalesce, drop }
+
+/// Returns the [SlotPolicy] for a given [CelebrationEvent] variant.
+///
+/// Exhaustive — adding a new variant to the [CelebrationEvent] union
+/// without extending this switch is a compile error.
+SlotPolicy slotPolicyFor(CelebrationEvent event) {
+  return switch (event) {
+    // First-awakening narratively precedes the body-part's first rank-up
+    // and is session-throttled upstream; never dropped.
+    FirstAwakeningEvent() => SlotPolicy.serialize,
+    // Class change is the rarest progression beat in the entire loop
+    // (≈ once per quarter for an active lifter). Slot 1 reserved.
+    ClassChangeEvent() => SlotPolicy.serialize,
+    // Top rank-up reserved (BUG-013); spillover rank-ups also serialize.
+    // Beyond cap-at-3, the queue's overflow strategy coalesces remaining
+    // rank-ups into the overflow card — but the per-event policy is
+    // serialize. coalesce is a queue-level fallback, not the event's
+    // intrinsic policy.
+    RankUpEvent() => SlotPolicy.serialize,
+    // Title is the crown (BUG-017) — beats level-up in the closer slot.
+    TitleUnlockEvent() => SlotPolicy.serialize,
+    // PR flash is the most viscerally meaningful mid-workout signal
+    // (canonical share moment per the post-session mockup); reserved
+    // in the cap-at-3 queue.
+    PersonalRecordEvent() => SlotPolicy.serialize,
+    // Character level is a pure function of body-part ranks; the saga
+    // screen always re-derives it. Dropping it costs less narrative
+    // continuity than dropping any other variant.
+    LevelUpEvent() => SlotPolicy.drop,
+  };
+}
+
 /// Result of [CelebrationQueue.build] — the ordered playback list plus an
 /// optional overflow card payload when the cap-at-3 rule trims rank-ups.
 class CelebrationQueueResult {
@@ -97,6 +164,7 @@ class CelebrationQueue {
     final rankUps = <RankUpEvent>[];
     final levelUps = <LevelUpEvent>[];
     final titles = <TitleUnlockEvent>[];
+    final personalRecords = <PersonalRecordEvent>[];
 
     for (final e in events) {
       switch (e) {
@@ -110,6 +178,8 @@ class CelebrationQueue {
           levelUps.add(e);
         case TitleUnlockEvent():
           titles.add(e);
+        case PersonalRecordEvent():
+          personalRecords.add(e);
       }
     }
 
@@ -122,7 +192,7 @@ class CelebrationQueue {
       return a.bodyPart.dbValue.compareTo(b.bodyPart.dbValue);
     });
 
-    // ----- Reservation policy (BUG-011 + BUG-013 + BUG-017) -----
+    // ----- Reservation policy (BUG-011 + BUG-013 + BUG-017 + PR 29.5) -----
     //
     // Allocate slots in priority order so the rarest events always survive
     // the cap.
@@ -130,14 +200,16 @@ class CelebrationQueue {
     //           class per snapshot, so multi-class-change in one finish
     //           is structurally impossible)
     //   slot 2: highest rank-up — BUG-013 invariant
-    //   spillover: additional rank-ups (descending) → titles (FIFO) →
-    //              level-up. Title beats level-up (BUG-017: "title is the
-    //              crown") but loses to additional rank-ups (BUG-013:
-    //              "rank-ups never lose to closers").
+    //   spillover: additional rank-ups (descending) → personal records
+    //              (FIFO) → titles (FIFO) → level-up. Per WIP §4 + mockup
+    //              §4 hierarchy, PR sits AFTER class-change and BEFORE
+    //              title in the closer priority; PRs are the canonical
+    //              share moment, narratively heavier than a title unlock.
+    //              Level-up is the lowest-priority closer because
+    //              character level is a pure function of body-part ranks
+    //              (always re-derivable on the saga screen).
     //
-    // Pure-function arithmetic: same inputs → same allocation. Using
-    // direct `take(n)` calls instead of a builder loop because the budget
-    // math is cleaner to reason about with explicit per-bucket allocations.
+    // Pure-function arithmetic: same inputs → same allocation.
     var remaining = _capExcludingAwakening;
 
     // Slot 1: class change. Take at most one (`classChanges.length` will
@@ -152,16 +224,18 @@ class CelebrationQueue {
         : const <RankUpEvent>[];
     remaining -= keptTopRankUp.length;
 
-    // Spillover: additional rank-ups (descending) → titles (FIFO) →
-    // level-up. Level-up is the lowest-priority closer because character
-    // level is a pure function of body-part ranks (always re-derivable on
-    // the saga screen) — dropping it costs less narrative continuity than
-    // dropping a rank-up or title.
+    // Spillover: additional rank-ups (descending) → personal records (FIFO)
+    // → titles (FIFO) → level-up.
     final additionalRankUps = rankUps
         .skip(keptTopRankUp.length)
         .take(remaining < 0 ? 0 : remaining)
         .toList(growable: false);
     remaining -= additionalRankUps.length;
+
+    final keptPersonalRecords = personalRecords
+        .take(remaining < 0 ? 0 : remaining)
+        .toList(growable: false);
+    remaining -= keptPersonalRecords.length;
 
     final keptTitles = titles
         .take(remaining < 0 ? 0 : remaining)
@@ -175,19 +249,22 @@ class CelebrationQueue {
     // last bucket; intentionally elided to avoid a dead store warning.
 
     // Compose final queue in playback order: first-awakening → class →
-    // rank-ups → level-up → titles. Titles render last so they're the
-    // crown of the workout (spec §13.2).
+    // rank-ups → PRs → level-up → titles. Titles render last so they're
+    // the crown of the workout (spec §13.2). PRs play after the rank-up
+    // body-part beat but before the title's narrative-closing role.
     final queue = <CelebrationEvent>[
       ...firstAwakenings,
       ...keptClassChange,
       ...keptTopRankUp,
       ...additionalRankUps,
+      ...keptPersonalRecords,
       ...keptLevelUps,
       ...keptTitles,
     ];
 
     // Overflow currently surfaces only the trimmed rank-up count — closers
-    // dropped by the cap are silently absorbed (see class-level docstring).
+    // (PRs, titles, level-ups) dropped by the cap are silently absorbed
+    // (see class-level docstring).
     final overflowCount =
         rankUps.length - keptTopRankUp.length - additionalRankUps.length;
     final overflow = overflowCount > 0
