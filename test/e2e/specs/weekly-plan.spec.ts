@@ -14,6 +14,7 @@ import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
 import { HOME, WEEKLY_PLAN, WEEKLY_PLAN_26E } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 /**
  * Flutter's ListView.builder uses viewport culling — items outside the visible
@@ -66,12 +67,93 @@ async function scrollSheetAndClick(
 // The Push Day starter routine is seeded by seed.sql.
 const PUSH_DAY = 'Push Day';
 
+/**
+ * Reseed the smokeWeeklyPlan user back to the canonical "no plan + minimal
+ * workout" baseline that `global-setup.ts:smokeWeeklyPlan` originally
+ * provisioned (delete weekly_plans + ensureProfile + seedMinimalWorkout).
+ *
+ * Why this exists
+ * ---------------
+ * The five tests in the 'Weekly Plan' smoke describe block ALL run
+ * sequentially against the SAME server-side user (Playwright per-worker user
+ * isolation handles cross-worker races, not intra-worker back-to-back tests).
+ * Tests 3 and 5 mutate weekly_plans:
+ *
+ *   - Test 3 ('should add a routine ...') opens Plan Management, optionally
+ *     clears any existing plan via the AppBar overflow menu, then adds
+ *     Push Day. The clear-existing path is defensive AND silently no-ops
+ *     when the popup menu doesn't render in the 3 s observation window —
+ *     so under CI 4-vCPU contention the defensive branch can run, hit a
+ *     transient hidden-popup state, and proceed to "add" Push Day on top
+ *     of a stale plan. Once Push Day is in the plan, the AddRoutinesSheet
+ *     correctly filters it OUT (server-side dedupe), so a retry of test 3
+ *     finds nothing to scroll to and times out on `scrollSheetAndClick`.
+ *
+ *   - Test 5 ('should remove routines ...') clears the plan, but that
+ *     runs AFTER test 3, so it doesn't repair test 3's setup pollution.
+ *
+ *   - On CI `retries: 1`, a failed test 3 first attempt that managed to
+ *     add Push Day before failing leaves the row in the table; the retry
+ *     then can't add Push Day a second time.
+ *
+ * Direct evidence: the CI failure artifact (run 26261681645) page snapshot
+ * shows the Plan Management screen with Push Day already pinned to the
+ * plan (with an "X" remove button) AND the AddRoutinesSheet open below it
+ * listing 'Pull Day, Leg Day, Full Body, + Create new routine' — Push Day
+ * is missing from the sheet because it's already in the plan.
+ *
+ * Fix mirrors `reseedFullCrashUser` in crash-recovery.spec.ts (commit
+ * 28d67d6): per-test reset back to the baseline that global-setup
+ * established, BEFORE login, so the Flutter app hydrates from clean state.
+ *
+ * Reset scope = global-setup `smokeWeeklyPlan` runner:
+ *   - weekly_plans (delete)
+ *   - ensureProfile (no-op if already set, mirrors global-setup)
+ *   - seedMinimalWorkout (idempotent — checks 'E2E Warmup Workout' sentinel)
+ *
+ * Idempotent. Safe to call on a user that's already clean.
+ */
+async function reseedSmokeWeeklyPlanUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(
+    admin,
+    getUser('smokeWeeklyPlan').email,
+  );
+  if (!userId) return;
+
+  // Delete weekly_plans rows for this user — mirrors global-setup's
+  // smokeWeeklyPlan runner step 1. Cascade: weekly_plans → no FK children
+  // (routine_id is a soft reference; routines stay intact).
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // The other two steps in global-setup's smokeWeeklyPlan runner —
+  // ensureProfile and seedMinimalWorkout — are idempotent: ensureProfile
+  // upserts a row keyed on user_id, seedMinimalWorkout checks for an
+  // existing workout named 'E2E Warmup Workout' before inserting. After
+  // global-setup runs once at suite start, both are no-ops on subsequent
+  // calls. We deliberately do NOT re-call them here: the test pollution
+  // mechanism is weekly_plans accumulation specifically, not profile or
+  // workout drift. Keeping the reset surgical avoids touching tables that
+  // aren't part of the leak.
+}
+
 // =============================================================================
 // SMOKE — Weekly Plan (smokeWeeklyPlan user)
 // =============================================================================
 
 test.describe('Weekly Plan', { tag: '@smoke' }, () => {
+  // Serial mode: the five tests share one server-side user; serial execution
+  // serializes the per-test reseed in beforeEach so test N+1's setup never
+  // races test N's teardown. Also makes `--repeat-each=N` stable for this
+  // file. Cross-worker isolation is unaffected — each worker still has its
+  // own `smokeWeeklyPlan` user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login so
+    // the Flutter app hydrates from clean state. See `reseedSmokeWeeklyPlanUser`
+    // docstring for the per-test pollution mechanism this prevents.
+    await reseedSmokeWeeklyPlanUser();
     await login(
       page,
       getUser('smokeWeeklyPlan').email,

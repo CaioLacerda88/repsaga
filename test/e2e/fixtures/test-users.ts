@@ -224,12 +224,12 @@ export const TEST_USERS = {
   // Phase 18c — Rank-up celebration / overlay tests
   // -------------------------------------------------------------------------
 
-  // rpgRankUpThreshold: chest body_part_progress pre-seeded to
-  // (cumulativeXpForRank(5) - 1 set worth of XP). Completing one chest set
-  // during the test crosses the Rank 5 boundary and fires a RankUpOverlay.
-  // Rank 5 cumulative XP = 60 × (1.10^4 − 1) / 0.10 ≈ 278.46 XP.
-  // We seed to 270 XP (≈ 8 XP below threshold); one working set of bench
-  // press at moderate weight earns ~10–15 XP and reliably triggers the rank-up.
+  // rpgRankUpThreshold: chest body_part_progress pre-seeded to the Phase 29 v2
+  // single-rank-up deterministic window midpoint (chest rank 3 / 157 XP, all
+  // others rank 1 / 0 XP). One bench 80x5 set lands chest at 238.3199 XP / rank
+  // 4 with ~40 XP margin on either window edge — guarantees one rank-up event,
+  // no skip to rank 5, no chest_r5 title threshold crossed. See seed function
+  // in global-setup.ts for the full derivation.
   rpgRankUpThreshold: {
     email: 'e2e-rpg-rank-up-threshold@test.local',
     password: 'TestPassword123!',

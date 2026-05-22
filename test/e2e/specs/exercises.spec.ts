@@ -156,7 +156,20 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
     await expect(allCards.first()).toBeVisible({ timeout: 10_000 });
 
     // Step 2: Type "bench" — filters down to bench-related exercises only.
-    await flutterFill(page, EXERCISE_LIST.searchInput, 'bench');
+    //
+    // Use flutterFillByInput (direct <input>.focus()) rather than flutterFill
+    // (which clicks the semantics overlay and waits 200ms for Flutter's text
+    // editing connection to attach). On the exercise search field specifically
+    // — same as flake noted in the form-tips test at line ~469 — the semantics
+    // click → text-editing-connection chain races under CI 4-vCPU saturation:
+    // the keystrokes fire before Flutter has wired Control+a / 'bench' through
+    // to the focused TextEditingController, the search query stays empty, the
+    // list never narrows, and `role=button[name*="Bench"]` finds nothing
+    // (Barbell Bench Press is below-the-fold in the virtualized alphabetical
+    // list when unfiltered). Failure mode is deterministic, not flaky pump
+    // timing — the artifact screenshot shows the search input still showing
+    // its placeholder.
+    await flutterFillByInput(page, 'Search exercises', 'bench');
     await page.waitForTimeout(800);
 
     // Step 3: Assert filtered state — Deadlift is NOT a bench exercise.
@@ -664,9 +677,14 @@ test.describe('Exercise library', () => {
     await expect(allCards.first()).toBeVisible({ timeout: 10_000 });
     const totalBefore = await allCards.count();
 
-    // Use flutterFill (keyboard events) instead of page.fill (synthetic input
-    // events) — Flutter CanvasKit may not process synthetic events on CI.
-    await flutterFill(page, EXERCISE_LIST.searchInput, 'bench');
+    // Use flutterFillByInput (direct <input>.focus()) rather than flutterFill
+    // — see the matching comment on the smoke `should clear search filter`
+    // test (~line 153) for the failure mode. Short version: flutterFill
+    // clicks the semantics overlay and relies on Flutter's text-editing
+    // connection attaching within 200 ms, which races under CI 4-vCPU
+    // contention and causes the keystrokes to drop silently. Targeting the
+    // <input aria-label="Search exercises..."> directly removes that race.
+    await flutterFillByInput(page, 'Search exercises', 'bench');
     // Allow the 300 ms debounce to fire + extra CI margin.
     await page.waitForTimeout(1_000);
 

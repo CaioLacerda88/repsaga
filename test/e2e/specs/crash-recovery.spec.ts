@@ -39,13 +39,131 @@ import {
 } from '../helpers/workout';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // Full — crash and session recovery (no smoke equivalent)
 // ---------------------------------------------------------------------------
+
+/**
+ * Reseed the fullCrash user back to the canonical "minimal workout, no RPG
+ * state" baseline that `global-setup.ts` originally provisioned via
+ * `cleanFreshStateUser` + `ensureProfile` + `seedMinimalWorkout`.
+ *
+ * Why this exists
+ * ---------------
+ * The five tests in this describe block ALL run sequentially against the SAME
+ * server-side user (Playwright per-worker user isolation handles cross-worker
+ * races, but NOT intra-worker back-to-back tests on one user). Four of the
+ * five tests deliberately trigger crash/reload/finish flows:
+ *   - Tests 1-3 reload the page or navigate away mid-workout → may leave an
+ *     orphan workout row server-side if `notifier.finishWorkout` was racing
+ *     with the reload, and definitely accumulate state across reruns.
+ *   - Test 4 fully finishes a workout → writes a workout + xp_events +
+ *     body_part_progress + exercise_peak_loads + exercise_peak_loads_by_rep_range
+ *     + personal_records. After test 4 runs, the chest body part has XP and
+ *     the next test inherits a non-zero RPG ladder.
+ *   - Test 5 (rapid double-tap of Finish, the test that flaked under Phase 29
+ *     v2 SQL load) then runs against a chest body part with leftover XP +
+ *     non-trivial `body_part_progress.rank`, which materially changes the
+ *     work `record_session_xp_batch` does (`tier_diff_mult`, novelty_mult,
+ *     overload_mult all read prior peak / progress rows). The accumulated
+ *     server work plus the celebration-chain wall-clock (1.6 s ClassChange +
+ *     1.1 s rank-up + 1.1 s level-up + 1.1 s title) pushed total runtime past
+ *     the 60 s test cap under CI 4-vCPU saturation, surfacing as
+ *     "Target page, context or browser has been closed" on the post-celebration
+ *     NAV.homeTab visibility check. The page snapshot at failure showed the
+ *     home screen fully rendered as `INITIATE 3 Chest` (first attempt) and
+ *     `INITIATE 4 Chest` (retry) — direct evidence of leaked RPG XP.
+ *
+ * Reset scope mirrors `cleanFreshStateUser` in `global-setup.ts` plus the
+ * Phase 29 v2 / Phase 27 tables added post-cleanFreshStateUser:
+ *   - workouts (cascades to workout_exercises → sets via FK)
+ *   - personal_records (set_id is ON DELETE SET NULL — must be explicit)
+ *   - weekly_plans
+ *   - xp_events, user_xp
+ *   - body_part_progress (Phase 27)
+ *   - exercise_peak_loads (Phase 27)
+ *   - exercise_peak_loads_by_rep_range (Phase 29 v2)
+ *   - earned_titles (Phase 27)
+ *   - backfill_progress (re-upserted as completed so SagaIntroGate's
+ *     retro backfill is a no-op on next login — same trick the
+ *     rank-up-celebration reseeds use)
+ *
+ * Then re-seeds the minimal warmup workout so the home ActionHero resolves
+ * to the free-workout branch (workoutCount > 0 → not the day-zero
+ * "Create first routine" hero, which would route `startEmptyWorkout` to
+ * the wrong button).
+ *
+ * Idempotent. Safe to call on a user that's already clean.
+ */
+async function reseedFullCrashUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('fullCrash').email);
+  if (!userId) return;
+
+  // Workouts cascade to workout_exercises → sets; PRs have set_id ON DELETE
+  // SET NULL so they must be deleted explicitly BEFORE workouts (otherwise
+  // the PR rows linger with null set_id and still drive PR-resolver state).
+  await admin.from('personal_records').delete().eq('user_id', userId);
+  await admin.from('workouts').delete().eq('user_id', userId);
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // RPG state added post-cleanFreshStateUser (Phase 27 + Phase 29 v2).
+  await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('user_xp').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Mark backfill_progress as completed so SagaIntroGate.runRetroBackfill is
+  // a no-op on next login (no workouts to backfill anyway, but suppressing
+  // it removes one source of racing writes during the home screen's first
+  // paint and matches the rank-up-celebration reseed pattern).
+  const nowIso = new Date().toISOString();
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: nowIso,
+      updated_at: nowIso,
+      completed_at: nowIso,
+    },
+    { onConflict: 'user_id' },
+  );
+
+  // Re-seed the minimal warmup workout so the ActionHero resolves to the
+  // free-workout branch (mirrors global-setup.ts:seedMinimalWorkout — a
+  // sets-less finished workout that bumps workoutCount > 0 without
+  // contributing any XP or PR rows).
+  const now = new Date();
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Warmup Workout',
+    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
+    duration_seconds: 1800,
+  });
+}
+
 test.describe('Crash and session recovery', () => {
+  // Serial mode: the five tests share one server-side user; serial execution
+  // serializes the per-test reseed in beforeEach so test N+1's setup never
+  // races test N's teardown. Also makes `--repeat-each=N` stable for this
+  // file. Cross-worker isolation is unaffected — each worker still has its
+  // own `fullCrash` user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login so
+    // the Flutter app hydrates from clean state. See `reseedFullCrashUser`
+    // docstring for the per-test pollution mechanism this prevents.
+    await reseedFullCrashUser();
     await login(page, getUser('fullCrash').email, getUser('fullCrash').password);
   });
 
