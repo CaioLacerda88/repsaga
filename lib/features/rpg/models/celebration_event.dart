@@ -93,4 +93,56 @@ sealed class CelebrationEvent with _$CelebrationEvent {
     required CharacterClass fromClass,
     required CharacterClass toClass,
   }) = ClassChangeEvent;
+
+  /// A personal record was set during this workout — fires the mid-workout
+  /// PR thin-flash (Phase 30 mockup §4½ variant 5) and the post-session
+  /// Beat 3 PR cut (PR 30a).
+  ///
+  /// **Carrier semantics:** the variant intentionally carries pre-resolved
+  /// display strings ([exerciseName]) instead of the bare ID. The exercise
+  /// object is in scope at the active-workout notifier (where the builder
+  /// is invoked); resolving the display name there keeps this event a
+  /// pure data carrier and avoids re-fetching the exercises catalog from
+  /// the celebration player or the thin-flash widget.
+  ///
+  /// **Why `exerciseId` instead of `exerciseSlug` (deviation from WIP):**
+  /// the [Exercise] model in this codebase exposes `id` (UUID), not
+  /// `slug`. Carrying the UUID serves the documented purposes (analytics
+  /// keying + future tap-to-exercise navigation) the same way a slug
+  /// would — call sites translate id → exercise object the same way
+  /// they would translate a slug.
+  ///
+  /// **Slot policy:** [SlotPolicy.serialize]. The PR flash is the most
+  /// viscerally meaningful mid-workout signal a user can experience (it
+  /// is the canonical share moment per the post-session mockup); it
+  /// holds its own slot in the cap-at-3 visible queue.
+  ///
+  /// **Emission site (NOT in PR 29.5):** the builder + active-workout
+  /// notifier wiring lands in PR 30a/30b. PR 29.5 ships the union variant
+  /// + queue policy + thin-flash renderer so the boundary is in place;
+  /// the emission path is unblocked without further refactor.
+  const factory CelebrationEvent.personalRecord({
+    /// The exercise UUID for analytics keying + future post-session
+    /// tap-to-exercise navigation.
+    required String exerciseId,
+
+    /// Pre-resolved display name (e.g. "Bench Press" / "Supino reto").
+    /// Resolved at the call site where the [Exercise] object is in scope
+    /// to keep this event a pure data carrier.
+    required String exerciseName,
+
+    /// PR weight in kilograms.
+    required num weight,
+
+    /// Reps achieved at the PR weight.
+    required int reps,
+
+    /// Rep-band classification (e.g. "1-5", "6-12", "13+"). Carried for
+    /// the post-session screen's PR-by-band breakdown (PR 30a).
+    required String repBand,
+
+    /// Previous best weight for this rep-band, in kilograms. `null` for
+    /// first-ever PR in this band.
+    num? priorBest,
+  }) = PersonalRecordEvent;
 }

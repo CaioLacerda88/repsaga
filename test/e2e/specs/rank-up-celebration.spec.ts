@@ -1,16 +1,29 @@
 /**
- * Rank-up celebration + mid-workout overlay tests (Phase 18c).
+ * Rank-up celebration server-state tests (Phase 18c, post-Path-A pivot).
+ *
+ * **Path A pivot (PR 29.5, 2026-05-22):** the mid-workout celebration
+ * flash layer was retired. The post-session screen (PR 30a) will
+ * surface the full ceremony for every event variant. These tests no
+ * longer assert on mid-workout overlay visibility — they assert on the
+ * EXACT post-finish server state (XP totals, ranks, earned title rows)
+ * via Supabase admin queries. That contract is the durable one: the
+ * SQL chain (record_session_xp_batch) writes the same totals regardless
+ * of how the UI surfaces them. Mid-workout the user sees no flash;
+ * post-session beats land in PR 30a's E2E suite.
  *
  * Tests:
- *   S1 — Single rank-up overlay auto-advances
- *   S2 — Multi-event sequence (rank-up → level-up → title sheet)
- *   S3 — FirstAwakeningOverlay throttle (fires once, not again in same session)
- *   S4 — Overflow cap (3 shown + CelebrationOverflowCard with overflow count)
+ *   S1 — Single rank-up finish lands the right post-state in DB
+ *   S2 — Multi-event finish lands the right post-state + earned title
+ *   S3 — FirstAwakening builder throttle (server-side, single event/finish)
+ *   S4 — Overflow cap parity gate (cap-at-3 → 6 rank-ups in DB, queue
+ *        cap pinned by unit tests; visual surface moves to PR 30a)
+ *   S4b — (SKIPPED post-Path-A) overflow card tap navigation; revives
+ *         in PR 30a against the post-session screen
  *   S5 — PR chip appears inline after set commit, persists for session
  *   S6 — Finish button is in AppBar trailing; FAB triggers add-exercise flow
  *
- * All tests are tagged @smoke — they cover the critical RPG reward loop which
- * is the core engagement mechanic of Phase 18c.
+ * All non-skipped tests are tagged @smoke — they cover the critical
+ * RPG reward loop server-state contract.
  *
  * Seeding (see global-setup.ts):
  *   rpgRankUpThreshold   — chest at rank 3, 157 XP (Phase 29 v2 single-rank-up
@@ -420,22 +433,14 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
     await setReps(page, '5');
     await completeSet(page, 0);
 
-    // Finish the workout to trigger the celebration queue.
+    // Finish the workout to trigger the celebration flow.
     await finishWorkout(page);
 
-    // The RankUpOverlay should appear as a dialog on screen.
-    await expect(page.locator(CELEBRATION.rankUpOverlay).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // The overlay auto-advances after 1.1 s (CelebrationPlayer.overlayHold).
-    // We wait up to 4 s for it to disappear without any tap.
-    await expect(page.locator(CELEBRATION.rankUpOverlay).first()).not.toBeVisible({
-      timeout: 4_000,
-    });
-
-    // After all overlays clear, the app navigates to the PR celebration or
-    // home screen. Both are acceptable post-finish landing pages.
+    // PR 29.5 Path A pivot: no mid-workout overlay mounts. The
+    // post-session ceremony (PR 30a) carries the full celebration. The
+    // finish flow lands on /home (or on /pr-celebration if a PR was
+    // set during the session — not the case for this seed, but both
+    // are acceptable post-finish landing pages).
     await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 10_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
@@ -518,46 +523,13 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
 
     await finishWorkout(page);
 
-    // 1) Rank-up overlay appears first.
-    await expect(page.locator(CELEBRATION.rankUpOverlay).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Auto-advances after 1.1 s — wait for it to clear.
-    await expect(page.locator(CELEBRATION.rankUpOverlay).first()).not.toBeVisible({
-      timeout: 4_000,
-    });
-
-    // 2) Level-up overlay appears next (character level 2).
-    await expect(page.locator(CELEBRATION.levelUpOverlay).first()).toBeVisible({
-      timeout: 4_000,
-    });
-
-    // Auto-advances.
-    await expect(page.locator(CELEBRATION.levelUpOverlay).first()).not.toBeVisible({
-      timeout: 4_000,
-    });
-
-    // 3) Title unlock sheet appears last (the "crown" per spec §13.2).
-    await expect(page.locator(CELEBRATION.titleUnlockSheet).first()).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // Equip button is visible inside the sheet.
-    await expect(page.locator(CELEBRATION.equipTitleButton).first()).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // Tap EQUIP TITLE — should persist the title and dismiss the sheet.
-    await page.locator(CELEBRATION.equipTitleButton).first().click();
-
-    // Sheet should dismiss after equip.
-    await expect(
-      page.locator(CELEBRATION.titleUnlockSheet).first(),
-    ).not.toBeVisible({ timeout: 8_000 });
-
-    // Navigate to character sheet and assert the active title pill reflects the
-    // newly equipped title.
+    // PR 29.5 Path A pivot: no mid-workout overlays mount. The
+    // post-session ceremony (PR 30a) will carry the full celebration
+    // for the rank-up → level-up → title beats. Mid-workout the user
+    // sees no flash; the finish flow lands on /home (no PR in this
+    // seed, so /pr-celebration is not pushed). The queue ordering is
+    // pinned by the unit tests in
+    // `test/unit/features/rpg/domain/celebration_queue_test.dart`.
     await page.waitForURL(/\/home/, { timeout: 10_000 });
     // Wait for home screen to stabilise before navigating to profile tab.
     // 26f: the CharacterCard always renders on Home and replaces the legacy
@@ -565,18 +537,16 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     await page.locator(HOME.characterCard).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
     await page.locator(WORKOUT.finishButton).waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
 
-    // Navigate to Profile (Saga) tab and verify active title pill is set.
+    // Navigate to Profile (Saga) tab to verify the rank-up landed.
     await page.locator('[flt-semantics-identifier="nav-profile"]').click();
     // Wait for the character sheet body to fully load (confirms the Saga screen
     // has rendered its data state, not just the loading skeleton).
     await expect(page.locator(SAGA.runeHalo).first()).toBeVisible({
       timeout: 15_000,
     });
-    // Phase 26b: sagaHeaderTitle replaces the legacy activeTitlePill selector.
-    // The title text is now a Semantics-wrapped Text in the SagaHeader meta column.
-    await expect(page.locator(SAGA.sagaHeaderTitle).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    // PR 29.5: no EQUIP tap happened mid-workout (EQUIP moves to the post-session
+    // summary panel in PR 30a). We confirm Saga loads (runeHalo visible) without
+    // asserting the active title pill — there is no active title yet.
 
     // Parity gate — assert the EXACT per-body-part XP totals + ranks the SQL
     // chain wrote, matching the Dart calculator + Python sim + fixture oracle
@@ -614,10 +584,12 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
         .toBeLessThanOrEqual(1e-4);
     }
 
-    // Title gate — chest_r10_plate_bearer row must exist AND be the active
-    // title (equip button was tapped above). The unique partial index on
-    // `earned_titles(user_id) WHERE is_active=TRUE` guarantees at most one
-    // active title per user; we additionally assert no OTHER title is active.
+    // Title gate — chest_r10_plate_bearer row must exist in earned_titles.
+    // PR 29.5: the EQUIP affordance moved to the post-session summary panel
+    // (PR 30a). The mid-workout thin-flash auto-dismisses without equipping,
+    // so is_active is NOT asserted here. The earned row being present is the
+    // correct contract for PR 29.5; is_active will be tested in PR 30a's
+    // E2E suite after the post-session EQUIP CTA lands.
     const { data: titleRows } = await admin
       .from('earned_titles')
       .select('title_id, is_active')
@@ -625,9 +597,6 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     const titles = (titleRows ?? []) as Array<{ title_id: string; is_active: boolean }>;
     const r10 = titles.find((t) => t.title_id === 'chest_r10_plate_bearer');
     expect(r10, 'chest_r10_plate_bearer earned_titles row missing').toBeDefined();
-    expect(r10!.is_active, 'chest_r10_plate_bearer must be active after EQUIP tap').toBe(true);
-    const otherActive = titles.filter((t) => t.is_active && t.title_id !== 'chest_r10_plate_bearer');
-    expect(otherActive, `unexpected other active title(s): ${JSON.stringify(otherActive)}`).toHaveLength(0);
   });
 });
 
@@ -685,35 +654,17 @@ test.describe('First awakening overlay', { tag: '@smoke' }, () => {
     // The verification `completed.nth(0)` confirms at least one set completed.
     await completeSet(page, 0);
 
-    // Finish the workout — this triggers CelebrationPlayer to build + play
-    // the queue. The builder emits at most ONE FirstAwakeningEvent (breaks
-    // after the first awakened body part found in activeBodyParts order).
+    // Finish the workout — this triggers the celebration event builder.
+    // The builder emits at most ONE FirstAwakeningEvent (breaks after the
+    // first awakened body part found in activeBodyParts order); the
+    // throttle invariant is pinned by the unit tests in
+    // `test/unit/features/workouts/active_workout_provider_test.dart`.
     await finishWorkout(page);
 
-    // The FirstAwakeningOverlay should appear after the finish.
-    // CelebrationPlayer.overlayHold = 1100ms, so the overlay is held for
-    // 1.1s even though the internal animation is only 800ms.
-    await expect(
-      page.locator(CELEBRATION.firstAwakeningOverlay).first(),
-    ).toBeVisible({ timeout: 15_000 });
-
-    // The overlay auto-dismisses after 1.1s (overlayHold).
-    // Wait up to 4s for it to disappear.
-    await expect(
-      page.locator(CELEBRATION.firstAwakeningOverlay).first(),
-    ).not.toBeVisible({ timeout: 4_000 });
-
-    // After the overlay dismisses, no SECOND firstAwakeningOverlay should appear
-    // (the builder `break` ensures at most one per finish).
-    const secondOverlayVisible = await page
-      .locator(CELEBRATION.firstAwakeningOverlay)
-      .first()
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-
-    expect(secondOverlayVisible).toBe(false);
-
-    // The app navigates to home or pr-celebration after the celebration queue.
+    // PR 29.5 Path A pivot: no mid-workout overlay mounts. The first
+    // awakening beat will surface in the post-session screen (PR 30a).
+    // The finish flow lands on /home or /pr-celebration depending on
+    // whether a PR was set.
     await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 15_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals + ranks. Seed:
@@ -847,41 +798,16 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     //   queue          = [top rank-up, 2nd rank-up, 3rd rank-up]
     //   overflow       = 6 − 3 = 3 rank-ups (folded into the overflow card)
     //
-    // What this test asserts at the e2e layer:
-    //   1. The first rank-up overlay appears (queue began playing).
-    //   2. The overflow card appears with the correct "+3 ranks" label
-    //      — the cap-at-3 receipt.
-    //   3. EXACT per-body-part XP totals match the Phase 29 v2 chain
-    //      (Dart calculator + Python sim + fixture oracle) within 1e-4
-    //      absolute. This is the parity drift detector — if the SQL
-    //      chain divergees from the oracle, this assertion catches it
-    //      before any flaky timing-based check.
-    //
-    // What we DO NOT assert here any more:
-    //   * The 4 s auto-dismiss → covered by the widget test
-    //     `celebration_overflow_card_test.dart` ("auto-dismisses after 4
-    //     seconds"). e2e is the wrong layer to measure animation timers
-    //     against real wall-clock — under any CPU pressure the timer fires
-    //     late and the test races itself. The widget test pins the same
-    //     property using `tester.pump(Duration)` with a fake clock.
-    //   * Per-overlay sequencing of rank-up₁ → rank-up₂ → level-up →
-    //     overflow → that's covered by the multi-celebration test (S3).
-    await expect(page.locator(CELEBRATION.rankUpOverlay).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Hold the handle ONCE so re-resolutions can't lose to the auto-dismiss.
-    // The 45s timeout (vs the queue's nominal ~3.7s drain time) absorbs CI's
-    // 4-vCPU starvation: under load, each 1.1s overlay hold can stretch to
-    // 5–8s, so the cumulative drain can take 25–35s before the overflow card
-    // mounts. Still well inside the test.slow() 180s overall budget.
-    const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
-    await expect(overflowCard).toBeVisible({ timeout: 45_000 });
-
-    // The accessible label is `"{N} more rank-ups — open Saga"`. With this
-    // seeding (6 rank-ups − 3 in the queue = 3 overflowed), the label MUST
-    // read `3 more rank-ups` for cap-at-3 to be working end-to-end.
-    await expect(overflowCard).toHaveAccessibleName(/3 more rank-ups/);
+    // PR 29.5 Path A pivot: the mid-workout overlay layer (including
+    // the overflow card) is retired. The post-session screen (PR 30a)
+    // will surface the cap-at-3 + overflow affordance as part of the
+    // ceremony. This test's value lives in the parity gate below —
+    // EXACT per-body-part XP totals match the Phase 29 v2 chain
+    // (Dart calculator + Python sim + fixture oracle) within 1e-4
+    // absolute. The cap-at-3 logic is pinned by the unit tests in
+    // `test/unit/features/rpg/domain/celebration_queue_test.dart`;
+    // mid-workout the user sees no flash, just the post-finish nav.
+    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 30_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
     // wrote, matching the Dart calculator + Python sim + fixture oracle at
@@ -950,20 +876,20 @@ test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () 
     );
   });
 
-  test('should route to /profile when the user taps the overflow card', async ({
+  // eslint-disable-next-line playwright/no-skipped-test
+  test.skip('should route to /profile when the user taps the overflow card', async ({
     page,
   }) => {
-    // CI 4-vCPU starvation slows the celebration queue's Timer.delayed
-    // sequence — same reasoning as S4 above. test.slow() + a 45s overflow-
-    // card visibility budget absorbs the worst-case timer delivery latency.
+    // PR 29.5 Path A pivot (2026-05-22): the mid-workout overflow card
+    // is gone — the post-session screen (PR 30a) will surface the
+    // cap-at-3 affordance + the "tap to see all rank-ups" navigation
+    // as part of the ceremony. The "tap card → /profile" contract is
+    // not testable mid-workout anymore; PR 30a will re-introduce this
+    // assertion against the post-session screen's overflow surface.
+    // Test left as `.skip` (not deleted) so the PR-30a author has the
+    // body as a starting template for the post-session variant.
     test.slow();
 
-    // Same seeding contract as the auto-dismiss test (4 compound lifts produce
-    // 4+ rank-ups, exceeds cap-at-3, triggers the overflow card). The new
-    // assertion: when the user explicitly taps the card, the post-finish
-    // navigation routes to /profile (Saga) instead of /home or /pr-celebration.
-    // Spec WIP §17/§175: "tap routes to /profile" — the card's whole purpose
-    // is to give a path to see the rank-ups that didn't fit in the queue.
     await startEmptyWorkout(page);
     // BUG-020: Finish button only appears after first exercise is added.
     await addExercise(page, SEED_EXERCISES.benchPress);

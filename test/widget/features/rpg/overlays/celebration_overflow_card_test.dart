@@ -8,7 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/ui/overlays/celebration_overflow_card.dart';
-import 'package:repsaga/features/rpg/ui/overlays/rank_up_overlay.dart';
+import 'package:repsaga/features/rpg/ui/overlays/rank_up_overflow_flipbook.dart';
 
 import '../../../../helpers/test_material_app.dart';
 

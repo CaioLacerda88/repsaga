@@ -1635,18 +1635,33 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
      4½. MID-WORKOUT THIN-FLASH OVERLAYS (Option B)
      ══════════════════════════════════════════════════════════════════ -->
 <section id="midworkout">
-  <h2>4½ · Mid-workout thin flashes · 400ms Concept B signals</h2>
-  <p>The four existing RPG overlays (<code>first_awakening_overlay</code>, <code>level_up_overlay</code>,
-  <code>class_change_overlay</code>, <code>title_unlock_sheet</code>) currently fire mid-workout as 800–1600ms modal cards with rounded
-  corners, soft glows, and (for title) interactive CTAs. They predate Concept B and contradict the hard-cut grammar.
-  <strong>Phase 30 redesigns each as a 400ms thin hue-flash:</strong> full-bleed, no card chrome, no border-radius, no glow, no
-  interactive CTA, auto-dismiss only. Mid-workout celebration stays for variable-ratio reinforcement + discoverability; the
-  post-session screen then re-reveals each event as a deeper Beat 2/3 cut.</p>
+  <h2>4½ · Mid-workout flash layer — RETIRED (Path A pivot, 2026-05-22)</h2>
+
+  <div class="callout-violet" style="border-left-color:#FFB300;">
+    <strong>Path A pivot (2026-05-22).</strong> The original §4½ specced a "dual-loop" model: mid-workout flashes during the workout for variable-ratio reinforcement, post-session ceremony at finish for the deep reveal — same event, two attentional contexts, claimed to be complementary not redundant. On-device verification (Galaxy S25 Ultra, PR 29.5 debug APK) surfaced the gap: <strong>the architecture only supports session-finish event emission</strong> (events are computed from a pre-vs-post session diff inside <code>record_session_xp_batch</code>, not per-set). So in practice the "mid-workout" flashes fired ~200ms before the post-session screen mounted — same moment, same attention context, low-res preview of the high-res cinematic that fires 4 seconds later. The dual-loop thesis only holds with true per-set firing; without it, the flash layer is redundant pre-roll. Decision: <strong>kill the mid-workout flash layer entirely</strong>. Phase 30's post-session cinematic ceremony (Beats 1–5, see §5–§8) carries the full celebration for ALL events. The legacy mid-workout overlay widgets (<code>class_change_overlay</code>, <code>level_up_overlay</code>, <code>first_awakening_overlay</code>, <code>title_unlock_sheet</code>, <code>rank_up_overlay</code>) still retire in PR 29.5 (they contradicted Concept B grammar); they're replaced by NOTHING — the events skip the flash layer entirely and pass through to the post-session screen.
+  </div>
+
+  <h3>What survives from the original §4½ spec</h3>
+  <ul>
+    <li><strong><code>CelebrationEvent.personalRecord</code> variant</strong> — kept on the sealed union. Consumed by post-session Beat 4 (PR cards), not by a mid-workout flash.</li>
+    <li><strong><code>CelebrationQueue.SlotPolicy</code> enum</strong> — kept. Drives post-session event ordering / coalescing / serialization.</li>
+    <li><strong>Retirement of 5 legacy mid-workout overlay widgets</strong> — kept. Concept B grammar incompatibility was real regardless of the dual-loop question.</li>
+    <li><strong>ARB key additions</strong> — most retired (no eyebrow / hero strings needed for a flash layer that doesn't exist); a few survive if Beat 2/3/4 reuses them.</li>
+  </ul>
+
+  <h3>What got cut in the pivot</h3>
+  <ul>
+    <li><strong><code>thin_flash_overlay.dart</code></strong> — deleted; no replacement widget. The post-session screen carries the entire celebration in §5–§8 cuts.</li>
+    <li><strong><code>scripts/check_thin_flash_no_glow.sh</code> CI gate</strong> — deleted; no thin-flash widget to gate.</li>
+    <li><strong>Mid-workout playback inside <code>celebration_orchestrator.dart</code></strong> — simplified to a pass-through (or fully retired). The post-session screen consumes <code>CelebrationQueueResult</code> directly.</li>
+    <li><strong>Thin-flash semantics selectors</strong> — removed from <code>test/e2e/helpers/selectors.ts</code>; no DOM surface to select.</li>
+  </ul>
+
+  <h3>If we ever revive mid-workout flashes (future scope, not Phase 30)</h3>
+  <p>Path B (hybrid) and Path C (full mockup spec) were considered and rejected for Phase 30. They require per-set XP delta computation + per-set state diff + emission inside <code>recordSet()</code> — a 3–7 day architecture expansion sensitive to the same NUMERIC-rounding parity bugs Phase 29 just spent three PRs untangling. If post-launch data shows users wanting more frequent mid-workout reinforcement (variable-ratio gym gamification IS the differentiator vs Strong/Hevy/Fitbod), revisit then — the <code>PersonalRecordEvent</code> variant + <code>SlotPolicy</code> enum kept in PR 29.5 are the scaffolding that would be needed.</p>
 
   <div class="callout-violet">
-    <strong>The dual-loop model.</strong> Mid-workout = brief environmental notification ("X happened, back to your set"). Post-session
-    = ceremony ("here's everything X means in context"). Same event, two layers of celebration, two different attentional budgets. Not
-    redundant — complementary. UX-critic adjudication after Option A vs Option B analysis (see <code>memory/feedback_*</code>).
+    <strong>Mockup §4½ canonical grid below preserved for historical reference only.</strong> The 5 flash-variant tiles below show what the mid-workout layer WOULD have looked like at the 1200ms timing locked in Round 2.5. Each event is now absorbed by a post-session Beat — see §5–§8 for the actual visual treatment.
   </div>
 
   <h3>The five flash variants</h3>

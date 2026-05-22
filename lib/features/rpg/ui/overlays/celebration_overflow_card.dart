@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
-import 'rank_up_overlay.dart';
+import 'rank_up_overflow_flipbook.dart';
 
 /// Condensed overflow card surfaced after the cap-at-3 rule trims rank-ups
 /// (Phase 18c, spec §13).

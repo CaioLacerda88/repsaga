@@ -1160,52 +1160,38 @@ export const SAGA = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Phase 18c — Mid-workout overlays + title unlocks
+// Mid-workout overlays + title unlocks
 //
-// All overlay widgets and the TitlesScreen have Semantics(identifier: ...)
-// wrappers added in the QA gate for Phase 18c.
+// **Path A pivot (PR 29.5, 2026-05-22):** the mid-workout celebration
+// flash layer was retired entirely. The post-session screen (PR 30a)
+// carries the full celebration ceremony for ALL events. There is no
+// mid-workout overlay widget to select against — the five legacy
+// overlays and the thin-flash replacement that briefly replaced them
+// are all gone. The overflow card surface also migrates to the
+// post-session screen and no longer mounts mid-workout.
+//
+// What remains under CELEBRATION: the TitlesScreen (codex) selectors
+// that are unrelated to mid-workout playback, and the FAB / Finish
+// button aliases used by workout specs.
 // ---------------------------------------------------------------------------
 export const CELEBRATION = {
-  /** RankUpOverlay card — Semantics(identifier: 'rank-up-overlay') */
-  rankUpOverlay: '[flt-semantics-identifier="rank-up-overlay"]',
-  /** LevelUpOverlay root — Semantics(identifier: 'level-up-overlay') */
-  levelUpOverlay: '[flt-semantics-identifier="level-up-overlay"]',
-  /** TitleUnlockSheet root — Semantics(identifier: 'title-unlock-sheet') */
-  titleUnlockSheet: '[flt-semantics-identifier="title-unlock-sheet"]',
-  /** FirstAwakeningOverlay root — Semantics(identifier: 'first-awakening-overlay') */
-  firstAwakeningOverlay: '[flt-semantics-identifier="first-awakening-overlay"]',
-  /** CelebrationOverflowCard root — Semantics(identifier: 'celebration-overflow-card') */
+  /**
+   * CelebrationOverflowCard root — the widget is still in the codebase
+   * but, post-Path-A pivot, it no longer mounts mid-workout. The
+   * post-session screen (PR 30a) consumes the overflow payload and
+   * renders the affordance as part of the ceremony. Selector retained
+   * for the widget test under `test/widget/.../celebration_overflow_card_test.dart`
+   * and for any future PR-30a E2E that may reuse the semantics
+   * identifier.
+   */
   celebrationOverflowCard: '[flt-semantics-identifier="celebration-overflow-card"]',
   /**
-   * BUG-013 (Cluster 3) — RankUpOverflowFlipbook inside the overflow card.
-   * Replaces the prior text-only "{N} more rank-ups" line with three cycling
-   * muscle sigils + "+{N} ranks" headline. Semantics(identifier:
-   * 'rank-up-overflow-flipbook').
+   * BUG-013 (Cluster 3) — RankUpOverflowFlipbook nested inside the
+   * overflow card. Same status as `celebrationOverflowCard` above —
+   * no mid-workout mount post-Path-A; selector retained for the widget
+   * test and any future PR-30a E2E.
    */
   rankUpOverflowFlipbook: '[flt-semantics-identifier="rank-up-overflow-flipbook"]',
-  /**
-   * BUG-011 (Cluster 3) — ClassChangeOverlay root —
-   * Semantics(identifier: 'class-change-overlay'). Fires when a workout
-   * finish crosses a class boundary (Initiate→first earned class, or any
-   * subsequent class flip). 1600ms choreography; auto-dismissed by the
-   * celebration player.
-   */
-  classChangeOverlay: '[flt-semantics-identifier="class-change-overlay"]',
-  /**
-   * BUG-011 — subtitle line inside the class-change overlay
-   * ("Sua jornada ganhou um nome." / "Your journey has earned a name.").
-   */
-  classChangeSubtitle: '[flt-semantics-identifier="class-change-subtitle"]',
-  /**
-   * BUG-011 — class name label inside the class-change overlay
-   * (Rajdhani 700 36sp uppercase). Used for content verification.
-   */
-  classChangeNameLabel: '[flt-semantics-identifier="class-change-name-label"]',
-  /**
-   * BUG-011 — "antes: {className}" subtitle. Only visible on the
-   * Initiate→first transition; suppressed on later class flips.
-   */
-  classChangePreviousLabel: '[flt-semantics-identifier="class-change-previous-label"]',
   /**
    * BUG-014 (Cluster 3) — structured stat chip on locked cross-build
    * title rows. Identifier pattern: 'cross-build-stat-chip-{slug}' where

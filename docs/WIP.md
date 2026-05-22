@@ -20,9 +20,78 @@ the phase summary in PROJECT.md §4.
 >
 > Status (2026-05-22): **Phase 29 fully shipped** (PR #251 sim consolidation, PR #252 SQL + Dart port + parity fixes, PR #253 docs refresh — all merged; migration `00065_phase29_xp_formula_v2.sql` applied to hosted Supabase). **Ready to dispatch PR 29.5 to tech-lead.**
 
-### PR 29.5 — Mid-workout overlay redesign
+### PR 29.5 — Path A pivot: retire mid-workout flash layer entirely
+
+> **Path A pivot (2026-05-22).** The original PR 29.5 plan below specced a `thin_flash_overlay.dart` to replace the 5 legacy mid-workout overlays with a Concept-B-conformant hue-flash. On-device verification (Galaxy S25 Ultra, PR 29.5 review pass 3) surfaced that the flashes fire ~200ms before the Phase 30 post-session cinematic ceremony mounts — same moment, same attentional context. The mockup §4½ "dual-loop" thesis only holds with TRUE per-set firing; the architecture only supports session-finish emission. Without per-set firing the flash layer is redundant pre-roll for the cinematic that fires 4 seconds later.
+>
+> **Decision:** kill the flash layer entirely. The post-session screen (PR 30a, Beats 1–5) carries the full celebration for ALL events. PR 29.5 retires the 5 legacy widgets + scaffolds `CelebrationEvent.personalRecord` + `SlotPolicy` enum that PR 30a will consume. The plan below is preserved as the historical record of what was shipped before the pivot.
+>
+> See `docs/post-session-screen-mockup-v2.html` §4½ (Path A pivot section) for the full rationale.
 
 **Branch:** `feature/29.5-thin-flash-overlay` off `main` (PRs #252 + #253 already merged; no rebase needed).
+
+**Boundary inventory** (per CLAUDE.md boundary-trigger ripple check; locked before implementation)
+
+This PR crosses four boundaries. Each is exhaustively enumerated below so reviewers can audit the blast radius without re-running the grep.
+
+1. **`CelebrationEvent` sealed union shape** (`lib/features/rpg/models/celebration_event.dart`)
+   - Adding `CelebrationEvent.personalRecord({String exerciseId, String exerciseName, num weight, int reps, num? priorBest})` variant. **Deviation from WIP `exerciseSlug` field name**: the `Exercise` model carries `id` (UUID), not `slug`. Using `exerciseId` keeps the carrier honest about what it transports; later post-session navigation maps id → screen the same way an exercise slug would. Flag in hand-off.
+   - All existing variants unchanged.
+   - Freezed exhaustive switches will fail compilation in every consumer until `personalRecord` is handled. Consumers identified:
+     - `lib/features/rpg/domain/celebration_queue.dart` — switch in `build()` bucketing loop
+     - `lib/features/rpg/ui/celebration_player.dart` — switch in `_playOverlay` builder + barrier color
+     - `lib/features/rpg/ui/overlays/thin_flash_overlay.dart` (NEW) — switch in render
+     - any existing tests that build `CelebrationEvent` instances by variant: none directly switch over the union in test code.
+
+2. **`celebration_queue.dart` enqueue contract**
+   - Adding `enum SlotPolicy { drop, coalesce, serialize }` + pure function `SlotPolicy slotPolicyFor(CelebrationEvent event)`.
+   - Per-variant assignments:
+     - `FirstAwakeningEvent` → `serialize` (bypasses cap entirely, head of queue)
+     - `ClassChangeEvent` → `serialize` (slot 1 reservation)
+     - `RankUpEvent` → `serialize` (top rank-up reserved; spillover too)
+     - `PersonalRecordEvent` → `serialize` (per WIP §4½: PR is a mid-workout flash; queue policy mirrors title's "crown" treatment so a PR landing during an active queue is sequenced, not dropped)
+     - `TitleUnlockEvent` → `serialize` (third closer slot)
+     - `LevelUpEvent` → `drop` (silently absorbed if cap-at-3 fills; re-derivable on saga screen — matches existing behavior locked by BUG-017 tests)
+   - The enum names what the queue *already does today*; PR 29.5 just makes the policy first-class + adds the PR variant. No queue ordering changes for existing variants — existing BUG-013/BUG-017 tests must continue to pass unchanged.
+   - **No runtime "new event mid-playback" mechanism** is built — the current architecture builds the queue once at finish time. The enum documents the per-event invariant the queue enforces and is unit-test-pinned.
+
+3. **Five overlay widget files retired** (1656 LOC total — WIP's 1163 LOC count excluded rank_up_overlay)
+   - `lib/features/rpg/ui/overlays/class_change_overlay.dart` (637 LOC)
+   - `lib/features/rpg/ui/overlays/level_up_overlay.dart` (138 LOC)
+   - `lib/features/rpg/ui/overlays/first_awakening_overlay.dart` (182 LOC)
+   - `lib/features/rpg/ui/overlays/title_unlock_sheet.dart` (208 LOC)
+   - `lib/features/rpg/ui/overlays/rank_up_overlay.dart` (491 LOC) — keep `RankUpOverflowFlipbook` (different widget, used by `celebration_overflow_card.dart`); move it to its own file or to celebration_overflow_card.dart
+   - Call-sites of the deleted widgets (from `Grep ClassChangeOverlay|LevelUpOverlay|FirstAwakeningOverlay|TitleUnlockSheet|RankUpOverlay`):
+     - `lib/features/rpg/ui/celebration_player.dart` — `_playOverlay` switch arms + `_classChangeHold` constant + barrier-color switch (rewrite to dispatch to ThinFlashOverlay uniformly)
+     - Widget test files (DELETE):
+       - `test/widget/features/rpg/overlays/class_change_overlay_test.dart`
+       - `test/widget/features/rpg/overlays/level_up_overlay_test.dart`
+       - `test/widget/features/rpg/overlays/first_awakening_overlay_test.dart`
+       - `test/widget/features/rpg/overlays/title_unlock_sheet_test.dart`
+       - `test/widget/features/rpg/overlays/title_unlock_sheet_golden_test.dart`
+       - `test/widget/features/rpg/overlays/rank_up_overlay_test.dart`
+       - `test/widget/features/rpg/overlays/rank_up_overlay_golden_test.dart`
+     - Widget test file (UPDATE — references old widgets in imports/finders):
+       - `test/widget/features/rpg/celebration_player_test.dart` — swap `RankUpOverlay`/`LevelUpOverlay`/`TitleUnlockSheet` finders to `ThinFlashOverlay`; sequence timings change from 1100ms→400ms holds
+   - `RankUpOverflowFlipbook` extracted from `rank_up_overlay.dart` into a new module so the overflow card keeps working. Sole consumer: `celebration_overflow_card.dart`.
+
+4. **E2E selectors + helpers**
+   - `test/e2e/helpers/selectors.ts` — `CELEBRATION.rankUpOverlay`, `.levelUpOverlay`, `.titleUnlockSheet`, `.firstAwakeningOverlay`, `.classChangeOverlay`, `.classChangeSubtitle`, `.classChangeNameLabel`, `.classChangePreviousLabel` collapse onto thin-flash variant identifiers. Old constants kept as deprecated aliases for one PR cycle (delete in 30c).
+   - `test/e2e/helpers/app.ts:384` — `CELEBRATION.titleUnlockSheet` reference; helper now interacts with the title flash (no sheet, no EQUIP CTA).
+   - `test/e2e/specs/rank-up-celebration.spec.ts` — multiple references to `CELEBRATION.rankUpOverlay`, `.levelUpOverlay`, `.firstAwakeningOverlay`, `.titleUnlockSheet`. **Resolution policy (per WIP §4½ retire-with-aliases plan):** keep the deprecated aliases pointing at the new identifiers so existing specs continue to pass; tighten in 30c.
+   - `test/e2e/specs/saga.spec.ts:536` — `CELEBRATION.classChangeOverlay` reference. Same alias resolution.
+   - `test/e2e/specs/titles.spec.ts` — `CELEBRATION.equipTitleButton` reference inside a mid-workout context. The mid-workout EQUIP affordance is GONE; this spec must be updated to expect no equip-button mid-workout (the EQUIP affordance migrates to post-session in PR 30a). Per WIP, the EQUIP-from-titles-screen flow is unaffected.
+   - `test/e2e/FLAKY_TESTS.md` — references RankUpOverlay/LevelUpOverlay; documentation update only (no behavior change).
+   - `test/e2e/global-setup.ts` — references in setup/teardown contexts; no behavioral impact, comments only.
+
+5. **EQUIP affordance audit (per dispatcher prompt §4)**
+   - Mid-workout EQUIP CTA lived ONLY in `TitleUnlockSheet`. Grep for `equipTitleButton`/`equip-title-button`/`equipTitle` across `lib/`:
+     - `lib/features/rpg/ui/overlays/title_unlock_sheet.dart` (deleted)
+     - `lib/features/profile/ui/titles_screen.dart` (independent EQUIP flow — kept; not mid-workout)
+   - No other screen depends on the mid-workout EQUIP affordance. The post-session summary panel will re-introduce EQUIP in PR 30a per WIP spec.
+
+6. **`personalRecord` emission site (NOT wired in PR 29.5)**
+   - Per dispatcher prompt: "PR 29.5 wires the variant + thin-flash rendering; PR 30a/30b will wire the emission site." `CelebrationEventBuilder.build` and `ActiveWorkoutNotifier._buildAndStashCelebration` are UNCHANGED in this PR. The new variant + queue policy + thin-flash renderer ship together; emission is unblocked for 30a/30b without further refactor. WIP §4 (which described emission wiring in 29.5) is overridden by the dispatcher prompt — flagged in hand-off.
 
 **Scope summary**
 
