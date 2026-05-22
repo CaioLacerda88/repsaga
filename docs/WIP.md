@@ -91,7 +91,7 @@ This PR crosses four boundaries. Each is exhaustively enumerated below so review
    - No other screen depends on the mid-workout EQUIP affordance. The post-session summary panel will re-introduce EQUIP in PR 30a per WIP spec.
 
 6. **`personalRecord` emission site (NOT wired in PR 29.5)**
-   - Per dispatcher prompt: "PR 29.5 wires the variant + thin-flash rendering; PR 30a/30b will wire the emission site." `CelebrationEventBuilder.build` and `ActiveWorkoutNotifier._buildAndStashCelebration` are UNCHANGED in this PR. The new variant + queue policy + thin-flash renderer ship together; emission is unblocked for 30a/30b without further refactor. WIP §4 (which described emission wiring in 29.5) is overridden by the dispatcher prompt — flagged in hand-off.
+   - Per dispatcher prompt (Path A revision): "PR 29.5 wires the variant + SlotPolicy enum; PR 30a/30b will wire the emission site." `CelebrationEventBuilder.build` and `ActiveWorkoutNotifier._buildAndStashCelebration` are UNCHANGED in this PR. The new variant + queue policy ship as scaffolding for the post-session screen (PR 30a) to consume; emission is unblocked for 30a/30b without further refactor. WIP §4 (which described emission wiring in 29.5) is overridden by the dispatcher prompt — flagged in hand-off.
 
 **Path A scope summary (what shipped)**
 
