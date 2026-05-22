@@ -1082,7 +1082,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>Is Beat 1 always identical?</td>
         <td class="col-decision">No — 4 tier-aware micro-variants of one structural beat.</td>
-        <td class="col-rationale">Both agents pushed back on "always same." Same structure (XP slam, diagonal slash, hold), but copy + tension budget vary: <strong>day-zero</strong> · <strong>baseline</strong> · <strong>PR-anticipatory</strong> · <strong>class-change-anticipatory</strong>. Max-combo gets a 120ms anticipation pre-roll. No additional beats, just one parameter.</td>
+        <td class="col-rationale">Both agents pushed back on "always same." Same structure (XP slam, diagonal slash, hold), but copy + tension budget vary: <strong>day-zero</strong> · <strong>baseline</strong> · <strong>Threshold-anticipatory</strong> · <strong>class-change-anticipatory</strong>. Max-combo gets a 120ms anticipation pre-roll. No additional beats, just one parameter.</td>
       </tr>
       <tr>
         <td>Beat 2 multi-stat choreography (≥2 body parts)</td>
@@ -1092,7 +1092,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>Beat 3 reward stacking when multiple events fire</td>
         <td class="col-decision">Max 2 Beat 3 cuts. Rank-up promoted into Beat 2 elevated variant. Level-up folded into Beat 1 copy. Class change always closes.</td>
-        <td class="col-rationale">PO's adjudication: Beat 3 events do NOT stack cinematically — they chain. PR + class change is the only legitimate two-cut combo. Rank-up + Beat 2 fusion is more narratively coherent than a separate cut. Level-up overlay already fires mid-workout, so Beat 1 copy ("NÍVEL 23. A SAGA CONTINUA.") absorbs the announcement.</td>
+        <td class="col-rationale">PO's adjudication: Beat 3 events do NOT stack cinematically — they chain. PR + class change is the only legitimate two-cut combo. Rank-up + Beat 2 fusion is more narratively coherent than a separate cut. Level-up folds into Beat 1 copy ("NÍVEL 23. A SAGA CONTINUA.") to avoid inflating the cinematic with a separate B3 cut for a state-threshold event that XP bars already narrativize across sessions (you watched the bars fill workout over workout; the level is the sum). Beat 1 IS the revelation — first exposure post-Path-A — not an absorption of a prior mid-workout flash.</td>
       </tr>
       <tr>
         <td>Share card direction</td>
@@ -1163,7 +1163,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>3</td>
         <td class="st-name">Single PR</td>
-        <td>PR-anticipatory</td>
+        <td>Threshold-anticipatory</td>
         <td>BP card (PR's muscle)</td>
         <td><span class="pill pr">PR cut</span></td>
         <td class="st-dur">~9s</td>
@@ -1172,7 +1172,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>4</td>
         <td class="st-name">Multi-PR (2-4 PRs)</td>
-        <td>PR-anticipatory</td>
+        <td>Threshold-anticipatory</td>
         <td>BP card (dominant)</td>
         <td><span class="pill pr">Hero PR + roll-up strip</span></td>
         <td class="st-dur">~11s</td>
@@ -1181,7 +1181,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>5</td>
         <td class="st-name">Single body-part rank-up</td>
-        <td>PR-anticipatory</td>
+        <td>Threshold-anticipatory</td>
         <td>BP card · <strong>elevated</strong> (bar crosses → rank slam)</td>
         <td><span class="pill skip">skipped</span> (unless PR also)</td>
         <td class="st-dur">~10s</td>
@@ -1190,7 +1190,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <tr>
         <td>6</td>
         <td class="st-name">Multi body-part rank-up</td>
-        <td>PR-anticipatory</td>
+        <td>Threshold-anticipatory</td>
         <td>Top rank-up elevated, others via CelebrationQueue overflow card</td>
         <td><span class="pill skip">skipped</span></td>
         <td class="st-dur">~11s</td>
@@ -1295,13 +1295,13 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       </div>
     </div>
 
-    <!-- Variant 3: PR-anticipatory -->
+    <!-- Variant 3: Threshold-anticipatory -->
     <div class="beat-variant">
-      <div class="vh">Variant · PR-anticipatory</div>
+      <div class="vh">Variant · Threshold-anticipatory</div>
       <div class="vt">"NOVO LIMITE."</div>
       <div class="vd">PR or rank-up incoming. Copy primes the reveal without spoiling it. Hold 1200ms. Same slash, same slam — the copy is the only signal.</div>
       <div class="cut narrow">
-        <div class="cut-label">Beat 1 · PR-anticipatory</div>
+        <div class="cut-label">Beat 1 · Threshold-anticipatory</div>
         <div class="cut-bg flood-black"></div>
         <div class="cut-slash"><div class="slash-violet"></div></div>
         <div class="cut-content">
@@ -1332,7 +1332,11 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     </div>
   </div>
 
-  <p class="t-body-sm" style="font-style: italic;">Note: title-unlock state (#8) reuses the PR-anticipatory copy variant ("CONQUISTA DESPERTADA.") with the gold pre-tint omitted. State #7 (level-up only, no class change) uses the Max-combo variant with level-up copy. State #11 (empty session) never fires Beat 1 at all.</p>
+  <p class="t-body-sm" style="font-style: italic;">Note: title-unlock state (#8) reuses the Threshold-anticipatory copy variant ("CONQUISTA DESPERTADA.") with the gold pre-tint omitted. State #7 (level-up only, no class change) uses the Max-combo variant with level-up copy. State #11 (empty session) never fires Beat 1 at all.</p>
+
+  <p class="t-body-sm" style="font-style: italic;"><strong>Path A convergence note:</strong> all hold durations in §5 scripts (1.5s default, 120ms pre-roll on level-up + max-combo) are minimum parse times for <strong>first-exposure revelations</strong>, not confirmation-mode rests. Pre-Path-A drafts framed some holds as "confirms what the mid-workout flash already showed" — that framing is dead; every cut is the user's first sighting of the event. Tech-lead should treat scripted hold values as floors (parse-time guarantees), not ceilings.</p>
+
+  <p class="t-body-sm" style="font-style: italic;"><strong>RewardTier.derive() note for the Threshold-anticipatory variant:</strong> this variant fires for BOTH personal-record sessions AND rank-up-only sessions (single OR multi rank-up) — i.e. <code>hasPR || hasRankUp</code>. The copy "NOVO LIMITE." is the right register for any threshold-crossing event; do not gate it on PR presence alone or rank-up-only sessions will silently fall through to baseline "ENCERRADO. MAIS FORTE." copy.</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -1771,11 +1775,8 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
   where the user has time to consider it. New title earned → summary panel shows a "Novo título · PILAR DE FERRO · [EQUIPAR]" row. User
   can equip there OR dismiss and visit the titles screen later. Mid-workout never demands an action — that's the rule.</p>
 
-  <h3>Implementation surface · PR 29.5 (before 30a)</h3>
-  <p>The overlay redesign ships as <strong>PR 29.5</strong>, BEFORE 30a (post-session screen). Reason: the post-session storyboards
-  assume the mid-workout overlays are already the new thin flashes (Beat 1 level-up copy says "confirms what already happened" — that
-  copy only makes sense if the flash is the new thin one, not the old soft-glow card). PR 29.5 is the foundation that lets the
-  post-session cinematic land coherently.</p>
+  <h3>Implementation surface · PR 29.5 (MERGED via #255 — Path A pivot)</h3>
+  <p>PR 29.5 shipped on 2026-05-22 as a Path A pivot — the originally-planned <code>thin_flash_overlay.dart</code> widget was rejected after on-device verification surfaced that mid-workout flashes fire ~200ms before Phase 30's cinematic post-session ceremony mounts (same moment, same attentional context → redundant pre-roll). PR 29.5 instead retired all 5 legacy mid-workout overlays AND scaffolded the <code>CelebrationEvent.personalRecord</code> variant + <code>CelebrationQueue.SlotPolicy</code> enum for Phase 30 (PR 30a) consumption. The §5 storyboard scripts for States 1, 7, 9, and 10 — originally framed as "the user already saw this in the mid-workout flash" — were rewritten 2026-05-22 to remove the dual-loop framing and emphasize first-touch revelation weight. See <strong>§4½ Path A pivot section above</strong> for full rationale and <strong>§8 PR 29.5 MERGED gap block</strong> for the implementation summary.</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════
@@ -1838,9 +1839,11 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       </div>
     </div>
     <div class="storyboard-script">
-      <strong>Script.</strong> <code>first_awakening_overlay.dart</code> already fires BEFORE this screen — Beat 2 here is the "awakening confirmed" visual,
-      not a reawakening. Bar starts at 0% and animates to 12% (the literal XP earned). <strong>Never consolatory.</strong> The "O PIOR JÁ PASSOU" copy is the
-      most emotionally loaded line in the catalog — it earns the slot because it's only true once per user-lifetime.
+      <strong>Script.</strong> Beat 2 is the user's first exposure to their body-part awakening (post-Path-A, no mid-workout flash precedes
+      this screen). This IS the revelation, not a confirmation. Bar starts at 0% and animates to 12% (the literal XP earned) over 400ms
+      ease-out so the user has time to read both the body-part label and the XP delta as the awakening lands. <strong>Never consolatory.</strong>
+      The "O PIOR JÁ PASSOU" copy is the most emotionally loaded line in the catalog — it earns the slot because it's only true once per
+      user-lifetime.
     </div>
   </div>
 
@@ -1911,7 +1914,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     </div>
     <div class="storyboard-strip">
       <div class="cut narrow">
-        <div class="cut-label">B1 · PR-anticipatory</div>
+        <div class="cut-label">B1 · Threshold-anticipatory</div>
         <div class="cut-bg flood-black"></div>
         <div class="cut-slash"><div class="slash-violet"></div></div>
         <div class="cut-content">
@@ -1987,7 +1990,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     </div>
     <div class="storyboard-strip">
       <div class="cut narrow">
-        <div class="cut-label">B1 · PR-anticipatory</div>
+        <div class="cut-label">B1 · Threshold-anticipatory</div>
         <div class="cut-bg flood-black"></div>
         <div class="cut-slash"><div class="slash-violet"></div></div>
         <div class="cut-content">
@@ -2066,7 +2069,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     </div>
     <div class="storyboard-strip">
       <div class="cut narrow">
-        <div class="cut-label">B1 · PR-anticipatory</div>
+        <div class="cut-label">B1 · Threshold-anticipatory</div>
         <div class="cut-bg flood-black"></div>
         <div class="cut-slash"><div class="slash-violet"></div></div>
         <div class="cut-content">
@@ -2138,7 +2141,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     </div>
     <div class="storyboard-strip">
       <div class="cut narrow">
-        <div class="cut-label">B1 · PR-anticipatory</div>
+        <div class="cut-label">B1 · Threshold-anticipatory</div>
         <div class="cut-bg flood-black"></div>
         <div class="cut-slash"><div class="slash-violet"></div></div>
         <div class="cut-content">
@@ -2257,9 +2260,11 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       </div>
     </div>
     <div class="storyboard-script">
-      <strong>Script.</strong> <code>level_up_overlay.dart</code> already fires mid-workout when the threshold crosses — by the time this screen plays, the user has already seen
-      the level reveal. Beat 1 copy ("NÍVEL 23. A SAGA CONTINUA.") <strong>confirms</strong> what already happened, doesn't re-announce it. No separate Beat 3 cut.
-      <strong>Avoid double-celebrating.</strong> The 120ms pre-roll honors the level-up's significance without inflating the cinematic.
+      <strong>Script.</strong> Beat 1 carries the level-up announcement as a <strong>first exposure</strong> (post-Path-A, no mid-workout flash precedes this screen).
+      The copy ("NÍVEL 23. A SAGA CONTINUA.") is the revelation, not a confirmation — hold 1.5s (with the 120ms pre-roll shown) to give the user parse
+      time on the level number before the post-screen cuts. <strong>No separate Beat 3 cut</strong>: the level-up is resolved in Beat 1 copy alone, because
+      the XP bars across sessions have already narrativized the climb and the level is the sum. The 120ms pre-roll honors the level-up's significance without
+      inflating the cinematic into a separate Beat 3 cut.
     </div>
   </div>
 
@@ -2391,11 +2396,13 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       </div>
     </div>
     <div class="storyboard-script">
-      <strong>Script.</strong> <strong>Beat 2 is skipped entirely</strong> — running BP cards before a class change dilutes its identity-defining gravity.
-      The mid-workout flash (see §4½) already fired at the moment of class transition, so the user enters this screen already AS Bulwark — no surprise.
-      The post-session Beat 3 cut (1.5s hold) is the ceremonial reveal: full-bleed hotViolet flood, BULWARK slam in Rajdhani 42, "DESPERTOU." subline,
-      italic class flavor at bottom ("O peito é o escudo." pulled from existing l10n key <code>className_bulwark_flavor</code>). The old
-      <code>class_change_overlay.dart</code> 1600ms sigil ceremony is <strong>retired</strong> as part of PR 29.5 — its choreography contradicts Concept B's hard-cut grammar.
+      <strong>Script.</strong> <strong>Beat 2 is skipped entirely</strong> — running BP cards before a class change dilutes its identity-defining gravity (no BP tally
+      before the identity slam). Post-Path-A, the user has <strong>NOT seen this event before this screen</strong>; Beat 3 is the revelation, not a re-reveal.
+      Hold 1.5s — unchanged — because rarity justifies it, not familiarity from a prior flash. Full-bleed hotViolet flood, BULWARK slam in Rajdhani 42,
+      "DESPERTOU." subline, italic class flavor at bottom ("O peito é o escudo." pulled from existing l10n key <code>className_bulwark_flavor</code>).
+      The <code>bp-eyebrow</code> "Classe Desperta" label is load-bearing as the user's first legible signal that a class change happened — do not omit it.
+      The old <code>class_change_overlay.dart</code> 1600ms sigil ceremony was <strong>retired in PR 29.5</strong> both because its choreography contradicts
+      Concept B's hard-cut grammar AND because the per-set XP architecture doesn't support true mid-workout emission (Path A pivot — see §4½).
     </div>
   </div>
 
@@ -2461,10 +2468,12 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       </div>
     </div>
     <div class="storyboard-script">
-      <strong>Script.</strong> The rarest state — and exactly the one the cinematic was designed for. Hierarchy collapse: level-up folds into B1 copy, rank-up promotes
-      to B2 elevated, PR + class change are the two Beat 3 cuts (PR first as escalation, class change last as scene-ender). Each Beat 3 cut is now a full Concept B
-      hard-cut cinematic (not a 0.3s bridge + handoff to a legacy widget). <strong>Total 12s — earned, not indulgent</strong>, because the tier-state-machine ensures
-      max-combo is rare. Title unlock (if also present in this session) surfaces on the summary panel's "Novo título · [EQUIPAR]" row, NOT as a third Beat 3 cut.
+      <strong>Script.</strong> The rarest state — and exactly the one the cinematic was designed for. <strong>Beat 1 is the first exposure of the level number</strong>
+      (post-Path-A, no mid-workout flash precedes this screen) — the 1.5s pre-roll hold is required to give parse time before B2 slams in. Hierarchy collapse: level-up
+      folds into B1 copy, rank-up promotes to B2 elevated, PR + class change are the two Beat 3 cuts (PR first as escalation, class change last as scene-ender). Each
+      Beat 3 cut is now a full Concept B hard-cut cinematic (not a 0.3s bridge + handoff to a legacy widget). <strong>Total 12s — earned, not indulgent</strong>,
+      because the tier-state-machine ensures max-combo is rare. Title unlock (if also present in this session) surfaces on the summary panel's "Novo título · [EQUIPAR]"
+      row, NOT as a third Beat 3 cut.
     </div>
   </div>
 
@@ -2747,25 +2756,10 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
   </div>
 
   <div class="impl-gap" style="border-left-color: var(--hero-gold);">
-    <div class="ig-head" style="color: var(--hero-gold);">PR 29.5 · MUST SHIP BEFORE 30a</div>
-    <div class="ig-title">Mid-workout overlay redesign — 4 widgets → 1 thin-flash widget</div>
-    <p>The four legacy mid-workout overlays contradict Concept B's hard-cut grammar (centered sigil cards, soft glows, color tweens,
-    modal backdrops, interactive CTAs). PR 29.5 retires all four and ships a single new <code>ThinFlashOverlay</code> widget that
-    consumes a <code>CelebrationEvent</code> and renders the appropriate 400ms hue-flash variant. See §4½ for the five variants.</p>
-    <p><strong>Files retired:</strong></p>
-    <ul style="margin: 6px 0; padding-left: 18px;">
-      <li><code>lib/features/rpg/ui/overlays/class_change_overlay.dart</code> (1600ms sigil ceremony, 637 lines) — DELETE</li>
-      <li><code>lib/features/rpg/ui/overlays/level_up_overlay.dart</code> (200ms slide-in card) — DELETE</li>
-      <li><code>lib/features/rpg/ui/overlays/first_awakening_overlay.dart</code> (800ms scale-fade card) — DELETE</li>
-      <li><code>lib/features/rpg/ui/overlays/title_unlock_sheet.dart</code> (DraggableScrollableSheet with EQUIP CTA) — DELETE; EQUIP affordance relocates to post-session summary panel (see next gap)</li>
-    </ul>
-    <p><strong>Files added:</strong></p>
-    <ul style="margin: 6px 0; padding-left: 18px;">
-      <li><code>lib/features/rpg/ui/overlays/thin_flash_overlay.dart</code> — single widget, 5 variants switched on <code>CelebrationEvent</code> type. 400ms hard-cut hue flood, no border-radius, no glow, no interactive elements. Auto-dismissed by <code>celebration_player</code> after 400ms.</li>
-    </ul>
-    <p><strong>Tests to migrate:</strong> <code>class_change_overlay_test.dart</code>, <code>level_up_overlay_test.dart</code>, <code>first_awakening_overlay_test.dart</code>, <code>title_unlock_sheet_test.dart</code>, <code>title_unlock_sheet_golden_test.dart</code> — consolidate into <code>thin_flash_overlay_test.dart</code> with one group per variant.</p>
-    <p><strong>E2E selectors:</strong> existing identifiers (<code>class-change-overlay</code>, <code>class-change-subtitle</code>, <code>class-change-name-label</code>, <code>class-change-previous-label</code>, <code>level-up-overlay</code>, <code>first-awakening-overlay</code>, <code>title-unlock-sheet</code>) collapse into <code>thin-flash-overlay</code> with a variant attribute (<code>thin-flash-class-change</code> etc). Migrate every spec file in <code>test/e2e/specs/</code> + helper selectors.</p>
-    <p><strong>Why PR 29.5, not after 30a:</strong> the post-session storyboards (State 1, 7, 9, 10) reference "mid-workout flash already fired" as a precondition. If 30a ships first while the old 1600ms class-change ceremony still fires, the user experiences the celebration TWICE in contradictory aesthetics. PR 29.5 is the foundation; 30a then lands coherently on top.</p>
+    <div class="ig-head" style="color: var(--hero-gold);">PR 29.5 · MERGED (#255, Path A pivot)</div>
+    <div class="ig-title">Mid-workout overlay layer retired — no replacement widget</div>
+    <p>PR 29.5 shipped via #255 on 2026-05-22 as a <strong>Path A pivot</strong>: the planned <code>thin_flash_overlay.dart</code> widget was rejected after on-device verification showed mid-workout flashes fire ~200ms before Phase 30's cinematic post-session ceremony (same moment, same attentional context) — redundant pre-roll, not the dual-loop the §4½ original spec assumed. Path A retired all 5 legacy mid-workout overlays (<code>class_change_overlay.dart</code>, <code>level_up_overlay.dart</code>, <code>first_awakening_overlay.dart</code>, <code>title_unlock_sheet.dart</code>, <code>rank_up_overlay.dart</code> — 1656 LOC) and scaffolded the <code>CelebrationEvent.personalRecord</code> variant + <code>CelebrationQueue.SlotPolicy</code> enum for Phase 30 (PR 30a) consumption. <code>celebration_player.dart</code> is now a pass-through; <code>celebration_orchestrator.dart</code> keeps saga-intro wait + pulse-write side effect only. Full rationale: <strong>§4½ Path A pivot section</strong>.</p>
+    <p><strong>Post-merge consequence for §5 storyboard scripts:</strong> States 1, 7, 9, and 10 originally framed their Beat cuts as "the user already saw this in the mid-workout flash; this is the deeper re-reveal." Under Path A every Beat cut is a <strong>first exposure</strong>. Script blocks for those states were rewritten 2026-05-22 to remove the dual-loop framing and emphasize first-touch revelation weight. See §2 Path A convergence note (italic block) for the framing rule across all Beat 1 holds.</p>
   </div>
 
   <div class="impl-gap">
@@ -2785,9 +2779,9 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
     <div class="ig-title">CelebrationQueue + CelebrationEvent — keep, don't reinvent</div>
     <ul style="margin: 6px 0; padding-left: 18px;">
       <li><code>CelebrationEvent</code> sealed union — add <code>personalRecord</code> variant (see top gap above); the other 5 variants stay as-is.</li>
-      <li><code>CelebrationQueue</code> cap-at-3 logic — preserves the rule that mid-workout never queues more than 3 flashes back-to-back. The thin_flash_overlay subscribes to the queue.</li>
+      <li><code>CelebrationQueue</code> cap-at-3 / <code>SlotPolicy</code> logic — governs how overflow events surface on the <strong>post-session summary panel</strong> (e.g. State 6 secondary rank-ups). The mid-workout cap constraint is retired with the flash layer (Path A). Queue consumed directly by the post-session screen; no <code>thin_flash_overlay</code> subscriber.</li>
       <li><code>CelebrationQueue</code> overflow card on summary panel — State 6 (multi rank-up) reuses this for the non-top rank-ups.</li>
-      <li><code>celebration_player</code> — the orchestrator that drives queue → overlay rendering. Update to dispatch to <code>thin_flash_overlay</code> instead of the four retired widgets.</li>
+      <li><code>celebration_player</code> — pass-through after PR 29.5 (Path A). PR 30a re-wires the player to surface events into the post-session screen state machine instead of mounting any UI dialog. Public <code>play()</code> signature preserved across the PR boundary so the orchestrator call site is unchanged.</li>
     </ul>
   </div>
 
@@ -2815,7 +2809,7 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
   <div class="impl-gap">
     <div class="ig-head">Gap · responsive text sizing</div>
     <div class="ig-title">FittedBox / scale-down for long pt-BR class &amp; title names</div>
-    <p>The mockup uses narrow 160px scaled cuts where text sizes have been reduced visually so the canonical sample text (BULWARK, DESBRAVADOR, 95kg × 5, +1042) fits cleanly. <strong>The real Flutter implementation must use <code>FittedBox(fit: BoxFit.scaleDown)</code> on every hero-tier text element</strong> so longer pt-BR strings (<code>DESBRAVADOR</code> 11 chars, <code>ASCENDENTE</code> 10 chars, <code>PATHFINDER</code>, multi-digit weights like <code>140kg × 12</code>) don't overflow even on the smallest target viewport (320dp width). Existing precedent: <code>class_change_overlay.dart</code>'s <code>_ClassHeadline</code> already uses FittedBox + per-glyph reveal (see lines 545-569 of the legacy file before retirement); apply the same pattern to the new <code>thin_flash_overlay.dart</code> hero text + every post-session cinematic cut hero.</p>
+    <p>The mockup uses narrow 160px scaled cuts where text sizes have been reduced visually so the canonical sample text (BULWARK, DESBRAVADOR, 95kg × 5, +1042) fits cleanly. <strong>The real Flutter implementation must use <code>FittedBox(fit: BoxFit.scaleDown)</code> on every hero-tier text element</strong> so longer pt-BR strings (<code>DESBRAVADOR</code> 11 chars, <code>ASCENDENTE</code> 10 chars, <code>PATHFINDER</code>, multi-digit weights like <code>140kg × 12</code>) don't overflow even on the smallest target viewport (320dp width). The retired <code>class_change_overlay.dart</code>'s <code>_ClassHeadline</code> was the historical reference implementation (FittedBox + per-glyph reveal; pre-PR-29.5 git history if you need to inspect); apply the same FittedBox + responsive-scale pattern to every post-session cinematic cut hero in the new state machine.</p>
     <p><strong>Hero-tier elements requiring FittedBox:</strong></p>
     <ul style="margin: 6px 0; padding-left: 18px;">
       <li>B1 XP slam (<code>+1042 XP</code>) — Rajdhani 700, target ~64sp on phone</li>
@@ -2824,7 +2818,6 @@ footer.doc-footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid v
       <li>B3 PR weight (<code>95kg × 5</code>) — Rajdhani 700 in heroGold, target ~44sp</li>
       <li>B3 class change (<code>BULWARK</code>) — Rajdhani 700, target ~42sp</li>
       <li>B3 title name (<code>DESBRAVADOR DO FERRO</code>) — Rajdhani 700, target ~26sp</li>
-      <li>Mid-workout thin-flash hero text — Rajdhani 700, target ~32sp</li>
     </ul>
     <p><strong>Min/max font ranges:</strong> set <code>minFontSize</code> via FittedBox's natural behavior; do not let any hero text drop below 70% of target size (golden tests should pin this — a hero text scaled to 12sp on a 320dp viewport indicates the layout itself needs reconsideration, not just smaller type).</p>
   </div>
