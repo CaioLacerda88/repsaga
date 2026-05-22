@@ -36,8 +36,8 @@ import '../models/title.dart' as rpg;
 ///
 /// **What survives for PR 30a's consumption:**
 ///   * [CelebrationEvent.personalRecord] variant — Beat 4 will consume.
-///   * [CelebrationQueue.SlotPolicy] enum + `slotPolicyFor` — drives
-///     post-session event ordering / coalescing.
+///   * [SlotPolicy] enum + `slotPolicyFor` — drives post-session event
+///     ordering / coalescing.
 ///   * [`CelebrationOverflowCard`] / [`RankUpOverflowFlipbook`] — the
 ///     overflow surface lives in the file system but no longer mounts
 ///     mid-workout. PR 30a integrates it into Beat 4 or removes it

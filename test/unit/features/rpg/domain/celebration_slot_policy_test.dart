@@ -1,10 +1,11 @@
 /// Unit tests for the per-variant slot policy attached to [CelebrationEvent].
 ///
 /// The policy enum names what the queue already does today and is what the
-/// new mid-workout `ThinFlashOverlay` dispatch reads against. Pinning each
-/// assignment as a behavior-not-wiring test ensures a future variant added
-/// to the union has to make an explicit policy choice (compile error from
-/// the exhaustive switch) rather than silently inheriting a default.
+/// post-session screen (PR 30a) will read against when dispatching events
+/// across cut beats. Pinning each assignment as a behavior-not-wiring test
+/// ensures a future variant added to the union has to make an explicit
+/// policy choice (compile error from the exhaustive switch) rather than
+/// silently inheriting a default.
 ///
 ///   * `serialize` — the event holds its own slot; if multiple slots are
 ///     available the variant fills them in order. First-awakening,

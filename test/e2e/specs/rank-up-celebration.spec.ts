@@ -415,7 +415,7 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
     );
   });
 
-  test('should show RankUpOverlay after crossing a rank threshold and auto-advance to home', async ({
+  test('should auto-advance to home after crossing a rank threshold and write correct XP to DB', async ({
     page,
   }) => {
     // User is pre-seeded with chest at rank 3 / 157 XP (Phase 29 v2 single-
@@ -605,7 +605,7 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
 //      finish, even when multiple body parts awaken simultaneously).
 // =============================================================================
 
-test.describe('First awakening overlay', { tag: '@smoke' }, () => {
+test.describe('First awakening server-state gate', { tag: '@smoke' }, () => {
   // Serial mode: prevents parallel races on the shared rpgFreshUser when
   // running with --repeat-each. Two parallel instances would both write
   // XP to the same user, causing the second instance's pre/post snapshot
