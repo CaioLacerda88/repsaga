@@ -182,34 +182,85 @@ Shipping disclaimer: this is a v1 draft. Telemetry will surface misattributions;
 
 ---
 
-## 6. Rank curve
+## 6. Rank curve (Phase 29 v2 — piecewise)
+
+**Phase 29 v2 update (2026-05-22):** the original Phase 18 rank curve
+was geometric end-to-end: `xp_to_next(n) = 60 × 1.10^(n-1)`. Phase 29 v2
+Refinement #6 replaced it with a **piecewise** structure to make the
+high-rank endgame accessible while preserving the newbie honeymoon.
 
 ```
-xp_to_next(n) = 60 × 1.10^(n-1)
-xp_cumulative_for_rank(n) = 60 × (1.10^(n-1) - 1) / 0.10
+xp_for_rank(R):
+  if R <= 1:  return 0
+  if R <= 20: return 60 × (1.10^(R-1) - 1) / 0.10      # Band 1: geometric
+  else:       return xp_for_rank(20) + (R - 20) × 367.0 # Band 2: linear (LITERAL)
 ```
 
-Sample milestones:
+**Band 1 (geometric, ranks 1-20):** unchanged from the original
+Phase 18 curve. `XP_BASE = 60`, growth factor `1.10`. Preserves the
+newbie-honeymoon pacing the Phase 24d calibration was tuned against.
 
-| Rank | Cumulative XP | XP from previous |
-|---|---|---|
-| 2 | 60 | 60 |
-| 5 | 278 | 218 |
-| 10 | 814 | 536 |
-| 20 | 3,069 | 1,391 |
-| 30 | 8,917 | 5,848 |
-| 50 | 63,431 | 39,345 |
-| 70 | 430,171 | 264,691 |
-| 90 | 2,897,412 | 1,780,703 |
-| 99 | 6,832,761 | 3,935,349 |
+**Band 2 (linear, ranks 21-99):** flat `LINEAR_XP_PER_RANK = 367.0` per
+rank. **Literal constant** in every Phase 29 v2 implementation site
+(Python sim / fixture / Dart / SQL) — intentionally NOT derived from
+`60 × 1.10^19 ≈ 366.957` because the derived float would compound
+rounding at high ranks across the 4 parity sites and break the 1e-4
+absolute parity invariant. Pinned by a dedicated test:
+`cumulativeXpForRank(21) - cumulativeXpForRank(20) == 367.0` exactly.
 
-**Pacing (validated by 260-week simulation):**
-- Rank 1→20: ~8 weeks of consistent training (newbie honeymoon)
-- Rank 1→50: ~12 months (intermediate plateau, matches real strength progression)
-- Rank 50→99: 3-5+ years (the lifer's flex, à la RuneScape)
-- Rank 99 ≈ 6.8M XP (vs RuneScape's 13M — ours is intentionally faster because gym training is slower than RPG grinding)
+**Why piecewise:**
 
-Cap at Rank 99. Beyond 99 is the same XP table running indefinitely (no level cap on the underlying XP, just the visible cap).
+- The pre-29 geometric curve produced absurd totals at the top end
+  (rank 50 ≈ 63,431 XP, rank 99 ≈ 6.83M XP). At realistic training
+  cadences, the post-launch endgame was inaccessible.
+- It was also exponential at the top — at rank 99 each rank cost 6.83M
+  XP, a lottery-ticket gap from rank 98 (no felt progress between
+  consecutive ranks unless you specialized hard).
+- The piecewise structure preserves the felt curve at the start (where
+  Phase 24d's 6-archetype baseline was tuned) and gives a predictable,
+  flat per-rank cost in the long tail — the lifer's flex is "N more
+  linear ranks past 20," not "I rolled the dice at rank 60."
+
+**Cumulative milestones (Phase 29 v2):**
+
+| Rank | Cumulative XP | Band | Note |
+|---|---|---|---|
+| 1 | 0 | — | starting rank |
+| 5 | 278 | 1 | first prestige tier |
+| 10 | ~814 | 1 | |
+| 20 | ~3,440 | 1 → 2 transition | breakpoint |
+| 30 | ~7,110 | 2 | |
+| 50 | ~14,448 | 2 | 3,440 + 30 × 367 |
+| 70 | ~21,788 | 2 | 3,440 + 50 × 367 |
+| 99 | ~32,433 | 2 | 3,440 + 79 × 367 |
+
+**Backfill on migration (00065):** end-of-migration
+`UPDATE body_part_progress SET rank = rpg_rank_for_xp(total_xp)` for all
+users. Everyone above rank ~21 shifts UP because Band 2 is dramatically
+cheaper than the pre-29 geometric extension. Pre-29
+`xp_events.payload` values stay frozen (forward-only semantics) — only
+the derived `body_part_progress.rank` column changes.
+
+**Pacing (validated by 13-persona × 12-week simulation under
+Phase 29 v2):**
+
+- Rank 1→20: ~8 weeks of consistent training (newbie honeymoon —
+  unchanged from Phase 24d).
+- Rank 1→50: ~6–9 months for a Strong Intermediate / Advanced persona
+  (was effectively impossible under the pre-29 curve).
+- Rank 50→99: 2–3 years of consistent training (was 5+ under pre-29) —
+  still the lifer's flex but now reachable.
+- Rank 99 ≈ 32k XP (vs 6.83M pre-29) — keeps endgame meaningful without
+  making it lottery-ticket.
+
+Cap at Rank 99. Beyond 99 is the same XP table running indefinitely (no
+level cap on the underlying XP, just the visible cap).
+
+**The full Phase 29 v2 + 29.6 XP formula chain** (volume × intensity ×
+strength × novelty × cap × difficulty × tier_diff_mult × overload_mult
+× frequency_mult × abs_strength_premium) is documented in
+`docs/xp-difficulty-framework.md` §8-§15. The per-persona validation
+panel lives in `docs/xp-balance-baseline.md`.
 
 ---
 

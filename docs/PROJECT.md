@@ -58,6 +58,7 @@ reference: `docs/xp-difficulty-framework.md`.
 | 26f | Pre-launch UI/UX revamp — Home redesign (character card + bucket chips) | DONE | #242 |
 | 27 | Post-26f sweep — L1–L18 polish + L13.4 Android back-press + 5 device-QA bugs | DONE | #244 |
 | 27 L18.4 | Typography sweep + `check_typography_call_sites.sh` CI gate | DONE | #245 |
+| 29 | XP formula v2 + 29.6 — Pokemon Gen 5 tier_diff_mult + 5 refinements + piecewise rank curve + absolute strength premium + gender-aware tier tables | DONE | #251 #252 #253 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -87,6 +88,8 @@ auto-memory entry of the same slug.
 | `async-caller-broke-snackbar` | State | Async notifier method needs caller-side `await`; CLAUDE.md A1 catches it |
 | `postgres-alter-type-transaction` | DB | `ALTER TYPE ADD VALUE` can't run in transaction; own migration |
 | `check-violation-writer-audit` | DB | Audit every writer, not just the surfacer |
+| `dart-sql-payload-semantic-drift` | Parity | SQL accumulator silently aggregates a different semantic value than the Dart oracle (XP-earned vs attribution-share-count). Detection: E2E exact-XP parity gate fails at 1e-4. Fix: re-derive the accumulator at the SQL-level JOIN through the canonical source-of-truth column (e.g., `exercises.xp_attribution`), not a downstream-aggregated payload (e.g., `xp_events.payload`). Phase 29 PR 2 (#252) novelty/cap fix is the canonical example. |
+| `character-level-misuses-rank-fn` | RPG | `rpg_rank_for_xp(SUM(total_xp))` is a PER-body-part XP→rank curve, NOT a character-level reduction. Applied to a sum across body parts it gives silently-incorrect values (r3-across-6 user reports level 6, real level 3). Bug originated in 00060 title-detection block and silently propagated into 00065 when title-detection was restored. Fix: use the canonical `character_state` view formula `GREATEST(1, FLOOR((SUM(rank) − COUNT(*)) / 4.0)::int + 1)` filtered to the 6 active body parts. |
 
 ### Section index
 
@@ -921,6 +924,113 @@ For 20 curated bodyweight exercises (pull-ups, dips, push-ups, pistol squats, wa
 - **What was deliberately NOT changed:** `_ExerciseCard.exercise.name` stays on Inter `AppTextStyles.title`. Critic's reasoning (locked): the screen title is already Rajdhani 28dp; promoting every list-item to Rajdhani replicates the screen-title font at smaller size across 30 rows and collapses the visual hierarchy into a single-typeface word wall. The exercise list is a reference-browse surface, not an action surface. Routines are the inverse — action surfaces (tap → starts workout) earn Rajdhani.
 - **Reviewer cycle:** 0 Blockers, 1 Critical (CI-gate regex gap) + 1 Warning (`_DetailChip` letterSpacing) + 2 Suggestions (one was a device-QA pointer). All non-pointer findings landed in `6ade54d` with the negative-case smoke-test documented in the commit message.
 - **Verification:** All 8 GitHub Actions green on the final commit including E2E. 2889 unit/widget tests pass. All 3 check scripts clean (`check_reward_accent`, `check_hardcoded_colors`, new `check_typography_call_sites`). No SQL migrations. Cluster memory `feedback_design_token_sweep_on_new_tokens` now has structural backing — future token categories (e.g., a new `display` size variant) would need an analogous gate; the script template in `check_typography_call_sites.sh` is the reference pattern.
+
+### Phase 29: XP formula v2 + 29.6 — Pokemon Gen 5 adapted chain + piecewise rank curve (PRs #251, #252, #253)
+
+> **Source of truth (post-phase):** `docs/xp-difficulty-framework.md`
+> §8–§17 (the 11-multiplier chain + every locked constant + 13-persona
+> panel) and `docs/xp-balance-baseline.md` (validation snapshot).
+> Per-lift × per-gender Symmetric Strength tables in
+> `lib/features/rpg/domain/implied_tier.dart`.
+
+**Why:** pre-launch, the RPG layer must honor "RPG layer never decouples
+from real lifts" (`memory/project_rpg_thesis.md`). Phase 24d's six-
+multiplier chain matched the 6 calibration archetypes at the totals
+level but couldn't catch the thesis violation: a 4-yr returning
+intermediate (Diego, 80 kg, real working weights) landed at character
+level 1 by week 12. Phase 29 v2 introduces the Pokemon Gen 5 scaled-XP
+mechanic adapted to gym mechanics — a low-rank user logging a heavy
+compound lift gets a measurable XP burst (mathematically derived from
+rank-vs-implied-tier gap), producing the fast-burst-then-plateau curve
+that matches both RPG balance feel and gym physiology.
+
+**3-PR decomposition (per the parity-invariant rule — see
+`memory/feedback_pr_decomposition_parity_invariant.md`):** the
+source-of-truth (Python sim) can move ahead of the oracle (fixture
+JSON), but the oracle must never move ahead of the consumers (Dart +
+SQL). PR 1 consolidates the sim ahead; PR 2 lands the oracle +
+consumers atomically; PR 3 lands the documentation.
+
+- **PR #251 — Phase 29 PR 1 (Python sim consolidation):** rewrites
+  `tasks/rpg-xp-simulation.py` as the single source of truth for the
+  Phase 29 v2 + 29.6 LOCKED 11-multiplier chain (consolidates 3 prior
+  prototype scripts). Adjudicates 5 ambiguities from the design call
+  (named rep bands for `overload_mult`; AND/OR ladder tie rules;
+  per-lift × per-gender tier-table literal anchor values; gentler
+  `frequency_mult` table `[1.00, 1.06, 1.10, 1.06, 1.00]` vs the
+  prototype's 1.15 peak; LITERAL `LINEAR_XP_PER_RANK = 367.0`). 13/13
+  persona panel PASS. **Deliberately holds the fixture regen** to keep
+  the 4-site parity invariant green through PR 2. Two prior consumers
+  (Dart calculator + record_set_xp SQL) still at Phase 24d.
+- **PR #252 — Phase 29 PR 2 (SQL + Dart + fixture atomic landing):**
+  closes the 4-site parity invariant in one commit. New SQL migration
+  `00065_phase29_xp_formula_v2.sql` (filename shifted from 00060 — slot
+  already claimed by 00060_titles_award_at_detection.sql; next free
+  slot was 00065). 8 new/replaced helper functions including
+  `rpg_implied_tier_for_exercise` (per-lift × per-gender table interp +
+  Brzycki 1RM + per-exercise discount), `rpg_tier_diff_mult` (Pokemon
+  Gen 5 adapted clamp), `rpg_abs_strength_premium` (29.6 Path C),
+  `rpg_overload_mult` (named rep bands + AND/OR ladder),
+  `rpg_frequency_mult` (rolling 7d count), `rpg_near_failure_inferred`,
+  `rpg_rep_band`, and `rpg_cumulative_xp_for_rank` REPLACED with
+  piecewise (geometric Band 1, LITERAL 367.0 Band 2). New Dart modules
+  `lib/features/rpg/domain/implied_tier.dart` (LiftFamily / LiftGender
+  enums, 6 per-gender tier tables × 6 families, per-exercise discount,
+  Brzycki + linear interp); `xp_calculator.dart` rewritten for the
+  11-multiplier chain with optional Phase 29 v2 params + neutral
+  defaults; `rank_curve.dart` piecewise with auto-regenerating
+  cumulative table. Schema additions: `profiles.gender text NULL`,
+  `exercises.bodyweight_load_ratio numeric(3,2) DEFAULT 1.0`,
+  `exercise_peak_loads_by_rep_range` table. Hive cache schema v1 → v2.
+  Fixture regenerated as the new oracle: 94 set_xp_v2 + 17
+  implied_tier + 12 abs_strength_premium + 17 tier_diff_mult + 7
+  overload_mult + 7 frequency_mult + 7 near_failure rows. Backfill on
+  migration: `UPDATE body_part_progress SET rank =
+  rpg_rank_for_xp(total_xp)` shifts every user above rank ~21 upward
+  (forward-only; pre-29 `xp_events.payload` rows stay frozen).
+  Reviewer-cycle catches: novelty/cap accumulator semantic drift
+  (cluster `dart-sql-payload-semantic-drift`) — fixed by re-deriving
+  share from `exercises.xp_attribution` JOIN; character-level reduction
+  bug (cluster `character-level-misuses-rank-fn`) — `rpg_rank_for_xp(SUM(total_xp))`
+  carried over from 00060 produced silently-wrong character_level
+  values; fixed via canonical `character_state` view formula. Title-
+  award INSERT block restored at the bottom of both RPCs (Step 8.1/8.2/8.3
+  verbatim from 00060). 3004 unit/widget + 39 integration + Android
+  debug APK + full E2E green.
+- **PR #253 — Phase 29 PR 3 (documentation refresh, this PR):**
+  `docs/xp-difficulty-framework.md` extended with the 11-multiplier
+  chain spec (§8 chain shape + §9 tier_diff_mult + §10 absolute
+  strength premium + §11 overload_mult + §12 frequency_mult + §13
+  near-failure + §14 bodyweight_load_ratio + §15 piecewise rank curve
+  + §16 character level + §17 13-persona panel).
+  `docs/xp-balance-baseline.md` rewritten as the Phase 29 v2 + 29.6
+  launch baseline with all locked constants + per-persona validation
+  results. `docs/rpg-design.md` §6 rewritten for the piecewise rank
+  curve. Two cluster-ledger entries added
+  (`dart-sql-payload-semantic-drift`, `character-level-misuses-rank-fn`).
+  Auto-memory `project_phase_29_v2_formula.md` updated to mark PR 1 +
+  PR 2 + PR 3 as merged.
+
+- **Key files:** `lib/features/rpg/domain/{implied_tier,xp_calculator,rank_curve}.dart` ·
+  `supabase/migrations/00065_phase29_xp_formula_v2.sql` ·
+  `tasks/rpg-xp-simulation.py` ·
+  `test/fixtures/rpg_xp_fixtures.json` ·
+  `docs/xp-difficulty-framework.md` · `docs/xp-balance-baseline.md` ·
+  `docs/rpg-design.md` §6.
+- **Test count:** 3004 → 3008 Dart unit/widget (added Phase 29 v2
+  helper groups + 11-multiplier end-to-end parity at 1e-4); 39
+  integration; 7 dedicated E2E exact-XP parity gates across
+  rank-up-celebration scenarios (S1/S2/S3/S4/S4b).
+- **Notable decisions:** literal `LINEAR_XP_PER_RANK = 367.0` (not
+  derived) to avoid float-rounding drift across the 4 parity sites;
+  Phase 29.6 Path C (persistent absolute-strength premium, not
+  decaying); gender NULL/`other` → male tier table fallback for
+  backward-compat with existing users; Phase 24c's binary
+  `uses_bodyweight_load` flag preserved alongside the new per-exercise
+  `bodyweight_load_ratio` fraction (binary flag still gates whether
+  the per-exercise ratio applies); `near_failure` helper plumbed but
+  always-FALSE on server until `sets.target_reps` lands in a follow-up
+  active-workout UI phase.
 
 ---
 

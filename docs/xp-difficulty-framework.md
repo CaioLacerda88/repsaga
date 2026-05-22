@@ -1,15 +1,25 @@
 # Exercise Difficulty Framework for XP Calibration
 
 Permanent reference for the `exercises.difficulty_mult` system shipped in
-Phase 24. When curating multipliers for new default exercises (or auditing
-existing ones), use this document — it is the literature-derived basis for
-every tier assignment and constant in the formula. Last reviewed 2026-05-13.
+Phase 24, extended in Phase 29 v2 + 29.6 with five additional XP-chain
+refinements and a piecewise rank curve. When curating multipliers for new
+default exercises (or auditing existing ones), use this document — it is
+the literature-derived basis for every tier assignment and constant in the
+formula. Last reviewed 2026-05-22.
 
-For the phase that introduced this framework, see `PROJECT.md` §3 →
-Phase 24 — XP Balancing. For the SQL migration adding the column, see
-the migration named `*_add_exercise_difficulty_mult.sql`. For the Dart
-calculator, see `lib/features/rpg/domain/xp_calculator.dart` (`difficultyMult`
-param). For the Python parity simulator, see `tasks/rpg-xp-simulation.py`.
+For the phases that built this framework, see `PROJECT.md` §4 → Phase 24
+(four sub-phases — difficulty multiplier infrastructure, 50 new defaults,
+bodyweight-as-load, calibration sign-off) and Phase 29 (XP formula v2 +
+29.6 absolute strength premium + per-lift × per-gender Symmetric Strength
+tier tables + piecewise rank curve). For the SQL migrations, see
+`*_add_exercise_difficulty_mult.sql` (00053) and
+`00065_phase29_xp_formula_v2.sql`. For the Dart calculator, see
+`lib/features/rpg/domain/xp_calculator.dart`,
+`lib/features/rpg/domain/implied_tier.dart`, and
+`lib/features/rpg/domain/rank_curve.dart`. For the Python parity simulator
+that drives the 4-site invariant, see `tasks/rpg-xp-simulation.py`. The
+balance-baseline snapshot (per-persona week-12 results) lives at
+`docs/xp-balance-baseline.md`.
 
 ---
 
@@ -284,6 +294,394 @@ exceeding the 1.50× hard cap.
 
 All five ratios fall in defensible territory. No pair exceeds 1.50× at
 equal volume_load. The framework is ready for migration.
+
+---
+
+## 8. Phase 29 v2 + 29.6 — The 11-multiplier chain
+
+Phase 24 shipped a six-multiplier chain (base × intensity × strength ×
+novelty × cap × difficulty). Phase 29 v2 extends it with five refinements
+(per-lift × per-gender implied tier + named-band overload + rolling
+frequency + near-failure inference + per-exercise bodyweight load
+fraction) plus the Phase 29.6 Path C **absolute strength premium**. The
+shipped chain order, in execution sequence (matches
+`lib/features/rpg/domain/xp_calculator.dart` and
+`supabase/migrations/00065_phase29_xp_formula_v2.sql` byte-for-byte):
+
+```
+set_xp = volume_load^0.60                                              -- base
+       × intensity_mult(reps) + (0.10 if near_failure_inferred)        -- #4
+       × strength_mult(weight, peak_load)                              -- floor 0.40
+       × novelty_mult(session_share_count)                             -- exp(-share/15)
+       × cap_mult(weekly_share_count)                                  -- 0.30 if >= 15
+       × difficulty_mult(exercise)                                     -- [0.85, 1.25]
+       × tier_diff_mult(implied_tier, current_rank)                    -- #1 — Pokemon Gen 5 adapted
+       × overload_mult(weight, reps, prior_best_in_band)               -- #2 — named rep bands
+       × frequency_mult(sessions_for_bp_in_7d)                         -- #3 — rolling weekly count
+       × abs_strength_premium(implied_tier)                            -- 29.6 Path C
+```
+
+Then distributed across body parts via `xp_attribution`:
+`xp_awarded[bp] = set_xp × attribution[exercise][bp]`.
+
+### 8.1 Why this shape
+
+Phase 24d's six-multiplier baseline matched 6 calibration archetypes at
+the totals level, but the **13-persona panel** for Phase 29 surfaced a
+thesis violation: a 4-yr returning intermediate (Diego, 80 kg, real
+lifts) landed at character level 1 by week 12. The RPG layer was
+decoupling from real lifts — failing the load-bearing principle
+(`memory/project_rpg_thesis.md`). Phase 29 v2 introduces the Pokemon
+Gen 5 scaled-XP mechanic adapted to gym mechanics: a low-rank user
+logging a heavy compound lift gets a measurable burst of XP
+(mathematically derived from rank-vs-implied-tier gap), naturally
+producing the fast-burst-then-plateau curve that matches both RPG
+balance feel AND gym physiology (newbie gains → plateau).
+
+Phase 29.6 then closes the "elite competitor at low rank" gap: when a
+new user shows up with a 180 kg × 3 bench, the formula recognizes the
+absolute load magnitude (not just the gap-to-rank) and grants a
+persistent premium tied to actual lift strength.
+
+### 8.2 Locked constants — Phase 29 v2
+
+The 4-site parity invariant (Python sim, fixture JSON, Dart, SQL) holds
+at 1e-4 absolute. Every constant below is mirrored at all four sites.
+
+| Constant | Value | Notes |
+|---|---|---|
+| `VOLUME_EXPONENT` | `0.60` | unchanged from Phase 24d |
+| `NOVELTY_DENOMINATOR` | `15.0` | unchanged |
+| `WEEKLY_CAP_SETS` | `15.0` | unchanged |
+| `OVER_CAP_MULTIPLIER` | `0.30` | unchanged |
+| `STRENGTH_MULT_FLOOR` | `0.40` | unchanged |
+| `DIFFICULTY_MULT_FLOOR` | `0.85` | per-exercise floor |
+| `DIFFICULTY_MULT_CEILING` | `1.25` | per-exercise ceiling |
+| `E_BONUS` | `0.8` | absolute-strength premium max boost |
+| `E_FLOOR` | `35.0` | implied_tier below this → no premium |
+| `E_CEIL` | `55.0` | implied_tier above this → max premium |
+| `NF_INTENSITY_BONUS` | `0.10` | near-failure adds +0.10 to intensity |
+| `NF_TARGET_THRESHOLD` | `0.85` | actual < target × 0.85 → near_failure |
+| `FREQUENCY_MULT_TABLE` | `[1.00, 1.06, 1.10, 1.06, 1.00]` | sessions 1/2/3/4/5+ |
+| `XP_BASE` | `60` | rank curve geometric base (ranks 1-20) |
+| `XP_GROWTH_BAND1` | `1.10` | geometric growth in ranks 1-20 |
+| `RANK_CURVE_BREAKPOINT` | `20` | piecewise pivot |
+| `LINEAR_XP_PER_RANK` | `367.0` | **LITERAL** — not derived from `60 × 1.10^19 ≈ 366.957` (the derived float would compound rounding at high ranks across the 4 parity sites) |
+
+## 9. Refinement #1 — `tier_diff_mult` (Pokemon Gen 5 adapted)
+
+The XP-scaling formula used in Pokemon's Gen 5 trainer-battle reward
+mechanic, adapted for rank-vs-tier instead of level-vs-opponent-level.
+
+```
+T = implied_tier(exercise, weight, reps, bodyweight, gender)   ∈ [0, 70]
+R = current_rank for the exercise's primary body part          ∈ [1, 99]
+
+tier_diff_mult = clamp(((2T + 10) / (T + R + 10))^2.5, 0.25, 8.0)
+```
+
+**Behavior:**
+
+- At parity (T = R): mult = 1.0 exactly.
+- T >> R (underleveled lifter, heavy lift): mult climbs toward 8.0 cap.
+- T << R (overleveled, light technique work): mult floors at 0.25.
+- Smooth across the boundary — no step discontinuity.
+
+The 8.0/0.25 clamps are aggressive but necessary to keep the formula
+from degenerating at extreme R-T gaps (an elite at rank 5 hitting a 2.5×BW
+bench shouldn't earn 30× — 8× is the locked ceiling that still feels
+proportional).
+
+### 9.1 `implied_tier` derivation
+
+Three steps: estimate 1RM via Brzycki, normalize to bodyweight + apply
+per-exercise isolation discount, interpolate into the per-lift × per-gender
+Symmetric Strength table.
+
+```
+1RM_est        = weight × 36 / (37 - reps)                    -- Brzycki
+ratio          = 1RM_est / bodyweight ÷ isolation_discount
+tier           = linear_interpolate(tier_table[family][gender], ratio)
+                 ∈ [0, 70]
+```
+
+**Lift families** (6): bench, squat, deadlift, ohp, row, curl. Each
+exercise maps to a family in `lib/features/rpg/domain/implied_tier.dart`.
+
+**Gender tables** (2 per family — male / female): sourced from Symmetric
+Strength + strengthlevel.com standards (2026-05-20 snapshot). Each table
+has 8 (ratio, tier) anchor pairs spanning Untrained → Legendary.
+`gender = NULL` or `'other'` falls back to the male table (matches the
+Python sim's `female=False` default and preserves backward-compat for
+existing users who signed up before the `profiles.gender` column existed).
+
+**Isolation discount** (per-exercise; default 1.0):
+
+| Exercise family | Discount |
+|---|---|
+| Compound (bench, squat, deadlift, ohp, row) | 1.00 |
+| Curl (bicep, hammer) | 0.55 |
+| Tricep pushdown | 0.55 |
+| Lateral raise | 0.25 |
+
+**Legendary extension** (rank 65-70):
+
+- Bench: 2.5× BW
+- Squat: 3.0× BW
+- Deadlift: 3.5× BW
+- OHP: 1.4× BW
+
+NULL bodyweight (user hasn't entered it via Phase 24c's prompt yet) falls
+back to a sentinel implied_tier of **15.0** (the `kBodyweightZeroFallback`
+constant) — gentle middle of the table; no XP cliff for users who haven't
+filled in their weight.
+
+## 10. Phase 29.6 Path C — `abs_strength_premium`
+
+A persistent multiplier tied to ABSOLUTE strength (implied_tier), not to
+rank or to the rank-vs-tier gap. Closes the "elite at low rank" gap that
+`tier_diff_mult` alone can't address (`tier_diff_mult` decays as R climbs
+toward T, but an experienced lifter's PR magnitude should keep paying out
+as long as the lifter keeps repping it).
+
+```
+abs_strength_premium = 1 + E_BONUS × clamp((T - E_FLOOR) / (E_CEIL - E_FLOOR), 0, 1)
+                     = 1 + 0.8 × clamp((T - 35) / 20, 0, 1)
+```
+
+**Behavior:**
+
+- T < 35: premium = 1.0 (no boost; novice / intermediate territory).
+- T = 45 (mid-band, ~Advanced lifter): premium = 1.4×.
+- T = 55: premium = 1.8× (max).
+- T > 55: clamped at 1.8× (no runaway scaling for legendary outliers).
+
+This is the **Path C** resolution from the Phase 29.6 design call: the
+team evaluated several premium shapes (persistent vs decaying, linear vs
+sigmoid) and locked Path C (persistent, linear, clamped). Persistent
+matters because the premium is supposed to reward strength capacity itself
+— if it decayed with rank, it would re-collapse into a `tier_diff_mult`
+variant.
+
+## 11. Refinement #2 — `overload_mult` (named rep bands)
+
+Rewards in-band PR effort. Tracks the user's best (weight, reps) per
+(user, exercise, rep_band) in the `exercise_peak_loads_by_rep_range`
+table (introduced in migration 00065; owner-read RLS, SECURITY DEFINER
+writes from the XP RPCs).
+
+**Rep bands** (physiological, not mathematical):
+
+| Reps | Band |
+|---|---|
+| 1-4 | `heavy` |
+| 5-7 | `strength` |
+| 8-12 | `hypertrophy` |
+| 13+ | `endurance` |
+
+**AND/OR ladder** (matched against the prior best in the same band):
+
+| Condition | `overload_mult` |
+|---|---|
+| `weight > prior_best.weight` | **1.15** |
+| `reps > prior_best.reps AND weight >= prior_best.weight` | **1.10** |
+| Any improvement (either weight or reps up) | **1.05** |
+| No improvement | **1.00** |
+
+Strict-improvement semantics: ties don't qualify. The ladder is
+short-circuit `IF`-chain — the first matching branch wins.
+
+The `exercise_peak_loads_by_rep_range` table coexists with the legacy
+`exercise_peak_loads` (exercise-wide PR tracker from Phase 18a). The
+first is purely for `overload_mult` lookups; the second remains the
+canonical PR detector consumed by the Personal Records feature.
+
+## 12. Refinement #3 — `frequency_mult` (rolling 7d session count)
+
+Rewards smart weekly cadence — productive volume is distributed across
+several sessions, not crammed into one. Counts distinct workout sessions
+in the trailing 7d window that touched the same body part.
+
+```
+n = COUNT(DISTINCT workout_id) FROM xp_events
+    WHERE body_part = bp
+      AND occurred_at > NOW() - INTERVAL '7 days'
+      AND workout_id != current_workout_id          -- exclude in-flight session
+```
+
+Lookup table (sessions 1 / 2 / 3 / 4 / 5+):
+
+| Sessions in 7d | `frequency_mult` |
+|---|---|
+| 1 (first session of the week) | 1.00 |
+| 2 | 1.06 |
+| 3 (peak — typical hypertrophy cadence) | 1.10 |
+| 4 | 1.06 |
+| 5+ (over-training territory) | 1.00 |
+
+The `workout_id != current` exclusion prevents the in-flight session
+from double-counting itself. Implemented inline in the RPC via a simple
+`COUNT(...) FILTER` clause; if hot-path queries become slow at scale a
+materialized counter is queued for Phase 29.5.
+
+The table is intentionally gentler than the original prototype (which
+peaked at 1.15) per the Phase 29 PR 1 ambiguity-resolution call — the
+13/13 persona PASS was validated against `[1.00, 1.06, 1.10, 1.06, 1.00]`.
+
+## 13. Refinement #4 — `near_failure_inferred` (no UI toggle)
+
+The XP formula rewards effort intensity through `intensity_mult(reps)`
+already, but Phase 29 v2 adds a **derived** near-failure signal — no
+per-set checkbox in the UI. The intent is to capture the "I left maybe
+one rep in the tank" effort without adding a self-report toggle that
+would bloat the set row and bias to optimism.
+
+```
+near_failure_inferred = (actual_reps < target_reps × 0.85)
+                      ? intensity_mult += NF_INTENSITY_BONUS    -- +0.10
+                      : intensity_mult unchanged
+```
+
+**Current state:** the helper is plumbed end-to-end in Dart + SQL +
+fixture parity, but `sets.target_reps` is not yet a column. The SQL RPCs
+hard-NULL `v_target_reps`, so `rpg_near_failure_inferred` always returns
+FALSE on the server. Helper is ready for when the active-workout UI
+exposes a target-reps signal (planned follow-up). The fixture already
+contains 7 near-failure parity cases to pin the Dart side.
+
+## 14. Refinement #5 — `bodyweight_load_ratio` (per-exercise)
+
+Phase 24c shipped a binary `uses_bodyweight_load BOOLEAN` flag with a
+flat all-1.0 simple-addition semantic for 20 curated slugs. Phase 29 v2
+replaces that flat-1.0 with **per-exercise biomechanical fractions**
+sourced from the kinesiology literature:
+
+| Slug | `bodyweight_load_ratio` | Source |
+|---|---|---|
+| `pull_up`, `chin_up`, `wide_grip_pull_up`, `muscle_up` | 1.00 | Youdas et al. 2010 (full BW lift through long ROM) |
+| `dips`, `ring_dip`, `pistol_squat` | 0.95 | Free-hanging or unilateral squat near-full BW |
+| `archer_push_up` | 0.80 | Suprak et al. 2011 (asymmetric load on one arm) |
+| `decline_push_up` | 0.74 | Suprak (head-down inversion increases the percent of BW supported by the arms) |
+| `bodyweight_squat`, `single_leg_deadlift_unweighted` | 0.75 | Bryanton et al. 2012 (effective system mass minus support leg) |
+| `push_up` (standard) | 0.64 | Suprak (~64% of BW supported on the hands in plank-position push-up) |
+| `incline_push_up` | 0.41 | Suprak (head-up inversion reduces the load) |
+| Everything else | 1.00 (default) | Conservative — no biomech literature → no discount |
+
+Effective weight (used by `volume_load`, `strength_mult`, and
+`implied_tier`):
+
+```
+effective_weight = sets.weight + bodyweight_kg × exercises.bodyweight_load_ratio
+                   (only for slugs where uses_bodyweight_load = TRUE)
+```
+
+The column is `numeric(3,2) NOT NULL DEFAULT 1.0` with
+`CHECK BETWEEN 0.20 AND 1.00` (gym-realistic range).
+
+## 15. Refinement #6 — Piecewise rank curve
+
+The Phase 24d rank curve was geometric end-to-end: `xp_to_next(n) = 60 × 1.10^(n-1)`.
+That works for ranks 1-20 (the newbie honeymoon) but generates absurd
+totals at the top end: rank 50 ≈ 63,431 XP, rank 99 ≈ 6.83M XP. Two
+problems:
+
+1. At launch, no real user will see a high rank without years of
+   training, but the Phase 29 v2 persona simulation showed mature
+   personas plateauing in the 25-35 range — meaning rank 50+ matters for
+   the post-launch endgame. 63k XP per rank past rank 50 makes that
+   endgame inaccessible at any realistic training cadence.
+2. The geometric curve is exponential — at rank 99 each rank costs 6.83M
+   XP, which is a lottery-ticket gap from rank 98 (no felt progress
+   between consecutive ranks unless you specialize hard).
+
+Phase 29 v2 replaces the curve with a **piecewise** structure:
+
+```
+xp_for_rank(R):
+  if R <= 1:  return 0
+  if R <= 20: return 60 × (1.10^(R-1) - 1) / 0.10      -- geometric Band 1
+  else:       return xp_for_rank(20) + (R - 20) × 367.0 -- linear Band 2
+```
+
+**Cumulative milestones (Phase 29 v2):**
+
+| Rank | Cumulative XP |
+|---|---|
+| 1 | 0 |
+| 10 | ~814 |
+| 20 (Band 1 → Band 2 breakpoint) | ~3,440 |
+| 30 | ~7,110 |
+| 50 | ~14,448 (3,440 + 30 × 367) |
+| 70 | ~21,788 (3,440 + 50 × 367) |
+| 99 | ~32,433 (3,440 + 79 × 367) |
+
+Why piecewise:
+
+- **Band 1 (geometric, 60 × 1.10^(n-1)):** preserves the Phase 24d
+  newbie honeymoon — rank 1→20 in ~8 weeks of consistent training, the
+  rank curve that the 6-archetype Phase 24d calibration was tuned
+  against.
+- **Band 2 (linear, 367.0 XP/rank LITERAL):** flat per-rank cost in the
+  long tail. Predictable. Each rank past 20 costs exactly the same as
+  the previous one — the lifer's flex is "I've grinded N more linear
+  ranks past 20," not "I bought a lottery ticket at rank 60."
+
+**Critical:** `367.0` is a LITERAL constant in every Phase 29 v2
+implementation site (Python sim / fixture / Dart / SQL). The derived
+value `60 × 1.10^19 ≈ 366.957` would compound float rounding at high
+ranks across the 4 parity sites and silently break the 1e-4 invariant.
+This is pinned by a dedicated test: `cumulativeXpForRank(21) - cumulativeXpForRank(20) == 367.0`
+exactly.
+
+**Backfill semantics:** the 00065 migration ran
+`UPDATE body_part_progress SET rank = rpg_rank_for_xp(total_xp)` for all
+users. Existing users above rank ~21 see their rank shift UP because
+the piecewise curve makes high ranks dramatically cheaper. Pre-29
+`xp_events.payload` values stay frozen (forward-only semantics — a
+historical event still records the XP it earned under the prior chain);
+only the derived `body_part_progress.rank` column changes.
+
+## 16. Character level (unchanged through Phase 29)
+
+```
+character_level = max(1, floor((Σ active_ranks - N_active) / 4) + 1)
+N_active = 6 (chest, back, legs, shoulders, arms, core)
+```
+
+This is the canonical formula encoded in the `character_state` view from
+migration 00040 §9. Note (`memory/cluster-character-level-misuses-rank-fn`):
+the function `rpg_rank_for_xp` is the PER-body-part XP→rank curve, not a
+character-level reduction. Applied to a SUM across body parts it returns
+silently-incorrect values — a r3-across-6 user (real character level 3)
+would be reported as level 6. Title-detection blocks in
+`record_session_xp_batch` + `record_set_xp` must use the canonical
+`character_state`-shaped reduction, not `rpg_rank_for_xp(SUM(total_xp))`.
+
+## 17. 13-persona panel — Phase 29 v2 validation (13 / 13 PASS)
+
+Every persona's week-12 average rank lands inside its target band. Full
+per-persona simulation output in `docs/xp-balance-baseline.md`.
+
+| Persona | Body weight | Experience | wk12 avg rank | Target band | Verdict |
+|---|---|---|---|---|---|
+| True Beginner | 75 kg | 0 yr | 15.7 | 13-19 | PASS |
+| Diego (returning intermediate) | 80 kg | 4 yr | 27.3 | 23-30 | PASS |
+| Strong Intermediate | 85 kg | 6 yr | 31.5 | 29-38 | PASS |
+| Advanced | 90 kg | 8 yr | 41.8 | 36-46 | PASS |
+| Elite Path C (competitive, bench 180×3) | 95 kg | 10 yr | 52.7 | 49-66 | PASS |
+| Smurf (fake 140 kg 1RM @ 70 kg) | 70 kg | low | 18.2 | < Diego | PASS |
+| Weak + Consistent (5×/wk modest lifts) | 75 kg | mid | 24.3 | 17-26 | PASS |
+| Strong + Inconsistent (3×/wk strong lifts) | 90 kg | mid | 27.7 | 24-32 | PASS |
+| Female Beginner | 58 kg | 0 yr | 16.3 | 9-17 | PASS |
+| Female Intermediate | 60 kg | 2 yr | 21.3 | 17-27 | PASS |
+| Older Lifter | 80 kg (55 yo) | 5 yr | 23.0 | 14-24 | PASS |
+| Machine-Only Gym Tourist | 78 kg | 1 yr | 21.2 | 11-23 | PASS |
+| Hypertrophy BB Split | 82 kg | 4 yr | 31.0 | 22-33 | PASS |
+
+The thesis-violating persona from Phase 24d (Diego — 4-yr returning
+intermediate landing at character level 1) now lands at avg rank 27.3
+under Phase 29 v2 — solidly inside the Strong Intermediate band, the
+RPG layer is back in lockstep with real lifts.
 
 ---
 
