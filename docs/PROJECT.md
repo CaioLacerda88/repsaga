@@ -15,7 +15,7 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-20).** **Phase 27 COMPLETE.** Post-26f open-scope sweep landed across two PRs: PR #244 bundled the L1–L18 polish + the L13.4 Android back-press fix (cluster `nested-nav-back-gate`) + the five device-QA bug-burst (Week-plan persistence via `onConflict`, optimistic engagement update, Saga chart edge unclip + label halo, redundant vitality-table dot removal, Home cold-mount skeleton gate with `PendingSyncBadge` lifted outside it); PR #245 (L18.4) landed the typography sweep + a new `scripts/check_typography_call_sites.sh` CI gate to structurally prevent the recurring sweep cycle. New `AppTextStyles.titleDisplay` token (Rajdhani 600 16dp) — Routines cards as action surfaces, Exercises stay on Inter `title`. **Phase 26 COMPLETE.** All six
+**Current state (2026-05-22).** **PR 29.5 merged** — 5 legacy mid-workout overlay widgets retired (1656 LOC; Concept B grammar mismatch); `PersonalRecordEvent` variant + `CelebrationQueue.SlotPolicy` enum scaffolded for Phase 30 consumption; `celebration_player.dart` simplified to a pass-through. **Path A pivot** locked: mid-workout flash layer retired entirely with NO replacement widget — on-device verification (2026-05-22) confirmed mid-workout flashes fire ~200ms before Phase 30's cinematic post-session ceremony mounts, making the layer redundant pre-roll; the architecture only supports session-finish emission (events derive from a pre/post session diff inside `record_session_xp_batch`), so the mockup §4½ "dual-loop" thesis doesn't hold without per-set firing; per-set firing was rejected for Phase 30 scope (3-7 day expansion sensitive to the same NUMERIC-rounding parity bugs Phase 29 just untangled). Phase 30's cinematic post-session screen (PR 30a/30b/30c, in flight) will carry the entire celebration. Mockup-v2.html §4½ documents the pivot rationale; v1 mockup deleted (sole source of truth: `docs/post-session-screen-mockup-v2.html`). **Phase 29 COMPLETE** (#251 #252 #253). **Phase 27 COMPLETE.** Post-26f open-scope sweep landed across two PRs: PR #244 bundled the L1–L18 polish + the L13.4 Android back-press fix (cluster `nested-nav-back-gate`) + the five device-QA bug-burst (Week-plan persistence via `onConflict`, optimistic engagement update, Saga chart edge unclip + label halo, redundant vitality-table dot removal, Home cold-mount skeleton gate with `PendingSyncBadge` lifted outside it); PR #245 (L18.4) landed the typography sweep + a new `scripts/check_typography_call_sites.sh` CI gate to structurally prevent the recurring sweep cycle. New `AppTextStyles.titleDisplay` token (Rajdhani 600 16dp) — Routines cards as action surfaces, Exercises stay on Inter `title`. **Phase 26 COMPLETE.** All six
 sub-phases shipped: 26a (PR #232) color system foundation (`bodyPartChest`
 pink, `bodyPartBack` sky, `xpTrack`, vitality aliases); 26b (PR #234) Saga
 Option B v4; 26c (PR #236) Stats deep-dive revamp (HP-drain vitality,
@@ -59,6 +59,7 @@ reference: `docs/xp-difficulty-framework.md`.
 | 27 | Post-26f sweep — L1–L18 polish + L13.4 Android back-press + 5 device-QA bugs | DONE | #244 |
 | 27 L18.4 | Typography sweep + `check_typography_call_sites.sh` CI gate | DONE | #245 |
 | 29 | XP formula v2 + 29.6 — Pokemon Gen 5 tier_diff_mult + 5 refinements + piecewise rank curve + absolute strength premium + gender-aware tier tables | DONE | #251 #252 #253 |
+| 29.5 | Retire 5 legacy mid-workout overlays (Concept B grammar mismatch) + scaffold `PersonalRecordEvent` variant + `CelebrationQueue.SlotPolicy` enum for Phase 30 consumption (Path A pivot — mid-workout flash layer retired entirely, no replacement widget) | DONE | #255 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -416,6 +417,22 @@ Deliverables:
 All six sub-phases shipped (PRs #232, #234, #236, #238, #240, #242). Full retrospectives in §4 (Phase 26a–f). The locked color system, vitality copy, volume counting rule, and heroGold scarcity exceptions established during the phase remain in force as project conventions — reuse them for any v1.1 polish work. Production code is canonical post-shipping.
 
 **Original mission framing (for context).** "Per-screen surgery, not a redesign" — locked the visual language tokens already established in earlier phases, pushed RPG identity to the surface, fixed the titles awarding data-integrity bug, gave the plan editor an honest data layer. Total scope landed at ~17–22 dev days as estimated.
+
+### Phase 30 — Post-session "after-battle" reward screen
+
+Cinematic finisher (Concept B / Persona 5R / HSR grammar — full-bleed hard cuts, body-part hue floods, heroGold scarcity, zero border-radius, NO BoxShadow/blur/glassmorphism) plays as a state machine after every workout finish, re-revealing each celebration event (level up, rank ups, class changes, title unlocks, personal records) as a deeper Beat 1–5 reveal. Replaces the legacy `pr_celebration_screen.dart` route (retired in PR 30c). Source of truth: `docs/post-session-screen-mockup-v2.html` (all 11 states + Path A pivot in §4½ + photo-overlay share card + 6 implementation gaps). Active scope-by-PR breakdown lives in `docs/WIP.md`.
+
+| Sub-PR | Status | Scope |
+|---|---|---|
+| 29.5 — Retire mid-workout overlays + scaffold PR/SlotPolicy | DONE (PR #255) | 5 legacy mid-workout overlay widgets retired (1656 LOC; Concept B mismatch); `CelebrationEvent.personalRecord` variant + `CelebrationQueue.SlotPolicy` enum + `slotPolicyFor` function scaffolded for Phase 30 consumption; `celebration_player.dart` simplified to a pass-through; `rank_up_overflow_flipbook.dart` extracted; mockup-v1 deleted (v2 sole source of truth). **Path A pivot** killed the planned `thin_flash_overlay.dart` after on-device verification (2026-05-22) showed mid-workout flashes fire ~200ms before the post-session ceremony mounts → redundant pre-roll. 9 SlotPolicy unit tests + 3 `PersonalRecordEvent` equality tests added. |
+| 30a — Post-session screen + state machine + summary panel | TODO | Cinematic Beat 1–5 reveal + finish-coordinator wiring + title EQUIP migration from mid-workout to the summary panel + empty-session guard. Consumes the PR 29.5 scaffolding (events + slot policy). |
+| 30b — Share card pipeline | TODO | `image_picker` + `share_plus` + render-to-image at 1080×1920 + 2 variants + discreet mode + golden tests. |
+| 30c — Cleanup + deprecate `pr_celebration_screen.dart` + final E2E migration + docs | TODO | Retires the legacy `/pr-celebration` route + removes deprecated `hasPriorEarnedTitles` / `onEquipTitle` params on `CelebrationPlayer.play` + final E2E selector migration + condensation into §4. Absorbs the test-hygiene audit (3 candidate flows). |
+
+**Cluster lessons captured during PR 29.5:**
+
+- **Redundant-pre-roll-when-emission-misaligned.** A UI layer designed for one attentional context (mid-workout, variable-ratio reinforcement) running at a different one (session-finish, ~200ms before the deeper ceremony) is redundant pre-roll, not complementary. Catch via on-device verification + asking "does the layer fire at the moment its UX design assumes?" before locking. The cluster is implicit in `feedback_visual_verification_physical_device.md`.
+- **Mockup spec aspirational ≠ architecture-realizable.** §4½ called for per-set firing; the architecture only supports session-finish emission. Surfacing the gap requires reading the emission path (`record_session_xp_batch` → `_buildAndStashCelebration`) before agreeing to the spec, not after building it.
 
 ### Launch Phase
 
