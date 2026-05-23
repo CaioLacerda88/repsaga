@@ -851,5 +851,48 @@
   "daysTrainedCount": "{count, plural, =0{0 dias treinados} =1{1 dia treinado} other{{count} dias treinados}}",
   "addWorkout": "+ Adicionar treino",
   "softCapWarning": "Acima do seu limite semanal de {count}",
-  "spontaneousTag": "Espontâneo"
+  "spontaneousTag": "Espontâneo",
+
+  "b1CopyDayZero": "COMEÇO.\nO PIOR JÁ PASSOU.",
+  "b1CopyBaselineA": "ENCERRADO.\nMAIS FORTE.",
+  "b1CopyBaselineB": "CONSISTÊNCIA VENCE.",
+  "b1CopyPrAnticipatory": "NOVO LIMITE.",
+  "b1CopyTitleAnticipatory": "CONQUISTA DESPERTADA.",
+  "b1CopyMaxLevelUp": "NÍVEL {n}.\nA SAGA CONTINUA.",
+
+  "b3PrEyebrowSingle": "!! Recorde",
+  "b3PrEyebrowMulti": "!! {n} Recordes",
+  "b3PrCopySingle": "VOCÊ QUEBROU TUDO.",
+  "b3PrCopyMulti": "VOCÊ DESTRUIU TUDO.",
+  "b3PrPillTemplate": "{exercise} · {weight}kg × {reps}",
+  "b3TitleEyebrow": "Título Desbloqueado",
+  "b3ClassEyebrow": "Classe Desperta",
+  "b3ClassSubline": "DESPERTOU.",
+
+  "b2RankCopy": "{bodyPart} · RANK {n}",
+
+  "summarySagaNumber": "Saga {n}",
+  "summaryDayZero": "1ª saga",
+  "summaryDurationSets": "{minutes} min · {sets} séries",
+  "summaryTonnage": "{kg} ton",
+  "summaryNextStepLabel": "Próximo passo",
+  "summaryNextRank": "Faltam {xp} XP\npara {bodyPart} rank {n}.",
+  "summaryNextLevel": "Faltam {ranks} ranks\npara nível {n}.",
+  "summaryNewTitleLabel": "Novo título",
+  "summaryEquipCta": "EQUIPAR",
+  "summaryEquipLater": "depois",
+  "summaryContinueCta": "CONTINUAR ▶",
+  "summaryShareCta": "📷 Compartilhar saga",
+  "summaryShareComingSoon": "Compartilhar — em breve",
+  "summaryRankUpOverflowHeader": "+1 RANK · ABRIR SAGA",
+
+  "emptyGuardTitle": "Encerrar treino?",
+  "emptyGuardBody": "Nenhum exercício registrado.",
+  "emptyGuardDiscard": "Descartar",
+  "emptyGuardContinue": "Continuar treinando",
+
+  "postSessionFirstAwakeningSuffix": "Desperto",
+  "postSessionCascadeTruncationPill": "+{n} mais",
+  "postSessionXpLabel": "XP",
+  "postSessionTitleEquipped": "Equipado ✓"
 }

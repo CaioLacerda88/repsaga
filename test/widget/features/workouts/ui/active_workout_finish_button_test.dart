@@ -113,6 +113,9 @@ class _FixedActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
       .length;
 
   @override
+  int get totalSetsCount => state_.exercises.expand((e) => e.sets).length;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

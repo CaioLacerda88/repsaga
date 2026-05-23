@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/routine_start_config.dart';
@@ -151,6 +152,21 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
   @override
   int get incompleteSetsCount => throw UnimplementedError(
     '_StubActiveWorkoutNotifier.incompleteSetsCount getter is not stubbed',
+  );
+
+  @override
+  int get totalSetsCount => throw UnimplementedError(
+    '_StubActiveWorkoutNotifier.totalSetsCount getter is not stubbed',
+  );
+
+  @override
+  num? consumeLastSessionTotalXpDelta() => throw UnimplementedError(
+    'consumeLastSessionTotalXpDelta is not stubbed for this test',
+  );
+
+  @override
+  Map<BodyPart, num> consumeLastSessionBpDeltas() => throw UnimplementedError(
+    'consumeLastSessionBpDeltas is not stubbed for this test',
   );
 
   @override

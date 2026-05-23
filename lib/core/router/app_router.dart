@@ -37,8 +37,10 @@ import '../../features/personal_records/domain/pr_detection_service.dart';
 import '../../features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import '../../features/personal_records/ui/pr_celebration_screen.dart';
 import '../../features/personal_records/ui/pr_list_screen.dart';
+import '../../features/workouts/providers/post_session_controller.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
 import '../../features/workouts/ui/home_screen.dart';
+import '../../features/workouts/ui/post_session/post_session_screen.dart';
 import '../../features/weekly_plan/ui/week_plan_screen.dart';
 import '../../features/rpg/providers/earned_titles_backfill_provider.dart';
 import '../../features/rpg/providers/rpg_progress_provider.dart';
@@ -141,6 +143,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           return null;
         },
         builder: (context, state) => const ActiveWorkoutScreen(),
+      ),
+      // Phase 30 PR 30a — full-screen cinematic post-session route.
+      // **Push-only** (never deep-linked, never popable to active workout —
+      // back goes to home). Receives `PostSessionParams` via `state.extra`.
+      // The legacy `/pr-celebration` route (below) stays alive until PR 30c.
+      //
+      // Cluster: `gorouter-context-go-vs-push` — we use `go()` from the
+      // coordinator (not `push()`) because the active-workout screen has
+      // already unmounted by the time we navigate here; `push()` would
+      // leave a dead route entry behind it.
+      GoRoute(
+        path: '/workout/finish/:workoutId',
+        name: 'postWorkoutFinish',
+        redirect: (context, state) {
+          // Soft-fail to /home on a malformed extra envelope; the route is
+          // push-only so the only way to land here without a valid extra is
+          // a programmer error.
+          if (state.extra is! PostSessionParams) return '/home';
+          return null;
+        },
+        builder: (context, state) {
+          final params = state.extra! as PostSessionParams;
+          return PostSessionScreen(
+            params: params,
+            // Decoupling Rule 8 — the route container wires GoRouter.
+            onContinue: () => context.go('/home'),
+          );
+        },
       ),
       GoRoute(
         path: '/pr-celebration',

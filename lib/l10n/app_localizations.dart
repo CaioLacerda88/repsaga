@@ -4715,6 +4715,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Spontaneous'**
   String get spontaneousTag;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: Day-zero (first session ever). Mockup §2 Variant Day-Zero.
+  ///
+  /// In en, this message translates to:
+  /// **'BEGUN.\nTHE WORST IS BEHIND.'**
+  String get b1CopyDayZero;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: baseline A (default). Mockup §2 Variant Baseline.
+  ///
+  /// In en, this message translates to:
+  /// **'DONE.\nSTRONGER.'**
+  String get b1CopyBaselineA;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: baseline B (alternates with A across sessions). Mockup §5 State 2 script.
+  ///
+  /// In en, this message translates to:
+  /// **'CONSISTENCY WINS.'**
+  String get b1CopyBaselineB;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: threshold-anticipatory (PR or rank-up incoming). Mockup §2 Variant Threshold-anticipatory.
+  ///
+  /// In en, this message translates to:
+  /// **'NEW LIMIT.'**
+  String get b1CopyPrAnticipatory;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: title-anticipatory (reuses Threshold-anticipatory parse window with a different copy line). Mockup §2 + §5 State 8.
+  ///
+  /// In en, this message translates to:
+  /// **'ACHIEVEMENT AWAKENED.'**
+  String get b1CopyTitleAnticipatory;
+
+  /// Phase 30 PR 30a — Beat 1 copy variant: max-combo / class-change / level-up (folds level into B1 copy). Mockup §2 Variant Max-combo + §5 State 7.
+  ///
+  /// In en, this message translates to:
+  /// **'LEVEL {n}.\nTHE SAGA CONTINUES.'**
+  String b1CopyMaxLevelUp(int n);
+
+  /// Phase 30 PR 30a — Beat 3 PR eyebrow for a single-PR session. Mockup §4 PR single.
+  ///
+  /// In en, this message translates to:
+  /// **'!! Record'**
+  String get b3PrEyebrowSingle;
+
+  /// Phase 30 PR 30a — Beat 3 PR eyebrow for a multi-PR session. Mockup §4 PR multi.
+  ///
+  /// In en, this message translates to:
+  /// **'!! {n} Records'**
+  String b3PrEyebrowMulti(int n);
+
+  /// Phase 30 PR 30a — Beat 3 PR copy line for single-PR. Mockup §4 PR single.
+  ///
+  /// In en, this message translates to:
+  /// **'YOU BROKE THROUGH.'**
+  String get b3PrCopySingle;
+
+  /// Phase 30 PR 30a — Beat 3 PR copy line for multi-PR. Mockup §4 PR multi.
+  ///
+  /// In en, this message translates to:
+  /// **'YOU DESTROYED IT.'**
+  String get b3PrCopyMulti;
+
+  /// Phase 30 PR 30a — Beat 3 multi-PR pill row template. Mockup §4 PR multi.
+  ///
+  /// In en, this message translates to:
+  /// **'{exercise} · {weight}kg × {reps}'**
+  String b3PrPillTemplate(String exercise, String weight, int reps);
+
+  /// Phase 30 PR 30a — Beat 3 title-unlock eyebrow. Mockup §4 Title.
+  ///
+  /// In en, this message translates to:
+  /// **'Title Unlocked'**
+  String get b3TitleEyebrow;
+
+  /// Phase 30 PR 30a — Beat 3 class-change eyebrow. Mockup §4 Class change + §5 State 9.
+  ///
+  /// In en, this message translates to:
+  /// **'Class Awakened'**
+  String get b3ClassEyebrow;
+
+  /// Phase 30 PR 30a — Beat 3 class-change subline below the class name. Mockup §4 Class change.
+  ///
+  /// In en, this message translates to:
+  /// **'AWAKENED.'**
+  String get b3ClassSubline;
+
+  /// Phase 30 PR 30a — Beat 2 elevated rank-up copy template. Mockup §3 Variant D.
+  ///
+  /// In en, this message translates to:
+  /// **'{bodyPart} · RANK {n}'**
+  String b2RankCopy(String bodyPart, String n);
+
+  /// Phase 30 PR 30a — Summary panel saga number. Mockup §5 storyboards.
+  ///
+  /// In en, this message translates to:
+  /// **'Saga {n}'**
+  String summarySagaNumber(int n);
+
+  /// Phase 30 PR 30a — Summary panel saga label for day-zero finish. Mockup §5 State 1.
+  ///
+  /// In en, this message translates to:
+  /// **'1st saga'**
+  String get summaryDayZero;
+
+  /// Phase 30 PR 30a — Summary panel duration + sets line.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min · {sets} sets'**
+  String summaryDurationSets(int minutes, int sets);
+
+  /// Phase 30 PR 30a — Summary panel tonnage line (kg already formatted at the call site).
+  ///
+  /// In en, this message translates to:
+  /// **'{kg} ton'**
+  String summaryTonnage(String kg);
+
+  /// Phase 30 PR 30a — Summary panel next-step eyebrow. Mockup §5 storyboards.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get summaryNextStepLabel;
+
+  /// Phase 30 PR 30a — Summary panel next-rank hook. Mockup §5 States 1, 2, 5, 8.
+  ///
+  /// In en, this message translates to:
+  /// **'{xp} XP left\nfor {bodyPart} rank {n}.'**
+  String summaryNextRank(int xp, String bodyPart, int n);
+
+  /// Phase 30 PR 30a — Summary panel next-level hook. Mockup §5 States 7, 10.
+  ///
+  /// In en, this message translates to:
+  /// **'{ranks} ranks to\nlevel {n}.'**
+  String summaryNextLevel(int ranks, int n);
+
+  /// Phase 30 PR 30a — Summary panel new-title eyebrow. Mockup §5 State 8.
+  ///
+  /// In en, this message translates to:
+  /// **'New title'**
+  String get summaryNewTitleLabel;
+
+  /// Phase 30 PR 30a — Summary panel title-equip CTA label.
+  ///
+  /// In en, this message translates to:
+  /// **'EQUIP'**
+  String get summaryEquipCta;
+
+  /// Phase 30 PR 30a — Summary panel title-equip 'later' label.
+  ///
+  /// In en, this message translates to:
+  /// **'later'**
+  String get summaryEquipLater;
+
+  /// Phase 30 PR 30a — Summary panel CONTINUAR button. Mockup §5 storyboards.
+  ///
+  /// In en, this message translates to:
+  /// **'CONTINUE ▶'**
+  String get summaryContinueCta;
+
+  /// Phase 30 PR 30a — Summary panel share CTA label (placeholder in 30a; wired in 30b).
+  ///
+  /// In en, this message translates to:
+  /// **'📷 Share saga'**
+  String get summaryShareCta;
+
+  /// Phase 30 PR 30a — Snackbar shown when the share CTA is tapped in 30a.
+  ///
+  /// In en, this message translates to:
+  /// **'Share — coming soon'**
+  String get summaryShareComingSoon;
+
+  /// Phase 30 PR 30a — Summary panel rank-up overflow card header. Mockup §5 State 6.
+  ///
+  /// In en, this message translates to:
+  /// **'+1 RANK · OPEN SAGA'**
+  String get summaryRankUpOverflowHeader;
+
+  /// Phase 30 PR 30a — Empty-session guard sheet title. Mockup §5 State 11.
+  ///
+  /// In en, this message translates to:
+  /// **'End workout?'**
+  String get emptyGuardTitle;
+
+  /// Phase 30 PR 30a — Empty-session guard sheet body. Mockup §5 State 11.
+  ///
+  /// In en, this message translates to:
+  /// **'No exercises logged.'**
+  String get emptyGuardBody;
+
+  /// Phase 30 PR 30a — Empty-session guard sheet discard button.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get emptyGuardDiscard;
+
+  /// Phase 30 PR 30a — Empty-session guard sheet continue button.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep training'**
+  String get emptyGuardContinue;
+
+  /// Phase 30 PR 30a — Beat 2 body-part eyebrow suffix when a body part first awakens this session. Mockup §5 State 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Awakened'**
+  String get postSessionFirstAwakeningSuffix;
+
+  /// Phase 30 PR 30a — Cascade variant truncation pill. Mockup §3 Variant C.
+  ///
+  /// In en, this message translates to:
+  /// **'+{n} more'**
+  String postSessionCascadeTruncationPill(String n);
+
+  /// Phase 30 PR 30a — Sub-label below the XP slam numeral in Beat 1 / Beat 2.
+  ///
+  /// In en, this message translates to:
+  /// **'XP'**
+  String get postSessionXpLabel;
+
+  /// Phase 30 PR 30a — Summary panel title-equip success state. Mockup §5 State 8 + WIP.md PR 30a Open question #6.
+  ///
+  /// In en, this message translates to:
+  /// **'Equipped ✓'**
+  String get postSessionTitleEquipped;
 }
 
 class _AppLocalizationsDelegate

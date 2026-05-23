@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../personal_records/providers/pr_providers.dart';
 import '../../../routines/providers/notifiers/routine_list_notifier.dart';
+import '../../../rpg/models/body_part.dart';
+import '../../../rpg/models/celebration_event.dart';
+import '../../models/active_workout_state.dart';
+import '../../providers/post_session_controller.dart';
 import '../../providers/workout_history_providers.dart';
 import '../../providers/workout_providers.dart';
+import '../widgets/empty_session_guard_sheet.dart';
 import '../widgets/finish_workout_dialog.dart';
 import 'celebration_orchestrator.dart';
 import 'post_workout_navigator.dart';
@@ -80,6 +86,35 @@ class FinishWorkoutCoordinator {
     _isFinishing = true;
     try {
       final notifier = ref.read(activeWorkoutProvider.notifier);
+
+      // Phase 30 PR 30a — empty-session guard (mockup §5 State 11).
+      // BEFORE the finish dialog runs. When the user taps "Finish" with
+      // zero sets logged, show a disambiguation sheet instead of pushing
+      // through to the post-session screen. Playing a celebration for
+      // zero work would train users that the RPG layer is fake.
+      if (notifier.totalSetsCount == 0) {
+        final l10n = AppLocalizations.of(context);
+        final guard = await EmptySessionGuardSheet.show(
+          context,
+          title: l10n.emptyGuardTitle,
+          body: l10n.emptyGuardBody,
+          discardLabel: l10n.emptyGuardDiscard,
+          continueLabel: l10n.emptyGuardContinue,
+        );
+        if (!context.mounted) return;
+        switch (guard) {
+          case EmptySessionGuardResult.discarded:
+            await notifier.discardWorkout();
+            if (!context.mounted) return;
+            context.go('/home');
+            return;
+          case EmptySessionGuardResult.continueTraining:
+          case EmptySessionGuardResult.cancelled:
+            // Stay on the active workout screen.
+            return;
+        }
+      }
+
       final incompleteCount = notifier.incompleteSetsCount;
 
       final result = await FinishWorkoutDialog.show(
@@ -232,13 +267,16 @@ class FinishWorkoutCoordinator {
       // notifier built the queue inside `finishWorkout`; we read it once
       // via the consume getter so a hot-reload doesn't re-fire.
       //
-      // [outcome.userTappedOverflow] — when the user explicitly tapped the
-      // overflow card we route to `/profile` (Saga) instead of the default
-      // home/PR-celebration flow. The user made an explicit nav choice;
-      // honor it.
+      // [outcome.userTappedOverflow] — pre-PR-30a this came from the
+      // mid-workout overflow card. Post-PR-30a (Path A), the overflow
+      // card lives on the post-session summary panel and the screen
+      // navigates to /profile internally via its onContinue callback —
+      // so this field is dead code for online-with-reward finishes
+      // (the post-session route owns nav). Kept for backward compat with
+      // offline branches + Phase 29.5's pass-through orchestrator.
       var userTappedOverflow = false;
+      final celebration = notifier.consumeLastCelebration();
       if (!wasSavedOffline && context.mounted) {
-        final celebration = notifier.consumeLastCelebration();
         if (celebration != null) {
           final outcome = await celebrationOrchestrator.play(
             rootContext: rootContext,
@@ -282,6 +320,68 @@ class FinishWorkoutCoordinator {
       // are about cache reconciliation (the PR upsert may have committed
       // independently of the workout), not navigation.
       final navigationPrResult = wasSavedOffline ? null : prResult;
+
+      // Phase 30 PR 30a — when online + the queue carries reward events
+      // (PR / rank-up / title / class-change), push the post-session route
+      // instead of the legacy /pr-celebration. Offline still routes via the
+      // legacy navigator (no celebration playback for queued finishes).
+      final hasRewardEvent =
+          celebration != null &&
+          celebration.queue.any(
+            (e) =>
+                e is RankUpEvent ||
+                e is TitleUnlockEvent ||
+                e is ClassChangeEvent ||
+                e is LevelUpEvent ||
+                e is PersonalRecordEvent,
+          );
+      final shouldPushPostSession =
+          !wasSavedOffline &&
+          (hasRewardEvent ||
+              (navigationPrResult != null && navigationPrResult.hasNewRecords));
+
+      if (shouldPushPostSession && celebration != null) {
+        final l10n = AppLocalizations.of(rootContext);
+        final totalXpDelta = notifier.consumeLastSessionTotalXpDelta();
+        final bpDeltasNum = notifier.consumeLastSessionBpDeltas();
+        final bpDeltas = <BodyPart, int>{
+          for (final entry in bpDeltasNum.entries)
+            entry.key: entry.value.round(),
+        };
+        final params = PostSessionParams(
+          queueResult: celebration,
+          prResult: navigationPrResult,
+          exerciseNames: exerciseNames,
+          totalXpEarned: (totalXpDelta ?? 0).round(),
+          bpXpDeltas: bpDeltas,
+          bpProgressFractionPre: _emptyBpFractions(),
+          bpFirstAwakening: celebration.queue
+              .whereType<FirstAwakeningEvent>()
+              .map((e) => e.bodyPart)
+              .toSet(),
+          priorFinishedWorkoutCount:
+              (ref.read(workoutCountProvider).value ?? 1) - 1,
+          durationMinutes: _computeDurationMinutes(currentState),
+          setsCount: _computeSetsCount(currentState),
+          tonnageTons: _computeTonnage(currentState),
+          l10n: l10n,
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!rootContext.mounted) return;
+          // The workoutId is the just-finished workout's id, captured from
+          // the snapshot taken before finishWorkout disposed the state.
+          final workoutId = currentState?.workout.id ?? 'unknown';
+          rootContext.go('/workout/finish/$workoutId', extra: params);
+        });
+        // Defer the navigation-ownership release for two frames so the
+        // active-workout screen's postFrame doesn't clobber our go().
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _isFinishHandled = false;
+          });
+        });
+        return;
+      }
 
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
@@ -345,5 +445,43 @@ class FinishWorkoutCoordinator {
       // which is harmless because `_isFinishing` is also still cleared
       // here, allowing a subsequent finish to fire and re-set both flags.
     }
+  }
+
+  // ─── Post-session helpers (Phase 30 PR 30a) ────────────────────────────
+
+  Map<BodyPart, double> _emptyBpFractions() {
+    return <BodyPart, double>{};
+  }
+
+  int _computeDurationMinutes(ActiveWorkoutState? state) {
+    if (state == null) return 0;
+    final start = state.workout.startedAt;
+    final end = state.workout.finishedAt ?? DateTime.now();
+    return end.difference(start).inMinutes;
+  }
+
+  int _computeSetsCount(ActiveWorkoutState? state) {
+    if (state == null) return 0;
+    var n = 0;
+    for (final ex in state.exercises) {
+      for (final s in ex.sets) {
+        if (s.isCompleted) n += 1;
+      }
+    }
+    return n;
+  }
+
+  double _computeTonnage(ActiveWorkoutState? state) {
+    if (state == null) return 0;
+    var kg = 0.0;
+    for (final ex in state.exercises) {
+      for (final s in ex.sets) {
+        if (!s.isCompleted) continue;
+        final w = s.weight ?? 0;
+        final r = s.reps ?? 0;
+        kg += w * r;
+      }
+    }
+    return kg / 1000.0;
   }
 }
