@@ -4,6 +4,7 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../../shared/widgets/reward_accent.dart';
 import '../../../domain/post_session_choreographer.dart';
 import '../../../domain/post_session_timing.dart';
+import 'cut_slash.dart';
 
 /// Beat 3 PR cut — single or multi PR.
 ///
@@ -269,18 +270,15 @@ class _GoldSlash extends CustomPainter {
     // CustomPainter has no BuildContext ancestor mid-paint; read the
     // sanctioned reward color via the static alias per the same precedent
     // as `progress_chart_section.dart` (FlDotPainter).
-    final paint = Paint()
+    // The 0.42 base alpha is ramped by [phase] (0→1 over the gold-flood
+    // window) — so the slash fades IN with the rest of the gold cut.
+    paintCutSlash(
+      canvas,
+      size,
       // ignore: reward_accent — CustomPainter has no BuildContext for RewardAccent.of
-      ..color = RewardAccent.color.withValues(
-        alpha: 0.42 * phase.clamp(0.0, 1.0),
-      );
-    final path = Path()
-      ..moveTo(0, size.height * 0.30)
-      ..lineTo(size.width, size.height * 0.20)
-      ..lineTo(size.width, size.height * 0.38)
-      ..lineTo(0, size.height * 0.48)
-      ..close();
-    canvas.drawPath(path, paint);
+      color: RewardAccent.color,
+      alpha: 0.42 * phase.clamp(0.0, 1.0),
+    );
   }
 
   @override

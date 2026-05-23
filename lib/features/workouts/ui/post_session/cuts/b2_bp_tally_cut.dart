@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
+import 'cut_slash.dart';
 
 /// Beat 2 single-BP cut (Variant A — mockup §3) AND sequential cut
 /// (Variant B). Same widget shape; the screen layer drives different
@@ -180,14 +181,7 @@ class _DiagonalBpSlash extends CustomPainter {
   final Color color;
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color.withValues(alpha: 0.36);
-    final path = Path()
-      ..moveTo(0, size.height * 0.34)
-      ..lineTo(size.width, size.height * 0.22)
-      ..lineTo(size.width, size.height * 0.40)
-      ..lineTo(0, size.height * 0.52)
-      ..close();
-    canvas.drawPath(path, paint);
+    paintCutSlash(canvas, size, color: color, alpha: 0.36);
   }
 
   @override

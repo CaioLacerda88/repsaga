@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import 'cut_slash.dart';
 
 /// Beat 3 class-change cut. Full Concept B 1.5s ceremony.
 ///
@@ -137,14 +138,7 @@ class B3ClassChangeCutWidget extends StatelessWidget {
 class _ClassSlash extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.hotViolet.withValues(alpha: 0.40);
-    final path = Path()
-      ..moveTo(0, size.height * 0.34)
-      ..lineTo(size.width, size.height * 0.22)
-      ..lineTo(size.width, size.height * 0.40)
-      ..lineTo(0, size.height * 0.50)
-      ..close();
-    canvas.drawPath(path, paint);
+    paintCutSlash(canvas, size, color: AppColors.hotViolet, alpha: 0.40);
   }
 
   @override

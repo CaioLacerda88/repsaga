@@ -5,6 +5,7 @@ import '../../../../../shared/widgets/reward_accent.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../domain/post_session_choreographer.dart';
+import 'cut_slash.dart';
 
 /// Beat 3 title-unlock cut. Hue-typed flood — NO white flash (reserved
 /// for PR). Mockup §4 Title.
@@ -145,14 +146,7 @@ class _TitleSlash extends CustomPainter {
   final Color color;
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color.withValues(alpha: 0.32);
-    final path = Path()
-      ..moveTo(0, size.height * 0.34)
-      ..lineTo(size.width, size.height * 0.22)
-      ..lineTo(size.width, size.height * 0.40)
-      ..lineTo(0, size.height * 0.50)
-      ..close();
-    canvas.drawPath(path, paint);
+    paintCutSlash(canvas, size, color: color, alpha: 0.32);
   }
 
   @override

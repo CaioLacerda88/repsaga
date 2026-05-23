@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/reward_tier.dart';
+import 'cut_slash.dart';
 
 /// Beat 1 — the XP cut.
 ///
@@ -172,15 +173,7 @@ class _SlashPainter extends CustomPainter {
   final Color color;
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color.withValues(alpha: 0.16);
-    // Diagonal stripe across the cut from upper-left to lower-right.
-    final path = Path()
-      ..moveTo(0, size.height * 0.30)
-      ..lineTo(size.width, size.height * 0.20)
-      ..lineTo(size.width, size.height * 0.42)
-      ..lineTo(0, size.height * 0.52)
-      ..close();
-    canvas.drawPath(path, paint);
+    paintCutSlash(canvas, size, color: color, alpha: 0.16);
   }
 
   @override
