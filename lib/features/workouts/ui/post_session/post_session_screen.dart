@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,6 +24,8 @@ import 'cuts/b2_elevated_cut.dart';
 import 'cuts/b3_class_change_cut.dart';
 import 'cuts/b3_pr_cut.dart';
 import 'cuts/b3_title_cut.dart';
+import 'cuts/cinematic_skip_button.dart';
+import 'cuts/cinematic_tap_hint.dart';
 import 'post_session_state.dart';
 import 'summary/next_step_hook.dart';
 import 'summary/post_session_summary_panel.dart';
@@ -81,6 +85,28 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// when the screen transitions from cinematic playback into the summary.
   bool _loggedSummaryMount = false;
 
+  /// PR 30a UX pass — tracks whether the user has tapped the cinematic
+  /// at least once. The tap-hint affordance disappears permanently after
+  /// the first tap (or after [_tapHintExpired] flips at 2s, whichever
+  /// fires first). Once true, never resets — the user has confirmed they
+  /// know the gesture exists.
+  bool _userHasTapped = false;
+
+  /// PR 30a UX pass — flipped true by a one-shot 2000ms `Timer` scheduled
+  /// in [initState]. After 2 seconds of B1, the tap-hint affordance hides
+  /// regardless of whether the user tapped (the cinematic has moved on; the
+  /// affordance is no longer relevant for that surface). The check is
+  /// composed in [_buildCinematic] alongside the `_userHasTapped` +
+  /// `cutIndex == 0` predicates so the hint truly fires once per session.
+  bool _tapHintExpired = false;
+
+  /// PR 30a UX pass — owns the 2000ms tap-hint retirement timer so
+  /// [dispose] can cancel it before teardown. `Future.delayed` is not
+  /// cancellable; a pending Future trips the test framework's
+  /// `timersPending` assertion when the host widget unmounts before the
+  /// 2s elapses.
+  Timer? _tapHintTimer;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +130,19 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     });
 
     _controller.addStatusListener(_onAnimationStatus);
+
+    // PR 30a UX pass — schedule the tap-hint retirement at 2000ms via a
+    // cancellable [Timer] so [dispose] can drop it before teardown
+    // ([Future.delayed] is not cancellable and trips the test framework's
+    // `timersPending` assertion when the screen unmounts before 2s
+    // elapses). If the user taps before this fires, [_userHasTapped] is
+    // the primary gate and this timer's flip is a no-op for hint
+    // visibility (the OR-condition already retired the affordance).
+    _tapHintTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (_disposed || !mounted) return;
+      if (_tapHintExpired) return;
+      setState(() => _tapHintExpired = true);
+    });
   }
 
   @override
@@ -111,6 +150,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
     debugPrint('[repsaga] POST-SESSION-SCREEN: dispose fired');
     _disposed = true;
+    _tapHintTimer?.cancel();
     _controller.removeStatusListener(_onAnimationStatus);
     _controller.dispose();
     _stateController.dispose();
@@ -175,8 +215,16 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       B2SequentialSecondaryCut() => PostSessionTiming.b2HoldSequentialSecondary,
       B2CascadeCut() => PostSessionTiming.b2HoldCascade,
       B2ElevatedRankUpCut() => PostSessionTiming.b2HoldElevated,
-      B3PrCut() =>
-        PostSessionTiming.b3PrWhiteFlash + PostSessionTiming.b3HoldPr,
+      // Multi-PR variant carries N pill-rows that stagger inside the
+      // gold-flood window (200ms each), so its hold floor is higher than
+      // the single-PR variant. Predicate `pillRows.isNotEmpty` mirrors the
+      // `isMulti` check in `_buildPrCut` — timing branch and rendering
+      // branch agree by construction.
+      B3PrCut(:final pillRows) =>
+        PostSessionTiming.b3PrWhiteFlash +
+            (pillRows.isNotEmpty
+                ? PostSessionTiming.b3HoldPrMulti
+                : PostSessionTiming.b3HoldPr),
       B3TitleCut() => PostSessionTiming.b3HoldTitle,
       B3ClassChangeCut() => PostSessionTiming.b3HoldClassChange,
     };
@@ -184,6 +232,13 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   void _handleTap() {
     if (_stateController.state.showSummary) return;
+    // PR 30a UX pass — first tap retires the tap-hint affordance.
+    // `setState` is needed because the host build composes the hint via
+    // the `_userHasTapped` predicate; mutating without rebuilding would
+    // leave the chevron pulsing after the gesture was confirmed.
+    if (!_userHasTapped) {
+      setState(() => _userHasTapped = true);
+    }
     _controller.stop();
     _stateController.advance();
     _playCurrentCut();
@@ -235,12 +290,33 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   Widget _buildCinematic(PostSessionState state, AppLocalizations l10n) {
     final cut = state.cuts[state.cutIndex];
-    return AnimatedSwitcher(
-      duration: Duration.zero,
-      child: KeyedSubtree(
-        key: ValueKey(state.cutIndex),
-        child: _buildCut(cut, state, l10n),
-      ),
+    // PR 30a UX pass — tap-hint visibility composes three predicates:
+    //   * `!_userHasTapped`        — retires permanently on first tap
+    //   * `state.cutIndex == 0`    — only ever visible during B1
+    //   * `!_tapHintExpired`       — 2000ms one-shot timer (initState)
+    // All three predicates are owned by THIS state — the hint widget is
+    // pure render, the screen decides when to mount it. The skip button
+    // is unconditionally present during all cinematic cuts.
+    final showTapHint =
+        !_userHasTapped && state.cutIndex == 0 && !_tapHintExpired;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedSwitcher(
+          duration: Duration.zero,
+          child: KeyedSubtree(
+            key: ValueKey(state.cutIndex),
+            child: _buildCut(cut, state, l10n),
+          ),
+        ),
+        if (showTapHint) const CinematicTapHint(),
+        CinematicSkipButton(
+          onSkip: () {
+            _controller.stop();
+            _stateController.skipToSummary();
+          },
+        ),
+      ],
     );
   }
 

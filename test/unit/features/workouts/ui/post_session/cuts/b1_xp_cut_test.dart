@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/workouts/domain/post_session_timing.dart';
 import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/b1_xp_cut.dart';
 
@@ -89,16 +90,26 @@ void main() {
   );
 
   testWidgets(
-    'tier-derived behavior: dayZero hold duration is 1300ms (the source of truth is the controller, not the widget)',
+    'tier-derived behavior: every tier routes to its dedicated b1Hold '
+    'constant (the source of truth is the controller, not the widget)',
     (tester) async {
-      // Pin the contract: the widget consumes [RewardTier.b1Hold] to derive
-      // hold timing externally. The widget itself is stateless re: timing;
-      // the parent controller drives it. Assert the public API the
-      // controller relies on.
-      expect(RewardTier.dayZero.b1Hold.inMilliseconds, 1300);
-      expect(RewardTier.baseline.b1Hold.inMilliseconds, 1200);
-      expect(RewardTier.thresholdAnticipatory.b1Hold.inMilliseconds, 1200);
-      expect(RewardTier.classChangeAnticipatory.b1Hold.inMilliseconds, 1500);
+      // Pin the routing contract: the widget consumes [RewardTier.b1Hold]
+      // to derive hold timing externally. The widget itself is stateless
+      // re: timing; the parent controller drives it. Assert the routing
+      // through the PostSessionTiming constants — numeric ms values stay
+      // out of this test so future UX retunes only touch the constants
+      // file (the dartdoc on PostSessionTiming captures the retune
+      // history).
+      expect(RewardTier.dayZero.b1Hold, PostSessionTiming.b1HoldDayZero);
+      expect(RewardTier.baseline.b1Hold, PostSessionTiming.b1HoldBaseline);
+      expect(
+        RewardTier.thresholdAnticipatory.b1Hold,
+        PostSessionTiming.b1HoldThresholdAnticipatory,
+      );
+      expect(
+        RewardTier.classChangeAnticipatory.b1Hold,
+        PostSessionTiming.b1HoldClassChangeAnticipatory,
+      );
     },
   );
 }

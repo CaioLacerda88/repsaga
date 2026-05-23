@@ -33,6 +33,8 @@ import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_skip_button.dart';
+import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_tap_hint.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
@@ -209,6 +211,60 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );
+
+    testWidgets('tap-hint visible only on cut 0 before first tap; '
+        'skip button visible during cinematic, gone on summary', (
+      tester,
+    ) async {
+      // Use a baseline cut so we have a B1 to land on. With no reward
+      // events queued the screen's choreographer emits exactly the B1
+      // (+ optional B2 single) — cinematic plays, then summary mounts
+      // after long-press.
+      await tester.pumpWidget(
+        _harness(
+          paramsBuilder: (l10n) => _params(
+            queueResult: const CelebrationQueueResult(queue: []),
+            prResult: null,
+            l10n: l10n,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Initial state — cut 0, untapped, hint NOT yet expired (2000ms
+      // timer hasn't fired). Both the hint and the skip button render.
+      expect(
+        find.byType(CinematicTapHint),
+        findsOneWidget,
+        reason: 'Tap hint must be visible on cut 0 before first tap',
+      );
+      expect(
+        find.byType(CinematicSkipButton),
+        findsOneWidget,
+        reason: 'Skip button must be visible during cinematic cuts',
+      );
+
+      // Skip to summary via the skip button. The button calls
+      // controller.skipToSummary() — same path the long-press takes.
+      await tester.tap(find.byType(CinematicSkipButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Summary mounted — neither affordance should render.
+      expect(
+        find.byType(CinematicSkipButton),
+        findsNothing,
+        reason: 'Skip button must NOT render on summary panel',
+      );
+      expect(
+        find.byType(CinematicTapHint),
+        findsNothing,
+        reason: 'Tap hint must NOT render on summary panel',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
 
     testWidgets(
       'routes to b1CopyMaxLevelUp when a level-up co-occurs with class change',

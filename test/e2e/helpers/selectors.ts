@@ -1444,6 +1444,15 @@ export const POST_SESSION = {
   titleEquipRow: '[flt-semantics-identifier="post-session-title-equip-row"]',
 
   /**
+   * Skip-cinematic button (top-right corner of every cinematic cut, NOT on
+   * the summary panel). Routes to controller.skipToSummary() — same path
+   * the long-press gesture takes. Added in PR 30a UX pass (2026-05-23) as
+   * a discoverable affordance for the previously-undiscoverable long-press.
+   * Semantics(identifier: 'post-session-skip-btn').
+   */
+  skipBtn: '[flt-semantics-identifier="post-session-skip-btn"]',
+
+  /**
    * Empty-session guard sheet (State 11) — shown when the user taps Finish
    * with zero logged sets, BEFORE the post-session route is pushed.
    * Semantics(identifier: 'empty-session-guard-sheet').

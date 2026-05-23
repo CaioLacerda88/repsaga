@@ -162,34 +162,39 @@ void main() {
   });
 
   group('RewardTier — b1Hold duration mapping', () {
-    test('dayZero holds for 1300ms', () {
+    // The numeric ms values are intentionally NOT hardcoded in these
+    // assertions — they're sourced from PostSessionTiming so a future
+    // retune (UX-critic passes have already retuned them twice — see the
+    // dartdoc on PostSessionTiming) only touches the constants file.
+    test('dayZero routes through PostSessionTiming.b1HoldDayZero', () {
       expect(RewardTier.dayZero.b1Hold, PostSessionTiming.b1HoldDayZero);
-      expect(RewardTier.dayZero.b1Hold.inMilliseconds, 1300);
     });
 
-    test('baseline holds for 1200ms', () {
+    test('baseline routes through PostSessionTiming.b1HoldBaseline', () {
       expect(RewardTier.baseline.b1Hold, PostSessionTiming.b1HoldBaseline);
-      expect(RewardTier.baseline.b1Hold.inMilliseconds, 1200);
     });
 
-    test('thresholdAnticipatory holds for 1200ms', () {
+    test('thresholdAnticipatory routes through '
+        'PostSessionTiming.b1HoldThresholdAnticipatory', () {
       expect(
         RewardTier.thresholdAnticipatory.b1Hold,
         PostSessionTiming.b1HoldThresholdAnticipatory,
       );
-      expect(RewardTier.thresholdAnticipatory.b1Hold.inMilliseconds, 1200);
     });
 
-    test('classChangeAnticipatory holds for 1500ms with 120ms pre-roll', () {
+    test('classChangeAnticipatory routes through the class-change hold + '
+        'carries the 120ms dead-black pre-roll', () {
       expect(
         RewardTier.classChangeAnticipatory.b1Hold,
         PostSessionTiming.b1HoldClassChangeAnticipatory,
       );
-      expect(RewardTier.classChangeAnticipatory.b1Hold.inMilliseconds, 1500);
       expect(
         RewardTier.classChangeAnticipatory.b1PreRoll,
         PostSessionTiming.b1PreRollClassChangeAnticipatory,
       );
+      // The pre-roll is a structural cinematic primitive (Concept B
+      // grammar §0), not a parse-time floor that floats with UX retunes
+      // — pin the exact ms value here.
       expect(RewardTier.classChangeAnticipatory.b1PreRoll.inMilliseconds, 120);
     });
 
