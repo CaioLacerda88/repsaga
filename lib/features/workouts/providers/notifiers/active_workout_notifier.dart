@@ -247,6 +247,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// 30 PR 30a — drives the empty-session guard (mockup §5 State 11):
   /// when zero sets exist, the finish flow shows a disambiguation sheet
   /// instead of pushing the post-session cinematic.
+  ///
+  /// IMPORTANT — lifecycle: returns 0 AFTER `finishWorkout()` is awaited,
+  /// because the notifier transitions to `AsyncData(null)` on commit and
+  /// this getter short-circuits on `state.value == null`. Callers that
+  /// need the pre-finish set count in the post-finish path MUST capture
+  /// the value BEFORE the `await notifier.finishWorkout()` call. See
+  /// `finish_workout_coordinator.dart` (the `preFinishSetsCount` capture
+  /// alongside `priorWorkoutCount`) for the established pattern, and
+  /// auto-memory `cluster_async_caller_broke_snackbar.md` for the cluster.
   int get totalSetsCount {
     final current = state.value;
     if (current == null) return 0;

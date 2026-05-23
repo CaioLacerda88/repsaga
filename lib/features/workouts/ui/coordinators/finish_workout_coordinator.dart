@@ -181,6 +181,23 @@ class FinishWorkoutCoordinator {
       // regression test that pins the contract.
       final priorWorkoutCount = ref.read(workoutCountProvider).value ?? 0;
 
+      // Phase 30 PR 30a Bug C v2 (2026-05-23) — same lifecycle contract as
+      // priorWorkoutCount above. `notifier.totalSetsCount` reads from
+      // `state.value`, which is AsyncData(null) AFTER finishWorkout()
+      // transitions the notifier state. The post-session-push predicate
+      // below (`shouldPushPostSession`) needs the pre-finish set count to
+      // evaluate correctly — reading totalSetsCount post-await returns 0
+      // for every session, dropping every finish onto the legacy /home
+      // navigator and skipping the cinematic entirely.
+      //
+      // Cluster: `async-caller-broke-snackbar` / `async-caller-broke-nav`.
+      // Third occurrence of this lifecycle pattern in this file — same
+      // class as the 271c20d priorWorkoutCount fix. If you're adding
+      // ANOTHER provider/notifier read to this method whose return value
+      // depends on `state.value`, capture it BEFORE the
+      // `await notifier.finishWorkout()` at line ~202.
+      final preFinishSetsCount = notifier.totalSetsCount;
+
       // Capture the root navigator's context NOW — while this State is still
       // mounted and in the widget tree — for use after the save completes.
       // When the save commits the notifier transitions to AsyncData(null),
@@ -364,8 +381,7 @@ class FinishWorkoutCoordinator {
       // Cluster: `spec-caption-vs-implementation-drift` — predicate
       // mirrored the legacy "show only if PR" rule from /pr-celebration
       // and missed the mockup §5 State 2 baseline cinematic intent.
-      final shouldPushPostSession =
-          !wasSavedOffline && notifier.totalSetsCount > 0;
+      final shouldPushPostSession = !wasSavedOffline && preFinishSetsCount > 0;
 
       if (shouldPushPostSession) {
         final l10n = AppLocalizations.of(rootContext);

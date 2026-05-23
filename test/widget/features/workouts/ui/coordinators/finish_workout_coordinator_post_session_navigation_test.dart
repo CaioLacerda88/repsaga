@@ -186,8 +186,20 @@ class _PRRewardNotifier extends AsyncNotifier<ActiveWorkoutState?>
   @override
   Future<ActiveWorkoutState?> build() async => _state;
 
+  // Bug C v2 (2026-05-23) — must mirror the production getter at
+  // active_workout_notifier.dart's `totalSetsCount`, which short-circuits
+  // to 0 when `state.value == null`. Reading from `_state` (which IS
+  // nulled inside `finishWorkout` below) reproduces the production
+  // lifecycle so the test catches the regression of reading
+  // `notifier.totalSetsCount` AFTER the await. A hardcoded `=> 1` would
+  // mask the bug because the post-await read in the coordinator would
+  // (wrongly) succeed.
   @override
-  int get totalSetsCount => 1;
+  int get totalSetsCount {
+    final s = _state;
+    if (s == null) return 0;
+    return s.exercises.expand((e) => e.sets).length;
+  }
 
   @override
   int get incompleteSetsCount => 0;
@@ -272,8 +284,20 @@ class _BaselineNotifier extends AsyncNotifier<ActiveWorkoutState?>
   @override
   Future<ActiveWorkoutState?> build() async => _state;
 
+  // Bug C v2 (2026-05-23) — mirror the production getter (reads from
+  // `state.value`, returns 0 after `finishWorkout()` nulls the state).
+  // A hardcoded `=> 1` here masks the lifecycle regression: the
+  // coordinator's post-await `notifier.totalSetsCount > 0` read would
+  // (wrongly) succeed, the predicate would (wrongly) be true, and the
+  // test would PASS even with the broken production code. Reading from
+  // `_state` — which we deliberately null inside `finishWorkout` below
+  // — reproduces the production lifecycle exactly.
   @override
-  int get totalSetsCount => 1;
+  int get totalSetsCount {
+    final s = _state;
+    if (s == null) return 0;
+    return s.exercises.expand((e) => e.sets).length;
+  }
 
   @override
   int get incompleteSetsCount => 0;
