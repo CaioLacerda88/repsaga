@@ -40,6 +40,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { dismissCelebrationIfPresent } from '../helpers/app';
 import { login } from '../helpers/auth';
 import {
   startEmptyWorkout,
@@ -441,7 +442,7 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
     // finish flow lands on /home (or on /pr-celebration if a PR was
     // set during the session — not the case for this seed, but both
     // are acceptable post-finish landing pages).
-    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 10_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 10_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
     // wrote, matching the Dart calculator + Python sim + fixture oracle at
@@ -526,11 +527,20 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     // PR 29.5 Path A pivot: no mid-workout overlays mount. The
     // post-session ceremony (PR 30a) will carry the full celebration
     // for the rank-up → level-up → title beats. Mid-workout the user
-    // sees no flash; the finish flow lands on /home (no PR in this
-    // seed, so /pr-celebration is not pushed). The queue ordering is
-    // pinned by the unit tests in
+    // sees no flash; the finish flow lands on the post-session screen
+    // (`/workout/finish/...`) because the celebration queue carries
+    // reward events (rank-up + level-up + title-unlock). Legacy
+    // `/home` is still accepted for paths that have no reward events.
+    // The queue ordering is pinned by the unit tests in
     // `test/unit/features/rpg/domain/celebration_queue_test.dart`.
-    await page.waitForURL(/\/home/, { timeout: 10_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 10_000 });
+    // If we landed on the post-session screen, dismiss it so the rest
+    // of the test (Profile tab nav + DB parity gate) can continue
+    // against /home as the stable starting point.
+    if (page.url().includes('workout/finish/')) {
+      await dismissCelebrationIfPresent(page, 5_000);
+    }
+    await page.waitForURL(/\/home/, { timeout: 15_000 });
     // Wait for home screen to stabilise before navigating to profile tab.
     // 26f: the CharacterCard always renders on Home and replaces the legacy
     // "Quick workout" CTA as the post-workout home-loaded sentinel.
@@ -665,7 +675,7 @@ test.describe('First awakening server-state gate', { tag: '@smoke' }, () => {
     // awakening beat will surface in the post-session screen (PR 30a).
     // The finish flow lands on /home or /pr-celebration depending on
     // whether a PR was set.
-    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 15_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 15_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals + ranks. Seed:
     // all 0 XP / rank 1. Workout: bench 60x5 + squat 80x5. Attribution:
@@ -807,7 +817,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     // absolute. The cap-at-3 logic is pinned by the unit tests in
     // `test/unit/features/rpg/domain/celebration_queue_test.dart`;
     // mid-workout the user sees no flash, just the post-finish nav.
-    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 30_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 30_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
     // wrote, matching the Dart calculator + Python sim + fixture oracle at
@@ -1139,6 +1149,6 @@ test.describe('Active workout chrome (Phase 18c)', { tag: '@smoke' }, () => {
 
     // Confirm → workout completes → navigate away from active workout screen.
     await page.locator(WORKOUT.dialogFinishButton).click();
-    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 15_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 15_000 });
   });
 });

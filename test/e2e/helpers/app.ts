@@ -369,21 +369,42 @@ export async function dismissCelebrationIfPresent(
   page: Page,
   timeout = 20_000,
 ): Promise<void> {
-  // No mid-workout overlay exists post-Path-A. Skip directly to the
-  // `/pr-celebration` route check. The route push happens synchronously
-  // with the finish flow when a PR was set; if no PR was set, the
-  // waitForURL times out and we proceed.
-  const onCelebration = await page
-    .waitForURL('**/pr-celebration**', { timeout })
+  // Post-Path-A (PR 29.5): no mid-workout overlay exists.
+  // PR 30a migration window: the coordinator now pushes `/workout/finish/:workoutId`
+  // for online finishes with reward events (rank-up, PR, class-change, title, level-up).
+  // The legacy `/pr-celebration` route is still alive (until PR 30c) for
+  // the offline fallback and for specs that haven't migrated yet.
+  // Wait for either route, then dismiss appropriately.
+  const postRoute = await page
+    .waitForURL(/\/(pr-celebration|workout\/finish\/)/, { timeout })
     .then(() => true)
     .catch(() => false);
 
-  if (onCelebration) {
-    // Continue button sits outside any animation and is always
-    // reachable once we're on the /pr-celebration route.
+  if (!postRoute) return;
+
+  const url = page.url();
+  if (url.includes('workout/finish/')) {
+    // Post-session screen (PR 30a): the CONTINUAR CTA is the dismissal
+    // affordance. Long-press skips cinematics and shows the summary panel.
+    const continueCta = '[flt-semantics-identifier="post-session-continue-cta"]';
+    // Skip cinematics via long-press on the screen root, then tap CONTINUAR.
+    const screenRoot = '[flt-semantics-identifier="post-session-screen"]';
+    const summaryEl = page.locator(continueCta);
+    // Use long-press to fast-forward all cinematic cuts to the summary panel.
+    // The screen's long-press handler sets _skipCinematics = true and jumps
+    // directly to the summary. We allow up to 8 s for the summary to appear.
+    try {
+      await flutterLongPress(page, screenRoot, 600);
+    } catch {
+      // If the long-press misses (screen already on summary), fall through.
+    }
+    await expect(summaryEl).toBeVisible({ timeout: 8_000 });
+    await page.click(continueCta);
+    await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
+  } else {
+    // Legacy /pr-celebration route — alive until PR 30c.
     await expect(page.locator(PR.continueButton)).toBeVisible({ timeout: 10_000 });
     await page.click(PR.continueButton);
-    // Wait for the celebration route to leave before the caller continues.
     await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
   }
 }

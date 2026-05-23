@@ -156,10 +156,29 @@ class FinishWorkoutCoordinator {
       // StateError, crashing finish() and leaving the URL stuck on
       // /workout/active. We capture the result synchronously here and use
       // the pre-computed bool throughout the rest of the method.
+      //
+      // Cluster: `async-caller-broke-snackbar` / `async-caller-broke-nav`.
       final shouldPrompt = postWorkoutNavigator.shouldShowPlanPrompt(
         ref,
         routineId,
       );
+
+      // Phase 30 PR 30a — same `ref`-lifetime contract as `shouldPrompt`
+      // above. The post-session push branch needs the workout count from
+      // BEFORE this finish to render the saga number ("Saga {n+1}"). Reading
+      // `workoutCountProvider` AFTER `await notifier.finishWorkout()` throws
+      // `Bad state: Using "ref" when a widget is about to or has been
+      // unmounted is unsafe` because the active-workout State has been
+      // disposed by then. Capture the value synchronously here; the value
+      // is exactly "prior count" by definition (the just-finished workout
+      // has not yet been counted), so no subtraction is needed downstream.
+      //
+      // This was the PR 30a regression that surfaced under QA — the URL
+      // stayed on `/workout/active` because the exception fired before the
+      // `addPostFrameCallback` that schedules `rootContext.go(...)`. See the
+      // `finish_workout_coordinator_post_session_navigation_test.dart`
+      // regression test that pins the contract.
+      final priorWorkoutCount = ref.read(workoutCountProvider).value ?? 0;
 
       // Capture the root navigator's context NOW — while this State is still
       // mounted and in the widget tree — for use after the save completes.
@@ -366,8 +385,10 @@ class FinishWorkoutCoordinator {
               .whereType<FirstAwakeningEvent>()
               .map((e) => e.bodyPart)
               .toSet(),
-          priorFinishedWorkoutCount:
-              (ref.read(workoutCountProvider).value ?? 1) - 1,
+          // Captured BEFORE `await notifier.finishWorkout()` — see the
+          // `priorWorkoutCount` capture above. Reading `ref` here would
+          // throw because the active-workout State is disposed by now.
+          priorFinishedWorkoutCount: priorWorkoutCount,
           durationMinutes: _computeDurationMinutes(currentState),
           setsCount: _computeSetsCount(currentState),
           tonnageTons: _computeTonnage(currentState),

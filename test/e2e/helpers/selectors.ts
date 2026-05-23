@@ -1374,3 +1374,79 @@ export const EXERCISE_LOC = {
   formTipsSectionText: (locale: 'en' | 'pt' = 'en') =>
     `text=${locale === 'pt' ? 'DICAS DE FORMA' : 'FORM TIPS'}`,
 } as const;
+
+// ---------------------------------------------------------------------------
+// POST_SESSION — Post-session cinematic screen (PR 30a).
+//
+// The screen lives at `/workout/finish/:workoutId` and is pushed by
+// `finish_workout_coordinator.dart` after a non-empty online finish.
+// Offline finishes + empty-session finishes still route to /home.
+//
+// Selector lifecycle:
+//   30a — all identifiers below added.
+//   30c — selectors survive; `pr-celebration-screen` is the retiring peer.
+//
+// All selectors use `flt-semantics-identifier` (Flutter AOM, not CSS class).
+// ---------------------------------------------------------------------------
+export const POST_SESSION = {
+  /** Full-screen post-session route root — Semantics(identifier: 'post-session-screen'). */
+  screen: '[flt-semantics-identifier="post-session-screen"]',
+
+  /**
+   * Beat 1 XP cut — full-screen XP reveal.
+   * Semantics(identifier: 'post-session-b1-xp').
+   */
+  b1Xp: '[flt-semantics-identifier="post-session-b1-xp"]',
+
+  /**
+   * Beat 2 body-part tally cut — all B2 variants (single, cascade, elevated rank-up)
+   * share this identifier. Semantics(identifier: 'post-session-b2-tally').
+   */
+  b2Tally: '[flt-semantics-identifier="post-session-b2-tally"]',
+
+  /**
+   * Beat 3 Personal Record cut.
+   * Semantics(identifier: 'post-session-b3-pr').
+   */
+  b3Pr: '[flt-semantics-identifier="post-session-b3-pr"]',
+
+  /**
+   * Beat 3 Title Unlock cut.
+   * Semantics(identifier: 'post-session-b3-title').
+   */
+  b3Title: '[flt-semantics-identifier="post-session-b3-title"]',
+
+  /**
+   * Beat 3 Class Change cut.
+   * Semantics(identifier: 'post-session-b3-class-change').
+   */
+  b3ClassChange: '[flt-semantics-identifier="post-session-b3-class-change"]',
+
+  /**
+   * Summary panel — the final post-cinematic panel with saga label, stats,
+   * next-step hook, and CONTINUAR CTA.
+   * Semantics(identifier: 'post-session-summary').
+   */
+  summary: '[flt-semantics-identifier="post-session-summary"]',
+
+  /**
+   * CONTINUAR / Continue button on the summary panel.
+   * Semantics(identifier: 'post-session-continue-cta').
+   */
+  continueCta: '[flt-semantics-identifier="post-session-continue-cta"]',
+
+  /**
+   * Title EQUIP row inside the summary panel (State 8 / State 10).
+   * Replaces the retired `title-unlock-sheet-equip-button` selector from
+   * the mid-workout overlay era (PR 29.5).
+   * Semantics(identifier: 'post-session-title-equip-row').
+   */
+  titleEquipRow: '[flt-semantics-identifier="post-session-title-equip-row"]',
+
+  /**
+   * Empty-session guard sheet (State 11) — shown when the user taps Finish
+   * with zero logged sets, BEFORE the post-session route is pushed.
+   * Semantics(identifier: 'empty-session-guard-sheet').
+   */
+  emptySessionGuardSheet: '[flt-semantics-identifier="empty-session-guard-sheet"]',
+} as const;
