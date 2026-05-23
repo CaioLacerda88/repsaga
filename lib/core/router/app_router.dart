@@ -387,8 +387,12 @@ class _RouterRefreshListenable extends ChangeNotifier {
   final Ref _ref;
 }
 
-/// Height in logical pixels of the OfflineBanner overlay. Used to pad the
-/// active tab's content so it isn't covered by the banner.
+/// Height in logical pixels of the OfflineBanner CONTENT (the rendered Row
+/// with icon + text), NOT including the status bar inset above it. The
+/// banner is wrapped in `SafeArea(top: true)` in `_ShellScaffold.build`
+/// so it sits below the system status bar; the body's Padding therefore
+/// uses `MediaQuery.viewPadding.top + _kOfflineBannerHeight` to compute
+/// total vertical space the banner occupies.
 ///
 /// Geometry: vertical padding 12 + 12 = 24dp, plus the rendered line height
 /// of `AppTextStyles.bodySmall` (`fontSize: 12 * height: 1.5` = 18dp) which
@@ -558,6 +562,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     // satisfy NavigationBar's range requirement but hide the indicator so no
     // tab appears active.
     final isOnTab = tabIndex >= 0;
+    // Status-bar inset for the offline-banner placement below. We capture it
+    // once here so the body Padding and the SafeArea wrap on the banner
+    // agree on the same value within a single build.
+    final viewPaddingTop = MediaQuery.of(context).viewPadding.top;
 
     // Family 5A / AW-EX-B-US1-03: the OfflineBanner is rendered as a
     // top-of-body overlay (Stack, painted AFTER child), not as a Column
@@ -628,30 +636,54 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
           body: Stack(
             children: [
               Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    top: isOnline ? 0 : _kOfflineBannerHeight,
+                // Body Padding below explicitly adds the top inset when offline
+                // so the banner (which sits in the inset via SafeArea below)
+                // doesn't cover tab content. Tab content widgets ALSO wrap
+                // themselves in SafeArea — we strip the top padding from
+                // MediaQuery here so their SafeArea doesn't double-pad against
+                // the status bar that we've already accounted for.
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: !isOnline,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: isOnline
+                          ? 0
+                          : viewPaddingTop + _kOfflineBannerHeight,
+                    ),
+                    child: widget.child,
                   ),
-                  child: widget.child,
                 ),
               ),
               if (!isOnline)
                 Align(
                   alignment: Alignment.topCenter,
-                  // Pin the banner to `TextScaler.noScaling` so its rendered
-                  // height stays equal to `_kOfflineBannerHeight` (42dp)
-                  // regardless of system font scaling. The banner is a short,
-                  // high-contrast visual marker — letting it scale would either
-                  // wrap the row (worse a11y) or push it past the padded body
-                  // and overlap content. Other text in the app respects the
-                  // user's text-scale preference; this banner is the one
-                  // exception, by design. See `_kOfflineBannerHeight` for the
-                  // height contract this pin protects.
-                  child: MediaQuery(
-                    data: MediaQuery.of(
-                      context,
-                    ).copyWith(textScaler: TextScaler.noScaling),
-                    child: const OfflineBanner(),
+                  // Cluster: safearea-system-overlay-overlap — Scaffold defaults
+                  // to extending body behind status bar on Android edge-to-edge;
+                  // widgets painted at body y=0 (here, the OfflineBanner Align
+                  // overlay) sit behind the system status bar without an
+                  // explicit SafeArea wrap. Same class as the PostSessionScreen
+                  // visual fix in bff76bd.
+                  child: SafeArea(
+                    top: true,
+                    bottom: false,
+                    left: false,
+                    right: false,
+                    // Pin the banner to `TextScaler.noScaling` so its rendered
+                    // height stays equal to `_kOfflineBannerHeight` (42dp)
+                    // regardless of system font scaling. The banner is a short,
+                    // high-contrast visual marker — letting it scale would either
+                    // wrap the row (worse a11y) or push it past the padded body
+                    // and overlap content. Other text in the app respects the
+                    // user's text-scale preference; this banner is the one
+                    // exception, by design. See `_kOfflineBannerHeight` for the
+                    // height contract this pin protects.
+                    child: MediaQuery(
+                      data: MediaQuery.of(
+                        context,
+                      ).copyWith(textScaler: TextScaler.noScaling),
+                      child: const OfflineBanner(),
+                    ),
                   ),
                 ),
             ],
