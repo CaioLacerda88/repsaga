@@ -169,6 +169,13 @@ class PostSessionController extends ChangeNotifier {
 
     final sagaNumber = params.priorFinishedWorkoutCount + 1;
 
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    debugPrint(
+      '[repsaga] CONTROLLER: state built, rewardTier=$tier, '
+      'cutCount=${cuts.length}, '
+      'cutTypes=${cuts.map((c) => c.runtimeType).toList()}',
+    );
+
     return PostSessionState(
       tier: tier,
       queueResult: params.queueResult,
@@ -195,12 +202,18 @@ class PostSessionController extends ChangeNotifier {
   /// Advance to the next cut. When the index reaches `cuts.length`, flip
   /// [PostSessionState.showSummary] true.
   void advance() {
-    final next = _state.cutIndex + 1;
+    final oldIndex = _state.cutIndex;
+    final next = oldIndex + 1;
     if (next >= _state.cuts.length) {
       _state = _state.copyWith(showSummary: true);
     } else {
       _state = _state.copyWith(cutIndex: next);
     }
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    debugPrint(
+      '[repsaga] CONTROLLER: advance fired, currentIndex was=$oldIndex → '
+      'now=${_state.cutIndex}, isAtSummary=${_state.showSummary}',
+    );
     notifyListeners();
   }
 

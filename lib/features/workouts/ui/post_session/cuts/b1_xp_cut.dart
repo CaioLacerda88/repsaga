@@ -64,74 +64,88 @@ class B1XpCutWidget extends StatelessWidget {
             // per the Concept B grammar (`docs/post-session-screen-mockup-v2.html`
             // §0 anti-AI render rules: no box-shadow, no border-radius).
             const _DiagonalSlash(color: AppColors.hotViolet),
-            // XP number slam (translateY -40 → 0, 180ms overshoot).
-            AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) {
-                final slam = Curves.easeOutBack.transform(
-                  animation.value.clamp(0.0, 0.18) / 0.18,
-                );
-                final translateY = (1 - slam) * -40.0;
-                final opacity = slam.clamp(0.0, 1.0);
-                return Center(
-                  child: Opacity(
-                    opacity: opacity,
-                    child: Transform.translate(
-                      offset: Offset(0, translateY),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '+$totalXp',
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.celebrationSize(48).copyWith(
-                                color: AppColors.textCream,
-                                letterSpacing: 0.04 * 48,
+            // Cluster: safearea-system-overlay-overlap — same class as bff76bd
+            // + 0d0b4b7. Background flood stays edge-to-edge; content insets
+            // respect system bars.
+            Positioned.fill(
+              child: SafeArea(
+                minimum: const EdgeInsets.only(top: 12, bottom: 16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // XP number slam (translateY -40 → 0, 180ms overshoot).
+                    AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) {
+                        final slam = Curves.easeOutBack.transform(
+                          animation.value.clamp(0.0, 0.18) / 0.18,
+                        );
+                        final translateY = (1 - slam) * -40.0;
+                        final opacity = slam.clamp(0.0, 1.0);
+                        return Center(
+                          child: Opacity(
+                            opacity: opacity,
+                            child: Transform.translate(
+                              offset: Offset(0, translateY),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      '+$totalXp',
+                                      textAlign: TextAlign.center,
+                                      style: AppTextStyles.celebrationSize(48)
+                                          .copyWith(
+                                            color: AppColors.textCream,
+                                            letterSpacing: 0.04 * 48,
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    xpLabel,
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.label.copyWith(
+                                      color: AppColors.textDim,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            xpLabel,
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.label.copyWith(
-                              color: AppColors.textDim,
-                              fontSize: 11,
+                        );
+                      },
+                    ),
+                    // Bottom copy line.
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 40,
+                      child: AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, _) {
+                          final fade =
+                              (animation.value.clamp(0.18, 0.45) - 0.18) / 0.27;
+                          return Opacity(
+                            opacity: fade.clamp(0.0, 1.0),
+                            child: Text(
+                              copyLine,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.headline.copyWith(
+                                color: AppColors.textCream,
+                                fontSize: 22,
+                                letterSpacing: 0.04 * 22,
+                                height: 1.1,
+                              ),
                             ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            // Bottom copy line.
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 40,
-              child: AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) {
-                  final fade =
-                      (animation.value.clamp(0.18, 0.45) - 0.18) / 0.27;
-                  return Opacity(
-                    opacity: fade.clamp(0.0, 1.0),
-                    child: Text(
-                      copyLine,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.headline.copyWith(
-                        color: AppColors.textCream,
-                        fontSize: 22,
-                        letterSpacing: 0.04 * 22,
-                        height: 1.1,
-                      ),
-                    ),
-                  );
-                },
+                  ],
+                ),
               ),
             ),
           ],

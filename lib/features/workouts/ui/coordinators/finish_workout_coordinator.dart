@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -183,9 +181,8 @@ class FinishWorkoutCoordinator {
       // regression test that pins the contract.
       final priorWorkoutCount = ref.read(workoutCountProvider).value ?? 0;
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: priorWorkoutCount=$priorWorkoutCount',
-        name: 'repsaga',
+      debugPrint(
+        '[repsaga] FINISH-COORD: priorWorkoutCount=$priorWorkoutCount',
       );
 
       // Phase 30 PR 30a Bug C v2 (2026-05-23) — same lifecycle contract as
@@ -205,11 +202,10 @@ class FinishWorkoutCoordinator {
       // `await notifier.finishWorkout()` at line ~202.
       final preFinishSetsCount = notifier.totalSetsCount;
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: preFinishSetsCount=$preFinishSetsCount, '
+      debugPrint(
+        '[repsaga] FINISH-COORD: preFinishSetsCount=$preFinishSetsCount, '
         'current.exercises.length='
         '${ref.read(activeWorkoutProvider).value?.exercises.length}',
-        name: 'repsaga',
       );
 
       // Capture the root navigator's context NOW — while this State is still
@@ -231,20 +227,18 @@ class FinishWorkoutCoordinator {
       // which would instantly pop any showDialog overlay).
       _isFinishHandled = true;
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: pre-await notifier.totalSetsCount='
+      debugPrint(
+        '[repsaga] FINISH-COORD: pre-await notifier.totalSetsCount='
         '${notifier.totalSetsCount}, '
         'state.value='
         '${ref.read(activeWorkoutProvider).value?.workout.name ?? 'NULL'}',
-        name: 'repsaga',
       );
       final finishResult = await notifier.finishWorkout(notes: result.notes);
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: post-await context.mounted=${context.mounted}, '
+      debugPrint(
+        '[repsaga] FINISH-COORD: post-await context.mounted=${context.mounted}, '
         'state.value='
         '${ref.read(activeWorkoutProvider).value?.workout.name ?? 'NULL'}',
-        name: 'repsaga',
       );
       if (!context.mounted) {
         _isFinishHandled = false;
@@ -283,10 +277,9 @@ class FinishWorkoutCoordinator {
       final wasServerErrorQueued = finishResult?.serverErrorQueued ?? false;
       final prResult = finishResult?.prResult;
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: wasSavedOffline=$wasSavedOffline, '
+      debugPrint(
+        '[repsaga] FINISH-COORD: wasSavedOffline=$wasSavedOffline, '
         'prResult=${prResult != null}',
-        name: 'repsaga',
       );
 
       // Invalidate caches so stat cards and lists reflect the new workout.
@@ -418,11 +411,10 @@ class FinishWorkoutCoordinator {
       // and missed the mockup §5 State 2 baseline cinematic intent.
       final shouldPushPostSession = !wasSavedOffline && preFinishSetsCount > 0;
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: PREDICATE wasSavedOffline=$wasSavedOffline, '
+      debugPrint(
+        '[repsaga] FINISH-COORD: PREDICATE wasSavedOffline=$wasSavedOffline, '
         'preFinishSetsCount=$preFinishSetsCount, '
         'shouldPushPostSession=$shouldPushPostSession',
-        name: 'repsaga',
       );
 
       if (shouldPushPostSession) {
@@ -473,10 +465,9 @@ class FinishWorkoutCoordinator {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!rootContext.mounted) {
             // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-            developer.log(
-              'FINISH-COORD: postFrame fired but rootContext NOT mounted, '
-              'aborting push',
-              name: 'repsaga',
+            debugPrint(
+              '[repsaga] FINISH-COORD: postFrame fired but rootContext NOT '
+              'mounted, aborting push',
             );
             return;
           }
@@ -484,10 +475,9 @@ class FinishWorkoutCoordinator {
           // the snapshot taken before finishWorkout disposed the state.
           final workoutId = currentState?.workout.id ?? 'unknown';
           // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-          developer.log(
-            'FINISH-COORD: about to push post-session route '
+          debugPrint(
+            '[repsaga] FINISH-COORD: about to push post-session route '
             '/workout/finish/$workoutId',
-            name: 'repsaga',
           );
           rootContext.go('/workout/finish/$workoutId', extra: params);
         });
@@ -502,12 +492,11 @@ class FinishWorkoutCoordinator {
       }
 
       // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-      developer.log(
-        'FINISH-COORD: falling through to legacy navigator, '
+      debugPrint(
+        '[repsaga] FINISH-COORD: falling through to legacy navigator, '
         'will route to /home or /pr-celebration '
         '(wasSavedOffline=$wasSavedOffline, preFinishSetsCount='
         '$preFinishSetsCount, prResult=${navigationPrResult != null})',
-        name: 'repsaga',
       );
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,

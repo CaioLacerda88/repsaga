@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -78,16 +76,20 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// Guards the one-shot "first build" log so we don't spam every rebuild.
   bool _loggedFirstBuild = false;
 
+  /// TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT.
+  /// Guards the one-shot "summary mounted" log so it fires exactly once
+  /// when the screen transitions from cinematic playback into the summary.
+  bool _loggedSummaryMount = false;
+
   @override
   void initState() {
     super.initState();
     // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-    developer.log(
-      'POST-SESSION-SCREEN: initState fired, '
+    debugPrint(
+      '[repsaga] POST-SESSION-SCREEN: initState fired, '
       'priorFinishedWorkoutCount=${widget.params.priorFinishedWorkoutCount}, '
       'totalXpEarned=${widget.params.totalXpEarned}, '
       'queueLen=${widget.params.queueResult.queue.length}',
-      name: 'repsaga',
     );
     _stateController = PostSessionController(ref: ref, params: widget.params);
     _controller = AnimationController(
@@ -106,6 +108,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   @override
   void dispose() {
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    debugPrint('[repsaga] POST-SESSION-SCREEN: dispose fired');
     _disposed = true;
     _controller.removeStatusListener(_onAnimationStatus);
     _controller.dispose();
@@ -117,6 +121,11 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     if (status != AnimationStatus.completed) return;
     final state = _stateController.state;
     if (state.isPlayingCinematic) {
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      debugPrint(
+        '[repsaga] POST-SESSION-SCREEN: cut ${state.cutIndex} complete → '
+        'advancing',
+      );
       // Schedule advance after the abyss gap; we defer one frame so the
       // current cut's last frame paints before the swap. Future.microtask
       // would skip the abyss gap; we want a deliberate blackout.
@@ -140,6 +149,11 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     if (!state.isPlayingCinematic) return;
     final cut = state.cuts[state.cutIndex];
     final duration = _durationForCut(cut, state.tier);
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    debugPrint(
+      '[repsaga] POST-SESSION-SCREEN: playing cut index=${state.cutIndex}, '
+      'type=${cut.runtimeType}, durationMs=${duration.inMilliseconds}',
+    );
     if (duration != _currentCutDuration) {
       _currentCutDuration = duration;
       _controller.duration = duration;
@@ -202,12 +216,11 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
               // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
               if (!_loggedFirstBuild) {
                 _loggedFirstBuild = true;
-                developer.log(
-                  'POST-SESSION-SCREEN: building cuts, '
+                debugPrint(
+                  '[repsaga] POST-SESSION-SCREEN: building cuts, '
                   'rewardTier=${state.tier}, '
                   'cutCount=${state.cuts.length}, '
                   'showSummary=${state.showSummary}',
-                  name: 'repsaga',
                 );
               }
               return state.showSummary
@@ -392,6 +405,14 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   }
 
   Widget _buildSummary(PostSessionState state, AppLocalizations l10n) {
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    if (!_loggedSummaryMount) {
+      _loggedSummaryMount = true;
+      debugPrint(
+        '[repsaga] POST-SESSION-SCREEN: summary panel mounted, '
+        '${state.cuts.length} cuts played',
+      );
+    }
     final sagaLabel = state.priorFinishedWorkoutCount == 0
         ? l10n.summaryDayZero
         : l10n.summarySagaNumber(state.sagaNumber);
@@ -494,6 +515,11 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
       onContinue: () {
+        // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+        debugPrint(
+          '[repsaga] POST-SESSION-SCREEN: CONTINUE tapped → onContinue '
+          'callback firing',
+        );
         _stateController.onContinue();
         widget.onContinue();
       },

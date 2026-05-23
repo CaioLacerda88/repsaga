@@ -63,91 +63,109 @@ class B2BpTallyCut extends StatelessWidget {
             // Hue flood — 22% alpha to read as flood, not solid hue.
             ColoredBox(color: hue.withValues(alpha: 0.22)),
             CustomPaint(painter: _DiagonalBpSlash(hue)),
-            // Eyebrow + XP slam.
-            AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) {
-                final slam = Curves.easeOut.transform(
-                  animation.value.clamp(0.0, 0.25) / 0.25,
-                );
-                return Center(
-                  child: Opacity(
-                    opacity: slam.clamp(0.0, 1.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          eyebrow.toUpperCase(),
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.label.copyWith(
-                            color: hue,
-                            letterSpacing: 0.12 * 11,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            '+$xpEarned',
-                            style: AppTextStyles.celebrationSize(36).copyWith(
-                              color: AppColors.textCream,
-                              letterSpacing: 0.04 * 36,
+            // Cluster: safearea-system-overlay-overlap — same class as bff76bd
+            // + 0d0b4b7. Background flood stays edge-to-edge; content insets
+            // respect system bars.
+            Positioned.fill(
+              child: SafeArea(
+                minimum: const EdgeInsets.only(top: 12, bottom: 16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Eyebrow + XP slam.
+                    AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) {
+                        final slam = Curves.easeOut.transform(
+                          animation.value.clamp(0.0, 0.25) / 0.25,
+                        );
+                        return Center(
+                          child: Opacity(
+                            opacity: slam.clamp(0.0, 1.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  eyebrow.toUpperCase(),
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.label.copyWith(
+                                    color: hue,
+                                    letterSpacing: 0.12 * 11,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '+$xpEarned',
+                                    style: AppTextStyles.celebrationSize(36)
+                                        .copyWith(
+                                          color: AppColors.textCream,
+                                          letterSpacing: 0.04 * 36,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  xpLabel,
+                                  style: AppTextStyles.label.copyWith(
+                                    color: AppColors.textDim,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          xpLabel,
-                          style: AppTextStyles.label.copyWith(
-                            color: AppColors.textDim,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
-            ),
-            // Bottom progress bar fills as animation crosses 0.30 → 0.70.
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 40,
-              child: AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) {
-                  final fill = ((animation.value - 0.30) / 0.40).clamp(
-                    0.0,
-                    1.0,
-                  );
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.zero,
-                        child: Stack(
-                          children: [
-                            Container(height: 4, color: AppColors.xpTrack),
-                            FractionallySizedBox(
-                              widthFactor: (progressFractionAfter * fill).clamp(
-                                0.0,
-                                1.0,
+                    // Bottom progress bar fills as animation crosses 0.30 → 0.70.
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 40,
+                      child: AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, _) {
+                          final fill = ((animation.value - 0.30) / 0.40).clamp(
+                            0.0,
+                            1.0,
+                          );
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.zero,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      height: 4,
+                                      color: AppColors.xpTrack,
+                                    ),
+                                    FractionallySizedBox(
+                                      widthFactor:
+                                          (progressFractionAfter * fill).clamp(
+                                            0.0,
+                                            1.0,
+                                          ),
+                                      child: Container(height: 4, color: hue),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Container(height: 4, color: hue),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'rank $rankAfter · ${(progressFractionAfter * 100).round()}%',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.numericSmall,
+                              ),
+                            ],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'rank $rankAfter · ${(progressFractionAfter * 100).round()}%',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.numericSmall,
-                      ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

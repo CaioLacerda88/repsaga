@@ -63,50 +63,58 @@ class B3TitleCutWidget extends StatelessWidget {
           children: [
             ColoredBox(color: hue.withValues(alpha: 0.36)),
             CustomPaint(painter: _TitleSlash(hue)),
-            AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) {
-                final fade = Curves.easeOut.transform(
-                  animation.value.clamp(0.0, 0.30) / 0.30,
-                );
-                return Opacity(
-                  opacity: fade.clamp(0.0, 1.0),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          eyebrowLabel,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.label.copyWith(
-                            color: hue,
-                            fontSize: 12,
-                          ),
+            // Cluster: safearea-system-overlay-overlap — same class as bff76bd
+            // + 0d0b4b7. Background flood stays edge-to-edge; content insets
+            // respect system bars.
+            Positioned.fill(
+              child: SafeArea(
+                minimum: const EdgeInsets.only(top: 12, bottom: 16),
+                child: AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, _) {
+                    final fade = Curves.easeOut.transform(
+                      animation.value.clamp(0.0, 0.30) / 0.30,
+                    );
+                    return Opacity(
+                      opacity: fade.clamp(0.0, 1.0),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              eyebrowLabel,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.label.copyWith(
+                                color: hue,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Character-level milestone title renders in heroGold
+                            // via the RewardAccent widget-tree scope (mockup §4).
+                            // Body-part-typed and cross-build variants stay in
+                            // textCream (the hue is signaled by the flood
+                            // background + slash painter, not by the title color).
+                            if (isCharacterLevel)
+                              RewardAccent(child: titleText)
+                            else
+                              titleText,
+                            const SizedBox(height: 14),
+                            Text(
+                              subLabel,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textDim,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 24),
-                        // Character-level milestone title renders in heroGold
-                        // via the RewardAccent widget-tree scope (mockup §4).
-                        // Body-part-typed and cross-build variants stay in
-                        // textCream (the hue is signaled by the flood
-                        // background + slash painter, not by the title color).
-                        if (isCharacterLevel)
-                          RewardAccent(child: titleText)
-                        else
-                          titleText,
-                        const SizedBox(height: 14),
-                        Text(
-                          subLabel,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textDim,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         ),

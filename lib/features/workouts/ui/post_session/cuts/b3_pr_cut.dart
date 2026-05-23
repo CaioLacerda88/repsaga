@@ -93,77 +93,84 @@ class B3PrCutWidget extends StatelessWidget {
   }
 
   Widget _buildPrContent(BuildContext context, double goldPhase) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Eyebrow renders in heroGold via the canonical RewardAccent
-          // widget-tree scope — DefaultTextStyle.merge supplies the color so
-          // the Text below does not reference the token directly.
-          Opacity(
-            opacity: goldPhase.clamp(0.0, 1.0),
-            child: RewardAccent(
-              child: Text(
-                eyebrow,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.label.copyWith(
-                  fontSize: 12,
-                  letterSpacing: 0.14 * 12,
+    // Cluster: safearea-system-overlay-overlap — same class as bff76bd
+    // + 0d0b4b7. Background flood (white flash / gold ColoredBox / slash
+    // painter) stays edge-to-edge above this widget; content insets respect
+    // system bars here.
+    return SafeArea(
+      minimum: const EdgeInsets.only(top: 12, bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Eyebrow renders in heroGold via the canonical RewardAccent
+            // widget-tree scope — DefaultTextStyle.merge supplies the color so
+            // the Text below does not reference the token directly.
+            Opacity(
+              opacity: goldPhase.clamp(0.0, 1.0),
+              child: RewardAccent(
+                child: Text(
+                  eyebrow,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 12,
+                    letterSpacing: 0.14 * 12,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Opacity(
-            opacity: goldPhase.clamp(0.0, 1.0),
-            child: Column(
-              children: [
-                Text(
-                  data.heroExerciseName,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.headline.copyWith(
-                    color: AppColors.textCream,
-                    fontSize: 18,
-                    letterSpacing: 0.04 * 18,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // PR weight × reps — heroGold via RewardAccent (mockup §4:
-                // "B3 PR weight — Rajdhani 700 in heroGold").
-                RewardAccent(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${_formatWeight(data.heroWeightKg)}kg × ${data.heroReps}',
-                      style: AppTextStyles.celebrationSize(
-                        34,
-                      ).copyWith(letterSpacing: 0.04 * 34),
+            const SizedBox(height: 16),
+            Opacity(
+              opacity: goldPhase.clamp(0.0, 1.0),
+              child: Column(
+                children: [
+                  Text(
+                    data.heroExerciseName,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.headline.copyWith(
+                      color: AppColors.textCream,
+                      fontSize: 18,
+                      letterSpacing: 0.04 * 18,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Pill rows fade in sequentially (200ms stagger inside the gold
-          // window). Mockup §4 PR multi.
-          if (data.pillRows.isNotEmpty || data.truncatedPillCount > 0)
-            _buildPills(goldPhase),
-          const Spacer(),
-          Opacity(
-            opacity: goldPhase.clamp(0.0, 1.0),
-            child: Text(
-              copyLine,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headline.copyWith(
-                color: AppColors.textCream,
-                fontSize: 16,
-                letterSpacing: 0.04 * 16,
+                  const SizedBox(height: 8),
+                  // PR weight × reps — heroGold via RewardAccent (mockup §4:
+                  // "B3 PR weight — Rajdhani 700 in heroGold").
+                  RewardAccent(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${_formatWeight(data.heroWeightKg)}kg × ${data.heroReps}',
+                        style: AppTextStyles.celebrationSize(
+                          34,
+                        ).copyWith(letterSpacing: 0.04 * 34),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            // Pill rows fade in sequentially (200ms stagger inside the gold
+            // window). Mockup §4 PR multi.
+            if (data.pillRows.isNotEmpty || data.truncatedPillCount > 0)
+              _buildPills(goldPhase),
+            const Spacer(),
+            Opacity(
+              opacity: goldPhase.clamp(0.0, 1.0),
+              child: Text(
+                copyLine,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.headline.copyWith(
+                  color: AppColors.textCream,
+                  fontSize: 16,
+                  letterSpacing: 0.04 * 16,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
