@@ -311,6 +311,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         ),
         if (showTapHint) const CinematicTapHint(),
         CinematicSkipButton(
+          label: l10n.cinematicSkipLabel,
           onSkip: () {
             _controller.stop();
             _stateController.skipToSummary();

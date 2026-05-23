@@ -16,7 +16,7 @@
 /// cut on this screen is the user's first sighting of the event. Treat
 /// scripted hold values as floors (parse-time guarantees), not ceilings.
 ///
-/// **2026-05-23 retune — first-exposure parse-time floors revisited
+/// **2026-05-23 retune (pass 1) — first-exposure parse-time floors revisited
 /// (UX-critic analysis, in-flight PR 30a UX pass).** Initial constants were
 /// specced against a second-exposure parse window (when the mid-workout
 /// flash layer still pre-cued every reward event); the Path A pivot killed
@@ -25,13 +25,18 @@
 /// too fast, almost no feeling of accomplishment." All cut hold durations
 /// were bumped 200-700ms across the board to honor first-exposure parse time.
 ///
-/// Knock-on effect on the max-combo total: the worst-case cinematic length
-/// rose from ~12s (mockup §5 State 10 original budget) to ~14-15s. The
-/// mockup §5 State 10 rarity rationale still holds — max-combo requires a
-/// PR + rank-up + level-up + class-change to co-occur, which the
-/// tier-state-machine intentionally gates behind class-progression events
-/// that only fire every few-dozen sessions. The longest cinematic remains
-/// rare-by-construction.
+/// **2026-05-23 retune (pass 2) — match mockup §5 State 10's 12s ceiling.**
+/// On-device verification of pass 1 (commit `2b26d60`) reported "timing
+/// still feels super fast" and — critically — that the user "couldn't even
+/// try to use the skip button" before cuts advanced. Pass 1 undershot the
+/// canonical mockup budget. Pass 2 bumps every hold to land the max-combo
+/// 5-cut total at ~12.2s (mockup §5 State 10 spec: "Total 12s — earned, not
+/// indulgent"). The 12s ceiling is reserved for the rarest co-occurrence
+/// (PR + rank-up + level-up + class-change in the same session); the
+/// baseline 2-cut path still totals ~4.5s, which doesn't feel indulgent.
+///
+/// Math check for pass 2 max-combo (5 cuts): B1(2500) + B2 cascade(2800) +
+/// B2 elevated(2200) + B3 PR(2500) + B3 title(2200) = 12 200 ms.
 ///
 /// **Why all-static (no enum-of-durations):** these are constants, not
 /// variants. An enum would force every consumer to pattern-match on a
@@ -45,29 +50,30 @@ class PostSessionTiming {
   // ─── Beat 1 (XP cut) ─────────────────────────────────────────────────
 
   /// Baseline B1 hold. Used by `RewardTier.baseline`. Mockup §2 Variant Baseline.
-  /// Retuned 1200ms → 1800ms (2026-05-23 UX-critic pass).
-  static const Duration b1HoldBaseline = Duration(milliseconds: 1800);
+  /// Retuned 1200ms → 1800ms (pass 1, 2026-05-23) → 2500ms (pass 2,
+  /// 2026-05-23) to match mockup §5 State 10's 12s max-combo ceiling.
+  static const Duration b1HoldBaseline = Duration(milliseconds: 2500);
 
   /// Day-zero B1 hold — extended over baseline to honor first-step gravity.
-  /// Mockup §2 Variant Day-Zero. Retuned 1300ms → 2000ms in proportion to
-  /// the baseline retune (2026-05-23 UX-critic pass).
-  static const Duration b1HoldDayZero = Duration(milliseconds: 2000);
+  /// Mockup §2 Variant Day-Zero. Retuned 1300ms → 2000ms (pass 1) → 2600ms
+  /// (pass 2) in proportion to the baseline retune.
+  static const Duration b1HoldDayZero = Duration(milliseconds: 2600);
 
   /// Threshold-anticipatory B1 hold (fires for PR-incoming OR rank-up-incoming).
   /// The copy ("NOVO LIMITE.") carries the tension. Mockup §2 Variant
   /// Threshold-anticipatory + §2 RewardTier.derive note (accepts
-  /// `hasPR || hasRankUp`). Retuned 1200ms → 1800ms (2026-05-23 UX-critic
-  /// pass) — moves in lockstep with baseline.
+  /// `hasPR || hasRankUp`). Retuned 1200ms → 1800ms (pass 1) → 2500ms
+  /// (pass 2) — moves in lockstep with baseline.
   static const Duration b1HoldThresholdAnticipatory = Duration(
-    milliseconds: 1800,
+    milliseconds: 2500,
   );
 
   /// Class-change anticipatory / max-combo / level-up B1 hold. Longer parse
   /// time for the level-up announcement that's folded into B1 copy.
   /// Mockup §2 Variant Max-combo / Class-change. Retuned 1500ms → 2000ms
-  /// (2026-05-23 UX-critic pass).
+  /// (pass 1) → 2700ms (pass 2).
   static const Duration b1HoldClassChangeAnticipatory = Duration(
-    milliseconds: 2000,
+    milliseconds: 2700,
   );
 
   /// Pre-roll dead-black hold for the class-change / max-combo / level-up
@@ -80,43 +86,43 @@ class PostSessionTiming {
   /// Title-anticipatory shares B1 timing with Threshold-anticipatory (the
   /// title's gold pre-tint is omitted — same parse window, different copy).
   /// Mockup §2 note below the variant grid. Retuned in lockstep with the
-  /// threshold-anticipatory token (2026-05-23 UX-critic pass).
-  static const Duration b1HoldTitleAnticipatory = Duration(milliseconds: 1800);
+  /// threshold-anticipatory token (pass 1 1800ms, pass 2 2500ms).
+  static const Duration b1HoldTitleAnticipatory = Duration(milliseconds: 2500);
 
   // ─── Beat 2 (body-part tally) ────────────────────────────────────────
 
   /// Single-BP B2 hold. Mockup §3 Variant A. Retuned 1000ms → 1400ms
-  /// (2026-05-23 UX-critic pass) — first-exposure parse floor for the body-
-  /// part tally cut.
-  static const Duration b2HoldSingle = Duration(milliseconds: 1400);
+  /// (pass 1) → 2000ms (pass 2) — first-exposure parse floor for the
+  /// body-part tally cut at the mockup-spec ceiling.
+  static const Duration b2HoldSingle = Duration(milliseconds: 2000);
 
   /// Sequential B2 dominant-cut hold. Mockup §3 Variant B. Retuned 1000ms →
-  /// 1400ms (2026-05-23 UX-critic pass) — moves in lockstep with the
+  /// 1400ms (pass 1) → 2000ms (pass 2) — moves in lockstep with the
   /// single-BP variant; both are first-exposure dominant reveals.
-  static const Duration b2HoldSequentialDominant = Duration(milliseconds: 1400);
+  static const Duration b2HoldSequentialDominant = Duration(milliseconds: 2000);
 
   /// Sequential B2 secondary-cut hold. Mockup §3 Variant B. Retuned 800ms →
-  /// 1100ms (2026-05-23 UX-critic pass) — secondary hold stays ~300ms
+  /// 1100ms (pass 1) → 1500ms (pass 2) — secondary hold stays ~500ms
   /// shorter than dominant so the rhythm reads as "main beat → echo."
   static const Duration b2HoldSequentialSecondary = Duration(
-    milliseconds: 1100,
+    milliseconds: 1500,
   );
 
-  /// Cascade B2 hold (3+ BPs). Locked at 2.0s regardless of N to keep the
-  /// cinematic tight. Mockup §3 Variant C. Unchanged in 2026-05-23 retune —
-  /// the cascade already earned its keep at 2000ms (it carries N rows of
-  /// stagger inside the same window).
-  static const Duration b2HoldCascade = Duration(milliseconds: 2000);
+  /// Cascade B2 hold (3+ BPs). Mockup §3 Variant C. Retuned 2000ms → 2800ms
+  /// (pass 2, 2026-05-23) — the cascade holds N rows of stagger inside the
+  /// same window, so the bump honors first-exposure parse time for the
+  /// composed reveal AND lifts the max-combo budget to the mockup spec.
+  static const Duration b2HoldCascade = Duration(milliseconds: 2800);
 
   /// Cascade row stagger — each additional BP fades in 140ms after the
   /// previous. Mockup §3 Variant C.
   static const Duration b2CascadeRowStagger = Duration(milliseconds: 140);
 
   /// Elevated B2 hold (rank-up fusion). Mockup §3 Variant D. Retuned 1100ms
-  /// → 1600ms (2026-05-23 UX-critic pass) — elevated holds the bar-fill
+  /// → 1600ms (pass 1) → 2200ms (pass 2) — elevated holds the bar-fill
   /// animation + rank slam in the same cut, so the floor grows with the
   /// composed reveal.
-  static const Duration b2HoldElevated = Duration(milliseconds: 1600);
+  static const Duration b2HoldElevated = Duration(milliseconds: 2200);
 
   /// Bar-fill animation duration inside an elevated B2. Bar runs to 100%
   /// over this window before the rank slam fires. Mockup §3 Variant D
@@ -135,37 +141,38 @@ class PostSessionTiming {
   static const Duration b3PrWhiteFlash = Duration(milliseconds: 33);
 
   /// PR gold-flood hold for the single-PR variant. Mockup §4 PR single.
-  /// Retuned 1500ms → 1800ms (2026-05-23 UX-critic pass) — PR is the
+  /// Retuned 1500ms → 1800ms (pass 1) → 2500ms (pass 2) — PR is the
   /// session's single most-celebratory event; the floor accommodates the
   /// white flash → eyebrow → hero → copy line parse chain at first
   /// exposure.
-  static const Duration b3HoldPr = Duration(milliseconds: 1800);
+  static const Duration b3HoldPr = Duration(milliseconds: 2500);
 
   /// PR gold-flood hold for the multi-PR variant. Mockup §4 PR multi.
   /// Distinct from [b3HoldPr] because the multi variant additionally
   /// staggers N PR pills into the gold-flood window (200ms each via
   /// [b3MultiPrPillStagger]); the hero + pills + copy chain needs more
-  /// parse headroom than the single-PR cut. Introduced 2026-05-23
-  /// (UX-critic pass). The screen layer branches on `cut.pillRows.isNotEmpty`
-  /// — same `isMulti` predicate that already drives the eyebrow + copy line
-  /// resolver, so the timing branch and the rendering branch agree by
-  /// construction.
-  static const Duration b3HoldPrMulti = Duration(milliseconds: 2200);
+  /// parse headroom than the single-PR cut. Introduced 2026-05-23 (pass 1).
+  /// Pass 2 lifts 2200ms → 3000ms — the multi variant carries the most
+  /// composed reveal in the cinematic. The screen layer branches on
+  /// `cut.pillRows.isNotEmpty` — same `isMulti` predicate that already
+  /// drives the eyebrow + copy line resolver, so the timing branch and the
+  /// rendering branch agree by construction.
+  static const Duration b3HoldPrMulti = Duration(milliseconds: 3000);
 
   /// Multi-PR pill stagger — each additional PR pill fades in 200ms after
   /// the prior one inside the gold-flood context. Mockup §4 PR multi.
   static const Duration b3MultiPrPillStagger = Duration(milliseconds: 200);
 
   /// Title-unlock hold. Quieter than PR — no white flash. Mockup §4 Title.
-  /// Retuned 1200ms → 1600ms (2026-05-23 UX-critic pass).
-  static const Duration b3HoldTitle = Duration(milliseconds: 1600);
+  /// Retuned 1200ms → 1600ms (pass 1) → 2200ms (pass 2).
+  static const Duration b3HoldTitle = Duration(milliseconds: 2200);
 
   /// Class-change hold. Longest single-cut budget in the cinematic — the
   /// rarest event earns the longest hold. Mockup §4 Class change + §5
-  /// State 9 script. Unchanged in 2026-05-23 retune — class-change already
-  /// holds at 1500ms and the State 9 script keeps its rarity-earned
-  /// gravity.
-  static const Duration b3HoldClassChange = Duration(milliseconds: 1500);
+  /// State 9 script. Retuned 1500ms → 2800ms (pass 2, 2026-05-23) — class
+  /// change is the rarest event in the cinematic, lifted to honor the
+  /// mockup's "rarity earns gravity" rule.
+  static const Duration b3HoldClassChange = Duration(milliseconds: 2800);
 
   // ─── Transitions ─────────────────────────────────────────────────────
 

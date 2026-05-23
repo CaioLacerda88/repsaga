@@ -2884,4 +2884,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get postSessionTitleEquipped => 'Equipado ✓';
+
+  @override
+  String get cinematicSkipLabel => 'PULAR';
 }

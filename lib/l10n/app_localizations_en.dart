@@ -2873,4 +2873,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get postSessionTitleEquipped => 'Equipped ✓';
+
+  @override
+  String get cinematicSkipLabel => 'SKIP';
 }

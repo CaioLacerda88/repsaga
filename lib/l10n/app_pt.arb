@@ -895,5 +895,6 @@
   "postSessionFirstAwakeningSuffix": "Desperto",
   "postSessionCascadeTruncationPill": "+{n} mais",
   "postSessionXpLabel": "XP",
-  "postSessionTitleEquipped": "Equipado ✓"
+  "postSessionTitleEquipped": "Equipado ✓",
+  "cinematicSkipLabel": "PULAR"
 }

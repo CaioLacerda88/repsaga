@@ -11,10 +11,14 @@ import '../../../../../core/theme/app_theme.dart';
 /// surfaces the same `skipToSummary()` route via an explicit tap target
 /// in the top-right corner.
 ///
-/// **Concept B grammar (mockup §0):** no Material ripple, no fill, no
-/// border, no tooltip. A ghost icon at low alpha — present enough to be
-/// discoverable, restrained enough to disappear into the cinematic
-/// chrome.
+/// **Visibility retune (UX pass 2, 2026-05-23).** Pass 1 shipped a ghost
+/// icon at low alpha (`AppColors.textDim`, 22dp, no chrome). On-device
+/// verification confirmed users never even noticed the button existed
+/// before the cut advanced. This pass redesigns to a hard-rectangle
+/// abyss-panel pill carrying both a localized label ("PULAR" / "SKIP") and
+/// the skip-next glyph in `AppColors.textCream` — the same chrome grammar
+/// the cascade-row panels adopted in Bug G. Still no Material ripple, no
+/// border, no border-radius (Concept B grammar — mockup §0).
 ///
 /// **Long-press preserved.** The existing `_handleLongPress` route on
 /// [PostSessionScreen] is intentionally not removed — some users may have
@@ -26,13 +30,28 @@ import '../../../../../core/theme/app_theme.dart';
 /// unmounts (the summary has its own CONTINUAR CTA, which is the
 /// canonical forward action there).
 ///
+/// **L10n parameterization (memory: feedback_widget_l10n_parameterization).**
+/// The button takes the localized label as a constructor argument — the
+/// screen layer resolves `AppLocalizations.of(context).cinematicSkipLabel`
+/// and threads it down. Keeps this widget unit-testable without an l10n
+/// harness; the ARB-key decision lives at the screen layer.
+///
 /// **Accessibility.** Wrapped in a `Semantics` node with `button: true`,
 /// `label: 'Skip cinematic'`, and `identifier: 'post-session-skip-btn'`
 /// so screen-readers + Playwright E2E selectors have a stable handle.
 class CinematicSkipButton extends StatelessWidget {
-  const CinematicSkipButton({super.key, required this.onSkip});
+  const CinematicSkipButton({
+    super.key,
+    required this.onSkip,
+    required this.label,
+  });
 
   final VoidCallback onSkip;
+
+  /// Localized button label — e.g. "PULAR" (pt) or "SKIP" (en). Already
+  /// uppercased by the ARB key (matches the `AppTextStyles.label`
+  /// letter-spaced eyebrow casing convention).
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -42,11 +61,12 @@ class CinematicSkipButton extends StatelessWidget {
       child: SafeArea(
         // Inset only by the top + right system region — the cut canvas
         // itself stays edge-to-edge above (Stack composition in the host
-        // screen).
+        // screen). Keeps the status bar / camera notch from overlapping
+        // the pill on tall-aspect Android devices.
         bottom: false,
         left: false,
         child: Padding(
-          padding: const EdgeInsets.only(top: 8, right: 12),
+          padding: const EdgeInsets.only(top: 8, right: 8),
           child: Semantics(
             container: true,
             explicitChildNodes: true,
@@ -56,15 +76,47 @@ class CinematicSkipButton extends StatelessWidget {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onSkip,
-              child: const Padding(
-                // Pad the tap target to honor Material's 48dp minimum
-                // hit-region without rendering any chrome around the
-                // icon itself (Concept B: no ripple, no fill).
-                padding: EdgeInsets.all(12),
-                child: Icon(
-                  Icons.skip_next,
-                  size: 22,
-                  color: AppColors.textDim,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  // Hard rectangle (no border-radius) — Concept B grammar.
+                  // Abyss-tinted panel at 75% alpha mirrors the cascade-row
+                  // chrome adopted in Bug G; reads as part of the
+                  // cinematic frame, not as a Material widget pasted on
+                  // top.
+                  color: Color(0xBF0D0319), // AppColors.abyss @ 75% alpha.
+                ),
+                child: Padding(
+                  // 14h / 12v padding lifts the tap target to ≥40dp tall.
+                  // Row height = max(label 11sp × 1.2 line ≈ 13.2dp,
+                  // icon 16dp) = 16dp → total = 16 + 2×12 = 40dp.
+                  // Memory: feedback_tap_target_measurement — Flutter's
+                  // MaterialTapTargetSize.padded default doesn't apply to
+                  // raw GestureDetectors, so we size up explicitly.
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: AppTextStyles.label.copyWith(
+                          // Tighter letter-spacing than the token default
+                          // so the 4-char Portuguese label ("PULAR")
+                          // doesn't read as letter-mosaic at 11sp.
+                          letterSpacing: 0.16 * 11,
+                          color: AppColors.textCream,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.skip_next,
+                        size: 16,
+                        color: AppColors.textCream,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

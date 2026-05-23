@@ -2282,5 +2282,7 @@
   "postSessionXpLabel": "XP",
   "@postSessionXpLabel": { "description": "Phase 30 PR 30a — Sub-label below the XP slam numeral in Beat 1 / Beat 2." },
   "postSessionTitleEquipped": "Equipped ✓",
-  "@postSessionTitleEquipped": { "description": "Phase 30 PR 30a — Summary panel title-equip success state. Mockup §5 State 8 + WIP.md PR 30a Open question #6." }
+  "@postSessionTitleEquipped": { "description": "Phase 30 PR 30a — Summary panel title-equip success state. Mockup §5 State 8 + WIP.md PR 30a Open question #6." },
+  "cinematicSkipLabel": "SKIP",
+  "@cinematicSkipLabel": { "description": "Phase 30 PR 30a UX pass 2 (2026-05-23) — Label inside the top-right skip pill that jumps the post-session cinematic to the summary panel. Pre-uppercased to match the letter-spaced eyebrow casing convention (AppTextStyles.label)." }
 }
