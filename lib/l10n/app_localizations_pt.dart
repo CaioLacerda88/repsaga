@@ -2772,6 +2772,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get b1CopyClassChangeOnly => 'NOVO LIMITE.';
+
+  @override
   String get b3PrEyebrowSingle => '!! Recorde';
 
   @override

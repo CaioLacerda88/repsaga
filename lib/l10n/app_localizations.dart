@@ -4752,6 +4752,12 @@ abstract class AppLocalizations {
   /// **'LEVEL {n}.\nTHE SAGA CONTINUES.'**
   String b1CopyMaxLevelUp(int n);
 
+  /// Beat 1 copy variant: class-change-only state (State 9). Distinct ARB key from the PR-anticipatory variant — same string today, but the semantic distinction lets editorial copy diverge without code churn. Mockup §5 State 9 bottom copy line.
+  ///
+  /// In en, this message translates to:
+  /// **'NEW LIMIT.'**
+  String get b1CopyClassChangeOnly;
+
   /// Phase 30 PR 30a — Beat 3 PR eyebrow for a single-PR session. Mockup §4 PR single.
   ///
   /// In en, this message translates to:

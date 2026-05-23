@@ -2170,6 +2170,8 @@
     "description": "Phase 30 PR 30a — Beat 1 copy variant: max-combo / class-change / level-up (folds level into B1 copy). Mockup §2 Variant Max-combo + §5 State 7.",
     "placeholders": { "n": { "type": "int" } }
   },
+  "b1CopyClassChangeOnly": "NEW LIMIT.",
+  "@b1CopyClassChangeOnly": { "description": "Beat 1 copy variant: class-change-only state (State 9). Distinct ARB key from the PR-anticipatory variant — same string today, but the semantic distinction lets editorial copy diverge without code churn. Mockup §5 State 9 bottom copy line." },
 
   "b3PrEyebrowSingle": "!! Record",
   "@b3PrEyebrowSingle": { "description": "Phase 30 PR 30a — Beat 3 PR eyebrow for a single-PR session. Mockup §4 PR single." },

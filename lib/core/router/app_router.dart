@@ -37,7 +37,7 @@ import '../../features/personal_records/domain/pr_detection_service.dart';
 import '../../features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import '../../features/personal_records/ui/pr_celebration_screen.dart';
 import '../../features/personal_records/ui/pr_list_screen.dart';
-import '../../features/workouts/providers/post_session_controller.dart';
+import '../../features/workouts/ui/post_session/post_session_controller.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
 import '../../features/workouts/ui/home_screen.dart';
 import '../../features/workouts/ui/post_session/post_session_screen.dart';

@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../l10n/app_localizations.dart';
-import '../../personal_records/domain/pr_detection_service.dart';
-import '../../rpg/domain/celebration_queue.dart';
-import '../../rpg/domain/rank_curve.dart';
-import '../../rpg/models/body_part.dart';
-import '../../rpg/models/celebration_event.dart';
-import '../../rpg/providers/rpg_progress_provider.dart';
-import '../../rpg/ui/widgets/body_part_localization.dart';
-import '../domain/post_session_choreographer.dart';
-import '../domain/reward_tier.dart';
-import '../providers/workout_history_providers.dart';
-import '../ui/post_session/post_session_state.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../personal_records/domain/pr_detection_service.dart';
+import '../../../rpg/domain/celebration_queue.dart';
+import '../../../rpg/domain/rank_curve.dart';
+import '../../../rpg/models/body_part.dart';
+import '../../../rpg/models/celebration_event.dart';
+import '../../../rpg/providers/rpg_progress_provider.dart';
+import '../../../rpg/ui/widgets/body_part_localization.dart';
+import '../../domain/post_session_choreographer.dart';
+import '../../domain/reward_tier.dart';
+import '../../providers/workout_history_providers.dart';
+import 'post_session_state.dart';
 
 /// Params for [PostSessionController].
 ///

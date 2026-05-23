@@ -163,7 +163,7 @@ Guard:
 **Acceptance criteria**
 
 1. `RewardTier.derive` is a pure function; given the 4 canonical fixture inputs (dayZero / baseline / prAnticipatory / classChangeAnticipatory) returns the expected enum. Hold duration mapping locked: dayZero=1300ms, baseline=1200ms, prAnticipatory=1200ms, classChangeAnticipatory=1500ms (with 120ms pre-roll).
-2. `PostSessionChoreographer.build` produces the correct cut count for every State 1-10 fixture in `test/fixtures/post_session_states.json`. State counts: S1=2 cuts, S2=2, S3=3, S4=3, S5=3, S6=3, S7=2, S8=3, S9=2 (B2 skipped), S10=4. Total cuts + summary panel.
+2. `PostSessionChoreographer.build` produces the correct cut count for every State 1-10 fixture in `test/fixtures/post_session_states.json`. State counts: S1=2 cuts, S2=2, S3=3, S4=3, S5=2 cuts (B1 + B2 elevated rank-up — mockup §5 State 5), S6=3, S7=2, S8=3, S9=2 (B2 skipped), S10=4. Total cuts + summary panel.
 3. Empty-session guard (State 11): zero sets → `EmptySessionGuardSheet` modal shows; Descartar → `/home`; Continuar treinando → returns to active workout. Post-session route is **never pushed** for empty sessions. Verified by widget test on `finish_workout_coordinator.dart` + an E2E test that completes a workout with zero sets.
 4. B1 hold duration is 1200ms ± 50ms for baseline tier verified by `pumpAndSettle` timing test (`tester.binding.clock` introspection). dayZero=1300, classChange=1500.
 5. Cascade variant truncates at 4 rows + "+N mais" pill when ≥6 BPs trained (mockup §3 Variant C).

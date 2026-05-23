@@ -8,7 +8,7 @@ import '../../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../models/active_workout_state.dart';
-import '../../providers/post_session_controller.dart';
+import '../post_session/post_session_controller.dart';
 import '../../providers/workout_history_providers.dart';
 import '../../providers/workout_providers.dart';
 import '../widgets/empty_session_guard_sheet.dart';
@@ -354,6 +354,13 @@ class FinishWorkoutCoordinator {
           exerciseNames: exerciseNames,
           totalXpEarned: (totalXpDelta ?? 0).round(),
           bpXpDeltas: bpDeltas,
+          // TODO(30b): populate from the pre-finish snapshot so Beat 2 bars
+          // animate from the true pre-session rank progress instead of 0%.
+          // The empty default makes the Beat 2 tally cut visually consistent
+          // today (every bar starts empty + fills to the post-finish value)
+          // but loses the "watch your prior progress get added to" beat the
+          // mockup §3 Variant A storyboard intends. See WIP.md PR 30a
+          // "Known limitations carried forward" + PR 30b plan.
           bpProgressFractionPre: _emptyBpFractions(),
           bpFirstAwakening: celebration.queue
               .whereType<FirstAwakeningEvent>()

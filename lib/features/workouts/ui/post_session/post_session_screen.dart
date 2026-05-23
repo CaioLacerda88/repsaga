@@ -9,10 +9,11 @@ import '../../../rpg/models/character_class.dart';
 import '../../../rpg/models/title.dart' as rpg;
 import '../../../rpg/providers/earned_titles_provider.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
+import '../../../rpg/ui/widgets/title_localization.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/post_session_timing.dart';
 import '../../domain/reward_tier.dart';
-import '../../providers/post_session_controller.dart';
+import 'post_session_controller.dart';
 import 'cuts/b1_xp_cut.dart';
 import 'cuts/b2_bp_tally_cut.dart';
 import 'cuts/b2_cascade_cut.dart';
@@ -64,6 +65,12 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// Duration for the current cut. Updated whenever the cut index changes.
   Duration _currentCutDuration = const Duration(milliseconds: 1200);
 
+  /// True after [dispose] runs. Guards the abyss-gap [Future.delayed]
+  /// callback against firing after teardown — `mounted` alone is
+  /// insufficient when synthetic test clocks resolve the timer before the
+  /// State's `BuildContext` notices unmounting.
+  bool _disposed = false;
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +91,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   @override
   void dispose() {
+    _disposed = true;
     _controller.removeStatusListener(_onAnimationStatus);
     _controller.dispose();
     _stateController.dispose();
@@ -98,7 +106,13 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       // current cut's last frame paints before the swap. Future.microtask
       // would skip the abyss gap; we want a deliberate blackout.
       Future.delayed(PostSessionTiming.cutAbyssGap, () {
-        if (!mounted) return;
+        // Defensive double-guard: `_disposed` catches the synthetic-clock
+        // race where the timer resolves after [dispose] but before the
+        // framework marks the State as unmounted; `mounted` catches the
+        // common path. Either alone leaks a use-after-dispose on the
+        // controller fields in tests using `tester.runAsync` + a fake
+        // ticker.
+        if (_disposed || !mounted) return;
         _stateController.advance();
         _playCurrentCut();
       });
@@ -120,26 +134,23 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   }
 
   Duration _durationForCut(PostSessionCut cut, RewardTier tier) {
-    if (cut is B1XpCut) {
+    // Exhaustive switch on the sealed [PostSessionCut] union — a future
+    // Beat 3 variant added to the union will produce a compile error here
+    // (non_exhaustive_switch_expression), not a silent fallback duration.
+    return switch (cut) {
       // Include the pre-roll inside the same controller duration so the
       // copy-line fade pacing scales correctly. Hold = pre-roll + hold.
-      return tier.b1PreRoll + tier.b1Hold;
-    }
-    if (cut is B2SingleBpCut) return PostSessionTiming.b2HoldSingle;
-    if (cut is B2SequentialDominantCut) {
-      return PostSessionTiming.b2HoldSequentialDominant;
-    }
-    if (cut is B2SequentialSecondaryCut) {
-      return PostSessionTiming.b2HoldSequentialSecondary;
-    }
-    if (cut is B2CascadeCut) return PostSessionTiming.b2HoldCascade;
-    if (cut is B2ElevatedRankUpCut) return PostSessionTiming.b2HoldElevated;
-    if (cut is B3PrCut) {
-      return PostSessionTiming.b3PrWhiteFlash + PostSessionTiming.b3HoldPr;
-    }
-    if (cut is B3TitleCut) return PostSessionTiming.b3HoldTitle;
-    if (cut is B3ClassChangeCut) return PostSessionTiming.b3HoldClassChange;
-    return const Duration(milliseconds: 1200);
+      B1XpCut() => tier.b1PreRoll + tier.b1Hold,
+      B2SingleBpCut() => PostSessionTiming.b2HoldSingle,
+      B2SequentialDominantCut() => PostSessionTiming.b2HoldSequentialDominant,
+      B2SequentialSecondaryCut() => PostSessionTiming.b2HoldSequentialSecondary,
+      B2CascadeCut() => PostSessionTiming.b2HoldCascade,
+      B2ElevatedRankUpCut() => PostSessionTiming.b2HoldElevated,
+      B3PrCut() =>
+        PostSessionTiming.b3PrWhiteFlash + PostSessionTiming.b3HoldPr,
+      B3TitleCut() => PostSessionTiming.b3HoldTitle,
+      B3ClassChangeCut() => PostSessionTiming.b3HoldClassChange,
+    };
   }
 
   void _handleTap() {
@@ -199,17 +210,19 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     PostSessionState state,
     AppLocalizations l10n,
   ) {
-    if (cut is B1XpCut) {
-      return B1XpCutWidget(
+    // Exhaustive switch on the sealed [PostSessionCut] union — no default
+    // arm. A future Beat variant added to the union surfaces a compile
+    // error here (non_exhaustive_switch_expression) instead of silently
+    // rendering an empty SizedBox.
+    return switch (cut) {
+      B1XpCut() => B1XpCutWidget(
         animation: _controller.view,
         tier: cut.tier,
         totalXp: cut.totalXp,
         copyLine: _b1CopyFor(cut, l10n),
         xpLabel: l10n.postSessionXpLabel,
-      );
-    }
-    if (cut is B2SingleBpCut) {
-      return B2BpTallyCut(
+      ),
+      B2SingleBpCut() => B2BpTallyCut(
         animation: _controller.view,
         bodyPart: cut.bodyPart,
         bodyPartLabel:
@@ -222,10 +235,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         firstAwakeningSuffix: cut.isFirstAwakening
             ? ' · ${l10n.postSessionFirstAwakeningSuffix}'
             : null,
-      );
-    }
-    if (cut is B2SequentialDominantCut) {
-      return B2BpTallyCut(
+      ),
+      B2SequentialDominantCut() => B2BpTallyCut(
         animation: _controller.view,
         bodyPart: cut.bodyPart,
         bodyPartLabel:
@@ -235,10 +246,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         progressFractionAfter: cut.progressFractionAfter,
         rankAfter: 0,
         isFirstAwakening: false,
-      );
-    }
-    if (cut is B2SequentialSecondaryCut) {
-      return B2BpTallyCut(
+      ),
+      B2SequentialSecondaryCut() => B2BpTallyCut(
         animation: _controller.view,
         bodyPart: cut.bodyPart,
         bodyPartLabel:
@@ -248,95 +257,112 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         progressFractionAfter: cut.progressFractionAfter,
         rankAfter: 0,
         isFirstAwakening: false,
-      );
-    }
-    if (cut is B2CascadeCut) {
-      final truncated = cut.truncatedCount > 0
-          ? l10n.postSessionCascadeTruncationPill(cut.truncatedCount.toString())
-          : '';
-      return B2CascadeCutWidget(
-        animation: _controller.view,
-        cut: cut,
-        bodyPartLabels: state.bodyPartLabels,
-        xpLabel: l10n.postSessionXpLabel,
-        truncatedPillLabel: truncated,
-      );
-    }
-    if (cut is B2ElevatedRankUpCut) {
-      final bpLabel =
-          state.bodyPartLabels[cut.bodyPart] ?? cut.bodyPart.dbValue;
-      return B2ElevatedCut(
-        animation: _controller.view,
-        bodyPart: cut.bodyPart,
-        bodyPartLabel: bpLabel,
-        newRank: cut.newRank,
-        rankCopy: l10n.b2RankCopy(
-          bpLabel.toUpperCase(),
-          cut.newRank.toString(),
+      ),
+      B2CascadeCut() => _buildCascadeCut(cut, state, l10n),
+      B2ElevatedRankUpCut() => _buildElevatedCut(cut, state, l10n),
+      B3PrCut() => _buildPrCut(cut, l10n),
+      B3TitleCut() => _buildTitleCut(cut, state, l10n),
+      B3ClassChangeCut() => _buildClassChangeCut(cut, l10n),
+    };
+  }
+
+  Widget _buildCascadeCut(
+    B2CascadeCut cut,
+    PostSessionState state,
+    AppLocalizations l10n,
+  ) {
+    final truncated = cut.truncatedCount > 0
+        ? l10n.postSessionCascadeTruncationPill(cut.truncatedCount.toString())
+        : '';
+    return B2CascadeCutWidget(
+      animation: _controller.view,
+      cut: cut,
+      bodyPartLabels: state.bodyPartLabels,
+      xpLabel: l10n.postSessionXpLabel,
+      truncatedPillLabel: truncated,
+    );
+  }
+
+  Widget _buildElevatedCut(
+    B2ElevatedRankUpCut cut,
+    PostSessionState state,
+    AppLocalizations l10n,
+  ) {
+    final bpLabel = state.bodyPartLabels[cut.bodyPart] ?? cut.bodyPart.dbValue;
+    return B2ElevatedCut(
+      animation: _controller.view,
+      bodyPart: cut.bodyPart,
+      bodyPartLabel: bpLabel,
+      newRank: cut.newRank,
+      rankCopy: l10n.b2RankCopy(bpLabel.toUpperCase(), cut.newRank.toString()),
+    );
+  }
+
+  Widget _buildPrCut(B3PrCut cut, AppLocalizations l10n) {
+    final isMulti = cut.pillRows.isNotEmpty;
+    final eyebrow = isMulti
+        ? l10n.b3PrEyebrowMulti(cut.pillRows.length + 1)
+        : l10n.b3PrEyebrowSingle;
+    final copy = isMulti ? l10n.b3PrCopyMulti : l10n.b3PrCopySingle;
+    final pillLabels = [
+      for (final pr in cut.pillRows)
+        l10n.b3PrPillTemplate(
+          pr.exerciseName,
+          _formatWeight(pr.weightKg),
+          pr.reps,
         ),
-      );
-    }
-    if (cut is B3PrCut) {
-      final isMulti = cut.pillRows.isNotEmpty;
-      final eyebrow = isMulti
-          ? l10n.b3PrEyebrowMulti(cut.pillRows.length + 1)
-          : l10n.b3PrEyebrowSingle;
-      final copy = isMulti ? l10n.b3PrCopyMulti : l10n.b3PrCopySingle;
-      final pillLabels = [
-        for (final pr in cut.pillRows)
-          l10n.b3PrPillTemplate(
-            pr.exerciseName,
-            _formatWeight(pr.weightKg),
-            pr.reps,
-          ),
-      ];
-      final truncated = cut.truncatedPillCount > 0
-          ? l10n.postSessionCascadeTruncationPill(
-              cut.truncatedPillCount.toString(),
-            )
-          : '';
-      return B3PrCutWidget(
-        animation: _controller.view,
-        data: B3PrCutData.fromCut(cut),
-        eyebrow: eyebrow,
-        copyLine: copy,
-        pillLabels: pillLabels,
-        truncatedPillLabel: truncated,
-      );
-    }
-    if (cut is B3TitleCut) {
-      final eyebrow = l10n.b3TitleEyebrow;
-      // Look up the title name. Defensive: if the catalog isn't ready yet,
-      // fall back to the slug.
-      final catalog =
-          ref.read(titleCatalogProvider).value ?? const <rpg.Title>[];
-      final titleName = _titleDisplayName(catalog, cut.titleSlug, l10n);
-      final sub = _titleSubLabel(catalog, cut.titleSlug, l10n, state);
-      final bp = _titleBodyPart(catalog, cut.titleSlug);
-      return B3TitleCutWidget(
-        animation: _controller.view,
-        variant: cut.variant,
-        titleName: titleName,
-        subLabel: sub,
-        eyebrowLabel: eyebrow,
-        bodyPart: bp,
-      );
-    }
-    if (cut is B3ClassChangeCut) {
-      final cls = CharacterClass.values.firstWhere(
-        (c) => c.slug == cut.toClassSlug,
-        orElse: () => CharacterClass.initiate,
-      );
-      final copy = localizedClassCopy(cls, l10n);
-      return B3ClassChangeCutWidget(
-        animation: _controller.view,
-        className: copy.name.toUpperCase(),
-        eyebrowLabel: l10n.b3ClassEyebrow,
-        subLabel: l10n.b3ClassSubline,
-        flavorLine: copy.tagline,
-      );
-    }
-    return const SizedBox.shrink();
+    ];
+    final truncated = cut.truncatedPillCount > 0
+        ? l10n.postSessionCascadeTruncationPill(
+            cut.truncatedPillCount.toString(),
+          )
+        : '';
+    return B3PrCutWidget(
+      animation: _controller.view,
+      data: B3PrCutData.fromCut(cut),
+      eyebrow: eyebrow,
+      copyLine: copy,
+      pillLabels: pillLabels,
+      truncatedPillLabel: truncated,
+    );
+  }
+
+  Widget _buildTitleCut(
+    B3TitleCut cut,
+    PostSessionState state,
+    AppLocalizations l10n,
+  ) {
+    final eyebrow = l10n.b3TitleEyebrow;
+    // Defensive catalog read: if the title catalog provider is mid-load,
+    // [localizedTitleCopy] falls back to the slug — never the steady-state
+    // path (cluster: slug-rendered-as-display-name).
+    final catalog = ref.read(titleCatalogProvider).value ?? const <rpg.Title>[];
+    final titleName = _titleDisplayName(catalog, cut.titleSlug, l10n);
+    final sub = _titleSubLabel(catalog, cut.titleSlug, l10n, state);
+    final bp = _titleBodyPart(catalog, cut.titleSlug);
+    return B3TitleCutWidget(
+      animation: _controller.view,
+      variant: cut.variant,
+      titleName: titleName,
+      subLabel: sub,
+      eyebrowLabel: eyebrow,
+      bodyPart: bp,
+    );
+  }
+
+  Widget _buildClassChangeCut(B3ClassChangeCut cut, AppLocalizations l10n) {
+    final cls = CharacterClass.values.firstWhere(
+      (c) => c.slug == cut.toClassSlug,
+      orElse: () => CharacterClass.initiate,
+    );
+    final copy = localizedClassCopy(cls, l10n);
+    return B3ClassChangeCutWidget(
+      animation: _controller.view,
+      className: copy.name.toUpperCase(),
+      eyebrowLabel: l10n.b3ClassEyebrow,
+      subLabel: l10n.b3ClassSubline,
+      flavorLine: copy.tagline,
+    );
   }
 
   Widget _buildSummary(PostSessionState state, AppLocalizations l10n) {
@@ -470,9 +496,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       case RewardTier.classChangeAnticipatory:
         final level = cut.newCharacterLevel;
         if (level != null) {
+          // Max-combo / level-up folds the level into the B1 copy via the
+          // Max variant (mockup §5 State 7/10).
           return l10n.b1CopyMaxLevelUp(level);
         }
-        return l10n.b1CopyPrAnticipatory;
+        // State 9 (class-change-only): the bottom copy line is its OWN
+        // ARB key, not a reuse of the PR-anticipatory string. The text
+        // happens to be the same today ("NEW LIMIT." / "NOVO LIMITE." per
+        // mockup §5 State 9), but routing through a dedicated key keeps
+        // future editorial divergence cost-free and removes the semantic
+        // mis-route the State 9 fallback otherwise telegraphs.
+        return l10n.b1CopyClassChangeOnly;
     }
   }
 
@@ -481,14 +515,15 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     String slug,
     AppLocalizations l10n,
   ) {
-    // Title display name is looked up against AppLocalizations via a key
-    // pattern `title_{slug}_name`. Since AppLocalizations doesn't expose
-    // runtime key lookup, the screen-layer fallback returns the slug;
-    // the catalog of all titles is small enough that a future refactor
-    // can promote this to a strongly-typed resolver. For 30a, that's
-    // acceptable — the title cut's hue + eyebrow carry the cinematic
-    // weight; the exact title name appears in the summary EQUIP row.
-    return slug;
+    // Resolve the localized display name via the project-wide title slug →
+    // ARB-key resolver (mirrors how the Titles screen renders names — see
+    // `lib/features/rpg/ui/widgets/title_localization.dart`). The catalog
+    // parameter is preserved so the call site can stay stable if the
+    // resolver future grows to take a richer key. Falls back to the slug
+    // only when the catalog is mid-load AND the slug isn't yet in the
+    // resolver — never the steady-state path (cluster:
+    // slug-rendered-as-display-name).
+    return localizedTitleCopy(slug, l10n)?.name ?? slug;
   }
 
   String _titleSubLabel(

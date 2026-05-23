@@ -8,8 +8,7 @@ import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 
 /// Pins the post-session reward-tier classifier against the four canonical
 /// fixtures from mockup-v2 §2 (Day-zero, Baseline, Threshold-anticipatory,
-/// Class-change-anticipatory) and the hold-duration mapping locked in WIP.md
-/// PR 30a scope.
+/// Class-change-anticipatory) and the steady-state hold-duration mapping.
 ///
 /// Steady-state behavior — no phase numbering in test labels per
 /// `feedback_phase_agnostic_test_names`.
@@ -162,7 +161,7 @@ void main() {
     );
   });
 
-  group('RewardTier hold-duration mapping (locked per WIP.md PR 30a)', () {
+  group('RewardTier — b1Hold duration mapping', () {
     test('dayZero holds for 1300ms', () {
       expect(RewardTier.dayZero.b1Hold, PostSessionTiming.b1HoldDayZero);
       expect(RewardTier.dayZero.b1Hold.inMilliseconds, 1300);

@@ -2761,6 +2761,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get b1CopyClassChangeOnly => 'NEW LIMIT.';
+
+  @override
   String get b3PrEyebrowSingle => '!! Record';
 
   @override

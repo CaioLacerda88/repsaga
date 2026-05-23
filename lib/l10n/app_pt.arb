@@ -859,6 +859,7 @@
   "b1CopyPrAnticipatory": "NOVO LIMITE.",
   "b1CopyTitleAnticipatory": "CONQUISTA DESPERTADA.",
   "b1CopyMaxLevelUp": "NÍVEL {n}.\nA SAGA CONTINUA.",
+  "b1CopyClassChangeOnly": "NOVO LIMITE.",
 
   "b3PrEyebrowSingle": "!! Recorde",
   "b3PrEyebrowMulti": "!! {n} Recordes",
