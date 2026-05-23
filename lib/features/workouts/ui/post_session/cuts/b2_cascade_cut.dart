@@ -153,25 +153,48 @@ class B2CascadeCutWidget extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 3,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        rowLabel,
-                                        style: AppTextStyles.label.copyWith(
+                                  // Cluster: spec-caption-vs-implementation-drift
+                                  // — mockup §3 specified the cascade-row
+                                  // chrome (colored bar + panel BG) but the
+                                  // original implementation rendered bare
+                                  // text. User on-device verification flagged
+                                  // the visual gap.
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3,
+                                      horizontal: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.abyss.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                      border: Border(
+                                        left: BorderSide(
                                           color: rowHue,
-                                          fontSize: 12,
+                                          width: 2,
                                         ),
                                       ),
-                                      const Spacer(),
-                                      Text(
-                                        '+${row.xpEarned}',
-                                        style: AppTextStyles.numericSmall
-                                            .copyWith(
-                                              color: AppColors.textCream,
-                                              fontSize: 13,
-                                            ),
-                                      ),
-                                    ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          rowLabel,
+                                          style: AppTextStyles.label.copyWith(
+                                            color: rowHue,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '+${row.xpEarned}',
+                                          style: AppTextStyles.numericSmall
+                                              .copyWith(
+                                                color: AppColors.textCream,
+                                                fontSize: 13,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
