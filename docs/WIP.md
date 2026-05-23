@@ -12,6 +12,52 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+## PR 30a · Visual verification gate · summary panel SafeArea + Concept B fidelity (2026-05-23)
+
+> Visual verification gate (on-device Galaxy S25 Ultra, HEAD `271c20d`) surfaced two bugs in PR #259's post-session summary panel. Cinematic (B1/B2/B3 cuts) renders correctly per user; only the static summary panel needs the fix. Mockup §5 final summary frames are the canonical visual reference.
+
+**Branch:** `feature/30a-post-session-screen` (existing).
+
+### Bug 1 — SafeArea / system UI overlap
+
+- [x] **Root cause:** Re-investigated. The screen DOES use `Scaffold(body: ...)` (the brief's premise was wrong). Per Flutter Scaffold internals (`scaffold.dart:3034`), `removeBottomPadding` is `false` when there's no `bottomNavigationBar` — so `MediaQuery.padding` reaches the inner `SafeArea` correctly on standard Android. The Galaxy S25 Ultra failure is the **Samsung floating-pill gesture-nav** edge case: One UI 6+ devices render a translucent pill that visually overlaps content while reporting `MediaQuery.padding.bottom ≈ 0` because the system bar is "transparent". Same mechanism for the top — Samsung's "high-contrast" status-bar mode can shrink the reported inset below the actual visible bar height.
+- [x] **Fix:** `SafeArea(minimum: EdgeInsets.only(top: 12, bottom: 16), child: ...)` — guarantees a padding floor for the cases where the OS under-reports its own system region. Standard Android devices still honor the real (larger) inset; only the under-reporters get bumped up to the floor. No new pattern introduced (this is the canonical `SafeArea.minimum` API documented for exactly this case).
+
+### Bug 2 — Concept B visual fidelity rebuild
+
+Reconciled the brief against the mockup §5 canonical frames. The original brief over-stated several deltas — the mockup actually keeps the saga number understated (`t-label` Barlow Condensed 11sp tracked, not a saga slam), and many existing styling tokens already aligned. Actual rebuild:
+
+- [x] **A. Saga header** — already correct register (`AppTextStyles.label.copyWith(color: textDim)`). Dropped the explicit `fontSize: 12` override — defaulting to `label`'s native 11sp matches the mockup `t-label` register exactly.
+- [x] **B. Stats block** — already correct (`numeric.copyWith(fontSize: 17)` for duration/sets, `bodySmall` for tonnage). The mockup spec confirms vertically-stacked, not 3-column — the brief's "3-column" framing was incorrect against the §5 frame.
+- [x] **C. Next-step hook** — added `nextStepEyebrowColor` prop. Screen now derives the per-state color (BP hue for NextRankHook, hotViolet for NextLevelHook, heroGold for PrDetailHook per mockup §5 State 1/2/5/7/8 palette).
+- [x] **D. Reward roll-up rows** — preserved `TitleEquipRow` / `RankUpOverflowRow` (already match mockup §5 State 6/8).
+- [x] **E. Share CTA** — rewrote `ShareCtaButton` to render a `PostSessionCinematicButton` (Concept B style) with leading `Icons.camera_alt_outlined`. ARB string stripped of the `📷` emoji.
+- [x] **F. CONTINUE button** — rewrote in panel via the same `PostSessionCinematicButton`, primaryViolet background, trailing `Icons.arrow_forward_rounded`. ARB string stripped of `▶`.
+- [x] **G. Middle wasteland** — preserved `Spacer()` because the mockup §5 also leaves the middle empty (the CONTINUE rail sits at the bottom edge of the panel above the SafeArea floor). Reduced outer padding `(20, 24, 20, 20)` → `(20, 12, 20, 8)` to tighten the rail.
+- [x] **H. Dividers** — kept `Divider(color: AppColors.hair, height: 1)` — matches mockup.
+
+### Test coverage
+
+- [x] Updated `test/unit/features/workouts/ui/post_session/summary/post_session_summary_panel_test.dart` — label assertions now match the uppercased cinematic-button output; added `find.byIcon(Icons.arrow_forward_rounded)` + `find.byIcon(Icons.camera_alt_outlined)` contract pins.
+- [x] Added `test/widget/features/workouts/ui/post_session/summary/post_session_summary_panel_golden_test.dart` — 4 goldens at 360dp covering S2 / S5 / S8 / S10. Tagged `@Tags(['golden'])` so they're EXCLUDED from `make test` / CI (host-platform text-shaping divergence; run locally via `make test-golden`).
+- [x] Updated `test/flutter_test_config.dart` — registers Barlow + Barlow Condensed TTFs alongside Rajdhani + Inter so widget tests render with the correct family metrics (closes the Phase 28b font-loader-test gap).
+- [x] Added `dart_test.yaml` `golden` tag declaration + `Makefile` `test-golden` target.
+
+### Verification gate
+
+- [x] `dart format .`
+- [x] `dart analyze --fatal-infos` — clean (0 issues).
+- [x] `flutter test --exclude-tags integration --exclude-tags golden test/unit/ test/widget/` — 3063 / 3063 passing (10 integration failures are pre-existing — broken Supabase parity, unrelated to this fix).
+- [x] `flutter test --tags golden test/widget/features/workouts/ui/post_session/summary/` — 4/4 goldens baked + matching.
+- [x] `flutter build apk --debug --no-shrink` — green.
+- [ ] User installs APK on Galaxy S25 Ultra + re-verifies visually (no Android device connected to my shell, so the user runs `adb install -r build/app/outputs/flutter-apk/app-debug.apk` from their workstation).
+
+### Commit + push
+
+- [ ] Single descriptive commit on `feature/30a-post-session-screen`.
+
+---
+
 ## Phase 30 · Implementation Plan
 
 > Canonical spec: `docs/post-session-screen-mockup-v2.html` (Round 2, all 11 states + Path A pivot in §4½ — mid-workout flash layer retired; events pass through to the post-session ceremony + photo-overlay share card + 6 implementation gaps). Mockup is locked; do not deviate without surfacing via the "Open questions" subsection.

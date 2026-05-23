@@ -15,6 +15,25 @@ import 'share_cta_button.dart';
 ///
 /// Each row is conditional on the presence of its payload — see the
 /// per-state script in mockup §5 for the visibility rules.
+///
+/// **Visual contract (mockup §5 final frames, locked 2026-05-23):**
+///   * Saga eyebrow at top in [AppTextStyles.label] textDim (11sp Barlow
+///     Condensed tracked) — matches mockup `t-label` register.
+///   * Duration/sets numeric in [AppTextStyles.numeric] at 17sp (Rajdhani
+///     700 tabular) — matches mockup `t-numeric` register.
+///   * Tonnage caption in [AppTextStyles.bodySmall] (Barlow 12sp textDim) —
+///     matches mockup `t-body-sm` register.
+///   * Hair divider above the next-step hook (`AppColors.hair`).
+///   * Next-step eyebrow color comes from [nextStepEyebrowColor] (mockup
+///     §5 uses hotViolet / heroGold / bp-* per state).
+///   * Share CTA and CONTINUE rendered via [_PostSessionCinematicButton] —
+///     Rajdhani 600 11sp tracked label + leading/trailing Material icon,
+///     never an emoji glyph in the text (jarring against the Concept B
+///     palette per the 2026-05-23 visual gate).
+///   * Outer SafeArea uses `minimum: EdgeInsets.only(top: 12, bottom: 16)`
+///     to guarantee a padding floor on devices (Samsung floating-pill
+///     gesture nav) that report 0 inset for the bottom system region
+///     while still rendering a pill that visually overlaps content.
 class PostSessionSummaryPanel extends StatelessWidget {
   const PostSessionSummaryPanel({
     super.key,
@@ -33,6 +52,7 @@ class PostSessionSummaryPanel extends StatelessWidget {
     this.prDetailRow,
     this.classChangeRow,
     this.nextStepHookFormatter,
+    this.nextStepEyebrowColor,
   });
 
   /// "Saga 47" or "1ª saga" (day-zero variant). Pre-resolved.
@@ -57,10 +77,18 @@ class PostSessionSummaryPanel extends StatelessWidget {
   /// a generic fallback renders the hook payload as a debug string.
   final String Function(NextStepHookKind hook)? nextStepHookFormatter;
 
-  /// "CONTINUAR ▶" label.
+  /// Accent color for the next-step eyebrow (mockup §5 per-state palette
+  /// — hotViolet for baseline / level-up, heroGold for PR detail, BP hue
+  /// for rank-up / title states). Defaults to [AppColors.hotViolet] when
+  /// the screen layer doesn't override.
+  final Color? nextStepEyebrowColor;
+
+  /// "CONTINUAR" label (no glyph baked in — the arrow icon renders
+  /// separately at the call site).
   final String continueLabel;
 
-  /// "📷 Compartilhar saga" label (30a placeholder).
+  /// "Compartilhar saga" label (no glyph baked in — the camera icon
+  /// renders separately at the call site).
   final String shareLabel;
 
   /// "Em breve" snackbar message.
@@ -89,6 +117,8 @@ class PostSessionSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final eyebrowColor = nextStepEyebrowColor ?? AppColors.hotViolet;
+
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -97,18 +127,25 @@ class PostSessionSummaryPanel extends StatelessWidget {
       child: ColoredBox(
         color: AppColors.abyss,
         child: SafeArea(
+          // `minimum` guarantees a padding floor for the gesture-nav region
+          // on Samsung devices whose floating pill design reports
+          // `MediaQuery.padding.bottom == 0` while still rendering a visible
+          // indicator that would otherwise overlap CONTINUE. The Galaxy S25
+          // Ultra visual-gate run (2026-05-23) surfaced the regression.
+          minimum: const EdgeInsets.only(top: 12, bottom: 16),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Saga eyebrow — mockup `t-label` register (Barlow Condensed
+                // 11sp tracked) in textDim. The number stays visually quiet
+                // here because the cinematic preceding the summary already
+                // carried the saga's emotional weight via B1/B2/B3 cuts.
                 Text(
                   sagaLabel,
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.label.copyWith(
-                    color: AppColors.textDim,
-                    fontSize: 12,
-                  ),
+                  style: AppTextStyles.label.copyWith(color: AppColors.textDim),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -123,18 +160,18 @@ class PostSessionSummaryPanel extends StatelessWidget {
                   style: AppTextStyles.bodySmall,
                 ),
                 if (nextStepHook != null) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 22),
                   const Divider(color: AppColors.hair, height: 1),
                   const SizedBox(height: 10),
                   Text(
                     nextStepEyebrow.toUpperCase(),
                     textAlign: TextAlign.center,
                     style: AppTextStyles.label.copyWith(
-                      color: AppColors.hotViolet,
+                      color: eyebrowColor,
                       fontSize: 11,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     _formatHook(nextStepHook!),
                     textAlign: TextAlign.center,
@@ -169,16 +206,12 @@ class PostSessionSummaryPanel extends StatelessWidget {
                   container: true,
                   explicitChildNodes: true,
                   identifier: 'post-session-continue-cta',
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: onContinue,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primaryViolet,
-                        foregroundColor: AppColors.textCream,
-                      ),
-                      child: Text(continueLabel),
-                    ),
+                  child: PostSessionCinematicButton(
+                    label: continueLabel,
+                    backgroundColor: AppColors.primaryViolet,
+                    foregroundColor: AppColors.textCream,
+                    trailingIcon: Icons.arrow_forward_rounded,
+                    onPressed: onContinue,
                   ),
                 ),
               ],
@@ -207,6 +240,89 @@ class PostSessionSummaryPanel extends StatelessWidget {
       ) =>
         '$exerciseName · ${weightKg}kg × $reps (+${improvementKg}kg)',
     };
+  }
+}
+
+/// Concept B finisher button — Rajdhani 600 11sp tracked label, hard-edged
+/// rectangle (`kRadiusSm = 4`), with an optional leading/trailing Material
+/// icon at the same color as the label.
+///
+/// Used for both the Share CTA and CONTINUE on the post-session summary.
+/// Deliberately NOT a `FilledButton` because the app-wide
+/// [AppTheme.filledButtonTheme] renders Barlow Condensed labels with rounded
+/// corners — appropriate for general app surfaces but mismatched with the
+/// cinematic-finisher grammar mockup §5 specifies (Rajdhani-display family,
+/// `kRadiusXs` square edges, `padding: 6px vertical`).
+///
+/// **Selector contract:** the button is an `InkWell` inside a `Material` —
+/// `tester.tap(find.byType(PostSessionCinematicButton))` works in widget
+/// tests; the parent `Semantics(identifier:)` injected by the panel keeps
+/// the E2E selector contract.
+class PostSessionCinematicButton extends StatelessWidget {
+  const PostSessionCinematicButton({
+    super.key,
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onPressed,
+    this.leadingIcon,
+    this.trailingIcon,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onPressed;
+  final IconData? leadingIcon;
+  final IconData? trailingIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: backgroundColor,
+      // Square-ish corners per mockup `.continue-btn-cut` (border-radius: 4).
+      // Matches `kRadiusSm` but inlined as a literal here because the
+      // Concept B grammar treats hard edges as load-bearing — not a generic
+      // app rounding that should drift with the radii scale.
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (leadingIcon != null) ...[
+                Icon(leadingIcon, color: foregroundColor, size: 16),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label.toUpperCase(),
+                textAlign: TextAlign.center,
+                // Concept B finisher type — Rajdhani 600 13sp tracked at
+                // 0.04em per mockup `.continue-btn-cut`. Derived from
+                // [AppTextStyles.titleDisplay] (Rajdhani 600) with the
+                // tracked-button overrides applied; routes through the
+                // sanctioned token so the typography-call-sites gate
+                // stays clean instead of falling back to a raw
+                // `fontFamily: 'Rajdhani'` literal.
+                style: AppTextStyles.titleDisplay.copyWith(
+                  fontSize: 13,
+                  letterSpacing: 0.04 * 13,
+                  height: 1.2,
+                  color: foregroundColor,
+                ),
+              ),
+              if (trailingIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(trailingIcon, color: foregroundColor, size: 16),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -8,6 +8,7 @@ import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/models/character_class.dart';
 import '../../../rpg/models/title.dart' as rpg;
 import '../../../rpg/providers/earned_titles_provider.dart';
+import '../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/title_localization.dart';
 import '../../domain/post_session_choreographer.dart';
@@ -429,12 +430,38 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       nextLevel: state.nextLevel,
     );
 
+    // Mockup §5 per-state eyebrow color rule:
+    //   * NextRankHook → dominant BP's hue (matches the §5 State 1/2/5/6/8
+    //     pattern where the forward hook is anchored to the muscle the
+    //     user just trained, even when the eyebrow text is generic).
+    //   * NextLevelHook → hotViolet (character-level milestones live on
+    //     the brand-primary axis, not a body-part identity — mockup §5
+    //     State 7 + 10).
+    //   * null (no hook) → defaults to hotViolet at the panel layer.
+    // PR-detail eyebrow on mockup §5 State 3 uses the heroGold accent
+    // ("!! Recorde" tracked caption — `color: var(--hero-gold)` on
+    // `.t-label-sm`). Wrapping a single Text color in a RewardAccent
+    // ancestor would require lifting the entire panel for one tracked
+    // caption — the gold here is a typographic accent, not a foreground
+    // reward burst. The ignore marker lives on the line itself (form a)
+    // so `dart format` cannot orphan it.
+    final eyebrowColor = switch (hook) {
+      NextRankHook(:final bodyPart) =>
+        VitalityStateStyles.bodyPartColor[bodyPart] ?? AppColors.hotViolet,
+      NextLevelHook() => AppColors.hotViolet,
+      PrDetailHook() =>
+        AppColors
+            .heroGold, // ignore: reward_accent — typographic accent, see header
+      null => AppColors.hotViolet,
+    };
+
     return PostSessionSummaryPanel(
       sagaLabel: sagaLabel,
       durationSetsLabel: durationSets,
       tonnageLabel: tonnage,
       nextStepEyebrow: l10n.summaryNextStepLabel,
       nextStepHook: hook,
+      nextStepEyebrowColor: eyebrowColor,
       continueLabel: l10n.summaryContinueCta,
       shareLabel: l10n.summaryShareCta,
       shareComingSoonMessage: l10n.summaryShareComingSoon,

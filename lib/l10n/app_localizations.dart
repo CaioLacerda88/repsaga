@@ -4872,16 +4872,16 @@ abstract class AppLocalizations {
   /// **'later'**
   String get summaryEquipLater;
 
-  /// Phase 30 PR 30a — Summary panel CONTINUAR button. Mockup §5 storyboards.
+  /// Phase 30 PR 30a — Summary panel CONTINUAR button. Mockup §5 storyboards. The trailing arrow is rendered as a Material icon at the call site, never baked into the string (visual gate fix 2026-05-23).
   ///
   /// In en, this message translates to:
-  /// **'CONTINUE ▶'**
+  /// **'CONTINUE'**
   String get summaryContinueCta;
 
-  /// Phase 30 PR 30a — Summary panel share CTA label (placeholder in 30a; wired in 30b).
+  /// Phase 30 PR 30a — Summary panel share CTA label (placeholder in 30a; wired in 30b). The camera glyph is rendered as a Material icon at the call site, never baked into the string (visual gate fix 2026-05-23).
   ///
   /// In en, this message translates to:
-  /// **'📷 Share saga'**
+  /// **'Share saga'**
   String get summaryShareCta;
 
   /// Phase 30 PR 30a — Snackbar shown when the share CTA is tapped in 30a.

@@ -2837,10 +2837,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get summaryEquipLater => 'later';
 
   @override
-  String get summaryContinueCta => 'CONTINUE ▶';
+  String get summaryContinueCta => 'CONTINUE';
 
   @override
-  String get summaryShareCta => '📷 Share saga';
+  String get summaryShareCta => 'Share saga';
 
   @override
   String get summaryShareComingSoon => 'Share — coming soon';

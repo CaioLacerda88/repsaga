@@ -2848,10 +2848,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get summaryEquipLater => 'depois';
 
   @override
-  String get summaryContinueCta => 'CONTINUAR ▶';
+  String get summaryContinueCta => 'CONTINUAR';
 
   @override
-  String get summaryShareCta => '📷 Compartilhar saga';
+  String get summaryShareCta => 'Compartilhar saga';
 
   @override
   String get summaryShareComingSoon => 'Compartilhar — em breve';
