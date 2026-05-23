@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../personal_records/providers/pr_providers.dart';
 import '../../../routines/providers/notifiers/routine_list_notifier.dart';
+import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../models/active_workout_state.dart';
@@ -340,26 +341,33 @@ class FinishWorkoutCoordinator {
       // independently of the workout), not navigation.
       final navigationPrResult = wasSavedOffline ? null : prResult;
 
-      // Phase 30 PR 30a — when online + the queue carries reward events
-      // (PR / rank-up / title / class-change), push the post-session route
-      // instead of the legacy /pr-celebration. Offline still routes via the
-      // legacy navigator (no celebration playback for queued finishes).
-      final hasRewardEvent =
-          celebration != null &&
-          celebration.queue.any(
-            (e) =>
-                e is RankUpEvent ||
-                e is TitleUnlockEvent ||
-                e is ClassChangeEvent ||
-                e is LevelUpEvent ||
-                e is PersonalRecordEvent,
-          );
+      // Phase 30 PR 30a (Bug C, 2026-05-23) — every online finish with at
+      // least one logged set routes through the post-session cinematic.
+      //
+      // The original cut gated on `hasRewardEvent || hasNewRecords`, which
+      // dropped baseline XP-only sessions (mockup §5 State 2 — the most
+      // common state) onto the legacy /home navigator and skipped the
+      // cinematic entirely. The notifier author already documented the
+      // intent at active_workout_notifier.dart:1825 — "the screen renders
+      // a baseline cinematic for empty queues too (the B1 XP slam is the
+      // user's primary feedback even on a session with no rank-up / no
+      // PR)". The empty-session guard at line 95 above already returns
+      // early for zero-set finishes, so the `totalSetsCount > 0` clause
+      // is redundant-safe defense in depth (kept for clarity at this
+      // call site — future readers shouldn't have to chase the guard up
+      // the method to know the contract).
+      //
+      // Path A confirmed by user 2026-05-23: PR-bearing online sessions
+      // also route through the new post-session route. /pr-celebration
+      // becomes dead-on-online; final retire stays in PR 30c.
+      //
+      // Cluster: `spec-caption-vs-implementation-drift` — predicate
+      // mirrored the legacy "show only if PR" rule from /pr-celebration
+      // and missed the mockup §5 State 2 baseline cinematic intent.
       final shouldPushPostSession =
-          !wasSavedOffline &&
-          (hasRewardEvent ||
-              (navigationPrResult != null && navigationPrResult.hasNewRecords));
+          !wasSavedOffline && notifier.totalSetsCount > 0;
 
-      if (shouldPushPostSession && celebration != null) {
+      if (shouldPushPostSession) {
         final l10n = AppLocalizations.of(rootContext);
         final totalXpDelta = notifier.consumeLastSessionTotalXpDelta();
         final bpDeltasNum = notifier.consumeLastSessionBpDeltas();
@@ -367,8 +375,18 @@ class FinishWorkoutCoordinator {
           for (final entry in bpDeltasNum.entries)
             entry.key: entry.value.round(),
         };
+        // Normalize the empty-queue case: baseline XP-only sessions have
+        // `consumeLastCelebration() == null` (the notifier short-circuits
+        // when `events.isEmpty` at active_workout_notifier.dart:1843).
+        // The post-session route always needs a valid queueResult — the
+        // choreographer's S2 path renders cuts based on tier + deltas
+        // even when the queue is empty. The screen layer never sees null;
+        // the coordinator normalizes here.
+        final queueResultForRoute =
+            celebration ??
+            const CelebrationQueueResult(queue: <CelebrationEvent>[]);
         final params = PostSessionParams(
-          queueResult: celebration,
+          queueResult: queueResultForRoute,
           prResult: navigationPrResult,
           exerciseNames: exerciseNames,
           totalXpEarned: (totalXpDelta ?? 0).round(),
@@ -381,7 +399,7 @@ class FinishWorkoutCoordinator {
           // mockup §3 Variant A storyboard intends. See WIP.md PR 30a
           // "Known limitations carried forward" + PR 30b plan.
           bpProgressFractionPre: _emptyBpFractions(),
-          bpFirstAwakening: celebration.queue
+          bpFirstAwakening: queueResultForRoute.queue
               .whereType<FirstAwakeningEvent>()
               .map((e) => e.bodyPart)
               .toSet(),

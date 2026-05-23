@@ -239,6 +239,73 @@ class _PRRewardNotifier extends AsyncNotifier<ActiveWorkoutState?>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Bug C (2026-05-23) regression fixture — baseline XP-only finish.
+///
+/// **What this notifier models.** Mockup §5 State 2: a session that
+/// commits successfully but earns no reward events at all. No rank-up,
+/// no PR, no class-change, no level-up, no title — just XP. Per the
+/// post-session §5 spec this IS the most common state, and the
+/// cinematic was designed around making baseline XP feel rewarding (the
+/// B1 XP slam is documented at active_workout_notifier.dart:1825 as the
+/// "user's primary feedback even on a session with no rank-up / no PR").
+///
+/// **The pre-fix bug.** The coordinator's old `shouldPushPostSession`
+/// predicate was `hasRewardEvent || hasNewRecords`. For this state both
+/// halves evaluate false (no events → no reward; no PR → null result),
+/// so the predicate returned false and the user landed on /home via the
+/// legacy navigator — skipping the cinematic the spec calls for.
+///
+/// **What this notifier returns.**
+///   * `consumeLastCelebration() == null` — mirrors the production
+///     notifier's `if (events.isEmpty) { _lastCelebration = null; }`
+///     short-circuit at active_workout_notifier.dart:1843.
+///   * `prResult == null` — no PR was set this session.
+///   * `totalSetsCount == 1` — one logged set, so the empty-session
+///     guard at line 95 passes and finish() proceeds.
+///   * XP/BP deltas non-zero — the post-session screen has something
+///     to slam into the user.
+class _BaselineNotifier extends AsyncNotifier<ActiveWorkoutState?>
+    implements ActiveWorkoutNotifier {
+  _BaselineNotifier(this._state);
+  ActiveWorkoutState? _state;
+
+  @override
+  Future<ActiveWorkoutState?> build() async => _state;
+
+  @override
+  int get totalSetsCount => 1;
+
+  @override
+  int get incompleteSetsCount => 0;
+
+  @override
+  Future<FinishWorkoutResult?> finishWorkout({String? notes}) async {
+    // Same two-yield dance as `_PRRewardNotifier` so the active-workout
+    // shell has time to rebuild + dispose the body State that owns the
+    // harness `ref`. See `_PRRewardNotifier.finishWorkout` for the full
+    // explanation of why both yields are load-bearing.
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    _state = null;
+    state = const AsyncData(null);
+    await Future<void>.delayed(Duration.zero);
+    return (prResult: null, savedOffline: false, serverErrorQueued: false);
+  }
+
+  @override
+  CelebrationQueueResult? consumeLastCelebration() => null;
+
+  @override
+  num? consumeLastSessionTotalXpDelta() => 50;
+
+  @override
+  Map<BodyPart, num> consumeLastSessionBpDeltas() => const <BodyPart, num>{
+    BodyPart.chest: 50,
+  };
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// No-op CelebrationOrchestrator that returns immediately.
 ///
 /// The production [CelebrationOrchestrator] reads several global providers
@@ -280,7 +347,7 @@ class _NoopCelebrationOrchestrator extends CelebrationOrchestrator {
 /// `rootContext.go('/workout/finish/...')` call materialises as an entry
 /// in [navigatedLocations].
 Widget _buildHarness({
-  required _PRRewardNotifier notifier,
+  required ActiveWorkoutNotifier notifier,
   required List<String> navigatedLocations,
   required List<PostSessionParams> capturedParams,
   int initialWorkoutCount = 1,
@@ -290,7 +357,7 @@ Widget _buildHarness({
     routes: [
       GoRoute(
         path: '/active',
-        builder: (context, state) => _ActiveWorkoutStub(notifier: notifier),
+        builder: (context, state) => const _ActiveWorkoutStub(),
       ),
       GoRoute(
         path: '/home',
@@ -346,8 +413,7 @@ Widget _buildHarness({
 /// widget never unmounts and the broken `ref.read(...)` after the await
 /// silently succeeds.
 class _ActiveWorkoutStub extends ConsumerWidget {
-  const _ActiveWorkoutStub({required this.notifier});
-  final _PRRewardNotifier notifier;
+  const _ActiveWorkoutStub();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -528,5 +594,119 @@ void main() {
             'because the active-workout State is disposed by then.',
       );
     });
+
+    testWidgets(
+      'navigates to /workout/finish/:workoutId for a baseline XP-only '
+      'session (no reward events, no PR — Bug C 2026-05-23)',
+      (tester) async {
+        // Mockup §5 State 2 — THE most common finish state. Pre-fix the
+        // coordinator's `shouldPushPostSession` predicate gated on
+        // `hasRewardEvent || hasNewRecords`, and baseline finishes have
+        // neither — so the user was dropped onto /home and never saw the
+        // cinematic the spec calls for. Post-fix the predicate is
+        // `!wasSavedOffline && notifier.totalSetsCount > 0`, so the
+        // baseline path routes through the post-session screen and the
+        // B1 XP slam (notifier author's "primary feedback") plays.
+        final navigated = <String>[];
+        final captured = <PostSessionParams>[];
+        final notifier = _BaselineNotifier(_makeNonEmptyState());
+
+        await tester.pumpWidget(
+          _buildHarness(
+            notifier: notifier,
+            navigatedLocations: navigated,
+            capturedParams: captured,
+            initialWorkoutCount: 3,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byKey(const ValueKey('finish-btn'))),
+        );
+        await container.read(workoutCountProvider.future);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('finish-btn')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byType(FilledButton));
+        await tester.pumpAndSettle(const Duration(seconds: 10));
+
+        // Contract: baseline XP-only finishes MUST reach the post-session
+        // route. If this assertion fails with an empty navigation list
+        // the predicate has likely regressed to the legacy
+        // `hasRewardEvent || hasNewRecords` form — re-read the doc-block
+        // above `shouldPushPostSession` for the intent.
+        expect(
+          navigated.any((l) => l == '/workout/finish/$_testWorkoutId'),
+          isTrue,
+          reason:
+              'Baseline XP-only finish must route to '
+              '/workout/finish/$_testWorkoutId. An empty navigated list '
+              'means the post-session push branch was skipped — most '
+              'likely shouldPushPostSession regressed to the '
+              '`hasRewardEvent || hasNewRecords` predicate. Mockup §5 '
+              'State 2 is THE most common finish state and the cinematic '
+              'was designed around making baseline XP feel rewarding.',
+        );
+
+        // And the screen must NOT have landed on /home — that would mean
+        // the predicate evaluated false and the legacy navigator took
+        // over, skipping the cinematic.
+        expect(
+          navigated.where((l) => l == '/home').toList(),
+          isEmpty,
+          reason:
+              'Baseline XP-only finish must NOT land on /home. /home '
+              'indicates shouldPushPostSession returned false and the '
+              'legacy postWorkoutNavigator branch ran — skipping the '
+              'cinematic.',
+        );
+
+        // Pin the params: the route builder must receive a valid
+        // PostSessionParams (NOT null), with the threaded XP/BP deltas
+        // and the synthesized empty CelebrationQueueResult.
+        expect(
+          captured,
+          hasLength(1),
+          reason:
+              'Exactly one set of post-session params should reach '
+              'the route builder.',
+        );
+        expect(
+          captured.single.totalXpEarned,
+          equals(50),
+          reason:
+              'totalXpEarned must thread through from the notifier — '
+              'baseline XP-only is the user-visible reward and B1 needs '
+              'the value to slam.',
+        );
+        expect(
+          captured.single.bpXpDeltas,
+          equals(const {BodyPart.chest: 50}),
+          reason:
+              'bpXpDeltas must thread through from the notifier — the '
+              'tally cut renders per-body-part bars from these deltas.',
+        );
+        expect(
+          captured.single.queueResult.queue,
+          isEmpty,
+          reason:
+              'When the notifier returns null from consumeLastCelebration '
+              '(events.isEmpty short-circuit), the coordinator must '
+              'synthesize an empty CelebrationQueueResult — the screen '
+              'never sees null. Empty queue is the choreographer\'s S2 '
+              'baseline path.',
+        );
+        expect(
+          captured.single.priorFinishedWorkoutCount,
+          equals(3),
+          reason:
+              'priorFinishedWorkoutCount must come from the synchronous '
+              'pre-await capture of workoutCountProvider.',
+        );
+      },
+    );
   });
 }
