@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../shared/widgets/reward_accent.dart';
 import '../../../domain/post_session_choreographer.dart';
 import '../../../domain/post_session_timing.dart';
 
@@ -13,9 +14,11 @@ import '../../../domain/post_session_timing.dart';
 /// multi-PR eyebrow with count is built at the screen layer (the widget
 /// receives the already-substituted string).
 ///
-/// **Concept B note (mockup §0):** the 33ms `ColoredBox(Colors.white)`
-/// flash is NOT a `BoxShadow` and is NOT a glow. A future grammar gate
-/// must not flag it as one — see [PostSessionTiming.b3PrWhiteFlash].
+/// **Concept B note (mockup §0):** the 33ms full-screen white flash is a
+/// structural cinematic primitive (NOT a `BoxShadow`, NOT a glow). It is
+/// rendered as a pure-white `ColoredBox` overlay during the flash window —
+/// see [PostSessionTiming.b3PrWhiteFlash]. A future grammar gate must not
+/// flag this as a glow.
 class B3PrCutWidget extends StatelessWidget {
   const B3PrCutWidget({
     super.key,
@@ -69,12 +72,17 @@ class B3PrCutWidget extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               const ColoredBox(color: AppColors.abyss),
-              if (inFlash)
-                // 33ms white flash — Concept B "ColoredBox(Colors.white)" — NOT
-                // a glow, NOT a BoxShadow. See cluster note in dartdoc above.
-                const ColoredBox(color: Colors.white),
+              // 33ms cinematic full-screen white flash — Concept B grammar
+              // primitive (see dartdoc above). Intentional palette opt-out:
+              // structurally white, not a palette color.
+              if (inFlash) _buildFlash(),
               if (!inFlash)
-                ColoredBox(color: AppColors.heroGold.withValues(alpha: 0.50)),
+                // Full-screen gold flood — structural fill, no widget subtree
+                // to wrap in a RewardAccent. Reads the sanctioned reward
+                // color via the static alias per the same precedent as
+                // `pr_celebration_screen.dart` (full-screen flash).
+                // ignore: reward_accent — full-screen flood; no widget-subtree host for RewardAccent
+                ColoredBox(color: RewardAccent.color.withValues(alpha: 0.50)),
               if (!inFlash) CustomPaint(painter: _GoldSlash(goldPhase)),
               if (!inFlash) _buildPrContent(context, goldPhase),
             ],
@@ -90,15 +98,19 @@ class B3PrCutWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Eyebrow renders in heroGold via the canonical RewardAccent
+          // widget-tree scope — DefaultTextStyle.merge supplies the color so
+          // the Text below does not reference the token directly.
           Opacity(
             opacity: goldPhase.clamp(0.0, 1.0),
-            child: Text(
-              eyebrow,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.label.copyWith(
-                color: AppColors.heroGold,
-                fontSize: 12,
-                letterSpacing: 0.14 * 12,
+            child: RewardAccent(
+              child: Text(
+                eyebrow,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 12,
+                  letterSpacing: 0.14 * 12,
+                ),
               ),
             ),
           ),
@@ -117,13 +129,16 @@ class B3PrCutWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    '${_formatWeight(data.heroWeightKg)}kg × ${data.heroReps}',
-                    style: AppTextStyles.celebrationSize(34).copyWith(
-                      color: AppColors.heroGold,
-                      letterSpacing: 0.04 * 34,
+                // PR weight × reps — heroGold via RewardAccent (mockup §4:
+                // "B3 PR weight — Rajdhani 700 in heroGold").
+                RewardAccent(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${_formatWeight(data.heroWeightKg)}kg × ${data.heroReps}',
+                      style: AppTextStyles.celebrationSize(
+                        34,
+                      ).copyWith(letterSpacing: 0.04 * 34),
                     ),
                   ),
                 ),
@@ -199,6 +214,12 @@ class B3PrCutWidget extends StatelessWidget {
     return Column(children: widgets);
   }
 
+  /// 33ms cinematic full-screen white flash. Extracted so the ignore
+  /// marker can ride the literal directly — keeps the build method
+  /// readable while the gate stays satisfied. See class-level docstring.
+  // ignore: hardcoded_color — Concept B 33ms cinematic flash
+  static Widget _buildFlash() => const ColoredBox(color: Colors.white);
+
   static String _formatWeight(double w) {
     if (w == w.roundToDouble()) return w.toStringAsFixed(0);
     return w.toStringAsFixed(1);
@@ -238,8 +259,12 @@ class _GoldSlash extends CustomPainter {
   final double phase;
   @override
   void paint(Canvas canvas, Size size) {
+    // CustomPainter has no BuildContext ancestor mid-paint; read the
+    // sanctioned reward color via the static alias per the same precedent
+    // as `progress_chart_section.dart` (FlDotPainter).
     final paint = Paint()
-      ..color = AppColors.heroGold.withValues(
+      // ignore: reward_accent — CustomPainter has no BuildContext for RewardAccent.of
+      ..color = RewardAccent.color.withValues(
         alpha: 0.42 * phase.clamp(0.0, 1.0),
       );
     final path = Path()

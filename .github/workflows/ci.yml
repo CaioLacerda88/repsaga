@@ -110,6 +110,26 @@ jobs:
         # historical context (five sweeps in one phase).
         run: bash scripts/check_typography_call_sites.sh
 
+      - name: Check reward-accent scarcity
+        # Quarantines `heroGold` rendering to a single sanctioned widget
+        # (`RewardAccent`) per the Arcane Ascent reward-scarcity framework
+        # (§17.0c). The script was wired locally into `make analyze`
+        # since Phase 26d but only landed in CI in PR 30b — Phase 30a
+        # shipped four heroGold leaks that `make analyze` would have
+        # caught had any author run it locally. CI now blocks the
+        # same class of leak. See script header for opt-out grammar
+        # (`// ignore: reward_accent — <reason>`).
+        run: bash scripts/check_reward_accent.sh
+
+      - name: Check hardcoded colors
+        # Fails on any out-of-palette literal (`Color(0x…)`,
+        # `Colors.black*`, `Colors.white*`) under `lib/features/`. Same
+        # CI gap as the reward-accent gate above: wired locally into
+        # `make analyze` but never run in CI until PR 30b. Allowed
+        # palette tokens live in `lib/core/theme/app_theme.dart`
+        # (`AppColors.*`). See script header for opt-out grammar.
+        run: bash scripts/check_hardcoded_colors.sh
+
   test:
     runs-on: ubuntu-latest
     needs: analyze

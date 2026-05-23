@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../shared/widgets/reward_accent.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../domain/post_session_choreographer.dart';
@@ -9,6 +10,15 @@ import '../../../domain/post_session_choreographer.dart';
 /// for PR). Mockup §4 Title.
 ///
 /// **Decoupling Rule 2.** Title name + sub-label arrive pre-resolved.
+///
+/// **Reward-scarcity note.** The `characterLevel` variant renders a
+/// heroGold flood (mockup §4: "Character-level milestone title → heroGold
+/// flood") — body-part-typed and cross-build variants use violet/body-part
+/// hues. heroGold emissions are quarantined to the reward-tier register
+/// per `RewardAccent`; the typographic gold accent on the title text goes
+/// through the widget-tree scope, and the structural fill/painter sinks
+/// read `RewardAccent.color` directly with an `ignore: reward_accent`
+/// marker (same precedent as `pr_celebration_screen.dart`).
 class B3TitleCutWidget extends StatelessWidget {
   const B3TitleCutWidget({
     super.key,
@@ -32,6 +42,15 @@ class B3TitleCutWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hue = _floodHue();
+    final isCharacterLevel = variant == TitleCutVariant.characterLevel;
+    final titleText = Text(
+      titleName,
+      textAlign: TextAlign.center,
+      style: AppTextStyles.celebrationSize(28).copyWith(
+        color: isCharacterLevel ? null : AppColors.textCream,
+        letterSpacing: 0.04 * 28,
+      ),
+    );
     return Semantics(
       container: true,
       explicitChildNodes: true,
@@ -66,16 +85,15 @@ class B3TitleCutWidget extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        Text(
-                          titleName,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.celebrationSize(28).copyWith(
-                            color: variant == TitleCutVariant.characterLevel
-                                ? AppColors.heroGold
-                                : AppColors.textCream,
-                            letterSpacing: 0.04 * 28,
-                          ),
-                        ),
+                        // Character-level milestone title renders in heroGold
+                        // via the RewardAccent widget-tree scope (mockup §4).
+                        // Body-part-typed and cross-build variants stay in
+                        // textCream (the hue is signaled by the flood
+                        // background + slash painter, not by the title color).
+                        if (isCharacterLevel)
+                          RewardAccent(child: titleText)
+                        else
+                          titleText,
                         const SizedBox(height: 14),
                         Text(
                           subLabel,
@@ -101,7 +119,11 @@ class B3TitleCutWidget extends StatelessWidget {
       case TitleCutVariant.crossBuild:
         return AppColors.hotViolet;
       case TitleCutVariant.characterLevel:
-        return AppColors.heroGold;
+        // Structural sink (consumed by ColoredBox fill + _TitleSlash painter
+        // + eyebrow color); no widget subtree to wrap in RewardAccent. Same
+        // precedent as `pr_celebration_screen.dart` (full-screen flash).
+        // ignore: reward_accent — structural flood; no widget-subtree host for RewardAccent
+        return RewardAccent.color;
       case TitleCutVariant.bodyPartTyped:
         final bp = bodyPart;
         if (bp == null) return AppColors.hotViolet;

@@ -75,7 +75,11 @@ class B2ElevatedCut extends StatelessWidget {
                 return Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (inFlash) const ColoredBox(color: Color(0xCCFFFFFF)),
+                    // Phase B: 80ms cinematic 80%-alpha white flash —
+                    // Concept B grammar primitive (mockup §3 elevated
+                    // rank-up flash). Structurally white, not a palette
+                    // color; intentional opt-out.
+                    if (inFlash) _buildFlash(),
                     Center(
                       child: Opacity(
                         opacity: slamCurve.clamp(0.0, 1.0),
@@ -156,6 +160,14 @@ class B2ElevatedCut extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Phase B 80%-alpha white flash. Extracted so the ignore marker can
+  /// ride the literal directly — keeping the build method readable while
+  /// the gate stays satisfied. See class-level docstring.
+  Widget _buildFlash() {
+    // ignore: hardcoded_color — Concept B 80ms cinematic flash
+    return ColoredBox(color: Colors.white.withValues(alpha: 0.80));
   }
 }
 

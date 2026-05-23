@@ -19,10 +19,25 @@
 # Explicitly allowed:
 #   - `Colors.transparent` — structural, not a color choice.
 #
-# Opt-out: add `// ignore: hardcoded_color` at end of the offending line when
-# the literal is intentional (e.g. a test fixture recreating a specific pixel,
-# or a structural true-black border that the palette intentionally does not
-# cover). The ignore must be explicit so it surfaces in code review.
+# Opt-out: add `// ignore: hardcoded_color — <reason>` either
+# (a) trailing on the same line as the flagged literal, or
+# (b) on the line immediately preceding the flagged literal.
+# Form (b) exists because `dart format` will sometimes wrap a
+# constructor across multiple lines when a trailing comment would push
+# the line past 80 cols, leaving the literal and the marker on
+# different lines. Placing the marker on the preceding line is the only
+# deterministic spot in that case. This mirrors `check_reward_accent.sh`'s
+# grammar so the two style gates share the same opt-out form.
+#
+# When the literal is structurally awkward to annotate (e.g. nested in a
+# multi-line `ColoredBox(color: ...withValues(alpha: ...))` constructor
+# that the formatter splits), extract the widget into a tiny private
+# `_buildXxx()` helper and put the ignore marker on the helper — keeps
+# the call site readable while the gate stays satisfied. See
+# `b3_pr_cut.dart::_buildFlash` for the canonical pattern.
+#
+# Every opt-out must carry a brief justification after the em-dash so the
+# reason surfaces in code review and git blame.
 #
 # Usage: bash scripts/check_hardcoded_colors.sh
 # Exit: 0 on clean, 1 on any unapproved hit.
@@ -47,10 +62,42 @@ fi
 # this pattern at all — the word after `Colors.` is neither `black` nor `white`).
 PATTERN='Color\(0x[0-9A-Fa-f]+|Colors\.black[0-9]*|Colors\.white[0-9]*'
 
-# Grep every match, then strip lines with the opt-out marker.
+# Pass 1: every raw match across `lib/features/`.
 # The `--` guards against any path that happens to start with `-`.
-HITS="$(grep -rn --include='*.dart' -E "$PATTERN" -- "$SCAN_DIR" \
-  | grep -v 'ignore: hardcoded_color' || true)"
+RAW_HITS="$(grep -rn --include='*.dart' -E "$PATTERN" -- "$SCAN_DIR" || true)"
+
+# Pre-compute ignore-marker line numbers per file in a single grep per file.
+# Stored as a space-separated list of line numbers; later we test both the
+# offending line and the immediately preceding line (to cover the dart
+# format wrap case described in the header).
+declare -A IGNORE_LINES
+for f in $(grep -rln --include='*.dart' 'ignore: hardcoded_color' -- "$SCAN_DIR" 2>/dev/null || true); do
+  nums="$(grep -n 'ignore: hardcoded_color' -- "$f" | cut -d: -f1 | tr '\n' ' ')"
+  IGNORE_LINES["$f"]="$nums"
+done
+
+HITS=""
+# EDIT_WITH_CARE: matches `check_reward_accent.sh`'s same/preceding-line
+# opt-out behavior. Diverging here would force call sites to remember two
+# different ignore grammars depending on which gate fired.
+if [[ -n "$RAW_HITS" ]]; then
+  while IFS= read -r hit; do
+    file="${hit%%:*}"
+    rest="${hit#*:}"
+    lineno="${rest%%:*}"
+
+    # Skip if the match line, or the line immediately before, carries an
+    # `ignore: hardcoded_color` marker. Both forms (trailing on same line,
+    # standalone on preceding line) are legal opt-outs — see header.
+    nums=" ${IGNORE_LINES[$file]:-} "
+    prev=$((lineno - 1))
+    if [[ "$nums" == *" $lineno "* ]] || [[ "$nums" == *" $prev "* ]]; then
+      continue
+    fi
+
+    HITS+="$hit"$'\n'
+  done <<< "$RAW_HITS"
+fi
 
 if [[ -n "$HITS" ]]; then
   echo "check_hardcoded_colors: found out-of-palette color literals under lib/features/:" >&2
@@ -58,7 +105,12 @@ if [[ -n "$HITS" ]]; then
   echo "" >&2
   echo "Migrate to an AppColors palette token (use .withValues(alpha: …) for" >&2
   echo "translucent overlays), or annotate the line with" >&2
-  echo "'// ignore: hardcoded_color' if the literal is intentional." >&2
+  echo "'// ignore: hardcoded_color — <reason>' if the literal is intentional." >&2
+  echo "(The marker may sit trailing on the offending line OR on the line" >&2
+  echo "immediately preceding it — same grammar as check_reward_accent.sh." >&2
+  echo "When dart format wrapping awkwardly splits the literal away from" >&2
+  echo "the marker, extract the literal into a tiny private _buildXxx()" >&2
+  echo "helper and put the ignore on the helper. See header for details.)" >&2
   exit 1
 fi
 
