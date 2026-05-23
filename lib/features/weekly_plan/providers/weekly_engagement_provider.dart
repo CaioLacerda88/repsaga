@@ -139,6 +139,12 @@ final weeklyEngagementProvider = FutureProvider.family
           for (final bucket in plan.routines) {
             // Already-completed bucket entries are accounted for via doneRows.
             if (bucket.completedWorkoutId != null) continue;
+            // Spontaneous bucket entries (Bug F / migration 00063) carry
+            // routine_id: null — no source routine to project planned-set
+            // counts from. They're also always already-completed so they
+            // almost never reach this point, but the guard documents the
+            // contract and keeps Map[String, R][null] inference clean.
+            if (bucket.routineId == null) continue;
             final routine = routineMap[bucket.routineId];
             if (routine == null) continue;
             for (final routineExercise in routine.exercises) {

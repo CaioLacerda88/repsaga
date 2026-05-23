@@ -31,7 +31,11 @@ class BucketRoutineRow extends StatelessWidget {
     this.onOverflowTap,
   });
 
-  final String routineId;
+  /// `null` for a spontaneous bucket entry whose source routine was deleted
+  /// or never existed (free workout — see migration 00063 + `BucketRoutine`).
+  /// The Semantics identifier falls back to `bucket-row-spontaneous` in that
+  /// case so the row still has a deterministic test handle.
+  final String? routineId;
   final String name;
   final bool isDone;
   final bool isSpontaneous;
@@ -48,10 +52,11 @@ class BucketRoutineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final identifierSuffix = routineId ?? 'spontaneous';
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      identifier: 'bucket-row-$routineId',
+      identifier: 'bucket-row-$identifierSuffix',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
@@ -103,7 +108,7 @@ class BucketRoutineRow extends StatelessWidget {
               container: true,
               explicitChildNodes: true,
               button: true,
-              identifier: 'bucket-row-overflow-$routineId',
+              identifier: 'bucket-row-overflow-$identifierSuffix',
               child: IconButton(
                 key: const ValueKey('bucket-row-overflow'),
                 icon: const Icon(Icons.close, size: 20),

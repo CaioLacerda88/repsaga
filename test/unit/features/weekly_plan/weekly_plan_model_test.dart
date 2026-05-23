@@ -126,6 +126,54 @@ void main() {
     });
   });
 
+  group('BucketRoutine — routineId nullability (Bug F)', () {
+    // Migration 00063 appends spontaneous (free-workout) bucket entries
+    // with routine_id: null. Pre-fix, json_serializable generated
+    // `routineId: json['routine_id'] as String` which threw _TypeError
+    // on every read, putting weeklyPlanProvider into permanent AsyncError
+    // and triggering Riverpod 3's exponential retry (200ms * 2^attempt,
+    // capped at 6.4s) — observed log spam + slow home re-mount.
+
+    test('deserializes routine_id: null for spontaneous workouts', () {
+      final json = <String, dynamic>{
+        'routine_id': null,
+        'order': 5,
+        'completed_workout_id': 'wk-spontaneous-1',
+        'completed_at': '2026-05-22T10:00:00.000Z',
+        'is_spontaneous': true,
+      };
+      final bucket = BucketRoutine.fromJson(json);
+      expect(bucket.routineId, isNull);
+      expect(bucket.isSpontaneous, isTrue);
+      expect(bucket.completedWorkoutId, 'wk-spontaneous-1');
+    });
+
+    test('deserializes routine_id: <uuid> for routine-based workouts', () {
+      final json = <String, dynamic>{
+        'routine_id': '00000000-0000-0000-0000-000000000001',
+        'order': 0,
+        'is_spontaneous': false,
+      };
+      final bucket = BucketRoutine.fromJson(json);
+      expect(bucket.routineId, '00000000-0000-0000-0000-000000000001');
+      expect(bucket.isSpontaneous, isFalse);
+    });
+
+    test('toJson preserves null routine_id through roundtrip', () {
+      const bucket = BucketRoutine(
+        routineId: null,
+        order: 3,
+        completedWorkoutId: 'wk-1',
+        isSpontaneous: true,
+      );
+      final json = bucket.toJson();
+      expect(json['routine_id'], isNull);
+      final restored = BucketRoutine.fromJson(json);
+      expect(restored.routineId, isNull);
+      expect(restored.isSpontaneous, isTrue);
+    });
+  });
+
   group('BucketRoutine — isSpontaneous field', () {
     test('should default to false when absent from JSONB (back-compat)', () {
       final json = _bucketRoutineJson();
