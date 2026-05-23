@@ -1262,6 +1262,13 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// the save).
   Future<FinishWorkoutResult?> finishWorkout({String? notes}) async {
     final current = state.value;
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    log(
+      'NOTIFIER: finishWorkout start, '
+      'state.value=${current?.workout.name ?? 'NULL'}, '
+      'sets=${current?.exercises.expand((e) => e.sets).length ?? 0}',
+      name: 'repsaga',
+    );
     if (current == null) return null;
     if (_isFinishing) return null;
     _isFinishing = true;
@@ -1762,6 +1769,14 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     // either way it must not leak into the next finish call.
     _cancelRequested = false;
 
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    log(
+      'NOTIFIER: state transitioning via guard result, '
+      'saveCommitted=$saveCommitted, '
+      'savedOffline=$savedOffline, '
+      'isError=${result is AsyncError}',
+      name: 'repsaga',
+    );
     state = result;
     _isFinishing = false;
 

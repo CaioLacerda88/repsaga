@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -72,9 +74,21 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// State's `BuildContext` notices unmounting.
   bool _disposed = false;
 
+  /// TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT.
+  /// Guards the one-shot "first build" log so we don't spam every rebuild.
+  bool _loggedFirstBuild = false;
+
   @override
   void initState() {
     super.initState();
+    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+    developer.log(
+      'POST-SESSION-SCREEN: initState fired, '
+      'priorFinishedWorkoutCount=${widget.params.priorFinishedWorkoutCount}, '
+      'totalXpEarned=${widget.params.totalXpEarned}, '
+      'queueLen=${widget.params.queueResult.queue.length}',
+      name: 'repsaga',
+    );
     _stateController = PostSessionController(ref: ref, params: widget.params);
     _controller = AnimationController(
       vsync: this,
@@ -185,6 +199,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
             listenable: _stateController,
             builder: (context, _) {
               final state = _stateController.state;
+              // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+              if (!_loggedFirstBuild) {
+                _loggedFirstBuild = true;
+                developer.log(
+                  'POST-SESSION-SCREEN: building cuts, '
+                  'rewardTier=${state.tier}, '
+                  'cutCount=${state.cuts.length}, '
+                  'showSummary=${state.showSummary}',
+                  name: 'repsaga',
+                );
+              }
               return state.showSummary
                   ? _buildSummary(state, l10n)
                   : _buildCinematic(state, l10n);

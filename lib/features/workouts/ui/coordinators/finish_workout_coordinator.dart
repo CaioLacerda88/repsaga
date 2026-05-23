@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -180,6 +182,11 @@ class FinishWorkoutCoordinator {
       // `finish_workout_coordinator_post_session_navigation_test.dart`
       // regression test that pins the contract.
       final priorWorkoutCount = ref.read(workoutCountProvider).value ?? 0;
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: priorWorkoutCount=$priorWorkoutCount',
+        name: 'repsaga',
+      );
 
       // Phase 30 PR 30a Bug C v2 (2026-05-23) — same lifecycle contract as
       // priorWorkoutCount above. `notifier.totalSetsCount` reads from
@@ -197,6 +204,13 @@ class FinishWorkoutCoordinator {
       // depends on `state.value`, capture it BEFORE the
       // `await notifier.finishWorkout()` at line ~202.
       final preFinishSetsCount = notifier.totalSetsCount;
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: preFinishSetsCount=$preFinishSetsCount, '
+        'current.exercises.length='
+        '${ref.read(activeWorkoutProvider).value?.exercises.length}',
+        name: 'repsaga',
+      );
 
       // Capture the root navigator's context NOW — while this State is still
       // mounted and in the widget tree — for use after the save completes.
@@ -216,7 +230,22 @@ class FinishWorkoutCoordinator {
       // play uninterrupted (GoRouter's go() does a full-stack replacement
       // which would instantly pop any showDialog overlay).
       _isFinishHandled = true;
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: pre-await notifier.totalSetsCount='
+        '${notifier.totalSetsCount}, '
+        'state.value='
+        '${ref.read(activeWorkoutProvider).value?.workout.name ?? 'NULL'}',
+        name: 'repsaga',
+      );
       final finishResult = await notifier.finishWorkout(notes: result.notes);
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: post-await context.mounted=${context.mounted}, '
+        'state.value='
+        '${ref.read(activeWorkoutProvider).value?.workout.name ?? 'NULL'}',
+        name: 'repsaga',
+      );
       if (!context.mounted) {
         _isFinishHandled = false;
         return;
@@ -253,6 +282,12 @@ class FinishWorkoutCoordinator {
       // network issue. `serverErrorQueued` implies `savedOffline`.
       final wasServerErrorQueued = finishResult?.serverErrorQueued ?? false;
       final prResult = finishResult?.prResult;
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: wasSavedOffline=$wasSavedOffline, '
+        'prResult=${prResult != null}',
+        name: 'repsaga',
+      );
 
       // Invalidate caches so stat cards and lists reflect the new workout.
       if (!wasSavedOffline) {
@@ -382,6 +417,13 @@ class FinishWorkoutCoordinator {
       // mirrored the legacy "show only if PR" rule from /pr-celebration
       // and missed the mockup §5 State 2 baseline cinematic intent.
       final shouldPushPostSession = !wasSavedOffline && preFinishSetsCount > 0;
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: PREDICATE wasSavedOffline=$wasSavedOffline, '
+        'preFinishSetsCount=$preFinishSetsCount, '
+        'shouldPushPostSession=$shouldPushPostSession',
+        name: 'repsaga',
+      );
 
       if (shouldPushPostSession) {
         final l10n = AppLocalizations.of(rootContext);
@@ -429,10 +471,24 @@ class FinishWorkoutCoordinator {
           l10n: l10n,
         );
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!rootContext.mounted) return;
+          if (!rootContext.mounted) {
+            // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+            developer.log(
+              'FINISH-COORD: postFrame fired but rootContext NOT mounted, '
+              'aborting push',
+              name: 'repsaga',
+            );
+            return;
+          }
           // The workoutId is the just-finished workout's id, captured from
           // the snapshot taken before finishWorkout disposed the state.
           final workoutId = currentState?.workout.id ?? 'unknown';
+          // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+          developer.log(
+            'FINISH-COORD: about to push post-session route '
+            '/workout/finish/$workoutId',
+            name: 'repsaga',
+          );
           rootContext.go('/workout/finish/$workoutId', extra: params);
         });
         // Defer the navigation-ownership release for two frames so the
@@ -445,6 +501,14 @@ class FinishWorkoutCoordinator {
         return;
       }
 
+      // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
+      developer.log(
+        'FINISH-COORD: falling through to legacy navigator, '
+        'will route to /home or /pr-celebration '
+        '(wasSavedOffline=$wasSavedOffline, preFinishSetsCount='
+        '$preFinishSetsCount, prResult=${navigationPrResult != null})',
+        name: 'repsaga',
+      );
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
         userTappedOverflow: userTappedOverflow,
