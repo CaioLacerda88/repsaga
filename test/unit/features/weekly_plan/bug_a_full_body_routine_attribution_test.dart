@@ -242,5 +242,86 @@ void main() {
 
       expect(planned.isEmpty, isTrue);
     });
+
+    test('tied max-weight body parts both receive the full set count', () {
+      // Test 1's fixtures deliberately use unambiguous max attribution (one
+      // winner per exercise) to keep its arithmetic exact. This test pins the
+      // OTHER branch of `primaryBodyPartsForSet`: when two BPs tie at the
+      // same max share, both belong in the winner set and computePlannedCounts
+      // must credit each one `setConfigs.length` times — NOT split the count.
+      //
+      // The user-facing rationale: a push-pull exercise weighted 50/50 across
+      // chest and back is just as much "a chest set" as "a back set" for the
+      // purposes of weekly engagement coverage, so both bars advance by the
+      // full set count.
+      final pushPull = exercise(
+        id: 'ex-push-pull',
+        slug: 'push_pull_hybrid',
+        muscleGroup: MuscleGroup.chest, // unused by attribution path; tie wins
+        xpAttribution: const {'chest': 0.5, 'back': 0.5},
+      );
+
+      final routine = Routine(
+        id: 'routine-tie',
+        userId: 'user-1',
+        name: 'Tie Break',
+        isDefault: false,
+        createdAt: fixedCreatedAt,
+        exercises: [routineExercise(ex: pushPull, sets: 3)],
+      );
+
+      final planned = computePlannedCounts(
+        plan: planFor(routineId: routine.id),
+        routinesById: {routine.id: routine},
+      );
+
+      // Both tied BPs receive the full set count — not 1.5 each, not split.
+      expect(planned[BodyPart.chest], 3, reason: 'Tied BP gets full set count');
+      expect(planned[BodyPart.back], 3, reason: 'Tied BP gets full set count');
+      // Untouched BPs receive nothing.
+      expect(planned[BodyPart.legs] ?? 0, 0);
+      expect(planned[BodyPart.shoulders] ?? 0, 0);
+      expect(planned[BodyPart.arms] ?? 0, 0);
+      expect(planned[BodyPart.core] ?? 0, 0);
+    });
+
+    test('empty xp_attribution map falls back to primary muscle '
+        '(same as null — defense-in-depth)', () {
+      // The fallback guard at weekly_engagement_provider.dart is
+      // `attrJson != null && attrJson.isNotEmpty`. A null map and an empty
+      // `{}` map both fall through to the `{muscleGroup: 1.0}` safety net —
+      // an empty JSONB map from the DB is semantically equivalent to null
+      // for attribution purposes (no shares to compare → no winners).
+      // Test 2 pins the null branch; this pins the empty-map branch.
+      final emptyAttrExercise = exercise(
+        id: 'ex-empty-attr',
+        slug: 'empty_attr_exercise',
+        muscleGroup: MuscleGroup.legs,
+        xpAttribution: const <String, num>{},
+      );
+
+      final routine = Routine(
+        id: 'routine-empty-attr',
+        userId: 'user-1',
+        name: 'Empty Attr',
+        isDefault: false,
+        createdAt: fixedCreatedAt,
+        exercises: [routineExercise(ex: emptyAttrExercise, sets: 3)],
+      );
+
+      final planned = computePlannedCounts(
+        plan: planFor(routineId: routine.id),
+        routinesById: {routine.id: routine},
+      );
+
+      // Fallback credits the primary muscle once per set.
+      expect(planned[BodyPart.legs], 3);
+      // No other BPs touched — narrow fallback, same as the null branch.
+      expect(planned[BodyPart.chest] ?? 0, 0);
+      expect(planned[BodyPart.back] ?? 0, 0);
+      expect(planned[BodyPart.shoulders] ?? 0, 0);
+      expect(planned[BodyPart.arms] ?? 0, 0);
+      expect(planned[BodyPart.core] ?? 0, 0);
+    });
   });
 }

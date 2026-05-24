@@ -62,11 +62,22 @@ BEGIN;
 -- Adding `xp_attribution` to the projection IS such a shape change, so
 -- we must DROP first, then CREATE fresh.
 --
--- Drop order: callers first (insert + update both call fn_exercises_localized
--- via SELECT * inside their bodies), then the leaf function. CASCADE is
--- intentionally NOT used: any unexpected dependency outside this migration
--- (e.g. a view we forgot about) should fail loudly here, not silently
--- vanish under CASCADE.
+-- Drop order: composing callers (fn_insert_user_exercise and
+-- fn_update_user_exercise both `SELECT * FROM public.fn_exercises_localized(...)`
+-- at the end of their bodies) MUST be dropped BEFORE the leaf so the new
+-- RETURNS TABLE shape can land — otherwise PG rejects with SQLSTATE 42P13
+-- when the wrappers' row-type no longer matches the leaf's.
+--
+-- fn_search_exercises_localized is NOT a composing caller — it has its own
+-- standalone implementation (CTE + LATERAL projection, no SELECT * delegation
+-- to fn_exercises_localized). We drop it in the same batch purely for symmetry
+-- and to keep the four-function RPC family at a consistent schema version
+-- (any future caller-of-search migration sees one coherent shape, not a
+-- mid-migration mix).
+--
+-- CASCADE is intentionally NOT used: any unexpected dependency outside this
+-- migration (e.g. a view we forgot about) should fail loudly here, not
+-- silently vanish under CASCADE.
 -- ---------------------------------------------------------------------------
 
 DROP FUNCTION IF EXISTS public.fn_insert_user_exercise(
