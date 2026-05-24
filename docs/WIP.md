@@ -28,18 +28,18 @@ the phase summary in PROJECT.md §4.
 
 - [x] `lib/features/workouts/domain/share_payload.dart` — Freezed model + dominantBodyPart + dominantHue + factory `SharePayload.fromPostSessionState`
 - [x] `make gen` to produce `share_payload.freezed.dart`
-- [ ] `test/unit/features/workouts/domain/share_payload_test.dart` — 8 composition cases (day-zero / baseline / single PR / multi PR / single rank-up / multi rank-up / title / class-change)
-- [ ] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart` — Minimal Strip layout (bottom strip + hue accent + XP + PR + bar + REPSAGA wordmark)
-- [ ] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_a_test.dart`
-- [ ] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_b.dart` — Full-bleed collar layout w/ `CustomClipper<Path>` top + bottom diagonals
-- [ ] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_b_test.dart`
-- [ ] `lib/features/workouts/ui/post_session/share/variants/share_card_discreet.dart` — Hue flood + reused `paintCutSlash` + d-hero numeric + REPSAGA
-- [ ] `test/unit/features/workouts/ui/post_session/share/variants/share_card_discreet_test.dart`
-- [ ] `lib/features/workouts/ui/post_session/share/share_card_renderer.dart` — composer (photo zone | discreet flood) + variant overlay
-- [ ] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_test.dart`
-- [ ] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_golden_test.dart` — 3 goldens (A baseline, B PR, Discreet class-change)
-- [ ] `make format` + `make analyze` + `flutter test test/unit/features/workouts/` final gates
-- [ ] commit `feat(workouts): share card variants + renderer + SharePayload domain (PR 30b Pass 1)`
+- [x] `test/unit/features/workouts/domain/share_payload_test.dart` — 8 composition cases (day-zero / baseline / single PR / multi PR / single rank-up / multi rank-up / title / class-change) + idempotency
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart` — Minimal Strip layout (bottom strip + hue accent + XP + PR + bar + REPSAGA wordmark)
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_a_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_b.dart` — Full-bleed collar layout w/ `CustomClipper<Path>` top + bottom diagonals
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_b_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_discreet.dart` — Hue flood + reused `paintCutSlash` + d-hero numeric + REPSAGA
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_discreet_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/share_card_renderer.dart` — composer (photo zone | discreet flood) + variant overlay
+- [x] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_test.dart`
+- [x] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_golden_test.dart` — 3 goldens (A baseline, B PR, Discreet class-change)
+- [x] `dart format .` + `dart analyze --fatal-infos` + `flutter test test/unit/features/workouts/` final gates (522 tests passing)
+- [x] commits split across 4 atomic groups: `b9a911f` (payload tests) → `f3497cf` (3 variants) → `675bf81` (renderer) → `c7abcda` (goldens + closeout)
 
 **Branch:** `feature/30b-share-card` off `main` (after 30a merges).
 
