@@ -129,10 +129,12 @@ void main() {
         find.byKey(const ValueKey('share-card-variant-b-top-collar')),
       );
       final color = container.color!;
-      expect(color.red, AppColors.abyss.red);
-      expect(color.green, AppColors.abyss.green);
-      expect(color.blue, AppColors.abyss.blue);
-      expect((color.alpha / 255 - 0.95).abs() < 0.01, isTrue);
+      // Use the new float-channel accessors — `.red/.green/.blue/.alpha`
+      // are deprecated in Flutter 3.27+.
+      expect(color.r, AppColors.abyss.r);
+      expect(color.g, AppColors.abyss.g);
+      expect(color.b, AppColors.abyss.b);
+      expect((color.a - 0.95).abs() < 0.01, isTrue);
     },
   );
 }

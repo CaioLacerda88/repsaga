@@ -156,10 +156,12 @@ void main() {
     );
     final color = (decorated.decoration as BoxDecoration).color!;
     // Per mockup §6 "Render rules": rgba(13,3,25,0.92) — abyss at 92%.
-    // We compare R/G/B to the abyss token and alpha within 1/255 tolerance.
-    expect(color.red, AppColors.abyss.red);
-    expect(color.green, AppColors.abyss.green);
-    expect(color.blue, AppColors.abyss.blue);
-    expect((color.alpha / 255 - 0.92).abs() < 0.01, isTrue);
+    // We compare R/G/B to the abyss token (via the new float-channel
+    // accessors — `.red/.green/.blue/.alpha` are deprecated in Flutter
+    // 3.27+) and alpha within ~1% tolerance.
+    expect(color.r, AppColors.abyss.r);
+    expect(color.g, AppColors.abyss.g);
+    expect(color.b, AppColors.abyss.b);
+    expect((color.a - 0.92).abs() < 0.01, isTrue);
   });
 }

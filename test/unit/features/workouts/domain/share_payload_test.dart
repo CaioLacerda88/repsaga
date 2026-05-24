@@ -142,39 +142,36 @@ void main() {
   // ---------------------------------------------------------------------------
   // Case 4: Multi-PR — hero selection by score (weight × reps), name tiebreaker
   // ---------------------------------------------------------------------------
-  test(
-    'multi-PR session selects highest-score PR (weight × reps), then '
-    'alphabetical by exercise name tiebreaker',
-    () {
-      // Two PRs at identical score (100 × 3 == 60 × 5 == 300).
-      // Alphabetical tiebreaker picks "Deadlift" over "Squat".
-      // A third PR at higher score (95 × 5 == 475) beats both.
-      final payload = SharePayload.fromPostSessionState(
-        tier: RewardTier.thresholdAnticipatory,
-        queueResult: queue(const []),
-        prResult: prResult([
-          pr(exerciseId: 'squat', value: 100, reps: 3),
-          pr(exerciseId: 'bench', value: 95, reps: 5), // score 475 — wins
-          pr(exerciseId: 'deadlift', value: 60, reps: 5),
-        ]),
-        bpXpDeltas: const {BodyPart.chest: 400, BodyPart.legs: 250},
-        bpRankAfter: const {BodyPart.chest: 19, BodyPart.legs: 17},
-        exerciseNames: const {
-          'squat': 'Squat',
-          'bench': 'Bench Press',
-          'deadlift': 'Deadlift',
-        },
-        totalXp: 980,
-        characterClassSlug: 'bulwark',
-      );
+  test('multi-PR session selects highest-score PR (weight × reps), then '
+      'alphabetical by exercise name tiebreaker', () {
+    // Two PRs at identical score (100 × 3 == 60 × 5 == 300).
+    // Alphabetical tiebreaker picks "Deadlift" over "Squat".
+    // A third PR at higher score (95 × 5 == 475) beats both.
+    final payload = SharePayload.fromPostSessionState(
+      tier: RewardTier.thresholdAnticipatory,
+      queueResult: queue(const []),
+      prResult: prResult([
+        pr(exerciseId: 'squat', value: 100, reps: 3),
+        pr(exerciseId: 'bench', value: 95, reps: 5), // score 475 — wins
+        pr(exerciseId: 'deadlift', value: 60, reps: 5),
+      ]),
+      bpXpDeltas: const {BodyPart.chest: 400, BodyPart.legs: 250},
+      bpRankAfter: const {BodyPart.chest: 19, BodyPart.legs: 17},
+      exerciseNames: const {
+        'squat': 'Squat',
+        'bench': 'Bench Press',
+        'deadlift': 'Deadlift',
+      },
+      totalXp: 980,
+      characterClassSlug: 'bulwark',
+    );
 
-      expect(payload.pr!.exerciseName, 'Bench Press');
-      expect(payload.pr!.weightKg, 95);
-      expect(payload.pr!.reps, 5);
-      expect(payload.dominantBodyPart, BodyPart.chest);
-      expect(payload.hasShareCta, isTrue);
-    },
-  );
+    expect(payload.pr!.exerciseName, 'Bench Press');
+    expect(payload.pr!.weightKg, 95);
+    expect(payload.pr!.reps, 5);
+    expect(payload.dominantBodyPart, BodyPart.chest);
+    expect(payload.hasShareCta, isTrue);
+  });
 
   // ---------------------------------------------------------------------------
   // Case 5: Single rank-up (no PR) — hue + hasRankUp + share CTA
@@ -266,34 +263,31 @@ void main() {
   // ---------------------------------------------------------------------------
   // Case 8: Class-change — hue override to hotViolet, isClassChange flag set
   // ---------------------------------------------------------------------------
-  test(
-    'class-change session overrides BP hue with hotViolet + sets '
-    'isClassChange flag (even though chest is dominant)',
-    () {
-      final payload = SharePayload.fromPostSessionState(
-        tier: RewardTier.classChangeAnticipatory,
-        queueResult: queue(const [
-          CelebrationEvent.classChange(
-            fromClass: CharacterClass.initiate,
-            toClass: CharacterClass.bulwark,
-          ),
-        ]),
-        prResult: null,
-        bpXpDeltas: const {BodyPart.chest: 420},
-        bpRankAfter: const {BodyPart.chest: 18},
-        exerciseNames: const {},
-        totalXp: 420,
-        characterClassSlug: 'bulwark',
-      );
+  test('class-change session overrides BP hue with hotViolet + sets '
+      'isClassChange flag (even though chest is dominant)', () {
+    final payload = SharePayload.fromPostSessionState(
+      tier: RewardTier.classChangeAnticipatory,
+      queueResult: queue(const [
+        CelebrationEvent.classChange(
+          fromClass: CharacterClass.initiate,
+          toClass: CharacterClass.bulwark,
+        ),
+      ]),
+      prResult: null,
+      bpXpDeltas: const {BodyPart.chest: 420},
+      bpRankAfter: const {BodyPart.chest: 18},
+      exerciseNames: const {},
+      totalXp: 420,
+      characterClassSlug: 'bulwark',
+    );
 
-      expect(payload.isClassChange, isTrue);
-      expect(payload.dominantBodyPart, BodyPart.chest);
-      expect(payload.dominantBodyPartRank, 18);
-      // Class-change hue override beats the BP-derived hue.
-      expect(payload.dominantHue, AppColors.hotViolet);
-      expect(payload.hasShareCta, isTrue);
-    },
-  );
+    expect(payload.isClassChange, isTrue);
+    expect(payload.dominantBodyPart, BodyPart.chest);
+    expect(payload.dominantBodyPartRank, 18);
+    // Class-change hue override beats the BP-derived hue.
+    expect(payload.dominantHue, AppColors.hotViolet);
+    expect(payload.hasShareCta, isTrue);
+  });
 
   // ---------------------------------------------------------------------------
   // Idempotency — same inputs → identical payload (pure function contract)

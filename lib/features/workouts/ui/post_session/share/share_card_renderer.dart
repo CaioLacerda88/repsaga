@@ -145,10 +145,7 @@ class ShareCardRenderer extends StatelessWidget {
       container: true,
       explicitChildNodes: true,
       identifier: 'share-card-renderer',
-      child: AspectRatio(
-        aspectRatio: 9 / 16,
-        child: _buildBody(),
-      ),
+      child: AspectRatio(aspectRatio: 9 / 16, child: _buildBody()),
     );
   }
 

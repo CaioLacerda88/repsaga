@@ -56,9 +56,7 @@ void main() {
   Widget host(Widget child) {
     return MaterialApp(
       home: Scaffold(
-        body: Center(
-          child: SizedBox(width: 270, child: child),
-        ),
+        body: Center(child: SizedBox(width: 270, child: child)),
       ),
     );
   }
@@ -183,10 +181,7 @@ void main() {
       await tester.pumpWidget(
         host(
           ShareCardRenderer(
-            payload: payload(
-              dominantBp: BodyPart.chest,
-              isClassChange: true,
-            ),
+            payload: payload(dominantBp: BodyPart.chest, isClassChange: true),
             variant: ShareCardVariant.discreet,
             strings: strings,
           ),
@@ -269,10 +264,7 @@ class _SolidImageProvider extends ImageProvider<_SolidImageProvider> {
     // 1×1 placeholder is enough for find.byKey assertions.
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    canvas.drawRect(
-      const Rect.fromLTWH(0, 0, 1, 1),
-      Paint()..color = color,
-    );
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 1, 1), Paint()..color = color);
     final picture = recorder.endRecording();
     final image = await picture.toImage(1, 1);
     return ImageInfo(image: image);
