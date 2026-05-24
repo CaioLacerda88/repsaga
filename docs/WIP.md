@@ -22,6 +22,8 @@ the phase summary in PROJECT.md §4.
 
 ### PR 30b — Share card pipeline
 
+**Status (2026-05-24):** In flight on `feature/30b-share-card`. Dispatched in 3 passes to keep scope tractable: Pass 1 = widget + domain layer (variants A/B/Discreet, ShareCardRenderer, SharePayload, unit + widget + golden tests; NO IO, NO pubspec changes); Pass 2 = IO services (Context7-pinned `image_picker` / `share_plus` / `permission_handler` + ShareImageRenderer + ShareService + AndroidManifest); Pass 3 = ShareController + ShareSheet + SharePreviewScreen + wire `share_cta_button.dart` + E2E spec. Task graph in TaskList (#1 setup, #2 Pass 1, #3 Pass 2, #4 Pass 3, #5 ship).
+
 **Branch:** `feature/30b-share-card` off `main` (after 30a merges).
 
 **Scope summary**
