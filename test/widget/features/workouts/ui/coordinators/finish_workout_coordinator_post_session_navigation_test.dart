@@ -194,11 +194,20 @@ class _PRRewardNotifier extends AsyncNotifier<ActiveWorkoutState?>
   // `notifier.totalSetsCount` AFTER the await. A hardcoded `=> 1` would
   // mask the bug because the post-await read in the coordinator would
   // (wrongly) succeed.
+  //
+  // PR #261 reviewer Blocker 2 (2026-05-24) — the `.where(isCompleted)`
+  // filter mirrors the post-Bug-B production getter: planned-but-not-
+  // tapped slots no longer count. `_makeNonEmptyState` uses
+  // `isCompleted: true`, so the returned count stays at 1 — the
+  // post-session navigation contract under test is unchanged.
   @override
   int get totalSetsCount {
     final s = _state;
     if (s == null) return 0;
-    return s.exercises.expand((e) => e.sets).length;
+    return s.exercises
+        .expand((e) => e.sets)
+        .where((set) => set.isCompleted)
+        .length;
   }
 
   @override
@@ -292,11 +301,18 @@ class _BaselineNotifier extends AsyncNotifier<ActiveWorkoutState?>
   // test would PASS even with the broken production code. Reading from
   // `_state` — which we deliberately null inside `finishWorkout` below
   // — reproduces the production lifecycle exactly.
+  //
+  // PR #261 reviewer Blocker 2 (2026-05-24) — the `.where(isCompleted)`
+  // filter mirrors the post-Bug-B production getter. `_makeNonEmptyState`
+  // uses `isCompleted: true`, so the returned count stays at 1.
   @override
   int get totalSetsCount {
     final s = _state;
     if (s == null) return 0;
-    return s.exercises.expand((e) => e.sets).length;
+    return s.exercises
+        .expand((e) => e.sets)
+        .where((set) => set.isCompleted)
+        .length;
   }
 
   @override

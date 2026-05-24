@@ -243,10 +243,28 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         .length;
   }
 
-  /// Total set count across all exercises (completed + incomplete). Phase
-  /// 30 PR 30a — drives the empty-session guard (mockup §5 State 11):
-  /// when zero sets exist, the finish flow shows a disambiguation sheet
-  /// instead of pushing the post-session cinematic.
+  /// Total set count across all exercises — counts ONLY completed sets
+  /// post-Bug-B filter (PR #261, reviewer Blocker 2). The empty-session
+  /// guard at `finish_workout_coordinator.dart:96` reads this to decide
+  /// whether to show State 11 modal vs route forward; the Bug-B save-site
+  /// filter (L~1336) drops incomplete sets at persistence time, so
+  /// counting planned sets here would let a user who taps Finish without
+  /// completing any work bypass the guard and create a ghost history
+  /// entry (RPC accepts empty arrays without error).
+  ///
+  /// Sequence the planned-count semantics broke:
+  ///   1. `startFromRoutine` pre-populates `exercises` with all routine
+  ///      exercises + planned `setCount` sets (`isCompleted: false`).
+  ///   2. User taps "Finish" immediately without completing any set.
+  ///   3. Pre-fix: `totalSetsCount` = N planned > 0 → guard does NOT
+  ///      fire → coordinator routes forward → `_repo.saveWorkout(...)`
+  ///      with `committedExercises = []` → ghost history entry.
+  ///   4. Post-fix: `totalSetsCount` = 0 → guard fires → user is asked
+  ///      to discard or continue logging.
+  ///
+  /// If a separate `plannedSetsCount` getter is needed for analytics or
+  /// UI surfaces (none currently — grepped 2026-05-24), add it alongside.
+  /// This getter pins the guard contract.
   ///
   /// IMPORTANT — lifecycle: returns 0 AFTER `finishWorkout()` is awaited,
   /// because the notifier transitions to `AsyncData(null)` on commit and
@@ -259,7 +277,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   int get totalSetsCount {
     final current = state.value;
     if (current == null) return 0;
-    return current.exercises.expand((e) => e.sets).length;
+    return current.exercises
+        .expand((e) => e.sets)
+        .where((s) => s.isCompleted)
+        .length;
   }
 
   /// Start a new workout session.
@@ -1758,12 +1779,23 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // drain (in case any pre-26e queue entries survived an upgrade).
       ref.invalidate(weeklyPlanProvider);
 
-      // Analytics intentionally reads the PRE-filter `exercises` so the
-      // `workoutFinished` event retains its planned-vs-committed semantics:
-      // `totalSets` reports the planned-routine size, `completedSets` what
-      // the user actually logged, and `incompleteSetsSkipped` the delta.
-      // After the Bug B fix `sets` is the post-filter (all-completed) list,
-      // which would make `incompleteSetsSkipped` always 0 if used here.
+      // Analytics — mixed planned-vs-committed reads, on purpose:
+      //
+      // `totalSets` / `completedSets` / `incompleteSetsSkipped` read the
+      // PRE-filter `exercises` so `workoutFinished` retains its planned-
+      // vs-committed deltas (the delta IS the analytics signal —
+      // "how often do users plan more than they execute?"). Using the
+      // post-filter `sets` here would make `incompleteSetsSkipped`
+      // always 0 and erase the signal.
+      //
+      // `exerciseCount` reads the POST-filter `committedExercises.length`
+      // (PR #261 reviewer Blocker 1). The schema has no paired
+      // `completedExercises` field, so consumers couldn't recover the
+      // committed count from a planned-count read. This field answers
+      // "how many exercises did the user actually perform" — that's the
+      // committed shape. If a planned counterpart is ever needed, add a
+      // separate `plannedExerciseCount` field on the event rather than
+      // silently changing this field's meaning.
       final plannedSets = exercises.expand((e) => e.sets).toList();
       final totalSets = plannedSets.length;
       final completedSetsCount = plannedSets.where((s) => s.isCompleted).length;
@@ -1773,7 +1805,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutFinished(
           durationSeconds: durationSeconds,
-          exerciseCount: exercises.length,
+          exerciseCount: committedExercises.length,
           totalSets: totalSets,
           completedSets: completedSetsCount,
           incompleteSetsSkipped: incompleteSetsSkipped,

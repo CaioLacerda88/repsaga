@@ -112,8 +112,14 @@ class _FixedActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
       .where((s) => !s.isCompleted)
       .length;
 
+  // PR #261 reviewer Blocker 2 (2026-05-24): mirror the post-Bug-B
+  // production getter — count only completed sets. The screen reads
+  // `_hasCompletedSet` directly (not this getter) to drive Finish-bar
+  // enablement, so swapping the formula here doesn't affect the BUG-020
+  // contracts under test; it just keeps the stub honest.
   @override
-  int get totalSetsCount => state_.exercises.expand((e) => e.sets).length;
+  int get totalSetsCount =>
+      state_.exercises.expand((e) => e.sets).where((s) => s.isCompleted).length;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

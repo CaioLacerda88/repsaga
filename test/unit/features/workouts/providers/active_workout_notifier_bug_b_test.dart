@@ -62,9 +62,16 @@ class _FakeActiveWorkoutState extends Fake implements ActiveWorkoutState {}
 
 class _FakeWorkout extends Fake implements Workout {}
 
-class _FakeAnalyticsRepository extends BaseRepository
+/// Captures every `insertEvent` call so a test can assert on the analytics
+/// event payload. PR #261 reviewer Blocker 1 changed `workoutFinished`'s
+/// `exerciseCount` from `exercises.length` (planned) to
+/// `committedExercises.length` (committed); the analytics assertion in
+/// test 1 reads from `events` to pin that contract.
+class _CapturingAnalyticsRepository extends BaseRepository
     implements AnalyticsRepository {
-  const _FakeAnalyticsRepository();
+  _CapturingAnalyticsRepository();
+
+  final List<AnalyticsEvent> events = [];
 
   @override
   Future<void> insertEvent({
@@ -72,7 +79,9 @@ class _FakeAnalyticsRepository extends BaseRepository
     required AnalyticsEvent event,
     required String? platform,
     required String? appVersion,
-  }) async {}
+  }) async {
+    events.add(event);
+  }
 }
 
 class _CapturingPendingSyncNotifier extends PendingSyncNotifier {
@@ -150,12 +159,14 @@ ActiveWorkoutState _makeRoutineState({
   _MockWorkoutLocalStorage mockStorage,
   _MockAuthRepository mockAuth,
   _CapturingPendingSyncNotifier capturedNotifier,
+  _CapturingAnalyticsRepository capturingAnalytics,
 })
 _makeBundle(ActiveWorkoutState initial) {
   final mockRepo = _MockWorkoutRepository();
   final mockStorage = _MockWorkoutLocalStorage();
   final mockAuth = _MockAuthRepository();
   final capturedNotifier = _CapturingPendingSyncNotifier();
+  final capturingAnalytics = _CapturingAnalyticsRepository();
 
   when(() => mockStorage.loadActiveWorkout()).thenReturn(initial);
   when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
@@ -170,9 +181,7 @@ _makeBundle(ActiveWorkoutState initial) {
       workoutRepositoryProvider.overrideWithValue(mockRepo),
       workoutLocalStorageProvider.overrideWithValue(mockStorage),
       authRepositoryProvider.overrideWithValue(mockAuth),
-      analyticsRepositoryProvider.overrideWithValue(
-        const _FakeAnalyticsRepository(),
-      ),
+      analyticsRepositoryProvider.overrideWithValue(capturingAnalytics),
       pendingSyncProvider.overrideWith(() => capturedNotifier),
     ],
   );
@@ -182,6 +191,7 @@ _makeBundle(ActiveWorkoutState initial) {
     mockStorage: mockStorage,
     mockAuth: mockAuth,
     capturedNotifier: capturedNotifier,
+    capturingAnalytics: capturingAnalytics,
   );
 }
 
@@ -261,6 +271,55 @@ void main() {
         capturedSets.every((s) => survivingWeIds.contains(s.workoutExerciseId)),
         isTrue,
         reason: 'No persisted set may reference a dropped exercise',
+      );
+
+      // PR #261 reviewer Blocker 1 (2026-05-24) — analytics contract.
+      //
+      // `workoutFinished.exerciseCount` must match the committed shape
+      // (2 here — Bench Press + Triceps; OHP dropped because zero
+      // completed sets). Pre-fix it reported `exercises.length` = 3 (the
+      // planned shape), and consumers had no paired `completedExercises`
+      // field to recover the true value. The field now answers
+      // "how many exercises did the user actually perform."
+      //
+      // The planned-vs-committed deltas live on the OTHER fields
+      // (`totalSets` = 12 planned, `completedSets` = 3 logged,
+      // `incompleteSetsSkipped` = 9) — those are the analytics signal
+      // for "how often do users plan more than they execute?"
+      final finished = bundle.capturingAnalytics.events.firstWhere(
+        (e) => e.name == 'workout_finished',
+        orElse: () => throw StateError('no workoutFinished event captured'),
+      );
+      final finishedProps = finished.props;
+      expect(
+        finishedProps['exercise_count'],
+        equals(2),
+        reason:
+            'workoutFinished.exerciseCount must equal '
+            'committedExercises.length (2 — Bench Press + Triceps), NOT '
+            'planned exercises.length (3 — pre-fix Blocker 1 leak).',
+      );
+      // Paranoia pins: the planned-vs-committed deltas on the other
+      // fields must STILL be informative. If a future refactor swaps
+      // these reads to post-filter `sets`, `incompleteSetsSkipped`
+      // collapses to 0 and the signal vanishes.
+      expect(
+        finishedProps['total_sets'],
+        equals(12),
+        reason:
+            'totalSets = 12 (3 exercises x 4 planned sets) — planned shape.',
+      );
+      expect(
+        finishedProps['completed_sets'],
+        equals(3),
+        reason: 'completedSets = 3 (2 + 0 + 1) — committed shape.',
+      );
+      expect(
+        finishedProps['incomplete_sets_skipped'],
+        equals(9),
+        reason:
+            'incompleteSetsSkipped = 9 (12 planned - 3 committed) — the '
+            'planned-vs-committed delta IS the analytics signal.',
       );
     });
 
@@ -375,6 +434,170 @@ void main() {
       expect(
         capturedSets.where((s) => s.workoutExerciseId == 'we-2').length,
         2,
+      );
+    });
+
+    test('ad-hoc workout (not started from routine) — filter still drops '
+        'uncompleted sets and zero-completed-set exercises', () async {
+      // PR #261 reviewer Warning (2026-05-24): the existing three tests
+      // all use `_makeRoutineState`, which models the routine-start path
+      // (every exercise pre-populated with planned sets). The filter is
+      // path-independent — it operates on any `ActiveWorkoutState.exercises`
+      // — but until this test, no fixture pinned the ad-hoc path where
+      // exercises are added one-by-one via `addExercise` and sets via
+      // `addSet`.
+      //
+      // What the ad-hoc path looks like (verified at
+      // active_workout_notifier.dart::addExercise / addSet):
+      //   - `addExercise` seeds set 1 with `isCompleted: false` for the
+      //     new exercise (carry-over from last session OR equipment
+      //     defaults; either way uncompleted).
+      //   - `addSet` appends additional sets with `isCompleted: false`.
+      //   - The user taps a "complete" affordance on individual sets to
+      //     flip `isCompleted` to true.
+      //
+      // Fixture: an ad-hoc workout with 3 exercises whose sets were added
+      // individually (no pre-fill of N planned slots). Same completion
+      // pattern as test 1 — first exercise 2/3 completed, second 0/2
+      // completed (must be dropped), third 1/4 completed.
+      final state = ActiveWorkoutState.fromJson({
+        'workout': TestWorkoutFactory.create(isActive: true),
+        'exercises': [
+          {
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-adhoc-1',
+              exerciseId: 'exercise-bench',
+              order: 1,
+            ),
+            'sets': [
+              TestSetFactory.create(
+                id: 'set-adhoc-1-1',
+                workoutExerciseId: 'we-adhoc-1',
+                setNumber: 1,
+                isCompleted: true,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-1-2',
+                workoutExerciseId: 'we-adhoc-1',
+                setNumber: 2,
+                isCompleted: true,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-1-3',
+                workoutExerciseId: 'we-adhoc-1',
+                setNumber: 3,
+                isCompleted: false,
+              ),
+            ],
+          },
+          {
+            // User added this exercise + 2 sets but never completed
+            // either — must be dropped at the exercise level.
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-adhoc-2',
+              exerciseId: 'exercise-rows',
+              order: 2,
+            ),
+            'sets': [
+              TestSetFactory.create(
+                id: 'set-adhoc-2-1',
+                workoutExerciseId: 'we-adhoc-2',
+                setNumber: 1,
+                isCompleted: false,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-2-2',
+                workoutExerciseId: 'we-adhoc-2',
+                setNumber: 2,
+                isCompleted: false,
+              ),
+            ],
+          },
+          {
+            'workout_exercise': TestWorkoutExerciseFactory.create(
+              id: 'we-adhoc-3',
+              exerciseId: 'exercise-curls',
+              order: 3,
+            ),
+            'sets': [
+              TestSetFactory.create(
+                id: 'set-adhoc-3-1',
+                workoutExerciseId: 'we-adhoc-3',
+                setNumber: 1,
+                isCompleted: true,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-3-2',
+                workoutExerciseId: 'we-adhoc-3',
+                setNumber: 2,
+                isCompleted: false,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-3-3',
+                workoutExerciseId: 'we-adhoc-3',
+                setNumber: 3,
+                isCompleted: false,
+              ),
+              TestSetFactory.create(
+                id: 'set-adhoc-3-4',
+                workoutExerciseId: 'we-adhoc-3',
+                setNumber: 4,
+                isCompleted: false,
+              ),
+            ],
+          },
+        ],
+      });
+      final bundle = _makeBundle(state);
+      addTearDown(bundle.container.dispose);
+
+      late List<WorkoutExercise> capturedExercises;
+      late List<ExerciseSet> capturedSets;
+      when(
+        () => bundle.mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+          routineId: any(named: 'routineId'),
+        ),
+      ).thenAnswer((invocation) async {
+        capturedExercises =
+            invocation.namedArguments[#exercises] as List<WorkoutExercise>;
+        capturedSets = invocation.namedArguments[#sets] as List<ExerciseSet>;
+        return invocation.namedArguments[#workout] as Workout;
+      });
+
+      await bundle.container.read(activeWorkoutProvider.future);
+      await bundle.container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout();
+
+      // 2 exercises survived: we-adhoc-1 (2 completed) and we-adhoc-3 (1
+      // completed). we-adhoc-2 (zero completed) was dropped — same
+      // contract as the routine path.
+      expect(
+        capturedExercises.map((e) => e.id).toList(),
+        equals(['we-adhoc-1', 'we-adhoc-3']),
+        reason:
+            'Ad-hoc path must drop exercises with zero completed sets '
+            'identically to the routine path (filter is path-independent).',
+      );
+
+      // 3 sets persisted (2 + 1), all isCompleted == true.
+      expect(capturedSets.length, 3);
+      expect(
+        capturedSets.every((s) => s.isCompleted),
+        isTrue,
+        reason:
+            'Ad-hoc path must persist only completed sets — same contract '
+            'as the routine path.',
+      );
+
+      // No orphan-set leak from the dropped we-adhoc-2 exercise.
+      final survivingWeIds = capturedExercises.map((e) => e.id).toSet();
+      expect(
+        capturedSets.every((s) => survivingWeIds.contains(s.workoutExerciseId)),
+        isTrue,
       );
     });
   });
