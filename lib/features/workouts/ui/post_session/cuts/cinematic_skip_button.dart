@@ -19,15 +19,15 @@ import '../../../../../core/theme/app_theme.dart';
 /// adopted in Bug G. Still no Material ripple, no border, no border-radius
 /// (Concept B grammar — mockup §0).
 ///
-/// **Text-only refinement (UX pass 2.5, 2026-05-24).** Pass 2 paired the
-/// localized label with a `skip_next` glyph at 16dp. User + UX-critic
-/// review converged on dropping the icon: the abyss-panel chrome + hard
-/// edge + uppercase letter-spaced label already signals affordance, and
-/// the 16dp glyph competed with the typography instead of adding semantic
-/// weight. Removing the icon required bumping vertical padding 12→14dp
-/// to keep the ≥40dp tap target (icon was contributing 16dp of intrinsic
-/// row height) and pinning font weight to `w700` so the text-only pill
-/// reads as affordance, not body label.
+/// **Chrome strip + icon restore (UX pass 2.6, 2026-05-24).** Pass 2.5
+/// dropped the icon, but on-device review brought it back: the chevron
+/// is a stronger affordance-signal than text alone (universal "advance"
+/// glyph). At the same time the abyss-panel chrome got stripped — the
+/// label+icon pair already reads as a tappable element without a box,
+/// and the box was the heaviest piece of Material-style chrome on an
+/// otherwise pure Concept B canvas. Final composition: padded row of
+/// `label` + 6dp gap + `skip_next` glyph, both in `textCream`, no
+/// background, no border. Trust contrast.
 ///
 /// **Long-press preserved.** The existing `_handleLongPress` route on
 /// [PostSessionScreen] is intentionally not removed — some users may have
@@ -85,43 +85,40 @@ class CinematicSkipButton extends StatelessWidget {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onSkip,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  // Hard rectangle (no border-radius) — Concept B grammar.
-                  // Abyss-tinted panel at 75% alpha mirrors the cascade-row
-                  // chrome adopted in Bug G; reads as part of the
-                  // cinematic frame, not as a Material widget pasted on
-                  // top.
-                  color: Color(0xBF0D0319), // AppColors.abyss @ 75% alpha.
+              child: Padding(
+                // 14h / 12v padding lifts the tap target to ≥40dp tall.
+                // Row height = max(label 11sp × 1.2 line ≈ 13.2dp,
+                // icon 16dp) = 16dp → total = 16 + 2×12 = 40dp exact.
+                // Memory: feedback_tap_target_measurement — Flutter's
+                // MaterialTapTargetSize.padded default doesn't apply to
+                // raw GestureDetectors, so we size up explicitly.
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-                child: Padding(
-                  // 14h / 14v padding lifts the tap target to ≥40dp tall
-                  // in the text-only design (UX pass 2.5, 2026-05-24).
-                  // Row height = label 11sp × 1.2 line ≈ 13.2dp →
-                  // total ≈ 13.2 + 2×14 = 41.2dp. Pass 2 used 12v because
-                  // the 16dp icon dominated the intrinsic row height
-                  // (40 = 16 + 2×12); dropping the icon required bumping
-                  // vertical padding to keep the contract.
-                  // Memory: feedback_tap_target_measurement — Flutter's
-                  // MaterialTapTargetSize.padded default doesn't apply to
-                  // raw GestureDetectors, so we size up explicitly.
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  child: Text(
-                    label,
-                    style: AppTextStyles.label.copyWith(
-                      // Tighter letter-spacing than the token default so
-                      // the 4-char Portuguese label ("PULAR") doesn't read
-                      // as letter-mosaic at 11sp. Weight pinned w700 so
-                      // the text-only pill reads as affordance, not body
-                      // label — UX-critic 2026-05-24.
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.16 * 11,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.label.copyWith(
+                        // Tighter letter-spacing than the token default so
+                        // the 4-char Portuguese label ("PULAR") doesn't
+                        // read as letter-mosaic at 11sp. Weight pinned
+                        // w700 so the chrome-less label reads as
+                        // affordance, not body copy.
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.16 * 11,
+                        color: AppColors.textCream,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.skip_next,
+                      size: 16,
                       color: AppColors.textCream,
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
