@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/providers/auth_providers.dart';
-import '../../rpg/models/body_part.dart';
+import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
+import '../../rpg/models/body_part.dart';
+import '../data/models/weekly_plan.dart';
 import '../domain/weekly_engagement.dart';
 import 'weekly_plan_provider.dart';
 
@@ -40,6 +42,64 @@ WeeklyEngagement engagementFromCounts({
     done: doneCounts,
     planned: includePlanned ? plannedCounts : const {},
   );
+}
+
+/// Compute the per-body-part planned-set counts implied by a weekly [plan]
+/// and the [routinesById] map of available routines.
+///
+/// Pure-Dart seam — the provider's IO side (Supabase, Riverpod) reads the
+/// plan + routines, then forwards them here. Exposed for unit testing so
+/// Bug A (full-body routines crediting only their primary muscle pre-fix)
+/// can be pinned without standing up a full Riverpod + Supabase harness.
+///
+/// Walks every uncompleted, non-spontaneous bucket entry whose `routine_id`
+/// resolves to a known routine. For each routine-exercise:
+///   * Reads `xp_attribution` (if present) or falls back to
+///     `{muscle_group.name: 1.0}` — the latter is a defense-in-depth safety
+///     net for any genuinely-null-attribution exercise (cache-corrupted
+///     state, etc.). Post Bug A migration 00066, the fallback should
+///     effectively never fire for valid server-curated rows.
+///   * Calls [primaryBodyPartsForSet] once and credits each winner
+///     `setConfigs.length` times (one credit per planned set sharing the
+///     attribution).
+Map<BodyPart, int> computePlannedCounts({
+  required WeeklyPlan plan,
+  required Map<String, Routine> routinesById,
+}) {
+  final acc = <BodyPart, int>{};
+  for (final bucket in plan.routines) {
+    // Already-completed bucket entries are accounted for via the done-counts
+    // path.
+    if (bucket.completedWorkoutId != null) continue;
+    // Spontaneous bucket entries (Bug F / migration 00063) carry
+    // routine_id: null — no source routine to project planned-set counts
+    // from. They're also always already-completed so they almost never
+    // reach this point, but the guard documents the contract and keeps
+    // Map[String, R][null] inference clean.
+    if (bucket.routineId == null) continue;
+    final routine = routinesById[bucket.routineId];
+    if (routine == null) continue;
+    for (final routineExercise in routine.exercises) {
+      final exercise = routineExercise.exercise;
+      if (exercise == null) continue;
+      final attrJson = exercise.xpAttribution;
+      // `MuscleGroup.name` matches `BodyPart.dbValue` token-for-token
+      // (both are lowercase enum names). Fallback when no xp_attribution
+      // JSON is available on the exercise yet — defense-in-depth safety
+      // net per the contract above.
+      final primaryMuscle = exercise.muscleGroup.name;
+      final Map<String, num> attrMap = (attrJson != null && attrJson.isNotEmpty)
+          ? attrJson
+          : <String, num>{primaryMuscle: 1.0};
+      final winners = primaryBodyPartsForSet(attrMap);
+      final setCount = routineExercise.setConfigs.length;
+      if (setCount == 0) continue;
+      for (final bp in winners) {
+        acc[bp] = (acc[bp] ?? 0) + setCount;
+      }
+    }
+  }
+  return acc;
 }
 
 /// Emits the current week's engagement totals.
@@ -134,40 +194,10 @@ final weeklyEngagementProvider = FutureProvider.family
         final plan = ref.watch(weeklyPlanProvider).value;
         final routines = ref.watch(routineListProvider).value ?? const [];
         if (plan != null) {
-          final routineMap = {for (final r in routines) r.id: r};
-          final acc = <BodyPart, int>{};
-          for (final bucket in plan.routines) {
-            // Already-completed bucket entries are accounted for via doneRows.
-            if (bucket.completedWorkoutId != null) continue;
-            // Spontaneous bucket entries (Bug F / migration 00063) carry
-            // routine_id: null — no source routine to project planned-set
-            // counts from. They're also always already-completed so they
-            // almost never reach this point, but the guard documents the
-            // contract and keeps Map[String, R][null] inference clean.
-            if (bucket.routineId == null) continue;
-            final routine = routineMap[bucket.routineId];
-            if (routine == null) continue;
-            for (final routineExercise in routine.exercises) {
-              final exercise = routineExercise.exercise;
-              if (exercise == null) continue;
-              final attrJson = exercise.xpAttribution;
-              // `MuscleGroup.name` matches `BodyPart.dbValue` token-for-token
-              // (both are lowercase enum names). Fallback when no
-              // xp_attribution JSON is available on the exercise yet.
-              final primaryMuscle = exercise.muscleGroup.name;
-              final Map<String, num> attrMap =
-                  (attrJson != null && attrJson.isNotEmpty)
-                  ? attrJson
-                  : <String, num>{primaryMuscle: 1.0};
-              final winners = primaryBodyPartsForSet(attrMap);
-              final setCount = routineExercise.setConfigs.length;
-              if (setCount == 0) continue;
-              for (final bp in winners) {
-                acc[bp] = (acc[bp] ?? 0) + setCount;
-              }
-            }
-          }
-          plannedCounts = acc;
+          plannedCounts = computePlannedCounts(
+            plan: plan,
+            routinesById: {for (final r in routines) r.id: r},
+          );
         }
       }
 
