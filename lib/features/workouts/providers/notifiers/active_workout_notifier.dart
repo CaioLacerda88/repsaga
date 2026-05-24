@@ -243,10 +243,28 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         .length;
   }
 
-  /// Total set count across all exercises (completed + incomplete). Phase
-  /// 30 PR 30a — drives the empty-session guard (mockup §5 State 11):
-  /// when zero sets exist, the finish flow shows a disambiguation sheet
-  /// instead of pushing the post-session cinematic.
+  /// Total set count across all exercises — counts ONLY completed sets
+  /// post-Bug-B filter (PR #261, reviewer Blocker 2). The empty-session
+  /// guard at `finish_workout_coordinator.dart:96` reads this to decide
+  /// whether to show State 11 modal vs route forward; the Bug-B save-site
+  /// filter (L~1336) drops incomplete sets at persistence time, so
+  /// counting planned sets here would let a user who taps Finish without
+  /// completing any work bypass the guard and create a ghost history
+  /// entry (RPC accepts empty arrays without error).
+  ///
+  /// Sequence the planned-count semantics broke:
+  ///   1. `startFromRoutine` pre-populates `exercises` with all routine
+  ///      exercises + planned `setCount` sets (`isCompleted: false`).
+  ///   2. User taps "Finish" immediately without completing any set.
+  ///   3. Pre-fix: `totalSetsCount` = N planned > 0 → guard does NOT
+  ///      fire → coordinator routes forward → `_repo.saveWorkout(...)`
+  ///      with `committedExercises = []` → ghost history entry.
+  ///   4. Post-fix: `totalSetsCount` = 0 → guard fires → user is asked
+  ///      to discard or continue logging.
+  ///
+  /// If a separate `plannedSetsCount` getter is needed for analytics or
+  /// UI surfaces (none currently — grepped 2026-05-24), add it alongside.
+  /// This getter pins the guard contract.
   ///
   /// IMPORTANT — lifecycle: returns 0 AFTER `finishWorkout()` is awaited,
   /// because the notifier transitions to `AsyncData(null)` on commit and
@@ -259,7 +277,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   int get totalSetsCount {
     final current = state.value;
     if (current == null) return 0;
-    return current.exercises.expand((e) => e.sets).length;
+    return current.exercises
+        .expand((e) => e.sets)
+        .where((s) => s.isCompleted)
+        .length;
   }
 
   /// Start a new workout session.
@@ -1306,7 +1327,41 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
 
     // Capture workout data BEFORE setting loading state.
     final exercises = current.exercises;
-    final exerciseIds = exercises
+
+    // Bug B fix 2026-05-24 — save-site filter for planned-vs-committed shape.
+    //
+    // `ActiveWorkoutState.exercises` carries the PLANNED shape:
+    // `startFromRoutine` pre-populates every routine exercise with N
+    // pre-filled `ExerciseSet`s (`isCompleted: false`) so the user has
+    // editable slots to tap through. Before this filter the finish path
+    // forwarded that planned shape verbatim to `save_workout`, so a user
+    // completing 2 sets of 1 exercise from a 3-exercise routine saw the
+    // entire routine in /history (Bench Press, OHP, Triceps — with all
+    // pre-filled sets persisted as `is_completed=false`).
+    //
+    // `committedExercises` keeps only `isCompleted` sets and drops any
+    // exercise that ends up with zero completed sets, then drives every
+    // downstream persistence path:
+    //   - online save_workout RPC payload (workoutExercises + sets below)
+    //   - offline replay payload (exercisesJson + setsJson at L~1430)
+    //   - PR detection input (skips empty-set exercises one layer earlier)
+    //   - PR cache key (exerciseIds below)
+    //
+    // Analytics (`exerciseCount`, `totalSets`, `incompleteSetsSkipped`)
+    // intentionally keeps reading the PRE-filter `exercises` so the
+    // `workoutFinished` event still reports planned-vs-completed deltas
+    // — that's what those fields mean.
+    //
+    // Cluster: planned-shape-persisted-as-actual (new pattern, closest
+    // existing match is `optimistic-ui-vs-async-provider`).
+    final committedExercises = exercises
+        .map(
+          (e) => e.copyWith(sets: e.sets.where((s) => s.isCompleted).toList()),
+        )
+        .where((e) => e.sets.isNotEmpty)
+        .toList();
+
+    final exerciseIds = committedExercises
         .map((e) => e.workoutExercise.exerciseId)
         .toSet()
         .toList();
@@ -1331,8 +1386,14 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         notes: notes,
       );
 
-      final workoutExercises = exercises.map((e) => e.workoutExercise).toList();
-      final sets = exercises.expand((e) => e.sets).toList();
+      // Bug B fix 2026-05-24: built from `committedExercises` (only
+      // completed sets, no empty-set exercises) so both the online RPC
+      // payload below and the offline replay payload at L~1430 persist
+      // the actual workout shape, not the planned routine skeleton.
+      final workoutExercises = committedExercises
+          .map((e) => e.workoutExercise)
+          .toList();
+      final sets = committedExercises.expand((e) => e.sets).toList();
 
       // --- Save workout (online or offline queue) ---
       try {
@@ -1557,7 +1618,12 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
 
         prResult = prService.detectPRs(
           userId: _userId,
-          exercises: exercises,
+          // Bug B fix: feed `committedExercises` (only completed sets, no
+          // empty-set exercises). `detectPRs` already filters via
+          // `completedWorkingSets()` and `continue`s on empty exercises, so
+          // this is a no-op contract-wise but keeps the persistence layer
+          // and the PR-detection layer reading the same shape.
+          exercises: committedExercises,
           existingRecords: existingRecords,
           totalFinishedWorkouts: workoutCount,
         );
@@ -1713,15 +1779,33 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // drain (in case any pre-26e queue entries survived an upgrade).
       ref.invalidate(weeklyPlanProvider);
 
-      final totalSets = sets.length;
-      final completedSetsCount = sets.where((s) => s.isCompleted).length;
+      // Analytics — mixed planned-vs-committed reads, on purpose:
+      //
+      // `totalSets` / `completedSets` / `incompleteSetsSkipped` read the
+      // PRE-filter `exercises` so `workoutFinished` retains its planned-
+      // vs-committed deltas (the delta IS the analytics signal —
+      // "how often do users plan more than they execute?"). Using the
+      // post-filter `sets` here would make `incompleteSetsSkipped`
+      // always 0 and erase the signal.
+      //
+      // `exerciseCount` reads the POST-filter `committedExercises.length`
+      // (PR #261 reviewer Blocker 1). The schema has no paired
+      // `completedExercises` field, so consumers couldn't recover the
+      // committed count from a planned-count read. This field answers
+      // "how many exercises did the user actually perform" — that's the
+      // committed shape. If a planned counterpart is ever needed, add a
+      // separate `plannedExerciseCount` field on the event rather than
+      // silently changing this field's meaning.
+      final plannedSets = exercises.expand((e) => e.sets).toList();
+      final totalSets = plannedSets.length;
+      final completedSetsCount = plannedSets.where((s) => s.isCompleted).length;
       final incompleteSetsSkipped = totalSets - completedSetsCount;
       final hadPr = prResult?.newRecords.isNotEmpty ?? false;
       final source = _workoutSource(current.routineId);
       _trackWorkoutEvent(
         event: AnalyticsEvent.workoutFinished(
           durationSeconds: durationSeconds,
-          exerciseCount: exercises.length,
+          exerciseCount: committedExercises.length,
           totalSets: totalSets,
           completedSets: completedSetsCount,
           incompleteSetsSkipped: incompleteSetsSkipped,
