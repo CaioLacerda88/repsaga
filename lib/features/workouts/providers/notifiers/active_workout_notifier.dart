@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:ui' show Locale;
 
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -1262,12 +1262,6 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// the save).
   Future<FinishWorkoutResult?> finishWorkout({String? notes}) async {
     final current = state.value;
-    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-    debugPrint(
-      '[repsaga] NOTIFIER: finishWorkout start, '
-      'state.value=${current?.workout.name ?? 'NULL'}, '
-      'sets=${current?.exercises.expand((e) => e.sets).length ?? 0}',
-    );
     if (current == null) return null;
     if (_isFinishing) return null;
     _isFinishing = true;
@@ -1768,13 +1762,6 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     // either way it must not leak into the next finish call.
     _cancelRequested = false;
 
-    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-    debugPrint(
-      '[repsaga] NOTIFIER: state transitioning via guard result, '
-      'saveCommitted=$saveCommitted, '
-      'savedOffline=$savedOffline, '
-      'isError=${result is AsyncError}',
-    );
     state = result;
     _isFinishing = false;
 

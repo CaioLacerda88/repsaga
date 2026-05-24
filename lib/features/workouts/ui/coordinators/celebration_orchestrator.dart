@@ -177,14 +177,6 @@ class CelebrationOrchestrator {
   }) async {
     for (final event in queue.whereType<RankUpEvent>()) {
       try {
-        // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-        // recordRankUpPulses lives on CelebrationOrchestrator (not
-        // CelebrationPlayer per the original instrumentation plan); kept
-        // here because moving the method would balloon the diff.
-        debugPrint(
-          '[repsaga] CELEBRATION-PLAYER: recording pulse for '
-          '${event.bodyPart}',
-        );
         await pulseStorage.recordRankUp(event.bodyPart);
       } on Exception catch (e, stack) {
         // Fire-and-forget: cosmetic pulse failure must not abort the

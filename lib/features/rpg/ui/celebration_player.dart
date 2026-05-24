@@ -116,11 +116,6 @@ class CelebrationPlayer {
     )
     Future<void> Function(rpg.Title title)? onEquipTitle,
   }) {
-    // TEMP-INSTRUMENTATION (cinematic-not-playing diagnosis) — REVERT
-    debugPrint(
-      '[repsaga] CELEBRATION-PLAYER: play called (pass-through after Path A; '
-      'userTappedOverflow always false)',
-    );
     // Path A: no UI is rendered mid-workout. The post-session screen
     // (PR 30a) consumes `result` directly. Return synchronously via a
     // pre-completed Future so the caller's `await` still works.
