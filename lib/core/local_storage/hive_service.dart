@@ -50,6 +50,15 @@ class HiveService {
   ///   for every bodyweight exercise until the cache TTL fires. The wipe
   ///   forces a one-shot refresh against the migration's authoritative
   ///   per-slug ratios.
+  /// - 3: Bug A fix (2026-05-24) — evicts routine + exercise cache entries
+  ///   that pre-date migration 00066's `fn_exercises_localized` projection
+  ///   of `xp_attribution`. Without the bump, cached routines hydrated via
+  ///   the pre-fix RPC would carry `Exercise.xpAttribution = null`
+  ///   indefinitely, keeping `weeklyEngagementProvider` on the
+  ///   `{primaryMuscle: 1.0}` fallback path that masked full-body routine
+  ///   attribution under the WeeklyEngagement.from `max(done, planned)`
+  ///   invariant. One forced refresh per install repopulates with the
+  ///   authoritative server attribution maps.
   ///
   /// Adding `usesBodyweightLoad` with `@Default(false)` is technically
   /// backward-compatible at the Freezed level (legacy rows deserialize as
@@ -57,7 +66,7 @@ class HiveService {
   /// authoritative server flags — leaving stale `false`s in cache would let
   /// the 20 curated bodyweight exercises miss their effective-load math
   /// until the cache TTL fires.
-  static const int currentCacheSchemaVersion = 2;
+  static const int currentCacheSchemaVersion = 3;
 
   /// Hive boxes whose contents are model-serialized payloads from Supabase
   /// reads. These are wiped on cache schema version mismatch — the cost is
