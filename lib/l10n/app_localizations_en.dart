@@ -2739,4 +2739,141 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spontaneousTag => 'Spontaneous';
+
+  @override
+  String get b1CopyDayZero => 'BEGUN.\nTHE WORST IS BEHIND.';
+
+  @override
+  String get b1CopyBaselineA => 'DONE.\nSTRONGER.';
+
+  @override
+  String get b1CopyBaselineB => 'CONSISTENCY WINS.';
+
+  @override
+  String get b1CopyPrAnticipatory => 'NEW LIMIT.';
+
+  @override
+  String get b1CopyTitleAnticipatory => 'ACHIEVEMENT AWAKENED.';
+
+  @override
+  String b1CopyMaxLevelUp(int n) {
+    return 'LEVEL $n.\nTHE SAGA CONTINUES.';
+  }
+
+  @override
+  String get b1CopyClassChangeOnly => 'NEW LIMIT.';
+
+  @override
+  String get b3PrEyebrowSingle => '!! Record';
+
+  @override
+  String b3PrEyebrowMulti(int n) {
+    return '!! $n Records';
+  }
+
+  @override
+  String get b3PrCopySingle => 'YOU BROKE THROUGH.';
+
+  @override
+  String get b3PrCopyMulti => 'YOU DESTROYED IT.';
+
+  @override
+  String b3PrPillTemplate(String exercise, String weight, int reps) {
+    return '$exercise · ${weight}kg × $reps';
+  }
+
+  @override
+  String get b3TitleEyebrow => 'Title Unlocked';
+
+  @override
+  String get b3ClassEyebrow => 'Class Awakened';
+
+  @override
+  String get b3ClassSubline => 'AWAKENED.';
+
+  @override
+  String b2RankCopy(String bodyPart, String n) {
+    return '$bodyPart · RANK $n';
+  }
+
+  @override
+  String summarySagaNumber(int n) {
+    return 'Saga $n';
+  }
+
+  @override
+  String get summaryDayZero => '1st saga';
+
+  @override
+  String summaryDurationSets(int minutes, int sets) {
+    return '$minutes min · $sets sets';
+  }
+
+  @override
+  String summaryTonnage(String kg) {
+    return '$kg ton';
+  }
+
+  @override
+  String get summaryNextStepLabel => 'Next';
+
+  @override
+  String summaryNextRank(int xp, String bodyPart, int n) {
+    return '$xp XP left\nfor $bodyPart rank $n.';
+  }
+
+  @override
+  String summaryNextLevel(int ranks, int n) {
+    return '$ranks ranks to\nlevel $n.';
+  }
+
+  @override
+  String get summaryNewTitleLabel => 'New title';
+
+  @override
+  String get summaryEquipCta => 'EQUIP';
+
+  @override
+  String get summaryEquipLater => 'later';
+
+  @override
+  String get summaryContinueCta => 'CONTINUE';
+
+  @override
+  String get summaryShareCta => 'Share saga';
+
+  @override
+  String get summaryShareComingSoon => 'Share — coming soon';
+
+  @override
+  String get summaryRankUpOverflowHeader => '+1 RANK · OPEN SAGA';
+
+  @override
+  String get emptyGuardTitle => 'End workout?';
+
+  @override
+  String get emptyGuardBody => 'No exercises logged.';
+
+  @override
+  String get emptyGuardDiscard => 'Discard';
+
+  @override
+  String get emptyGuardContinue => 'Keep training';
+
+  @override
+  String get postSessionFirstAwakeningSuffix => 'Awakened';
+
+  @override
+  String postSessionCascadeTruncationPill(String n) {
+    return '+$n more';
+  }
+
+  @override
+  String get postSessionXpLabel => 'XP';
+
+  @override
+  String get postSessionTitleEquipped => 'Equipped ✓';
+
+  @override
+  String get cinematicSkipLabel => 'SKIP';
 }

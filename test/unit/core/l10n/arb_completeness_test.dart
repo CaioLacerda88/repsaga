@@ -90,6 +90,10 @@ void main() {
       // Cluster 3 — gym-vernacular loanwords. pt-BR Brazilian gym slang
       // uses "ranks" verbatim; "+5 ranks" reads natively in both locales.
       'rankUpOverflowFlipbookLabel',
+      // Phase 30 PR 30a — format-only template strings. Punctuation +
+      // placeholders only, no localizable prose.
+      'b3PrPillTemplate', // "{exercise} · {weight}kg × {reps}"
+      'b2RankCopy', // "{bodyPart} · RANK {n}"
     };
 
     /// Pattern for format-only strings (only placeholders and punctuation).

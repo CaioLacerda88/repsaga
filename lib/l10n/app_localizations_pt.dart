@@ -2750,4 +2750,141 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get spontaneousTag => 'Espontâneo';
+
+  @override
+  String get b1CopyDayZero => 'COMEÇO.\nO PIOR JÁ PASSOU.';
+
+  @override
+  String get b1CopyBaselineA => 'ENCERRADO.\nMAIS FORTE.';
+
+  @override
+  String get b1CopyBaselineB => 'CONSISTÊNCIA VENCE.';
+
+  @override
+  String get b1CopyPrAnticipatory => 'NOVO LIMITE.';
+
+  @override
+  String get b1CopyTitleAnticipatory => 'CONQUISTA DESPERTADA.';
+
+  @override
+  String b1CopyMaxLevelUp(int n) {
+    return 'NÍVEL $n.\nA SAGA CONTINUA.';
+  }
+
+  @override
+  String get b1CopyClassChangeOnly => 'NOVO LIMITE.';
+
+  @override
+  String get b3PrEyebrowSingle => '!! Recorde';
+
+  @override
+  String b3PrEyebrowMulti(int n) {
+    return '!! $n Recordes';
+  }
+
+  @override
+  String get b3PrCopySingle => 'VOCÊ QUEBROU TUDO.';
+
+  @override
+  String get b3PrCopyMulti => 'VOCÊ DESTRUIU TUDO.';
+
+  @override
+  String b3PrPillTemplate(String exercise, String weight, int reps) {
+    return '$exercise · ${weight}kg × $reps';
+  }
+
+  @override
+  String get b3TitleEyebrow => 'Título Desbloqueado';
+
+  @override
+  String get b3ClassEyebrow => 'Classe Desperta';
+
+  @override
+  String get b3ClassSubline => 'DESPERTOU.';
+
+  @override
+  String b2RankCopy(String bodyPart, String n) {
+    return '$bodyPart · RANK $n';
+  }
+
+  @override
+  String summarySagaNumber(int n) {
+    return 'Saga $n';
+  }
+
+  @override
+  String get summaryDayZero => '1ª saga';
+
+  @override
+  String summaryDurationSets(int minutes, int sets) {
+    return '$minutes min · $sets séries';
+  }
+
+  @override
+  String summaryTonnage(String kg) {
+    return '$kg ton';
+  }
+
+  @override
+  String get summaryNextStepLabel => 'Próximo passo';
+
+  @override
+  String summaryNextRank(int xp, String bodyPart, int n) {
+    return 'Faltam $xp XP\npara $bodyPart rank $n.';
+  }
+
+  @override
+  String summaryNextLevel(int ranks, int n) {
+    return 'Faltam $ranks ranks\npara nível $n.';
+  }
+
+  @override
+  String get summaryNewTitleLabel => 'Novo título';
+
+  @override
+  String get summaryEquipCta => 'EQUIPAR';
+
+  @override
+  String get summaryEquipLater => 'depois';
+
+  @override
+  String get summaryContinueCta => 'CONTINUAR';
+
+  @override
+  String get summaryShareCta => 'Compartilhar saga';
+
+  @override
+  String get summaryShareComingSoon => 'Compartilhar — em breve';
+
+  @override
+  String get summaryRankUpOverflowHeader => '+1 RANK · ABRIR SAGA';
+
+  @override
+  String get emptyGuardTitle => 'Encerrar treino?';
+
+  @override
+  String get emptyGuardBody => 'Nenhum exercício registrado.';
+
+  @override
+  String get emptyGuardDiscard => 'Descartar';
+
+  @override
+  String get emptyGuardContinue => 'Continuar treinando';
+
+  @override
+  String get postSessionFirstAwakeningSuffix => 'Desperto';
+
+  @override
+  String postSessionCascadeTruncationPill(String n) {
+    return '+$n mais';
+  }
+
+  @override
+  String get postSessionXpLabel => 'XP';
+
+  @override
+  String get postSessionTitleEquipped => 'Equipado ✓';
+
+  @override
+  String get cinematicSkipLabel => 'PULAR';
 }

@@ -239,10 +239,18 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
               buildDefaultDragHandles: false,
               itemBuilder: (context, index) {
                 final bucket = _bucketRoutines[index];
-                final routine = routineMap[bucket.routineId];
+                // bucket.routineId is nullable for spontaneous entries (see
+                // Bug F / migration 00063). The ValueKey composes
+                // routineId + order so two spontaneous entries don't
+                // collide on `ValueKey(null)`.
+                final routine = bucket.routineId == null
+                    ? null
+                    : routineMap[bucket.routineId];
                 final rowContext = context;
                 return ReorderableDelayedDragStartListener(
-                  key: ValueKey(bucket.routineId),
+                  key: ValueKey(
+                    '${bucket.routineId ?? 'spontaneous'}-${bucket.order}',
+                  ),
                   index: index,
                   child: BucketRoutineRow(
                     routineId: bucket.routineId,

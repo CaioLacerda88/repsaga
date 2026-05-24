@@ -36,14 +36,25 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   await testMain();
 }
 
-/// Registers Rajdhani + Inter TTFs with Flutter's runtime font loader so
-/// widget tests render text with the correct family metrics. Mirrors the
-/// `pubspec.yaml > flutter.fonts:` declaration.
+/// Registers Rajdhani + Barlow + Barlow Condensed + Inter TTFs with
+/// Flutter's runtime font loader so widget tests render text with the
+/// correct family metrics. Mirrors the `pubspec.yaml > flutter.fonts:`
+/// declaration. Phase 28b swapped Inter → Barlow as the body family;
+/// Inter is retained here only as a passive fallback (some legacy
+/// surfaces may still reach for it during the rollout).
 Future<void> _loadAppFonts() async {
   await _loadFamily('Rajdhani', const [
     'assets/fonts/Rajdhani-Medium.ttf',
     'assets/fonts/Rajdhani-SemiBold.ttf',
     'assets/fonts/Rajdhani-Bold.ttf',
+  ]);
+  await _loadFamily('Barlow', const [
+    'assets/fonts/Barlow-Regular.ttf',
+    'assets/fonts/Barlow-SemiBold.ttf',
+  ]);
+  await _loadFamily('Barlow Condensed', const [
+    'assets/fonts/BarlowCondensed-Medium.ttf',
+    'assets/fonts/BarlowCondensed-SemiBold.ttf',
   ]);
   await _loadFamily('Inter', const [
     'assets/fonts/Inter-Regular.ttf',

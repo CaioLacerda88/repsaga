@@ -28,6 +28,7 @@ import '../../../personal_records/providers/pr_providers.dart';
 import '../../../profile/providers/profile_providers.dart';
 import '../../../rpg/domain/celebration_event_builder.dart';
 import '../../../rpg/domain/celebration_queue.dart';
+import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/earned_titles_provider.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
@@ -242,6 +243,25 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         .length;
   }
 
+  /// Total set count across all exercises (completed + incomplete). Phase
+  /// 30 PR 30a — drives the empty-session guard (mockup §5 State 11):
+  /// when zero sets exist, the finish flow shows a disambiguation sheet
+  /// instead of pushing the post-session cinematic.
+  ///
+  /// IMPORTANT — lifecycle: returns 0 AFTER `finishWorkout()` is awaited,
+  /// because the notifier transitions to `AsyncData(null)` on commit and
+  /// this getter short-circuits on `state.value == null`. Callers that
+  /// need the pre-finish set count in the post-finish path MUST capture
+  /// the value BEFORE the `await notifier.finishWorkout()` call. See
+  /// `finish_workout_coordinator.dart` (the `preFinishSetsCount` capture
+  /// alongside `priorWorkoutCount`) for the established pattern, and
+  /// auto-memory `cluster_async_caller_broke_snackbar.md` for the cluster.
+  int get totalSetsCount {
+    final current = state.value;
+    if (current == null) return 0;
+    return current.exercises.expand((e) => e.sets).length;
+  }
+
   /// Start a new workout session.
   ///
   /// If [name] is omitted a date-based name is generated automatically,
@@ -250,6 +270,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
+    _lastSessionTotalXpDelta = null;
+    _lastSessionBpDeltas = const <BodyPart, num>{};
     _cancelRequested = false;
     // PR #202 review O1: clear cross-workout bookkeeping. The notifier
     // is keepAlive-by-default (plain AsyncNotifierProvider, no
@@ -307,6 +329,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     state = const AsyncLoading();
     _firstAwakeningFiredThisSession = false;
     _lastCelebration = null;
+    _lastSessionTotalXpDelta = null;
+    _lastSessionBpDeltas = const <BodyPart, num>{};
     _cancelRequested = false;
     // PR #202 review O1: see startWorkout for rationale.
     _originalSetIndices.clear();
@@ -1181,6 +1205,37 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// notifier does not own playback timing.
   CelebrationQueueResult? _lastCelebration;
 
+  /// Phase 30 PR 30a — total XP delta the user earned in the most recent
+  /// online finish (`sum(post.totalXp - pre.totalXp)` across active body
+  /// parts). The post-session screen reads this to render the B1 XP slam.
+  /// `null` after an offline finish, a zero-set finish, or a discard.
+  ///
+  /// **Why on the notifier:** the pre/post snapshots are local to
+  /// [_buildAndStashCelebration] and shouldn't leak outside the finish
+  /// flow. Stashing the precomputed delta here avoids forcing the
+  /// coordinator (or the screen) to re-fetch and re-diff snapshots they
+  /// don't otherwise need to read.
+  num? _lastSessionTotalXpDelta;
+
+  /// Read and clear the last-session XP delta. One-shot — subsequent
+  /// calls return `null` until the next finish runs.
+  num? consumeLastSessionTotalXpDelta() {
+    final v = _lastSessionTotalXpDelta;
+    _lastSessionTotalXpDelta = null;
+    return v;
+  }
+
+  /// Phase 30 PR 30a — per-BP XP deltas for the most recent online
+  /// finish. Empty after offline / zero-set / discard. The post-session
+  /// screen uses this to drive B2 single/cascade body-part cuts.
+  Map<BodyPart, num> _lastSessionBpDeltas = const <BodyPart, num>{};
+
+  Map<BodyPart, num> consumeLastSessionBpDeltas() {
+    final v = _lastSessionBpDeltas;
+    _lastSessionBpDeltas = const <BodyPart, num>{};
+    return v;
+  }
+
   /// Read and clear the queued celebration produced by the last finish.
   ///
   /// One-shot: subsequent calls return `null` until the next finish runs.
@@ -1213,6 +1268,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _lastValidState = current;
     _cancelRequested = false;
     _lastCelebration = null;
+    _lastSessionTotalXpDelta = null;
+    _lastSessionBpDeltas = const <BodyPart, num>{};
     // Tracked locally inside the guard scope — folded into the returned
     // [FinishWorkoutResult] so the caller reads it through the explicit
     // return value, not via a notifier field. Restores unidirectional
@@ -1772,6 +1829,25 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         alreadyEarnedSlugs: preEarnedSlugs,
         suppressFirstAwakening: _firstAwakeningFiredThisSession,
       );
+
+      // Phase 30 PR 30a — compute total + per-BP XP delta for the
+      // post-session screen. We do this regardless of whether
+      // [events.isEmpty] because the screen renders a baseline cinematic
+      // for empty queues too (the B1 XP slam is the user's primary feedback
+      // even on a session with no rank-up / no PR).
+      num totalDelta = 0;
+      final bpDeltas = <BodyPart, num>{};
+      for (final bp in activeBodyParts) {
+        final preXp = preSnapshot.byBodyPart[bp]?.totalXp ?? 0;
+        final postXp = postSnapshot.byBodyPart[bp]?.totalXp ?? 0;
+        final delta = postXp - preXp;
+        if (delta > 0) {
+          bpDeltas[bp] = delta;
+          totalDelta += delta;
+        }
+      }
+      _lastSessionTotalXpDelta = totalDelta > 0 ? totalDelta : null;
+      _lastSessionBpDeltas = Map.unmodifiable(bpDeltas);
 
       if (events.isEmpty) {
         _lastCelebration = null;

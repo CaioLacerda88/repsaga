@@ -618,7 +618,7 @@ test.describe('Personal records', () => {
   // fast first-pass signal. The full regression suite covers this test on
   // every PR, which is the appropriate gate for a multi-workout flow guard.
   // ---------------------------------------------------------------------------
-  test('should navigate to /pr-celebration after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
+  test('should navigate to the post-workout celebration screen after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
     page,
   }) => {
     // This test runs two full workouts in sequence plus the post-workout
@@ -636,18 +636,22 @@ test.describe('Personal records', () => {
     // Workout B — 70 kg × 8 beats the 50 kg × 8 baseline on weight.
     // With prCacheBootstrapProvider seeding the cache on shell mount,
     // `prDetectionService.detectPRs()` now has the 50 kg × 8 baseline in Hive.
-    // The 70 kg set is strictly greater → `prResult.hasNewRecords == true` →
-    // `post_workout_navigator` must navigate to /pr-celebration.
+    // The 70 kg set is strictly greater → `prResult.hasNewRecords == true`.
+    //
+    // **PR 30a route change:** the coordinator now pushes `/workout/finish/:id`
+    // (post-session screen) for online finishes with PR results, instead of
+    // `/pr-celebration`. The regression contract is preserved — a PR MUST
+    // navigate away from /home to a celebration surface. The specific route
+    // changes at PR 30a; the contract is "user sees a ceremony, not /home".
     await doWorkout(page, EXERCISE_NAMES.romanian_deadlift.en, '70', '8');
 
-    // Assert we reach /pr-celebration. This is the core regression contract.
-    // waitForURL is immune to ScaleTransition animation — fires as soon as the
-    // route is pushed, regardless of widget animation state.
-    await page.waitForURL('**/pr-celebration**', { timeout: 20_000 });
-    await expect(page.locator(PR.continueButton)).toBeVisible({ timeout: 10_000 });
+    // Assert we reach the post-session screen OR the legacy /pr-celebration.
+    // (PR 30a → post-session; any regression that routes to /home instead
+    // of either celebration surface fails this waitForURL.)
+    await page.waitForURL(/\/(workout\/finish\/|pr-celebration)/, { timeout: 20_000 });
 
-    // Clean up: dismiss the celebration so subsequent tests start from /home.
-    await page.click(PR.continueButton);
-    await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
+    // Dismiss the celebration and return to /home.
+    await dismissCelebrationIfPresent(page, 5_000);
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 });

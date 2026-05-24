@@ -12,6 +12,52 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+## PR 30a · Visual verification gate · summary panel SafeArea + Concept B fidelity (2026-05-23)
+
+> Visual verification gate (on-device Galaxy S25 Ultra, HEAD `271c20d`) surfaced two bugs in PR #259's post-session summary panel. Cinematic (B1/B2/B3 cuts) renders correctly per user; only the static summary panel needs the fix. Mockup §5 final summary frames are the canonical visual reference.
+
+**Branch:** `feature/30a-post-session-screen` (existing).
+
+### Bug 1 — SafeArea / system UI overlap
+
+- [x] **Root cause:** Re-investigated. The screen DOES use `Scaffold(body: ...)` (the brief's premise was wrong). Per Flutter Scaffold internals (`scaffold.dart:3034`), `removeBottomPadding` is `false` when there's no `bottomNavigationBar` — so `MediaQuery.padding` reaches the inner `SafeArea` correctly on standard Android. The Galaxy S25 Ultra failure is the **Samsung floating-pill gesture-nav** edge case: One UI 6+ devices render a translucent pill that visually overlaps content while reporting `MediaQuery.padding.bottom ≈ 0` because the system bar is "transparent". Same mechanism for the top — Samsung's "high-contrast" status-bar mode can shrink the reported inset below the actual visible bar height.
+- [x] **Fix:** `SafeArea(minimum: EdgeInsets.only(top: 12, bottom: 16), child: ...)` — guarantees a padding floor for the cases where the OS under-reports its own system region. Standard Android devices still honor the real (larger) inset; only the under-reporters get bumped up to the floor. No new pattern introduced (this is the canonical `SafeArea.minimum` API documented for exactly this case).
+
+### Bug 2 — Concept B visual fidelity rebuild
+
+Reconciled the brief against the mockup §5 canonical frames. The original brief over-stated several deltas — the mockup actually keeps the saga number understated (`t-label` Barlow Condensed 11sp tracked, not a saga slam), and many existing styling tokens already aligned. Actual rebuild:
+
+- [x] **A. Saga header** — already correct register (`AppTextStyles.label.copyWith(color: textDim)`). Dropped the explicit `fontSize: 12` override — defaulting to `label`'s native 11sp matches the mockup `t-label` register exactly.
+- [x] **B. Stats block** — already correct (`numeric.copyWith(fontSize: 17)` for duration/sets, `bodySmall` for tonnage). The mockup spec confirms vertically-stacked, not 3-column — the brief's "3-column" framing was incorrect against the §5 frame.
+- [x] **C. Next-step hook** — added `nextStepEyebrowColor` prop. Screen now derives the per-state color (BP hue for NextRankHook, hotViolet for NextLevelHook, heroGold for PrDetailHook per mockup §5 State 1/2/5/7/8 palette).
+- [x] **D. Reward roll-up rows** — preserved `TitleEquipRow` / `RankUpOverflowRow` (already match mockup §5 State 6/8).
+- [x] **E. Share CTA** — rewrote `ShareCtaButton` to render a `PostSessionCinematicButton` (Concept B style) with leading `Icons.camera_alt_outlined`. ARB string stripped of the `📷` emoji.
+- [x] **F. CONTINUE button** — rewrote in panel via the same `PostSessionCinematicButton`, primaryViolet background, trailing `Icons.arrow_forward_rounded`. ARB string stripped of `▶`.
+- [x] **G. Middle wasteland** — preserved `Spacer()` because the mockup §5 also leaves the middle empty (the CONTINUE rail sits at the bottom edge of the panel above the SafeArea floor). Reduced outer padding `(20, 24, 20, 20)` → `(20, 12, 20, 8)` to tighten the rail.
+- [x] **H. Dividers** — kept `Divider(color: AppColors.hair, height: 1)` — matches mockup.
+
+### Test coverage
+
+- [x] Updated `test/unit/features/workouts/ui/post_session/summary/post_session_summary_panel_test.dart` — label assertions now match the uppercased cinematic-button output; added `find.byIcon(Icons.arrow_forward_rounded)` + `find.byIcon(Icons.camera_alt_outlined)` contract pins.
+- [x] Added `test/widget/features/workouts/ui/post_session/summary/post_session_summary_panel_golden_test.dart` — 4 goldens at 360dp covering S2 / S5 / S8 / S10. Tagged `@Tags(['golden'])` so they're EXCLUDED from `make test` / CI (host-platform text-shaping divergence; run locally via `make test-golden`).
+- [x] Updated `test/flutter_test_config.dart` — registers Barlow + Barlow Condensed TTFs alongside Rajdhani + Inter so widget tests render with the correct family metrics (closes the Phase 28b font-loader-test gap).
+- [x] Added `dart_test.yaml` `golden` tag declaration + `Makefile` `test-golden` target.
+
+### Verification gate
+
+- [x] `dart format .`
+- [x] `dart analyze --fatal-infos` — clean (0 issues).
+- [x] `flutter test --exclude-tags integration --exclude-tags golden test/unit/ test/widget/` — 3063 / 3063 passing (10 integration failures are pre-existing — broken Supabase parity, unrelated to this fix).
+- [x] `flutter test --tags golden test/widget/features/workouts/ui/post_session/summary/` — 4/4 goldens baked + matching.
+- [x] `flutter build apk --debug --no-shrink` — green.
+- [ ] User installs APK on Galaxy S25 Ultra + re-verifies visually (no Android device connected to my shell, so the user runs `adb install -r build/app/outputs/flutter-apk/app-debug.apk` from their workstation).
+
+### Commit + push
+
+- [ ] Single descriptive commit on `feature/30a-post-session-screen`.
+
+---
+
 ## Phase 30 · Implementation Plan
 
 > Canonical spec: `docs/post-session-screen-mockup-v2.html` (Round 2, all 11 states + Path A pivot in §4½ — mid-workout flash layer retired; events pass through to the post-session ceremony + photo-overlay share card + 6 implementation gaps). Mockup is locked; do not deviate without surfacing via the "Open questions" subsection.
@@ -23,6 +69,82 @@ the phase summary in PROJECT.md §4.
 ### PR 30a — Post-session screen + state machine + summary panel
 
 **Branch:** `feature/30a-post-session-screen` off `main` (PR 29.5 merged 2026-05-22 via #255, Path A pivot — see §4½).
+
+#### Boundary inventory (filled 2026-05-22 BEFORE any code per CLAUDE.md "Boundary-trigger ripple check")
+
+PR 30a crosses 5 boundaries. Each block lists every caller / reader / test / E2E selector touching the affected symbol.
+
+**B1. `/pr-celebration` route — route push site shifts to `/workout/finish/:workoutId` for online finishes with non-zero work.**
+
+| Site | What it does | Impact in 30a |
+|---|---|---|
+| `lib/core/router/app_router.dart:146-171` | Defines the `/pr-celebration` GoRoute with `validatePrCelebrationExtra` redirect + `PrCelebrationArgs.fromExtra` builder. | KEEP AS-IS until 30c. 30a adds `postWorkoutFinish` route side-by-side. |
+| `lib/features/workouts/ui/coordinators/post_workout_navigator.dart:95-129` | The `navigateAfterFinish` push to `/pr-celebration` when `prResult.hasNewRecords`. | REPLACE: when `prResult != null || celebrationHasRewardEvent`, push `/workout/finish/:workoutId` instead. Offline branch (`/home`) unchanged. |
+| `lib/features/personal_records/ui/pr_celebration_screen.dart` | The legacy screen builder. 476 LOC. | KEEP AS-IS in 30a — retires in PR 30c. |
+| `test/unit/core/router/pr_celebration_args_test.dart` | Pins the `PrCelebrationArgs.fromExtra` + redirect gate contract. | KEEP AS-IS (legacy route still alive). |
+| `test/e2e/helpers/app.ts:344-430` (`dismissCelebrationIfPresent`) | Polls `/pr-celebration` URL after finish + clicks Continue. | KEEP AS-IS in 30a — most E2E tests still hit `/pr-celebration` until 30c. Add a SECOND helper `dismissPostSessionIfPresent` that polls `/workout/finish/...`. Both helpers can coexist. |
+| `test/e2e/specs/personal-records.spec.ts:55-98` | Asserts `**/pr-celebration**` route after PR finish. | KEEP for legacy E2E test users; new `specs/post_session.spec.ts` covers the new route with a fresh user. |
+| `test/e2e/specs/charter-d-exploratory.spec.ts:12-241` | Charter-D exploratory branches checks `pr-celebration` URL. | KEEP for now (charter spec exists to surface drift). |
+| `test/e2e/specs/rank-up-celebration.spec.ts:408,587,891` | Pattern `/\/(home|pr-celebration)/` waits for either route. | KEEP — broadens to `/\/(home|pr-celebration|workout\/finish)/` is a 30b/30c concern when the new route covers all flows. For 30a, the new route only fires on PR / reward presence; ad-hoc finishes still route via legacy paths in those specs. |
+| `test/e2e/specs/manage-data.spec.ts:142` | Comments reference `/pr-celebration`. | NOT load-bearing (a comment); leave. |
+| `test/e2e/global-setup.ts:1072,1176-1195,2022` | Comments + assertion contexts about not triggering `/pr-celebration`. | NOT load-bearing on the new route. |
+
+**Net B1 impact:** add the new route + push site; legacy route stays. **No 30a-blocking downstream regression** because the post-session route handles online-with-non-zero-work; offline + zero-work paths route to `/home` unchanged.
+
+**B2. `celebration_player.dart` re-wiring — pass-through gets a new event-surfacing channel.**
+
+Current state (post-PR-29.5): `CelebrationPlayer.play(...)` always returns `CelebrationPlayResult.notTapped`. The `userTappedOverflow` field is always `false`.
+
+| Site | What it does | Impact in 30a |
+|---|---|---|
+| `lib/features/rpg/ui/celebration_player.dart:80-124` | Pass-through `play()` method. Two `@Deprecated` params. | NO CHANGE in 30a. The route push consumes `CelebrationQueueResult` directly from `notifier.consumeLastCelebration()` (same field the post-session controller will read). |
+| `lib/features/workouts/ui/coordinators/celebration_orchestrator.dart:54-151` | `play()` invokes `CelebrationPlayer.play()` + writes rank-up pulses. Returns `CelebrationOutcome(userTappedOverflow: false)` per the pass-through. | NO CHANGE in 30a. The orchestrator's two real jobs (saga-intro wait + rank-up pulse write) remain. `userTappedOverflow` stays `false` from this call site. |
+| `lib/features/workouts/ui/coordinators/finish_workout_coordinator.dart:239-250` | Reads `outcome.userTappedOverflow` to branch nav (currently always false post-Path-A). | KEEP THE FIELD READ but supplement: the NEW route is pushed when `prResult != null || celebration.queue.any(...)`. The `userTappedOverflow` signal now comes from inside the post-session screen — but the screen runs AFTER the coordinator finishes, so the coordinator's `navigateAfterFinish` cannot know it yet. **Resolution:** for 30a, the coordinator pushes the post-session route + the screen handles its own "user tapped overflow card → navigate to /profile" internally via the injected `onContinue` callback (Decoupling Rule 8). The coordinator's `userTappedOverflow` branch in `post_workout_navigator.dart:106-107` (go to `/profile`) is dead code in 30a's new flow but remains for offline + non-reward paths. **Document this in `post_workout_navigator.dart` header.** |
+| `test/unit/features/workouts/ui/coordinators/celebration_orchestrator_test.dart` | Tests `recordRankUpPulses` only. | NO CHANGE. |
+
+**Net B2 impact:** zero new code in `celebration_player.dart` (Decoupling Rule 6 spec said "re-wire" but on re-read the pass-through already supports the new flow without modification — the post-session screen reads `CelebrationQueueResult` from `consumeLastCelebration()` which is the SAME field `CelebrationOrchestrator.play()` passes through. **No changes to the player file needed in 30a.** PR 30c deletes the file outright.
+
+**Plan deviation (deliberate):** the original task brief mentioned "Decoupling Rule 6: re-wire celebration_player to surface events into a stream/notifier." On inspection, `consumeLastCelebration()` (existing one-shot accessor on `ActiveWorkoutNotifier`) already IS the surface the post-session controller reads. Adding a new notifier/stream layer would be Rule-5-violating duplication. Documenting this in the implementation header.
+
+**B3. `CelebrationOrchestrator.play()` user-tapped-overflow signal — sourcing moves into the post-session screen.**
+
+Pre-PR-30a: orchestrator returns `(userTappedOverflow: bool)` → coordinator → `post_workout_navigator.navigateAfterFinish` → if true, `go('/profile')`.
+
+Post-PR-30a (for online finishes with reward): coordinator skips the navigator's overflow branch (the new route handles it). The screen's "overflow card → /profile" tap is wired via `onContinue` taking a function parameter that delegates to GoRouter, AND the overflow card carries a `VoidCallback onTapOverflow` injected from the route container.
+
+The coordinator's nav branch `userTappedOverflow → /profile` STAYS for backward compat in flows that don't push the new route (offline finishes can have rank-up events that surface in an overflow card... but per Phase 18c spec offline finishes skip overlays entirely, so this is dead code today). Leave the field in the `CelebrationOutcome` typedef; mark dead-code-comment in `post_workout_navigator.dart`.
+
+**B4. `finish_workout_coordinator.dart` empty-session guard — NEW guard runs BEFORE everything else.**
+
+| Site | What it does | Impact in 30a |
+|---|---|---|
+| `finish_workout_coordinator.dart:75-89` | `finish()` opens `FinishWorkoutDialog.show()` — the existing dialog handles incomplete sets but NOT zero-set. | ADD: before showing the dialog, check `notifier.totalSetsCount == 0`. If zero, show `EmptySessionGuardSheet` (modal). Branches: Descartar → `notifier.discardWorkout()` + `context.go('/home')`; Continuar treinando → return early, stay on active workout. Post-session route is never pushed. |
+| `ActiveWorkoutNotifier.totalSetsCount` — does this getter exist? | NO. Only `incompleteSetsCount`. | ADD: `int get totalSetsCount` returning `state.value?.exercises.expand((e) => e.sets).length ?? 0`. |
+
+No downstream regression — the guard is a NEW addition before any existing path runs.
+
+**B5. 24 new ARB keys — schema-equivalent change.**
+
+| Site | Impact |
+|---|---|
+| `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` | ADD ~30 keys (24 + a few for State 7 "level-up only" copy and the EQUIP success snackbar). |
+| `lib/l10n/app_localizations.dart` (generated) | Regenerated by `flutter gen-l10n` — must commit the regeneration. |
+| `lib/l10n/app_localizations_en.dart` + `app_localizations_pt.dart` | Regenerated. |
+| Existing widget consumers of l10n strings | No change — additive only. No renames. |
+
+**B6. 17 new test files + ~10 goldens — coverage gates.**
+
+| Site | Impact |
+|---|---|
+| `test/unit/features/workouts/...` | NEW (unit + widget tests per the table in scope summary). |
+| `test/widget/features/workouts/...` | NEW. |
+| `test/e2e/specs/post_session.spec.ts` | NEW. |
+| `test/e2e/helpers/selectors.ts` | EXTEND — add `post-session-screen`, `post-session-b1-xp`, `post-session-b2-tally`, `post-session-b3-pr|title|class-change`, `post-session-summary`, `post-session-continue-cta`, `post-session-title-equip-row`, `empty-session-guard-sheet` per the E2E selector migration table. |
+| `test/e2e/fixtures/test-users.ts` + `test/e2e/global-setup.ts` | NEW user fixture `postSessionDayZero` (zero workouts seeded — for State 1). Add new user, seed in global setup. |
+
+**Downstream surprises (none material).** The boundary scan found no provider that re-emits state derived from `celebration_player`'s outcome — `consumeLastCelebration()` is the single read site and remains one-shot. No deep-link / saved-route surface targets `/pr-celebration`. The Sentry navigator observer extracts route names via `sanitizeRouteName` which is regex-based on path patterns; adding `/workout/finish/:workoutId` requires no observer change (the regex accepts any GoRoute path).
+
+
 
 **Scope summary**
 
@@ -87,7 +209,7 @@ Guard:
 **Acceptance criteria**
 
 1. `RewardTier.derive` is a pure function; given the 4 canonical fixture inputs (dayZero / baseline / prAnticipatory / classChangeAnticipatory) returns the expected enum. Hold duration mapping locked: dayZero=1300ms, baseline=1200ms, prAnticipatory=1200ms, classChangeAnticipatory=1500ms (with 120ms pre-roll).
-2. `PostSessionChoreographer.build` produces the correct cut count for every State 1-10 fixture in `test/fixtures/post_session_states.json`. State counts: S1=2 cuts, S2=2, S3=3, S4=3, S5=3, S6=3, S7=2, S8=3, S9=2 (B2 skipped), S10=4. Total cuts + summary panel.
+2. `PostSessionChoreographer.build` produces the correct cut count for every State 1-10 fixture in `test/fixtures/post_session_states.json`. State counts: S1=2 cuts, S2=2, S3=3, S4=3, S5=2 cuts (B1 + B2 elevated rank-up — mockup §5 State 5), S6=3, S7=2, S8=3, S9=2 (B2 skipped), S10=4. Total cuts + summary panel.
 3. Empty-session guard (State 11): zero sets → `EmptySessionGuardSheet` modal shows; Descartar → `/home`; Continuar treinando → returns to active workout. Post-session route is **never pushed** for empty sessions. Verified by widget test on `finish_workout_coordinator.dart` + an E2E test that completes a workout with zero sets.
 4. B1 hold duration is 1200ms ± 50ms for baseline tier verified by `pumpAndSettle` timing test (`tester.binding.clock` introspection). dayZero=1300, classChange=1500.
 5. Cascade variant truncates at 4 rows + "+N mais" pill when ≥6 BPs trained (mockup §3 Variant C).

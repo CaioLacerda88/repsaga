@@ -186,7 +186,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
 
     await dialogFinish.click();
 
-    await page.waitForURL(/\/(pr-celebration|home)/, { timeout: 20_000 });
+    await page.waitForURL(/\/(pr-celebration|home|workout\/finish\/)/, { timeout: 20_000 });
     const urlW1 = page.url();
     log(`[SETUP-W1] URL after Workout 1 finish: ${urlW1}`);
 
@@ -233,7 +233,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     await ss(page, 'B1-W2-finish-dialog');
     await dialogFinish.click();
 
-    await page.waitForURL(/\/(pr-celebration|home)/, { timeout: 25_000 });
+    await page.waitForURL(/\/(pr-celebration|home|workout\/finish\/)/, { timeout: 25_000 });
     const urlB1 = page.url();
     log(`[B1] URL after 0-PR finish: ${urlB1}`);
 
@@ -281,7 +281,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
     await dialogFinish.click();
 
-    await page.waitForURL(/\/(pr-celebration|home)/, { timeout: 25_000 });
+    await page.waitForURL(/\/(pr-celebration|home|workout\/finish\/)/, { timeout: 25_000 });
     const urlB2 = page.url();
     log(`[B2] URL after PR finish: ${urlB2}`);
 
@@ -344,7 +344,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
     await dialogFinish.click();
 
-    await page.waitForURL(/\/(pr-celebration|home)/, { timeout: 25_000 });
+    await page.waitForURL(/\/(pr-celebration|home|workout\/finish\/)/, { timeout: 25_000 });
     const urlB3 = page.url();
     log(`[B3] URL after multi-PR finish: ${urlB3}`);
 
@@ -999,7 +999,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     }
 
     await page.waitForTimeout(8_000);
-    await page.waitForURL(/\/(home|pr-celebration|workout)/, { timeout: 20_000 }).catch(() => {});
+    await page.waitForURL(/\/(home|pr-celebration|workout)/, { timeout: 20_000 }).catch(() => {}); // workout already covers workout/finish/
     await ss(page, 'B11-after-double-tap');
 
     log(`[B11] Total save_workout requests intercepted: ${saveRequests.length}`);
@@ -1250,7 +1250,7 @@ test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
     // Save with empty notes
     await dialogFinish.click();
 
-    await page.waitForURL(/\/(home|pr-celebration)/, { timeout: 25_000 });
+    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 25_000 });
     const urlNotes = page.url();
     log(`[NOTES] URL after finish with empty notes: ${urlNotes}`);
 

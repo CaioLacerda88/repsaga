@@ -253,7 +253,10 @@ class _BucketChip extends ConsumerWidget {
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      identifier: 'home-bucket-chip-${entry.routineId}',
+      // routineId is null for spontaneous entries whose source routine was
+      // never recorded (Bug F / migration 00063). Fall back to `spontaneous`
+      // so the identifier is stable + doesn't interpolate the literal `null`.
+      identifier: 'home-bucket-chip-${entry.routineId ?? 'spontaneous'}',
       button: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 96, maxWidth: 130),

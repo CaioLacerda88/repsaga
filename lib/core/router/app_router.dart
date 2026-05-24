@@ -37,8 +37,10 @@ import '../../features/personal_records/domain/pr_detection_service.dart';
 import '../../features/personal_records/providers/pr_cache_bootstrap_provider.dart';
 import '../../features/personal_records/ui/pr_celebration_screen.dart';
 import '../../features/personal_records/ui/pr_list_screen.dart';
+import '../../features/workouts/ui/post_session/post_session_controller.dart';
 import '../../features/workouts/ui/active_workout_screen.dart';
 import '../../features/workouts/ui/home_screen.dart';
+import '../../features/workouts/ui/post_session/post_session_screen.dart';
 import '../../features/weekly_plan/ui/week_plan_screen.dart';
 import '../../features/rpg/providers/earned_titles_backfill_provider.dart';
 import '../../features/rpg/providers/rpg_progress_provider.dart';
@@ -141,6 +143,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           return null;
         },
         builder: (context, state) => const ActiveWorkoutScreen(),
+      ),
+      // Phase 30 PR 30a — full-screen cinematic post-session route.
+      // **Push-only** (never deep-linked, never popable to active workout —
+      // back goes to home). Receives `PostSessionParams` via `state.extra`.
+      // The legacy `/pr-celebration` route (below) stays alive until PR 30c.
+      //
+      // Cluster: `gorouter-context-go-vs-push` — we use `go()` from the
+      // coordinator (not `push()`) because the active-workout screen has
+      // already unmounted by the time we navigate here; `push()` would
+      // leave a dead route entry behind it.
+      GoRoute(
+        path: '/workout/finish/:workoutId',
+        name: 'postWorkoutFinish',
+        redirect: (context, state) {
+          // Soft-fail to /home on a malformed extra envelope; the route is
+          // push-only so the only way to land here without a valid extra is
+          // a programmer error.
+          if (state.extra is! PostSessionParams) return '/home';
+          return null;
+        },
+        builder: (context, state) {
+          final params = state.extra! as PostSessionParams;
+          return PostSessionScreen(
+            params: params,
+            // Decoupling Rule 8 — the route container wires GoRouter.
+            onContinue: () => context.go('/home'),
+          );
+        },
       ),
       GoRoute(
         path: '/pr-celebration',
@@ -357,8 +387,12 @@ class _RouterRefreshListenable extends ChangeNotifier {
   final Ref _ref;
 }
 
-/// Height in logical pixels of the OfflineBanner overlay. Used to pad the
-/// active tab's content so it isn't covered by the banner.
+/// Height in logical pixels of the OfflineBanner CONTENT (the rendered Row
+/// with icon + text), NOT including the status bar inset above it. The
+/// banner is wrapped in `SafeArea(top: true)` in `_ShellScaffold.build`
+/// so it sits below the system status bar; the body's Padding therefore
+/// uses `MediaQuery.viewPadding.top + _kOfflineBannerHeight` to compute
+/// total vertical space the banner occupies.
 ///
 /// Geometry: vertical padding 12 + 12 = 24dp, plus the rendered line height
 /// of `AppTextStyles.bodySmall` (`fontSize: 12 * height: 1.5` = 18dp) which
@@ -528,6 +562,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     // satisfy NavigationBar's range requirement but hide the indicator so no
     // tab appears active.
     final isOnTab = tabIndex >= 0;
+    // Status-bar inset for the offline-banner placement below. We capture it
+    // once here so the body Padding and the SafeArea wrap on the banner
+    // agree on the same value within a single build.
+    final viewPaddingTop = MediaQuery.of(context).viewPadding.top;
 
     // Family 5A / AW-EX-B-US1-03: the OfflineBanner is rendered as a
     // top-of-body overlay (Stack, painted AFTER child), not as a Column
@@ -598,30 +636,54 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
           body: Stack(
             children: [
               Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    top: isOnline ? 0 : _kOfflineBannerHeight,
+                // Body Padding below explicitly adds the top inset when offline
+                // so the banner (which sits in the inset via SafeArea below)
+                // doesn't cover tab content. Tab content widgets ALSO wrap
+                // themselves in SafeArea — we strip the top padding from
+                // MediaQuery here so their SafeArea doesn't double-pad against
+                // the status bar that we've already accounted for.
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: !isOnline,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: isOnline
+                          ? 0
+                          : viewPaddingTop + _kOfflineBannerHeight,
+                    ),
+                    child: widget.child,
                   ),
-                  child: widget.child,
                 ),
               ),
               if (!isOnline)
                 Align(
                   alignment: Alignment.topCenter,
-                  // Pin the banner to `TextScaler.noScaling` so its rendered
-                  // height stays equal to `_kOfflineBannerHeight` (42dp)
-                  // regardless of system font scaling. The banner is a short,
-                  // high-contrast visual marker — letting it scale would either
-                  // wrap the row (worse a11y) or push it past the padded body
-                  // and overlap content. Other text in the app respects the
-                  // user's text-scale preference; this banner is the one
-                  // exception, by design. See `_kOfflineBannerHeight` for the
-                  // height contract this pin protects.
-                  child: MediaQuery(
-                    data: MediaQuery.of(
-                      context,
-                    ).copyWith(textScaler: TextScaler.noScaling),
-                    child: const OfflineBanner(),
+                  // Cluster: safearea-system-overlay-overlap — Scaffold defaults
+                  // to extending body behind status bar on Android edge-to-edge;
+                  // widgets painted at body y=0 (here, the OfflineBanner Align
+                  // overlay) sit behind the system status bar without an
+                  // explicit SafeArea wrap. Same class as the PostSessionScreen
+                  // visual fix in bff76bd.
+                  child: SafeArea(
+                    top: true,
+                    bottom: false,
+                    left: false,
+                    right: false,
+                    // Pin the banner to `TextScaler.noScaling` so its rendered
+                    // height stays equal to `_kOfflineBannerHeight` (42dp)
+                    // regardless of system font scaling. The banner is a short,
+                    // high-contrast visual marker — letting it scale would either
+                    // wrap the row (worse a11y) or push it past the padded body
+                    // and overlap content. Other text in the app respects the
+                    // user's text-scale preference; this banner is the one
+                    // exception, by design. See `_kOfflineBannerHeight` for the
+                    // height contract this pin protects.
+                    child: MediaQuery(
+                      data: MediaQuery.of(
+                        context,
+                      ).copyWith(textScaler: TextScaler.noScaling),
+                      child: const OfflineBanner(),
+                    ),
                   ),
                 ),
             ],

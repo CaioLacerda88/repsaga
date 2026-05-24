@@ -7,3 +7,13 @@
 tags:
   integration:
     skip: false
+  # `golden` tag: marks pixel-comparison golden tests. EXCLUDED from
+  # `make test` / CI because golden images are byte-sensitive to host
+  # platform sub-pixel font rendering (Linux freetype vs Windows
+  # DirectWrite vs macOS CoreText) and the project has not established a
+  # canonical baking platform yet. Run with `flutter test --tags golden`
+  # to verify the locked visual contract on the same host that baked the
+  # goldens (see `test/helpers/tolerant_golden_comparator.dart` for the
+  # tolerance policy when running cross-host).
+  golden:
+    skip: false
