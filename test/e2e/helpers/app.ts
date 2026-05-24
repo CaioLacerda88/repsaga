@@ -384,21 +384,29 @@ export async function dismissCelebrationIfPresent(
 
   const url = page.url();
   if (url.includes('workout/finish/')) {
-    // Post-session screen (PR 30a): the CONTINUAR CTA is the dismissal
-    // affordance. Long-press skips cinematics and shows the summary panel.
+    // Post-session screen (PR 30a): tap the SKIP pill (post-session-skip-btn)
+    // to call skipToSummary() directly, then tap the CONTINUAR CTA.
+    //
+    // The previous implementation used flutterLongPress(screenRoot, 600) which
+    // was flaky under workers=4 CPU contention: the long-press would land but
+    // the 8 s window for the CTA to appear was too tight when CanvasKit widget
+    // rebuild + AOM re-emit took longer than expected. The skip button is
+    // composited as a direct GestureDetector tap — no animation timer involved —
+    // so it's both faster and more deterministic than the long-press path.
+    const skipBtn = '[flt-semantics-identifier="post-session-skip-btn"]';
     const continueCta = '[flt-semantics-identifier="post-session-continue-cta"]';
-    // Skip cinematics via long-press on the screen root, then tap CONTINUAR.
-    const screenRoot = '[flt-semantics-identifier="post-session-screen"]';
     const summaryEl = page.locator(continueCta);
-    // Use long-press to fast-forward all cinematic cuts to the summary panel.
-    // The screen's long-press handler sets _skipCinematics = true and jumps
-    // directly to the summary. We allow up to 8 s for the summary to appear.
+    // Wait for the skip button to be present (it renders immediately on
+    // the cinematic; if the screen already jumped to summary it won't be
+    // there, which is fine — the catch falls through).
     try {
-      await flutterLongPress(page, screenRoot, 600);
+      await expect(page.locator(skipBtn)).toBeVisible({ timeout: 8_000 });
+      await page.click(skipBtn);
     } catch {
-      // If the long-press misses (screen already on summary), fall through.
+      // Skip button gone — screen already transitioned to summary panel.
+      // Fall through and wait for CONTINUAR directly.
     }
-    await expect(summaryEl).toBeVisible({ timeout: 8_000 });
+    await expect(summaryEl).toBeVisible({ timeout: 15_000 });
     await page.click(continueCta);
     await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
   } else {
