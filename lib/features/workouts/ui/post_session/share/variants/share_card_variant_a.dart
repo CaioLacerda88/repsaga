@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../core/theme/app_theme.dart';
+import '../share_card_typography.dart';
 
 /// Variant A — Minimal Strip overlay (mockup §6 default).
 ///
@@ -29,6 +30,7 @@ class ShareCardVariantA extends StatelessWidget {
     required this.wordmark,
     required this.barFillFraction,
     this.prText,
+    this.renderTarget = ShareCardRenderTarget.export,
   });
 
   /// Hue accent color — drives the top 2dp line + the bar fill.
@@ -50,6 +52,14 @@ class ShareCardVariantA extends StatelessWidget {
   /// Progress bar fill fraction in [0.0, 1.0]. Reflects the dominant BP's
   /// rank progress fraction; clamped defensively inside the widget.
   final double barFillFraction;
+
+  /// Whether this widget is the export (1080×1920 offscreen) tree OR the
+  /// preview (FittedBox-scaled visible) tree. Drives the typography
+  /// sizing — see [ShareCardTypography] for the per-element pairs.
+  /// Defaults to [ShareCardRenderTarget.export] so the golden contract
+  /// (which captures the 1080×1920 frame) stays correct without callers
+  /// touching the param.
+  final ShareCardRenderTarget renderTarget;
 
   @override
   Widget build(BuildContext context) {
@@ -82,21 +92,14 @@ class ShareCardVariantA extends StatelessWidget {
                 children: [
                   Text(
                     xpText,
-                    style: AppTextStyles.numeric.copyWith(
-                      fontSize: 22,
-                      letterSpacing: -0.02 * 22,
-                    ),
+                    style: ShareCardTypography.variantAXp(renderTarget),
                   ),
                   const Spacer(),
                   if (prText != null)
+                    // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (PR-only render via ShareCardTypography.variantAPr).
                     Text(
                       prText!,
-                      style: AppTextStyles.numeric.copyWith(
-                        fontSize: 16,
-                        // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (PR-only render).
-                        color: AppColors.heroGold,
-                        letterSpacing: 0.04 * 16,
-                      ),
+                      style: ShareCardTypography.variantAPr(renderTarget),
                     ),
                 ],
               ),
@@ -122,20 +125,18 @@ class ShareCardVariantA extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              // Wordmark — Rajdhani 9sp, +0.22em tracking, textDim, right-aligned.
-              // Derived from `numeric` (Rajdhani 700 tabular) so the family
-              // override stays inside the sanctioned `AppTextStyles.*` entry
-              // point — `check_typography_call_sites.sh` Gate 1 forbids raw
+              // Wordmark — Rajdhani 700 (textDim), +0.22em tracking,
+              // right-aligned. Size routed through ShareCardTypography so
+              // the preview-target widening (9sp → 11sp) reads on a
+              // FittedBox-scaled visible preview. Derived from `numeric`
+              // so the family override stays inside the sanctioned
+              // `AppTextStyles.*` entry point — Gate 1 forbids raw
               // `fontFamily: 'Rajdhani'` literals at call sites.
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
                   wordmark,
-                  style: AppTextStyles.numeric.copyWith(
-                    fontSize: 9,
-                    letterSpacing: 0.22 * 9,
-                    color: AppColors.textDim,
-                  ),
+                  style: ShareCardTypography.variantAWordmark(renderTarget),
                 ),
               ),
             ],

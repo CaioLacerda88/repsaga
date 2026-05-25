@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -21,6 +22,24 @@ import 'package:share_plus/share_plus.dart';
 ///   * Share dispatches sharePreview into the controller.
 ///   * Tap-to-hide XP / PR toggles affected strings (best-effort: assert
 ///     widget-tree visibility of the underlying renderer).
+///
+/// **Two ShareCardRenderer instances per screen** (PR 30c device bug 3):
+/// the screen mounts BOTH a visible preview tree (`renderTarget: preview`)
+/// and an offscreen export tree (`renderTarget: export`, positioned at
+/// `left: -10000`). Tests probing widget state therefore disambiguate by
+/// `renderTarget` — see [visibleRenderer] / [exportRenderer] below.
+ShareCardRenderer visibleRenderer(WidgetTester tester) {
+  return tester
+      .widgetList<ShareCardRenderer>(find.byType(ShareCardRenderer))
+      .firstWhere((r) => r.renderTarget == ShareCardRenderTarget.preview);
+}
+
+ShareCardRenderer exportRenderer(WidgetTester tester) {
+  return tester
+      .widgetList<ShareCardRenderer>(find.byType(ShareCardRenderer))
+      .firstWhere((r) => r.renderTarget == ShareCardRenderTarget.export);
+}
+
 void main() {
   const strings = ShareCardStrings(
     wordmark: 'REPSAGA',
@@ -138,10 +157,7 @@ void main() {
       previewPhoto: _StubXFile('/tmp/photo.jpg'),
     );
 
-    final renderer = tester.widget<ShareCardRenderer>(
-      find.byType(ShareCardRenderer),
-    );
-    expect(renderer.variant, ShareCardVariant.minimalStrip);
+    expect(visibleRenderer(tester).variant, ShareCardVariant.minimalStrip);
     // Toggle chips visible.
     expect(find.text('MÍNIMO'), findsOneWidget);
     expect(find.text('DESTAQUE'), findsOneWidget);
@@ -159,10 +175,7 @@ void main() {
     await tester.tap(find.text('DESTAQUE'));
     await tester.pump();
 
-    final renderer = tester.widget<ShareCardRenderer>(
-      find.byType(ShareCardRenderer),
-    );
-    expect(renderer.variant, ShareCardVariant.fullBleed);
+    expect(visibleRenderer(tester).variant, ShareCardVariant.fullBleed);
   });
 
   testWidgets(
@@ -170,10 +183,7 @@ void main() {
     (tester) async {
       await pumpScreen(tester, payload: buildPayload(), previewPhoto: null);
 
-      final renderer = tester.widget<ShareCardRenderer>(
-        find.byType(ShareCardRenderer),
-      );
-      expect(renderer.variant, ShareCardVariant.discreet);
+      expect(visibleRenderer(tester).variant, ShareCardVariant.discreet);
       expect(find.text('MÍNIMO'), findsNothing);
       expect(find.text('DESTAQUE'), findsNothing);
     },
@@ -489,20 +499,28 @@ void main() {
       previewPhoto: _StubXFile('/tmp/photo.jpg'),
     );
 
-    // Sanity: XP text rendered initially.
-    ShareCardRenderer rendered() =>
-        tester.widget<ShareCardRenderer>(find.byType(ShareCardRenderer));
-    expect(rendered().strings.variantAXpText, '+618 XP');
+    // Sanity: XP text rendered initially on the visible preview tree.
+    expect(visibleRenderer(tester).strings.variantAXpText, '+618 XP');
 
     // Tap inside the XP hit zone — bottom-strip Positioned overlay.
     // The XP overlay sits at `bottom: 0, height: 280` inside a
-    // 1080×1920 stack — tap the bottom of the visible preview.
-    final preview = find.byType(ShareCardRenderer);
-    final rect = tester.getRect(preview);
+    // 1080×1920 stack — tap the bottom of the visible preview. The
+    // offscreen export renderer (at `left: -10000`) sits outside the
+    // viewport so taps land on the visible one only; we scope the
+    // hit-test rect to the visible renderer to be explicit.
+    final visible = find.byWidgetPredicate(
+      (w) =>
+          w is ShareCardRenderer &&
+          w.renderTarget == ShareCardRenderTarget.preview,
+    );
+    final rect = tester.getRect(visible);
     await tester.tapAt(Offset(rect.center.dx, rect.bottom - 12));
     await tester.pump();
 
-    expect(rendered().strings.variantAXpText, '');
+    // Both renderers share the same `strings` reference, so checking
+    // either one reflects the tap-to-hide state. We probe the visible
+    // one for consistency with the rest of the suite.
+    expect(visibleRenderer(tester).strings.variantAXpText, '');
   });
 
   // ---------------------------------------------------------------------------
@@ -521,15 +539,19 @@ void main() {
       // The drag-to-reframe gesture flows the offset INTO the renderer
       // (PR 30b Important 3) so that only the photo subtree translates;
       // pre-fix the Transform sat ABOVE the renderer and shifted the
-      // overlay too. Probe the renderer's photoOffset prop directly.
-      Offset rendererPhotoOffset() {
-        return tester
-            .widget<ShareCardRenderer>(find.byType(ShareCardRenderer))
-            .photoOffset;
-      }
+      // overlay too. Probe the visible renderer's photoOffset prop
+      // directly (post-PR-30c there's also an offscreen export renderer
+      // — both receive the same offset value so either probe works, but
+      // we use the visible one for consistency).
+      Offset rendererPhotoOffset() => visibleRenderer(tester).photoOffset;
 
       final before = rendererPhotoOffset();
-      await tester.drag(find.byType(ShareCardRenderer), const Offset(0, 200));
+      final visible = find.byWidgetPredicate(
+        (w) =>
+            w is ShareCardRenderer &&
+            w.renderTarget == ShareCardRenderTarget.preview,
+      );
+      await tester.drag(visible, const Offset(0, 200));
       await tester.pump();
       final after = rendererPhotoOffset();
 
@@ -538,6 +560,227 @@ void main() {
       expect(after.dy, greaterThan(before.dy));
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // PR 30c device bug 2 — ClipRect contains the drag-to-reframe overflow
+  //
+  // Pre-fix: drag-to-reframe applied a Transform.translate to the photo
+  // subtree. The card's AspectRatio host had no clipping ancestor, so the
+  // translated pixels could overflow the 9:16 outer bounds and paint over
+  // the variant toggle row above. On a real device the user saw the photo
+  // creeping up onto the MÍNIMO / DESTAQUE chips during an upward drag.
+  //
+  // Post-fix: a ClipRect wraps the AspectRatio. The card's outer paint
+  // bounds clamp to the AspectRatio's bounds regardless of the inner
+  // Transform — the toggle row above is untouched.
+  // ---------------------------------------------------------------------------
+  testWidgets('photo cannot paint outside the card frame after max upward drag '
+      '(ClipRect contract — PR 30c device bug 2)', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    // Drive the drag past the natural reframe band. The clamp inside
+    // the screen caps _photoAlignmentY at -1.0 (yielding photoOffset.dy
+    // = -80 in renderer units), but the gesture itself fires deltas
+    // far beyond that. The ClipRect must hold the visible paint bounds
+    // inside the AspectRatio regardless of how aggressive the drag is.
+    final visibleCard = find.byWidgetPredicate(
+      (w) =>
+          w is ShareCardRenderer &&
+          w.renderTarget == ShareCardRenderTarget.preview,
+    );
+    await tester.drag(visibleCard, const Offset(0, -2000));
+    await tester.pump();
+
+    // The screen-layer ClipRect sits between Center and AspectRatio
+    // (outer card frame). The renderer also has its own AspectRatio
+    // descendant, so two AspectRatio widgets exist under the ClipRect —
+    // we want the outer one (the direct child of the ClipRect).
+    final clipRectFinder = find.descendant(
+      of: find.byType(SharePreviewScreen),
+      matching: find.byType(ClipRect),
+    );
+    expect(
+      clipRectFinder,
+      findsOneWidget,
+      reason:
+          'AspectRatio must be wrapped in a ClipRect '
+          '(PR 30c device bug 2 fix)',
+    );
+
+    // The outer AspectRatio is the first AspectRatio descendant of the
+    // ClipRect.
+    final outerAspectRatio = find
+        .descendant(of: clipRectFinder, matching: find.byType(AspectRatio))
+        .first;
+    final aspectRect = tester.getRect(outerAspectRatio);
+    final clipRect = tester.getRect(clipRectFinder);
+    expect(
+      clipRect,
+      aspectRect,
+      reason:
+          'ClipRect bounds must equal the AspectRatio bounds — '
+          'photo overflow cannot escape the card frame',
+    );
+
+    // Bottom action row (Refazer/Compartilhar) sits BELOW the card
+    // frame on screen. If the photo overflow leaked, it would paint
+    // ABOVE the card too — over the variant toggle. The toggle still
+    // renders its labels post-drag, which means no overflow ate them.
+    expect(find.text('MÍNIMO'), findsOneWidget);
+    expect(find.text('DESTAQUE'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // PR 30c device bug 3 — offscreen export tree stays mounted across the
+  // rendering / sharing state transitions so RenderRepaintBoundary.toImage
+  // can capture a still-painted boundary.
+  //
+  // Pre-fix: the screen returned a CircularProgressIndicator-only body
+  // when state transitioned to ShareStateRendering. The next frame
+  // unmounted the (visible) RepaintBoundary while toImage was mid-flight,
+  // throwing on a disposed layer and surfacing the "Couldn't render the
+  // saga card" snackbar to the user.
+  //
+  // Post-fix: the screen ALWAYS mounts the same body tree across
+  // preview / rendering / sharing — an offscreen export tree at
+  // `Positioned(left: -10000)` and a visible preview tree side-by-side
+  // inside a Stack. Busy states just overlay a barrier + spinner on top.
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'mounts both visible preview and offscreen export ShareCardRenderer '
+    'in preview state (device bug 3 dual-tree setup)',
+    (tester) async {
+      await pumpScreen(
+        tester,
+        payload: buildPayload(),
+        previewPhoto: _StubXFile('/tmp/photo.jpg'),
+      );
+
+      // Both renderers are present.
+      expect(find.byType(ShareCardRenderer), findsNWidgets(2));
+      expect(
+        visibleRenderer(tester).renderTarget,
+        ShareCardRenderTarget.preview,
+      );
+      expect(exportRenderer(tester).renderTarget, ShareCardRenderTarget.export);
+    },
+  );
+
+  testWidgets('offscreen export tree stays mounted across the rendering state '
+      'transition so toImage captures a painted boundary (device bug 3 fix)', (
+    tester,
+  ) async {
+    final renderer = _RecordingRenderer();
+    final container = ProviderContainer(
+      overrides: [
+        shareServiceProvider.overrideWithValue(stubService()),
+        shareImageRendererProvider.overrideWithValue(renderer),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final photo = _StubXFile('/tmp/photo.jpg');
+    container.read(shareControllerProvider.notifier).state = ShareState.preview(
+      photo: photo,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: SharePreviewScreen(
+            payload: buildPayload(),
+            strings: strings,
+            l10n: l10n,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Sanity: both trees mounted before the share tap.
+    expect(find.byType(ShareCardRenderer), findsNWidgets(2));
+
+    // Manually transition the controller into rendering (the share
+    // tap is async; we simulate the intermediate frame the bug
+    // reproduced on).
+    container.read(shareControllerProvider.notifier).state =
+        const ShareState.rendering();
+    await tester.pump();
+
+    // Post-fix invariant: the export tree IS still mounted while the
+    // controller is in the rendering state. Pre-fix the body
+    // returned only a CircularProgressIndicator and both renderers
+    // were gone — toImage would race against a disposed boundary.
+    expect(find.byType(ShareCardRenderer), findsNWidgets(2));
+    expect(exportRenderer(tester).renderTarget, ShareCardRenderTarget.export);
+
+    // The busy barrier is visible — observable user-facing affordance.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('sharePreview passes the offscreen export RepaintBoundary key '
+      '(NOT the visible preview tree) — device bug 3 contract', (tester) async {
+    final renderer = _RecordingRenderer();
+    final r = await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+      renderer: renderer,
+    );
+
+    await tester.tap(find.text('COMPARTILHAR'));
+    await tester.pump();
+    await tester.pump();
+
+    // The renderer was called with the offscreen export tree's
+    // GlobalKey. We assert the captured key points at a
+    // RepaintBoundary that's currently a RenderRepaintBoundary in the
+    // tree — proving the export boundary is mounted at the moment
+    // toImage would normally be called.
+    expect(renderer.lastKey, isNotNull);
+    // The key's currentContext resolves to a real element, and that
+    // element's render object is a RepaintBoundary.
+    final ctx = renderer.lastKey!.currentContext;
+    // After the share completes the screen would call onClose, but
+    // the _RecordingRenderer returns synchronously without an XFile
+    // disposal step — the screen has already advanced through the
+    // success branch. We use the captured key to assert the boundary
+    // shape mattered at the moment the share button fired.
+    // Defensive: skip the assertion if the screen has already torn
+    // down (idle state).
+    if (ctx != null) {
+      expect(ctx.findRenderObject(), isA<RenderRepaintBoundary>());
+    }
+
+    // The container's lastKey doesn't directly tell us which tree it
+    // was — but the screen only EVER passes the offscreen key. We
+    // assert it by checking renderer.lastKey is exactly the global
+    // key the screen attached to the offscreen RepaintBoundary. We
+    // can't access the State's private field directly, so we verify
+    // a weaker invariant: the captured key is NOT a placeholder
+    // empty GlobalKey() and HAS a debug label matching the export
+    // key (which is set with `debugLabel: 'share-preview-export-repaint'`
+    // in the State).
+    expect(
+      renderer.lastKey.toString(),
+      contains('share-preview-export-repaint'),
+      reason:
+          'sharePreview must use the offscreen export tree key, '
+          'not the visible preview tree key',
+    );
+    // Suppress the unused `r` lint — keeps the helper signature in line
+    // with other share tests that DO assert on the returned record.
+    addTearDown(() {
+      r.container; // touch
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Defensive mount — non-preview states at mount time

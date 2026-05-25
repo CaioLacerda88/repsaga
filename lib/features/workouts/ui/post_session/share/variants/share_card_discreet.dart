@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../../core/theme/app_theme.dart';
 import '../../cuts/cut_slash.dart';
+import '../share_card_typography.dart';
 
 /// Discreet — the no-photo cinematic still (mockup §6 "Discreet mode").
 ///
@@ -37,6 +38,7 @@ class ShareCardDiscreet extends StatelessWidget {
     required this.wordmark,
     this.prLine,
     this.prDetail,
+    this.renderTarget = ShareCardRenderTarget.export,
   });
 
   /// Hue accent — drives the background flood top-left, the slash color,
@@ -67,6 +69,13 @@ class ShareCardDiscreet extends StatelessWidget {
   /// Wordmark, e.g. "REPSAGA". Rendered Rajdhani 700 10sp +0.24em tracked
   /// at the bottom-center.
   final String wordmark;
+
+  /// Whether this widget is the export (1080×1920 offscreen) tree OR the
+  /// preview (FittedBox-scaled visible) tree. Drives the typography
+  /// sizing — see [ShareCardTypography] for the per-element pairs.
+  /// Defaults to [ShareCardRenderTarget.export] so the golden contract
+  /// stays correct.
+  final ShareCardRenderTarget renderTarget;
 
   @override
   Widget build(BuildContext context) {
@@ -105,10 +114,9 @@ class ShareCardDiscreet extends StatelessWidget {
               Text(
                 eyebrow,
                 key: const ValueKey('share-card-discreet-eyebrow'),
-                style: AppTextStyles.label.copyWith(
-                  fontSize: 11,
-                  letterSpacing: 0.22 * 11,
-                  color: dominantHue,
+                style: ShareCardTypography.discreetEyebrow(
+                  renderTarget,
+                  hue: dominantHue,
                 ),
               ),
               const SizedBox(height: 6),
@@ -116,33 +124,20 @@ class ShareCardDiscreet extends StatelessWidget {
                 heroText,
                 key: const ValueKey('share-card-discreet-hero'),
                 textAlign: TextAlign.center,
-                style: AppTextStyles.numeric.copyWith(
-                  fontSize: 44,
-                  letterSpacing: -0.02 * 44,
-                  height: 1.0,
-                ),
+                style: ShareCardTypography.discreetHero(renderTarget),
               ),
               const SizedBox(height: 4),
               Text(
                 heroSubLabel,
-                style: AppTextStyles.label.copyWith(
-                  fontSize: 10,
-                  letterSpacing: 0.22 * 10,
-                  color: AppColors.textDim,
-                ),
+                style: ShareCardTypography.discreetHeroSubLabel(renderTarget),
               ),
               if (prLine != null) ...[
                 const SizedBox(height: 22),
+                // ignore: reward_accent — PR line is the canonical reward; heroGold scarcity contract met (rendered through ShareCardTypography.discreetPrLine).
                 Text(
                   prLine!,
                   key: const ValueKey('share-card-discreet-pr-line'),
-                  style: AppTextStyles.numeric.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.04 * 14,
-                    // ignore: reward_accent — PR line is the canonical reward; heroGold scarcity contract met.
-                    color: AppColors.heroGold,
-                  ),
+                  style: ShareCardTypography.discreetPrLine(renderTarget),
                 ),
               ],
               if (prDetail != null) ...[
@@ -153,11 +148,7 @@ class ShareCardDiscreet extends StatelessWidget {
               Text(
                 wordmark,
                 key: const ValueKey('share-card-discreet-wordmark'),
-                style: AppTextStyles.numeric.copyWith(
-                  fontSize: 10,
-                  letterSpacing: 0.24 * 10,
-                  color: AppColors.textDim,
-                ),
+                style: ShareCardTypography.discreetWordmark(renderTarget),
               ),
             ],
           ),

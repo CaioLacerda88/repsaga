@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_card_typography.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart';
 
 /// Pins Variant A (Minimal Strip) overlay behavior — what the user sees on
@@ -135,6 +136,66 @@ void main() {
       expect(fractionallySized.widthFactor, 1.0);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // PR 30c device bug 1 — preview vs export typography split
+  //
+  // The same widget tree renders in two contexts:
+  //   * `ShareCardRenderTarget.export` — 1080×1920 offscreen tree captured
+  //     by ShareImageRenderer. Typography matches mockup §6 sizes (XP
+  //     22sp, PR 16sp, wordmark 9sp).
+  //   * `ShareCardRenderTarget.preview` — FittedBox-scaled visible tree
+  //     inside SharePreviewScreen. After the ~0.333 scale-down to a 360dp
+  //     viewport, mockup-sized text reads at ~7px which is unreadable; the
+  //     preview-target sizes are scaled up so the on-screen text stays
+  //     legible.
+  // ---------------------------------------------------------------------------
+
+  testWidgets('export target uses mockup §6 sizes (XP 22sp, PR 16sp, wordmark '
+      '9sp)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        const ShareCardVariantA(
+          dominantHue: AppColors.bodyPartChest,
+          xpText: '+618 XP',
+          prText: '95kg × 5 · PR',
+          wordmark: 'REPSAGA',
+          barFillFraction: 0.5,
+          renderTarget: ShareCardRenderTarget.export,
+        ),
+      ),
+    );
+
+    final xp = tester.widget<Text>(find.text('+618 XP'));
+    expect(xp.style?.fontSize, 22);
+    final pr = tester.widget<Text>(find.text('95kg × 5 · PR'));
+    expect(pr.style?.fontSize, 16);
+    final wordmark = tester.widget<Text>(find.text('REPSAGA'));
+    expect(wordmark.style?.fontSize, 9);
+  });
+
+  testWidgets('preview target uses scaled-up sizes for FittedBox readability '
+      '(XP 28sp, PR 18sp, wordmark 11sp)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        const ShareCardVariantA(
+          dominantHue: AppColors.bodyPartChest,
+          xpText: '+618 XP',
+          prText: '95kg × 5 · PR',
+          wordmark: 'REPSAGA',
+          barFillFraction: 0.5,
+          renderTarget: ShareCardRenderTarget.preview,
+        ),
+      ),
+    );
+
+    final xp = tester.widget<Text>(find.text('+618 XP'));
+    expect(xp.style?.fontSize, 28);
+    final pr = tester.widget<Text>(find.text('95kg × 5 · PR'));
+    expect(pr.style?.fontSize, 18);
+    final wordmark = tester.widget<Text>(find.text('REPSAGA'));
+    expect(wordmark.style?.fontSize, 11);
+  });
 
   testWidgets('strip background is flat abyss at ~92% opacity', (tester) async {
     await tester.pumpWidget(

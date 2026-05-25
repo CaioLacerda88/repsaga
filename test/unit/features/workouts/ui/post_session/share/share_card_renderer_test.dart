@@ -331,6 +331,95 @@ void main() {
     );
   });
 
+  // ---------------------------------------------------------------------------
+  // PR 30c device bug 1 — renderTarget threads through each variant
+  //
+  // The composer forwards its `renderTarget` to whichever variant it
+  // selects so the typography table can pick preview-sized vs export-sized
+  // pairs at one boundary. Default is `export` — the golden contract
+  // captures the 1080×1920 export bytes and must not regress.
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'defaults renderTarget to export so existing callers + goldens are unchanged',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          ShareCardRenderer(
+            payload: payload(),
+            variant: ShareCardVariant.minimalStrip,
+            strings: strings,
+          ),
+        ),
+      );
+
+      final variantA = tester.widget<ShareCardVariantA>(
+        find.byType(ShareCardVariantA),
+      );
+      expect(variantA.renderTarget, ShareCardRenderTarget.export);
+    },
+  );
+
+  testWidgets('forwards renderTarget.preview into ShareCardVariantA', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          renderTarget: ShareCardRenderTarget.preview,
+        ),
+      ),
+    );
+
+    final variantA = tester.widget<ShareCardVariantA>(
+      find.byType(ShareCardVariantA),
+    );
+    expect(variantA.renderTarget, ShareCardRenderTarget.preview);
+  });
+
+  testWidgets('forwards renderTarget.preview into ShareCardVariantB', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.fullBleed,
+          strings: strings,
+          renderTarget: ShareCardRenderTarget.preview,
+        ),
+      ),
+    );
+
+    final variantB = tester.widget<ShareCardVariantB>(
+      find.byType(ShareCardVariantB),
+    );
+    expect(variantB.renderTarget, ShareCardRenderTarget.preview);
+  });
+
+  testWidgets('forwards renderTarget.preview into ShareCardDiscreet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.discreet,
+          strings: strings,
+          renderTarget: ShareCardRenderTarget.preview,
+        ),
+      ),
+    );
+
+    final discreet = tester.widget<ShareCardDiscreet>(
+      find.byType(ShareCardDiscreet),
+    );
+    expect(discreet.renderTarget, ShareCardRenderTarget.preview);
+  });
+
   testWidgets('photoOffset shifts the placeholder when no photo is supplied', (
     tester,
   ) async {

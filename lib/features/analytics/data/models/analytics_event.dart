@@ -55,12 +55,6 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
     required int workoutNumber,
   }) = _WorkoutFinished;
 
-  const factory AnalyticsEvent.prCelebrationSeen({
-    required bool isFirstWorkout,
-    required int prCount,
-    required List<String> recordTypes,
-  }) = _PrCelebrationSeen;
-
   const factory AnalyticsEvent.weekPlanSaved({
     required int routineCount,
     required bool atSoftCap,
@@ -108,7 +102,6 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
     _WorkoutStarted() => 'workout_started',
     _WorkoutDiscarded() => 'workout_discarded',
     _WorkoutFinished() => 'workout_finished',
-    _PrCelebrationSeen() => 'pr_celebration_seen',
     _WeekPlanSaved() => 'week_plan_saved',
     _WeekComplete() => 'week_complete',
     _AddToPlanPromptResponded() => 'add_to_plan_prompt_responded',
@@ -160,16 +153,6 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
         'had_pr': hadPr,
         'source': source,
         'workout_number': workoutNumber,
-      },
-    _PrCelebrationSeen(
-      :final isFirstWorkout,
-      :final prCount,
-      :final recordTypes,
-    ) =>
-      {
-        'is_first_workout': isFirstWorkout,
-        'pr_count': prCount,
-        'record_types': recordTypes,
       },
     _WeekPlanSaved(
       :final routineCount,

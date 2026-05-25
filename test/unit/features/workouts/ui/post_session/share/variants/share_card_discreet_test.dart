@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_card_typography.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_discreet.dart';
 
 /// Pins the Discreet variant — the no-photo cinematic still that auto-
@@ -120,8 +121,105 @@ void main() {
     );
     // We route through AppTextStyles.numeric (Rajdhani 700 tabular) and
     // assert the size override only — fontFamily is owned by AppTheme.
+    // Default renderTarget is export (matches mockup §6 44sp).
     expect(hero.style!.fontSize, 44);
     expect(hero.style!.fontFamily, 'Rajdhani');
     expect(hero.style!.fontWeight, FontWeight.w700);
+  });
+
+  // ---------------------------------------------------------------------------
+  // PR 30c device bug 1 — preview vs export typography split
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'preview target uses scaled-up hero size (56sp) so FittedBox-scaled '
+    'preview stays readable',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          const ShareCardDiscreet(
+            dominantHue: AppColors.bodyPartChest,
+            eyebrow: 'Peito · Rank 19',
+            heroText: '+618',
+            heroSubLabel: 'XP NESTA SAGA',
+            prLine: '!! 95kg × 5',
+            wordmark: 'REPSAGA',
+            renderTarget: ShareCardRenderTarget.preview,
+          ),
+        ),
+      );
+
+      final hero = tester.widget<Text>(
+        find.byKey(const ValueKey('share-card-discreet-hero')),
+      );
+      expect(hero.style!.fontSize, 56);
+
+      final eyebrow = tester.widget<Text>(
+        find.byKey(const ValueKey('share-card-discreet-eyebrow')),
+      );
+      expect(eyebrow.style!.fontSize, 13);
+
+      final prLine = tester.widget<Text>(
+        find.byKey(const ValueKey('share-card-discreet-pr-line')),
+      );
+      expect(prLine.style!.fontSize, 16);
+
+      final wordmark = tester.widget<Text>(
+        find.byKey(const ValueKey('share-card-discreet-wordmark')),
+      );
+      expect(wordmark.style!.fontSize, 11);
+    },
+  );
+
+  testWidgets('export target uses mockup §6 sizes (hero 44sp, eyebrow 11sp, '
+      'prLine 14sp, wordmark 10sp)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        const ShareCardDiscreet(
+          dominantHue: AppColors.bodyPartChest,
+          eyebrow: 'Peito · Rank 19',
+          heroText: '+618',
+          heroSubLabel: 'XP NESTA SAGA',
+          prLine: '!! 95kg × 5',
+          wordmark: 'REPSAGA',
+          renderTarget: ShareCardRenderTarget.export,
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('share-card-discreet-hero')))
+          .style!
+          .fontSize,
+      44,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('share-card-discreet-eyebrow')),
+          )
+          .style!
+          .fontSize,
+      11,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('share-card-discreet-pr-line')),
+          )
+          .style!
+          .fontSize,
+      14,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('share-card-discreet-wordmark')),
+          )
+          .style!
+          .fontSize,
+      10,
+    );
   });
 }

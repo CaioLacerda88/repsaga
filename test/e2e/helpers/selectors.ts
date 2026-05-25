@@ -544,15 +544,13 @@ export const SET_ROW = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Personal Records — celebration screen and records list
+// Personal Records — records list surface only.
+//
+// The PR celebration screen + `/pr-celebration` route were retired in PR 30c.
+// PR confirmation now lives in the post-session cinematic's B3 PR cut + the
+// summary panel detail row — selectors live under `POST_SESSION.*`.
 // ---------------------------------------------------------------------------
 export const PR = {
-  /** Heading shown when a new personal record is set — Semantics(identifier: 'pr-new-heading') */
-  newPRHeading: '[flt-semantics-identifier="pr-new-heading"]',
-  /** Heading shown when the user completes their first workout — Semantics(identifier: 'pr-first-workout') */
-  firstWorkoutHeading: '[flt-semantics-identifier="pr-first-workout"]',
-  /** "Continue" button on the PR celebration screen — Semantics(identifier: 'pr-continue-btn') */
-  continueButton: '[flt-semantics-identifier="pr-continue-btn"]',
   /** "RECENT RECORDS" section on the progress tab — not yet implemented in the UI */
   recentRecordsSection: 'text=RECENT RECORDS',
 } as const;
@@ -1381,10 +1379,9 @@ export const EXERCISE_LOC = {
 // The screen lives at `/workout/finish/:workoutId` and is pushed by
 // `finish_workout_coordinator.dart` after a non-empty online finish.
 // Offline finishes + empty-session finishes still route to /home.
-//
-// Selector lifecycle:
-//   30a — all identifiers below added.
-//   30c — selectors survive; `pr-celebration-screen` is the retiring peer.
+// Post-PR-30c, this is the canonical post-finish destination — the legacy
+// `/pr-celebration` route + screen were retired; PR confirmation now
+// lives in the B3 PR cut + summary panel detail row below.
 //
 // All selectors use `flt-semantics-identifier` (Flutter AOM, not CSS class).
 // ---------------------------------------------------------------------------

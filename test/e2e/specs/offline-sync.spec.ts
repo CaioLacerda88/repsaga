@@ -51,6 +51,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { login } from '../helpers/auth';
+import { dismissCelebrationIfPresent } from '../helpers/app';
 import {
   startEmptyWorkout,
   addExercise,
@@ -61,6 +62,92 @@ import {
 import { NAV, OFFLINE, WORKOUT } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
+
+// =============================================================================
+// Per-test reseed helper
+//
+// Why this exists
+// ---------------
+// All three describe blocks share the same server-side smokeOfflineSync user.
+// Tests 1-7 complete workouts (some online, some via the offline queue path)
+// which write workouts rows, xp_events, body_part_progress, and
+// exercise_peak_loads. Without a per-test reset, accumulated RPG state from
+// test N inflates the RPG SQL chain work in test N+1, pushing runtime past the
+// 60s test timeout under --repeat-each=N or CI 4-vCPU saturation.
+//
+// Note on Hive (IndexedDB): Playwright creates a fresh browser context for each
+// test via the `page` fixture, so IndexedDB (Hive boxes) is already isolated
+// per-test. Only the Supabase server-side state needs the reseed.
+//
+// Baseline mirrors global-setup's smokeOfflineSync runner:
+//   - cleanFreshStateUser (workouts + PRs + xp cleared)
+//   - ensureProfile
+//   - seedMinimalWorkout ('E2E Warmup Workout' — makes ActionHero resolve to
+//     free-workout branch so startEmptyWorkout finds "Quick workout" CTA)
+//
+// Pattern lifted from crash-recovery.spec.ts (commit 28d67d6) and
+// weekly-plan.spec.ts (commit e2e089e).
+// =============================================================================
+
+/**
+ * Reseed the smokeOfflineSync user back to the canonical "lapsed" baseline
+ * that global-setup originally provisioned.
+ *
+ * Deletes all workout + RPG state, marks backfill_progress as completed (so
+ * SagaIntroGate.runRetroBackfill is a no-op on next login), then re-seeds
+ * the minimal warmup workout so the home ActionHero resolves to the
+ * free-workout branch (workoutCount > 0 → not the day-zero CTA).
+ *
+ * Idempotent. Safe to call on a user that's already clean.
+ */
+async function reseedOfflineSyncUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('smokeOfflineSync').email);
+  if (!userId) return;
+
+  // PRs first — set_id is ON DELETE SET NULL so rows survive workout deletion.
+  await admin.from('personal_records').delete().eq('user_id', userId);
+  await admin.from('workouts').delete().eq('user_id', userId);
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // RPG state (Phase 27 + Phase 29 v2).
+  await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('user_xp').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Mark backfill_progress as completed so SagaIntroGate.runRetroBackfill is
+  // a no-op on next login (matches crash-recovery + weekly-plan reseed pattern).
+  const nowIso = new Date().toISOString();
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: nowIso,
+      updated_at: nowIso,
+      completed_at: nowIso,
+    },
+    { onConflict: 'user_id' },
+  );
+
+  // Re-seed the minimal warmup workout so the ActionHero resolves to the
+  // free-workout branch (workoutCount > 0) rather than the day-zero CTA.
+  const now = new Date();
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Warmup Workout',
+    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
+    duration_seconds: 1800,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -94,7 +181,17 @@ async function restoreSupabaseRest(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Offline sync', { tag: '@smoke' }, () => {
+  // Serial mode: tests share one server-side user; serial execution ensures
+  // the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own
+  // smokeOfflineSync user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login so
+    // the Flutter app hydrates from clean state. See reseedOfflineSyncUser()
+    // docstring for the per-test pollution mechanism this prevents.
+    await reseedOfflineSyncUser();
     await login(
       page,
       getUser('smokeOfflineSync').email,
@@ -278,7 +375,15 @@ test.describe('Offline sync', { tag: '@smoke' }, () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Offline sync — badge interaction', () => {
+  // Serial mode: tests share one server-side user; serial execution ensures
+  // the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own
+  // smokeOfflineSync user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login.
+    await reseedOfflineSyncUser();
     await login(
       page,
       getUser('smokeOfflineSync').email,
@@ -404,6 +509,52 @@ test.describe('Offline sync — badge interaction', () => {
 
     await restoreSupabaseRest(page);
   });
+
+  // -------------------------------------------------------------------------
+  // Test 8: dismissCelebrationIfPresent short-circuits on offline finish
+  //
+  // dismissCelebrationIfPresent() waits for /workout/finish/ (the cinematic
+  // route) with a configurable timeout. When a finish is queued offline, the
+  // app routes directly to /home — the cinematic never fires. The helper must
+  // resolve to false within the short timeout and NOT throw or navigate the
+  // page away from /home.
+  //
+  // This test explicitly calls the helper after an offline finish to pin the
+  // short-circuit (.catch(() => false)) code path, which was otherwise only
+  // exercised implicitly by the tests above.
+  // -------------------------------------------------------------------------
+  test('should return false and not navigate when called after an offline finish (OFFLINE-008-short-circuit)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '5');
+    await completeSet(page, 0);
+
+    await blockSupabaseRest(page);
+
+    await page.click(WORKOUT.finishButton);
+    const dialogFinish5 = page.locator(WORKOUT.dialogFinishButton);
+    await expect(dialogFinish5).toBeVisible({ timeout: 8_000 });
+    await dialogFinish5.click();
+
+    // Wait for home (offline path) to appear.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    await page.waitForURL(/\/home/, { timeout: 5_000 });
+
+    // Call dismissCelebrationIfPresent with a 3 s timeout — short enough so
+    // the test does not stall but long enough to be a meaningful wait.
+    // It must return without throwing (the .catch returns false) and the
+    // page must stay on /home.
+    await dismissCelebrationIfPresent(page, 3_000);
+
+    // After the helper returns, the page must still be on /home.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 5_000 });
+    await page.waitForURL(/\/home/, { timeout: 5_000 });
+
+    await restoreSupabaseRest(page);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -419,7 +570,19 @@ test.describe('Offline sync — badge interaction', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Offline banner — browser network', { tag: '@smoke' }, () => {
+  // Serial mode: tests share one server-side user; serial execution ensures
+  // the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own
+  // smokeOfflineSync user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login.
+    // The banner tests don't mutate workout state, but the reseed ensures
+    // accumulated state from the smoke/badge-interaction describe blocks
+    // (which run before this one in serial order) doesn't carry over under
+    // --repeat-each=N when all three describe blocks share the same user.
+    await reseedOfflineSyncUser();
     await login(
       page,
       getUser('smokeOfflineSync').email,

@@ -14,7 +14,7 @@
  */
 
 import { Page, expect } from '@playwright/test';
-import { GAMIFICATION, NAV, PR, PROFILE, SAGA } from './selectors';
+import { GAMIFICATION, NAV, PROFILE, SAGA } from './selectors';
 
 /**
  * Wait for the Flutter app to finish its initial load.
@@ -345,76 +345,63 @@ export async function dismissSagaIntroOverlay(page: Page): Promise<void> {
 }
 
 /**
- * Drive the `/pr-celebration` route's Continue button if a PR was set.
+ * Drive the post-session cinematic to its CONTINUAR CTA after a workout
+ * finish — the canonical post-finish destination for online + non-empty
+ * sessions.
  *
- * **Path A pivot (PR 29.5, 2026-05-22):** the mid-workout flash layer is
- * gone. There is no mid-workout overlay to wait for — the post-workout
- * flow lands directly on `/home` (or on `/pr-celebration` if a PR was
- * set during the session). This helper previously waited for thin-flash
- * dialogs + an EQUIP CTA before driving the `/pr-celebration` Continue
- * button; the thin-flash phase is removed, leaving only the
- * `/pr-celebration` Continue path.
+ * **Path A pivot (PR 29.5, 2026-05-22) + PR 30 retirement:** the
+ * mid-workout flash layer is gone; the legacy `/pr-celebration` route was
+ * retired in PR 30c. Every online finish with at least one logged set
+ * routes through `/workout/finish/:workoutId` (the cinematic), which
+ * renders the PR confirmation in the B3 PR cut + summary panel detail
+ * row. Offline / zero-set finishes still land directly on `/home`.
  *
- * The function is kept (rather than deleted) because ~40 spec call
- * sites already invoke it after `finishWorkout()`; turning it into a
- * no-op-plus-PR-route handler keeps those specs working without churn.
- * The `/pr-celebration` route is unchanged — it remains a real route
- * until PR 30a folds it into the post-session summary panel.
+ * The function is kept (rather than deleted) because ~40 spec call sites
+ * already invoke it after `finishWorkout()`; the helper short-circuits
+ * cleanly when the cinematic doesn't fire (offline / zero-set finishes
+ * skip straight to `/home`).
  *
  * @param page    - Playwright page.
- * @param timeout - How long to wait for the `/pr-celebration` URL (ms).
- *                  Default 20 s.
+ * @param timeout - How long to wait for the cinematic URL (ms). Default 20 s.
  */
 export async function dismissCelebrationIfPresent(
   page: Page,
   timeout = 20_000,
 ): Promise<void> {
-  // Post-Path-A (PR 29.5): no mid-workout overlay exists.
-  // PR 30a migration window: the coordinator now pushes `/workout/finish/:workoutId`
-  // for online finishes with reward events (rank-up, PR, class-change, title, level-up).
-  // The legacy `/pr-celebration` route is still alive (until PR 30c) for
-  // the offline fallback and for specs that haven't migrated yet.
-  // Wait for either route, then dismiss appropriately.
-  const postRoute = await page
-    .waitForURL(/\/(pr-celebration|workout\/finish\/)/, { timeout })
+  // Wait for the post-session route (or short-circuit on offline / zero-set
+  // finishes that go straight to /home).
+  const cinematic = await page
+    .waitForURL(/\/workout\/finish\//, { timeout })
     .then(() => true)
     .catch(() => false);
 
-  if (!postRoute) return;
+  if (!cinematic) return;
 
-  const url = page.url();
-  if (url.includes('workout/finish/')) {
-    // Post-session screen (PR 30a): tap the SKIP pill (post-session-skip-btn)
-    // to call skipToSummary() directly, then tap the CONTINUAR CTA.
-    //
-    // The previous implementation used flutterLongPress(screenRoot, 600) which
-    // was flaky under workers=4 CPU contention: the long-press would land but
-    // the 8 s window for the CTA to appear was too tight when CanvasKit widget
-    // rebuild + AOM re-emit took longer than expected. The skip button is
-    // composited as a direct GestureDetector tap — no animation timer involved —
-    // so it's both faster and more deterministic than the long-press path.
-    const skipBtn = '[flt-semantics-identifier="post-session-skip-btn"]';
-    const continueCta = '[flt-semantics-identifier="post-session-continue-cta"]';
-    const summaryEl = page.locator(continueCta);
-    // Wait for the skip button to be present (it renders immediately on
-    // the cinematic; if the screen already jumped to summary it won't be
-    // there, which is fine — the catch falls through).
-    try {
-      await expect(page.locator(skipBtn)).toBeVisible({ timeout: 8_000 });
-      await page.click(skipBtn);
-    } catch {
-      // Skip button gone — screen already transitioned to summary panel.
-      // Fall through and wait for CONTINUAR directly.
-    }
-    await expect(summaryEl).toBeVisible({ timeout: 15_000 });
-    await page.click(continueCta);
-    await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
-  } else {
-    // Legacy /pr-celebration route — alive until PR 30c.
-    await expect(page.locator(PR.continueButton)).toBeVisible({ timeout: 10_000 });
-    await page.click(PR.continueButton);
-    await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
+  // Tap the SKIP pill (post-session-skip-btn) to call skipToSummary()
+  // directly, then tap the CONTINUAR CTA.
+  //
+  // The previous implementation used flutterLongPress(screenRoot, 600) which
+  // was flaky under workers=4 CPU contention: the long-press would land but
+  // the 8 s window for the CTA to appear was too tight when CanvasKit widget
+  // rebuild + AOM re-emit took longer than expected. The skip button is
+  // composited as a direct GestureDetector tap — no animation timer involved —
+  // so it's both faster and more deterministic than the long-press path.
+  const skipBtn = '[flt-semantics-identifier="post-session-skip-btn"]';
+  const continueCta = '[flt-semantics-identifier="post-session-continue-cta"]';
+  const summaryEl = page.locator(continueCta);
+  // Wait for the skip button to be present (it renders immediately on
+  // the cinematic; if the screen already jumped to summary it won't be
+  // there, which is fine — the catch falls through).
+  try {
+    await expect(page.locator(skipBtn)).toBeVisible({ timeout: 8_000 });
+    await page.click(skipBtn);
+  } catch {
+    // Skip button gone — screen already transitioned to summary panel.
+    // Fall through and wait for CONTINUAR directly.
   }
+  await expect(summaryEl).toBeVisible({ timeout: 15_000 });
+  await page.click(continueCta);
+  await page.waitForURL(/\/(home|profile)/, { timeout: 15_000 });
 }
 
 /**

@@ -80,8 +80,9 @@ class B3PrCutWidget extends StatelessWidget {
               if (!inFlash)
                 // Full-screen gold flood — structural fill, no widget subtree
                 // to wrap in a RewardAccent. Reads the sanctioned reward
-                // color via the static alias per the same precedent as
-                // `pr_celebration_screen.dart` (full-screen flash).
+                // color via the static alias per the same precedent as the
+                // sibling B3 title cut's character-level flood (full-screen
+                // structural sink with no widget-subtree host).
                 // ignore: reward_accent — full-screen flood; no widget-subtree host for RewardAccent
                 ColoredBox(color: RewardAccent.color.withValues(alpha: 0.50)),
               if (!inFlash) CustomPaint(painter: _GoldSlash(goldPhase)),

@@ -199,9 +199,9 @@ async function doWorkoutAndReturnHome(page: Page): Promise<void> {
 
   // Use the shared deterministic helper (Family 2 fix) instead of the racy
   // isVisible()-based check. dismissCelebrationIfPresent uses waitForURL to
-  // detect /pr-celebration (immune to ScaleTransition animation) and also
-  // handles Phase 18c overlays (rank-up, level-up, title-unlock) that appear
-  // before the route push.
+  // detect the post-session cinematic (`/workout/finish/:id`) and short-
+  // circuits cleanly when the finish goes straight to /home (offline /
+  // zero-set finishes).
   await dismissCelebrationIfPresent(page, 25_000);
 
   await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });

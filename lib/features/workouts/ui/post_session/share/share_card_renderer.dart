@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/share_payload.dart';
+import 'share_card_typography.dart';
 import 'variants/share_card_discreet.dart';
 import 'variants/share_card_variant_a.dart';
 import 'variants/share_card_variant_b.dart';
+
+export 'share_card_typography.dart' show ShareCardRenderTarget;
 
 /// Pre-localized text bundle for the share card.
 ///
@@ -121,6 +124,7 @@ class ShareCardRenderer extends StatelessWidget {
     required this.strings,
     this.photo,
     this.photoOffset = Offset.zero,
+    this.renderTarget = ShareCardRenderTarget.export,
   });
 
   /// Snapshot of the finished workout, projected for the share card.
@@ -151,6 +155,21 @@ class ShareCardRenderer extends StatelessWidget {
   /// edge on max drag.
   final Offset photoOffset;
 
+  /// Whether this widget is the **export** (1080×1920 offscreen) tree OR
+  /// the **preview** (FittedBox-scaled visible) tree. Forwarded to the
+  /// active variant subtree which routes the value to
+  /// [ShareCardTypography] for per-element sizing. Defaults to
+  /// [ShareCardRenderTarget.export] so the golden contract (which captures
+  /// the 1080×1920 export bytes) stays correct without callers touching
+  /// the param.
+  ///
+  /// **The preview screen mounts two `ShareCardRenderer` instances** —
+  /// a visible one with `renderTarget: preview` so the user can read the
+  /// typography on-screen, and an offscreen one (`Positioned(left: -10000)`)
+  /// with `renderTarget: export` that's the source for the
+  /// `RepaintBoundary` capture. See PR 30c device bug 1 / bug 3.
+  final ShareCardRenderTarget renderTarget;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -172,6 +191,7 @@ class ShareCardRenderer extends StatelessWidget {
           prLine: strings.discreetPrLine,
           prDetail: strings.discreetPrDetail,
           wordmark: strings.wordmark,
+          renderTarget: renderTarget,
         );
       case ShareCardVariant.minimalStrip:
         return Stack(
@@ -184,6 +204,7 @@ class ShareCardRenderer extends StatelessWidget {
               prText: strings.variantAPrText,
               wordmark: strings.wordmark,
               barFillFraction: payload.rankProgressFraction,
+              renderTarget: renderTarget,
             ),
           ],
         );
@@ -201,6 +222,7 @@ class ShareCardRenderer extends StatelessWidget {
               lift: strings.variantBLift,
               bpSub: strings.variantBBpSub,
               xpSub: strings.variantBXpSub,
+              renderTarget: renderTarget,
             ),
           ],
         );

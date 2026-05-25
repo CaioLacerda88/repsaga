@@ -44,15 +44,6 @@ void main() {
       expect(event.name, 'workout_finished');
     });
 
-    test('prCelebrationSeen → "pr_celebration_seen"', () {
-      const event = AnalyticsEvent.prCelebrationSeen(
-        isFirstWorkout: false,
-        prCount: 2,
-        recordTypes: ['max_weight', 'max_reps'],
-      );
-      expect(event.name, 'pr_celebration_seen');
-    });
-
     test('weekPlanSaved → "week_plan_saved"', () {
       const event = AnalyticsEvent.weekPlanSaved(
         routineCount: 4,
@@ -130,21 +121,6 @@ void main() {
         'source': 'planned_bucket',
         'workout_number': 5,
       });
-    });
-
-    test('prCelebrationSeen serializes record_types as list', () {
-      const event = AnalyticsEvent.prCelebrationSeen(
-        isFirstWorkout: true,
-        prCount: 3,
-        recordTypes: ['max_weight', 'max_reps', 'max_volume'],
-      );
-      expect(event.props['record_types'], [
-        'max_weight',
-        'max_reps',
-        'max_volume',
-      ]);
-      expect(event.props['is_first_workout'], true);
-      expect(event.props['pr_count'], 3);
     });
   });
 }
