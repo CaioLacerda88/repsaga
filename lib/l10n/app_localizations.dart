@@ -5015,6 +5015,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SKIP'**
   String get cinematicSkipLabel;
+
+  /// Phase 31 Pass 3 — Mission Debrief section eyebrow above the lift rows. Pre-title-cased; widget uppercases for the +0.22em tracked label register.
+  ///
+  /// In en, this message translates to:
+  /// **'Session report'**
+  String get postSessionDebriefEyebrow;
+
+  /// Phase 31 Pass 3 — Personal record flag rendered next to the weight × reps on a Mission Debrief lift row. heroGold-tinted; canonical reward signal.
+  ///
+  /// In en, this message translates to:
+  /// **'PR'**
+  String get postSessionPrFlag;
+
+  /// Phase 31 Pass 3 — '+N more exercises' footer on the Mission Debrief lift table when the session trained more than 4 exercises.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{+1 more exercise} other{+{count} more exercises}}'**
+  String postSessionMoreLifts(int count);
+
+  /// Phase 31 Pass 3 — Per-BP rank line in the Mission Debrief (no rank-up). Used on every BP that earned XP this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank {n}'**
+  String postSessionRankLabel(int n);
+
+  /// Phase 31 Pass 3 — Per-BP rank-up grammar in the Mission Debrief (rank-up session). Renders the rank delta arrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank {fromRank} → {toRank}'**
+  String postSessionRankUpArrow(int fromRank, int toRank);
+
+  /// Phase 31 Pass 3 — Weight unit suffix on Mission Debrief lift rows. v1 ships kg only; the key exists so a future lb locale can override without code touch.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get postSessionWeightUnit;
 }
 
 class _AppLocalizationsDelegate

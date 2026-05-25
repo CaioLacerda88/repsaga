@@ -907,5 +907,11 @@
   "postSessionCascadeTruncationPill": "+{n} mais",
   "postSessionXpLabel": "XP",
   "postSessionTitleEquipped": "Equipado ✓",
-  "cinematicSkipLabel": "PULAR"
+  "cinematicSkipLabel": "PULAR",
+  "postSessionDebriefEyebrow": "Relatório da sessão",
+  "postSessionPrFlag": "PR",
+  "postSessionMoreLifts": "{count, plural, =1{+1 outro exercício} other{+{count} outros exercícios}}",
+  "postSessionRankLabel": "Rank {n}",
+  "postSessionRankUpArrow": "Rank {fromRank} → {toRank}",
+  "postSessionWeightUnit": "kg"
 }

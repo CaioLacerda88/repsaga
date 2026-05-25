@@ -190,6 +190,16 @@ class PostSessionController extends ChangeNotifier {
       exerciseNames: params.exerciseNames,
     );
 
+    // Count of exercises that had at least one completed working set.
+    // Drives the "+N more exercises" footer in the S2 Mission Debrief
+    // (rendered when this count exceeds `topLifts.length`).
+    var totalExercisesTrained = 0;
+    for (final entry in params.exercises) {
+      if (completedWorkingSets(entry.sets).isNotEmpty) {
+        totalExercisesTrained++;
+      }
+    }
+
     return PostSessionState(
       tier: tier,
       queueResult: params.queueResult,
@@ -203,6 +213,7 @@ class PostSessionController extends ChangeNotifier {
       bpXpDeltas: Map.unmodifiable(params.bpXpDeltas),
       bpRankAfter: Map.unmodifiable(bpRankAfter),
       topLifts: List.unmodifiable(topLifts),
+      totalExercisesTrained: totalExercisesTrained,
       totalXpEarned: params.totalXpEarned,
       priorFinishedWorkoutCount: params.priorFinishedWorkoutCount,
       sagaNumber: sagaNumber,

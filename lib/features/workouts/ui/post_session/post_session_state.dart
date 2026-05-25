@@ -66,8 +66,14 @@ abstract class PostSessionState with _$PostSessionState {
     /// debrief table and the hero PR cut surface the same exercise when
     /// both apply). Rendered by the S2 Mission Debrief section; "+N more
     /// exercises" footer derives from comparing this list's length to
-    /// `setsCount` upstream. Phase 31 Pass 1.
+    /// [totalExercisesTrained]. Phase 31 Pass 1.
     required List<SessionLiftSummary> topLifts,
+
+    /// Total count of completed exercises trained this session (any
+    /// exercise with at least one completed working set). Used by the S2
+    /// Mission Debrief to compute the "+N more exercises" footer:
+    /// `more = totalExercisesTrained - topLifts.length`. Phase 31 Pass 3.
+    required int totalExercisesTrained,
 
     /// Post-finish total XP earned.
     required int totalXpEarned,
