@@ -165,47 +165,65 @@ void main() {
   });
 
   group('ShareService.cameraPermissionStatus', () {
-    test('reads Permission.camera status without invoking request', () async {
-      final readCalls = <Permission>[];
-      var requestCalls = 0;
-      final svc = ShareService(
-        imagePicker: (_) async => null,
-        fileShareSink: (_, {text}) async => throw UnimplementedError(),
-        permissionRequester: (_) async {
-          requestCalls += 1;
-          return PermissionStatus.granted;
-        },
-        permissionStatusReader: (p) async {
-          readCalls.add(p);
-          return PermissionStatus.denied;
-        },
-      );
+    // NB: on web, `kIsWeb` short-circuits this method to
+    // `PermissionStatus.granted` (see method docs — the `permission_handler`
+    // web plugin's MethodChannel registration is brittle across Flutter
+    // build-cache invalidations; bypassing on web keeps the share flow
+    // resilient and matches the browser's inline gesture-based camera UX).
+    // The non-web behavior covered by these tests delegates to the
+    // injected reader; the web branch is exercised by
+    // `test/e2e/specs/share_flow.spec.ts`.
+    test(
+      'on non-web, reads Permission.camera status without invoking request',
+      () async {
+        final readCalls = <Permission>[];
+        var requestCalls = 0;
+        final svc = ShareService(
+          imagePicker: (_) async => null,
+          fileShareSink: (_, {text}) async => throw UnimplementedError(),
+          permissionRequester: (_) async {
+            requestCalls += 1;
+            return PermissionStatus.granted;
+          },
+          permissionStatusReader: (p) async {
+            readCalls.add(p);
+            return PermissionStatus.denied;
+          },
+        );
 
-      final status = await svc.cameraPermissionStatus();
+        final status = await svc.cameraPermissionStatus();
 
-      expect(readCalls, [Permission.camera]);
-      expect(requestCalls, 0);
-      expect(status, PermissionStatus.denied);
-    });
+        expect(readCalls, [Permission.camera]);
+        expect(requestCalls, 0);
+        expect(status, PermissionStatus.denied);
+      },
+    );
   });
 
   group('ShareService.openAppSettings', () {
-    test('delegates to the injected appSettingsOpener seam', () async {
-      var calls = 0;
-      final svc = ShareService(
-        imagePicker: (_) async => null,
-        fileShareSink: (_, {text}) async => throw UnimplementedError(),
-        permissionRequester: (_) async => PermissionStatus.granted,
-        permissionStatusReader: (_) async => PermissionStatus.granted,
-        appSettingsOpener: () async {
-          calls += 1;
-          return true;
-        },
-      );
+    // NB: on web, `kIsWeb` short-circuits this method to `false` (matching
+    // `permission_handler_html`'s own no-op behavior — there is no
+    // app-settings surface on web). The non-web behavior covered here
+    // delegates to the injected opener.
+    test(
+      'on non-web, delegates to the injected appSettingsOpener seam',
+      () async {
+        var calls = 0;
+        final svc = ShareService(
+          imagePicker: (_) async => null,
+          fileShareSink: (_, {text}) async => throw UnimplementedError(),
+          permissionRequester: (_) async => PermissionStatus.granted,
+          permissionStatusReader: (_) async => PermissionStatus.granted,
+          appSettingsOpener: () async {
+            calls += 1;
+            return true;
+          },
+        );
 
-      final ok = await svc.openAppSettings();
-      expect(calls, 1);
-      expect(ok, isTrue);
-    });
+        final ok = await svc.openAppSettings();
+        expect(calls, 1);
+        expect(ok, isTrue);
+      },
+    );
   });
 }

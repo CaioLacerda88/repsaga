@@ -233,18 +233,18 @@ void main() {
 
     await tester.pumpWidget(
       host(
-        ShareCardRenderer(
+        const ShareCardRenderer(
           payload: payload,
           variant: ShareCardVariant.minimalStrip,
           strings: strings,
-          photo: const _ColorImageProvider(Color(0xFF666666)),
+          photo: _ColorImageProvider(Color(0xFF666666)),
           // Max drag = Alignment.y clamped to 1.0 × 80px in the preview
           // screen (_photoAlignmentY * 80). The golden test exercises the
           // raw renderer at the wider reviewer-spec value (1080 * 0.4 = 432)
           // to stress-test the overlay-clipping contract at the 1080×1920
           // frame edge. At this extreme the photo is translated well off
           // the bottom boundary — the overlay strip must remain unaffected.
-          photoOffset: const Offset(0, 1080 * 0.4),
+          photoOffset: Offset(0, 1080 * 0.4),
         ),
       ),
     );
