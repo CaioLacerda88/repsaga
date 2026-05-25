@@ -65,6 +65,5 @@ class BodyPartHues {
   /// Convenience accessor with a fallback to `hotViolet` (the defensive
   /// brand color reserved for "no body part" / class-change overrides).
   /// Used by the share-card composer to keep the call site terse.
-  static Color hueFor(BodyPart bp) =>
-      bodyPartColor[bp] ?? AppColors.hotViolet;
+  static Color hueFor(BodyPart bp) => bodyPartColor[bp] ?? AppColors.hotViolet;
 }

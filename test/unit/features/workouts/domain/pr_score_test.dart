@@ -50,10 +50,7 @@ void main() {
       );
       // Even a non-zero weight with null reps scores 0 — null reps means
       // the PR isn't a `weight × reps` hero candidate.
-      expect(
-        prScore(pr(exerciseId: 'odd', value: 80, reps: null)),
-        0.0,
-      );
+      expect(prScore(pr(exerciseId: 'odd', value: 80, reps: null)), 0.0);
     });
 
     test('reps == 0 scores 0 (weighted PR with zero reps is dominated)', () {

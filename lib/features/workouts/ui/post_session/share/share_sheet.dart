@@ -29,11 +29,7 @@ import 'share_localizations.dart';
 /// **Decoupling Rule 2.** Strings arrive via the [ShareLocalizations]
 /// constructor param. The widget never reads `AppLocalizations.of(context)`.
 class ShareSheet extends ConsumerWidget {
-  const ShareSheet({
-    super.key,
-    required this.l10n,
-    required this.cameraStatus,
-  });
+  const ShareSheet({super.key, required this.l10n, required this.cameraStatus});
 
   /// Pre-localized strings (Decoupling Rule 2).
   final ShareLocalizations l10n;
@@ -103,9 +99,7 @@ class ShareSheet extends ConsumerWidget {
                   label: l10n.takePhoto,
                   onTap: () {
                     Navigator.of(context).pop();
-                    ref
-                        .read(shareControllerProvider.notifier)
-                        .pickFromCamera();
+                    ref.read(shareControllerProvider.notifier).pickFromCamera();
                   },
                 ),
                 const SizedBox(height: 8),

@@ -65,10 +65,20 @@ class ShareImageRenderer {
        _nowMillis = nowMillis ?? _defaultNowMillis;
 
   /// Hard ceiling above which the renderer downsamples once at
-  /// `pixelRatio: 2.0`. Sized to the smallest known share-sheet attachment
-  /// cap (Android Sharesheet rejects multi-MB images on some OEM skins;
-  /// iOS is more permissive). 1.2 MB leaves headroom for any text-payload
-  /// the caller appends.
+  /// `pixelRatio: 2.0`.
+  ///
+  /// **Empirical default — not a hard guarantee.** Chosen to stay below
+  /// the typical Android Sharesheet `Intent.EXTRA_STREAM` binder
+  /// transaction budget (~1 MB observed on MIUI 12+ / OneUI 5+; iOS is
+  /// more permissive). The 1.2 MB ceiling leaves headroom for any
+  /// text-payload the caller appends. The constant is a Pass-2 default
+  /// that came out of bench-rendering the variant-B card with realistic
+  /// photos at `pixelRatio: 3.0`.
+  ///
+  /// TODO(PR 30b Suggestion 6): verify against the `share_plus` issue
+  /// tracker + on-device share-sheet rejection telemetry before launch.
+  /// If the rejection rate on production Android devices exceeds ~1%,
+  /// either tighten this ceiling or add a second downsample step.
   static const int _maxBytes = 1200 * 1024;
 
   /// Used when no override is provided. Falls back to `2.0` after a

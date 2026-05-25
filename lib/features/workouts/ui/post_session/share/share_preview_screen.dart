@@ -281,6 +281,13 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   /// relevant slots. Cheaper than introducing per-variant visibility
   /// params on every variant widget — the renderer already treats `null`
   /// slot strings as "render nothing" on the optional slots.
+  ///
+  // TODO(perf): allocates a fresh ShareCardStrings on every build. Cheap
+  // (14 string copies, no GC pressure measurable in profiling), but
+  // could be memoized in a final cached field keyed on (_xpHidden,
+  // _prHidden). Skipped until ShareCardStrings grows a copyWith — adding
+  // one ad-hoc would inflate this widget by ~25 lines. The allocation
+  // isn't a 60fps risk — see PR 30b Nit 8 deferral note.
   ShareCardStrings _stringsWithHidesApplied() {
     final s = widget.strings;
     return ShareCardStrings(

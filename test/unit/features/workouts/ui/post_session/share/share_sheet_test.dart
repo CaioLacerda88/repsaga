@@ -74,10 +74,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      host(
-        cameraStatus: PermissionStatus.granted,
-        service: buildService(),
-      ),
+      host(cameraStatus: PermissionStatus.granted, service: buildService()),
     );
 
     expect(find.text('Tirar foto'), findsOneWidget);
@@ -89,10 +86,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      host(
-        cameraStatus: PermissionStatus.denied,
-        service: buildService(),
-      ),
+      host(cameraStatus: PermissionStatus.denied, service: buildService()),
     );
 
     expect(find.text('Tirar foto'), findsOneWidget);
@@ -233,10 +227,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      host(
-        cameraStatus: PermissionStatus.granted,
-        service: buildService(),
-      ),
+      host(cameraStatus: PermissionStatus.granted, service: buildService()),
     );
 
     final semantics = find.byWidgetPredicate(

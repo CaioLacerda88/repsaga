@@ -268,8 +268,9 @@ void main() {
     addTearDown(container.dispose);
 
     final photo = _StubXFile('/tmp/photo.jpg');
-    container.read(shareControllerProvider.notifier).state =
-        ShareState.preview(photo: photo);
+    container.read(shareControllerProvider.notifier).state = ShareState.preview(
+      photo: photo,
+    );
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -323,8 +324,9 @@ void main() {
     addTearDown(container.dispose);
 
     final photo = _StubXFile('/tmp/photo.jpg');
-    container.read(shareControllerProvider.notifier).state =
-        ShareState.preview(photo: photo);
+    container.read(shareControllerProvider.notifier).state = ShareState.preview(
+      photo: photo,
+    );
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -379,9 +381,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container
-          .read(shareControllerProvider.notifier)
-          .openAppSettings();
+      await container.read(shareControllerProvider.notifier).openAppSettings();
       expect(openSettingsCalls, 1);
     },
   );

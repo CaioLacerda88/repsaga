@@ -316,46 +316,44 @@ void main() {
   // resetToPreview — PR 30b Blocker 2 (error retry path)
   // ---------------------------------------------------------------------------
 
+  test('resetToPreview restores the preview state with the supplied photo', () {
+    final container = makeContainer(
+      service: buildService(),
+      renderer: buildRenderer(),
+    );
+    final notifier = container.read(shareControllerProvider.notifier);
+    notifier.state = const ShareState.error(code: ShareErrorCodes.renderFailed);
+
+    final photo = _FakeXFile('/tmp/photo.jpg');
+    notifier.resetToPreview(photo: photo);
+
+    final s = container.read(shareControllerProvider);
+    expect(s, isA<ShareStatePreview>());
+    expect((s as ShareStatePreview).photo, photo);
+  });
+
   test(
-    'resetToPreview restores the preview state with the supplied photo',
+    'resetToPreview is idempotent — same photo, no spurious transitions',
     () {
       final container = makeContainer(
         service: buildService(),
         renderer: buildRenderer(),
       );
       final notifier = container.read(shareControllerProvider.notifier);
-      notifier.state = const ShareState.error(
-        code: ShareErrorCodes.renderFailed,
-      );
-
       final photo = _FakeXFile('/tmp/photo.jpg');
-      notifier.resetToPreview(photo: photo);
 
-      final s = container.read(shareControllerProvider);
-      expect(s, isA<ShareStatePreview>());
-      expect((s as ShareStatePreview).photo, photo);
+      notifier.resetToPreview(photo: photo);
+      final after1 = container.read(shareControllerProvider);
+
+      notifier.resetToPreview(photo: photo);
+      final after2 = container.read(shareControllerProvider);
+
+      // Equal values + no-op semantics. The state machine never emitted a
+      // duplicate transition because the value comparison short-circuits.
+      expect(after1, equals(after2));
+      expect((after2 as ShareStatePreview).photo, photo);
     },
   );
-
-  test('resetToPreview is idempotent — same photo, no spurious transitions', () {
-    final container = makeContainer(
-      service: buildService(),
-      renderer: buildRenderer(),
-    );
-    final notifier = container.read(shareControllerProvider.notifier);
-    final photo = _FakeXFile('/tmp/photo.jpg');
-
-    notifier.resetToPreview(photo: photo);
-    final after1 = container.read(shareControllerProvider);
-
-    notifier.resetToPreview(photo: photo);
-    final after2 = container.read(shareControllerProvider);
-
-    // Equal values + no-op semantics. The state machine never emitted a
-    // duplicate transition because the value comparison short-circuits.
-    expect(after1, equals(after2));
-    expect((after2 as ShareStatePreview).photo, photo);
-  });
 
   // ---------------------------------------------------------------------------
   // openAppSettings — PR 30b Blocker 2 (permanentlyDenied recovery path)

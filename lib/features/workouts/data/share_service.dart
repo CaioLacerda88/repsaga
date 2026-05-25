@@ -1,6 +1,7 @@
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:permission_handler/permission_handler.dart' as ph
+import 'package:permission_handler/permission_handler.dart'
+    as ph
     show openAppSettings;
 import 'package:share_plus/share_plus.dart';
 
