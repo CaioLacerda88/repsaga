@@ -22,13 +22,98 @@ import {
 } from '../helpers/workout';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
+
+// =============================================================================
+// Per-test reseed helpers
+//
+// Why these exist
+// ---------------
+// Several describe blocks in this file share a server-side user across
+// multiple sequential tests. Without a per-test reset, test N's saved
+// workouts (xp_events, body_part_progress, personal_records, exercise_peak_loads,
+// exercise_peak_loads_by_rep_range) accumulate into test N+1's baseline,
+// changing what the RPG SQL chain (`record_session_xp_batch`) does and how
+// long it takes. Under --repeat-each=N or CI 4-vCPU saturation the
+// accumulated state pushes total runtime past test timeouts, or changes
+// expected state-machine outcomes. Pattern from crash-recovery.spec.ts
+// (commit 28d67d6) and weekly-plan.spec.ts (commit e2e089e).
+//
+// Reset scope per helper mirrors `cleanFreshStateUser` + Phase 27/29 tables:
+//   - workouts (cascades to workout_exercises → sets via FK)
+//   - personal_records (set_id is ON DELETE SET NULL — must delete before workouts)
+//   - xp_events, user_xp
+//   - body_part_progress, exercise_peak_loads, exercise_peak_loads_by_rep_range
+//   - earned_titles, backfill_progress
+//
+// Then re-seeds:
+//   - backfill_progress completed row (suppresses SagaIntroGate retro backfill)
+//   - minimal warmup workout (makes ActionHero resolve to free-workout branch)
+//
+// Idempotent. Safe to call on a user that's already clean.
+// =============================================================================
+
+async function reseedWorkoutUser(role: 'smokeWorkout' | 'fullWorkout' | 'smokeWorkoutDestructiveGestures'): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser(role).email);
+  if (!userId) return;
+
+  // PRs first — set_id is ON DELETE SET NULL so rows survive workout deletion.
+  await admin.from('personal_records').delete().eq('user_id', userId);
+  await admin.from('workouts').delete().eq('user_id', userId);
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // RPG state (Phase 27 + Phase 29 v2).
+  await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('user_xp').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Mark backfill_progress as completed so SagaIntroGate.runRetroBackfill is
+  // a no-op on next login (matches crash-recovery + weekly-plan reseed pattern).
+  const nowIso = new Date().toISOString();
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: nowIso,
+      updated_at: nowIso,
+      completed_at: nowIso,
+    },
+    { onConflict: 'user_id' },
+  );
+
+  // Re-seed the minimal warmup workout so the ActionHero resolves to the
+  // free-workout branch (workoutCount > 0) rather than the day-zero CTA.
+  const now = new Date();
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Warmup Workout',
+    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
+    duration_seconds: 1800,
+  });
+}
 
 // =============================================================================
 // SMOKE — Workout core journey (smokeWorkout user)
 // =============================================================================
 
 test.describe('Workouts', { tag: '@smoke' }, () => {
+  // Serial mode: tests share one server-side user; serial execution ensures
+  // the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own smokeWorkout
+  // user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkout');
     await login(
       page,
       getUser('smokeWorkout').email,
@@ -204,6 +289,8 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
 // =============================================================================
 
 test.describe('Workout restore', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -365,7 +452,10 @@ test.describe('Workout restore', { tag: '@smoke' }, () => {
 // =============================================================================
 
 test.describe('Workout logging', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('fullWorkout');
     await login(
       page,
       getUser('fullWorkout').email,
@@ -847,6 +937,8 @@ test.describe('Workout logging', () => {
 // =============================================================================
 
 test.describe('Workout history', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -937,6 +1029,8 @@ test.describe('Workout history', () => {
 // =============================================================================
 
 test.describe('Set deletion during rest timer (PR2 — C3)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -1218,6 +1312,8 @@ test.describe('Set deletion during rest timer (PR2 — C3)', () => {
 // =============================================================================
 
 test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -1380,6 +1476,8 @@ test.describe('Workout discard cancel (PR2 — Fix B coverage gap)', () => {
 });
 
 test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -1501,7 +1599,10 @@ test.describe('Workout loading overlay cancel (PR1 — Q1)', () => {
 // =============================================================================
 
 test.describe('Exercise card destructive gestures cleanup (PR3)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkoutDestructiveGestures');
     await login(
       page,
       getUser('smokeWorkoutDestructiveGestures').email,
@@ -1628,7 +1729,10 @@ test.describe('Exercise card destructive gestures cleanup (PR3)', () => {
 });
 
 test.describe('Swap exercise with logged sets (PR3 — Q3)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkoutDestructiveGestures');
     await login(
       page,
       getUser('smokeWorkoutDestructiveGestures').email,
@@ -1776,7 +1880,10 @@ test.describe('Swap exercise with logged sets (PR3 — Q3)', () => {
 });
 
 test.describe('Add exercise undo (PR3 — H5)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkoutDestructiveGestures');
     await login(
       page,
       getUser('smokeWorkoutDestructiveGestures').email,
@@ -1937,6 +2044,8 @@ test.describe('Add exercise undo (PR3 — H5)', () => {
 // =============================================================================
 
 test.describe('Discard re-entrance (PR3 — S1)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -2052,6 +2161,8 @@ test.describe('Discard re-entrance (PR3 — S1)', () => {
 // =============================================================================
 
 test.describe('Cascading undo restores order (PR4 — M3)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -2235,7 +2346,10 @@ test.describe('Cascading undo restores order (PR4 — M3)', () => {
 // =============================================================================
 
 test.describe('Disabled FINISH helper text (PR5 — H6)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkout');
     await login(
       page,
       getUser('smokeWorkout').email,
@@ -2325,7 +2439,10 @@ test.describe('Disabled FINISH helper text (PR5 — H6)', () => {
 // =============================================================================
 
 test.describe('Layout stability on set completion (PR5 — H8)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    await reseedWorkoutUser('smokeWorkout');
     await login(
       page,
       getUser('smokeWorkout').email,
@@ -2407,6 +2524,8 @@ test.describe('Layout stability on set completion (PR5 — H8)', () => {
 // This E2E pins the user-visible behavior end-to-end via the AOM identifier
 // node emitted by `_SetRowFrame` in `set_row.dart`.
 test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -2577,6 +2696,8 @@ test.describe('PR-row state during loading (PR6 — M6)', { tag: '@smoke' }, () 
 // works on both web and Android.
 // =============================================================================
 test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
@@ -2663,6 +2784,8 @@ test.describe('Rest overlay chrome', { tag: '@smoke' }, () => {
 // Phase 23 D6 — addExercise auto-seeds set 1 (smokeAutoSeed user)
 // =============================================================================
 test.describe('Add exercise auto-seed', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     await login(
       page,
