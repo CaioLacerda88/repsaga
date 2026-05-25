@@ -392,8 +392,8 @@ test.describe('Crash and session recovery', () => {
     // Finish the workout.
     await finishWorkout(page);
 
-    // Dismiss the PR celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
+    // Dismiss the post-session cinematic if shown. Uses URL-based detection
+    // (`/workout/finish/:id`) to avoid the ScaleTransition visibility race.
     await dismissCelebrationIfPresent(page);
 
     // Return to home if not already there.

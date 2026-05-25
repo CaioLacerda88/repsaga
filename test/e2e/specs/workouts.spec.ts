@@ -566,11 +566,9 @@ test.describe('Workout logging', () => {
     await completeSet(page, 0);
     await finishWorkout(page);
 
-    // App must navigate to either the PR celebration screen or home.
-    // Use URL-based detection to avoid the ScaleTransition visibility race
-    // on PR.firstWorkoutHeading / PR.newPRHeading (both live inside a
-    // ScaleTransition that starts at scale=0, making them temporarily
-    // invisible to Playwright's isVisible() check).
+    // App must navigate to either the post-session cinematic or /home.
+    // Use URL-based detection (`/workout/finish/:id`) to avoid the
+    // ScaleTransition visibility race in the cinematic.
     await dismissCelebrationIfPresent(page);
 
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
@@ -642,8 +640,8 @@ test.describe('Workout logging', () => {
     await completeSet(page, 0);
     await finishWorkout(page);
 
-    // Dismiss PR celebration if shown. Uses URL-based detection to avoid the
-    // ScaleTransition visibility race on PR.firstWorkoutHeading / PR.newPRHeading.
+    // Dismiss the post-session cinematic if shown. Uses URL-based detection
+    // (`/workout/finish/:id`) to avoid the ScaleTransition visibility race.
     await dismissCelebrationIfPresent(page);
 
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });

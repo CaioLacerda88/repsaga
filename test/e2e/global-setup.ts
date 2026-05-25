@@ -1069,8 +1069,9 @@ async function seedRpgMultiCelebrationUser(
       { onConflict: 'user_id,exercise_id' },
     );
     // Seed prior personal records for all three record types so the workout
-    // finish does NOT trigger pr-celebration navigation (bench at 80kg/5
-    // produces max_weight=80, max_reps=5, max_volume=400 — all already known).
+    // finish does NOT render a PR cut in the post-session cinematic (bench
+    // at 80kg/5 produces max_weight=80, max_reps=5, max_volume=400 — all
+    // already known).
     const benchAchievedAt = new Date(Date.now() - 86_400_000).toISOString();
     await supabase.from('personal_records').insert([
       { user_id: userId, exercise_id: benchId, record_type: 'max_weight', value: 80, reps: 5, achieved_at: benchAchievedAt },
@@ -1173,9 +1174,9 @@ async function seedRpgOverflowQueueUser(
   }
 
   // Seed peak loads and prior personal records for the 4 exercises used in S4.
-  // Peak loads keep strength_mult = 1.0; personal records prevent pr-celebration
-  // navigation after workout finish (the app only navigates to /pr-celebration
-  // when prResult.hasNewRecords is true — no record exists means any set is a PR).
+  // Peak loads keep strength_mult = 1.0; personal records prevent the post-
+  // session cinematic from rendering a PR cut (the B3 PR cut only fires when
+  // prResult.hasNewRecords is true — no record exists means any set is a PR).
   const exerciseSlugs: Record<string, { slug: string; peak: number }> = {
     chest:     { slug: 'barbell_bench_press',   peak: 80 },
     legs:      { slug: 'barbell_squat',          peak: 80 },
@@ -1192,9 +1193,9 @@ async function seedRpgOverflowQueueUser(
         { onConflict: 'user_id,exercise_id' },
       );
       // Seed prior personal records for all three record types so workout
-      // finish does not trigger pr-celebration navigation (any set at the
-      // seeded weight/reps would otherwise register as a new max_reps or
-      // max_volume record even when max_weight is already known).
+      // finish does not render a PR cut in the post-session cinematic (any
+      // set at the seeded weight/reps would otherwise register as a new
+      // max_reps or max_volume record even when max_weight is already known).
       const achievedAt = new Date(Date.now() - 86_400_000).toISOString();
       await supabase.from('personal_records').insert([
         { user_id: userId, exercise_id: exId, record_type: 'max_weight', value: peak, reps: 5, achieved_at: achievedAt },
@@ -2019,7 +2020,8 @@ async function seedRpgClassCrossUser(
       { user_id: userId, exercise_id: benchId, peak_weight: 80, peak_reps: 5, peak_date: new Date().toISOString() },
       { onConflict: 'user_id,exercise_id' },
     );
-    // Pre-seed personal records so workout finish doesn't navigate to /pr-celebration.
+    // Pre-seed personal records so workout finish doesn't render a PR cut
+    // in the post-session cinematic.
     const achievedAt = new Date(Date.now() - 86_400_000).toISOString();
     await supabase.from('personal_records').insert([
       { user_id: userId, exercise_id: benchId, record_type: 'max_weight', value: 80, reps: 5, achieved_at: achievedAt },

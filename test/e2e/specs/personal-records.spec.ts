@@ -49,11 +49,11 @@ async function doWorkout(
 }
 
 // ---------------------------------------------------------------------------
-// Helper — dismiss the celebration screen and wait for Home
+// Helper — dismiss the post-session cinematic and wait for Home.
 //
 // Delegates to dismissCelebrationIfPresent (helpers/app.ts) which uses
-// waitForURL('**/pr-celebration**') instead of isVisible() to avoid the
-// racy ScaleTransition animation window.
+// waitForURL('/workout/finish/') to wait for the cinematic deterministically
+// (avoids the racy ScaleTransition animation window).
 // ---------------------------------------------------------------------------
 
 async function dismissCelebration(page: Page): Promise<void> {
@@ -95,8 +95,8 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
     // All three are valid outcomes — the key assertion is that the
     // workout saved successfully and the app navigated away from the
     // active workout screen.
-    // dismissCelebrationIfPresent uses waitForURL('**/pr-celebration**')
-    // which is immune to the ScaleTransition animation race.
+    // dismissCelebrationIfPresent uses waitForURL('/workout/finish/')
+    // which is immune to the cinematic's animation race.
     await dismissCelebrationIfPresent(page);
 
     // Must end up on the Home screen — proves navigation completed.
@@ -592,13 +592,13 @@ test.describe('Personal records', () => {
   // AW-EX-D-US1-02 regression guard (Family 7 re-probe, PR #179 deferred)
   //
   // Context: Charter D B2 observed that a genuine new-PR workout navigated to
-  // /home instead of /pr-celebration when the Saga intro overlay was also
-  // active. The static analysis in Family 7 concluded the root cause was
+  // /home instead of the celebration surface when the Saga intro overlay was
+  // also active. The static analysis in Family 7 concluded the root cause was
   // Family 1 (AW-EX-D-US1-01): an empty prCache meant `prResult.hasNewRecords`
-  // was false, so post_workout_navigator routed to /home (+ saga intro rendered
-  // over it). The Saga intro overlay never blocked the PR navigation — it only
-  // blocks CelebrationPlayer.play() via SagaIntroSequencer, which runs AFTER
-  // navigateAfterFinish() selects the target route.
+  // was false, so the post-workout navigator routed to /home (+ saga intro
+  // rendered over it). The Saga intro overlay never blocked the PR navigation
+  // — it only blocks CelebrationPlayer.play() via SagaIntroSequencer, which
+  // runs AFTER the navigator selects the target route.
   //
   // Family 1A fix (PR #177): prCacheBootstrapProvider eagerly seeds per-exercise
   // Hive cache entries from the full user PR history at shell mount. With a
@@ -608,7 +608,8 @@ test.describe('Personal records', () => {
   //
   // This test pins the B2 contract deterministically:
   //   Workout A (50 kg × 8, Romanian Deadlift) → seeds baseline in Hive
-  //   Workout B (70 kg × 8, same exercise)     → must navigate to /pr-celebration
+  //   Workout B (70 kg × 8, same exercise)     → must navigate to the
+  //                                               post-session cinematic
   //
   // Uses Romanian Deadlift to be independent of the other fullPR tests which
   // accumulate Bench Press / Squat / Overhead Press / Leg Press history.
@@ -618,7 +619,7 @@ test.describe('Personal records', () => {
   // fast first-pass signal. The full regression suite covers this test on
   // every PR, which is the appropriate gate for a multi-workout flow guard.
   // ---------------------------------------------------------------------------
-  test('should navigate to the post-workout celebration screen after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
+  test('should navigate to the post-session cinematic after a weight PR above a seeded baseline (AW-EX-D-US1-02 regression)', async ({
     page,
   }) => {
     // This test runs two full workouts in sequence plus the post-workout
@@ -638,17 +639,16 @@ test.describe('Personal records', () => {
     // `prDetectionService.detectPRs()` now has the 50 kg × 8 baseline in Hive.
     // The 70 kg set is strictly greater → `prResult.hasNewRecords == true`.
     //
-    // **PR 30a route change:** the coordinator now pushes `/workout/finish/:id`
-    // (post-session screen) for online finishes with PR results, instead of
-    // `/pr-celebration`. The regression contract is preserved — a PR MUST
-    // navigate away from /home to a celebration surface. The specific route
-    // changes at PR 30a; the contract is "user sees a ceremony, not /home".
+    // Post-PR-30c, every online + non-empty finish routes through
+    // `/workout/finish/:id` (the post-session cinematic). The PR
+    // confirmation is rendered in the B3 PR cut + summary panel detail
+    // row; the regression contract is preserved — a PR MUST navigate
+    // away from /home to the cinematic surface.
     await doWorkout(page, EXERCISE_NAMES.romanian_deadlift.en, '70', '8');
 
-    // Assert we reach the post-session screen OR the legacy /pr-celebration.
-    // (PR 30a → post-session; any regression that routes to /home instead
-    // of either celebration surface fails this waitForURL.)
-    await page.waitForURL(/\/(workout\/finish\/|pr-celebration)/, { timeout: 20_000 });
+    // Assert we reach the post-session cinematic. Any regression that
+    // routes to /home instead of the cinematic fails this waitForURL.
+    await page.waitForURL(/\/workout\/finish\//, { timeout: 20_000 });
 
     // Dismiss the celebration and return to /home.
     await dismissCelebrationIfPresent(page, 5_000);

@@ -439,10 +439,10 @@ test.describe('Rank-up celebration', { tag: '@smoke' }, () => {
 
     // PR 29.5 Path A pivot: no mid-workout overlay mounts. The
     // post-session ceremony (PR 30a) carries the full celebration. The
-    // finish flow lands on /home (or on /pr-celebration if a PR was
-    // set during the session — not the case for this seed, but both
-    // are acceptable post-finish landing pages).
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 10_000 });
+    // finish flow lands on the cinematic (`/workout/finish/:id`) for
+    // online + non-empty finishes, or on /home for offline / zero-set
+    // finishes — both are acceptable post-finish landing pages.
+    await page.waitForURL(/\/(home|workout\/finish\/)/, { timeout: 10_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
     // wrote, matching the Dart calculator + Python sim + fixture oracle at
@@ -533,7 +533,7 @@ test.describe('Multi-event celebration sequence', { tag: '@smoke' }, () => {
     // `/home` is still accepted for paths that have no reward events.
     // The queue ordering is pinned by the unit tests in
     // `test/unit/features/rpg/domain/celebration_queue_test.dart`.
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 10_000 });
+    await page.waitForURL(/\/(home|workout\/finish\/)/, { timeout: 10_000 });
     // If we landed on the post-session screen, dismiss it so the rest
     // of the test (Profile tab nav + DB parity gate) can continue
     // against /home as the stable starting point.
@@ -672,10 +672,10 @@ test.describe('First awakening server-state gate', { tag: '@smoke' }, () => {
     await finishWorkout(page);
 
     // PR 29.5 Path A pivot: no mid-workout overlay mounts. The first
-    // awakening beat will surface in the post-session screen (PR 30a).
-    // The finish flow lands on /home or /pr-celebration depending on
-    // whether a PR was set.
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 15_000 });
+    // awakening beat surfaces in the post-session screen (PR 30a).
+    // The finish flow lands on the cinematic for online + non-empty
+    // finishes, or on /home for offline / zero-set finishes.
+    await page.waitForURL(/\/(home|workout\/finish\/)/, { timeout: 15_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals + ranks. Seed:
     // all 0 XP / rank 1. Workout: bench 60x5 + squat 80x5. Attribution:
@@ -817,7 +817,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     // absolute. The cap-at-3 logic is pinned by the unit tests in
     // `test/unit/features/rpg/domain/celebration_queue_test.dart`;
     // mid-workout the user sees no flash, just the post-finish nav.
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 30_000 });
+    await page.waitForURL(/\/(home|workout\/finish\/)/, { timeout: 30_000 });
 
     // Parity gate — assert the EXACT per-body-part XP totals the SQL chain
     // wrote, matching the Dart calculator + Python sim + fixture oracle at
@@ -1149,6 +1149,6 @@ test.describe('Active workout chrome (Phase 18c)', { tag: '@smoke' }, () => {
 
     // Confirm → workout completes → navigate away from active workout screen.
     await page.locator(WORKOUT.dialogFinishButton).click();
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 15_000 });
+    await page.waitForURL(/\/(home|workout\/finish\/)/, { timeout: 15_000 });
   });
 });
