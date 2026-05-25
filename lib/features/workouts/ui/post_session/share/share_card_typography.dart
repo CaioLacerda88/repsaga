@@ -237,4 +237,88 @@ class ShareCardTypography {
       color: AppColors.textDim,
     );
   }
+
+  // ─── D3 Achievement Frame ──────────────────────────────────────────
+  //
+  // The single photo-overlay treatment for the share-card photo path
+  // (Phase 31 — replaces Variant A + Variant B). Two trapezoidal collars
+  // (top + bottom) frame the photo zone, with 4dp side bars in the
+  // dominant-BP hue (left) + hotViolet (right). Typography sizes are
+  // locked per docs/WIP.md § "Typography decisions" — D3 Achievement
+  // Frame export + preview tables.
+
+  /// Top-collar class name (Rajdhani 700, +0.04em tracking, textCream).
+  /// 36px export / 24sp preview.
+  static TextStyle achievementFrameClassName(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 24.0 : 36.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0.04 * size,
+    );
+  }
+
+  /// Top-collar saga eyebrow (Barlow Condensed 600, +0.22em tracking,
+  /// textDim). 20px export / 11sp preview.
+  static TextStyle achievementFrameSagaEyebrow(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 20.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.22 * size,
+      color: AppColors.textDim,
+    );
+  }
+
+  /// Bottom-collar XP hero (Rajdhani 700, -0.02em tracking, textCream).
+  /// The primary numeric register of the share card. 64px export / 38sp
+  /// preview.
+  static TextStyle achievementFrameXpHero(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 38.0 : 64.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: -0.02 * size,
+      height: 1.0,
+    );
+  }
+
+  /// Bottom-collar lift detail (Rajdhani 700, +0.04em tracking). Color
+  /// is `heroGold` when [isPr] is true (PR is the canonical reward) and
+  /// `textCream` otherwise. 28px export / 16sp preview.
+  static TextStyle achievementFrameLiftDetail(
+    ShareCardRenderTarget target, {
+    required bool isPr,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 16.0 : 28.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0.04 * size,
+      // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (only when isPr is true).
+      color: isPr ? AppColors.heroGold : AppColors.textCream,
+    );
+  }
+
+  /// Bottom-collar BP rank line (Barlow Condensed 600, +0.22em tracking,
+  /// hue). Rendered in the dominant-BP hue to mirror the left side bar.
+  /// 20px export / 12sp preview.
+  static TextStyle achievementFrameBpRank(
+    ShareCardRenderTarget target, {
+    required Color hue,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 12.0 : 20.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.22 * size,
+      color: hue,
+    );
+  }
+
+  /// Bottom-collar wordmark (Rajdhani 700, +0.24em tracking, textDim).
+  /// 18px export / 11sp preview.
+  static TextStyle achievementFrameWordmark(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 18.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0.24 * size,
+      color: AppColors.textDim,
+    );
+  }
 }
