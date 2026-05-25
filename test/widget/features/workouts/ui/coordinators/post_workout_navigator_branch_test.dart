@@ -101,7 +101,8 @@ Widget _buildNavigationHarness(_NavigationParams params) {
       ),
       GoRoute(
         path: '/profile',
-        builder: (_, state) => const Scaffold(body: Text('Destination: profile')),
+        builder: (_, state) =>
+            const Scaffold(body: Text('Destination: profile')),
       ),
     ],
   );

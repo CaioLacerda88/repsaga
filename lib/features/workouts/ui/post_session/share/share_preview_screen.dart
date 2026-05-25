@@ -363,13 +363,12 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
             // rendering or sharing. Without IgnorePointer the user
             // could double-tap action buttons under the barrier.
             if (isBusy)
-              const Positioned.fill(
+              Positioned.fill(
                 child: IgnorePointer(
                   ignoring: false,
-                  // ignore: hardcoded_color — busy-barrier scrim (60% abyss flood, same primitive used by every modal scrim in the post-session flow).
                   child: ColoredBox(
-                    color: Color(0x99000000),
-                    child: Center(child: CircularProgressIndicator()),
+                    color: AppColors.abyss.withValues(alpha: 0.6),
+                    child: const Center(child: CircularProgressIndicator()),
                   ),
                 ),
               ),
