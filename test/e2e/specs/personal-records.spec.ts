@@ -25,6 +25,146 @@ import {
 } from '../helpers/workout';
 import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES, SEED_EXERCISES } from '../fixtures/test-exercises';
+import { getAdminClient, getUserIdByEmail, seedPrForUser } from '../helpers/test-data-reset';
+
+// =============================================================================
+// Per-test reseed helpers
+//
+// Why these exist
+// ---------------
+// Both describe blocks in this file share a server-side user across multiple
+// sequential tests. Without a per-test reset, test N's saved workouts
+// (xp_events, body_part_progress, personal_records, exercise_peak_loads,
+// exercise_peak_loads_by_rep_range) accumulate into test N+1's baseline,
+// changing what the RPG SQL chain (`record_session_xp_batch`) does and how
+// long it takes. Under --repeat-each=N or CI 4-vCPU saturation the accumulated
+// state pushes total runtime past test timeouts, or changes expected
+// state-machine outcomes (e.g. a "first workout" test running after 3 prior
+// workouts will never see the first-workout celebration).
+//
+// Pattern lifted from crash-recovery.spec.ts (commit 28d67d6) and
+// weekly-plan.spec.ts (commit e2e089e).
+//
+// smokePR baseline (per global-setup.ts):
+//   - cleanFreshStateUser (workouts + PRs + xp cleared)
+//   - ensureProfile
+//   - seedPRData (bench press 100 kg x 5 PR seeded)
+//
+// fullPR baseline (per global-setup.ts):
+//   - cleanFreshStateUser (workouts + PRs + xp cleared)
+//   - ensureProfile
+//   - seedMinimalWorkout ('E2E Warmup Workout' — makes ActionHero lapsed)
+// =============================================================================
+
+/**
+ * Delete all workout + RPG state for a user back to the zero-history baseline,
+ * then upsert backfill_progress as completed. Shared by both reseed functions.
+ */
+async function clearUserState(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string,
+): Promise<void> {
+  // PRs first — set_id is ON DELETE SET NULL so rows survive workout deletion.
+  await admin.from('personal_records').delete().eq('user_id', userId);
+  await admin.from('workouts').delete().eq('user_id', userId);
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // RPG state (Phase 27 + Phase 29 v2).
+  await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('user_xp').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Mark backfill_progress as completed so SagaIntroGate.runRetroBackfill is
+  // a no-op on next login (matches crash-recovery + weekly-plan reseed pattern).
+  const nowIso = new Date().toISOString();
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: nowIso,
+      updated_at: nowIso,
+      completed_at: nowIso,
+    },
+    { onConflict: 'user_id' },
+  );
+}
+
+/**
+ * Reseed the smokePR user back to the canonical "PR seeded" baseline that
+ * global-setup originally provisioned: cleanFreshStateUser + ensureProfile +
+ * seedPRData (bench press 100 kg × 5).
+ *
+ * Why needed: 9 tests in the smoke describe block run against the same user in
+ * sequence. Tests that finish workouts write xp_events + body_part_progress +
+ * exercise_peak_loads, growing the RPG chain on each run. The 999 kg set in
+ * test :309 unconditionally beats the 100 kg seed, but on repeat-each=3 it
+ * inherits 3 rounds of accumulated XP and the celebration-chain wall-clock
+ * eventually exceeds the test budget.
+ *
+ * Also critical for the PR-detection tests (:264, :309): they assert that a
+ * high-weight set triggers `set-row-state-standing-pr`. If a prior test already
+ * wrote a 999 kg PR, the next run's 130 kg set in :264 will NOT fire standing-PR
+ * (it would be superseded by the prior 999 kg). The reseed restores the bench
+ * press PR to the known 100 kg baseline.
+ *
+ * Idempotent. Safe to call on a user that's already clean.
+ */
+async function reseedSmokePrUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('smokePR').email);
+  if (!userId) return;
+
+  await clearUserState(admin, userId);
+
+  // Re-seed the bench press 100 kg × 5 PR so pr-display tests and the
+  // PR-detection tests (:264, :309) find the expected baseline.
+  // seedPrForUser inserts a workout + set + personal_record using the
+  // 'E2E Reset Seed' sentinel (idempotent — skipped if already present).
+  await seedPrForUser(admin, userId, 'barbell_bench_press', 100, 5);
+}
+
+/**
+ * Reseed the fullPR user back to the canonical "minimal workout" baseline that
+ * global-setup originally provisioned: cleanFreshStateUser + ensureProfile +
+ * seedMinimalWorkout ('E2E Warmup Workout').
+ *
+ * Why needed: 4+ tests run sequentially against fullPR. Tests that finish two
+ * workouts in sequence (test.slow()) accumulate XP + PR state. On repeat-each=3
+ * the RPG chain grows longer on each repeat, pushing runtime past the tripled
+ * timeout the tests already use.
+ *
+ * Also critical for "should show celebration screen after first completed
+ * workout" (:464): if the user already has prior workout history from a
+ * previous test, the post-workout navigation may bypass the first-workout
+ * celebration entirely.
+ *
+ * Idempotent. Safe to call on a user that's already clean.
+ */
+async function reseedFullPrUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('fullPR').email);
+  if (!userId) return;
+
+  await clearUserState(admin, userId);
+
+  // Re-seed the minimal warmup workout so the ActionHero resolves to the
+  // free-workout branch (workoutCount > 0) rather than the day-zero CTA.
+  const now = new Date();
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Warmup Workout',
+    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
+    duration_seconds: 1800,
+  });
+}
 
 // The weight x reps pattern: "100 kg x 5" or "20 kg x 3".
 // The x character is U+00D7 (MULTIPLICATION SIGN), which is what _formatValue uses.
@@ -67,7 +207,17 @@ async function dismissCelebration(page: Page): Promise<void> {
 // =============================================================================
 
 test.describe('Personal records', { tag: '@smoke' }, () => {
+  // Serial mode: the 9 tests share one server-side user; serial execution
+  // ensures the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own smokePR
+  // user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login so
+    // the Flutter app hydrates from clean state. See reseedSmokePrUser()
+    // docstring for the per-test pollution mechanism this prevents.
+    await reseedSmokePrUser();
     await login(
       page,
       getUser('smokePR').email,
@@ -453,7 +603,17 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
 // =============================================================================
 
 test.describe('Personal records', () => {
+  // Serial mode: the 4+ tests share one server-side user; serial execution
+  // ensures the per-test reseed in beforeEach never races a concurrent test.
+  // Cross-worker isolation is unaffected — each worker has its own fullPR
+  // user via the per-worker user pool.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
+    // Reset the server-side user to the canonical baseline BEFORE login so
+    // the Flutter app hydrates from clean state. See reseedFullPrUser()
+    // docstring for the per-test pollution mechanism this prevents.
+    await reseedFullPrUser();
     await login(
       page,
       getUser('fullPR').email,
