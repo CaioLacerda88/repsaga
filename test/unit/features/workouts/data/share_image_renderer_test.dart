@@ -113,37 +113,34 @@ void main() {
       expect(xfile, isNotNull);
     });
 
-    test(
-      'retries at pixelRatio 2.0 when first encode exceeds 1.2MB',
-      () async {
-        final boundary = _RecordingBoundary();
-        var calls = 0;
-        final renderer = ShareImageRenderer(
-          boundaryResolver: (_) => boundary,
-          imageEncoder: (_, {required format}) async {
-            calls += 1;
-            // First call: oversized (>1.2MB). Second call (retry at 2.0x):
-            // small. The renderer must dispatch a second capture at the
-            // fallback ratio.
-            final size = calls == 1 ? (1300 * 1024) : (200 * 1024);
-            return ByteData.view(Uint8List(size).buffer);
-          },
-          tempDirResolver: () async => tmpRoot,
-          nowMillis: () => 1700000000000,
-        );
+    test('retries at pixelRatio 2.0 when first encode exceeds 1.2MB', () async {
+      final boundary = _RecordingBoundary();
+      var calls = 0;
+      final renderer = ShareImageRenderer(
+        boundaryResolver: (_) => boundary,
+        imageEncoder: (_, {required format}) async {
+          calls += 1;
+          // First call: oversized (>1.2MB). Second call (retry at 2.0x):
+          // small. The renderer must dispatch a second capture at the
+          // fallback ratio.
+          final size = calls == 1 ? (1300 * 1024) : (200 * 1024);
+          return ByteData.view(Uint8List(size).buffer);
+        },
+        tempDirResolver: () async => tmpRoot,
+        nowMillis: () => 1700000000000,
+      );
 
-        final xfile = await renderer.render(
-          repaintKey: GlobalKey(),
-          pixelRatio: 3.0,
-        );
+      final xfile = await renderer.render(
+        repaintKey: GlobalKey(),
+        pixelRatio: 3.0,
+      );
 
-        // Two boundary captures: original 3.0 then fallback 2.0.
-        expect(boundary.pixelRatios, [3.0, 2.0]);
-        // The file on disk is the smaller (200KB) payload, not the oversize
-        // initial encode.
-        expect(File(xfile.path).lengthSync(), 200 * 1024);
-      },
-    );
+      // Two boundary captures: original 3.0 then fallback 2.0.
+      expect(boundary.pixelRatios, [3.0, 2.0]);
+      // The file on disk is the smaller (200KB) payload, not the oversize
+      // initial encode.
+      expect(File(xfile.path).lengthSync(), 200 * 1024);
+    });
 
     test(
       'does not retry when the first encode is already under the cap',

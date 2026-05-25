@@ -10,10 +10,11 @@ import 'package:path_provider/path_provider.dart';
 /// Encodes a [ui.Image] to bytes. Hoisted to a top-level typedef so tests
 /// can inject a synchronous fake (the real implementation does an async
 /// channel hop into the engine).
-typedef ImageEncoder = Future<ByteData?> Function(
-  ui.Image image, {
-  required ui.ImageByteFormat format,
-});
+typedef ImageEncoder =
+    Future<ByteData?> Function(
+      ui.Image image, {
+      required ui.ImageByteFormat format,
+    });
 
 /// Resolves a [RenderRepaintBoundary] from a [GlobalKey]. Hoisted so the
 /// test can inject a mock boundary without staging the actual widget tree.
@@ -58,10 +59,10 @@ class ShareImageRenderer {
     ImageEncoder? imageEncoder,
     TempDirResolver? tempDirResolver,
     NowMillis? nowMillis,
-  })  : _resolveBoundary = boundaryResolver ?? _defaultBoundaryResolver,
-        _encodeImage = imageEncoder ?? _defaultImageEncoder,
-        _tempDir = tempDirResolver ?? getTemporaryDirectory,
-        _nowMillis = nowMillis ?? _defaultNowMillis;
+  }) : _resolveBoundary = boundaryResolver ?? _defaultBoundaryResolver,
+       _encodeImage = imageEncoder ?? _defaultImageEncoder,
+       _tempDir = tempDirResolver ?? getTemporaryDirectory,
+       _nowMillis = nowMillis ?? _defaultNowMillis;
 
   /// Hard ceiling above which the renderer downsamples once at
   /// `pixelRatio: 2.0`. Sized to the smallest known share-sheet attachment
@@ -130,8 +131,10 @@ class ShareImageRenderer {
     }
     final image = await boundary.toImage(pixelRatio: pixelRatio);
     try {
-      final byteData =
-          await _encodeImage(image, format: ui.ImageByteFormat.png);
+      final byteData = await _encodeImage(
+        image,
+        format: ui.ImageByteFormat.png,
+      );
       if (byteData == null) {
         throw StateError(
           'ShareImageRenderer: ui.Image.toByteData returned null.',

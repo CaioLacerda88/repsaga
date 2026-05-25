@@ -72,26 +72,28 @@ void main() {
   });
 
   group('ShareService.share', () {
-    test('hands the single XFile to the share sink with the supplied text',
-        () async {
-      final captured = <({List<XFile> files, String? text})>[];
-      final svc = ShareService(
-        imagePicker: (_) async => null,
-        fileShareSink: (files, {text}) async {
-          captured.add((files: files, text: text));
-          return const ShareResult('ok', ShareResultStatus.success);
-        },
-        permissionRequester: (_) async => PermissionStatus.granted,
-        permissionStatusReader: (_) async => PermissionStatus.granted,
-      );
-      final f = _FakeXFile('/tmp/card.png');
+    test(
+      'hands the single XFile to the share sink with the supplied text',
+      () async {
+        final captured = <({List<XFile> files, String? text})>[];
+        final svc = ShareService(
+          imagePicker: (_) async => null,
+          fileShareSink: (files, {text}) async {
+            captured.add((files: files, text: text));
+            return const ShareResult('ok', ShareResultStatus.success);
+          },
+          permissionRequester: (_) async => PermissionStatus.granted,
+          permissionStatusReader: (_) async => PermissionStatus.granted,
+        );
+        final f = _FakeXFile('/tmp/card.png');
 
-      await svc.share(f, text: 'Caption');
+        await svc.share(f, text: 'Caption');
 
-      expect(captured.length, 1);
-      expect(captured.first.files, [f]);
-      expect(captured.first.text, 'Caption');
-    });
+        expect(captured.length, 1);
+        expect(captured.first.files, [f]);
+        expect(captured.first.text, 'Caption');
+      },
+    );
 
     test('omitting text forwards null to the share sink', () async {
       String? observedText;
@@ -115,24 +117,26 @@ void main() {
   });
 
   group('ShareService.requestCameraPermission', () {
-    test('requests Permission.camera and returns the post-prompt status',
-        () async {
-      final requested = <Permission>[];
-      final svc = ShareService(
-        imagePicker: (_) async => null,
-        fileShareSink: (_, {text}) async => throw UnimplementedError(),
-        permissionRequester: (p) async {
-          requested.add(p);
-          return PermissionStatus.granted;
-        },
-        permissionStatusReader: (_) async => PermissionStatus.denied,
-      );
+    test(
+      'requests Permission.camera and returns the post-prompt status',
+      () async {
+        final requested = <Permission>[];
+        final svc = ShareService(
+          imagePicker: (_) async => null,
+          fileShareSink: (_, {text}) async => throw UnimplementedError(),
+          permissionRequester: (p) async {
+            requested.add(p);
+            return PermissionStatus.granted;
+          },
+          permissionStatusReader: (_) async => PermissionStatus.denied,
+        );
 
-      final status = await svc.requestCameraPermission();
+        final status = await svc.requestCameraPermission();
 
-      expect(requested, [Permission.camera]);
-      expect(status, PermissionStatus.granted);
-    });
+        expect(requested, [Permission.camera]);
+        expect(status, PermissionStatus.granted);
+      },
+    );
 
     test('propagates denial status without throwing', () async {
       final svc = ShareService(
@@ -142,10 +146,7 @@ void main() {
         permissionStatusReader: (_) async => PermissionStatus.denied,
       );
 
-      expect(
-        await svc.requestCameraPermission(),
-        PermissionStatus.denied,
-      );
+      expect(await svc.requestCameraPermission(), PermissionStatus.denied);
     });
 
     test('propagates permanentlyDenied without throwing', () async {
@@ -153,8 +154,7 @@ void main() {
         imagePicker: (_) async => null,
         fileShareSink: (_, {text}) async => throw UnimplementedError(),
         permissionRequester: (_) async => PermissionStatus.permanentlyDenied,
-        permissionStatusReader: (_) async =>
-            PermissionStatus.permanentlyDenied,
+        permissionStatusReader: (_) async => PermissionStatus.permanentlyDenied,
       );
 
       expect(

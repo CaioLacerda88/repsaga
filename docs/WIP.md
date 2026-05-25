@@ -41,6 +41,20 @@ the phase summary in PROJECT.md §4.
 - [x] `dart format .` + `dart analyze --fatal-infos` + `flutter test test/unit/features/workouts/` final gates (522 tests passing)
 - [x] commits split across 4 atomic groups: `b9a911f` (payload tests) → `f3497cf` (3 variants) → `675bf81` (renderer) → `c7abcda` (goldens + closeout)
 
+**Pass 2 checklist (in flight):**
+
+- [x] Pin compatible versions for `image_picker` / `share_plus` / `permission_handler` against Flutter SDK 3.11.4 (held `share_plus` at 10.1.4 — 11.x bumps Dart min beyond 3.11.4)
+- [x] `pubspec.yaml` — add the three deps + explicit `cross_file` / `path_provider` (transitive promotion to keep imports declared)
+- [x] `flutter pub get` resolves cleanly
+- [x] `android/app/src/main/AndroidManifest.xml` — `<uses-permission android:name="android.permission.CAMERA"/>` + `<queries>` intents (IMAGE_CAPTURE / GET_CONTENT / PICK image/*)
+- [x] `flutter build apk --debug` compiles (no Kotlin/Gradle/SDK friction)
+- [x] `lib/features/workouts/data/share_image_renderer.dart` — DI seams (`BoundaryResolver` / `ImageEncoder` / `TempDirResolver` / `NowMillis`) + 1.2MB overflow → pixelRatio-2.0 retry + PNG output (TODO(pass-3) for JPEG via `image` pkg)
+- [x] `test/unit/features/workouts/data/share_image_renderer_test.dart` — 8 cases (pixelRatio fwd, .png suffix, deterministic filename, non-null XFile, retry on overflow, no-retry-when-small, no-retry-below-fallback, StateError on detached key)
+- [x] `lib/features/workouts/data/share_service.dart` — `pickFromCamera` / `pickFromGallery` / `share(file, text:)` / `requestCameraPermission` / `cameraPermissionStatus`; DI via `ImageSourcePicker` / `FileShareSink` / `PermissionRequester` / `PermissionStatusReader` typedefs
+- [x] `test/unit/features/workouts/data/share_service_test.dart` — 10 cases covering each method + cancel/denial/permanentlyDenied paths
+- [x] `dart format .` + `dart analyze --fatal-infos` (project-wide, 0 issues) + `flutter test test/unit/features/workouts/` (540 / 540 pass; +18 over Pass 1's 522)
+- [x] commits split across 3 groups: `e7262d8` (deps + manifest) → `4c557ad` (renderer + tests) → `62bdf92` (share service + tests)
+
 **Branch:** `feature/30b-share-card` off `main` (after 30a merges).
 
 **Scope summary**

@@ -139,11 +139,7 @@ void main() {
       totalXp: 618,
       dominantBodyPart: BodyPart.back,
       dominantBodyPartRank: 19,
-      pr: SharePayloadPr(
-        exerciseName: 'Deadlift',
-        weightKg: 160,
-        reps: 3,
-      ),
+      pr: SharePayloadPr(exerciseName: 'Deadlift', weightKg: 160, reps: 3),
       characterClassSlug: 'berserker',
       isClassChange: false,
       hasTitleUnlock: false,

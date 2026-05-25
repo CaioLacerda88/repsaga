@@ -8,20 +8,16 @@ import 'package:share_plus/share_plus.dart';
 typedef ImageSourcePicker = Future<XFile?> Function(ImageSource source);
 
 /// Hands a list of files to the native share sheet. Hoisted for DI.
-typedef FileShareSink = Future<ShareResult> Function(
-  List<XFile> files, {
-  String? text,
-});
+typedef FileShareSink =
+    Future<ShareResult> Function(List<XFile> files, {String? text});
 
 /// Requests a runtime permission and returns its post-request status.
-typedef PermissionRequester = Future<PermissionStatus> Function(
-  Permission permission,
-);
+typedef PermissionRequester =
+    Future<PermissionStatus> Function(Permission permission);
 
 /// Returns the current status of a runtime permission (no prompt).
-typedef PermissionStatusReader = Future<PermissionStatus> Function(
-  Permission permission,
-);
+typedef PermissionStatusReader =
+    Future<PermissionStatus> Function(Permission permission);
 
 /// Single source of truth for share-card IO: camera/gallery pick, share
 /// sheet handoff, and camera-permission checks.
@@ -38,12 +34,12 @@ class ShareService {
     FileShareSink? fileShareSink,
     PermissionRequester? permissionRequester,
     PermissionStatusReader? permissionStatusReader,
-  })  : _imagePicker = imagePicker ?? _defaultImagePicker,
-        _fileShareSink = fileShareSink ?? _defaultFileShareSink,
-        _permissionRequester =
-            permissionRequester ?? _defaultPermissionRequester,
-        _permissionStatusReader =
-            permissionStatusReader ?? _defaultPermissionStatusReader;
+  }) : _imagePicker = imagePicker ?? _defaultImagePicker,
+       _fileShareSink = fileShareSink ?? _defaultFileShareSink,
+       _permissionRequester =
+           permissionRequester ?? _defaultPermissionRequester,
+       _permissionStatusReader =
+           permissionStatusReader ?? _defaultPermissionStatusReader;
 
   final ImageSourcePicker _imagePicker;
   final FileShareSink _fileShareSink;
