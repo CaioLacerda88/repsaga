@@ -2,6 +2,7 @@ import 'package:flutter/painting.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../domain/body_part_hues.dart';
 import '../../models/body_part.dart';
 import '../../models/vitality_state.dart';
 
@@ -107,41 +108,18 @@ class VitalityStateStyles {
   /// Body-part → chart line / sigil tint when the surface needs to convey
   /// **which body part** rather than **which conditioning state**.
   ///
+  /// **UI-layer re-export shim** (PR 30b Important 5). The canonical map
+  /// lives in [BodyPartHues.bodyPartColor] under `lib/features/rpg/domain/`
+  /// so the share-card domain composer (`SharePayload.fromPostSessionState`)
+  /// can resolve hues without reaching into `ui/`. This getter remains on
+  /// `VitalityStateStyles` so the 25+ existing UI call sites keep working
+  /// unchanged.
+  ///
   /// Lock contract (UI-critic note): every surface that draws a per-body-
-  /// part visual differentiation reads from this map. The §13.3 stats
-  /// deep-dive trend chart (Stage 3), the future per-body-part history
-  /// graph, and any "all six body parts at a glance" surface MUST consume
-  /// these colors. Introducing a second source = inevitable drift across
-  /// surfaces.
-  ///
-  /// Color choices (from AppTheme palette + spec §3 metaphors):
-  ///   * `chest`     → [AppColors.bodyPartChest] — pink (Phase 26a). Anatomical
-  ///                   fit (pec/heart) + frees [hotViolet] from chest identity.
-  ///   * `back`      → [AppColors.bodyPartBack]  — sky-blue (Phase 26a).
-  ///                   Resolves the chest/back "two purples" hue collision.
-  ///   * `legs`      → [AppColors.success]      — the green of foundation /
-  ///                   ground-stride; lower-body roots the saga.
-  ///   * `shoulders` → [AppColors.warning]      — warm yellow-amber, the
-  ///                   "yoke" / overhead reach distinct from heroGold.
-  ///   * `arms`      → [AppColors.error]        — red of the sinew; arms are
-  ///                   the visible specialist rank (§9.1 Berserker).
-  ///   * `core`      → [AppColors.textDim]      — neutral spine tone; core
-  ///                   stabilises but doesn't lead the eye.
-  ///   * `cardio`    → [AppColors.hair]         — muted hairline; v2 track,
-  ///                   intentionally desaturated until earnable.
-  ///
-  /// `heroGold` is intentionally NOT in this map — it stays scarce as the
-  /// reward token reserved for the `radiant` state and §13.2 rank-up
-  /// celebrations.
-  static const Map<BodyPart, Color> bodyPartColor = {
-    BodyPart.chest: AppColors.bodyPartChest,
-    BodyPart.back: AppColors.bodyPartBack,
-    BodyPart.legs: AppColors.success,
-    BodyPart.shoulders: AppColors.warning,
-    BodyPart.arms: AppColors.error,
-    BodyPart.core: AppColors.textDim,
-    BodyPart.cardio: AppColors.hair,
-  };
+  /// part visual differentiation reads through this single map. See
+  /// [BodyPartHues] for the full per-body-part palette rationale + color
+  /// rationale.
+  static Map<BodyPart, Color> get bodyPartColor => BodyPartHues.bodyPartColor;
 
   // ---------------------------------------------------------------------------
   // Vitality ramp color (Phase 26a)

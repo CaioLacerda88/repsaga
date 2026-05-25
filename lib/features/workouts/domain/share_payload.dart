@@ -5,10 +5,10 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../personal_records/domain/pr_detection_service.dart';
+import '../../rpg/domain/body_part_hues.dart';
 import '../../rpg/domain/celebration_queue.dart';
 import '../../rpg/models/body_part.dart';
 import '../../rpg/models/celebration_event.dart';
-import '../../rpg/ui/utils/vitality_state_styles.dart';
 import 'pr_score.dart';
 import 'reward_tier.dart';
 
@@ -300,10 +300,9 @@ extension SharePayloadCta on SharePayload {
   }
 }
 
-/// Body-part hue lookup — delegates to [VitalityStateStyles.bodyPartColor]
-/// (the canonical app-wide map; §13.3 lock contract). Reading through the
+/// Body-part hue lookup — delegates to the canonical domain map
+/// ([BodyPartHues.hueFor], §13.3 lock contract). Reading through the
 /// single source of truth prevents drift between the share card and every
 /// other "per-BP color" surface (stats trend chart, rank rail, weekly plan
 /// engagement bars).
-Color _bodyPartHue(BodyPart bp) =>
-    VitalityStateStyles.bodyPartColor[bp] ?? AppColors.hotViolet;
+Color _bodyPartHue(BodyPart bp) => BodyPartHues.hueFor(bp);
