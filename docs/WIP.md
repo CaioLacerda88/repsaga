@@ -216,7 +216,67 @@ Commit: `feat(workouts): S2 Mission Debrief summary section (Phase 31 Pass 3)`.
 
 Commit: `chore(workouts): Phase 31 closeout (visual verification + final gates)`.
 
-### Boundary-trigger ripple inventory (per CLAUDE.md)
+### Boundary inventory — completed 2026-05-25 (Explore agent dispatch)
+
+#### Boundary 1 — `PostSessionState` field additions (additive; minimal churn)
+
+- **Direct construction sites:** none. `PostSessionState` is built only inside `PostSessionController._buildInitial()`.
+- **Carrier of the soon-to-be-persisted maps:** `PostSessionParams` → `FinishWorkoutCoordinator:395-421` reads `bpDeltas` (already exists); test harness in `test/widget/.../post_session_screen_routing_test.dart:61-74` accepts `bpXpDeltas`.
+- **Controller:** `post_session_controller.dart:100-120` — `bpXpDeltas` already a local; `bpRankAfter` constructed at lines 100-107; both passed to `PostSessionChoreographer.build()` at 117-118. Persistence to state = trivial Freezed addition.
+- **Test fixtures updating `SharePayload.fromPostSessionState(...)`** (must pass `bpRankAfter` on top of existing `bpXpDeltas`):
+  - `test/unit/features/workouts/domain/share_payload_test.dart` — 10 test cases (lines 56, 90, 131-370)
+  - `test/unit/features/workouts/ui/post_session/share/share_preview_screen_test.dart:77-88`
+  - `test/unit/features/workouts/ui/post_session/summary/post_session_summary_panel_test.dart:55`
+  - `test/widget/features/workouts/ui/post_session/summary/post_session_summary_panel_golden_test.dart:172`
+- **`topLifts` field is brand-new** — no existing consumers; rendering surface is the S2 Mission Debrief (Pass 3). Project from raw set logs in controller's `_buildInitial()`.
+
+**Action: 4 test files updated for `bpRankAfter` (+1 file for `topLifts` once the field is rendered). No production widget rewrites needed for Boundary 1.**
+
+#### Boundary 2 — `ShareCardVariant` enum reshape
+
+`enum ShareCardVariant { minimalStrip, fullBleed, discreet }` → `enum ShareCardVariant { achievementFrame, discreet }`.
+
+- **Definition:** `lib/features/workouts/domain/share_payload.dart:30` — update enum + docstrings.
+- **Switch sites:**
+  - `lib/features/workouts/ui/post_session/share/share_card_renderer.dart:184-226` — master switch. Delete `minimalStrip` case (line 196-210, instantiates Variant A). Delete `fullBleed` case (line 211-225, instantiates Variant B). Add `achievementFrame` case for the new widget.
+  - `lib/features/workouts/ui/post_session/share/share_preview_screen.dart:97-117, 530-537` — `_variant` init, segmented-button equality checks, `onChanged` callbacks.
+- **Test sites:** `share_card_renderer_test.dart` — 2-3 tests reference `.minimalStrip` / `.fullBleed`. Update.
+
+**Action: 3 source files + 1 test file edited. Clean migration.**
+
+#### Boundary 3 — Variant A + B widget removal
+
+- **Delete (4 files):**
+  - `lib/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart` (70 lines)
+  - `lib/features/workouts/ui/post_session/share/variants/share_card_variant_b.dart` (~230 lines)
+  - `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_a_test.dart`
+  - `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_b_test.dart`
+- **Delete (3 goldens):**
+  - `test/unit/features/workouts/ui/post_session/share/goldens/share_card_variant_a_baseline.png`
+  - `test/unit/features/workouts/ui/post_session/share/goldens/share_card_variant_a_max_drag_offset.png`
+  - `test/unit/features/workouts/ui/post_session/share/goldens/share_card_variant_b_pr.png`
+- **Imports to drop:** `share_card_renderer.dart` (Variant A + B imports at top of file).
+- **E2E:**
+  - `test/e2e/helpers/selectors.ts:1488` — drop `variantToggle: '[flt-semantics-identifier="share-variant-toggle"]'`.
+  - Spot-grep E2E specs (`history-localization.spec.ts`, share-flow, etc.) for any `variantToggle` reference; remove the test logic.
+- **ARB cleanup:**
+  - `lib/l10n/app_pt.arb:892-893` — delete `sharePreviewMinimal` ("Mínimo") + `sharePreviewBold` ("Destaque").
+  - `lib/l10n/app_en.arb` — same keys (corresponding lines).
+  - Re-run `flutter gen-l10n` to regenerate `app_localizations*.dart` without the two getters.
+- **`ShareLocalizations` struct in `share_preview_screen.dart:60-75`** — drop `previewMinimal` + `previewBold` fields if present.
+- **Doc comment updates:** `share_preview_screen_test.dart:18-21` ("Variant toggle (A ↔ B) swaps the rendered variant subtree.") → rewrite for single-variant world.
+
+**Action: 4 file deletes + 3 golden deletes + 2 ARB keys + 1 E2E selector + spec spot-audit. Highest-risk surface = `share_preview_screen.dart` toggle state machine** — the camera-permission-denied auto-select-discreet path (line 117) must still land on `discreet` even with the toggle UI removed (handled via the existing permission-deny code path; SegmentedButton removal is pure visual).
+
+#### Migration summary
+
+| Surface | Files edited | Files deleted | Risk |
+|---|---|---|---|
+| Boundary 1 (state additions) | 1 lib + 4 tests | 0 | LOW (additive) |
+| Boundary 2 (enum reshape) | 3 lib + 1 test | 0 | LOW (clean rename + delete) |
+| Boundary 3 (widget removal) | 4 lib + 2 tests + 2 ARB | 4 src + 3 goldens | MEDIUM (toggle state machine + l10n + E2E audit) |
+
+### Boundary-trigger ripple inventory (per CLAUDE.md) — historical reference
 
 This change crosses 3 boundaries:
 
