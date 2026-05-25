@@ -1484,8 +1484,6 @@ export const SHARE_FLOW = {
 
   /** Preview screen root — Semantics(identifier: 'share-preview-screen'). */
   previewScreen: '[flt-semantics-identifier="share-preview-screen"]',
-  /** Variant toggle (Mínimo ↔ Destaque) — hidden on the Discreet path. */
-  variantToggle: '[flt-semantics-identifier="share-variant-toggle"]',
   /** Primary share CTA on the preview screen. */
   previewShareButton: '[flt-semantics-identifier="share-preview-share-button"]',
   /** Retake button — resets the controller + pops back to the share sheet. */

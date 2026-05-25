@@ -4914,18 +4914,6 @@ abstract class AppLocalizations {
   /// **'No photo · just the saga'**
   String get shareSheetNoPhoto;
 
-  /// Phase 30 PR 30b — Variant toggle option label for the minimal-strip share card (Variant A).
-  ///
-  /// In en, this message translates to:
-  /// **'Minimal'**
-  String get sharePreviewMinimal;
-
-  /// Phase 30 PR 30b — Variant toggle option label for the full-bleed share card (Variant B). 'Destaque' in pt-BR.
-  ///
-  /// In en, this message translates to:
-  /// **'Bold'**
-  String get sharePreviewBold;
-
   /// Phase 30 PR 30b — Preview-screen retake button label. Returns to the share-sheet step.
   ///
   /// In en, this message translates to:

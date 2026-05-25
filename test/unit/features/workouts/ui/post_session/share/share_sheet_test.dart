@@ -24,8 +24,6 @@ void main() {
     takePhoto: 'Tirar foto',
     fromGallery: 'Escolher da galeria',
     noPhoto: 'Sem foto · só a saga',
-    previewMinimal: 'Mínimo',
-    previewBold: 'Destaque',
     previewRetake: 'Refazer',
     previewShare: 'Compartilhar',
     wordmark: 'REPSAGA',

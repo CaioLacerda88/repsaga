@@ -2869,12 +2869,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shareSheetNoPhoto => 'Sem foto · só a saga';
 
   @override
-  String get sharePreviewMinimal => 'Mínimo';
-
-  @override
-  String get sharePreviewBold => 'Destaque';
-
-  @override
   String get sharePreviewRetake => 'Refazer';
 
   @override

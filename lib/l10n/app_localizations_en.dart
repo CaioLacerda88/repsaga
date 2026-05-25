@@ -2858,12 +2858,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareSheetNoPhoto => 'No photo · just the saga';
 
   @override
-  String get sharePreviewMinimal => 'Minimal';
-
-  @override
-  String get sharePreviewBold => 'Bold';
-
-  @override
   String get sharePreviewRetake => 'Retake';
 
   @override
