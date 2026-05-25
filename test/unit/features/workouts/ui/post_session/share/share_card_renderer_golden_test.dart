@@ -188,6 +188,75 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // Variant A at max drag-to-reframe offset — overlay must not clip.
+  //
+  // PR 30b Important 3: the pre-fix shape wrapped the entire renderer in
+  // Transform.translate which shifted overlay + photo together and clipped
+  // the bottom strip at 1080×1920 edges on max drag. Post-fix: photoOffset
+  // flows into _PhotoZone only. This golden locks that contract: at the
+  // maximum drag value (Offset(0, 1080 * 0.4) = Offset(0, 432)) the
+  // Variant A bottom-strip overlay must appear intact at its original
+  // y-position, and the photo must appear shifted down.
+  //
+  // Run with `--update-goldens` once to baseline on the CI platform.
+  // ---------------------------------------------------------------------------
+  testWidgets('share_card_variant_a_max_drag_offset.png', (tester) async {
+    await sizeFor(tester);
+    const payload = SharePayload(
+      tier: RewardTier.thresholdAnticipatory,
+      totalXp: 618,
+      dominantBodyPart: BodyPart.chest,
+      dominantBodyPartRank: 19,
+      rankProgressFraction: 0.5,
+      pr: SharePayloadPr(exerciseName: 'Bench Press', weightKg: 95, reps: 5),
+      characterClassSlug: 'bulwark',
+      isClassChange: false,
+      hasTitleUnlock: false,
+      hasRankUp: false,
+    );
+    const strings = ShareCardStrings(
+      wordmark: 'REPSAGA',
+      variantAXpText: '+618 XP',
+      variantAPrText: '95kg × 5 · PR',
+      variantBBpEyebrow: 'Peito',
+      variantBClassName: 'BULWARK',
+      variantBPrTag: null,
+      variantBLift: '',
+      variantBBpSub: '',
+      variantBXpSub: '+618 XP',
+      discreetEyebrow: 'Peito · Rank 19',
+      discreetHero: '+618',
+      discreetHeroSubLabel: 'XP NESTA SAGA',
+      discreetPrLine: null,
+      discreetPrDetail: null,
+    );
+
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload,
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          photo: const _ColorImageProvider(Color(0xFF666666)),
+          // Max drag = Alignment.y clamped to 1.0 × 80px in the preview
+          // screen (_photoAlignmentY * 80). The golden test exercises the
+          // raw renderer at the wider reviewer-spec value (1080 * 0.4 = 432)
+          // to stress-test the overlay-clipping contract at the 1080×1920
+          // frame edge. At this extreme the photo is translated well off
+          // the bottom boundary — the overlay strip must remain unaffected.
+          photoOffset: const Offset(0, 1080 * 0.4),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(ShareCardRenderer),
+      matchesGoldenFile('goldens/share_card_variant_a_max_drag_offset.png'),
+    );
+  });
+
+  // ---------------------------------------------------------------------------
   // Discreet class-change — hotViolet override + "BULWARK DESPERTOU."
   // ---------------------------------------------------------------------------
   testWidgets('share_card_discreet_class_change.png', (tester) async {

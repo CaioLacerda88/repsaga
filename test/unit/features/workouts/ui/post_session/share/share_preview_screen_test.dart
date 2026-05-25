@@ -540,6 +540,100 @@ void main() {
   );
 
   // ---------------------------------------------------------------------------
+  // Defensive mount — non-preview states at mount time
+  //
+  // PR 30b Suggestion 7: when the screen is mounted with an unexpected state
+  // (ShareStateError / ShareStateCancelled / ShareStateIdle) the build()
+  // defensive branch renders an empty scaffold + fires debugPrint. The
+  // screen must not crash — the scaffold must be present and onClose must
+  // NOT have been called (no auto-pop from a stray state transition).
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'mounts without crashing when initial controller state is ShareStateError',
+    (tester) async {
+      var closeCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          shareServiceProvider.overrideWithValue(stubService()),
+          shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Seed the controller into an error state — simulates the edge case
+      // where the caller opens the preview screen after a stale error in
+      // the pipeline (e.g. camera permission was denied before the sheet
+      // even opened, state never transitioned to preview).
+      container.read(shareControllerProvider.notifier).state =
+          const ShareState.error(code: ShareErrorCodes.renderFailed);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SharePreviewScreen(
+              payload: buildPayload(),
+              strings: strings,
+              l10n: l10n,
+              onClose: () => closeCalls += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Screen mounts — Scaffold is present, no exception thrown.
+      expect(find.byType(SharePreviewScreen), findsOneWidget);
+      expect(find.byType(Scaffold), findsOneWidget);
+      // The defensive branch must NOT auto-pop (onClose is the only legal
+      // caller of the pop path — initiating it here would skip user intent).
+      expect(closeCalls, 0);
+      // The preview body (variant toggle, retake, share) must be absent:
+      // the defensive SizedBox.shrink renders nothing interactive.
+      expect(find.text('REFAZER'), findsNothing);
+      expect(find.text('COMPARTILHAR'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'mounts without crashing when initial controller state is ShareStateCancelled',
+    (tester) async {
+      var closeCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          shareServiceProvider.overrideWithValue(stubService()),
+          shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(shareControllerProvider.notifier).state =
+          const ShareState.cancelled();
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SharePreviewScreen(
+              payload: buildPayload(),
+              strings: strings,
+              l10n: l10n,
+              onClose: () => closeCalls += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(SharePreviewScreen), findsOneWidget);
+      expect(find.byType(Scaffold), findsOneWidget);
+      expect(closeCalls, 0);
+      expect(find.text('REFAZER'), findsNothing);
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // Semantics identifier
   // ---------------------------------------------------------------------------
 
