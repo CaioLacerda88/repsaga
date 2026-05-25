@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../core/theme/app_theme.dart';
+import '../share_card_typography.dart';
 
 /// Variant B — Full-Bleed Collars overlay (mockup §6 "Destaque" one-tap toggle).
 ///
@@ -38,6 +39,7 @@ class ShareCardVariantB extends StatelessWidget {
     required this.bpSub,
     required this.xpSub,
     this.prTag,
+    this.renderTarget = ShareCardRenderTarget.export,
   });
 
   /// Body-part hue — drives the top eyebrow color + the bottom BP-sub label.
@@ -71,21 +73,41 @@ class ShareCardVariantB extends StatelessWidget {
   /// XP sub-line on the bottom-right row, e.g. "+618 XP".
   final String xpSub;
 
+  /// Whether this widget is the export (1080×1920 offscreen) tree OR the
+  /// preview (FittedBox-scaled visible) tree. Drives the typography
+  /// sizing — see [ShareCardTypography] for the per-element pairs.
+  /// Defaults to [ShareCardRenderTarget.export] so the golden contract
+  /// stays correct.
+  final ShareCardRenderTarget renderTarget;
+
   @override
   Widget build(BuildContext context) {
+    // The collars hold typography that scales with renderTarget — the
+    // preview target bumps each font ~1.5×, so the collar geometry has
+    // to grow proportionally or the bigger text overflows the fixed
+    // 60dp/110dp export geometry. The export target keeps mockup §6
+    // geometry intact (the golden contract). The preview target uses
+    // 96dp/175dp collars, sized so the bumped typography lays out
+    // without RenderFlex overflow.
+    final isPreview = renderTarget == ShareCardRenderTarget.preview;
+    final topCollarHeight = isPreview ? 96.0 : 60.0;
+    final bottomCollarHeight = isPreview ? 175.0 : 110.0;
+    final topPaddingTop = isPreview ? 16.0 : 10.0;
+    final bottomPaddingTop = isPreview ? 50.0 : 32.0;
+    final bottomPaddingBottom = isPreview ? 22.0 : 14.0;
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Top collar (60dp, diagonal cut bottom-left).
+        // Top collar (60dp export / 96dp preview, diagonal cut bottom-left).
         Align(
           alignment: Alignment.topCenter,
           child: ClipPath(
             clipper: const _TopCollarClipper(),
             child: Container(
               key: const ValueKey('share-card-variant-b-top-collar'),
-              height: 60,
+              height: topCollarHeight,
               color: AppColors.abyss.withValues(alpha: 0.95),
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              padding: EdgeInsets.fromLTRB(14, topPaddingTop, 14, 0),
               child: Stack(
                 children: [
                   Column(
@@ -94,18 +116,16 @@ class ShareCardVariantB extends StatelessWidget {
                     children: [
                       Text(
                         bpEyebrow,
-                        style: AppTextStyles.label.copyWith(
-                          fontSize: 10,
-                          letterSpacing: 0.18 * 10,
-                          color: dominantHue,
+                        style: ShareCardTypography.variantBBpEyebrow(
+                          renderTarget,
+                          hue: dominantHue,
                         ),
                       ),
                       const SizedBox(height: 1),
                       Text(
                         className,
-                        style: AppTextStyles.numeric.copyWith(
-                          fontSize: 14,
-                          letterSpacing: 0.04 * 14,
+                        style: ShareCardTypography.variantBClassName(
+                          renderTarget,
                         ),
                       ),
                     ],
@@ -115,11 +135,7 @@ class ShareCardVariantB extends StatelessWidget {
                     right: 0,
                     child: Text(
                       wordmark,
-                      style: AppTextStyles.numeric.copyWith(
-                        fontSize: 9,
-                        letterSpacing: 0.22 * 9,
-                        color: AppColors.textDim,
-                      ),
+                      style: ShareCardTypography.variantBWordmark(renderTarget),
                     ),
                   ),
                 ],
@@ -127,37 +143,35 @@ class ShareCardVariantB extends StatelessWidget {
             ),
           ),
         ),
-        // Bottom collar (110dp, diagonal cut top).
+        // Bottom collar (110dp export / 175dp preview, diagonal cut top).
         Align(
           alignment: Alignment.bottomCenter,
           child: ClipPath(
             clipper: const _BottomCollarClipper(),
             child: Container(
               key: const ValueKey('share-card-variant-b-bottom-collar'),
-              height: 110,
+              height: bottomCollarHeight,
               color: AppColors.abyss.withValues(alpha: 0.95),
-              padding: const EdgeInsets.fromLTRB(14, 32, 14, 14),
+              padding: EdgeInsets.fromLTRB(
+                14,
+                bottomPaddingTop,
+                14,
+                bottomPaddingBottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (prTag != null)
+                    // ignore: reward_accent — PR tag is the canonical reward; heroGold scarcity contract met (rendered through ShareCardTypography.variantBPrTag).
                     Text(
                       prTag!,
-                      style: AppTextStyles.label.copyWith(
-                        fontSize: 9,
-                        letterSpacing: 0.24 * 9,
-                        // ignore: reward_accent — PR tag is the canonical reward; heroGold scarcity contract met.
-                        color: AppColors.heroGold,
-                      ),
+                      style: ShareCardTypography.variantBPrTag(renderTarget),
                     ),
                   const SizedBox(height: 2),
                   Text(
                     lift,
-                    style: AppTextStyles.numeric.copyWith(
-                      fontSize: 24,
-                      letterSpacing: -0.01 * 24,
-                    ),
+                    style: ShareCardTypography.variantBLift(renderTarget),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -167,19 +181,15 @@ class ShareCardVariantB extends StatelessWidget {
                       Expanded(
                         child: Text(
                           bpSub,
-                          style: AppTextStyles.label.copyWith(
-                            fontSize: 9,
-                            letterSpacing: 0.16 * 9,
-                            color: dominantHue,
+                          style: ShareCardTypography.variantBBpSub(
+                            renderTarget,
+                            hue: dominantHue,
                           ),
                         ),
                       ),
                       Text(
                         xpSub,
-                        style: AppTextStyles.numeric.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: ShareCardTypography.variantBXpSub(renderTarget),
                       ),
                     ],
                   ),
