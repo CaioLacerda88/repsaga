@@ -4890,6 +4890,78 @@ abstract class AppLocalizations {
   /// **'Share — coming soon'**
   String get summaryShareComingSoon;
 
+  /// Phase 30 PR 30b — Bottom-sheet title for the share-card picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your saga'**
+  String get shareSheetTitle;
+
+  /// Phase 30 PR 30b — Camera option row in the share-card bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get shareSheetTakePhoto;
+
+  /// Phase 30 PR 30b — Gallery option row in the share-card bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from gallery'**
+  String get shareSheetFromGallery;
+
+  /// Phase 30 PR 30b — Discreet (no-photo) option row in the share-card bottom sheet. Mockup §7.
+  ///
+  /// In en, this message translates to:
+  /// **'No photo · just the saga'**
+  String get shareSheetNoPhoto;
+
+  /// Phase 30 PR 30b — Variant toggle option label for the minimal-strip share card (Variant A).
+  ///
+  /// In en, this message translates to:
+  /// **'Minimal'**
+  String get sharePreviewMinimal;
+
+  /// Phase 30 PR 30b — Variant toggle option label for the full-bleed share card (Variant B). 'Destaque' in pt-BR.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get sharePreviewBold;
+
+  /// Phase 30 PR 30b — Preview-screen retake button label. Returns to the share-sheet step.
+  ///
+  /// In en, this message translates to:
+  /// **'Retake'**
+  String get sharePreviewRetake;
+
+  /// Phase 30 PR 30b — Preview-screen primary CTA. Triggers the render + native share-sheet handoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get sharePreviewShare;
+
+  /// Phase 30 PR 30b — Brand wordmark baked into the share card. Same in en + pt; constant kept here for white-label / event-rebrand changes.
+  ///
+  /// In en, this message translates to:
+  /// **'REPSAGA'**
+  String get shareWordmark;
+
+  /// Phase 30 PR 30b — Snackbar copy when camera permission is denied on the share flow.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access denied. Tap again to retry.'**
+  String get sharePermissionDenied;
+
+  /// Phase 30 PR 30b — Snackbar copy when camera permission is permanently denied. Screen layer pairs this with an 'Open settings' affordance.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access blocked in settings.'**
+  String get sharePermissionPermanentlyDenied;
+
+  /// Phase 30 PR 30b — Snackbar copy when ShareImageRenderer fails to produce a sharable image.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t render the saga card. Try again.'**
+  String get shareRenderError;
+
   /// Phase 30 PR 30a — Summary panel rank-up overflow card header. Mockup §5 State 6.
   ///
   /// In en, this message translates to:
