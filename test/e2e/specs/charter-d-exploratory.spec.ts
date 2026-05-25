@@ -4,19 +4,39 @@
  * Persona: Sam (data-nerd; verifies every post-finish branch)
  * Date: 2026-05-07
  *
- * Guard: EXPL_CHARTER_D=1 so CI never runs this.
+ * **SUPERSEDED ARTIFACT — PR 30a / PR 30c post-session migration (2026-05-22)**
+ *
+ * This charter's URL-route assumptions predate the PR 30a / PR 30c
+ * post-session migration. Branches B1, B2, B3, B4, B5, B10, B11 probe
+ * whether the legacy `/pr-celebration` route fires (or doesn't). That route
+ * was retired in PR 30c — every online non-empty finish now routes through
+ * `/workout/finish/:workoutId` (the post-session cinematic). Updating each
+ * URL guard to `/workout/finish/` would fundamentally change the questions
+ * these branches were asking: B1 was investigating "does /pr-celebration
+ * fire incorrectly for 0 PRs?", not "does /workout/finish/ fire?".
+ *
+ * The charter's investigative narrative is preserved for continuity. The
+ * entire test.describe block is skipped (test.describe.skip) so the tests
+ * compile but never run. Do not remove — the findings log at FINAL provides
+ * a paper trail for the AW-EX-D-US1-* bugs discovered on 2026-05-07.
+ *
+ * Superseded by: workouts.spec.ts (online finish → /workout/finish/),
+ * offline-sync.spec.ts (offline finish → /home), personal-records.spec.ts
+ * (PR detection post-cinematic).
+ *
+ * Guard: EXPL_CHARTER_D=1 so CI never ran this even before skipping.
  *
  * Branches:
  *   SETUP  — sign up fresh user, complete onboarding, establish Bench Press baseline
  *   B1     — Online + 0 PRs + ad-hoc → expected /home (no celebration)
- *   B2     — Online + ≥1 PR + ad-hoc → expected /pr-celebration
- *   B3     — Multiple PRs in one workout → celebration lists both
+ *   B2     — Online + ≥1 PR + ad-hoc → expected /pr-celebration [ROUTE RETIRED]
+ *   B3     — Multiple PRs in one workout → celebration lists both [ROUTE RETIRED]
  *   B4     — Routine workout, NOT in plan → add-to-plan prompt
  *   B5     — Routine workout, IN plan → /home (no prompt)
  *   B8     — Offline + queued save → "Saved offline" snackbar
  *   B9     — Server 500 → error snackbar, stays on screen
- *   B10    — Background mid-save → celebration plays on return
- *   B11    — Tap Save & Finish twice rapidly → only one save
+ *   B10    — Background mid-save → celebration plays on return [ROUTE RETIRED]
+ *   B11    — Tap Save & Finish twice rapidly → only one save [ROUTE RETIRED]
  *   B12    — Cancel from loading overlay (10s wait)
  *   NOTES  — notes field edge cases
  *
@@ -139,7 +159,10 @@ function log(msg: string): void {
 // Tests (serial mode)
 // ============================================================
 
-test.describe('Charter D — Finish-flow happy + sad paths — US-1', () => {
+// eslint-disable-next-line playwright/no-skipped-test
+test.describe.skip('Charter D — Finish-flow happy + sad paths — US-1 [SUPERSEDED: /pr-celebration retired in PR 30c]', () => {
+  // This entire describe block is skipped. See file-level comment for rationale.
+  // The EXPL_CHARTER_D guard below is kept for documentary purposes only.
   test.skip(!RUN, 'Set EXPL_CHARTER_D=1 to run');
   test.use({ viewport: VIEWPORT });
   test.describe.configure({ mode: 'serial' });

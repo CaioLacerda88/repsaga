@@ -51,6 +51,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { login } from '../helpers/auth';
+import { dismissCelebrationIfPresent } from '../helpers/app';
 import {
   startEmptyWorkout,
   addExercise,
@@ -504,6 +505,52 @@ test.describe('Offline sync — badge interaction', () => {
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
 
     // Confirm we are truly on /home by checking the URL.
+    await page.waitForURL(/\/home/, { timeout: 5_000 });
+
+    await restoreSupabaseRest(page);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 8: dismissCelebrationIfPresent short-circuits on offline finish
+  //
+  // dismissCelebrationIfPresent() waits for /workout/finish/ (the cinematic
+  // route) with a configurable timeout. When a finish is queued offline, the
+  // app routes directly to /home — the cinematic never fires. The helper must
+  // resolve to false within the short timeout and NOT throw or navigate the
+  // page away from /home.
+  //
+  // This test explicitly calls the helper after an offline finish to pin the
+  // short-circuit (.catch(() => false)) code path, which was otherwise only
+  // exercised implicitly by the tests above.
+  // -------------------------------------------------------------------------
+  test('should return false and not navigate when called after an offline finish (OFFLINE-008-short-circuit)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '60');
+    await setReps(page, '5');
+    await completeSet(page, 0);
+
+    await blockSupabaseRest(page);
+
+    await page.click(WORKOUT.finishButton);
+    const dialogFinish5 = page.locator(WORKOUT.dialogFinishButton);
+    await expect(dialogFinish5).toBeVisible({ timeout: 8_000 });
+    await dialogFinish5.click();
+
+    // Wait for home (offline path) to appear.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    await page.waitForURL(/\/home/, { timeout: 5_000 });
+
+    // Call dismissCelebrationIfPresent with a 3 s timeout — short enough so
+    // the test does not stall but long enough to be a meaningful wait.
+    // It must return without throwing (the .catch returns false) and the
+    // page must stay on /home.
+    await dismissCelebrationIfPresent(page, 3_000);
+
+    // After the helper returns, the page must still be on /home.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 5_000 });
     await page.waitForURL(/\/home/, { timeout: 5_000 });
 
     await restoreSupabaseRest(page);
