@@ -147,8 +147,7 @@ class ShareCardVariantB extends StatelessWidget {
                       style: AppTextStyles.label.copyWith(
                         fontSize: 9,
                         letterSpacing: 0.24 * 9,
-                        // ignore: reward_accent — PR tag is the canonical
-                        // reward; heroGold scarcity contract met.
+                        // ignore: reward_accent — PR tag is the canonical reward; heroGold scarcity contract met.
                         color: AppColors.heroGold,
                       ),
                     ),

@@ -140,8 +140,7 @@ class ShareCardDiscreet extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.04 * 14,
-                    // ignore: reward_accent — PR line is the canonical
-                    // reward; heroGold scarcity contract met.
+                    // ignore: reward_accent — PR line is the canonical reward; heroGold scarcity contract met.
                     color: AppColors.heroGold,
                   ),
                 ),

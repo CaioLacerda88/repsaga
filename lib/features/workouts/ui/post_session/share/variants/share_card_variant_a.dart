@@ -93,8 +93,7 @@ class ShareCardVariantA extends StatelessWidget {
                       prText!,
                       style: AppTextStyles.numeric.copyWith(
                         fontSize: 16,
-                        // ignore: reward_accent — PR is the canonical reward;
-                        // heroGold scarcity contract met (PR-only render).
+                        // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (PR-only render).
                         color: AppColors.heroGold,
                         letterSpacing: 0.04 * 16,
                       ),
@@ -108,6 +107,7 @@ class ShareCardVariantA extends StatelessWidget {
                 child: Stack(
                   children: [
                     const Positioned.fill(
+                      // ignore: hardcoded_color — progress-track background (10%-white scrim, no token covers this transient overlay).
                       child: ColoredBox(color: Color(0x1AFFFFFF)),
                     ),
                     FractionallySizedBox(

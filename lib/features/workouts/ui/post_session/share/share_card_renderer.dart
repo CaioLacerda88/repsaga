@@ -212,6 +212,7 @@ class _PhotoZone extends StatelessWidget {
     if (photo == null) {
       return const ColoredBox(
         key: ValueKey('share-card-renderer-photo-placeholder'),
+        // ignore: hardcoded_color — discreet-mode photo-zone backdrop (deep violet flood, locked by mockup §6 Discreet render rules).
         color: Color(0xFF1A1228),
       );
     }
