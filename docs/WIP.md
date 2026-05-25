@@ -55,6 +55,16 @@ the phase summary in PROJECT.md §4.
 - [x] `dart format .` + `dart analyze --fatal-infos` (project-wide, 0 issues) + `flutter test test/unit/features/workouts/` (540 / 540 pass; +18 over Pass 1's 522)
 - [x] commits split across 3 groups: `e7262d8` (deps + manifest) → `4c557ad` (renderer + tests) → `62bdf92` (share service + tests)
 
+**Pass 3 checklist (complete):**
+
+- [x] Group A — `SharePayload.rankProgressFraction` field + `bpProgressFractionAfter` parameter on `fromPostSessionState`; drops the `(rank % 10) / 10` placeholder from the renderer + regenerated 3 goldens (commit `454dc33`)
+- [x] Group B — `ShareController` (Riverpod `Notifier`) state machine `idle → pickingPhoto → preview → rendering → sharing → idle` with `cancelled` / `error` branches; `shareServiceProvider` + `shareImageRendererProvider` DI seams; 12 behavior-not-wiring tests covering all transitions (commit `6e23d54`)
+- [x] Group C — `ShareSheet` bottom-modal (3 rows: camera / gallery / discreet) with permanentlyDenied-hides-camera rule; `ShareLocalizations` value-object bridge (Decoupling Rule 2); 7 widget tests (commit `66c3a6c`)
+- [x] Group D — `SharePreviewScreen` with 1080×1920 offscreen `RepaintBoundary` + FittedBox-scaled visible preview; A↔B variant toggle (locked on Discreet); retake + share CTAs; tap-to-hide XP/PR overlays; vertical drag-to-reframe via `Transform.translate`; 8 widget tests (commit `90fab21`)
+- [x] Group E — ARB keys (13 new strings in `app_en.arb` + `app_pt.arb`); rewrote `ShareCtaButton` as a `ConsumerStatefulWidget` that opens the sheet + pushes `SharePreviewScreen` on the controller's preview transition; `PostSessionState.bpProgressFractionAfter` field; `PostSessionSummaryPanel` constructor took `sharePayload` / `shareCardStrings` / `shareLocalizations` params; updated 12 summary-panel tests + 4 goldens (commit `6923c41`)
+- [x] Group F — `test/e2e/specs/share_flow.spec.ts` (4 tests @smoke) + `SHARE_FLOW` selector map; final gates green: `dart format` + `dart analyze --fatal-infos` (0 issues) + `flutter test test/unit/` (**2061 / 2061 pass; +1494 over Pass 2's 540 — includes all suites, not just workouts**) + `flutter build apk --debug` succeeded
+- [x] Carry-forwards documented in final report: `VitalityStateStyles.bodyPartColor` layer violation deferred to PR 30c; Mystery glyph in Variant A golden flagged for physical-Android visual verification at ship time; sheet permission read is sync-at-mount (acceptable per mockup §7).
+
 **Branch:** `feature/30b-share-card` off `main` (after 30a merges).
 
 **Scope summary**

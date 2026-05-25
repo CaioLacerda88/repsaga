@@ -35,8 +35,7 @@ sealed class ShareState with _$ShareState {
   /// Photo chosen (or skipped for discreet path) — preview screen is
   /// the source of truth for variant + framing. [photo] is `null` for
   /// the Discreet path; non-null for Variant A + B.
-  const factory ShareState.preview({required XFile? photo}) =
-      ShareStatePreview;
+  const factory ShareState.preview({required XFile? photo}) = ShareStatePreview;
 
   /// Render is in flight — `ShareImageRenderer.render` has been called
   /// but hasn't returned yet. Transitions to [sharing] on success or
@@ -226,5 +225,6 @@ class ShareController extends Notifier<ShareState> {
 }
 
 /// Top-level provider — [Notifier]-based per riverpod 3 conventions.
-final shareControllerProvider =
-    NotifierProvider<ShareController, ShareState>(ShareController.new);
+final shareControllerProvider = NotifierProvider<ShareController, ShareState>(
+  ShareController.new,
+);

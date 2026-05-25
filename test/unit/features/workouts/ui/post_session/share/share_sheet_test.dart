@@ -92,57 +92,52 @@ void main() {
   // Visibility
   // ---------------------------------------------------------------------------
 
-  testWidgets(
-    'shows all three rows when camera permission is granted',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          payload: buildPayload(),
-          cameraStatus: PermissionStatus.granted,
-          service: buildService(),
-        ),
-      );
+  testWidgets('shows all three rows when camera permission is granted', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        payload: buildPayload(),
+        cameraStatus: PermissionStatus.granted,
+        service: buildService(),
+      ),
+    );
 
-      expect(find.text('Tirar foto'), findsOneWidget);
-      expect(find.text('Escolher da galeria'), findsOneWidget);
-      expect(find.text('Sem foto · só a saga'), findsOneWidget);
-    },
-  );
+    expect(find.text('Tirar foto'), findsOneWidget);
+    expect(find.text('Escolher da galeria'), findsOneWidget);
+    expect(find.text('Sem foto · só a saga'), findsOneWidget);
+  });
 
-  testWidgets(
-    'shows camera row when permission is denied (allows re-prompt)',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          payload: buildPayload(),
-          cameraStatus: PermissionStatus.denied,
-          service: buildService(),
-        ),
-      );
+  testWidgets('shows camera row when permission is denied (allows re-prompt)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        payload: buildPayload(),
+        cameraStatus: PermissionStatus.denied,
+        service: buildService(),
+      ),
+    );
 
-      expect(find.text('Tirar foto'), findsOneWidget);
-      expect(find.text('Escolher da galeria'), findsOneWidget);
-      expect(find.text('Sem foto · só a saga'), findsOneWidget);
-    },
-  );
+    expect(find.text('Tirar foto'), findsOneWidget);
+    expect(find.text('Escolher da galeria'), findsOneWidget);
+    expect(find.text('Sem foto · só a saga'), findsOneWidget);
+  });
 
-  testWidgets(
-    'hides camera row when permission is permanently denied — '
-    'gallery + discreet remain',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          payload: buildPayload(),
-          cameraStatus: PermissionStatus.permanentlyDenied,
-          service: buildService(),
-        ),
-      );
+  testWidgets('hides camera row when permission is permanently denied — '
+      'gallery + discreet remain', (tester) async {
+    await tester.pumpWidget(
+      host(
+        payload: buildPayload(),
+        cameraStatus: PermissionStatus.permanentlyDenied,
+        service: buildService(),
+      ),
+    );
 
-      expect(find.text('Tirar foto'), findsNothing);
-      expect(find.text('Escolher da galeria'), findsOneWidget);
-      expect(find.text('Sem foto · só a saga'), findsOneWidget);
-    },
-  );
+    expect(find.text('Tirar foto'), findsNothing);
+    expect(find.text('Escolher da galeria'), findsOneWidget);
+    expect(find.text('Sem foto · só a saga'), findsOneWidget);
+  });
 
   // ---------------------------------------------------------------------------
   // Tap dispatch (behavior — observable controller state)

@@ -60,10 +60,7 @@ void main() {
               ]
             : const [],
       ),
-      prResult: const PRDetectionResult(
-        newRecords: [],
-        isFirstWorkout: false,
-      ),
+      prResult: const PRDetectionResult(newRecords: [], isFirstWorkout: false),
       bpXpDeltas: const {BodyPart.chest: 618},
       bpRankAfter: const {BodyPart.chest: 19},
       bpProgressFractionAfter: const {BodyPart.chest: 0.5},

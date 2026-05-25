@@ -47,7 +47,8 @@ void main() {
       imagePicker: imagePicker ?? (_) async => null,
       fileShareSink:
           fileShareSink ??
-          (_, {text}) async => const ShareResult('ok', ShareResultStatus.success),
+          (_, {text}) async =>
+              const ShareResult('ok', ShareResultStatus.success),
       permissionRequester:
           permissionRequester ?? (_) async => PermissionStatus.granted,
       permissionStatusReader:
@@ -251,26 +252,23 @@ void main() {
     },
   );
 
-  test(
-    'sharePreview emits render_failed error when renderer throws',
-    () async {
-      final container = makeContainer(
-        service: buildService(),
-        renderer: buildRenderer(
-          onRender: () async => throw StateError('boundary unmounted'),
-        ),
-      );
+  test('sharePreview emits render_failed error when renderer throws', () async {
+    final container = makeContainer(
+      service: buildService(),
+      renderer: buildRenderer(
+        onRender: () async => throw StateError('boundary unmounted'),
+      ),
+    );
 
-      final notifier = container.read(shareControllerProvider.notifier);
-      notifier.useDiscreet(payload: buildPayload());
+    final notifier = container.read(shareControllerProvider.notifier);
+    notifier.useDiscreet(payload: buildPayload());
 
-      await notifier.sharePreview(repaintKey: GlobalKey());
+    await notifier.sharePreview(repaintKey: GlobalKey());
 
-      final s = container.read(shareControllerProvider);
-      expect(s, isA<ShareStateError>());
-      expect((s as ShareStateError).code, ShareErrorCodes.renderFailed);
-    },
-  );
+    final s = container.read(shareControllerProvider);
+    expect(s, isA<ShareStateError>());
+    expect((s as ShareStateError).code, ShareErrorCodes.renderFailed);
+  });
 
   test(
     'sharePreview emits share_failed error when share returns unavailable',
@@ -326,10 +324,7 @@ void main() {
 
     final notifier = container.read(shareControllerProvider.notifier);
     notifier.useDiscreet(payload: buildPayload());
-    expect(
-      container.read(shareControllerProvider),
-      isA<ShareStatePreview>(),
-    );
+    expect(container.read(shareControllerProvider), isA<ShareStatePreview>());
 
     notifier.reset();
     expect(container.read(shareControllerProvider), const ShareState.idle());

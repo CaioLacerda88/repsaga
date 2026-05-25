@@ -622,9 +622,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   }) {
     final xpText = '+${state.totalXpEarned} XP';
     final bp = state.dominantBodyPart;
-    final bpLabel = bp == null
-        ? ''
-        : (state.bodyPartLabels[bp] ?? bp.dbValue);
+    final bpLabel = bp == null ? '' : (state.bodyPartLabels[bp] ?? bp.dbValue);
     final rank = payload.dominantBodyPartRank;
     final classSlug = payload.characterClassSlug;
     final className = classSlug.toUpperCase();
@@ -636,14 +634,10 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         ? ''
         : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps}';
     final variantBPrTag = pr == null ? null : l10n.summaryNewTitleLabel;
-    final variantBBpSub = pr == null
-        ? ''
-        : '${pr.exerciseName} · $bpLabel';
+    final variantBBpSub = pr == null ? '' : '${pr.exerciseName} · $bpLabel';
     final discreetEyebrow = payload.isClassChange
         ? '$className DESPERTOU.'
-        : (bpLabel.isEmpty || rank == null
-              ? bpLabel
-              : '$bpLabel · Rank $rank');
+        : (bpLabel.isEmpty || rank == null ? bpLabel : '$bpLabel · Rank $rank');
     final discreetHero = payload.isClassChange
         ? className
         : '+${state.totalXpEarned}';
