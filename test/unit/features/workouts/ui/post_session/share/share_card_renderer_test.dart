@@ -8,9 +8,8 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 import 'package:repsaga/features/workouts/domain/share_payload.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_card_renderer.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_achievement_frame.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_discreet.dart';
-import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart';
-import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_card_variant_b.dart';
 
 /// Pins the composer: variant dispatch + photo zone vs discreet flood
 /// branching + AspectRatio + semantics identifier.
@@ -40,14 +39,12 @@ void main() {
 
   const strings = ShareCardStrings(
     wordmark: 'REPSAGA',
-    variantAXpText: '+618 XP',
-    variantAPrText: '95kg × 5 · PR',
-    variantBBpEyebrow: 'Peito',
-    variantBClassName: 'BULWARK',
-    variantBPrTag: '!! Recorde',
-    variantBLift: '95kg × 5',
-    variantBBpSub: 'Supino · Peito',
-    variantBXpSub: '+618 XP',
+    achievementFrameClassName: 'BULWARK',
+    achievementFrameSagaEyebrow: 'SAGA 76',
+    achievementFrameXpHero: '+618 XP',
+    achievementFrameLiftDetail: '95kg × 5 · Supino',
+    achievementFrameHasPr: true,
+    achievementFrameBpRank: 'Peito · Rank 19',
     discreetEyebrow: 'Peito · Rank 19',
     discreetHero: '+618',
     discreetHeroSubLabel: 'XP NESTA SAGA',
@@ -64,20 +61,20 @@ void main() {
   }
 
   testWidgets(
-    'minimalStrip variant renders Variant A + photo placeholder when no photo',
+    'achievementFrame variant renders the new overlay + photo placeholder '
+    'when no photo',
     (tester) async {
       await tester.pumpWidget(
         host(
           ShareCardRenderer(
             payload: payload(),
-            variant: ShareCardVariant.minimalStrip,
+            variant: ShareCardVariant.achievementFrame,
             strings: strings,
           ),
         ),
       );
 
-      expect(find.byType(ShareCardVariantA), findsOneWidget);
-      expect(find.byType(ShareCardVariantB), findsNothing);
+      expect(find.byType(ShareCardAchievementFrame), findsOneWidget);
       expect(find.byType(ShareCardDiscreet), findsNothing);
       expect(
         find.byKey(const ValueKey('share-card-renderer-photo-placeholder')),
@@ -87,13 +84,13 @@ void main() {
   );
 
   testWidgets(
-    'minimalStrip variant renders the photo widget when a photo is supplied',
+    'achievementFrame variant renders the photo widget when a photo is supplied',
     (tester) async {
       await tester.pumpWidget(
         host(
           ShareCardRenderer(
             payload: payload(),
-            variant: ShareCardVariant.minimalStrip,
+            variant: ShareCardVariant.achievementFrame,
             strings: strings,
             photo: const _SolidImageProvider(Color(0xFF666666)),
           ),
@@ -110,24 +107,6 @@ void main() {
       );
     },
   );
-
-  testWidgets('fullBleed variant renders Variant B + photo zone', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      host(
-        ShareCardRenderer(
-          payload: payload(),
-          variant: ShareCardVariant.fullBleed,
-          strings: strings,
-        ),
-      ),
-    );
-
-    expect(find.byType(ShareCardVariantB), findsOneWidget);
-    expect(find.byType(ShareCardVariantA), findsNothing);
-    expect(find.byType(ShareCardDiscreet), findsNothing);
-  });
 
   testWidgets(
     'discreet variant renders ShareCardDiscreet only — no photo zone',
@@ -145,8 +124,7 @@ void main() {
       );
 
       expect(find.byType(ShareCardDiscreet), findsOneWidget);
-      expect(find.byType(ShareCardVariantA), findsNothing);
-      expect(find.byType(ShareCardVariantB), findsNothing);
+      expect(find.byType(ShareCardAchievementFrame), findsNothing);
       expect(
         find.byKey(const ValueKey('share-card-renderer-photo')),
         findsNothing,
@@ -158,24 +136,25 @@ void main() {
     },
   );
 
-  testWidgets('forwards dominant hue from payload into Variant A overlay', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      host(
-        ShareCardRenderer(
-          payload: payload(dominantBp: BodyPart.back),
-          variant: ShareCardVariant.minimalStrip,
-          strings: strings,
+  testWidgets(
+    'forwards dominant hue from payload into the Achievement Frame overlay',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          ShareCardRenderer(
+            payload: payload(dominantBp: BodyPart.back),
+            variant: ShareCardVariant.achievementFrame,
+            strings: strings,
+          ),
         ),
-      ),
-    );
+      );
 
-    final variantA = tester.widget<ShareCardVariantA>(
-      find.byType(ShareCardVariantA),
-    );
-    expect(variantA.dominantHue, AppColors.bodyPartBack);
-  });
+      final overlay = tester.widget<ShareCardAchievementFrame>(
+        find.byType(ShareCardAchievementFrame),
+      );
+      expect(overlay.dominantHue, AppColors.bodyPartBack);
+    },
+  );
 
   testWidgets(
     'class-change override forwards hotViolet hue into the discreet variant',
@@ -198,6 +177,27 @@ void main() {
     },
   );
 
+  testWidgets(
+    'forwards isClassChange flag from payload into the Achievement Frame '
+    'overlay so the left bar swaps to heroGold',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          ShareCardRenderer(
+            payload: payload(isClassChange: true),
+            variant: ShareCardVariant.achievementFrame,
+            strings: strings,
+          ),
+        ),
+      );
+
+      final overlay = tester.widget<ShareCardAchievementFrame>(
+        find.byType(ShareCardAchievementFrame),
+      );
+      expect(overlay.isClassChange, isTrue);
+    },
+  );
+
   testWidgets('carries a stable share-card-renderer semantics identifier', (
     tester,
   ) async {
@@ -205,7 +205,7 @@ void main() {
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
         ),
       ),
@@ -224,7 +224,7 @@ void main() {
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
         ),
       ),
@@ -249,62 +249,68 @@ void main() {
   // max drag.
   //
   // Post-fix: ShareCardRenderer takes a photoOffset param that flows into
-  // _PhotoZone only. The overlay (ShareCardVariantA / B) sits in the same
-  // Stack as the photo zone but never receives the offset.
+  // _PhotoZone only. The overlay (ShareCardAchievementFrame) sits in the
+  // same Stack as the photo zone but never receives the offset.
   // ---------------------------------------------------------------------------
 
-  testWidgets('photoOffset shifts the photo subtree but not the Variant A '
-      'overlay (minimalStrip)', (tester) async {
-    const offset = Offset(0, 40);
-    await tester.pumpWidget(
-      host(
-        ShareCardRenderer(
-          payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
-          strings: strings,
-          photo: const _SolidImageProvider(Color(0xFF666666)),
-          photoOffset: offset,
+  testWidgets(
+    'photoOffset shifts the photo subtree but not the Achievement Frame '
+    'overlay',
+    (tester) async {
+      const offset = Offset(0, 40);
+      await tester.pumpWidget(
+        host(
+          ShareCardRenderer(
+            payload: payload(),
+            variant: ShareCardVariant.achievementFrame,
+            strings: strings,
+            photo: const _SolidImageProvider(Color(0xFF666666)),
+            photoOffset: offset,
+          ),
         ),
-      ),
-    );
+      );
 
-    // Photo subtree IS translated by the offset.
-    final photoFinder = find.byKey(const ValueKey('share-card-renderer-photo'));
-    final photoTopLeft = tester.getTopLeft(photoFinder);
+      // Photo subtree IS translated by the offset.
+      final photoFinder = find.byKey(
+        const ValueKey('share-card-renderer-photo'),
+      );
+      final photoTopLeft = tester.getTopLeft(photoFinder);
 
-    // Overlay subtree is NOT translated.
-    final overlayFinder = find.byType(ShareCardVariantA);
-    final overlayTopLeft = tester.getTopLeft(overlayFinder);
+      // Overlay subtree is NOT translated.
+      final overlayFinder = find.byType(ShareCardAchievementFrame);
+      final overlayTopLeft = tester.getTopLeft(overlayFinder);
 
-    // Render the same tree with offset zero so we can diff positions.
-    await tester.pumpWidget(
-      host(
-        ShareCardRenderer(
-          payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
-          strings: strings,
-          photo: const _SolidImageProvider(Color(0xFF666666)),
+      // Render the same tree with offset zero so we can diff positions.
+      await tester.pumpWidget(
+        host(
+          ShareCardRenderer(
+            payload: payload(),
+            variant: ShareCardVariant.achievementFrame,
+            strings: strings,
+            photo: const _SolidImageProvider(Color(0xFF666666)),
+          ),
         ),
-      ),
-    );
+      );
 
-    final photoTopLeftZero = tester.getTopLeft(photoFinder);
-    final overlayTopLeftZero = tester.getTopLeft(overlayFinder);
+      final photoTopLeftZero = tester.getTopLeft(photoFinder);
+      final overlayTopLeftZero = tester.getTopLeft(overlayFinder);
 
-    // Photo Y position MOVED by the offset.dy.
-    expect(
-      photoTopLeft.dy - photoTopLeftZero.dy,
-      closeTo(offset.dy, 0.001),
-      reason: 'photoOffset.dy should shift the photo subtree by that amount',
-    );
+      // Photo Y position MOVED by the offset.dy.
+      expect(
+        photoTopLeft.dy - photoTopLeftZero.dy,
+        closeTo(offset.dy, 0.001),
+        reason: 'photoOffset.dy should shift the photo subtree by that amount',
+      );
 
-    // Overlay Y position did NOT move.
-    expect(
-      overlayTopLeft.dy,
-      closeTo(overlayTopLeftZero.dy, 0.001),
-      reason: 'photoOffset must NOT shift the Variant A overlay subtree',
-    );
-  });
+      // Overlay Y position did NOT move.
+      expect(
+        overlayTopLeft.dy,
+        closeTo(overlayTopLeftZero.dy, 0.001),
+        reason:
+            'photoOffset must NOT shift the Achievement Frame overlay subtree',
+      );
+    },
+  );
 
   testWidgets('photoOffset == Offset.zero does not wrap the photo in '
       'Transform.translate (no-op default)', (tester) async {
@@ -312,7 +318,7 @@ void main() {
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           photo: const _SolidImageProvider(Color(0xFF666666)),
         ),
@@ -347,57 +353,37 @@ void main() {
         host(
           ShareCardRenderer(
             payload: payload(),
-            variant: ShareCardVariant.minimalStrip,
+            variant: ShareCardVariant.achievementFrame,
             strings: strings,
           ),
         ),
       );
 
-      final variantA = tester.widget<ShareCardVariantA>(
-        find.byType(ShareCardVariantA),
+      final overlay = tester.widget<ShareCardAchievementFrame>(
+        find.byType(ShareCardAchievementFrame),
       );
-      expect(variantA.renderTarget, ShareCardRenderTarget.export);
+      expect(overlay.renderTarget, ShareCardRenderTarget.export);
     },
   );
 
-  testWidgets('forwards renderTarget.preview into ShareCardVariantA', (
+  testWidgets('forwards renderTarget.preview into ShareCardAchievementFrame', (
     tester,
   ) async {
     await tester.pumpWidget(
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           renderTarget: ShareCardRenderTarget.preview,
         ),
       ),
     );
 
-    final variantA = tester.widget<ShareCardVariantA>(
-      find.byType(ShareCardVariantA),
+    final overlay = tester.widget<ShareCardAchievementFrame>(
+      find.byType(ShareCardAchievementFrame),
     );
-    expect(variantA.renderTarget, ShareCardRenderTarget.preview);
-  });
-
-  testWidgets('forwards renderTarget.preview into ShareCardVariantB', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      host(
-        ShareCardRenderer(
-          payload: payload(),
-          variant: ShareCardVariant.fullBleed,
-          strings: strings,
-          renderTarget: ShareCardRenderTarget.preview,
-        ),
-      ),
-    );
-
-    final variantB = tester.widget<ShareCardVariantB>(
-      find.byType(ShareCardVariantB),
-    );
-    expect(variantB.renderTarget, ShareCardRenderTarget.preview);
+    expect(overlay.renderTarget, ShareCardRenderTarget.preview);
   });
 
   testWidgets('forwards renderTarget.preview into ShareCardDiscreet', (
@@ -428,7 +414,7 @@ void main() {
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           photoOffset: offset,
         ),
@@ -438,7 +424,7 @@ void main() {
     final placeholderFinder = find.byKey(
       const ValueKey('share-card-renderer-photo-placeholder'),
     );
-    final overlayFinder = find.byType(ShareCardVariantA);
+    final overlayFinder = find.byType(ShareCardAchievementFrame);
     final placeholderY = tester.getTopLeft(placeholderFinder).dy;
     final overlayY = tester.getTopLeft(overlayFinder).dy;
 
@@ -446,7 +432,7 @@ void main() {
       host(
         ShareCardRenderer(
           payload: payload(),
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
         ),
       ),

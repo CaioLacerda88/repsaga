@@ -16,26 +16,28 @@ part 'share_payload.freezed.dart';
 
 /// Renderable variant of the share card.
 ///
-/// **Variant A (Minimal Strip)** — bottom strip overlay, photo unobstructed.
-/// Default for every session and every share target.
-///
-/// **Variant B (Full-Bleed Collars)** — top + bottom diagonal-cut collars
-/// (`CustomClipper<Path>`). One-tap toggle on the preview screen
-/// (mockup §6 "Tente o destaque" nudge for high-drama sessions).
+/// **Achievement Frame (D3)** — the single photo-overlay treatment for the
+/// photo path (Phase 31 lock; replaced Variant A + Variant B). Two
+/// trapezoidal `ClipPath` collars frame the photo zone; 4dp side bars in
+/// the dominant-BP hue (left) and `hotViolet` (right) encode body-part
+/// identity in the chrome structure. See
+/// `share_card_achievement_frame.dart` for the visual contract.
 ///
 /// **Discreet** — no-photo cinematic still. Auto-selected when camera
 /// permission is denied OR user taps "Sem foto · só a saga" on the bottom
-/// sheet. Uses the same Variant-A overlay pipeline; only the underlay
-/// (photo vs hue-flood gradient + slash) differs (mockup §6 render rules).
-enum ShareCardVariant { minimalStrip, fullBleed, discreet }
+/// sheet. Renders the saga events directly on a hue-flood gradient +
+/// diagonal slash background; the photo path is replaced by chrome that
+/// IS the brand surface (mockup §6 render rules).
+enum ShareCardVariant { achievementFrame, discreet }
 
 /// The PR triplet surfaced on the share card — already-resolved for display.
 ///
-/// Carries only what the overlay needs to render the gold-tier "95kg × 5 · PR"
-/// line (Variant A) / "!! Recorde" tag + lift detail (Variant B) / "!! 95kg × 5"
-/// d-sub (Discreet). PR-by-band breakdowns + multi-PR pill rows stay on the
-/// post-session cinematic Beat 3 cut — the share card surfaces the hero PR
-/// only (mockup §6 callout: "the default surfaces only XP + peak event").
+/// Carries only what the overlay needs to render the bottom-collar lift
+/// detail "95kg × 5 · Supino" on the Achievement Frame (heroGold when
+/// [pr] is non-null) or the "!! 95kg × 5" d-sub on Discreet. PR-by-band
+/// breakdowns + multi-PR pill rows stay on the post-session cinematic
+/// Beat 3 cut — the share card surfaces the hero PR only (mockup §6
+/// callout: "the default surfaces only XP + peak event").
 @freezed
 abstract class SharePayloadPr with _$SharePayloadPr {
   const factory SharePayloadPr({
@@ -86,11 +88,11 @@ abstract class SharePayloadPr with _$SharePayloadPr {
 /// on any body part this session — defensively falls back to the brand
 /// hot violet via [SharePayload.dominantHue].
 ///
-/// **Class slug** is `null` unless the queue carried a `ClassChangeEvent`.
-/// Variant B's top-collar "BULWARK" line renders only when this is set;
-/// when absent, the top collar shows the existing character class instead
-/// (resolved at the screen layer from the user character snapshot — passed
-/// in via [characterClassSlug]).
+/// **Class slug** is the current character class (e.g. "bulwark"). On
+/// class-change sessions this is the NEW class. The Achievement Frame's
+/// top-collar class-name line renders this verbatim (caller uppercases);
+/// the class-change Q4 lock keeps the "DESPERTOU" framing in the B3
+/// cinematic cut, not on the share card.
 @freezed
 abstract class SharePayload with _$SharePayload {
   const SharePayload._();
@@ -102,26 +104,31 @@ abstract class SharePayload with _$SharePayload {
     required RewardTier tier,
 
     /// Total XP earned this session (e.g. 618). Renders as `+618 XP` on
-    /// Variant A's bottom strip and `+618 XP` on Variant B's collar-bottom.
+    /// the Achievement Frame's bottom-collar XP hero AND the Discreet's
+    /// d-hero numeric.
     required int totalXp,
 
     /// Dominant body part — `null` if no BP earned XP this session (a
     /// pathological case; defensive null). Drives the hue accent across
-    /// all three variants. Selection logic mirrors
-    /// `PostSessionChoreographer._appendBeat2`.
+    /// both variants (the Achievement Frame's left side bar + BP rank
+    /// line color, plus the Discreet's eyebrow + slash). Selection logic
+    /// mirrors `PostSessionChoreographer._appendBeat2`.
     required BodyPart? dominantBodyPart,
 
     /// Current rank on [dominantBodyPart] after the session. Renders in
-    /// Discreet variant's eyebrow ("Peito · Rank 19"). `null` when
-    /// [dominantBodyPart] is `null`.
+    /// the Discreet eyebrow ("Peito · Rank 19") and the Achievement
+    /// Frame's bottom-collar BP-rank line. `null` when [dominantBodyPart]
+    /// is `null`.
     required int? dominantBodyPartRank,
 
     /// Fraction in `[0.0, 1.0]` of XP progress within the dominant BP's
-    /// current rank — drives Variant A's mini progress-bar fill. `0.0`
-    /// when [dominantBodyPart] is `null` (defensive fallback, matches the
-    /// "no BP earned XP" edge case). Computed upstream from
-    /// `RankCurve.progressFraction(totalXp, rank)` so the share card's bar
-    /// fill stays in lockstep with the saga screen's rank rail.
+    /// current rank — historically drove a mini progress-bar fill on the
+    /// retired Variant A. Phase 31's Achievement Frame doesn't render a
+    /// fill bar (chrome encodes BP identity in the side bars instead), so
+    /// the field is currently read only by tests + the cinematic. `0.0`
+    /// when [dominantBodyPart] is `null`. Computed upstream from
+    /// `RankCurve.progressFraction(totalXp, rank)` so the value stays in
+    /// lockstep with the saga screen's rank rail.
     required double rankProgressFraction,
 
     /// Hero PR data when the session set a new record. `null` on baseline
@@ -130,29 +137,31 @@ abstract class SharePayload with _$SharePayload {
 
     /// Character class slug as of the post-session snapshot. e.g. "bulwark",
     /// "berserker", "initiate". Always non-null — every user has a class,
-    /// even Initiate. Renders on Variant B's top collar (mockup §6
-    /// "BULWARK" sample).
+    /// even Initiate. Renders on the Achievement Frame's top-collar
+    /// class-name line (caller uppercases). On class-change sessions
+    /// this is already the NEW class slug (controller swaps before the
+    /// payload is composed).
     required String characterClassSlug,
 
     /// `true` when the session crossed a class boundary (the queue carried
     /// a `ClassChangeEvent`). The Discreet variant overrides the dominant
-    /// BP hue with brand hot violet AND renders "BULWARK DESPERTOU." as
-    /// the d-hero in this case (mockup §6 render rules: "If class change
-    /// fired → swap chest hue for `hotViolet` + 'BULWARK DESPERTOU.' as
-    /// the d-hero"). Variant A + B render their PR / standard XP slot
-    /// regardless — class change does not displace the hue on those.
+    /// BP hue with brand `hotViolet` AND renders "BULWARK DESPERTOU." as
+    /// the d-hero. The Achievement Frame swaps the LEFT side bar from
+    /// the dominant hue (which is already `hotViolet` here per the
+    /// [dominantHue] override) to `heroGold` so the chrome doesn't read
+    /// as drained (both bars `hotViolet`). Top-collar copy stays as the
+    /// new class name only — Q4 lock keeps "DESPERTOU" framing in the
+    /// cinematic B3 cut, not on the card.
     required bool isClassChange,
 
     /// `true` when the session unlocked at least one title. Reserved for
-    /// future variants (e.g. "Novo título" eyebrow on Variant B); not
-    /// rendered in the current Pass-1 layouts but persisted on the payload
-    /// so Pass 3's preview-screen toggle can branch without re-computing.
+    /// future copy hints — not rendered today but persisted on the payload
+    /// so the preview-screen flow can branch without re-computing.
     required bool hasTitleUnlock,
 
     /// `true` when the session crossed at least one body-part rank
-    /// threshold. Used by Variant A's "anchor PR or rank info" branch
-    /// (mockup §6 Variant B render rules: "drop [heroGold] on non-PR
-    /// sessions and lead with rank info instead").
+    /// threshold. Drives the rank-info-vs-PR-info copy branching at the
+    /// screen-layer composer.
     required bool hasRankUp,
   }) = _SharePayload;
 

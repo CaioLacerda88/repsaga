@@ -17,8 +17,9 @@ import 'share_localizations.dart';
 ///   1. Render the active [ShareCardRenderer] inside a [RepaintBoundary]
 ///      so [ShareImageRenderer] can capture the rendered tree off-screen
 ///      at the correct 1080×1920 size.
-///   2. Provide a variant toggle (Minimal ↔ Bold). Discreet path locks
-///      to the Discreet variant — no photo, no toggle.
+///   2. Single-variant rendering. D3 Achievement Frame is the photo path;
+///      Discreet renders on the no-photo path. Phase 31 retired the
+///      Variant A ↔ Variant B segmented toggle — one overlay treatment.
 ///   3. Wire share + retake CTAs to [ShareController] transitions.
 ///   4. Tap-to-hide XP / tap-to-hide PR (mockup §7) — local toggles that
 ///      hide the overlay sections.
@@ -91,10 +92,11 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
     debugLabel: 'share-preview-export-repaint',
   );
 
-  /// Active variant. Discreet is locked when [_photo] is null (the user
-  /// chose "Sem foto · só a saga" on the bottom sheet). Otherwise toggles
-  /// between minimalStrip ↔ fullBleed.
-  ShareCardVariant _variant = ShareCardVariant.minimalStrip;
+  /// Active variant. Discreet is locked when the chosen photo is null (the
+  /// user picked "Sem foto · só a saga" on the bottom sheet). Otherwise
+  /// renders the D3 Achievement Frame (the single overlay treatment —
+  /// Phase 31 retired the Variant A ↔ Variant B toggle).
+  ShareCardVariant _variant = ShareCardVariant.achievementFrame;
 
   /// Tap-to-hide state for the XP overlay (mockup §7 affordance). When
   /// `true`, the Variant A/B XP line / Discreet hero stack is hidden.
@@ -218,20 +220,12 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  // Variant toggle — hidden on the Discreet path
-                  // (mockup §7: "Sem foto · só a saga" locks the
-                  // Discreet variant).
-                  if (!isDiscreet)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: _VariantToggle(
-                        value: _variant,
-                        minimalLabel: widget.l10n.previewMinimal,
-                        boldLabel: widget.l10n.previewBold,
-                        onChanged: (v) => setState(() => _variant = v),
-                      ),
-                    ),
-                  const SizedBox(height: 4),
+                  // Phase 31 retired the Variant A ↔ Variant B toggle.
+                  // The Achievement Frame is the single photo overlay;
+                  // Discreet still renders on the no-photo path
+                  // (auto-selected via [_variant] in `initState` when
+                  // `photo == null`).
+                  const SizedBox(height: 12),
 
                   // PR 30c device bug 2: the AspectRatio is wrapped in a
                   // ClipRect so the photoOffset Transform inside the
@@ -391,23 +385,23 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   /// slot strings as "render nothing" on the optional slots.
   ///
   // TODO(perf): allocates a fresh ShareCardStrings on every build. Cheap
-  // (14 string copies, no GC pressure measurable in profiling), but
+  // (11 string copies, no GC pressure measurable in profiling), but
   // could be memoized in a final cached field keyed on (_xpHidden,
   // _prHidden). Skipped until ShareCardStrings grows a copyWith — adding
-  // one ad-hoc would inflate this widget by ~25 lines. The allocation
+  // one ad-hoc would inflate this widget by ~20 lines. The allocation
   // isn't a 60fps risk — see PR 30b Nit 8 deferral note.
   ShareCardStrings _stringsWithHidesApplied() {
     final s = widget.strings;
     return ShareCardStrings(
       wordmark: s.wordmark,
-      variantAXpText: _xpHidden ? '' : s.variantAXpText,
-      variantAPrText: _prHidden ? null : s.variantAPrText,
-      variantBBpEyebrow: s.variantBBpEyebrow,
-      variantBClassName: s.variantBClassName,
-      variantBPrTag: _prHidden ? null : s.variantBPrTag,
-      variantBLift: _prHidden ? '' : s.variantBLift,
-      variantBBpSub: s.variantBBpSub,
-      variantBXpSub: _xpHidden ? '' : s.variantBXpSub,
+      achievementFrameClassName: s.achievementFrameClassName,
+      achievementFrameSagaEyebrow: s.achievementFrameSagaEyebrow,
+      achievementFrameXpHero: _xpHidden ? '' : s.achievementFrameXpHero,
+      achievementFrameLiftDetail: _prHidden
+          ? null
+          : s.achievementFrameLiftDetail,
+      achievementFrameHasPr: _prHidden ? false : s.achievementFrameHasPr,
+      achievementFrameBpRank: s.achievementFrameBpRank,
       discreetEyebrow: s.discreetEyebrow,
       discreetHero: _xpHidden ? '' : s.discreetHero,
       discreetHeroSubLabel: _xpHidden ? '' : s.discreetHeroSubLabel,
@@ -417,8 +411,7 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   }
 
   bool _hasPrSection() {
-    return widget.strings.variantAPrText != null ||
-        widget.strings.variantBPrTag != null ||
+    return widget.strings.achievementFrameLiftDetail != null ||
         widget.strings.discreetPrLine != null;
   }
 
@@ -499,79 +492,6 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
     // Reset back to preview with the cached photo so the user can
     // retry. resetToPreview is idempotent — safe if called repeatedly.
     controller.resetToPreview(photo: photo);
-  }
-}
-
-/// Two-pill toggle for Variant A ↔ Variant B (Mínimo / Destaque).
-class _VariantToggle extends StatelessWidget {
-  const _VariantToggle({
-    required this.value,
-    required this.minimalLabel,
-    required this.boldLabel,
-    required this.onChanged,
-  });
-
-  final ShareCardVariant value;
-  final String minimalLabel;
-  final String boldLabel;
-  final ValueChanged<ShareCardVariant> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      identifier: 'share-variant-toggle',
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _ToggleChip(
-            label: minimalLabel,
-            selected: value == ShareCardVariant.minimalStrip,
-            onTap: () => onChanged(ShareCardVariant.minimalStrip),
-          ),
-          const SizedBox(width: 8),
-          _ToggleChip(
-            label: boldLabel,
-            selected: value == ShareCardVariant.fullBleed,
-            onTap: () => onChanged(ShareCardVariant.fullBleed),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToggleChip extends StatelessWidget {
-  const _ToggleChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected ? AppColors.primaryViolet : AppColors.surface2;
-    final fg = selected ? AppColors.textCream : AppColors.textDim;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            label.toUpperCase(),
-            style: AppTextStyles.label.copyWith(color: fg, fontSize: 11),
-          ),
-        ),
-      ),
-    );
   }
 }
 

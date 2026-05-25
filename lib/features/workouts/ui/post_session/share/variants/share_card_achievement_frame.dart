@@ -199,9 +199,9 @@ class ShareCardAchievementFrame extends StatelessWidget {
               color: AppColors.abyss.withValues(alpha: 0.92),
               padding: EdgeInsets.fromLTRB(
                 28,
-                isPreview ? 28.0 : 84.0,
+                isPreview ? 16.0 : 84.0,
                 28,
-                isPreview ? 16.0 : 48.0,
+                isPreview ? 10.0 : 48.0,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -217,7 +217,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                     maxLines: 1,
                   ),
                   if (liftDetail != null) ...[
-                    SizedBox(height: isPreview ? 4.0 : 12.0),
+                    SizedBox(height: isPreview ? 2.0 : 12.0),
                     // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (only renders when hasPr is true via achievementFrameLiftDetail).
                     Text(
                       liftDetail!,
@@ -230,7 +230,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  SizedBox(height: isPreview ? 6.0 : 18.0),
+                  SizedBox(height: isPreview ? 4.0 : 18.0),
                   Text(
                     bpRank,
                     style: ShareCardTypography.achievementFrameBpRank(
@@ -240,7 +240,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                     textAlign: TextAlign.center,
                     maxLines: 1,
                   ),
-                  SizedBox(height: isPreview ? 6.0 : 18.0),
+                  SizedBox(height: isPreview ? 4.0 : 18.0),
                   Text(
                     wordmark,
                     style: ShareCardTypography.achievementFrameWordmark(

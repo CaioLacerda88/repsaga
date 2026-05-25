@@ -599,8 +599,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   /// Compose the [ShareCardStrings] bundle from the post-session state
   /// snapshot + the active [AppLocalizations]. Mirrors the per-variant
-  /// copy specs in mockup §6 — Variant A bottom strip, Variant B
-  /// collars, Discreet flood-and-slash.
+  /// copy specs in mockup §6 D3 — Achievement Frame top + bottom collars,
+  /// Discreet flood-and-slash.
   ///
   /// Kept inside the screen so the cinematic + share card pull from the
   /// same `state.bodyPartLabels` / `state.exerciseNames` maps the
@@ -618,17 +618,25 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     final classSlug = payload.characterClassSlug;
     final className = classSlug.toUpperCase();
     final pr = payload.pr;
-    final prText = pr == null
+    // Achievement Frame top-collar saga eyebrow: dropped on class-change
+    // sessions (Q4 lock — top collar reads NEW class name only when the
+    // class boundary fires). Otherwise renders the current saga number.
+    final sagaEyebrow = payload.isClassChange
         ? null
-        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps} · PR';
-    final variantBLift = pr == null
-        ? ''
-        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps}';
-    final variantBPrTag = pr == null ? null : l10n.summaryNewTitleLabel;
-    final variantBBpSub = pr == null ? '' : '${pr.exerciseName} · $bpLabel';
+        : 'SAGA ${state.sagaNumber}';
+    // Achievement Frame bottom-collar lift detail: "{weight}kg × {reps}
+    // · {exerciseName}" on PR sessions (rendered heroGold); collapses
+    // entirely on non-PR sessions.
+    final liftDetail = pr == null
+        ? null
+        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps} · ${pr.exerciseName}';
+    final bpRank = bpLabel.isEmpty || rank == null
+        ? bpLabel
+        : '$bpLabel · Rank $rank';
+    // Discreet eyebrow + d-hero keep their existing copy rules.
     final discreetEyebrow = payload.isClassChange
         ? '$className DESPERTOU.'
-        : (bpLabel.isEmpty || rank == null ? bpLabel : '$bpLabel · Rank $rank');
+        : bpRank;
     final discreetHero = payload.isClassChange
         ? className
         : '+${state.totalXpEarned}';
@@ -639,14 +647,12 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
     return ShareCardStrings(
       wordmark: l10n.shareWordmark,
-      variantAXpText: xpText,
-      variantAPrText: prText,
-      variantBBpEyebrow: bpLabel,
-      variantBClassName: className,
-      variantBPrTag: variantBPrTag,
-      variantBLift: variantBLift,
-      variantBBpSub: variantBBpSub,
-      variantBXpSub: xpText,
+      achievementFrameClassName: className,
+      achievementFrameSagaEyebrow: sagaEyebrow,
+      achievementFrameXpHero: xpText,
+      achievementFrameLiftDetail: liftDetail,
+      achievementFrameHasPr: pr != null,
+      achievementFrameBpRank: bpRank,
       discreetEyebrow: discreetEyebrow,
       discreetHero: discreetHero,
       discreetHeroSubLabel: 'XP',

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/share_payload.dart';
 import 'share_card_typography.dart';
+import 'variants/share_card_achievement_frame.dart';
 import 'variants/share_card_discreet.dart';
-import 'variants/share_card_variant_a.dart';
-import 'variants/share_card_variant_b.dart';
 
 export 'share_card_typography.dart' show ShareCardRenderTarget;
 
@@ -13,64 +12,66 @@ export 'share_card_typography.dart' show ShareCardRenderTarget;
 /// **Why a value object instead of `AppLocalizations`?** Decoupling Rule 2 —
 /// the variants themselves take pre-localized strings. The renderer is a
 /// pure composer; it picks the variant subtree but does not know about
-/// `AppLocalizations`. The caller (Pass 3 `SharePreviewScreen`) formats
-/// each string from the payload + the active locale and constructs this
-/// bundle. Same `ShareCardRenderer` instance works in pt-BR / en / future
-/// locales without touching the renderer.
+/// `AppLocalizations`. The caller (screen-layer composer in
+/// `post_session_screen.dart`) formats each string from the payload + the
+/// active locale and constructs this bundle. Same `ShareCardRenderer`
+/// instance works in pt-BR / en / future locales without touching the
+/// renderer.
 ///
-/// **Why not stuff strings on `SharePayload`?** The payload is the
-/// data projection of `PostSessionState` — purely numerical + structural.
+/// **Why not stuff strings on `SharePayload`?** The payload is the data
+/// projection of `PostSessionState` — purely numerical + structural.
 /// Mixing display strings into it would couple the domain model to
 /// `AppLocalizations` and force every call site to re-build the payload
 /// when the locale changes.
 class ShareCardStrings {
   const ShareCardStrings({
     required this.wordmark,
-    required this.variantAXpText,
-    required this.variantAPrText,
-    required this.variantBBpEyebrow,
-    required this.variantBClassName,
-    required this.variantBPrTag,
-    required this.variantBLift,
-    required this.variantBBpSub,
-    required this.variantBXpSub,
+    required this.achievementFrameClassName,
+    required this.achievementFrameXpHero,
+    required this.achievementFrameBpRank,
     required this.discreetEyebrow,
     required this.discreetHero,
     required this.discreetHeroSubLabel,
-    required this.discreetPrLine,
-    required this.discreetPrDetail,
+    this.achievementFrameSagaEyebrow,
+    this.achievementFrameLiftDetail,
+    this.achievementFrameHasPr = false,
+    this.discreetPrLine,
+    this.discreetPrDetail,
   });
 
   /// "REPSAGA" — same across pt + en. Kept as a param so a future
   /// white-label / event-rebrand override is a 1-line change.
   final String wordmark;
 
-  /// Variant A bottom-strip XP text, e.g. "+618 XP".
-  final String variantAXpText;
+  /// Achievement Frame top-collar class name (uppercased), e.g. "BULWARK".
+  /// On class-change sessions this is the NEW class name (Q4 lock).
+  final String achievementFrameClassName;
 
-  /// Variant A bottom-strip PR text, e.g. "95kg × 5 · PR". `null` on
-  /// non-PR sessions.
-  final String? variantAPrText;
+  /// Achievement Frame top-collar saga eyebrow, e.g. "SAGA 76". `null`
+  /// on class-change sessions per Q4 lock (the top collar reads class
+  /// name only when class boundary fires).
+  final String? achievementFrameSagaEyebrow;
 
-  /// Variant B top-collar BP eyebrow, e.g. "Peito" / "Chest".
-  final String variantBBpEyebrow;
+  /// Achievement Frame bottom-collar XP hero, e.g. "+618 XP". Primary
+  /// numeric register of the card.
+  final String achievementFrameXpHero;
 
-  /// Variant B top-collar class name, e.g. "BULWARK".
-  final String variantBClassName;
+  /// Achievement Frame bottom-collar lift detail, e.g. "95kg × 5 · Supino".
+  /// `null` on baseline / rank-up-only / class-change-only sessions —
+  /// the slot collapses entirely. When non-null AND
+  /// [achievementFrameHasPr] is `true`, the line renders in `heroGold`
+  /// (the canonical PR reward accent).
+  final String? achievementFrameLiftDetail;
 
-  /// Variant B bottom-collar PR tag, e.g. "!! Recorde" / "!! Record".
-  /// `null` on non-PR sessions.
-  final String? variantBPrTag;
+  /// `true` when the bottom-collar lift detail represents a hero PR —
+  /// drives the heroGold reward accent. `false` on non-PR sessions even
+  /// when [achievementFrameLiftDetail] is non-null (currently always
+  /// null on non-PR; future copy hints could populate this).
+  final bool achievementFrameHasPr;
 
-  /// Variant B bottom-collar lift line, e.g. "95kg × 5".
-  final String variantBLift;
-
-  /// Variant B bottom-collar BP-sub line, e.g. "Supino · Peito" /
-  /// "Bench · Chest".
-  final String variantBBpSub;
-
-  /// Variant B bottom-collar XP-sub line, e.g. "+618 XP".
-  final String variantBXpSub;
+  /// Achievement Frame bottom-collar BP-rank line, e.g. "Peito · Rank 19".
+  /// Rendered in the dominant-BP hue to mirror the left side bar.
+  final String achievementFrameBpRank;
 
   /// Discreet variant eyebrow, e.g. "Peito · Rank 19" or
   /// "BULWARK DESPERTOU." on class-change.
@@ -94,24 +95,18 @@ class ShareCardStrings {
 /// Composes the share card into a single 9:16 widget tree at runtime.
 ///
 /// **Responsibilities:**
-///   1. Decide whether to render the photo underlay (A + B) or the
-///      Discreet's own background (no photo).
+///   1. Decide whether to render the photo underlay (Achievement Frame)
+///      or the Discreet's own background (no photo).
 ///   2. Stack the chosen variant overlay on top of the underlay.
 ///   3. Forward the dominant hue from [payload.dominantHue] into the
 ///      variant so the body-part identity + class-change override are
 ///      resolved in one place.
 ///
-/// **Pass 1 scope.** No `RepaintBoundary`, no `RenderRepaintBoundary.toImage`
-/// — that's Pass 2's [ShareImageRenderer] service. This widget renders
-/// the visible preview only.
-///
 /// **Variant + photo interplay:**
-///   * `ShareCardVariant.minimalStrip` — photo is the underlay, Variant A
-///     bottom strip is the overlay. If [photo] is null the photo zone is
-///     a placeholder dark abyss surface (Pass 3 may wire a "no photo
-///     selected" placeholder image).
-///   * `ShareCardVariant.fullBleed` — same as above but with Variant B
-///     overlay (top + bottom collars).
+///   * `ShareCardVariant.achievementFrame` — photo is the underlay,
+///     [ShareCardAchievementFrame] is the overlay (two trapezoidal
+///     `ClipPath` collars + 4dp side bars). If [photo] is null the
+///     photo zone is a placeholder dark abyss surface.
 ///   * `ShareCardVariant.discreet` — no photo, Discreet variant owns the
 ///     full frame with its hue-flood gradient + slash + content. The
 ///     [photo] param is ignored (the Discreet path is the "no photo"
@@ -131,28 +126,27 @@ class ShareCardRenderer extends StatelessWidget {
   /// Source of truth for hue + flags + numeric data.
   final SharePayload payload;
 
-  /// Which variant to render. The Pass 3 preview screen toggles between
-  /// `minimalStrip` ↔ `fullBleed` via the "Mínimo" / "Destaque" segmented
-  /// control. `discreet` auto-selects on camera-denied / no-photo paths.
+  /// Which variant to render. `achievementFrame` is the default photo
+  /// path; `discreet` auto-selects on camera-denied / no-photo paths.
   final ShareCardVariant variant;
 
   /// Pre-localized text bundle. See [ShareCardStrings].
   final ShareCardStrings strings;
 
-  /// Optional photo underlay for Variant A + Variant B. Ignored when
+  /// Optional photo underlay for the Achievement Frame. Ignored when
   /// [variant] is [ShareCardVariant.discreet] (that variant owns its own
   /// background).
   final ImageProvider<Object>? photo;
 
-  /// Translation applied to the photo underlay ONLY (the bottom strip /
-  /// collars / overlay always stay aligned to the 1080×1920 frame).
+  /// Translation applied to the photo underlay ONLY (the collars + side
+  /// bars always stay aligned to the 1080×1920 frame).
   ///
   /// Driven by the preview screen's drag-to-reframe gesture. Defaults to
   /// [Offset.zero] (no shift). The translate is applied inside [_PhotoZone]
   /// so it cannot leak onto the overlay subtree — wrapping the entire
-  /// renderer in `Transform.translate` (the pre-fix shape) shifted overlay
-  /// AND photo together and produced clipping artifacts at the 1080×1920
-  /// edge on max drag.
+  /// renderer in `Transform.translate` (the pre-fix shape from PR 30b)
+  /// shifted overlay AND photo together and produced clipping artifacts
+  /// at the 1080×1920 edge on max drag.
   final Offset photoOffset;
 
   /// Whether this widget is the **export** (1080×1920 offscreen) tree OR
@@ -193,35 +187,21 @@ class ShareCardRenderer extends StatelessWidget {
           wordmark: strings.wordmark,
           renderTarget: renderTarget,
         );
-      case ShareCardVariant.minimalStrip:
+      case ShareCardVariant.achievementFrame:
         return Stack(
           fit: StackFit.expand,
           children: [
             _PhotoZone(photo: photo, offset: photoOffset),
-            ShareCardVariantA(
+            ShareCardAchievementFrame(
               dominantHue: payload.dominantHue,
-              xpText: strings.variantAXpText,
-              prText: strings.variantAPrText,
+              className: strings.achievementFrameClassName,
+              sagaEyebrow: strings.achievementFrameSagaEyebrow,
+              xpHero: strings.achievementFrameXpHero,
+              liftDetail: strings.achievementFrameLiftDetail,
+              hasPr: strings.achievementFrameHasPr,
+              bpRank: strings.achievementFrameBpRank,
               wordmark: strings.wordmark,
-              barFillFraction: payload.rankProgressFraction,
-              renderTarget: renderTarget,
-            ),
-          ],
-        );
-      case ShareCardVariant.fullBleed:
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            _PhotoZone(photo: photo, offset: photoOffset),
-            ShareCardVariantB(
-              dominantHue: payload.dominantHue,
-              bpEyebrow: strings.variantBBpEyebrow,
-              className: strings.variantBClassName,
-              wordmark: strings.wordmark,
-              prTag: strings.variantBPrTag,
-              lift: strings.variantBLift,
-              bpSub: strings.variantBBpSub,
-              xpSub: strings.variantBXpSub,
+              isClassChange: payload.isClassChange,
               renderTarget: renderTarget,
             ),
           ],
