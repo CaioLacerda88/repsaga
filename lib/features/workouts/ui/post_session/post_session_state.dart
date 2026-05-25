@@ -8,6 +8,7 @@ import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
+import '../../domain/session_lift_summary.dart';
 
 part 'post_session_state.freezed.dart';
 
@@ -45,6 +46,28 @@ abstract class PostSessionState with _$PostSessionState {
     /// that earned XP this session. Stored so `SharePayload.fromPostSessionState`
     /// can project the dominant BP's progress fraction into the share card.
     required Map<BodyPart, double> bpProgressFractionAfter,
+
+    /// Per-body-part XP earned this session, mirroring the choreographer's
+    /// `bpXpDeltas` argument. Persisted so the S2 Mission Debrief XP
+    /// segmented bar can render proportional widths without re-deriving
+    /// from the active workout state (which has been disposed by finish
+    /// time). Phase 31 Pass 1.
+    required Map<BodyPart, int> bpXpDeltas,
+
+    /// Per-body-part rank AFTER the session, for every BP that earned XP.
+    /// Drives the Mission Debrief per-BP rank delta rows ("Costas · Rank
+    /// 11 → 12"). Computed by the controller from the post-finish RPG
+    /// progress snapshot. Phase 31 Pass 1.
+    required Map<BodyPart, int> bpRankAfter,
+
+    /// Top lifts by XP contribution this session — capped at 4 rows with
+    /// alphabetical tiebreak on exercise name (matches
+    /// `PostSessionChoreographer._buildPrCut`'s ordering rule so the
+    /// debrief table and the hero PR cut surface the same exercise when
+    /// both apply). Rendered by the S2 Mission Debrief section; "+N more
+    /// exercises" footer derives from comparing this list's length to
+    /// `setsCount` upstream. Phase 31 Pass 1.
+    required List<SessionLiftSummary> topLifts,
 
     /// Post-finish total XP earned.
     required int totalXpEarned,

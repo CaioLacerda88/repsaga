@@ -547,29 +547,20 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       final classSlug =
           ref.read(characterClassProvider)?.slug ??
           CharacterClass.initiate.slug;
-      // Compute bp XP deltas from the queue + state; we use what the
-      // controller's state machine already projected — the share payload
-      // factory expects raw deltas, but the cinematic-side state stores
-      // the dominant-BP-derived hook. For the share card we just need
-      // the dominant BP, its rank, and progress fraction — all of which
-      // are already on PostSessionState. Construct a minimal deltas map
-      // (single entry on the dominant BP carrying its XP) so the
-      // factory's existing dominant-BP selection still resolves to the
-      // same value the cinematic chose.
-      final deltas = <BodyPart, int>{};
-      final ranks = <BodyPart, int>{};
-      if (state.dominantBodyPart != null) {
-        deltas[state.dominantBodyPart!] = state.totalXpEarned;
-        ranks[state.dominantBodyPart!] = state.dominantNextRank == null
-            ? 1
-            : state.dominantNextRank! - 1;
-      }
+      // Phase 31 Pass 1 — read the persisted deltas + ranks directly from
+      // state. Pre-Pass-1 the screen synthesized a single-entry deltas map
+      // from the dominant BP because the controller didn't persist the
+      // raw maps; the share factory then re-derived the dominant BP from
+      // that 1-entry map (the same BP it started from — round-trip). Now
+      // the state carries the full maps, so the factory's dominant-BP
+      // selection sees every BP that actually earned XP and ranks accent
+      // / hue fidelity matches the cinematic exactly.
       sharePayload = SharePayload.fromPostSessionState(
         tier: state.tier,
         queueResult: state.queueResult,
         prResult: state.prResult,
-        bpXpDeltas: deltas,
-        bpRankAfter: ranks,
+        bpXpDeltas: state.bpXpDeltas,
+        bpRankAfter: state.bpRankAfter,
         bpProgressFractionAfter: state.bpProgressFractionAfter,
         exerciseNames: state.exerciseNames,
         totalXp: state.totalXpEarned,

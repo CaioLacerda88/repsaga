@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/muscle_group_body_part.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../exercises/models/exercise.dart';
 import '../../../personal_records/domain/pr_detection_service.dart';
 import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/domain/rank_curve.dart';
@@ -11,7 +13,10 @@ import '../../../rpg/providers/rpg_progress_provider.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
+import '../../domain/session_lift_summary.dart';
+import '../../models/active_workout_state.dart';
 import '../../providers/workout_history_providers.dart';
+import '../../utils/set_filters.dart';
 import 'post_session_state.dart';
 
 /// Params for [PostSessionController].
@@ -33,6 +38,7 @@ class PostSessionParams {
     required this.setsCount,
     required this.tonnageTons,
     required this.l10n,
+    this.exercises = const [],
   });
 
   final CelebrationQueueResult queueResult;
@@ -46,6 +52,15 @@ class PostSessionParams {
   final int durationMinutes;
   final int setsCount;
   final double tonnageTons;
+
+  /// Pre-finish snapshot of the workout's exercises + sets. Captured by
+  /// [FinishWorkoutCoordinator] BEFORE `await notifier.finishWorkout()`
+  /// disposes the active-workout State. Drives `topLifts` projection on
+  /// `PostSessionState`. Defaults empty so legacy test fixtures and
+  /// pass-through flows that don't need the debrief table can omit it.
+  ///
+  /// Phase 31 Pass 1.
+  final List<ActiveWorkoutExercise> exercises;
 
   /// The active `AppLocalizations` instance from the route container's
   /// context. Passed in so the controller resolves body-part labels
@@ -169,6 +184,12 @@ class PostSessionController extends ChangeNotifier {
 
     final sagaNumber = params.priorFinishedWorkoutCount + 1;
 
+    final topLifts = _projectTopLifts(
+      exercises: params.exercises,
+      prResult: params.prResult,
+      exerciseNames: params.exerciseNames,
+    );
+
     return PostSessionState(
       tier: tier,
       queueResult: params.queueResult,
@@ -179,6 +200,9 @@ class PostSessionController extends ChangeNotifier {
       bodyPartLabels: bodyPartLabels,
       exerciseNames: params.exerciseNames,
       bpProgressFractionAfter: bpProgressAfter,
+      bpXpDeltas: Map.unmodifiable(params.bpXpDeltas),
+      bpRankAfter: Map.unmodifiable(bpRankAfter),
+      topLifts: List.unmodifiable(topLifts),
       totalXpEarned: params.totalXpEarned,
       priorFinishedWorkoutCount: params.priorFinishedWorkoutCount,
       sagaNumber: sagaNumber,
@@ -192,6 +216,139 @@ class PostSessionController extends ChangeNotifier {
       nextLevel: nextLevel,
     );
   }
+
+  /// Project the session's exercises into ranked [SessionLiftSummary] rows.
+  ///
+  /// **Ranking (mirrors `PostSessionChoreographer._buildPrCut`):**
+  ///   1. `xpContribution` descending.
+  ///   2. Alphabetical exercise name ascending (deterministic tiebreak).
+  ///
+  /// Returns at most [_maxTopLifts] rows. The "+N more exercises" footer
+  /// the screen renders is derived by comparing the returned list's length
+  /// against the total exercises trained — that comparison lives in the
+  /// widget layer, not here.
+  ///
+  /// **Peak set selection per exercise** mirrors the shared `prScore` rule
+  /// (`weight × reps`). Ties broken by max weight then max reps. Returns
+  /// `(0, 0)` when an exercise has no completed working sets — those
+  /// exercises are dropped from the result (no point rendering a 0×0 row).
+  ///
+  /// **`xpContribution` is an approximation** (Pass 1):
+  ///   * Per-set volume = `(weight ?? 0) × (reps ?? 0)`.
+  ///   * Per-exercise volume share toward each BP is weighted by the
+  ///     exercise's `xpAttribution` map (or 1.0 to the muscle-group-derived
+  ///     BP when attribution is null — matches the engagement-counting
+  ///     fallback in `primaryBodyPartsForSet`).
+  ///   * The total volume across all sets serves as the relative ranking
+  ///     key. Volume preserves order for the sort + top-K policy, which
+  ///     is all the field drives in Pass 3.
+  ///   * A precise per-exercise XP attribution would require the
+  ///     finisher's RPC return shape to surface per-exercise XP; Pass 3
+  ///     can refine if the mockup demands the exact XP value visible on
+  ///     the row.
+  static List<SessionLiftSummary> _projectTopLifts({
+    required List<ActiveWorkoutExercise> exercises,
+    required PRDetectionResult? prResult,
+    required Map<String, String> exerciseNames,
+  }) {
+    if (exercises.isEmpty) return const [];
+
+    final prExerciseIds = <String>{
+      if (prResult != null)
+        for (final r in prResult.newRecords) r.exerciseId,
+    };
+
+    final rows = <SessionLiftSummary>[];
+    for (final entry in exercises) {
+      final exercise = entry.workoutExercise.exercise;
+      if (exercise == null) continue;
+      final exerciseId = entry.workoutExercise.exerciseId;
+      final workingSets = completedWorkingSets(entry.sets);
+      if (workingSets.isEmpty) continue;
+
+      // Peak set — max by prScore (weight × reps), tiebreak max weight,
+      // then max reps. Stable selection so re-projecting the same data
+      // produces the same row.
+      double bestScore = -1;
+      double bestWeight = 0;
+      int bestReps = 0;
+      double totalVolume = 0;
+      for (final set in workingSets) {
+        final w = set.weight ?? 0;
+        final r = (set.reps ?? 0).toDouble();
+        final score = w * r;
+        totalVolume += score;
+        if (score > bestScore ||
+            (score == bestScore && w > bestWeight) ||
+            (score == bestScore && w == bestWeight && r > bestReps)) {
+          bestScore = score;
+          bestWeight = w;
+          bestReps = r.round();
+        }
+      }
+      if (bestScore < 0) continue;
+
+      // Dominant BP for this exercise — max share in xpAttribution, or
+      // fall back to MuscleGroup → BodyPart mapping. Defensive: if both
+      // resolve to null (cardio + no attribution), skip the row.
+      final bodyPart = _dominantBodyPartFor(exercise);
+      if (bodyPart == null) continue;
+
+      rows.add(
+        SessionLiftSummary(
+          exerciseId: exerciseId,
+          exerciseName: exerciseNames[exerciseId] ?? exercise.name,
+          bodyPart: bodyPart,
+          peakWeightKg: bestWeight,
+          peakReps: bestReps,
+          // Approximation — see method doc. Round to int so the sort key
+          // is integer-valued (matches the field type on the model).
+          xpContribution: totalVolume.round(),
+          isPR: prExerciseIds.contains(exerciseId),
+        ),
+      );
+    }
+
+    rows.sort((a, b) {
+      final cmp = b.xpContribution.compareTo(a.xpContribution);
+      if (cmp != 0) return cmp;
+      return a.exerciseName.compareTo(b.exerciseName);
+    });
+
+    if (rows.length <= _maxTopLifts) return rows;
+    return rows.sublist(0, _maxTopLifts);
+  }
+
+  /// Resolve an exercise to its dominant body part for debrief grouping.
+  ///
+  /// Lookup priority:
+  ///   1. `xpAttribution` max-share token (matches the engagement
+  ///      attribution rule in `primaryBodyPartsForSet`).
+  ///   2. `MuscleGroup` → `BodyPart` mapping via [muscleGroupToBodyPart].
+  ///   3. `null` (cardio + no attribution — caller drops the row).
+  static BodyPart? _dominantBodyPartFor(Exercise exercise) {
+    final attribution = exercise.xpAttribution;
+    if (attribution != null && attribution.isNotEmpty) {
+      double bestShare = 0;
+      BodyPart? winner;
+      attribution.forEach((key, value) {
+        final share = value.toDouble();
+        if (share <= 0) return;
+        final bp = BodyPart.tryFromDbValue(key);
+        if (bp == null || bp == BodyPart.cardio) return;
+        if (share > bestShare) {
+          bestShare = share;
+          winner = bp;
+        }
+      });
+      if (winner != null) return winner;
+    }
+    return muscleGroupToBodyPart(exercise.muscleGroup);
+  }
+
+  /// Maximum lift rows surfaced in the S2 Mission Debrief table per WIP
+  /// locked-decision #2 (top 4 + "+N more" footer on 5+ exercise sessions).
+  static const int _maxTopLifts = 4;
 
   /// Advance to the next cut. When the index reaches `cuts.length`, flip
   /// [PostSessionState.showSummary] true.
