@@ -352,6 +352,96 @@ void main() {
   });
 
   testWidgets(
+    'share-button cameraPermissionPermanentlyDenied surfaces snackbar with '
+    'Abrir configurações action that calls controller.openAppSettings',
+    (tester) async {
+      // The `_surfaceError` switch branch for cameraPermissionPermanentlyDenied
+      // is the only branch that wires a SnackBarAction with a non-null
+      // callback. Production's `sharePreview()` itself never emits this
+      // code (it lives on the camera-pick path), so we drive the branch
+      // via a controller subclass that re-emits the permanentlyDenied
+      // error when `sharePreview` is invoked. This pins the screen-layer
+      // contract: matching localized copy + working "Abrir configurações"
+      // affordance.
+      var openSettingsCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          shareServiceProvider.overrideWithValue(
+            ShareService(
+              imagePicker: (_) async => null,
+              fileShareSink: (_, {text}) async =>
+                  const ShareResult('ok', ShareResultStatus.success),
+              permissionRequester: (_) async => PermissionStatus.granted,
+              permissionStatusReader: (_) async => PermissionStatus.granted,
+              appSettingsOpener: () async {
+                openSettingsCalls += 1;
+                return true;
+              },
+            ),
+          ),
+          shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
+          shareControllerProvider.overrideWith(
+            _PermanentlyDeniedController.new,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Pre-seed the controller into preview so the share button renders.
+      final photo = _StubXFile('/tmp/photo.jpg');
+      container.read(shareControllerProvider.notifier).state =
+          ShareState.preview(photo: photo);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SharePreviewScreen(
+              payload: buildPayload(),
+              strings: strings,
+              l10n: l10n,
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('COMPARTILHAR'));
+      // sharePreview is async — pump until it settles.
+      await tester.pump();
+      await tester.pump();
+
+      // Snackbar copy is the permanentlyDenied localized message.
+      expect(find.text('Permissão bloqueada'), findsOneWidget);
+      // The SnackBarAction label is the openSettings localized copy.
+      expect(find.text('Abrir configurações'), findsOneWidget);
+      // Preview screen still mounted — the snackbar doesn't dismiss the
+      // screen (matches the renderFailed / shareFailed branch contract).
+      expect(find.byType(SharePreviewScreen), findsOneWidget);
+
+      // Verify the SnackBarAction wires `onPressed` to a non-null
+      // callback (the screen's `actionCallback ?? () {}` fallback would
+      // silently no-op if `actionCallback` ever became null on the
+      // permanentlyDenied branch — this pins it). Invoking
+      // `onPressed` directly on the widget is the cleanest seam: the
+      // default Material `SnackBar`'s floating bottom-margin positions
+      // its action just outside the test viewport's hit-test bounds
+      // (warning: "Offset would not hit test on the specified widget"
+      // — independent of viewport size, since the snackbar pads itself
+      // off the bottom edge). The InkWell-tap mechanics are Material's
+      // responsibility; what matters here is that
+      // `controller.openAppSettings` reaches the service seam.
+      final action = tester.widget<SnackBarAction>(find.byType(SnackBarAction));
+      action.onPressed();
+      // openAppSettings() is async — pump so the microtask drains
+      // (controller method awaits the service's async closure).
+      await tester.pump();
+      await tester.pump();
+      expect(openSettingsCalls, 1);
+    },
+  );
+
+  testWidgets(
     'ShareController.openAppSettings routes through ShareService DI seam',
     (tester) async {
       // Cover the openSettings affordance contract: when the snackbar's
@@ -512,5 +602,26 @@ class _ThrowingRenderer implements ShareImageRenderer {
     int jpegQuality = 88,
   }) async {
     throw StateError('render failed');
+  }
+}
+
+/// Controller subclass that overrides `sharePreview` to emit the
+/// [ShareErrorCodes.cameraPermissionPermanentlyDenied] error code on
+/// every invocation. Production's real `sharePreview` only ever emits
+/// `renderFailed` / `shareFailed`; the permanentlyDenied code lives on
+/// the camera-pick path. This fake unlocks driving the screen-layer
+/// `_surfaceError` permanentlyDenied branch (the only branch that
+/// wires a SnackBarAction with a non-null callback) through the
+/// preview screen's share-button flow. `openAppSettings()` is
+/// inherited so it still forwards to the injected ShareService seam.
+class _PermanentlyDeniedController extends ShareController {
+  @override
+  Future<void> sharePreview({
+    required GlobalKey repaintKey,
+    String? shareText,
+  }) async {
+    state = const ShareState.error(
+      code: ShareErrorCodes.cameraPermissionPermanentlyDenied,
+    );
   }
 }
