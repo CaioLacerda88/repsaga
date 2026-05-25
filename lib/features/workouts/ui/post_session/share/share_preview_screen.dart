@@ -64,10 +64,32 @@ class SharePreviewScreen extends ConsumerStatefulWidget {
 }
 
 class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
-  /// GlobalKey on the offscreen [RepaintBoundary] for the 1080×1920
-  /// render. The visible preview gets a separate scaled-down view; the
-  /// captured image is always the offscreen one.
-  final GlobalKey _repaintKey = GlobalKey(debugLabel: 'share-preview-repaint');
+  /// GlobalKey on the **offscreen** 1080×1920 export tree's
+  /// [RepaintBoundary]. This is the boundary that
+  /// [ShareImageRenderer.render] captures via `toImage(pixelRatio: 3.0)`.
+  ///
+  /// **Why a separate offscreen tree?** PR 30c device bug 3 root cause:
+  /// pre-fix the visible preview tree (`FittedBox`-scaled) WAS the
+  /// boundary. When the user tapped SHARE:
+  ///   1. The controller flipped state to [ShareStateRendering] so the
+  ///      previous `build()` returned a [CircularProgressIndicator]
+  ///      instead of the preview body.
+  ///   2. The next frame unmounted the visible preview tree — the
+  ///      [RepaintBoundary]'s layer was disposed.
+  ///   3. The `await boundary.toImage(...)` in flight finished on a
+  ///      disposed layer and threw, surfacing as the "Couldn't render
+  ///      the saga card" snackbar on real devices.
+  ///
+  /// **Post-fix:** the screen mounts BOTH a visible preview tree (with
+  /// `renderTarget: preview`) AND an offscreen export tree (with
+  /// `renderTarget: export`, positioned at `left: -10000`). The export
+  /// tree is the one captured by `toImage` and stays laid out + painted
+  /// across the state transition to [ShareStateRendering] because the
+  /// screen no longer swaps out its body — it overlays a spinner barrier
+  /// on top instead.
+  final GlobalKey _exportRepaintKey = GlobalKey(
+    debugLabel: 'share-preview-export-repaint',
+  );
 
   /// Active variant. Discreet is locked when [_photo] is null (the user
   /// chose "Sem foto · só a saga" on the bottom sheet). Otherwise toggles
@@ -100,24 +122,41 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(shareControllerProvider);
 
-    // While the controller is doing work (render or native sheet), show
-    // a progress indicator. Once it lands back in idle / error / cancelled
-    // we DO NOT auto-pop — the action handlers (retake + share) are the
-    // only callers of [widget.onClose]. Auto-popping from build double-
-    // fires when the action handler itself calls onClose AND the state
-    // transition triggers the post-frame callback.
-    if (state is ShareStateRendering || state is ShareStateSharing) {
-      return _scaffold(child: const Center(child: CircularProgressIndicator()));
+    // Defensive — when the screen is mounted with no preview state at
+    // all (unexpected; the screen-layer caller should open it after a
+    // preview transition) render an empty scaffold.
+    //
+    // PR 30b Suggestion 7: silent SizedBox.shrink was invisible in dev
+    // diagnostics. Use debugPrint (cluster: developer-log-invisible-logcat
+    // — developer.log doesn't reach adb logcat on Android) so a stray
+    // state landing here surfaces in `flutter run` output.
+    //
+    // ShareStatePreview / ShareStateRendering / ShareStateSharing ALL
+    // render the same body tree — the body holds the offscreen export
+    // RepaintBoundary that ShareImageRenderer needs. Unmounting it
+    // during the rendering transition (the pre-PR-30c shape) disposed
+    // the boundary's layer while toImage was mid-flight and threw the
+    // "Couldn't render the saga card" snackbar (device bug 3 root
+    // cause).
+    final ShareStatePreview? preview;
+    if (state is ShareStatePreview) {
+      preview = state;
+    } else if (state is ShareStateRendering || state is ShareStateSharing) {
+      // Both states retain the previously-chosen photo on the controller
+      // — the controller's last `preview` payload is what we need to
+      // keep rendering so the offscreen export tree stays mounted. We
+      // can't read that from the sealed union directly, so we use the
+      // photo captured on the state machine at the moment SHARE was
+      // tapped. The screen's tap handler passes the photo into
+      // [_onSharePressed]; we cache the last preview photo across
+      // rebuilds via [_lastPreviewPhoto].
+      preview = _lastPreviewPhoto == null
+          ? null
+          : ShareState.preview(photo: _lastPreviewPhoto) as ShareStatePreview;
+    } else {
+      preview = null;
     }
-    if (state is! ShareStatePreview) {
-      // Defensive — covers the case where the screen is mounted with no
-      // preview state at all (unexpected; the screen-layer caller should
-      // open it after a preview transition). Render an empty scaffold.
-      //
-      // PR 30b Suggestion 7: silent SizedBox.shrink was invisible in dev
-      // diagnostics. Use debugPrint (cluster: developer-log-invisible-logcat
-      // — developer.log doesn't reach adb logcat on Android) so a stray
-      // state landing here surfaces in `flutter run` output.
+    if (preview == null) {
       debugPrint(
         '[share_preview] unexpected state: ${state.runtimeType} -- '
         'rendering empty scaffold',
@@ -125,125 +164,148 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
       return _scaffold(child: const SizedBox.shrink());
     }
 
-    final photo = state.photo;
+    // Cache the active preview photo so the rendering / sharing states
+    // can keep rendering the same body tree (the offscreen export tree
+    // must stay mounted across the toImage async gap — device bug 3).
+    _lastPreviewPhoto = preview.photo;
+
+    final photo = preview.photo;
     final isDiscreet = photo == null;
+    final isBusy = state is ShareStateRendering || state is ShareStateSharing;
 
     return _scaffold(
       child: Semantics(
         container: true,
         explicitChildNodes: true,
         identifier: 'share-preview-screen',
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Variant toggle — hidden on the Discreet path (mockup §7:
-              // "Sem foto · só a saga" locks the Discreet variant).
-              if (!isDiscreet)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: _VariantToggle(
-                    value: _variant,
-                    minimalLabel: widget.l10n.previewMinimal,
-                    boldLabel: widget.l10n.previewBold,
-                    onChanged: (v) => setState(() => _variant = v),
+        child: Stack(
+          children: [
+            // OFFSCREEN export tree. Mounted at `left: -10000` so it's
+            // laid out + painted (required for `RenderRepaintBoundary
+            // .toImage` to read the boundary's layer) but invisible to
+            // the user. Uses `renderTarget: export` so the typography
+            // matches mockup §6 (the locked visual contract for the
+            // shipped PNG).
+            //
+            // `Offstage(offstage: true)` would skip layout + paint and
+            // break toImage; `Visibility(visible: false, maintainState:
+            // true, maintainSize: true)` does the same. The off-screen
+            // Positioned with a tight SizedBox is the canonical pattern.
+            Positioned(
+              left: -10000,
+              top: 0,
+              child: SizedBox(
+                width: 1080,
+                height: 1920,
+                child: RepaintBoundary(
+                  key: _exportRepaintKey,
+                  child: ShareCardRenderer(
+                    payload: widget.payload,
+                    variant: _variant,
+                    strings: _stringsWithHidesApplied(),
+                    photo: photo == null ? null : FileImage(File(photo.path)),
+                    photoOffset: Offset(0, _photoAlignmentY * 80),
+                    renderTarget: ShareCardRenderTarget.export,
                   ),
                 ),
-              const SizedBox(height: 4),
+              ),
+            ),
+            // Visible preview tree. Uses `renderTarget: preview` so the
+            // typography is scaled up enough to read on a FittedBox-
+            // shrunk visible card (device bug 1). The user only ever
+            // sees this; the bytes shared are sourced from the offscreen
+            // export tree above.
+            SafeArea(
+              child: Column(
+                children: [
+                  // Variant toggle — hidden on the Discreet path
+                  // (mockup §7: "Sem foto · só a saga" locks the
+                  // Discreet variant).
+                  if (!isDiscreet)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: _VariantToggle(
+                        value: _variant,
+                        minimalLabel: widget.l10n.previewMinimal,
+                        boldLabel: widget.l10n.previewBold,
+                        onChanged: (v) => setState(() => _variant = v),
+                      ),
+                    ),
+                  const SizedBox(height: 4),
 
-              // Preview body — FittedBox-scaled view of the 1080×1920
-              // offscreen render. The captured image is always at the
-              // native target size; the visible preview is just a scaled
-              // mirror so the user can frame + toggle interactively.
-              //
-              // PR 30c device bug 2: the AspectRatio is wrapped in a
-              // ClipRect so the photoOffset Transform inside the renderer
-              // cannot paint outside the card's 9:16 frame. Without this,
-              // dragging the photo upward let the translated pixels bleed
-              // up through the Column and overpaint the variant toggle
-              // row above. ClipRect clips at the AspectRatio's outer
-              // bounds — overlay strips still sit inside the frame so
-              // they remain visible.
-              Expanded(
-                child: GestureDetector(
-                  onVerticalDragUpdate: isDiscreet
-                      ? null
-                      : (details) {
-                          setState(() {
-                            _photoAlignmentY =
-                                (_photoAlignmentY + details.primaryDelta! / 200)
-                                    .clamp(-1.0, 1.0);
-                          });
-                        },
-                  child: Center(
-                    child: ClipRect(
-                      child: AspectRatio(
-                        aspectRatio: 9 / 16,
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: RepaintBoundary(
-                            key: _repaintKey,
-                            child: SizedBox(
-                              width: 1080,
-                              height: 1920,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  // Photo offset is forwarded into the
-                                  // renderer so ONLY the photo subtree
-                                  // translates -- the bottom strip /
-                                  // collars stay anchored to the 1080x1920
-                                  // frame. Wrapping the renderer itself in
-                                  // Transform.translate (the pre-PR-30b-fix
-                                  // shape) shifted overlay AND photo
-                                  // together and produced clipping
-                                  // artifacts at the frame edges on max
-                                  // drag.
-                                  ShareCardRenderer(
-                                    payload: widget.payload,
-                                    variant: _variant,
-                                    strings: _stringsWithHidesApplied(),
-                                    photo: photo == null
-                                        ? null
-                                        : FileImage(File(photo.path)),
-                                    photoOffset: Offset(
-                                      0,
-                                      _photoAlignmentY * 80,
-                                    ),
-                                  ),
-                                  // Tap-to-hide affordances — invisible tap
-                                  // surfaces over the XP zone (bottom strip
-                                  // on A/B, hero on Discreet) and the PR
-                                  // zone (bottom-strip right slot on A, PR
-                                  // tag area on B, !! line on Discreet).
-                                  // Mockup §7: "tap to hide XP / tap to
-                                  // hide PR" — toggle affordances surfaced
-                                  // as transparent rectangles.
-                                  Positioned(
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 0,
-                                    height: 280,
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      onTap: () => setState(
-                                        () => _xpHidden = !_xpHidden,
+                  // PR 30c device bug 2: the AspectRatio is wrapped in a
+                  // ClipRect so the photoOffset Transform inside the
+                  // renderer cannot paint outside the card's 9:16 frame.
+                  Expanded(
+                    child: GestureDetector(
+                      onVerticalDragUpdate: isDiscreet
+                          ? null
+                          : (details) {
+                              setState(() {
+                                _photoAlignmentY =
+                                    (_photoAlignmentY +
+                                            details.primaryDelta! / 200)
+                                        .clamp(-1.0, 1.0);
+                              });
+                            },
+                      child: Center(
+                        child: ClipRect(
+                          child: AspectRatio(
+                            aspectRatio: 9 / 16,
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              child: SizedBox(
+                                width: 1080,
+                                height: 1920,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    // Photo offset forwarded into the
+                                    // renderer so ONLY the photo
+                                    // subtree translates -- overlay
+                                    // strips / collars stay anchored.
+                                    ShareCardRenderer(
+                                      payload: widget.payload,
+                                      variant: _variant,
+                                      strings: _stringsWithHidesApplied(),
+                                      photo: photo == null
+                                          ? null
+                                          : FileImage(File(photo.path)),
+                                      photoOffset: Offset(
+                                        0,
+                                        _photoAlignmentY * 80,
                                       ),
+                                      renderTarget:
+                                          ShareCardRenderTarget.preview,
                                     ),
-                                  ),
-                                  if (_hasPrSection())
+                                    // Tap-to-hide affordances — Mockup §7.
                                     Positioned(
                                       left: 0,
                                       right: 0,
-                                      bottom: 320,
-                                      height: 120,
+                                      bottom: 0,
+                                      height: 280,
                                       child: GestureDetector(
                                         behavior: HitTestBehavior.translucent,
                                         onTap: () => setState(
-                                          () => _prHidden = !_prHidden,
+                                          () => _xpHidden = !_xpHidden,
                                         ),
                                       ),
                                     ),
-                                ],
+                                    if (_hasPrSection())
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 320,
+                                        height: 120,
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.translucent,
+                                          onTap: () => setState(
+                                            () => _prHidden = !_prHidden,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -251,46 +313,78 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                       ),
                     ),
                   ),
-                ),
-              ),
 
-              // Bottom action row — Retake + Share.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _PreviewActionButton(
-                        identifier: 'share-preview-retake',
-                        label: widget.l10n.previewRetake,
-                        backgroundColor: AppColors.surface2,
-                        foregroundColor: AppColors.textCream,
-                        onPressed: () {
-                          ref.read(shareControllerProvider.notifier).reset();
-                          widget.onClose();
-                        },
-                      ),
+                  // Bottom action row — Retake + Share. Disabled while
+                  // busy (rendering / sharing) so taps don't pile up.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _PreviewActionButton(
+                            identifier: 'share-preview-retake',
+                            label: widget.l10n.previewRetake,
+                            backgroundColor: AppColors.surface2,
+                            foregroundColor: AppColors.textCream,
+                            onPressed: isBusy
+                                ? null
+                                : () {
+                                    ref
+                                        .read(shareControllerProvider.notifier)
+                                        .reset();
+                                    widget.onClose();
+                                  },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: _PreviewActionButton(
+                            identifier: 'share-preview-share-button',
+                            label: widget.l10n.previewShare,
+                            backgroundColor: AppColors.primaryViolet,
+                            foregroundColor: AppColors.textCream,
+                            onPressed: isBusy
+                                ? null
+                                : () => _onSharePressed(photo),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: _PreviewActionButton(
-                        identifier: 'share-preview-share-button',
-                        label: widget.l10n.previewShare,
-                        backgroundColor: AppColors.primaryViolet,
-                        foregroundColor: AppColors.textCream,
-                        onPressed: () => _onSharePressed(photo),
-                      ),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Busy barrier — covers the visible tree (NOT the offscreen
+            // export tree, which sits BELOW this overlay in stack order
+            // but is offscreen via Positioned(left: -10000)). Renders a
+            // spinner on a translucent scrim while the controller is
+            // rendering or sharing. Without IgnorePointer the user
+            // could double-tap action buttons under the barrier.
+            if (isBusy)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: false,
+                  // ignore: hardcoded_color — busy-barrier scrim (60% abyss flood, same primitive used by every modal scrim in the post-session flow).
+                  child: ColoredBox(
+                    color: Color(0x99000000),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
+
+  /// Cached photo from the last `ShareStatePreview` snapshot. Lets the
+  /// `rendering` + `sharing` states keep rendering the same body tree —
+  /// the offscreen export tree must stay mounted across the toImage
+  /// async gap (PR 30c device bug 3). Reset to null when the controller
+  /// transitions out of the preview/rendering/sharing lifecycle.
+  XFile? _lastPreviewPhoto;
 
   /// Apply the tap-to-hide toggles to the strings bundle by blanking the
   /// relevant slots. Cheaper than introducing per-variant visibility
@@ -350,7 +444,7 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   /// `permissionDenied` / `permissionPermanentlyDenied` were dead code.
   Future<void> _onSharePressed(XFile? photo) async {
     final controller = ref.read(shareControllerProvider.notifier);
-    await controller.sharePreview(repaintKey: _repaintKey);
+    await controller.sharePreview(repaintKey: _exportRepaintKey);
     if (!mounted) return;
 
     final post = ref.read(shareControllerProvider);
@@ -495,7 +589,11 @@ class _PreviewActionButton extends StatelessWidget {
   final String label;
   final Color backgroundColor;
   final Color foregroundColor;
-  final VoidCallback onPressed;
+
+  /// Tap handler. `null` disables the button (taps no-op, ripple
+  /// suppressed). The busy-barrier in the parent still covers the
+  /// button, so this is belt-and-braces against missed events.
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
