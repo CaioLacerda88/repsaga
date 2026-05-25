@@ -120,6 +120,7 @@ class ShareCardRenderer extends StatelessWidget {
     required this.variant,
     required this.strings,
     this.photo,
+    this.photoOffset = Offset.zero,
   });
 
   /// Snapshot of the finished workout, projected for the share card.
@@ -138,6 +139,17 @@ class ShareCardRenderer extends StatelessWidget {
   /// [variant] is [ShareCardVariant.discreet] (that variant owns its own
   /// background).
   final ImageProvider<Object>? photo;
+
+  /// Translation applied to the photo underlay ONLY (the bottom strip /
+  /// collars / overlay always stay aligned to the 1080×1920 frame).
+  ///
+  /// Driven by the preview screen's drag-to-reframe gesture. Defaults to
+  /// [Offset.zero] (no shift). The translate is applied inside [_PhotoZone]
+  /// so it cannot leak onto the overlay subtree — wrapping the entire
+  /// renderer in `Transform.translate` (the pre-fix shape) shifted overlay
+  /// AND photo together and produced clipping artifacts at the 1080×1920
+  /// edge on max drag.
+  final Offset photoOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +177,7 @@ class ShareCardRenderer extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            _PhotoZone(photo: photo),
+            _PhotoZone(photo: photo, offset: photoOffset),
             ShareCardVariantA(
               dominantHue: payload.dominantHue,
               xpText: strings.variantAXpText,
@@ -179,7 +191,7 @@ class ShareCardRenderer extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            _PhotoZone(photo: photo),
+            _PhotoZone(photo: photo, offset: photoOffset),
             ShareCardVariantB(
               dominantHue: payload.dominantHue,
               bpEyebrow: strings.variantBBpEyebrow,
@@ -202,24 +214,34 @@ class ShareCardRenderer extends StatelessWidget {
 ///
 /// **Why a separate widget?** Keeps the placeholder + image branch out of
 /// `_buildBody`, and gives the composer test a stable `find.byKey` handle.
+/// Also owns the drag-to-reframe [Transform.translate] so the offset
+/// shifts ONLY the photo, never the overlay (PR 30b Important 3).
 class _PhotoZone extends StatelessWidget {
-  const _PhotoZone({this.photo});
+  const _PhotoZone({this.photo, this.offset = Offset.zero});
 
   final ImageProvider<Object>? photo;
 
+  /// Translation applied to the photo subtree (and only the photo subtree).
+  /// Zero by default — drag-to-reframe is a preview-only affordance.
+  final Offset offset;
+
   @override
   Widget build(BuildContext context) {
+    final Widget child;
     if (photo == null) {
-      return const ColoredBox(
+      child = const ColoredBox(
         key: ValueKey('share-card-renderer-photo-placeholder'),
         // ignore: hardcoded_color — discreet-mode photo-zone backdrop (deep violet flood, locked by mockup §6 Discreet render rules).
         color: Color(0xFF1A1228),
       );
+    } else {
+      child = Image(
+        key: const ValueKey('share-card-renderer-photo'),
+        image: photo!,
+        fit: BoxFit.cover,
+      );
     }
-    return Image(
-      key: const ValueKey('share-card-renderer-photo'),
-      image: photo!,
-      fit: BoxFit.cover,
-    );
+    if (offset == Offset.zero) return child;
+    return Transform.translate(offset: offset, child: child);
   }
 }

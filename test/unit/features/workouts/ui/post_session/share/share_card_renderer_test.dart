@@ -238,6 +238,137 @@ void main() {
     );
     expect(aspectRatio.aspectRatio, 9 / 16);
   });
+
+  // ---------------------------------------------------------------------------
+  // PR 30b Important 3 — photoOffset shifts ONLY the photo subtree.
+  //
+  // Pre-fix: the preview screen wrapped the entire ShareCardRenderer in a
+  // Transform.translate, so the drag gesture shifted both the photo AND
+  // the overlay strips together. The overlay then clipped at the
+  // 1080x1920 boundary, producing edge artifacts in the exported PNG on
+  // max drag.
+  //
+  // Post-fix: ShareCardRenderer takes a photoOffset param that flows into
+  // _PhotoZone only. The overlay (ShareCardVariantA / B) sits in the same
+  // Stack as the photo zone but never receives the offset.
+  // ---------------------------------------------------------------------------
+
+  testWidgets('photoOffset shifts the photo subtree but not the Variant A '
+      'overlay (minimalStrip)', (tester) async {
+    const offset = Offset(0, 40);
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          photo: const _SolidImageProvider(Color(0xFF666666)),
+          photoOffset: offset,
+        ),
+      ),
+    );
+
+    // Photo subtree IS translated by the offset.
+    final photoFinder = find.byKey(const ValueKey('share-card-renderer-photo'));
+    final photoTopLeft = tester.getTopLeft(photoFinder);
+
+    // Overlay subtree is NOT translated.
+    final overlayFinder = find.byType(ShareCardVariantA);
+    final overlayTopLeft = tester.getTopLeft(overlayFinder);
+
+    // Render the same tree with offset zero so we can diff positions.
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          photo: const _SolidImageProvider(Color(0xFF666666)),
+        ),
+      ),
+    );
+
+    final photoTopLeftZero = tester.getTopLeft(photoFinder);
+    final overlayTopLeftZero = tester.getTopLeft(overlayFinder);
+
+    // Photo Y position MOVED by the offset.dy.
+    expect(
+      photoTopLeft.dy - photoTopLeftZero.dy,
+      closeTo(offset.dy, 0.001),
+      reason: 'photoOffset.dy should shift the photo subtree by that amount',
+    );
+
+    // Overlay Y position did NOT move.
+    expect(
+      overlayTopLeft.dy,
+      closeTo(overlayTopLeftZero.dy, 0.001),
+      reason: 'photoOffset must NOT shift the Variant A overlay subtree',
+    );
+  });
+
+  testWidgets('photoOffset == Offset.zero does not wrap the photo in '
+      'Transform.translate (no-op default)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          photo: const _SolidImageProvider(Color(0xFF666666)),
+        ),
+      ),
+    );
+
+    // No Transform.translate ancestor under the photo when offset is zero.
+    final transformAncestors = find.ancestor(
+      of: find.byKey(const ValueKey('share-card-renderer-photo')),
+      matching: find.byType(Transform),
+    );
+    expect(
+      transformAncestors,
+      findsNothing,
+      reason: 'Offset.zero default should bypass the Transform.translate',
+    );
+  });
+
+  testWidgets('photoOffset shifts the placeholder when no photo is supplied', (
+    tester,
+  ) async {
+    const offset = Offset(0, -30);
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+          photoOffset: offset,
+        ),
+      ),
+    );
+
+    final placeholderFinder = find.byKey(
+      const ValueKey('share-card-renderer-photo-placeholder'),
+    );
+    final overlayFinder = find.byType(ShareCardVariantA);
+    final placeholderY = tester.getTopLeft(placeholderFinder).dy;
+    final overlayY = tester.getTopLeft(overlayFinder).dy;
+
+    await tester.pumpWidget(
+      host(
+        ShareCardRenderer(
+          payload: payload(),
+          variant: ShareCardVariant.minimalStrip,
+          strings: strings,
+        ),
+      ),
+    );
+
+    final placeholderYZero = tester.getTopLeft(placeholderFinder).dy;
+    final overlayYZero = tester.getTopLeft(overlayFinder).dy;
+
+    expect(placeholderY - placeholderYZero, closeTo(offset.dy, 0.001));
+    expect(overlayY, closeTo(overlayYZero, 0.001));
+  });
 }
 
 /// Minimal in-memory `ImageProvider` for tests — paints a solid color

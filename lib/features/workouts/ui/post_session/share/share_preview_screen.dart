@@ -168,23 +168,24 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                // Photo is wrapped in a Transform.translate
-                                // so the vertical drag gesture re-frames
-                                // the underlying image. The Stack inside
-                                // the renderer already paints overlays
-                                // ABOVE the photo; the translate only
-                                // shifts the photo layer (the strip /
-                                // collars stay fixed).
-                                Transform.translate(
-                                  offset: Offset(0, _photoAlignmentY * 80),
-                                  child: ShareCardRenderer(
-                                    payload: widget.payload,
-                                    variant: _variant,
-                                    strings: _stringsWithHidesApplied(),
-                                    photo: photo == null
-                                        ? null
-                                        : FileImage(File(photo.path)),
-                                  ),
+                                // Photo offset is forwarded into the
+                                // renderer so ONLY the photo subtree
+                                // translates -- the bottom strip /
+                                // collars stay anchored to the 1080x1920
+                                // frame. Wrapping the renderer itself in
+                                // Transform.translate (the pre-PR-30b-fix
+                                // shape) shifted overlay AND photo
+                                // together and produced clipping
+                                // artifacts at the frame edges on max
+                                // drag.
+                                ShareCardRenderer(
+                                  payload: widget.payload,
+                                  variant: _variant,
+                                  strings: _stringsWithHidesApplied(),
+                                  photo: photo == null
+                                      ? null
+                                      : FileImage(File(photo.path)),
+                                  photoOffset: Offset(0, _photoAlignmentY * 80),
                                 ),
                                 // Tap-to-hide affordances — invisible tap
                                 // surfaces over the XP zone (bottom strip

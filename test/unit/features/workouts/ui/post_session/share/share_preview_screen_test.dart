@@ -282,7 +282,7 @@ void main() {
   // ---------------------------------------------------------------------------
 
   testWidgets(
-    'vertical drag updates the photo translate offset (re-frame gesture)',
+    'vertical drag updates ShareCardRenderer.photoOffset (re-frame gesture)',
     (tester) async {
       await pumpScreen(
         tester,
@@ -290,26 +290,24 @@ void main() {
         previewPhoto: _StubXFile('/tmp/photo.jpg'),
       );
 
-      // Probe the Transform widget that wraps the renderer subtree.
-      // Compare its translation y-component before and after a drag.
-      double translateY() {
-        final t = tester.widget<Transform>(
-          find
-              .ancestor(
-                of: find.byType(ShareCardRenderer),
-                matching: find.byType(Transform),
-              )
-              .first,
-        );
-        return t.transform.getTranslation().y;
+      // The drag-to-reframe gesture flows the offset INTO the renderer
+      // (PR 30b Important 3) so that only the photo subtree translates;
+      // pre-fix the Transform sat ABOVE the renderer and shifted the
+      // overlay too. Probe the renderer's photoOffset prop directly.
+      Offset rendererPhotoOffset() {
+        return tester
+            .widget<ShareCardRenderer>(find.byType(ShareCardRenderer))
+            .photoOffset;
       }
 
-      final before = translateY();
+      final before = rendererPhotoOffset();
       await tester.drag(find.byType(ShareCardRenderer), const Offset(0, 200));
       await tester.pump();
-      final after = translateY();
+      final after = rendererPhotoOffset();
 
       expect(after, isNot(before));
+      // Drag down -> positive dy on the photo translation.
+      expect(after.dy, greaterThan(before.dy));
     },
   );
 
