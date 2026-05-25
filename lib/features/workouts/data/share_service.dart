@@ -1,5 +1,7 @@
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart' as ph
+    show openAppSettings;
 import 'package:share_plus/share_plus.dart';
 
 /// Picks an image from a source (camera / gallery). Hoisted to a top-level
@@ -19,6 +21,12 @@ typedef PermissionRequester =
 typedef PermissionStatusReader =
     Future<PermissionStatus> Function(Permission permission);
 
+/// Opens the host platform's app-settings screen so the user can flip the
+/// permission toggle. Hoisted for DI — `permission_handler` exposes this
+/// as a top-level function (`openAppSettings()`); we wrap it in a typedef
+/// so tests can verify the call without staging the platform channel.
+typedef AppSettingsOpener = Future<bool> Function();
+
 /// Single source of truth for share-card IO: camera/gallery pick, share
 /// sheet handoff, and camera-permission checks.
 ///
@@ -34,17 +42,20 @@ class ShareService {
     FileShareSink? fileShareSink,
     PermissionRequester? permissionRequester,
     PermissionStatusReader? permissionStatusReader,
+    AppSettingsOpener? appSettingsOpener,
   }) : _imagePicker = imagePicker ?? _defaultImagePicker,
        _fileShareSink = fileShareSink ?? _defaultFileShareSink,
        _permissionRequester =
            permissionRequester ?? _defaultPermissionRequester,
        _permissionStatusReader =
-           permissionStatusReader ?? _defaultPermissionStatusReader;
+           permissionStatusReader ?? _defaultPermissionStatusReader,
+       _appSettingsOpener = appSettingsOpener ?? _defaultAppSettingsOpener;
 
   final ImageSourcePicker _imagePicker;
   final FileShareSink _fileShareSink;
   final PermissionRequester _permissionRequester;
   final PermissionStatusReader _permissionStatusReader;
+  final AppSettingsOpener _appSettingsOpener;
 
   /// Open the platform camera and return the captured image, or `null` if
   /// the user cancelled or the platform denied access. Callers should
@@ -81,6 +92,11 @@ class ShareService {
     return _permissionStatusReader(Permission.camera);
   }
 
+  /// Open the platform app-settings screen so the user can flip a denied
+  /// permission. Used by the share preview's permanently-denied recovery
+  /// path. Returns `true` if the settings screen opened successfully.
+  Future<bool> openAppSettings() => _appSettingsOpener();
+
   // --------------------------------------------------------------------
   // Default platform implementations.
   // --------------------------------------------------------------------
@@ -110,4 +126,10 @@ class ShareService {
   ) {
     return permission.status;
   }
+
+  // The top-level `openAppSettings()` from `permission_handler` is shadowed
+  // by our same-named instance method, so reach for it via the package's
+  // namespace prefix. Wrapping it in a function reference keeps the typedef
+  // contract clean.
+  static Future<bool> _defaultAppSettingsOpener() => ph.openAppSettings();
 }

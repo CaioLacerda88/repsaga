@@ -2896,6 +2896,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível gerar o cartão. Tente novamente.';
 
   @override
+  String get shareOpenSettings => 'Abrir configurações';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · ABRIR SAGA';
 
   @override

@@ -2884,6 +2884,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareRenderError => 'Couldn\'t render the saga card. Try again.';
 
   @override
+  String get shareOpenSettings => 'Open settings';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · OPEN SAGA';
 
   @override

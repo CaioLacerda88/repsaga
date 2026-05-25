@@ -188,4 +188,24 @@ void main() {
       expect(status, PermissionStatus.denied);
     });
   });
+
+  group('ShareService.openAppSettings', () {
+    test('delegates to the injected appSettingsOpener seam', () async {
+      var calls = 0;
+      final svc = ShareService(
+        imagePicker: (_) async => null,
+        fileShareSink: (_, {text}) async => throw UnimplementedError(),
+        permissionRequester: (_) async => PermissionStatus.granted,
+        permissionStatusReader: (_) async => PermissionStatus.granted,
+        appSettingsOpener: () async {
+          calls += 1;
+          return true;
+        },
+      );
+
+      final ok = await svc.openAppSettings();
+      expect(calls, 1);
+      expect(ok, isTrue);
+    });
+  });
 }

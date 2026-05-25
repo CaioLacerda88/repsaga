@@ -4962,6 +4962,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t render the saga card. Try again.'**
   String get shareRenderError;
 
+  /// Phase 30 PR 30b — Snackbar action label paired with sharePermissionPermanentlyDenied. Taps openAppSettings() so the user can flip the camera-permission toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get shareOpenSettings;
+
   /// Phase 30 PR 30a — Summary panel rank-up overflow card header. Mockup §5 State 6.
   ///
   /// In en, this message translates to:

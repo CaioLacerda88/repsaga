@@ -2284,6 +2284,8 @@
   "@sharePermissionPermanentlyDenied": { "description": "Phase 30 PR 30b — Snackbar copy when camera permission is permanently denied. Screen layer pairs this with an 'Open settings' affordance." },
   "shareRenderError": "Couldn't render the saga card. Try again.",
   "@shareRenderError": { "description": "Phase 30 PR 30b — Snackbar copy when ShareImageRenderer fails to produce a sharable image." },
+  "shareOpenSettings": "Open settings",
+  "@shareOpenSettings": { "description": "Phase 30 PR 30b — Snackbar action label paired with sharePermissionPermanentlyDenied. Taps openAppSettings() so the user can flip the camera-permission toggle." },
   "summaryRankUpOverflowHeader": "+1 RANK · OPEN SAGA",
   "@summaryRankUpOverflowHeader": { "description": "Phase 30 PR 30a — Summary panel rank-up overflow card header. Mockup §5 State 6." },
 

@@ -214,10 +214,30 @@ class ShareController extends Notifier<ShareState> {
     return _service.cameraPermissionStatus();
   }
 
+  /// Open the platform app-settings screen. The preview-screen error
+  /// snackbar surfaces this affordance on the `cameraPermissionPermanentlyDenied`
+  /// path so the user can flip the toggle and retry.
+  Future<bool> openAppSettings() => _service.openAppSettings();
+
   /// Reset to idle. Called by [SharePreviewScreen]'s retake button so
   /// the screen layer can dismiss the preview and re-open the sheet.
   void reset() {
     state = const ShareState.idle();
+  }
+
+  /// Reset back to the preview state with the previously-chosen photo.
+  /// The preview-screen error handler calls this after surfacing the
+  /// snackbar so the user can retry the share without losing the photo
+  /// they framed.
+  ///
+  /// **Idempotent.** Safe to call multiple times — a no-op when state is
+  /// already a `preview` with the same photo. The state machine only emits
+  /// when the value actually changes, so the UI's `ref.listen` callbacks
+  /// fire exactly once.
+  void resetToPreview({required XFile? photo}) {
+    final next = ShareState.preview(photo: photo);
+    if (state == next) return;
+    state = next;
   }
 }
 

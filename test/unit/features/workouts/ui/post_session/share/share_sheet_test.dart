@@ -32,6 +32,7 @@ void main() {
     permissionDenied: 'Permissão negada',
     permissionPermanentlyDenied: 'Permissão bloqueada',
     renderError: 'Erro ao gerar imagem',
+    openSettings: 'Abrir configurações',
   );
 
   ShareService buildService({

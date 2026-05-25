@@ -27,6 +27,7 @@ class ShareLocalizations {
     required this.permissionDenied,
     required this.permissionPermanentlyDenied,
     required this.renderError,
+    required this.openSettings,
   });
 
   /// Bridge from the generated [AppLocalizations] to the typed bundle.
@@ -45,6 +46,7 @@ class ShareLocalizations {
       permissionDenied: l10n.sharePermissionDenied,
       permissionPermanentlyDenied: l10n.sharePermissionPermanentlyDenied,
       renderError: l10n.shareRenderError,
+      openSettings: l10n.shareOpenSettings,
     );
   }
 
@@ -89,4 +91,9 @@ class ShareLocalizations {
   /// Snackbar / error-state copy when [ShareImageRenderer] fails to
   /// produce a sharable image.
   final String renderError;
+
+  /// Snackbar action label paired with [permissionPermanentlyDenied].
+  /// Tapping it routes to `openAppSettings()` so the user can flip the
+  /// camera-permission toggle and retry.
+  final String openSettings;
 }

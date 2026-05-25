@@ -897,6 +897,7 @@
   "sharePermissionDenied": "Acesso à câmera negado. Toque novamente para tentar.",
   "sharePermissionPermanentlyDenied": "Acesso à câmera bloqueado nas configurações.",
   "shareRenderError": "Não foi possível gerar o cartão. Tente novamente.",
+  "shareOpenSettings": "Abrir configurações",
   "summaryRankUpOverflowHeader": "+1 RANK · ABRIR SAGA",
 
   "emptyGuardTitle": "Encerrar treino?",

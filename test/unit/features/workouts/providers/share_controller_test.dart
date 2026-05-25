@@ -311,6 +311,79 @@ void main() {
     notifier.reset();
     expect(container.read(shareControllerProvider), const ShareState.idle());
   });
+
+  // ---------------------------------------------------------------------------
+  // resetToPreview — PR 30b Blocker 2 (error retry path)
+  // ---------------------------------------------------------------------------
+
+  test(
+    'resetToPreview restores the preview state with the supplied photo',
+    () {
+      final container = makeContainer(
+        service: buildService(),
+        renderer: buildRenderer(),
+      );
+      final notifier = container.read(shareControllerProvider.notifier);
+      notifier.state = const ShareState.error(
+        code: ShareErrorCodes.renderFailed,
+      );
+
+      final photo = _FakeXFile('/tmp/photo.jpg');
+      notifier.resetToPreview(photo: photo);
+
+      final s = container.read(shareControllerProvider);
+      expect(s, isA<ShareStatePreview>());
+      expect((s as ShareStatePreview).photo, photo);
+    },
+  );
+
+  test('resetToPreview is idempotent — same photo, no spurious transitions', () {
+    final container = makeContainer(
+      service: buildService(),
+      renderer: buildRenderer(),
+    );
+    final notifier = container.read(shareControllerProvider.notifier);
+    final photo = _FakeXFile('/tmp/photo.jpg');
+
+    notifier.resetToPreview(photo: photo);
+    final after1 = container.read(shareControllerProvider);
+
+    notifier.resetToPreview(photo: photo);
+    final after2 = container.read(shareControllerProvider);
+
+    // Equal values + no-op semantics. The state machine never emitted a
+    // duplicate transition because the value comparison short-circuits.
+    expect(after1, equals(after2));
+    expect((after2 as ShareStatePreview).photo, photo);
+  });
+
+  // ---------------------------------------------------------------------------
+  // openAppSettings — PR 30b Blocker 2 (permanentlyDenied recovery path)
+  // ---------------------------------------------------------------------------
+
+  test('openAppSettings forwards into the ShareService DI seam', () async {
+    var settingsCalls = 0;
+    final container = makeContainer(
+      service: ShareService(
+        imagePicker: (_) async => null,
+        fileShareSink: (_, {text}) async =>
+            const ShareResult('ok', ShareResultStatus.success),
+        permissionRequester: (_) async => PermissionStatus.granted,
+        permissionStatusReader: (_) async => PermissionStatus.granted,
+        appSettingsOpener: () async {
+          settingsCalls += 1;
+          return true;
+        },
+      ),
+      renderer: buildRenderer(),
+    );
+
+    final ok = await container
+        .read(shareControllerProvider.notifier)
+        .openAppSettings();
+    expect(settingsCalls, 1);
+    expect(ok, isTrue);
+  });
 }
 
 // ---------------------------------------------------------------------------

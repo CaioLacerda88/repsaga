@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cross_file/cross_file.dart' show XFile;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -112,6 +113,15 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
       // Defensive — covers the case where the screen is mounted with no
       // preview state at all (unexpected; the screen-layer caller should
       // open it after a preview transition). Render an empty scaffold.
+      //
+      // PR 30b Suggestion 7: silent SizedBox.shrink was invisible in dev
+      // diagnostics. Use debugPrint (cluster: developer-log-invisible-logcat
+      // — developer.log doesn't reach adb logcat on Android) so a stray
+      // state landing here surfaces in `flutter run` output.
+      debugPrint(
+        '[share_preview] unexpected state: ${state.runtimeType} -- '
+        'rendering empty scaffold',
+      );
       return _scaffold(child: const SizedBox.shrink());
     }
 
@@ -254,16 +264,7 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                         label: widget.l10n.previewShare,
                         backgroundColor: AppColors.primaryViolet,
                         foregroundColor: AppColors.textCream,
-                        onPressed: () async {
-                          await ref
-                              .read(shareControllerProvider.notifier)
-                              .sharePreview(repaintKey: _repaintKey);
-                          if (!mounted) return;
-                          // Close after the controller settles — whether
-                          // the share succeeded, was dismissed, or errored,
-                          // the preview screen is done.
-                          widget.onClose();
-                        },
+                        onPressed: () => _onSharePressed(photo),
                       ),
                     ),
                   ],
@@ -308,6 +309,81 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
 
   Widget _scaffold({required Widget child}) {
     return Scaffold(backgroundColor: AppColors.abyss, body: child);
+  }
+
+  /// Tap handler for the preview-screen share button.
+  ///
+  /// Dispatches into the controller. On success the controller lands in
+  /// `idle` and we close the preview screen. On error we surface the
+  /// matching localized copy via a snackbar AND keep the preview screen
+  /// mounted (the `photo` is still cached locally, the user can retry by
+  /// tapping share again).
+  ///
+  /// Pre-fix the screen called `widget.onClose()` unconditionally on
+  /// every controller resolution, including [ShareStateError]. The
+  /// build()'s `state is! ShareStatePreview` fallback would render an
+  /// empty SizedBox.shrink for one frame and then the close fired, so
+  /// the user just saw the preview vanish on render/share failure with
+  /// no recovery path. `ShareLocalizations.renderError` /
+  /// `permissionDenied` / `permissionPermanentlyDenied` were dead code.
+  Future<void> _onSharePressed(XFile? photo) async {
+    final controller = ref.read(shareControllerProvider.notifier);
+    await controller.sharePreview(repaintKey: _repaintKey);
+    if (!mounted) return;
+
+    final post = ref.read(shareControllerProvider);
+    if (post is ShareStateError) {
+      _surfaceError(post, controller, photo);
+      return;
+    }
+
+    // Success / dismissed / unavailable handled inside the controller
+    // landing on idle — close the preview.
+    widget.onClose();
+  }
+
+  /// Render the failure snackbar + return the controller to preview so
+  /// the user can retry. Pure presentation — no IO. Idempotent.
+  void _surfaceError(
+    ShareStateError post,
+    ShareController controller,
+    XFile? photo,
+  ) {
+    final l10n = widget.l10n;
+    final String message;
+    String? actionLabel;
+    VoidCallback? actionCallback;
+    switch (post.code) {
+      case ShareErrorCodes.cameraPermissionPermanentlyDenied:
+        message = l10n.permissionPermanentlyDenied;
+        actionLabel = l10n.openSettings;
+        actionCallback = () => controller.openAppSettings();
+      case ShareErrorCodes.cameraPermissionDenied:
+        message = l10n.permissionDenied;
+      case ShareErrorCodes.renderFailed:
+      case ShareErrorCodes.shareFailed:
+      default:
+        // Render + share failures share the renderError copy until a
+        // dedicated shareError key lands in the ARB (TODO follow-up if
+        // the failure modes diverge in user-facing copy).
+        message = l10n.renderError;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: actionLabel == null
+            ? null
+            : SnackBarAction(
+                label: actionLabel,
+                onPressed: actionCallback ?? () {},
+              ),
+      ),
+    );
+
+    // Reset back to preview with the cached photo so the user can
+    // retry. resetToPreview is idempotent — safe if called repeatedly.
+    controller.resetToPreview(photo: photo);
   }
 }
 
