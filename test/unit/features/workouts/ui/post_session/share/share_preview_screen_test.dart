@@ -540,6 +540,74 @@ void main() {
   );
 
   // ---------------------------------------------------------------------------
+  // PR 30c device bug 2 — ClipRect contains the drag-to-reframe overflow
+  //
+  // Pre-fix: drag-to-reframe applied a Transform.translate to the photo
+  // subtree. The card's AspectRatio host had no clipping ancestor, so the
+  // translated pixels could overflow the 9:16 outer bounds and paint over
+  // the variant toggle row above. On a real device the user saw the photo
+  // creeping up onto the MÍNIMO / DESTAQUE chips during an upward drag.
+  //
+  // Post-fix: a ClipRect wraps the AspectRatio. The card's outer paint
+  // bounds clamp to the AspectRatio's bounds regardless of the inner
+  // Transform — the toggle row above is untouched.
+  // ---------------------------------------------------------------------------
+  testWidgets('photo cannot paint outside the card frame after max upward drag '
+      '(ClipRect contract — PR 30c device bug 2)', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    // Drive the drag past the natural reframe band. The clamp inside
+    // the screen caps _photoAlignmentY at -1.0 (yielding photoOffset.dy
+    // = -80 in renderer units), but the gesture itself fires deltas
+    // far beyond that. The ClipRect must hold the visible paint bounds
+    // inside the AspectRatio regardless of how aggressive the drag is.
+    await tester.drag(find.byType(ShareCardRenderer), const Offset(0, -2000));
+    await tester.pump();
+
+    // The screen-layer ClipRect sits between Center and AspectRatio
+    // (outer card frame). The renderer also has its own AspectRatio
+    // descendant, so two AspectRatio widgets exist under the ClipRect —
+    // we want the outer one (the direct child of the ClipRect).
+    final clipRectFinder = find.descendant(
+      of: find.byType(SharePreviewScreen),
+      matching: find.byType(ClipRect),
+    );
+    expect(
+      clipRectFinder,
+      findsOneWidget,
+      reason:
+          'AspectRatio must be wrapped in a ClipRect '
+          '(PR 30c device bug 2 fix)',
+    );
+
+    // The outer AspectRatio is the first AspectRatio descendant of the
+    // ClipRect.
+    final outerAspectRatio = find
+        .descendant(of: clipRectFinder, matching: find.byType(AspectRatio))
+        .first;
+    final aspectRect = tester.getRect(outerAspectRatio);
+    final clipRect = tester.getRect(clipRectFinder);
+    expect(
+      clipRect,
+      aspectRect,
+      reason:
+          'ClipRect bounds must equal the AspectRatio bounds — '
+          'photo overflow cannot escape the card frame',
+    );
+
+    // Bottom action row (Refazer/Compartilhar) sits BELOW the card
+    // frame on screen. If the photo overflow leaked, it would paint
+    // ABOVE the card too — over the variant toggle. The toggle still
+    // renders its labels post-drag, which means no overflow ate them.
+    expect(find.text('MÍNIMO'), findsOneWidget);
+    expect(find.text('DESTAQUE'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
   // Defensive mount — non-preview states at mount time
   //
   // PR 30b Suggestion 7: when the screen is mounted with an unexpected state

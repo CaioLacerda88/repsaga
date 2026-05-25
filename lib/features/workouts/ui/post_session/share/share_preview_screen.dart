@@ -154,6 +154,15 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
               // offscreen render. The captured image is always at the
               // native target size; the visible preview is just a scaled
               // mirror so the user can frame + toggle interactively.
+              //
+              // PR 30c device bug 2: the AspectRatio is wrapped in a
+              // ClipRect so the photoOffset Transform inside the renderer
+              // cannot paint outside the card's 9:16 frame. Without this,
+              // dragging the photo upward let the translated pixels bleed
+              // up through the Column and overpaint the variant toggle
+              // row above. ClipRect clips at the AspectRatio's outer
+              // bounds — overlay strips still sit inside the frame so
+              // they remain visible.
               Expanded(
                 child: GestureDetector(
                   onVerticalDragUpdate: isDiscreet
@@ -166,70 +175,76 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                           });
                         },
                   child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 9 / 16,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: RepaintBoundary(
-                          key: _repaintKey,
-                          child: SizedBox(
-                            width: 1080,
-                            height: 1920,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                // Photo offset is forwarded into the
-                                // renderer so ONLY the photo subtree
-                                // translates -- the bottom strip /
-                                // collars stay anchored to the 1080x1920
-                                // frame. Wrapping the renderer itself in
-                                // Transform.translate (the pre-PR-30b-fix
-                                // shape) shifted overlay AND photo
-                                // together and produced clipping
-                                // artifacts at the frame edges on max
-                                // drag.
-                                ShareCardRenderer(
-                                  payload: widget.payload,
-                                  variant: _variant,
-                                  strings: _stringsWithHidesApplied(),
-                                  photo: photo == null
-                                      ? null
-                                      : FileImage(File(photo.path)),
-                                  photoOffset: Offset(0, _photoAlignmentY * 80),
-                                ),
-                                // Tap-to-hide affordances — invisible tap
-                                // surfaces over the XP zone (bottom strip
-                                // on A/B, hero on Discreet) and the PR
-                                // zone (bottom-strip right slot on A, PR
-                                // tag area on B, !! line on Discreet).
-                                // Mockup §7: "tap to hide XP / tap to
-                                // hide PR" — toggle affordances surfaced
-                                // as transparent rectangles.
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  height: 280,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onTap: () =>
-                                        setState(() => _xpHidden = !_xpHidden),
+                    child: ClipRect(
+                      child: AspectRatio(
+                        aspectRatio: 9 / 16,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: RepaintBoundary(
+                            key: _repaintKey,
+                            child: SizedBox(
+                              width: 1080,
+                              height: 1920,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  // Photo offset is forwarded into the
+                                  // renderer so ONLY the photo subtree
+                                  // translates -- the bottom strip /
+                                  // collars stay anchored to the 1080x1920
+                                  // frame. Wrapping the renderer itself in
+                                  // Transform.translate (the pre-PR-30b-fix
+                                  // shape) shifted overlay AND photo
+                                  // together and produced clipping
+                                  // artifacts at the frame edges on max
+                                  // drag.
+                                  ShareCardRenderer(
+                                    payload: widget.payload,
+                                    variant: _variant,
+                                    strings: _stringsWithHidesApplied(),
+                                    photo: photo == null
+                                        ? null
+                                        : FileImage(File(photo.path)),
+                                    photoOffset: Offset(
+                                      0,
+                                      _photoAlignmentY * 80,
+                                    ),
                                   ),
-                                ),
-                                if (_hasPrSection())
+                                  // Tap-to-hide affordances — invisible tap
+                                  // surfaces over the XP zone (bottom strip
+                                  // on A/B, hero on Discreet) and the PR
+                                  // zone (bottom-strip right slot on A, PR
+                                  // tag area on B, !! line on Discreet).
+                                  // Mockup §7: "tap to hide XP / tap to
+                                  // hide PR" — toggle affordances surfaced
+                                  // as transparent rectangles.
                                   Positioned(
                                     left: 0,
                                     right: 0,
-                                    bottom: 320,
-                                    height: 120,
+                                    bottom: 0,
+                                    height: 280,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.translucent,
                                       onTap: () => setState(
-                                        () => _prHidden = !_prHidden,
+                                        () => _xpHidden = !_xpHidden,
                                       ),
                                     ),
                                   ),
-                              ],
+                                  if (_hasPrSection())
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 320,
+                                      height: 120,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.translucent,
+                                        onTap: () => setState(
+                                          () => _prHidden = !_prHidden,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
