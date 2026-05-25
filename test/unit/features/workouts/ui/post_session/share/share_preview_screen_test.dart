@@ -104,7 +104,7 @@ void main() {
     if (previewPhoto != null) {
       notifier.state = ShareState.preview(photo: previewPhoto);
     } else {
-      notifier.useDiscreet(payload: payload);
+      notifier.useDiscreet();
     }
 
     await tester.pumpWidget(

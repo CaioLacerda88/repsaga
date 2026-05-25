@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../../core/theme/app_theme.dart';
-import '../../../domain/share_payload.dart';
 import '../../../providers/share_controller.dart';
 import 'share_localizations.dart';
 
@@ -32,14 +31,9 @@ import 'share_localizations.dart';
 class ShareSheet extends ConsumerWidget {
   const ShareSheet({
     super.key,
-    required this.payload,
     required this.l10n,
     required this.cameraStatus,
   });
-
-  /// Pre-composed payload for the share controller's pick-methods.
-  /// Forwarded directly into [ShareController.pickFromCamera] etc.
-  final SharePayload payload;
 
   /// Pre-localized strings (Decoupling Rule 2).
   final ShareLocalizations l10n;
@@ -57,7 +51,6 @@ class ShareSheet extends ConsumerWidget {
   /// state transition. The preview screen is the next destination.
   static Future<void> open(
     BuildContext context, {
-    required SharePayload payload,
     required ShareLocalizations l10n,
     required PermissionStatus cameraStatus,
   }) {
@@ -70,11 +63,7 @@ class ShareSheet extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (sheetContext) {
-        return ShareSheet(
-          payload: payload,
-          l10n: l10n,
-          cameraStatus: cameraStatus,
-        );
+        return ShareSheet(l10n: l10n, cameraStatus: cameraStatus);
       },
     );
   }
@@ -116,7 +105,7 @@ class ShareSheet extends ConsumerWidget {
                     Navigator.of(context).pop();
                     ref
                         .read(shareControllerProvider.notifier)
-                        .pickFromCamera(payload: payload);
+                        .pickFromCamera();
                   },
                 ),
                 const SizedBox(height: 8),
@@ -127,9 +116,7 @@ class ShareSheet extends ConsumerWidget {
                 label: l10n.fromGallery,
                 onTap: () {
                   Navigator.of(context).pop();
-                  ref
-                      .read(shareControllerProvider.notifier)
-                      .pickFromGallery(payload: payload);
+                  ref.read(shareControllerProvider.notifier).pickFromGallery();
                 },
               ),
               const SizedBox(height: 8),
@@ -139,9 +126,7 @@ class ShareSheet extends ConsumerWidget {
                 label: l10n.noPhoto,
                 onTap: () {
                   Navigator.of(context).pop();
-                  ref
-                      .read(shareControllerProvider.notifier)
-                      .useDiscreet(payload: payload);
+                  ref.read(shareControllerProvider.notifier).useDiscreet();
                 },
               ),
             ],

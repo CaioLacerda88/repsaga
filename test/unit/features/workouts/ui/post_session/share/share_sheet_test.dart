@@ -3,12 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
-import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
 import 'package:repsaga/features/workouts/data/share_service.dart';
-import 'package:repsaga/features/workouts/domain/reward_tier.dart';
-import 'package:repsaga/features/workouts/domain/share_payload.dart';
 import 'package:repsaga/features/workouts/providers/share_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_sheet.dart';
@@ -38,20 +34,6 @@ void main() {
     renderError: 'Erro ao gerar imagem',
   );
 
-  SharePayload buildPayload() {
-    return SharePayload.fromPostSessionState(
-      tier: RewardTier.thresholdAnticipatory,
-      queueResult: CelebrationQueue.build(events: const []),
-      prResult: null,
-      bpXpDeltas: const {BodyPart.chest: 410},
-      bpRankAfter: const {BodyPart.chest: 19},
-      bpProgressFractionAfter: const {BodyPart.chest: 0.5},
-      exerciseNames: const {},
-      totalXp: 618,
-      characterClassSlug: 'bulwark',
-    );
-  }
-
   ShareService buildService({
     Future<XFile?> Function(ImageSource source)? imagePicker,
     Future<PermissionStatus> Function(Permission)? permissionRequester,
@@ -67,7 +49,6 @@ void main() {
   }
 
   Widget host({
-    required SharePayload payload,
     required PermissionStatus cameraStatus,
     required ShareService service,
   }) {
@@ -78,11 +59,7 @@ void main() {
       ],
       child: MaterialApp(
         home: Scaffold(
-          body: ShareSheet(
-            payload: payload,
-            l10n: fakeL10n,
-            cameraStatus: cameraStatus,
-          ),
+          body: ShareSheet(l10n: fakeL10n, cameraStatus: cameraStatus),
         ),
       ),
     );
@@ -97,7 +74,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       host(
-        payload: buildPayload(),
         cameraStatus: PermissionStatus.granted,
         service: buildService(),
       ),
@@ -113,7 +89,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       host(
-        payload: buildPayload(),
         cameraStatus: PermissionStatus.denied,
         service: buildService(),
       ),
@@ -128,7 +103,6 @@ void main() {
       'gallery + discreet remain', (tester) async {
     await tester.pumpWidget(
       host(
-        payload: buildPayload(),
         cameraStatus: PermissionStatus.permanentlyDenied,
         service: buildService(),
       ),
@@ -163,10 +137,9 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp(
+          child: const MaterialApp(
             home: Scaffold(
               body: ShareSheet(
-                payload: buildPayload(),
                 l10n: fakeL10n,
                 cameraStatus: PermissionStatus.granted,
               ),
@@ -201,10 +174,9 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp(
+          child: const MaterialApp(
             home: Scaffold(
               body: ShareSheet(
-                payload: buildPayload(),
                 l10n: fakeL10n,
                 cameraStatus: PermissionStatus.granted,
               ),
@@ -236,10 +208,9 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp(
+          child: const MaterialApp(
             home: Scaffold(
               body: ShareSheet(
-                payload: buildPayload(),
                 l10n: fakeL10n,
                 cameraStatus: PermissionStatus.granted,
               ),
@@ -262,7 +233,6 @@ void main() {
   ) async {
     await tester.pumpWidget(
       host(
-        payload: buildPayload(),
         cameraStatus: PermissionStatus.granted,
         service: buildService(),
       ),

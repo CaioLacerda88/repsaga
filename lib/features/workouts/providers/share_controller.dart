@@ -8,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/share_image_renderer.dart';
 import '../data/share_service.dart';
-import '../domain/share_payload.dart';
 
 part 'share_controller.freezed.dart';
 
@@ -120,8 +119,7 @@ class ShareController extends Notifier<ShareState> {
   /// configurações" affordance for the permanently-denied path). On
   /// grant → opens the camera; cancel = [ShareState.cancelled], chosen
   /// photo = [ShareState.preview].
-  // ignore: avoid_unused_constructor_parameters
-  Future<void> pickFromCamera({required SharePayload payload}) async {
+  Future<void> pickFromCamera() async {
     state = const ShareState.pickingPhoto();
     final status = await _service.requestCameraPermission();
     if (status == PermissionStatus.permanentlyDenied) {
@@ -148,8 +146,7 @@ class ShareController extends Notifier<ShareState> {
   /// User tapped "Escolher da galeria" on the share sheet. Android 13+
   /// photo picker doesn't need a runtime permission (system-level
   /// chooser); we skip the permission flow on purpose.
-  // ignore: avoid_unused_constructor_parameters
-  Future<void> pickFromGallery({required SharePayload payload}) async {
+  Future<void> pickFromGallery() async {
     state = const ShareState.pickingPhoto();
     final photo = await _service.pickFromGallery();
     if (photo == null) {
@@ -162,7 +159,7 @@ class ShareController extends Notifier<ShareState> {
   /// User tapped "Sem foto · só a saga" — discreet path. Skips the
   /// picker entirely and jumps to preview with a null photo. The
   /// preview screen locks the variant to discreet on this path.
-  void useDiscreet({required SharePayload payload}) {
+  void useDiscreet() {
     state = const ShareState.preview(photo: null);
   }
 

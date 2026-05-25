@@ -97,7 +97,6 @@ class _ShareCtaButtonState extends ConsumerState<ShareCtaButton> {
     if (!mounted) return;
     await ShareSheet.open(
       context,
-      payload: widget.payload,
       l10n: widget.l10n,
       cameraStatus: cameraStatus,
     );

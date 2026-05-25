@@ -3,12 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
-import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
 import 'package:repsaga/features/workouts/data/share_service.dart';
-import 'package:repsaga/features/workouts/domain/reward_tier.dart';
-import 'package:repsaga/features/workouts/domain/share_payload.dart';
 import 'package:repsaga/features/workouts/providers/share_controller.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -21,20 +17,6 @@ void main() {
   // ---------------------------------------------------------------------------
   // Fixtures
   // ---------------------------------------------------------------------------
-
-  SharePayload buildPayload() {
-    return SharePayload.fromPostSessionState(
-      tier: RewardTier.thresholdAnticipatory,
-      queueResult: CelebrationQueue.build(events: const []),
-      prResult: null,
-      bpXpDeltas: const {BodyPart.chest: 410},
-      bpRankAfter: const {BodyPart.chest: 19},
-      bpProgressFractionAfter: const {BodyPart.chest: 0.5},
-      exerciseNames: const {},
-      totalXp: 618,
-      characterClassSlug: 'bulwark',
-    );
-  }
 
   ShareService buildService({
     Future<XFile?> Function(ImageSource source)? imagePicker,
@@ -93,7 +75,7 @@ void main() {
       final notifier = container.read(shareControllerProvider.notifier);
       expect(container.read(shareControllerProvider), const ShareState.idle());
 
-      await notifier.pickFromCamera(payload: buildPayload());
+      await notifier.pickFromCamera();
 
       final terminal = container.read(shareControllerProvider);
       expect(terminal, isA<ShareStatePreview>());
@@ -112,7 +94,7 @@ void main() {
       );
 
       final notifier = container.read(shareControllerProvider.notifier);
-      await notifier.pickFromCamera(payload: buildPayload());
+      await notifier.pickFromCamera();
 
       final s = container.read(shareControllerProvider);
       expect(s, isA<ShareStateError>());
@@ -135,7 +117,7 @@ void main() {
       );
 
       final notifier = container.read(shareControllerProvider.notifier);
-      await notifier.pickFromCamera(payload: buildPayload());
+      await notifier.pickFromCamera();
 
       final s = container.read(shareControllerProvider);
       expect(s, isA<ShareStateError>());
@@ -158,7 +140,7 @@ void main() {
       );
 
       final notifier = container.read(shareControllerProvider.notifier);
-      await notifier.pickFromCamera(payload: buildPayload());
+      await notifier.pickFromCamera();
 
       expect(
         container.read(shareControllerProvider),
@@ -181,7 +163,7 @@ void main() {
       );
 
       final notifier = container.read(shareControllerProvider.notifier);
-      await notifier.pickFromGallery(payload: buildPayload());
+      await notifier.pickFromGallery();
 
       final s = container.read(shareControllerProvider);
       expect(s, isA<ShareStatePreview>());
@@ -196,7 +178,7 @@ void main() {
     );
 
     final notifier = container.read(shareControllerProvider.notifier);
-    await notifier.pickFromGallery(payload: buildPayload());
+    await notifier.pickFromGallery();
 
     expect(
       container.read(shareControllerProvider),
@@ -215,7 +197,7 @@ void main() {
     );
 
     final notifier = container.read(shareControllerProvider.notifier);
-    notifier.useDiscreet(payload: buildPayload());
+    notifier.useDiscreet();
 
     final s = container.read(shareControllerProvider);
     expect(s, isA<ShareStatePreview>());
@@ -240,7 +222,7 @@ void main() {
 
       final notifier = container.read(shareControllerProvider.notifier);
       // Pre-condition: must be in preview state.
-      notifier.useDiscreet(payload: buildPayload());
+      notifier.useDiscreet();
 
       await notifier.sharePreview(
         repaintKey: GlobalKey(debugLabel: 'test-repaint'),
@@ -261,7 +243,7 @@ void main() {
     );
 
     final notifier = container.read(shareControllerProvider.notifier);
-    notifier.useDiscreet(payload: buildPayload());
+    notifier.useDiscreet();
 
     await notifier.sharePreview(repaintKey: GlobalKey());
 
@@ -284,7 +266,7 @@ void main() {
       );
 
       final notifier = container.read(shareControllerProvider.notifier);
-      notifier.useDiscreet(payload: buildPayload());
+      notifier.useDiscreet();
 
       await notifier.sharePreview(repaintKey: GlobalKey());
 
@@ -323,7 +305,7 @@ void main() {
     );
 
     final notifier = container.read(shareControllerProvider.notifier);
-    notifier.useDiscreet(payload: buildPayload());
+    notifier.useDiscreet();
     expect(container.read(shareControllerProvider), isA<ShareStatePreview>());
 
     notifier.reset();
