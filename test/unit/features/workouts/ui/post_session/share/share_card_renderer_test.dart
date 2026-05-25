@@ -18,6 +18,7 @@ void main() {
   SharePayload payload({
     BodyPart? dominantBp = BodyPart.chest,
     int? rank = 19,
+    double rankProgress = 0.5,
     SharePayloadPr? pr,
     bool isClassChange = false,
     bool hasRankUp = false,
@@ -28,6 +29,7 @@ void main() {
       totalXp: 618,
       dominantBodyPart: dominantBp,
       dominantBodyPartRank: rank,
+      rankProgressFraction: rankProgress,
       pr: pr,
       characterClassSlug: 'bulwark',
       isClassChange: isClassChange,

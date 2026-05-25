@@ -59,6 +59,7 @@ void main() {
         prResult: null,
         bpXpDeltas: const {},
         bpRankAfter: const {},
+        bpProgressFractionAfter: const {},
         exerciseNames: const {},
         totalXp: 0,
         characterClassSlug: 'initiate',
@@ -68,6 +69,8 @@ void main() {
       expect(payload.totalXp, 0);
       expect(payload.dominantBodyPart, isNull);
       expect(payload.dominantBodyPartRank, isNull);
+      // Defensive fallback — no dominant BP → fraction is 0.
+      expect(payload.rankProgressFraction, 0.0);
       expect(payload.pr, isNull);
       expect(payload.isClassChange, isFalse);
       expect(payload.hasTitleUnlock, isFalse);
@@ -98,6 +101,11 @@ void main() {
           BodyPart.back: 10,
           BodyPart.arms: 8,
         },
+        bpProgressFractionAfter: const {
+          BodyPart.chest: 0.42,
+          BodyPart.back: 0.15,
+          BodyPart.arms: 0.55,
+        },
         exerciseNames: const {},
         totalXp: 340,
         characterClassSlug: 'bulwark',
@@ -105,6 +113,8 @@ void main() {
 
       expect(payload.dominantBodyPart, BodyPart.chest);
       expect(payload.dominantBodyPartRank, 12);
+      // Dominant BP is chest → fraction looked up by chest = 0.42.
+      expect(payload.rankProgressFraction, closeTo(0.42, 1e-9));
       expect(payload.pr, isNull);
       expect(payload.hasRankUp, isFalse);
       expect(payload.isClassChange, isFalse);
@@ -124,6 +134,7 @@ void main() {
       prResult: prResult([pr(exerciseId: 'bench', value: 95, reps: 5)]),
       bpXpDeltas: const {BodyPart.chest: 410},
       bpRankAfter: const {BodyPart.chest: 19},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.68},
       exerciseNames: const {'bench': 'Bench Press'},
       totalXp: 618,
       characterClassSlug: 'bulwark',
@@ -135,6 +146,7 @@ void main() {
     expect(payload.pr!.reps, 5);
     expect(payload.dominantBodyPart, BodyPart.chest);
     expect(payload.dominantBodyPartRank, 19);
+    expect(payload.rankProgressFraction, closeTo(0.68, 1e-9));
     expect(payload.hasShareCta, isTrue);
     expect(payload.dominantHue, AppColors.bodyPartChest);
   });
@@ -157,6 +169,7 @@ void main() {
       ]),
       bpXpDeltas: const {BodyPart.chest: 400, BodyPart.legs: 250},
       bpRankAfter: const {BodyPart.chest: 19, BodyPart.legs: 17},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.5, BodyPart.legs: 0.3},
       exerciseNames: const {
         'squat': 'Squat',
         'bench': 'Bench Press',
@@ -185,6 +198,8 @@ void main() {
       prResult: null,
       bpXpDeltas: const {BodyPart.back: 320},
       bpRankAfter: const {BodyPart.back: 14},
+      // Rank-up just fired → fraction near zero (post-rank-up base).
+      bpProgressFractionAfter: const {BodyPart.back: 0.05},
       exerciseNames: const {},
       totalXp: 320,
       characterClassSlug: 'bulwark',
@@ -223,6 +238,11 @@ void main() {
           BodyPart.chest: 22,
           BodyPart.arms: 11,
         },
+        bpProgressFractionAfter: const {
+          BodyPart.back: 0.12,
+          BodyPart.chest: 0.08,
+          BodyPart.arms: 0.5,
+        },
         exerciseNames: const {},
         totalXp: 830,
         characterClassSlug: 'bulwark',
@@ -248,6 +268,7 @@ void main() {
       prResult: null,
       bpXpDeltas: const {BodyPart.chest: 280},
       bpRankAfter: const {BodyPart.chest: 20},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.0},
       exerciseNames: const {},
       totalXp: 280,
       characterClassSlug: 'bulwark',
@@ -276,6 +297,7 @@ void main() {
       prResult: null,
       bpXpDeltas: const {BodyPart.chest: 420},
       bpRankAfter: const {BodyPart.chest: 18},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.33},
       exerciseNames: const {},
       totalXp: 420,
       characterClassSlug: 'bulwark',
@@ -301,6 +323,7 @@ void main() {
       'pr': prResult([pr(exerciseId: 'squat', value: 120, reps: 5)]),
       'deltas': const {BodyPart.legs: 540},
       'ranks': const {BodyPart.legs: 16},
+      'progress': const {BodyPart.legs: 0.22},
       'names': const {'squat': 'Squat'},
     };
 
@@ -310,6 +333,7 @@ void main() {
       prResult: args['pr'] as PRDetectionResult?,
       bpXpDeltas: args['deltas']! as Map<BodyPart, int>,
       bpRankAfter: args['ranks']! as Map<BodyPart, int>,
+      bpProgressFractionAfter: args['progress']! as Map<BodyPart, double>,
       exerciseNames: args['names']! as Map<String, String>,
       totalXp: 540,
       characterClassSlug: 'bulwark',

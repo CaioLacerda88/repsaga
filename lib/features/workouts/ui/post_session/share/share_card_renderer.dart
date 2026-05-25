@@ -171,7 +171,7 @@ class ShareCardRenderer extends StatelessWidget {
               xpText: strings.variantAXpText,
               prText: strings.variantAPrText,
               wordmark: strings.wordmark,
-              barFillFraction: _rankProgressFraction(payload),
+              barFillFraction: payload.rankProgressFraction,
             ),
           ],
         );
@@ -221,20 +221,4 @@ class _PhotoZone extends StatelessWidget {
       fit: BoxFit.cover,
     );
   }
-}
-
-/// Rank-progress fraction used to fill the Variant A mini progress bar.
-///
-/// **Pass 1 placeholder.** We do not yet have a `rankProgressFraction`
-/// field on [SharePayload] (the cinematic + saga screens already have it,
-/// but plumbing it through here is a Pass 3 wiring task). For now we
-/// derive a stable visual signal from the dominant BP rank's last digit
-/// so the bar isn't perpetually full: `(rank % 10) / 10` produces a
-/// repeatable fraction in [0, 1] without inventing data. The widget test
-/// asserts the bar fill *color* (hue tracking), not the fraction —
-/// fraction wiring is deferred to Pass 3.
-double _rankProgressFraction(SharePayload payload) {
-  final rank = payload.dominantBodyPartRank;
-  if (rank == null) return 0.0;
-  return (rank % 10) / 10.0;
 }

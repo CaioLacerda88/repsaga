@@ -87,6 +87,10 @@ void main() {
       totalXp: 320,
       dominantBodyPart: BodyPart.chest,
       dominantBodyPartRank: 12,
+      // Baseline tier — bar fill at zero (no rank progress earned at this
+      // viewport in the snapshot). Locked here so the golden's bar width
+      // stays deterministic across runs.
+      rankProgressFraction: 0.0,
       pr: null,
       characterClassSlug: 'bulwark',
       isClassChange: false,
@@ -139,6 +143,9 @@ void main() {
       totalXp: 618,
       dominantBodyPart: BodyPart.back,
       dominantBodyPartRank: 19,
+      // Note: Variant B doesn't render the rank bar — the field is still
+      // required on the payload for consistency, but visually inert here.
+      rankProgressFraction: 0.6,
       pr: SharePayloadPr(exerciseName: 'Deadlift', weightKg: 160, reps: 3),
       characterClassSlug: 'berserker',
       isClassChange: false,
@@ -190,6 +197,8 @@ void main() {
       totalXp: 420,
       dominantBodyPart: BodyPart.chest,
       dominantBodyPartRank: 18,
+      // Discreet variant doesn't render the rank bar — required-but-inert.
+      rankProgressFraction: 0.4,
       pr: null,
       characterClassSlug: 'bulwark',
       isClassChange: true,

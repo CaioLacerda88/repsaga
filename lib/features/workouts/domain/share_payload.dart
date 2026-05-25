@@ -116,6 +116,14 @@ abstract class SharePayload with _$SharePayload {
     /// [dominantBodyPart] is `null`.
     required int? dominantBodyPartRank,
 
+    /// Fraction in `[0.0, 1.0]` of XP progress within the dominant BP's
+    /// current rank — drives Variant A's mini progress-bar fill. `0.0`
+    /// when [dominantBodyPart] is `null` (defensive fallback, matches the
+    /// "no BP earned XP" edge case). Computed upstream from
+    /// `RankCurve.progressFraction(totalXp, rank)` so the share card's bar
+    /// fill stays in lockstep with the saga screen's rank rail.
+    required double rankProgressFraction,
+
     /// Hero PR data when the session set a new record. `null` on baseline
     /// + rank-up-only + class-change-only + title-only sessions.
     required SharePayloadPr? pr,
@@ -159,6 +167,10 @@ abstract class SharePayload with _$SharePayload {
   ///     BP selection.
   ///   * [bpRankAfter] — `{BodyPart: rankAfterSave}`. Read for the
   ///     dominant BP's rank.
+  ///   * [bpProgressFractionAfter] — `{BodyPart: fraction in [0,1]}`.
+  ///     Post-session XP progress within the BP's current rank, as already
+  ///     computed by `PostSessionController.build` via
+  ///     `RankCurve.progressFraction`. Looked up by `dominantBodyPart`.
   ///   * [exerciseNames] — pre-resolved exercise display names.
   ///   * [totalXp] — total XP earned this session.
   ///   * [characterClassSlug] — POST-session character class slug
@@ -182,6 +194,7 @@ abstract class SharePayload with _$SharePayload {
     required PRDetectionResult? prResult,
     required Map<BodyPart, int> bpXpDeltas,
     required Map<BodyPart, int> bpRankAfter,
+    required Map<BodyPart, double> bpProgressFractionAfter,
     required Map<String, String> exerciseNames,
     required int totalXp,
     required String characterClassSlug,
@@ -230,11 +243,19 @@ abstract class SharePayload with _$SharePayload {
     final hasTitle = queueResult.queue.any((e) => e is TitleUnlockEvent);
     final hasRankUp = queueResult.queue.any((e) => e is RankUpEvent);
 
+    // Rank progress lookup — defaults to 0.0 when no dominant BP OR the
+    // BP is absent from the map (defensive; the controller always populates
+    // it for every BP that earned XP this session).
+    final rankProgress = (dominantBp == null)
+        ? 0.0
+        : (bpProgressFractionAfter[dominantBp] ?? 0.0).clamp(0.0, 1.0);
+
     return SharePayload(
       tier: tier,
       totalXp: totalXp,
       dominantBodyPart: dominantBp,
       dominantBodyPartRank: dominantRank,
+      rankProgressFraction: rankProgress,
       pr: heroPr,
       characterClassSlug: characterClassSlug,
       isClassChange: hasClassChange,
