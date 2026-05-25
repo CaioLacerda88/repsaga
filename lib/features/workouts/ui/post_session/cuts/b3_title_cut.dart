@@ -19,7 +19,7 @@ import 'cut_slash.dart';
 /// per `RewardAccent`; the typographic gold accent on the title text goes
 /// through the widget-tree scope, and the structural fill/painter sinks
 /// read `RewardAccent.color` directly with an `ignore: reward_accent`
-/// marker (same precedent as `pr_celebration_screen.dart`).
+/// marker (same precedent as the sibling B3 PR cut's gold flood).
 class B3TitleCutWidget extends StatelessWidget {
   const B3TitleCutWidget({
     super.key,
@@ -130,7 +130,8 @@ class B3TitleCutWidget extends StatelessWidget {
       case TitleCutVariant.characterLevel:
         // Structural sink (consumed by ColoredBox fill + _TitleSlash painter
         // + eyebrow color); no widget subtree to wrap in RewardAccent. Same
-        // precedent as `pr_celebration_screen.dart` (full-screen flash).
+        // precedent as the sibling B3 PR cut's gold flood — see its
+        // `RewardAccent.color` read for the canonical structural-sink path.
         // ignore: reward_accent — structural flood; no widget-subtree host for RewardAccent
         return RewardAccent.color;
       case TitleCutVariant.bodyPartTyped:

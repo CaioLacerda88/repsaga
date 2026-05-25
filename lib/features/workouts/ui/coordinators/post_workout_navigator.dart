@@ -4,18 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../personal_records/domain/pr_detection_service.dart';
 import '../../../weekly_plan/providers/weekly_plan_provider.dart';
 import '../widgets/add_to_plan_prompt.dart';
 
-/// Stateless helper owning the post-finish navigation choreography.
+/// Stateless helper owning the post-finish navigation choreography for the
+/// finishes that do NOT route through the post-session cinematic.
 ///
-/// **Why a separate type:** the post-finish path branches across three
-/// signals (overflow card tap, PR celebration, plan-prompt) and consults
-/// providers from a `postFrameCallback` that fires after the screen's
-/// State has been disposed. Pulling the switch into a dedicated type
-/// keeps the rules legible and isolates the lifetime-sensitive
-/// `ProviderScope.containerOf` reads behind a single API.
+/// **Post-PR-30c surface:** the post-session screen (`/workout/finish/:id`)
+/// is the canonical destination for online + non-empty finishes — the
+/// finish coordinator pushes it directly. This navigator only runs for the
+/// remaining shapes (notably offline finishes that route straight to
+/// `/home`, optionally with the add-to-plan prompt) and exists for two
+/// reasons:
+///
+///   1. The plan-prompt has to be evaluated synchronously BEFORE the
+///      finish-save's `AsyncData(null)` transition disposes the active-
+///      workout state ([shouldShowPlanPrompt] is the contract for that).
+///   2. The plan-prompt dialog lives on the root overlay and outlives the
+///      finish-coordinator's lifetime; pulling it behind a stateless type
+///      isolates the lifetime-sensitive `ProviderScope.containerOf` read
+///      from the coordinator's `ref`.
 ///
 /// All methods take `rootContext` (the root navigator's context, which
 /// stays alive for the full app session) and use it for both the
@@ -74,29 +82,32 @@ class PostWorkoutNavigator {
     navContext.go('/home');
   }
 
-  /// Schedule the post-finish navigation transition on the next frame.
+  /// Schedule the post-finish navigation transition on the next frame for
+  /// the finishes that don't route through the post-session cinematic.
   ///
-  /// Defers the route transition by one frame: by the time we reach this
-  /// point the celebration overflow card is gone (the player awaited the
-  /// user-tap-or-timeout completer), so this post-frame callback is purely
-  /// defensive scheduling — any post-await microtask (Riverpod listeners,
-  /// analytics, etc.) gets a clean frame boundary before the route teardown
-  /// begins.
-  ///
-  /// **Branch precedence:**
+  /// **Branch precedence (post-PR-30c):**
   ///   1. `userTappedOverflow` → `/profile` (Saga). Honors the explicit nav
-  ///      choice the user made by tapping the overflow card; trumps PR
-  ///      celebration and plan-prompt.
-  ///   2. PR celebration → `/pr-celebration` (with optional plan-prompt
-  ///      payload so the celebration screen can chain into it).
-  ///   3. Plan-prompt → fire-and-forget [showPlanPromptAndGoHome] (the
+  ///      choice the user made by tapping the overflow card. Dead code on
+  ///      the post-PR-30a path (the overflow card lives on the post-session
+  ///      summary panel and the screen navigates internally) but kept for
+  ///      the offline / legacy pass-through branches that still consult the
+  ///      celebration orchestrator's outcome.
+  ///   2. Plan-prompt → fire-and-forget [showPlanPromptAndGoHome] (the
   ///      dialog lives on a separate Overlay subtree; we don't await it).
-  ///   4. Default → `/home`.
+  ///   3. Default → `/home`.
+  ///
+  /// The PR-celebration branch (formerly precedence 2) was retired in PR
+  /// 30c — every online finish with at least one logged set routes through
+  /// `/workout/finish/:workoutId` (the post-session cinematic), which
+  /// renders the PR confirmation in the B3 PR cut + summary panel detail
+  /// row. The legacy `/pr-celebration` route was deleted in the same PR.
+  ///
+  /// Defers the route transition by one frame: any post-await microtask
+  /// (Riverpod listeners, analytics, etc.) gets a clean frame boundary
+  /// before the route teardown begins.
   void navigateAfterFinish({
     required BuildContext rootContext,
     required bool userTappedOverflow,
-    required PRDetectionResult? prResult,
-    required Map<String, String> exerciseNames,
     required bool shouldPrompt,
     required String? routineId,
     required String? routineName,
@@ -105,16 +116,6 @@ class PostWorkoutNavigator {
       if (!rootContext.mounted) return;
       if (userTappedOverflow) {
         rootContext.go('/profile');
-      } else if (prResult != null && prResult.hasNewRecords) {
-        rootContext.go(
-          '/pr-celebration',
-          extra: {
-            'result': prResult,
-            'exerciseNames': exerciseNames,
-            if (shouldPrompt) 'planPromptRoutineId': routineId,
-            if (shouldPrompt) 'planPromptRoutineName': routineName,
-          },
-        );
       } else if (shouldPrompt) {
         // Fire-and-forget: dialog lives on a separate Overlay subtree, so
         // we don't need to await it here. The dialog handles its own

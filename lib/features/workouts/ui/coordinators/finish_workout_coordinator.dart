@@ -332,30 +332,21 @@ class FinishWorkoutCoordinator {
         return;
       }
 
-      // AW-EX-D-US1-02 + offline path (Family 7 round 3):
-      // For an offline finish the workout itself has not committed to the
-      // server — only the local queue. Routing to `/pr-celebration` for
-      // queued data would surface a "NEW PR" celebration for a workout that
-      // does not yet exist on the server, which is misleading from a trust
-      // standpoint and breaks the pre-existing user contract pinned by the
-      // OFFLINE-001/002/005/007 E2E tests (offline finish always lands on
-      // /home).
+      // Post-PR-30c — the legacy `/pr-celebration` route is gone and the
+      // post-session cinematic owns PR confirmation. The `prResult` value
+      // flows into the post-session route's `PostSessionParams` for the B3
+      // PR cut + summary panel detail row; offline finishes intentionally
+      // suppress that branch (the workout hasn't committed server-side so
+      // we don't surface a "NEW PR" until the queue drains).
       //
-      // Pre-Family-7, this contract was held implicitly by a postFrame race:
-      // the active-workout screen's home-redirect callback would clobber
-      // `navigateAfterFinish`'s `/pr-celebration` push because both ran in
-      // the same frame's postFrame phase and `go()` is last-write-wins. The
-      // Family 7 fix correctly removed that race by deferring the
-      // `_isFinishHandled` release across two frames — but doing so also
-      // removed the implicit guarantee.
-      //
-      // Make the contract explicit at the coordinator: when
-      // `wasSavedOffline == true`, suppress the PR-celebration branch by
-      // passing `prResult: null`. The navigator's default branch
-      // (`rootContext.go('/home')`) then handles offline correctly. The
-      // PR cache invalidations above (lines 185-189) still happen — those
-      // are about cache reconciliation (the PR upsert may have committed
-      // independently of the workout), not navigation.
+      // The pre-30c contract pinned by OFFLINE-001/002/005/007 — offline
+      // finish always lands on /home — is preserved: the offline path
+      // skips `shouldPushPostSession` below and falls through to
+      // `postWorkoutNavigator.navigateAfterFinish`, whose default branch
+      // is `rootContext.go('/home')`. The PR cache invalidations above
+      // still happen — those are about cache reconciliation (the PR
+      // upsert may have committed independently of the workout), not
+      // navigation.
       final navigationPrResult = wasSavedOffline ? null : prResult;
 
       // Phase 30 PR 30a (Bug C, 2026-05-23) — every online finish with at
@@ -445,11 +436,14 @@ class FinishWorkoutCoordinator {
         return;
       }
 
+      // PR-celebration branch retired in PR 30c — `navigationPrResult` is
+      // only consumed by the post-session route above. Offline / pass-through
+      // finishes go through the navigator's slimmed three-way switch
+      // (overflow → /profile, plan-prompt → showPlanPromptAndGoHome, else
+      // → /home).
       postWorkoutNavigator.navigateAfterFinish(
         rootContext: rootContext,
         userTappedOverflow: userTappedOverflow,
-        prResult: navigationPrResult,
-        exerciseNames: exerciseNames,
         shouldPrompt: shouldPrompt,
         routineId: routineId,
         routineName: routineName,
