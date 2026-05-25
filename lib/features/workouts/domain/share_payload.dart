@@ -5,11 +5,11 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../personal_records/domain/pr_detection_service.dart';
-import '../../personal_records/models/personal_record.dart';
 import '../../rpg/domain/celebration_queue.dart';
 import '../../rpg/models/body_part.dart';
 import '../../rpg/models/celebration_event.dart';
 import '../../rpg/ui/utils/vitality_state_styles.dart';
+import 'pr_score.dart';
 import 'reward_tier.dart';
 
 part 'share_payload.freezed.dart';
@@ -223,8 +223,8 @@ abstract class SharePayload with _$SharePayload {
     if (prResult != null && prResult.hasNewRecords) {
       final records = [...prResult.newRecords];
       records.sort((a, b) {
-        final aScore = _prScore(a);
-        final bScore = _prScore(b);
+        final aScore = prScore(a);
+        final bScore = prScore(b);
         final cmp = bScore.compareTo(aScore);
         if (cmp != 0) return cmp;
         final aName = exerciseNames[a.exerciseId] ?? a.exerciseId;
@@ -298,14 +298,6 @@ extension SharePayloadCta on SharePayload {
     if (isClassChange) return true;
     return false;
   }
-}
-
-/// PR scoring tiebreaker — same `weight × reps` heuristic used by the
-/// cinematic choreographer.
-double _prScore(PersonalRecord r) {
-  final weight = r.value;
-  final reps = (r.reps ?? 1).clamp(1, 1 << 20);
-  return weight * reps;
 }
 
 /// Body-part hue lookup — delegates to [VitalityStateStyles.bodyPartColor]

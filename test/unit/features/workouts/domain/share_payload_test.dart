@@ -187,6 +187,46 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // Case 4b: Mixed null-reps + weighted PR — weighted always wins
+  //
+  // Regression: pre-fix `share_payload.dart` scored null reps as `weight × 1`,
+  // letting a bodyweight maxReps PR beat a weighted PR in the share-card
+  // hero slot — while `PostSessionChoreographer._buildPrCut` scored null
+  // reps as `weight × 0`. The two surfaces could surface different heroes.
+  // After the `prScore` extraction (Blocker 1), both surfaces share the
+  // null-reps-as-zero rule and the weighted PR always wins in mixed sessions.
+  // ---------------------------------------------------------------------------
+  test('mixed null-reps + weighted PR — share card picks the weighted PR '
+      '(parity with choreographer Beat 3 cut)', () {
+    final payload = SharePayload.fromPostSessionState(
+      tier: RewardTier.thresholdAnticipatory,
+      queueResult: queue(const []),
+      prResult: prResult([
+        // Bodyweight maxReps PR — null reps, scores 0 post-fix.
+        pr(
+          exerciseId: 'pullup',
+          value: 100,
+          reps: null,
+          type: RecordType.maxReps,
+        ),
+        // Weighted PR — scores 60 × 5 = 300, wins.
+        pr(exerciseId: 'bench', value: 60, reps: 5),
+      ]),
+      bpXpDeltas: const {BodyPart.chest: 400, BodyPart.back: 250},
+      bpRankAfter: const {BodyPart.chest: 19, BodyPart.back: 17},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.5, BodyPart.back: 0.3},
+      exerciseNames: const {'pullup': 'Pull-up', 'bench': 'Bench Press'},
+      totalXp: 650,
+      characterClassSlug: 'bulwark',
+    );
+
+    expect(payload.pr!.exerciseName, 'Bench Press');
+    expect(payload.pr!.weightKg, 60);
+    expect(payload.pr!.reps, 5);
+    expect(payload.hasShareCta, isTrue);
+  });
+
+  // ---------------------------------------------------------------------------
   // Case 5: Single rank-up (no PR) — hue + hasRankUp + share CTA
   // ---------------------------------------------------------------------------
   test('single rank-up session sets hasRankUp + share CTA without a PR', () {
