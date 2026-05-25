@@ -1,10 +1,76 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
+import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/celebration_event.dart';
+import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
+import 'package:repsaga/features/workouts/data/share_service.dart';
+import 'package:repsaga/features/workouts/domain/reward_tier.dart';
+import 'package:repsaga/features/workouts/domain/share_payload.dart';
+import 'package:repsaga/features/workouts/providers/share_controller.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_card_renderer.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/next_step_hook.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/post_session_summary_panel.dart';
 
 void main() {
+  const fakeShareStrings = ShareCardStrings(
+    wordmark: 'REPSAGA',
+    variantAXpText: '+618 XP',
+    variantAPrText: null,
+    variantBBpEyebrow: 'Peito',
+    variantBClassName: 'BULWARK',
+    variantBPrTag: null,
+    variantBLift: '',
+    variantBBpSub: '',
+    variantBXpSub: '+618 XP',
+    discreetEyebrow: 'Peito · Rank 19',
+    discreetHero: '+618',
+    discreetHeroSubLabel: 'XP',
+    discreetPrLine: null,
+    discreetPrDetail: null,
+  );
+
+  const fakeShareLocalizations = ShareLocalizations(
+    sheetTitle: 'Compartilhar saga',
+    takePhoto: 'Tirar foto',
+    fromGallery: 'Escolher da galeria',
+    noPhoto: 'Sem foto · só a saga',
+    previewMinimal: 'Mínimo',
+    previewBold: 'Destaque',
+    previewRetake: 'Refazer',
+    previewShare: 'Compartilhar',
+    wordmark: 'REPSAGA',
+    permissionDenied: 'Permissão negada',
+    permissionPermanentlyDenied: 'Permissão bloqueada',
+    renderError: 'Erro ao gerar imagem',
+    openSettings: 'Abrir configurações',
+  );
+
+  SharePayload buildSharePayload({bool hasRankUp = true}) {
+    return SharePayload.fromPostSessionState(
+      tier: RewardTier.thresholdAnticipatory,
+      queueResult: CelebrationQueue.build(
+        events: hasRankUp
+            ? const [
+                CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 19),
+              ]
+            : const [],
+      ),
+      prResult: const PRDetectionResult(newRecords: [], isFirstWorkout: false),
+      bpXpDeltas: const {BodyPart.chest: 618},
+      bpRankAfter: const {BodyPart.chest: 19},
+      bpProgressFractionAfter: const {BodyPart.chest: 0.5},
+      exerciseNames: const {},
+      totalXp: 618,
+      characterClassSlug: 'bulwark',
+    );
+  }
+
   Widget panel({
     String? sagaLabel,
     String? durationSetsLabel,
@@ -15,32 +81,48 @@ void main() {
     Widget? rankUpOverflow,
     VoidCallback? onContinue,
   }) {
-    return MaterialApp(
-      home: Scaffold(
-        body: PostSessionSummaryPanel(
-          sagaLabel: sagaLabel ?? 'Saga 47',
-          durationSetsLabel: durationSetsLabel ?? '38 min · 14 séries',
-          tonnageLabel: tonnageLabel ?? '5.8 ton',
-          nextStepEyebrow: 'Próximo passo',
-          nextStepHook: nextStepHook,
-          continueLabel: 'CONTINUAR',
-          shareLabel: 'Compartilhar saga',
-          shareComingSoonMessage: 'Em breve',
-          hasShareCta: hasShareCta,
-          titleEquipRow: titleEquipRow,
-          rankUpOverflow: rankUpOverflow,
-          onContinue: onContinue ?? () {},
-          nextStepHookFormatter: (h) => switch (h) {
-            NextRankHook(
-              :final bodyPart,
-              :final xpToNextRank,
-              :final nextRank,
-            ) =>
-              'Faltam $xpToNextRank XP para ${bodyPart.dbValue} rank $nextRank.',
-            NextLevelHook(:final ranksToNextLevel, :final nextLevel) =>
-              'Faltam $ranksToNextLevel ranks para nível $nextLevel.',
-            PrDetailHook(:final exerciseName) => exerciseName,
-          },
+    return ProviderScope(
+      overrides: [
+        shareServiceProvider.overrideWithValue(
+          ShareService(
+            imagePicker: (_) async => null,
+            fileShareSink: (_, {text}) async =>
+                throw UnimplementedError('not exercised'),
+            permissionRequester: (_) async => throw UnimplementedError(),
+            permissionStatusReader: (_) async => throw UnimplementedError(),
+          ),
+        ),
+        shareImageRendererProvider.overrideWithValue(_StubRenderer()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: PostSessionSummaryPanel(
+            sagaLabel: sagaLabel ?? 'Saga 47',
+            durationSetsLabel: durationSetsLabel ?? '38 min · 14 séries',
+            tonnageLabel: tonnageLabel ?? '5.8 ton',
+            nextStepEyebrow: 'Próximo passo',
+            nextStepHook: nextStepHook,
+            continueLabel: 'CONTINUAR',
+            shareLabel: 'Compartilhar saga',
+            sharePayload: hasShareCta ? buildSharePayload() : null,
+            shareCardStrings: hasShareCta ? fakeShareStrings : null,
+            shareLocalizations: hasShareCta ? fakeShareLocalizations : null,
+            hasShareCta: hasShareCta,
+            titleEquipRow: titleEquipRow,
+            rankUpOverflow: rankUpOverflow,
+            onContinue: onContinue ?? () {},
+            nextStepHookFormatter: (h) => switch (h) {
+              NextRankHook(
+                :final bodyPart,
+                :final xpToNextRank,
+                :final nextRank,
+              ) =>
+                'Faltam $xpToNextRank XP para ${bodyPart.dbValue} rank $nextRank.',
+              NextLevelHook(:final ranksToNextLevel, :final nextLevel) =>
+                'Faltam $ranksToNextLevel ranks para nível $nextLevel.',
+              PrDetailHook(:final exerciseName) => exerciseName,
+            },
+          ),
         ),
       ),
     );
@@ -139,13 +221,63 @@ void main() {
     expect(find.text('OVERFLOW_PLACEHOLDER'), findsOneWidget);
   });
 
-  testWidgets(
-    'share CTA tap shows the coming-soon snackbar (30a placeholder behavior)',
-    (tester) async {
-      await tester.pumpWidget(panel(hasShareCta: true));
-      await tester.tap(find.text('COMPARTILHAR SAGA'));
-      await tester.pump(); // start the snackbar
-      expect(find.text('Em breve'), findsOneWidget);
-    },
-  );
+  testWidgets('share CTA tap opens the share sheet (PR 30b wired behavior)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          shareServiceProvider.overrideWithValue(
+            ShareService(
+              imagePicker: (_) async => null,
+              fileShareSink: (_, {text}) async => throw UnimplementedError(),
+              permissionRequester: (_) async => PermissionStatus.granted,
+              permissionStatusReader: (_) async => PermissionStatus.granted,
+            ),
+          ),
+          shareImageRendererProvider.overrideWithValue(_StubRenderer()),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: PostSessionSummaryPanel(
+              sagaLabel: 'Saga 47',
+              durationSetsLabel: '38 min · 14 séries',
+              tonnageLabel: '5.8 ton',
+              nextStepEyebrow: 'Próximo passo',
+              nextStepHook: null,
+              continueLabel: 'CONTINUAR',
+              shareLabel: 'Compartilhar saga',
+              sharePayload: buildSharePayload(),
+              shareCardStrings: fakeShareStrings,
+              shareLocalizations: fakeShareLocalizations,
+              hasShareCta: true,
+              onContinue: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('COMPARTILHAR SAGA'));
+    // refreshCameraPermission is async — pump to let it settle.
+    await tester.pumpAndSettle();
+
+    // The bottom sheet renders the title from ShareLocalizations.
+    expect(find.text('Compartilhar saga'), findsOneWidget);
+    // And the three picker rows.
+    expect(find.text('Tirar foto'), findsOneWidget);
+    expect(find.text('Escolher da galeria'), findsOneWidget);
+    expect(find.text('Sem foto · só a saga'), findsOneWidget);
+  });
+}
+
+class _StubRenderer implements ShareImageRenderer {
+  @override
+  Future<XFile> render({
+    required GlobalKey repaintKey,
+    double pixelRatio = 3.0,
+    int jpegQuality = 88,
+  }) async {
+    throw UnimplementedError('renderer not exercised in summary panel tests');
+  }
 }

@@ -22,11 +22,15 @@ import 'cuts/b2_bp_tally_cut.dart';
 import 'cuts/b2_cascade_cut.dart';
 import 'cuts/b2_elevated_cut.dart';
 import 'cuts/b3_class_change_cut.dart';
+import '../../domain/share_payload.dart';
+import '../../../rpg/providers/class_provider.dart';
 import 'cuts/b3_pr_cut.dart';
 import 'cuts/b3_title_cut.dart';
 import 'cuts/cinematic_skip_button.dart';
 import 'cuts/cinematic_tap_hint.dart';
 import 'post_session_state.dart';
+import 'share/share_card_renderer.dart';
+import 'share/share_localizations.dart';
 import 'summary/next_step_hook.dart';
 import 'summary/post_session_summary_panel.dart';
 import 'summary/title_equip_row.dart';
@@ -532,6 +536,53 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       null => AppColors.hotViolet,
     };
 
+    // Build the share-card payload + localized strings only when the
+    // CTA is visible. Building them unconditionally would pull the
+    // character class slug + per-BP labels into baseline-tier renders
+    // for no reason.
+    SharePayload? sharePayload;
+    ShareCardStrings? shareCardStrings;
+    ShareLocalizations? shareLocalizations;
+    if (state.hasShareCta) {
+      final classSlug =
+          ref.read(characterClassProvider)?.slug ??
+          CharacterClass.initiate.slug;
+      // Compute bp XP deltas from the queue + state; we use what the
+      // controller's state machine already projected — the share payload
+      // factory expects raw deltas, but the cinematic-side state stores
+      // the dominant-BP-derived hook. For the share card we just need
+      // the dominant BP, its rank, and progress fraction — all of which
+      // are already on PostSessionState. Construct a minimal deltas map
+      // (single entry on the dominant BP carrying its XP) so the
+      // factory's existing dominant-BP selection still resolves to the
+      // same value the cinematic chose.
+      final deltas = <BodyPart, int>{};
+      final ranks = <BodyPart, int>{};
+      if (state.dominantBodyPart != null) {
+        deltas[state.dominantBodyPart!] = state.totalXpEarned;
+        ranks[state.dominantBodyPart!] = state.dominantNextRank == null
+            ? 1
+            : state.dominantNextRank! - 1;
+      }
+      sharePayload = SharePayload.fromPostSessionState(
+        tier: state.tier,
+        queueResult: state.queueResult,
+        prResult: state.prResult,
+        bpXpDeltas: deltas,
+        bpRankAfter: ranks,
+        bpProgressFractionAfter: state.bpProgressFractionAfter,
+        exerciseNames: state.exerciseNames,
+        totalXp: state.totalXpEarned,
+        characterClassSlug: classSlug,
+      );
+      shareLocalizations = ShareLocalizations.from(l10n);
+      shareCardStrings = _buildShareCardStrings(
+        payload: sharePayload,
+        state: state,
+        l10n: l10n,
+      );
+    }
+
     return PostSessionSummaryPanel(
       sagaLabel: sagaLabel,
       durationSetsLabel: durationSets,
@@ -541,7 +592,9 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       nextStepEyebrowColor: eyebrowColor,
       continueLabel: l10n.summaryContinueCta,
       shareLabel: l10n.summaryShareCta,
-      shareComingSoonMessage: l10n.summaryShareComingSoon,
+      sharePayload: sharePayload,
+      shareCardStrings: shareCardStrings,
+      shareLocalizations: shareLocalizations,
       hasShareCta: state.hasShareCta,
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
@@ -550,6 +603,64 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         widget.onContinue();
       },
       nextStepHookFormatter: (h) => _formatHook(h, state, l10n),
+    );
+  }
+
+  /// Compose the [ShareCardStrings] bundle from the post-session state
+  /// snapshot + the active [AppLocalizations]. Mirrors the per-variant
+  /// copy specs in mockup §6 — Variant A bottom strip, Variant B
+  /// collars, Discreet flood-and-slash.
+  ///
+  /// Kept inside the screen so the cinematic + share card pull from the
+  /// same `state.bodyPartLabels` / `state.exerciseNames` maps the
+  /// controller already resolved. Adding a separate composer would
+  /// duplicate the lookups.
+  ShareCardStrings _buildShareCardStrings({
+    required SharePayload payload,
+    required PostSessionState state,
+    required AppLocalizations l10n,
+  }) {
+    final xpText = '+${state.totalXpEarned} XP';
+    final bp = state.dominantBodyPart;
+    final bpLabel = bp == null ? '' : (state.bodyPartLabels[bp] ?? bp.dbValue);
+    final rank = payload.dominantBodyPartRank;
+    final classSlug = payload.characterClassSlug;
+    final className = classSlug.toUpperCase();
+    final pr = payload.pr;
+    final prText = pr == null
+        ? null
+        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps} · PR';
+    final variantBLift = pr == null
+        ? ''
+        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps}';
+    final variantBPrTag = pr == null ? null : l10n.summaryNewTitleLabel;
+    final variantBBpSub = pr == null ? '' : '${pr.exerciseName} · $bpLabel';
+    final discreetEyebrow = payload.isClassChange
+        ? '$className DESPERTOU.'
+        : (bpLabel.isEmpty || rank == null ? bpLabel : '$bpLabel · Rank $rank');
+    final discreetHero = payload.isClassChange
+        ? className
+        : '+${state.totalXpEarned}';
+    final discreetPrLine = pr == null
+        ? null
+        : '!! ${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps}';
+    final discreetPrDetail = pr == null ? null : '${pr.exerciseName} · PR';
+
+    return ShareCardStrings(
+      wordmark: l10n.shareWordmark,
+      variantAXpText: xpText,
+      variantAPrText: prText,
+      variantBBpEyebrow: bpLabel,
+      variantBClassName: className,
+      variantBPrTag: variantBPrTag,
+      variantBLift: variantBLift,
+      variantBBpSub: variantBBpSub,
+      variantBXpSub: xpText,
+      discreetEyebrow: discreetEyebrow,
+      discreetHero: discreetHero,
+      discreetHeroSubLabel: 'XP',
+      discreetPrLine: discreetPrLine,
+      discreetPrDetail: discreetPrDetail,
     );
   }
 

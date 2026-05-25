@@ -2846,6 +2846,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get summaryShareComingSoon => 'Share — coming soon';
 
   @override
+  String get shareSheetTitle => 'Share your saga';
+
+  @override
+  String get shareSheetTakePhoto => 'Take a photo';
+
+  @override
+  String get shareSheetFromGallery => 'Pick from gallery';
+
+  @override
+  String get shareSheetNoPhoto => 'No photo · just the saga';
+
+  @override
+  String get sharePreviewMinimal => 'Minimal';
+
+  @override
+  String get sharePreviewBold => 'Bold';
+
+  @override
+  String get sharePreviewRetake => 'Retake';
+
+  @override
+  String get sharePreviewShare => 'Share';
+
+  @override
+  String get shareWordmark => 'REPSAGA';
+
+  @override
+  String get sharePermissionDenied =>
+      'Camera access denied. Tap again to retry.';
+
+  @override
+  String get sharePermissionPermanentlyDenied =>
+      'Camera access blocked in settings.';
+
+  @override
+  String get shareRenderError => 'Couldn\'t render the saga card. Try again.';
+
+  @override
+  String get shareOpenSettings => 'Open settings';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · OPEN SAGA';
 
   @override

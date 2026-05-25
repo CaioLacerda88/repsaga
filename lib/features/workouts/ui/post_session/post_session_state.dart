@@ -41,6 +41,11 @@ abstract class PostSessionState with _$PostSessionState {
     /// Pre-resolved exercise display names keyed by exercise id.
     required Map<String, String> exerciseNames,
 
+    /// Post-session XP-progress fraction within current rank for every BP
+    /// that earned XP this session. Stored so `SharePayload.fromPostSessionState`
+    /// can project the dominant BP's progress fraction into the share card.
+    required Map<BodyPart, double> bpProgressFractionAfter,
+
     /// Post-finish total XP earned.
     required int totalXpEarned,
 

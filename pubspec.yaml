@@ -36,6 +36,21 @@ dependencies:
   # the stub `web_online_events_io.dart` and never link `package:web`.
   web: ^1.1.1
   fl_chart: ^1.1.0
+  # Phase 30 PR 30b Pass 2: share-card IO pipeline.
+  #   image_picker  — camera + gallery picker (`pickImage`)
+  #   share_plus    — native share sheet (`Share.shareXFiles`)
+  #   permission_handler — graceful camera-denial UX (status + request)
+  # Versions pinned to the latest stable line compatible with Dart SDK 3.11.4.
+  # 11.x of share_plus bumped Dart min beyond 3.11.4, so we hold at 10.x.
+  image_picker: ^1.1.2
+  share_plus: ^10.1.4
+  permission_handler: ^11.3.1
+  # `cross_file` is a transitive dep of `share_plus` (XFile type) and
+  # `path_provider` is transitive via `hive_flutter`. Listed explicitly so
+  # `ShareImageRenderer` / `ShareService` can import them without depending
+  # on undeclared transitive resolution surviving future package upgrades.
+  cross_file: ^0.3.4
+  path_provider: ^2.1.4
   package_info_plus: ^9.0.1 # Pinned: 10.x requires Dart SDK newer than 3.11.4
   # Used for `firstWhereOrNull` in `active_workout_screen.dart` (PR3 review W1)
   # — the previous `firstWhere(orElse: () => after.last)` silently returned the

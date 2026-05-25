@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
+import '../../../domain/share_payload.dart';
+import '../share/share_card_renderer.dart';
+import '../share/share_localizations.dart';
 import 'next_step_hook.dart';
 import 'share_cta_button.dart';
 
@@ -44,8 +47,10 @@ class PostSessionSummaryPanel extends StatelessWidget {
     required this.nextStepHook,
     required this.continueLabel,
     required this.shareLabel,
-    required this.shareComingSoonMessage,
     required this.onContinue,
+    this.sharePayload,
+    this.shareCardStrings,
+    this.shareLocalizations,
     this.hasShareCta = false,
     this.titleEquipRow,
     this.rankUpOverflow,
@@ -91,8 +96,18 @@ class PostSessionSummaryPanel extends StatelessWidget {
   /// renders separately at the call site).
   final String shareLabel;
 
-  /// "Em breve" snackbar message.
-  final String shareComingSoonMessage;
+  /// Pre-composed share payload, sourced from `PostSessionState` by the
+  /// screen layer. Required when [hasShareCta] is true. Null when the
+  /// CTA is hidden (baseline / day-zero / level-up only).
+  final SharePayload? sharePayload;
+
+  /// Pre-localized share-card overlay strings. Required when
+  /// [hasShareCta] is true.
+  final ShareCardStrings? shareCardStrings;
+
+  /// Pre-localized share-sheet + preview-screen labels. Required when
+  /// [hasShareCta] is true.
+  final ShareLocalizations? shareLocalizations;
 
   /// Called when the user taps CONTINUAR. Route-agnostic per Decoupling
   /// Rule 8 — the route container wires this to GoRouter.
@@ -195,10 +210,15 @@ class PostSessionSummaryPanel extends StatelessWidget {
                   titleEquipRow!,
                 ],
                 const Spacer(),
-                if (hasShareCta) ...[
+                if (hasShareCta &&
+                    sharePayload != null &&
+                    shareCardStrings != null &&
+                    shareLocalizations != null) ...[
                   ShareCtaButton(
                     label: shareLabel,
-                    comingSoonMessage: shareComingSoonMessage,
+                    payload: sharePayload!,
+                    strings: shareCardStrings!,
+                    l10n: shareLocalizations!,
                   ),
                   const SizedBox(height: 10),
                 ],

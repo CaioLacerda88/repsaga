@@ -1458,4 +1458,39 @@ export const POST_SESSION = {
    * Semantics(identifier: 'empty-session-guard-sheet').
    */
   emptySessionGuardSheet: '[flt-semantics-identifier="empty-session-guard-sheet"]',
+
+  /**
+   * Share CTA on the summary panel (Phase 30 PR 30a label; PR 30b wiring).
+   * Tapping opens the share-card bottom sheet.
+   * Semantics(identifier: 'post-session-share-cta').
+   */
+  shareCta: '[flt-semantics-identifier="post-session-share-cta"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// SHARE_FLOW — Share-card pipeline (PR 30b).
+//
+// Bottom sheet (camera / gallery / discreet), preview screen (A↔B toggle,
+// retake + share CTAs). Camera + gallery row taps are SKIPPED on web E2E —
+// browsers route those to the platform picker which Playwright can't drive.
+// The Discreet path (no-photo) is the testable end-to-end shape on web.
+// ---------------------------------------------------------------------------
+export const SHARE_FLOW = {
+  /** Bottom-sheet container — Semantics(identifier: 'share-sheet'). */
+  sheet: '[flt-semantics-identifier="share-sheet"]',
+  /** Camera row inside the sheet — hidden when permission is permanentlyDenied. */
+  sheetCamera: '[flt-semantics-identifier="share-sheet-camera"]',
+  /** Gallery row inside the sheet. */
+  sheetGallery: '[flt-semantics-identifier="share-sheet-gallery"]',
+  /** Discreet row inside the sheet — locks the preview to the Discreet variant. */
+  sheetDiscreet: '[flt-semantics-identifier="share-sheet-discreet"]',
+
+  /** Preview screen root — Semantics(identifier: 'share-preview-screen'). */
+  previewScreen: '[flt-semantics-identifier="share-preview-screen"]',
+  /** Variant toggle (Mínimo ↔ Destaque) — hidden on the Discreet path. */
+  variantToggle: '[flt-semantics-identifier="share-variant-toggle"]',
+  /** Primary share CTA on the preview screen. */
+  previewShareButton: '[flt-semantics-identifier="share-preview-share-button"]',
+  /** Retake button — resets the controller + pops back to the share sheet. */
+  previewRetake: '[flt-semantics-identifier="share-preview-retake"]',
 } as const;

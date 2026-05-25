@@ -43,9 +43,20 @@
 @Tags(['golden'])
 library;
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
+import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
+import 'package:repsaga/features/workouts/data/share_service.dart';
+import 'package:repsaga/features/workouts/domain/reward_tier.dart';
+import 'package:repsaga/features/workouts/domain/share_payload.dart';
+import 'package:repsaga/features/workouts/providers/share_controller.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_card_renderer.dart';
+import 'package:repsaga/features/workouts/ui/post_session/share/share_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/next_step_hook.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/post_session_summary_panel.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/title_equip_row.dart';
@@ -90,19 +101,85 @@ void main() {
   };
 
   Widget host(Widget panel) {
-    return TestMaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(
-          size: viewport,
-          // Edge-to-edge insets emulating Android 15 — status bar 24dp,
-          // gesture nav 24dp. Verifies the `SafeArea(minimum:)` floor
-          // still respects real insets when they ARE reported.
-          padding: EdgeInsets.only(top: 24, bottom: 24),
+    return ProviderScope(
+      overrides: [
+        // The share CTA is a ConsumerStatefulWidget; it needs the
+        // share-controller graph available even when goldens don't tap it.
+        shareServiceProvider.overrideWithValue(
+          ShareService(
+            imagePicker: (_) async => null,
+            fileShareSink: (_, {text}) async =>
+                throw UnimplementedError('not exercised in goldens'),
+            permissionRequester: (_) async =>
+                throw UnimplementedError('not exercised in goldens'),
+            permissionStatusReader: (_) async =>
+                throw UnimplementedError('not exercised in goldens'),
+          ),
         ),
-        child: Scaffold(backgroundColor: const Color(0xFF0D0319), body: panel),
+        shareImageRendererProvider.overrideWithValue(_StubRenderer()),
+      ],
+      child: TestMaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: viewport,
+            // Edge-to-edge insets emulating Android 15 — status bar 24dp,
+            // gesture nav 24dp. Verifies the `SafeArea(minimum:)` floor
+            // still respects real insets when they ARE reported.
+            padding: EdgeInsets.only(top: 24, bottom: 24),
+          ),
+          child: Scaffold(
+            backgroundColor: const Color(0xFF0D0319),
+            body: panel,
+          ),
+        ),
       ),
     );
   }
+
+  const fakeShareStrings = ShareCardStrings(
+    wordmark: 'REPSAGA',
+    variantAXpText: '+618 XP',
+    variantAPrText: null,
+    variantBBpEyebrow: 'Peito',
+    variantBClassName: 'BULWARK',
+    variantBPrTag: null,
+    variantBLift: '',
+    variantBBpSub: '',
+    variantBXpSub: '+618 XP',
+    discreetEyebrow: 'Peito · Rank 19',
+    discreetHero: '+618',
+    discreetHeroSubLabel: 'XP',
+    discreetPrLine: null,
+    discreetPrDetail: null,
+  );
+
+  const fakeShareLocalizations = ShareLocalizations(
+    sheetTitle: 'Compartilhar saga',
+    takePhoto: 'Tirar foto',
+    fromGallery: 'Escolher da galeria',
+    noPhoto: 'Sem foto · só a saga',
+    previewMinimal: 'Mínimo',
+    previewBold: 'Destaque',
+    previewRetake: 'Refazer',
+    previewShare: 'Compartilhar',
+    wordmark: 'REPSAGA',
+    permissionDenied: 'Permissão negada',
+    permissionPermanentlyDenied: 'Permissão bloqueada',
+    renderError: 'Erro ao gerar imagem',
+    openSettings: 'Abrir configurações',
+  );
+
+  final sharePayload = SharePayload.fromPostSessionState(
+    tier: RewardTier.thresholdAnticipatory,
+    queueResult: CelebrationQueue.build(events: const []),
+    prResult: const PRDetectionResult(newRecords: [], isFirstWorkout: false),
+    bpXpDeltas: const {BodyPart.chest: 618},
+    bpRankAfter: const {BodyPart.chest: 19},
+    bpProgressFractionAfter: const {BodyPart.chest: 0.5},
+    exerciseNames: const {},
+    totalXp: 618,
+    characterClassSlug: 'bulwark',
+  );
 
   Widget baseline({
     bool hasShareCta = false,
@@ -120,7 +197,9 @@ void main() {
       nextStepEyebrowColor: eyebrowColor,
       continueLabel: 'CONTINUAR',
       shareLabel: 'Compartilhar saga',
-      shareComingSoonMessage: 'Em breve',
+      sharePayload: hasShareCta ? sharePayload : null,
+      shareCardStrings: hasShareCta ? fakeShareStrings : null,
+      shareLocalizations: hasShareCta ? fakeShareLocalizations : null,
       hasShareCta: hasShareCta,
       titleEquipRow: titleEquipRow,
       rankUpOverflow: rankUpOverflow,
@@ -269,4 +348,15 @@ void main() {
       );
     },
   );
+}
+
+class _StubRenderer implements ShareImageRenderer {
+  @override
+  Future<XFile> render({
+    required GlobalKey repaintKey,
+    double pixelRatio = 3.0,
+    int jpegQuality = 88,
+  }) async {
+    throw UnimplementedError('renderer not exercised in golden harness');
+  }
 }

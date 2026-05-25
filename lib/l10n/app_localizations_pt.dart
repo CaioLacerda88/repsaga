@@ -2857,6 +2857,48 @@ class AppLocalizationsPt extends AppLocalizations {
   String get summaryShareComingSoon => 'Compartilhar — em breve';
 
   @override
+  String get shareSheetTitle => 'Compartilhar saga';
+
+  @override
+  String get shareSheetTakePhoto => 'Tirar foto';
+
+  @override
+  String get shareSheetFromGallery => 'Escolher da galeria';
+
+  @override
+  String get shareSheetNoPhoto => 'Sem foto · só a saga';
+
+  @override
+  String get sharePreviewMinimal => 'Mínimo';
+
+  @override
+  String get sharePreviewBold => 'Destaque';
+
+  @override
+  String get sharePreviewRetake => 'Refazer';
+
+  @override
+  String get sharePreviewShare => 'Compartilhar';
+
+  @override
+  String get shareWordmark => 'REPSAGA';
+
+  @override
+  String get sharePermissionDenied =>
+      'Acesso à câmera negado. Toque novamente para tentar.';
+
+  @override
+  String get sharePermissionPermanentlyDenied =>
+      'Acesso à câmera bloqueado nas configurações.';
+
+  @override
+  String get shareRenderError =>
+      'Não foi possível gerar o cartão. Tente novamente.';
+
+  @override
+  String get shareOpenSettings => 'Abrir configurações';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · ABRIR SAGA';
 
   @override

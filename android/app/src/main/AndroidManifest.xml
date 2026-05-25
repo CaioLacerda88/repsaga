@@ -1,6 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Phase 30 PR 30b Pass 2: share-card capture flow.
+         CAMERA: required when the user taps "Camera" in the share photo bottom
+         sheet (handled gracefully by `permission_handler` — denial falls back
+         to the Discreet variant per the share-card mockup §6 contract).
+         READ_MEDIA_IMAGES is NOT declared: `image_picker` 1.x uses the
+         photo-picker on Android 13+ which doesn't require the runtime
+         permission. Older devices still work because image_picker delegates
+         to the system photo intent. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="RepSaga"
         android:name="${applicationName}"
@@ -83,6 +92,21 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Phase 30 PR 30b Pass 2: image_picker needs to resolve camera +
+             gallery intents on Android 11+ (package visibility, API 30+).
+             Per image_picker README:
+             https://pub.dev/packages/image_picker#android -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT"/>
+            <data android:mimeType="image/*"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK"/>
+            <data android:mimeType="image/*"/>
         </intent>
     </queries>
 </manifest>

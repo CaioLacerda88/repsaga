@@ -22,6 +22,49 @@ the phase summary in PROJECT.md §4.
 
 ### PR 30b — Share card pipeline
 
+**Status (2026-05-24):** In flight on `feature/30b-share-card`. Dispatched in 3 passes to keep scope tractable: Pass 1 = widget + domain layer (variants A/B/Discreet, ShareCardRenderer, SharePayload, unit + widget + golden tests; NO IO, NO pubspec changes); Pass 2 = IO services (Context7-pinned `image_picker` / `share_plus` / `permission_handler` + ShareImageRenderer + ShareService + AndroidManifest); Pass 3 = ShareController + ShareSheet + SharePreviewScreen + wire `share_cta_button.dart` + E2E spec. Task graph in TaskList (#1 setup, #2 Pass 1, #3 Pass 2, #4 Pass 3, #5 ship).
+
+**Pass 1 checklist (in flight):**
+
+- [x] `lib/features/workouts/domain/share_payload.dart` — Freezed model + dominantBodyPart + dominantHue + factory `SharePayload.fromPostSessionState`
+- [x] `make gen` to produce `share_payload.freezed.dart`
+- [x] `test/unit/features/workouts/domain/share_payload_test.dart` — 8 composition cases (day-zero / baseline / single PR / multi PR / single rank-up / multi rank-up / title / class-change) + idempotency
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_a.dart` — Minimal Strip layout (bottom strip + hue accent + XP + PR + bar + REPSAGA wordmark)
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_a_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_variant_b.dart` — Full-bleed collar layout w/ `CustomClipper<Path>` top + bottom diagonals
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_variant_b_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/variants/share_card_discreet.dart` — Hue flood + reused `paintCutSlash` + d-hero numeric + REPSAGA
+- [x] `test/unit/features/workouts/ui/post_session/share/variants/share_card_discreet_test.dart`
+- [x] `lib/features/workouts/ui/post_session/share/share_card_renderer.dart` — composer (photo zone | discreet flood) + variant overlay
+- [x] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_test.dart`
+- [x] `test/unit/features/workouts/ui/post_session/share/share_card_renderer_golden_test.dart` — 3 goldens (A baseline, B PR, Discreet class-change)
+- [x] `dart format .` + `dart analyze --fatal-infos` + `flutter test test/unit/features/workouts/` final gates (522 tests passing)
+- [x] commits split across 4 atomic groups: `b9a911f` (payload tests) → `f3497cf` (3 variants) → `675bf81` (renderer) → `c7abcda` (goldens + closeout)
+
+**Pass 2 checklist (in flight):**
+
+- [x] Pin compatible versions for `image_picker` / `share_plus` / `permission_handler` against Flutter SDK 3.11.4 (held `share_plus` at 10.1.4 — 11.x bumps Dart min beyond 3.11.4)
+- [x] `pubspec.yaml` — add the three deps + explicit `cross_file` / `path_provider` (transitive promotion to keep imports declared)
+- [x] `flutter pub get` resolves cleanly
+- [x] `android/app/src/main/AndroidManifest.xml` — `<uses-permission android:name="android.permission.CAMERA"/>` + `<queries>` intents (IMAGE_CAPTURE / GET_CONTENT / PICK image/*)
+- [x] `flutter build apk --debug` compiles (no Kotlin/Gradle/SDK friction)
+- [x] `lib/features/workouts/data/share_image_renderer.dart` — DI seams (`BoundaryResolver` / `ImageEncoder` / `TempDirResolver` / `NowMillis`) + 1.2MB overflow → pixelRatio-2.0 retry + PNG output (TODO(pass-3) for JPEG via `image` pkg)
+- [x] `test/unit/features/workouts/data/share_image_renderer_test.dart` — 8 cases (pixelRatio fwd, .png suffix, deterministic filename, non-null XFile, retry on overflow, no-retry-when-small, no-retry-below-fallback, StateError on detached key)
+- [x] `lib/features/workouts/data/share_service.dart` — `pickFromCamera` / `pickFromGallery` / `share(file, text:)` / `requestCameraPermission` / `cameraPermissionStatus`; DI via `ImageSourcePicker` / `FileShareSink` / `PermissionRequester` / `PermissionStatusReader` typedefs
+- [x] `test/unit/features/workouts/data/share_service_test.dart` — 10 cases covering each method + cancel/denial/permanentlyDenied paths
+- [x] `dart format .` + `dart analyze --fatal-infos` (project-wide, 0 issues) + `flutter test test/unit/features/workouts/` (540 / 540 pass; +18 over Pass 1's 522)
+- [x] commits split across 3 groups: `e7262d8` (deps + manifest) → `4c557ad` (renderer + tests) → `62bdf92` (share service + tests)
+
+**Pass 3 checklist (complete):**
+
+- [x] Group A — `SharePayload.rankProgressFraction` field + `bpProgressFractionAfter` parameter on `fromPostSessionState`; drops the `(rank % 10) / 10` placeholder from the renderer + regenerated 3 goldens (commit `454dc33`)
+- [x] Group B — `ShareController` (Riverpod `Notifier`) state machine `idle → pickingPhoto → preview → rendering → sharing → idle` with `cancelled` / `error` branches; `shareServiceProvider` + `shareImageRendererProvider` DI seams; 12 behavior-not-wiring tests covering all transitions (commit `6e23d54`)
+- [x] Group C — `ShareSheet` bottom-modal (3 rows: camera / gallery / discreet) with permanentlyDenied-hides-camera rule; `ShareLocalizations` value-object bridge (Decoupling Rule 2); 7 widget tests (commit `66c3a6c`)
+- [x] Group D — `SharePreviewScreen` with 1080×1920 offscreen `RepaintBoundary` + FittedBox-scaled visible preview; A↔B variant toggle (locked on Discreet); retake + share CTAs; tap-to-hide XP/PR overlays; vertical drag-to-reframe via `Transform.translate`; 8 widget tests (commit `90fab21`)
+- [x] Group E — ARB keys (13 new strings in `app_en.arb` + `app_pt.arb`); rewrote `ShareCtaButton` as a `ConsumerStatefulWidget` that opens the sheet + pushes `SharePreviewScreen` on the controller's preview transition; `PostSessionState.bpProgressFractionAfter` field; `PostSessionSummaryPanel` constructor took `sharePayload` / `shareCardStrings` / `shareLocalizations` params; updated 12 summary-panel tests + 4 goldens (commit `6923c41`)
+- [x] Group F — `test/e2e/specs/share_flow.spec.ts` (4 tests @smoke) + `SHARE_FLOW` selector map; final gates green: `dart format` + `dart analyze --fatal-infos` (0 issues) + `flutter test test/unit/` (**2061 / 2061 pass; +1494 over Pass 2's 540 — includes all suites, not just workouts**) + `flutter build apk --debug` succeeded
+- [x] Carry-forwards documented in final report: `VitalityStateStyles.bodyPartColor` layer violation deferred to PR 30c; Mystery glyph in Variant A golden flagged for physical-Android visual verification at ship time; sheet permission read is sync-at-mount (acceptable per mockup §7).
+
 **Branch:** `feature/30b-share-card` off `main` (after 30a merges).
 
 **Scope summary**

@@ -1,8 +1,8 @@
 import '../../personal_records/domain/pr_detection_service.dart';
-import '../../personal_records/models/personal_record.dart';
 import '../../rpg/domain/celebration_queue.dart';
 import '../../rpg/models/body_part.dart';
 import '../../rpg/models/celebration_event.dart';
+import 'pr_score.dart';
 import 'reward_tier.dart';
 
 /// One frame of the post-session cinematic.
@@ -454,8 +454,8 @@ class PostSessionChoreographer {
     // alphabetical exercise name. Mockup §5 State 4 script.
     final records = [...prResult.newRecords];
     records.sort((a, b) {
-      final aScore = _prScore(a);
-      final bScore = _prScore(b);
+      final aScore = prScore(a);
+      final bScore = prScore(b);
       final cmp = bScore.compareTo(aScore);
       if (cmp != 0) return cmp;
       // Tiebreak by exercise name (alphabetical, deterministic).
@@ -483,14 +483,6 @@ class PostSessionChoreographer {
       ],
       truncatedPillCount: truncated,
     );
-  }
-
-  /// Score used to pick the hero PR. Mockup §5 State 4 specifies
-  /// "highest weight × reps".
-  static double _prScore(PersonalRecord pr) {
-    final w = pr.value;
-    final r = (pr.reps ?? 0).toDouble();
-    return w * r;
   }
 
   static B3TitleCut _buildTitleCut(TitleUnlockEvent event) {

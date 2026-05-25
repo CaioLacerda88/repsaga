@@ -178,6 +178,7 @@ class PostSessionController extends ChangeNotifier {
       showSummary: cuts.isEmpty,
       bodyPartLabels: bodyPartLabels,
       exerciseNames: params.exerciseNames,
+      bpProgressFractionAfter: bpProgressAfter,
       totalXpEarned: params.totalXpEarned,
       priorFinishedWorkoutCount: params.priorFinishedWorkoutCount,
       sagaNumber: sagaNumber,
