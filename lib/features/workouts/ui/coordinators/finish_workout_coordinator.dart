@@ -281,7 +281,7 @@ class FinishWorkoutCoordinator {
         // never display on the destination screen — exactly the behavior we
         // want for in-screen undos but exactly what we DON'T want for
         // "Saved offline" / "Saved (server retry)" confirmations that need
-        // to follow the user to /home or /pr-celebration.
+        // to follow the user to /home or /workout/finish/:workoutId.
         final colorScheme = Theme.of(rootContext).colorScheme;
         final l10n = AppLocalizations.of(rootContext);
         final message = wasServerErrorQueued

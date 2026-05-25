@@ -4863,7 +4863,7 @@ void main() {
     // Workout B (70×8, same exercise) finishes online → must read the
     // 50kg baseline back from the cache, detect 70 > 50 as a new PR, and
     // produce `prResult.hasNewRecords == true` so the post-workout
-    // navigator sends the user to /pr-celebration.
+    // navigator sends the user to /workout/finish/:workoutId (the cinematic).
     //
     // Reproducer-side note: the test uses a stateful in-memory cache that
     // serves what was last written (matches Hive's in-memory semantics
@@ -5026,7 +5026,7 @@ void main() {
       // Swap the storage backing so the next `loadActiveWorkout` returns
       // workout B's state. Then invalidate the notifier so it re-runs
       // build() against the new state. This mirrors the production
-      // flow: the user finishes A, /pr-celebration → /home, taps
+      // flow: the user finishes A, /workout/finish/:workoutId (the cinematic) → /home, taps
       // "Start workout", which mounts a new ActiveWorkoutNotifier
       // instance that reads from storage.
       nextState = makeRdlState(
