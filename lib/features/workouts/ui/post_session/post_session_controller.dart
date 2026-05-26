@@ -32,6 +32,7 @@ class PostSessionParams {
     required this.totalXpEarned,
     required this.bpXpDeltas,
     required this.bpProgressFractionPre,
+    required this.bpRankBefore,
     required this.bpFirstAwakening,
     required this.priorFinishedWorkoutCount,
     required this.durationMinutes,
@@ -47,6 +48,13 @@ class PostSessionParams {
   final int totalXpEarned;
   final Map<BodyPart, int> bpXpDeltas;
   final Map<BodyPart, double> bpProgressFractionPre;
+
+  /// Pre-finish per-body-part rank snapshot. Captured by
+  /// [FinishWorkoutCoordinator] from `rpgProgressProvider` BEFORE
+  /// awaiting `notifier.finishWorkout()`. Plumbed through to
+  /// [PostSessionState.bpRankBefore] so the Mission Debrief can render
+  /// accurate multi-rank-jump arrows (`Rank 5 → 8`). Phase 31 Blocker 1.
+  final Map<BodyPart, int> bpRankBefore;
   final Set<BodyPart> bpFirstAwakening;
   final int priorFinishedWorkoutCount;
   final int durationMinutes;
@@ -200,6 +208,19 @@ class PostSessionController extends ChangeNotifier {
       }
     }
 
+    // Defensive: for any BP that earned XP but is missing from
+    // `params.bpRankBefore` (e.g. legacy fixtures, pre-Blocker-1 callers),
+    // fall back to `bpRankAfter - 1` clamped to 1. The fallback only ever
+    // takes effect on test fixtures that don't exercise the multi-rank-
+    // jump path — production always plumbs the snapshot through the
+    // coordinator.
+    final bpRankBeforeResolved = <BodyPart, int>{
+      for (final bp in params.bpXpDeltas.keys)
+        bp:
+            params.bpRankBefore[bp] ??
+            ((bpRankAfter[bp] ?? 1) - 1).clamp(1, 999),
+    };
+
     return PostSessionState(
       tier: tier,
       queueResult: params.queueResult,
@@ -212,6 +233,7 @@ class PostSessionController extends ChangeNotifier {
       bpProgressFractionAfter: bpProgressAfter,
       bpXpDeltas: Map.unmodifiable(params.bpXpDeltas),
       bpRankAfter: Map.unmodifiable(bpRankAfter),
+      bpRankBefore: Map.unmodifiable(bpRankBeforeResolved),
       topLifts: List.unmodifiable(topLifts),
       totalExercisesTrained: totalExercisesTrained,
       totalXpEarned: params.totalXpEarned,

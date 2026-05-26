@@ -60,6 +60,21 @@ abstract class PostSessionState with _$PostSessionState {
     /// progress snapshot. Phase 31 Pass 1.
     required Map<BodyPart, int> bpRankAfter,
 
+    /// Per-body-part rank BEFORE the session, for every BP that earned XP.
+    /// Captured by [FinishWorkoutCoordinator] from the pre-finish RPG
+    /// progress snapshot (BEFORE `await notifier.finishWorkout()` mutates
+    /// state) and threaded through [PostSessionParams]. Drives the
+    /// Mission Debrief per-BP rank delta arrow when [didRankUp] is true:
+    /// `Rank N → M` where `N = bpRankBefore[bp]` and `M = bpRankAfter[bp]`.
+    ///
+    /// **Why this exists separately from [bpRankAfter]:** a session can
+    /// jump multiple ranks at once (e.g. rank 5 → 8 in one finish). Deriving
+    /// "before" as `after - 1` is wrong in the multi-rank-jump case.
+    /// Persisting both endpoints is the only correct projection.
+    ///
+    /// Phase 31 Blocker 1 fix.
+    required Map<BodyPart, int> bpRankBefore,
+
     /// Top lifts by XP contribution this session — capped at 4 rows with
     /// alphabetical tiebreak on exercise name (matches
     /// `PostSessionChoreographer._buildPrCut`'s ordering rule so the

@@ -75,6 +75,7 @@ PostSessionState _buildState({
   required List<SessionLiftSummary> topLifts,
   required Map<BodyPart, int> bpXpDeltas,
   required Map<BodyPart, int> bpRankAfter,
+  Map<BodyPart, int>? bpRankBefore,
   int totalExercisesTrained = 0,
   CelebrationQueueResult? queueResult,
   BodyPart? dominantBodyPart,
@@ -89,6 +90,15 @@ PostSessionState _buildState({
                   ..sort((a, b) => b.value.compareTo(a.value)))
                 .first
                 .key);
+  // Default: assume a single-rank gain so the legacy fixtures that don't
+  // exercise the multi-rank-jump path still produce a sensible Mission
+  // Debrief arrow. Multi-rank fixtures override this explicitly.
+  final rankBefore =
+      bpRankBefore ??
+      <BodyPart, int>{
+        for (final entry in bpRankAfter.entries)
+          entry.key: (entry.value - 1).clamp(1, 999),
+      };
   return PostSessionState(
     tier: RewardTier.baseline,
     queueResult: queueResult ?? CelebrationQueue.build(events: const []),
@@ -101,6 +111,7 @@ PostSessionState _buildState({
     bpProgressFractionAfter: const {},
     bpXpDeltas: bpXpDeltas,
     bpRankAfter: bpRankAfter,
+    bpRankBefore: rankBefore,
     topLifts: topLifts,
     totalExercisesTrained: totalExercisesTrained == 0
         ? topLifts.length
@@ -322,6 +333,44 @@ void main() {
       expect(_hasRichTextSpan(tester, 'Rank 11 → 12'), isTrue);
       expect(_hasRichTextSpan(tester, 'Rank 12'), isFalse);
     });
+
+    testWidgets(
+      'multi-rank-jump session (rank 5 → 8): arrow renders true endpoints, '
+      'not rankAfter - 1',
+      (tester) async {
+        // Phase 31 Blocker 1 regression — pre-fix the row would render
+        // "Rank 7 → 8" (derived as rankAfter - 1). With `bpRankBefore`
+        // persisted on the state, the arrow surfaces the true pre-session
+        // endpoint regardless of how many ranks the session crossed.
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'supino',
+              exerciseName: 'Supino reto',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 95,
+              peakReps: 5,
+              xpContribution: 900,
+              isPR: true,
+            ),
+          ],
+          bpXpDeltas: const {BodyPart.chest: 900},
+          bpRankBefore: const {BodyPart.chest: 5},
+          bpRankAfter: const {BodyPart.chest: 8},
+          queueResult: CelebrationQueue.build(
+            events: const [
+              CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 8),
+            ],
+          ),
+        );
+
+        await _pumpDebrief(tester, state: state);
+
+        expect(_hasRichTextSpan(tester, 'Rank 5 → 8'), isTrue);
+        // Pre-fix grammar must NOT leak through.
+        expect(_hasRichTextSpan(tester, 'Rank 7 → 8'), isFalse);
+      },
+    );
 
     testWidgets(
       '5+ exercise session: top 4 lift rows + "+1 outro exercício" footer (pt)',

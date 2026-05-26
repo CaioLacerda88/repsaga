@@ -165,6 +165,15 @@ class MissionDebriefSection extends StatelessWidget {
                   state.bodyPartLabels[sortedBpEntries[i].key] ??
                   sortedBpEntries[i].key.dbValue,
               rankAfter: state.bpRankAfter[sortedBpEntries[i].key] ?? 1,
+              // Blocker 1 — use the persisted pre-session rank instead of
+              // `rankAfter - 1`. Multi-rank-jump sessions (e.g. 5 → 8) need
+              // the true `from` endpoint, not a one-off decrement.
+              rankBefore:
+                  state.bpRankBefore[sortedBpEntries[i].key] ??
+                  ((state.bpRankAfter[sortedBpEntries[i].key] ?? 1) - 1).clamp(
+                    1,
+                    999,
+                  ),
               didRankUp: rankedUpBodyParts.contains(sortedBpEntries[i].key),
               rankLabel: localizations.rankLabel,
               rankUpArrow: localizations.rankUpArrow,
@@ -200,14 +209,15 @@ class MissionDebriefSection extends StatelessWidget {
   }
 }
 
-/// One per-BP rank delta row. Renders either "{BP} · Rank N → N+1"
-/// (rank-up session) or "{BP} · Rank N" (no rank-up). Hue tints the BP
-/// label.
+/// One per-BP rank delta row. Renders either "{BP} · Rank N → M"
+/// (rank-up session — `N` and `M` may differ by more than 1 on multi-rank-
+/// jump sessions) or "{BP} · Rank N" (no rank-up). Hue tints the BP label.
 class _BpRankDeltaRow extends StatelessWidget {
   const _BpRankDeltaRow({
     required this.bodyPart,
     required this.bodyPartLabel,
     required this.didRankUp,
+    required this.rankBefore,
     required this.rankAfter,
     required this.rankLabel,
     required this.rankUpArrow,
@@ -216,6 +226,7 @@ class _BpRankDeltaRow extends StatelessWidget {
   final BodyPart bodyPart;
   final String bodyPartLabel;
   final bool didRankUp;
+  final int rankBefore;
   final int rankAfter;
   final String Function(int rank) rankLabel;
   final String Function(int from, int to) rankUpArrow;
@@ -224,7 +235,7 @@ class _BpRankDeltaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final hue = BodyPartHues.hueFor(bodyPart);
     final rankText = didRankUp
-        ? rankUpArrow(rankAfter - 1, rankAfter)
+        ? rankUpArrow(rankBefore, rankAfter)
         : rankLabel(rankAfter);
 
     return Semantics(

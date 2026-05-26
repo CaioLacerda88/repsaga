@@ -57,6 +57,7 @@ PostSessionParams _params({
   required AppLocalizations l10n,
   int totalXpEarned = 640,
   Map<BodyPart, int> bpXpDeltas = const {BodyPart.chest: 640},
+  Map<BodyPart, int> bpRankBefore = const {},
 }) {
   return PostSessionParams(
     queueResult: queueResult,
@@ -65,6 +66,7 @@ PostSessionParams _params({
     totalXpEarned: totalXpEarned,
     bpXpDeltas: bpXpDeltas,
     bpProgressFractionPre: const {},
+    bpRankBefore: bpRankBefore,
     bpFirstAwakening: const {},
     priorFinishedWorkoutCount: 46,
     durationMinutes: 48,

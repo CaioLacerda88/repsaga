@@ -8,6 +8,7 @@ import '../../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
+import '../../../rpg/providers/rpg_progress_provider.dart';
 import '../../models/active_workout_state.dart';
 import '../post_session/post_session_controller.dart';
 import '../../providers/workout_history_providers.dart';
@@ -197,6 +198,26 @@ class FinishWorkoutCoordinator {
       // depends on `state.value`, capture it BEFORE the
       // `await notifier.finishWorkout()` at line ~202.
       final preFinishSetsCount = notifier.totalSetsCount;
+
+      // Phase 31 Blocker 1 — capture pre-finish ranks per body part so the
+      // Mission Debrief can render accurate `Rank N → M` arrows even when
+      // a single session jumps multiple ranks (e.g. 5 → 8). MUST be read
+      // BEFORE `notifier.finishWorkout()` mutates the RPG progress
+      // snapshot. Same `ref`-lifetime contract as the captures above —
+      // reading rpgProgressProvider AFTER the await throws because the
+      // active-workout State is disposed and the ref invalidated.
+      //
+      // Defensive empty-map fallback so legacy callers (none in prod, but
+      // any test fixture / pass-through path) still construct a valid
+      // PostSessionParams; the controller's `_buildInitial` re-derives a
+      // sane default per BP when entries are missing.
+      final preFinishProgress = ref.read(rpgProgressProvider).value;
+      final bpRankBefore = <BodyPart, int>{};
+      if (preFinishProgress != null) {
+        preFinishProgress.byBodyPart.forEach((bp, row) {
+          bpRankBefore[bp] = row.rank;
+        });
+      }
 
       // Capture the root navigator's context NOW — while this State is still
       // mounted and in the widget tree — for use after the save completes.
@@ -406,6 +427,11 @@ class FinishWorkoutCoordinator {
           // mockup §3 Variant A storyboard intends. See WIP.md PR 30a
           // "Known limitations carried forward" + PR 30b plan.
           bpProgressFractionPre: _emptyBpFractions(),
+          // Phase 31 Blocker 1 — pre-finish per-BP rank snapshot captured
+          // above. Plumbed to PostSessionState.bpRankBefore so the Mission
+          // Debrief renders correct `Rank N → M` arrows on multi-rank-jump
+          // sessions.
+          bpRankBefore: bpRankBefore,
           bpFirstAwakening: queueResultForRoute.queue
               .whereType<FirstAwakeningEvent>()
               .map((e) => e.bodyPart)
