@@ -5,7 +5,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../personal_records/domain/pr_detection_service.dart';
 import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
-import '../../../rpg/models/celebration_event.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
 import '../../domain/session_lift_summary.dart';
@@ -131,15 +130,9 @@ abstract class PostSessionState with _$PostSessionState {
 extension PostSessionStateX on PostSessionState {
   bool get isPlayingCinematic => !showSummary && cutIndex < cuts.length;
 
-  /// Returns true when the queue or PR result indicates the share CTA
-  /// should render on the summary panel.
-  bool get hasShareCta {
-    if (prResult != null && prResult!.hasNewRecords) return true;
-    for (final e in queueResult.queue) {
-      if (e is RankUpEvent || e is TitleUnlockEvent || e is ClassChangeEvent) {
-        return true;
-      }
-    }
-    return false;
-  }
+  /// SHARE CTA visibility: any session with XP earned can be shared.
+  /// The "rare moment" event-queue rule was the right call for which
+  /// share-card VARIANT to render, but the wrong call for whether the
+  /// SHARE button itself should be visible (UX-critic round-3, 2026-05-26).
+  bool get hasShareCta => totalXpEarned > 0;
 }

@@ -145,28 +145,22 @@ void main() {
     expect(find.byIcon(Icons.arrow_forward_rounded), findsOneWidget);
   });
 
-  testWidgets(
-    'omits the share CTA when hasShareCta is false (baseline / day-zero / level-up)',
-    (tester) async {
-      await tester.pumpWidget(panel());
-      expect(find.text('COMPARTILHAR SAGA'), findsNothing);
-      // Camera icon is the share-CTA visual contract; should not render
-      // when the CTA itself is hidden.
-      expect(find.byIcon(Icons.camera_alt_outlined), findsNothing);
-    },
-  );
+  testWidgets('omits the share CTA when hasShareCta is false', (tester) async {
+    await tester.pumpWidget(panel());
+    expect(find.text('COMPARTILHAR SAGA'), findsNothing);
+    // Camera icon is the share-CTA visual contract; should not render
+    // when the CTA itself is hidden.
+    expect(find.byIcon(Icons.camera_alt_outlined), findsNothing);
+  });
 
-  testWidgets(
-    'renders the share CTA when hasShareCta is true (PR / rank-up / title / class-change)',
-    (tester) async {
-      await tester.pumpWidget(panel(hasShareCta: true));
-      // The cinematic button uppercases the label internally per mockup
-      // §5 grammar — the test asserts on the rendered (uppercase) glyph
-      // run, not on the raw constructor input.
-      expect(find.text('COMPARTILHAR SAGA'), findsOneWidget);
-      expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
-    },
-  );
+  testWidgets('renders the share CTA when hasShareCta is true', (tester) async {
+    await tester.pumpWidget(panel(hasShareCta: true));
+    // The cinematic button uppercases the label internally per mockup
+    // §5 grammar — the test asserts on the rendered (uppercase) glyph
+    // run, not on the raw constructor input.
+    expect(find.text('COMPARTILHAR SAGA'), findsOneWidget);
+    expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
+  });
 
   testWidgets('next-step hook renders pre-resolved text when provided', (
     tester,
