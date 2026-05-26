@@ -48,13 +48,6 @@ enum ShareCardRenderTarget {
 /// exactly; the preview-target styles are scaled up so the FittedBox-
 /// shrunk preview stays readable.
 ///
-/// **Variant B carve-out.** Variant B has fixed-pixel collar heights
-/// (60dp top, 110dp bottom in the export tree). The preview-target
-/// typography bump exceeds those fixed slots, so the collar heights
-/// scale up to 96dp / 175dp in the preview tree only. The export tree
-/// keeps mockup §6 geometry intact (the golden contract). See
-/// [ShareCardVariantB] for the per-target geometry table.
-///
 /// **Source.** Per UX-critic device-verification recommendation
 /// (Bug 1, PR 30c). The preview-target sizes are roughly 2.5× to 3× the
 /// export-target sizes — chosen so that after FittedBox scales the
@@ -63,121 +56,6 @@ enum ShareCardRenderTarget {
 /// locked design language.
 class ShareCardTypography {
   ShareCardTypography._();
-
-  // ─── Variant A (Minimal Strip) ─────────────────────────────────────
-
-  /// Variant A bottom-strip XP text style (e.g. "+618 XP"). Rajdhani 700
-  /// tabular, -0.02em tracking.
-  static TextStyle variantAXp(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 28.0 : 22.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      letterSpacing: -0.02 * size,
-    );
-  }
-
-  /// Variant A bottom-strip PR text style. Rajdhani 700, heroGold,
-  /// +0.04em tracking. Always rendered through `RewardAccent` semantics —
-  /// see `share_card_variant_a.dart` for the `ignore: reward_accent`
-  /// rationale (PR is the canonical reward).
-  static TextStyle variantAPr(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 18.0 : 16.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (PR-only render).
-      color: AppColors.heroGold,
-      letterSpacing: 0.04 * size,
-    );
-  }
-
-  /// Variant A wordmark style (Rajdhani 700, +0.22em tracking, textDim).
-  static TextStyle variantAWordmark(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 11.0 : 9.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      letterSpacing: 0.22 * size,
-      color: AppColors.textDim,
-    );
-  }
-
-  // ─── Variant B (Full-Bleed Collars) ────────────────────────────────
-
-  /// Top-collar BP eyebrow (Barlow Condensed 600, +0.18em tracking, hue).
-  static TextStyle variantBBpEyebrow(
-    ShareCardRenderTarget target, {
-    required Color hue,
-  }) {
-    final size = target == ShareCardRenderTarget.preview ? 12.0 : 10.0;
-    return AppTextStyles.label.copyWith(
-      fontSize: size,
-      letterSpacing: 0.18 * size,
-      color: hue,
-    );
-  }
-
-  /// Top-collar class name (Rajdhani 700, +0.04em tracking).
-  static TextStyle variantBClassName(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 22.0 : 14.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      letterSpacing: 0.04 * size,
-    );
-  }
-
-  /// Top-collar wordmark (Rajdhani 700, +0.22em tracking, textDim).
-  static TextStyle variantBWordmark(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 11.0 : 9.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      letterSpacing: 0.22 * size,
-      color: AppColors.textDim,
-    );
-  }
-
-  /// Bottom-collar PR tag (Barlow Condensed 600, +0.24em tracking,
-  /// heroGold). Always rendered through `RewardAccent` semantics; the
-  /// `ignore: reward_accent` annotation lives at the call site.
-  static TextStyle variantBPrTag(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 12.0 : 9.0;
-    return AppTextStyles.label.copyWith(
-      fontSize: size,
-      letterSpacing: 0.24 * size,
-      // ignore: reward_accent — PR tag is the canonical reward; heroGold scarcity contract met.
-      color: AppColors.heroGold,
-    );
-  }
-
-  /// Bottom-collar lift line (Rajdhani 700, -0.01em tracking).
-  static TextStyle variantBLift(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 30.0 : 24.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      letterSpacing: -0.01 * size,
-    );
-  }
-
-  /// Bottom-collar BP-sub label (Barlow Condensed 600, +0.16em tracking,
-  /// hue).
-  static TextStyle variantBBpSub(
-    ShareCardRenderTarget target, {
-    required Color hue,
-  }) {
-    final size = target == ShareCardRenderTarget.preview ? 12.0 : 9.0;
-    return AppTextStyles.label.copyWith(
-      fontSize: size,
-      letterSpacing: 0.16 * size,
-      color: hue,
-    );
-  }
-
-  /// Bottom-collar XP-sub line (Rajdhani 600 tabular).
-  static TextStyle variantBXpSub(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 18.0 : 13.0;
-    return AppTextStyles.numeric.copyWith(
-      fontSize: size,
-      fontWeight: FontWeight.w600,
-    );
-  }
 
   // ─── Discreet ──────────────────────────────────────────────────────
 

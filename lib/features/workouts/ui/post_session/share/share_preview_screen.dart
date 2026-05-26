@@ -99,7 +99,8 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   ShareCardVariant _variant = ShareCardVariant.achievementFrame;
 
   /// Tap-to-hide state for the XP overlay (mockup §7 affordance). When
-  /// `true`, the Variant A/B XP line / Discreet hero stack is hidden.
+  /// `true`, the Achievement Frame XP hero line (or Discreet hero stack)
+  /// is hidden.
   bool _xpHidden = false;
 
   /// Tap-to-hide state for the PR line.
