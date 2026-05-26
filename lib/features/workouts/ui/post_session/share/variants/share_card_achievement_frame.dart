@@ -179,6 +179,28 @@ class ShareCardAchievementFrame extends StatelessWidget {
     // Horizontal padding inside the collars — proportional to card width
     // so small viewports keep gutters in scale with content.
     final hPad = cardWidthDp * 0.04;
+    // Trapezoid clamp for the BOTTOM collar (Phase 31 Bug D).
+    //
+    // The bottom-collar `ClipPath` narrows the visible area at the
+    // collar's TOP edge to 70% of card-width (`(0.15, 0) → (0.85, 0)`)
+    // while the bottom-collar `Container` itself fills the full card-width.
+    // Without an extra inset on the text-layout region, `Text.maxLines:1 +
+    // TextOverflow.ellipsis` ellipses at the Container edge (~92% of card
+    // width after [hPad]) but the trapezoid's narrowing edge then clips
+    // the ellipsis off-screen — surfacing as "Caminhada do Fazendeird"
+    // (truncated WITHOUT a visible ellipsis) on the Bug D repro.
+    //
+    // Clamp the text-region to the trapezoid's narrow TOP edge by adding
+    // the 15% slant inset to the horizontal padding. The Column's content
+    // (XP hero / lift detail / BP rank / wordmark) now respects the
+    // trapezoid clipper as the structural bound — single-line ellipsis
+    // fires inside the visible trapezoid, not outside it.
+    //
+    // Top collar omits this clamp: its content sits at the WIDE edge of
+    // its mirrored trapezoid (top of the collar is full-width; narrows
+    // toward bottom). Class names ("BULWARK"/"BERSERKER" ≤ 12 chars) +
+    // saga eyebrows ("SAGA 76") never approach the narrow bottom edge.
+    final bottomCollarHorizontalSlant = cardWidthDp * 0.15;
     // Top-of-collar inner padding — proportional to collar height so
     // the class name + saga eyebrow stack sits well-centered.
     final topInnerPad = topCollarHeight * 0.16;
@@ -257,9 +279,9 @@ class ShareCardAchievementFrame extends StatelessWidget {
               height: bottomCollarHeight,
               color: AppColors.abyss.withValues(alpha: 0.92),
               padding: EdgeInsets.fromLTRB(
-                hPad,
+                hPad + bottomCollarHorizontalSlant,
                 bottomInnerTopPad,
-                hPad,
+                hPad + bottomCollarHorizontalSlant,
                 bottomInnerBottomPad,
               ),
               child: Column(

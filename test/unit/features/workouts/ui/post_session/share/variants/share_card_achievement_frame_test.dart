@@ -619,6 +619,62 @@ void main() {
   });
 
   testWidgets(
+    'bottom-collar text is clamped to the trapezoid narrow top edge so a '
+    'long single-line lift detail ellipses INSIDE the visible trapezoid '
+    '(Phase 31 Bug D regression — "Caminhada do Fazendeird" repro)',
+    (tester) async {
+      // The bottom-collar ClipPath narrows the visible area to 70% of card
+      // width at the collar's top edge (0.15 → 0.85). Pre-fix the
+      // Container filled the full card width with `hPad = 4%` and the
+      // long lift detail ellipsed at ~92% of card width — past the
+      // trapezoid's 70% top edge, so the ellipsis itself was clipped
+      // off-screen. Post-fix the text-region is clamped to the narrow
+      // top edge by adding `cardWidthDp * 0.15` to horizontal padding.
+      const cardWidth = 1080.0;
+      const hPad = cardWidth * 0.04;
+      const slant = cardWidth * 0.15;
+      // Available text width after the clamp.
+      final maxTextWidth = cardWidth - 2 * (hPad + slant);
+
+      await tester.pumpWidget(
+        host(
+          const ShareCardAchievementFrame(
+            dominantHue: AppColors.bodyPartChest,
+            className: 'BULWARK',
+            xpHero: '+618 XP',
+            liftDetail: 'Caminhada do Fazendeiro Bilateral com Halteres',
+            hasPr: true,
+            bpRank: 'Peito · Rank 19',
+            wordmark: 'REPSAGA',
+          ),
+        ),
+      );
+
+      // The rendered RenderParagraph for the lift detail must paint inside
+      // the trapezoid's narrow top-edge width (no horizontal overflow past
+      // the clip path's 70% inset).
+      final liftFinder = find.text(
+        'Caminhada do Fazendeiro Bilateral com Halteres',
+      );
+      final liftSize = tester.getSize(liftFinder);
+      expect(
+        liftSize.width,
+        lessThanOrEqualTo(maxTextWidth + 1.0),
+        reason:
+            'Bottom-collar text must paint inside the trapezoid narrow top '
+            'edge (≤ cardWidth - 2*(hPad + slant)). Pre-fix the text paints '
+            'at ~Container width (~92% of card) and the trapezoid clips the '
+            'ellipsis off-screen.',
+      );
+
+      // Single-line ellipsis still configured (visual contract).
+      final liftText = tester.widget<Text>(liftFinder);
+      expect(liftText.maxLines, 1);
+      expect(liftText.overflow, TextOverflow.ellipsis);
+    },
+  );
+
+  testWidgets(
     'class-change with no PR and null liftDetail: class name renders, '
     'left bar uses heroGold, lift-detail row absent, BP rank line present',
     (tester) async {
