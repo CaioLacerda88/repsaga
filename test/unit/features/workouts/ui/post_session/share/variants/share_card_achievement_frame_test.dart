@@ -634,7 +634,7 @@ void main() {
       const hPad = cardWidth * 0.04;
       const slant = cardWidth * 0.15;
       // Available text width after the clamp.
-      final maxTextWidth = cardWidth - 2 * (hPad + slant);
+      const maxTextWidth = cardWidth - 2 * (hPad + slant);
 
       await tester.pumpWidget(
         host(
