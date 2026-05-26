@@ -120,7 +120,7 @@ class MissionDebriefSection extends StatelessWidget {
           // for sets > 0, but guarding here keeps the widget self-safe).
           if (state.totalXpEarned > 0) ...[
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: const BoxDecoration(
                 // `AppColors.hair` is the canonical hair-divider color
                 // (rgba(179,109,255,0.14) — see `app_theme.dart`). The
@@ -137,17 +137,17 @@ class MissionDebriefSection extends StatelessWidget {
                   Text(
                     '+${state.totalXpEarned}',
                     style: AppTextStyles.numeric.copyWith(
-                      fontSize: 22,
-                      letterSpacing: -0.02 * 22,
+                      fontSize: 36,
+                      letterSpacing: -0.02 * 36,
                       color: AppColors.textCream,
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   Text(
                     localizations.xpEarnedLabel.toUpperCase(),
                     style: AppTextStyles.label.copyWith(
-                      fontSize: 11,
-                      letterSpacing: 0.16 * 11,
+                      fontSize: 12,
+                      letterSpacing: 0.16 * 12,
                       color: AppColors.textDim,
                     ),
                   ),
@@ -156,8 +156,8 @@ class MissionDebriefSection extends StatelessWidget {
                     Text(
                       classLabel!.toUpperCase(),
                       style: AppTextStyles.label.copyWith(
-                        fontSize: 10,
-                        letterSpacing: 0.10 * 10,
+                        fontSize: 11,
+                        letterSpacing: 0.10 * 11,
                         color: AppColors.hotViolet,
                       ),
                     ),

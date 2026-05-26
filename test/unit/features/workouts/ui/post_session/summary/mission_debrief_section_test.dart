@@ -751,6 +751,60 @@ void main() {
     });
 
     testWidgets(
+      'XP hero block: longest realistic copy at 320dp does not overflow '
+      '(round-3 36sp regression guard — "+10000 XP GANHO · DESBRAVADOR")',
+      (tester) async {
+        // Round-3 bumped the hero numeral from 22sp → 36sp, the eyebrow
+        // from 11sp → 12sp, the class accent from 10sp → 11sp, and the
+        // gap between numeric and eyebrow from 4dp → 6dp. The worst-case
+        // intra-Row width grows materially; this guard pins that even
+        // the longest realistic combination ("+10000" + "XP GANHO" +
+        // longest pt class name "DESBRAVADOR") fits the tightest
+        // production viewport without a RenderFlex overflow.
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'supino',
+              exerciseName: 'Supino',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 80,
+              peakReps: 8,
+              xpContribution: 9000,
+              isPR: false,
+            ),
+          ],
+          bpXpDeltas: const {BodyPart.chest: 10000},
+          bpRankAfter: const {BodyPart.chest: 40},
+        );
+
+        await _pumpDebrief(
+          tester,
+          state: state,
+          // pt localizations carry the "XP GANHO" eyebrow which is wider
+          // than the en "XP EARNED" — pin the worst-case.
+          localizations: _ptLocalizations(),
+          // "Desbravador" is the longest pt class name (11 chars,
+          // uppercases to "DESBRAVADOR").
+          classLabel: 'Desbravador',
+          viewport: const Size(320, 1200),
+        );
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'No RenderFlex overflow on the tightest production viewport '
+              'with the longest realistic XP + class-name combination.',
+        );
+        // All three text slots still render — verifies they were laid
+        // out, not silently elided.
+        expect(find.text('+10000'), findsOneWidget);
+        expect(find.text('XP GANHO'), findsOneWidget);
+        expect(find.text('DESBRAVADOR'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'structural divider renders between rank-delta rows and next-target '
       'callout (Phase 31 round-2 Bug G — visually separates blocks)',
       (tester) async {
