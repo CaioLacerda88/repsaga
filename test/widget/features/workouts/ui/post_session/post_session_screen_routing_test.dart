@@ -122,6 +122,16 @@ void main() {
       testWidgets(
         'summary EQUIP row renders the localized name in en (not the slug)',
         (tester) async {
+          // Use a realistic phone viewport — the post-session summary panel
+          // composes for ~760dp tall production screens. The default 800x600
+          // flutter_test viewport doesn't have enough vertical room for the
+          // Mission Debrief section + EQUIP row + share CTA + CONTINUE rail
+          // to fit, which produces a benign RenderFlex overflow in the test
+          // that's irrelevant to the rendering contract being asserted.
+          tester.view.devicePixelRatio = 1.0;
+          tester.view.physicalSize = const Size(360, 800);
+          addTearDown(tester.view.reset);
+
           await tester.pumpWidget(
             _harness(
               paramsBuilder: (l10n) => _params(
@@ -154,6 +164,10 @@ void main() {
       testWidgets(
         'summary EQUIP row renders the localized name in pt-BR (not the slug)',
         (tester) async {
+          tester.view.devicePixelRatio = 1.0;
+          tester.view.physicalSize = const Size(360, 800);
+          addTearDown(tester.view.reset);
+
           await tester.pumpWidget(
             _harness(
               locale: const Locale('pt'),
