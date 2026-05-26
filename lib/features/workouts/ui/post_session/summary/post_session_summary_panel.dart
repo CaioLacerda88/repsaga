@@ -54,8 +54,7 @@ class PostSessionSummaryPanel extends StatelessWidget {
     this.hasShareCta = false,
     this.titleEquipRow,
     this.rankUpOverflow,
-    this.prDetailRow,
-    this.classChangeRow,
+    this.debriefSection,
     this.nextStepHookFormatter,
     this.nextStepEyebrowColor,
   });
@@ -123,12 +122,13 @@ class PostSessionSummaryPanel extends StatelessWidget {
   /// Optional overflow card for multi-rank-up state (mockup §5 State 6).
   final Widget? rankUpOverflow;
 
-  /// Optional PR detail row (mockup §5 State 3 — "Supino · 95kg × 5,
-  /// +5kg vs anterior.").
-  final Widget? prDetailRow;
-
-  /// Optional class-change badge row (mockup §5 State 9 + 10).
-  final Widget? classChangeRow;
+  /// Optional S2 Mission Debrief section (Phase 31 Pass 3). Renders below
+  /// the duration/tonnage block — surfaces named lift rows, segmented XP
+  /// bar, per-BP rank deltas, and the next-target callout. When supplied,
+  /// the panel's separate next-step eyebrow+hook block (the legacy
+  /// summaryNextStepLabel + summaryNextRank/Level pair) is hidden because
+  /// the debrief section's next-target callout subsumes it.
+  final Widget? debriefSection;
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +174,13 @@ class PostSessionSummaryPanel extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodySmall,
                 ),
-                if (nextStepHook != null) ...[
+                // Legacy next-step eyebrow+hook block. Only renders when
+                // the Phase 31 debrief section isn't supplied — the
+                // debrief subsumes the next-target callout via its
+                // fifth row. The fallback exists for fixtures that don't
+                // wire the debrief (tests of the panel chrome, day-zero
+                // baselines, etc).
+                if (debriefSection == null && nextStepHook != null) ...[
                   const SizedBox(height: 22),
                   const Divider(color: AppColors.hair, height: 1),
                   const SizedBox(height: 10),
@@ -193,14 +199,6 @@ class PostSessionSummaryPanel extends StatelessWidget {
                     style: AppTextStyles.body,
                   ),
                 ],
-                if (prDetailRow != null) ...[
-                  const SizedBox(height: 14),
-                  prDetailRow!,
-                ],
-                if (classChangeRow != null) ...[
-                  const SizedBox(height: 14),
-                  classChangeRow!,
-                ],
                 if (rankUpOverflow != null) ...[
                   const SizedBox(height: 14),
                   rankUpOverflow!,
@@ -208,6 +206,10 @@ class PostSessionSummaryPanel extends StatelessWidget {
                 if (titleEquipRow != null) ...[
                   const SizedBox(height: 14),
                   titleEquipRow!,
+                ],
+                if (debriefSection != null) ...[
+                  const SizedBox(height: 8),
+                  debriefSection!,
                 ],
                 const Spacer(),
                 if (hasShareCta &&

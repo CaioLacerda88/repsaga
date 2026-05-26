@@ -31,6 +31,8 @@ import 'cuts/cinematic_tap_hint.dart';
 import 'post_session_state.dart';
 import 'share/share_card_renderer.dart';
 import 'share/share_localizations.dart';
+import 'summary/mission_debrief_localizations.dart';
+import 'summary/mission_debrief_section.dart';
 import 'summary/next_step_hook.dart';
 import 'summary/post_session_summary_panel.dart';
 import 'summary/title_equip_row.dart';
@@ -574,6 +576,14 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       );
     }
 
+    // Build the S2 Mission Debrief section (Phase 31 Pass 3). The
+    // section subsumes the legacy nextStepHook block on the panel — the
+    // panel hides its eyebrow + hook when `debriefSection` is non-null.
+    final debriefSection = MissionDebriefSection(
+      state: state,
+      localizations: MissionDebriefLocalizations.from(l10n),
+    );
+
     return PostSessionSummaryPanel(
       sagaLabel: sagaLabel,
       durationSetsLabel: durationSets,
@@ -589,6 +599,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       hasShareCta: state.hasShareCta,
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
+      debriefSection: debriefSection,
       onContinue: () {
         _stateController.onContinue();
         widget.onContinue();

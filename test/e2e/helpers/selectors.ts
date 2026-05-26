@@ -1462,6 +1462,29 @@ export const POST_SESSION = {
    * Semantics(identifier: 'post-session-share-cta').
    */
   shareCta: '[flt-semantics-identifier="post-session-share-cta"]',
+
+  /**
+   * S2 Mission Debrief section root (Phase 31 Pass 3). Fills the post-
+   * cinematic real estate above the share/continue CTAs with the lift
+   * table, segmented XP bar, per-BP rank deltas, and next-target callout.
+   * Semantics(identifier: 'mission-debrief-section').
+   */
+  missionDebriefSection: '[flt-semantics-identifier="mission-debrief-section"]',
+
+  /**
+   * Per-row lift selector pattern (Phase 31 Pass 3). Index is 0-based;
+   * top-4 lifts by XP contribution descending. Use as
+   * `${POST_SESSION.missionDebriefLiftRow}-0` for the hero row.
+   * Semantics(identifier: 'mission-debrief-lift-row-{i}').
+   */
+  missionDebriefLiftRow: '[flt-semantics-identifier^="mission-debrief-lift-row-"]',
+
+  /**
+   * Per-BP rank delta row selector pattern (Phase 31 Pass 3). Slug is the
+   * BodyPart.dbValue (chest/back/legs/...). Use as
+   * `[flt-semantics-identifier="mission-debrief-bp-row-chest"]`.
+   */
+  missionDebriefBpRow: '[flt-semantics-identifier^="mission-debrief-bp-row-"]',
 } as const;
 
 // ---------------------------------------------------------------------------
