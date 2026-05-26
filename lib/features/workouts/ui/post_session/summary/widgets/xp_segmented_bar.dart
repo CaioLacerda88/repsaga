@@ -33,21 +33,29 @@ class XpBarSegment {
 
 /// Horizontal segmented XP bar for the S2 Mission Debrief (Phase 31 Pass 3).
 ///
-/// Renders a 6dp-tall bar with proportional segments (one per body part
-/// that earned XP this session), separated by 2dp gaps that expose the
-/// underlying abyss backing. Labels sit below each segment in the
-/// corresponding hue.
+/// Renders a **14dp-tall** bar with proportional segments (one per body
+/// part that earned XP this session), separated by 2dp gaps that expose
+/// the underlying abyss backing. Each segment's BP name renders INSIDE
+/// the colored block (reverse-printed in `abyss` so the dark text rides
+/// on the hue background — locked design grammar per
+/// `docs/post-phase-30-design-exploration.html` § Surface 2 mockup).
 ///
-/// **Layout (top to bottom):**
-///   * 6dp segmented bar — `Row` of `Expanded(flex: segment.xp)` blocks
-///     painted with `ColoredBox(color: segment.hue)`. 2dp `SizedBox` gaps.
-///   * 8dp gap.
-///   * Label row — matching positions; each label is the BP name from
-///     [bodyPartLabels] uppercased, painted in 10sp Barlow Condensed 600
-///     +0.20em in the segment hue. Truncates with ellipsis when the
-///     segment is too narrow.
+/// **Layout:**
+///   * 14dp segmented bar — `Row` of `Expanded(flex: segment.xp)` blocks
+///     painted with `ColoredBox(color: segment.hue)`. Each block holds
+///     a centered Text label (BP name uppercased) in `abyss` color.
+///     Narrow segments (< ~24dp paint width) drop their label so
+///     overflow never bleeds — `OverflowBox` trick not needed because
+///     the Text uses `TextOverflow.ellipsis` and `maxLines: 1` with a
+///     `softWrap: false` for tighter clipping.
+///   * 2dp `SizedBox` gaps between segments.
 ///
-/// Total height: 6 + 8 + ~14 = ~28dp.
+/// **Phase 31 device-fix (Bug B):** pre-fix the bar was a 6dp-tall row
+/// with labels in a separate row below. On the device the 6dp height
+/// was effectively invisible against the abyss background — the user
+/// couldn't see the hue blocks. Per the mockup spec the bar is 14dp
+/// with labels reverse-printed inside. This commit aligns the
+/// implementation with the locked mockup.
 ///
 /// **Defensive cases (render nothing):**
 ///   * [segments] is empty.
@@ -71,61 +79,107 @@ class XpSegmentedBar extends StatelessWidget {
   /// painting order (typically XP descending).
   final List<XpBarSegment> segments;
 
+  /// Bar height (mockup §S2 spec). Public for tests; do not override at
+  /// call sites — the design grammar locks 14dp.
+  static const double barHeight = 14.0;
+
+  /// Minimum paint-width a segment needs before its label renders. Below
+  /// this threshold the label drops (the colored block still paints so
+  /// the BP's XP contribution stays visible — just unlabeled).
+  static const double _minLabelSegmentWidth = 24.0;
+
   @override
   Widget build(BuildContext context) {
     if (segments.isEmpty) return const SizedBox.shrink();
     final totalXp = segments.fold<int>(0, (sum, s) => sum + s.xp);
     if (totalXp <= 0) return const SizedBox.shrink();
 
-    // Identifier-bearing wrapper so the post-session E2E suite can pin the
-    // bar's visibility through the AOM accessibility tree without grepping
-    // hue-tinted segment colors. Phase 31 — Suggestion 2.
+    // LayoutBuilder gives us the bar's actual paint width so we can
+    // decide per-segment whether the label fits. A 1xp segment in a
+    // 1001xp total renders at ~0.4dp wide on a 412dp viewport — far
+    // below readable width; dropping the label keeps the block clean.
     return Semantics(
       container: true,
       explicitChildNodes: true,
       identifier: 'mission-debrief-xp-bar',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 6,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Subtract the 2dp gap widths from the available space so
+          // segment-width estimates match the laid-out reality.
+          final gapCount = segments.length - 1;
+          final paintableWidth = (constraints.maxWidth - gapCount * 2.0).clamp(
+            0.0,
+            double.infinity,
+          );
+          return SizedBox(
+            height: barHeight,
             child: Row(
               children: [
                 for (var i = 0; i < segments.length; i++) ...[
                   if (i > 0) const SizedBox(width: 2),
                   Expanded(
                     flex: segments[i].xp,
-                    child: ColoredBox(color: segments[i].hue),
+                    child: _XpBarSegmentBlock(
+                      hue: segments[i].hue,
+                      label:
+                          (bodyPartLabels[segments[i].bodyPart] ??
+                                  segments[i].bodyPart.dbValue)
+                              .toUpperCase(),
+                      estimatedWidth: paintableWidth * segments[i].xp / totalXp,
+                      minLabelWidth: _minLabelSegmentWidth,
+                    ),
                   ),
                 ],
               ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              for (var i = 0; i < segments.length; i++) ...[
-                if (i > 0) const SizedBox(width: 2),
-                Expanded(
-                  flex: segments[i].xp,
-                  child: Text(
-                    (bodyPartLabels[segments[i].bodyPart] ??
-                            segments[i].bodyPart.dbValue)
-                        .toUpperCase(),
-                    style: AppTextStyles.label.copyWith(
-                      fontSize: 10,
-                      letterSpacing: 0.20 * 10,
-                      color: segments[i].hue,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+          );
+        },
       ),
+    );
+  }
+}
+
+/// One segment block — a hue-tinted `ColoredBox` with the BP label
+/// reverse-printed inside in `abyss`. Drops the label when the
+/// estimated paint width falls below [minLabelWidth] so narrow
+/// segments don't visually clutter or overflow.
+class _XpBarSegmentBlock extends StatelessWidget {
+  const _XpBarSegmentBlock({
+    required this.hue,
+    required this.label,
+    required this.estimatedWidth,
+    required this.minLabelWidth,
+  });
+
+  final Color hue;
+  final String label;
+  final double estimatedWidth;
+  final double minLabelWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final showLabel = estimatedWidth >= minLabelWidth;
+    return ColoredBox(
+      color: hue,
+      child: showLabel
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  label,
+                  style: AppTextStyles.label.copyWith(
+                    fontSize: 10,
+                    letterSpacing: 0.20 * 10,
+                    color: AppColors.abyss,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.clip,
+                ),
+              ),
+            )
+          : const SizedBox.expand(),
     );
   }
 }

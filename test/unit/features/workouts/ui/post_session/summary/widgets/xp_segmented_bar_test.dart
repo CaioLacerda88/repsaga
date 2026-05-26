@@ -50,7 +50,8 @@ void main() {
         ],
       );
 
-      // Single segment label visible (uppercased).
+      // Single segment label visible (uppercased), reverse-printed in
+      // abyss inside the colored segment.
       expect(find.text('PEITO'), findsOneWidget);
       // The Expanded segment fills the available width (no other ColoredBox
       // children fighting for flex).
@@ -65,6 +66,135 @@ void main() {
       expect(coloredBoxes.length, 1);
       expect(coloredBoxes.single.color, AppColors.bodyPartChest);
     });
+
+    // -----------------------------------------------------------------
+    // Phase 31 Bug B — mockup-spec compliance regression guards
+    // -----------------------------------------------------------------
+
+    testWidgets(
+      'bar height is 14dp per mockup §S2 (Phase 31 Bug B regression)',
+      (tester) async {
+        await pumpBar(
+          tester,
+          segments: const [
+            XpBarSegment(
+              bodyPart: BodyPart.chest,
+              hue: AppColors.bodyPartChest,
+              xp: 618,
+            ),
+          ],
+        );
+
+        final barSize = tester.getSize(find.byType(XpSegmentedBar));
+        expect(
+          barSize.height,
+          14.0,
+          reason:
+              'Mockup §S2 locks the bar at 14dp tall; pre-fix the widget '
+              'used a 6dp height that was effectively invisible on the '
+              'abyss background.',
+        );
+        // The exposed const must stay in sync.
+        expect(XpSegmentedBar.barHeight, 14.0);
+      },
+    );
+
+    testWidgets(
+      'labels render INSIDE the colored segment, reverse-printed in abyss '
+      '(Phase 31 Bug B mockup compliance)',
+      (tester) async {
+        await pumpBar(
+          tester,
+          segments: const [
+            XpBarSegment(
+              bodyPart: BodyPart.chest,
+              hue: AppColors.bodyPartChest,
+              xp: 618,
+            ),
+          ],
+        );
+
+        // Find the PEITO label's color — must be abyss so the dark
+        // text reverse-prints on the hue background.
+        final labelText = tester.widget<Text>(find.text('PEITO'));
+        expect(
+          labelText.style?.color,
+          AppColors.abyss,
+          reason:
+              'Mockup §S2 specifies labels reverse-printed in abyss '
+              'inside the hue block.',
+        );
+
+        // The label Text must be a descendant of the ColoredBox that
+        // paints its segment (NOT a sibling row beneath it).
+        final coloredBox = tester.widget<ColoredBox>(
+          find.descendant(
+            of: find.byType(XpSegmentedBar),
+            matching: find.byWidgetPredicate(
+              (w) => w is ColoredBox && w.color == AppColors.bodyPartChest,
+            ),
+          ),
+        );
+        final labelAncestors = find.ancestor(
+          of: find.text('PEITO'),
+          matching: find.byWidget(coloredBox),
+        );
+        expect(
+          labelAncestors,
+          findsOneWidget,
+          reason:
+              'Each label must paint INSIDE its segment ColoredBox, not '
+              'in a separate row beneath the bar.',
+        );
+      },
+    );
+
+    testWidgets(
+      'narrow segments drop their label so the colored block stays clean '
+      '(Phase 31 Bug B narrow-segment defensive)',
+      (tester) async {
+        // 1000 vs 1 — the second segment paints at ~0.3dp wide on a
+        // 320dp viewport; the label can't fit.
+        await pumpBar(
+          tester,
+          segments: const [
+            XpBarSegment(
+              bodyPart: BodyPart.chest,
+              hue: AppColors.bodyPartChest,
+              xp: 1000,
+            ),
+            XpBarSegment(
+              bodyPart: BodyPart.back,
+              hue: AppColors.bodyPartBack,
+              xp: 1,
+            ),
+          ],
+        );
+
+        // Wide segment label renders.
+        expect(find.text('PEITO'), findsOneWidget);
+        // Narrow segment label drops (no Text rendered) — the block
+        // still paints, observable as a second ColoredBox.
+        expect(find.text('COSTAS'), findsNothing);
+
+        final coloredBoxes = tester
+            .widgetList<ColoredBox>(
+              find.descendant(
+                of: find.byType(XpSegmentedBar),
+                matching: find.byType(ColoredBox),
+              ),
+            )
+            .toList();
+        expect(
+          coloredBoxes.length,
+          2,
+          reason:
+              'Both segments must still paint — only the narrow label '
+              'drops; the colored block stays so the BP contribution '
+              'remains visible.',
+        );
+      },
+    );
 
     testWidgets('renders 2-segment 50/50 with equal flex', (tester) async {
       await pumpBar(
@@ -136,9 +266,10 @@ void main() {
       expect(coloredBoxes.length, 3);
 
       // Flex ratios on the bar segments — find the Expanded children of
-      // the 6dp-tall Row (the first SizedBox(height: 6) holds the bar).
+      // the 14dp-tall bar (Phase 31 Bug B mockup spec; the single
+      // SizedBox(height: 14) inside the LayoutBuilder holds the bar).
       final barSizedBox = tester.widget<SizedBox>(
-        find.byWidgetPredicate((w) => w is SizedBox && w.height == 6).first,
+        find.byWidgetPredicate((w) => w is SizedBox && w.height == 14).first,
       );
       // Walk the bar's row children — Expandeds carry the flex.
       final expandeds = tester
@@ -153,6 +284,11 @@ void main() {
     });
 
     testWidgets('renders 4-segment proportional bar', (tester) async {
+      // XP shares chosen so every segment paints at >= 24dp on a 360dp
+      // viewport (the minimum-label-width threshold). At 360dp - 40dp
+      // padding - 6dp gaps = 314dp paintable across 4 segments.
+      // Smallest segment (200/1100 of total) → ~57dp; well above the
+      // 24dp floor so the label renders.
       await pumpBar(
         tester,
         segments: const [
@@ -164,14 +300,14 @@ void main() {
           XpBarSegment(
             bodyPart: BodyPart.back,
             hue: AppColors.bodyPartBack,
-            xp: 200,
+            xp: 300,
           ),
           XpBarSegment(
             bodyPart: BodyPart.legs,
             hue: AppColors.success,
-            xp: 100,
+            xp: 200,
           ),
-          XpBarSegment(bodyPart: BodyPart.arms, hue: AppColors.error, xp: 50),
+          XpBarSegment(bodyPart: BodyPart.arms, hue: AppColors.error, xp: 200),
         ],
       );
 
@@ -222,42 +358,36 @@ void main() {
       expect(size.height, 0);
     });
 
-    testWidgets('narrow segment still paints; label truncates with ellipsis', (
-      tester,
-    ) async {
-      await pumpBar(
-        tester,
-        segments: const [
-          XpBarSegment(
-            bodyPart: BodyPart.chest,
-            hue: AppColors.bodyPartChest,
-            xp: 1000,
-          ),
-          // Tiny narrow segment: 1 / 1001 of the bar.
-          XpBarSegment(
-            bodyPart: BodyPart.back,
-            hue: AppColors.bodyPartBack,
-            xp: 1,
-          ),
-        ],
-      );
-
-      // Both segments paint.
-      final coloredBoxes = tester
-          .widgetList<ColoredBox>(
-            find.descendant(
-              of: find.byType(XpSegmentedBar),
-              matching: find.byType(ColoredBox),
+    testWidgets(
+      'visible label uses single-line clip + softWrap false (overflow does '
+      'not bleed when the segment is borderline width)',
+      (tester) async {
+        // 5/6 split — both segments wide enough to show labels; pin the
+        // text-flow configuration that prevents wraps under the new
+        // labels-inside-segment layout.
+        await pumpBar(
+          tester,
+          segments: const [
+            XpBarSegment(
+              bodyPart: BodyPart.chest,
+              hue: AppColors.bodyPartChest,
+              xp: 500,
             ),
-          )
-          .toList();
-      expect(coloredBoxes.length, 2);
+            XpBarSegment(
+              bodyPart: BodyPart.back,
+              hue: AppColors.bodyPartBack,
+              xp: 600,
+            ),
+          ],
+        );
 
-      // Narrow label is present but its Text widget should be configured
-      // to ellipsis at single line.
-      final costasText = tester.widget<Text>(find.text('COSTAS'));
-      expect(costasText.overflow, TextOverflow.ellipsis);
-      expect(costasText.maxLines, 1);
-    });
+        for (final label in const ['PEITO', 'COSTAS']) {
+          final text = tester.widget<Text>(find.text(label));
+          expect(text.maxLines, 1);
+          expect(text.softWrap, false);
+          expect(text.overflow, TextOverflow.clip);
+        }
+      },
+    );
   });
 }
