@@ -101,4 +101,15 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
       page.locator(POST_SESSION.missionDebriefBpRow).first(),
     ).toBeVisible();
   });
+
+  test('should render the segmented XP bar inside the debrief section', async ({
+    page,
+  }) => {
+    await expect(page.locator(POST_SESSION.missionDebriefSection)).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(
+      page.locator(POST_SESSION.missionDebriefXpBar),
+    ).toBeVisible();
+  });
 });

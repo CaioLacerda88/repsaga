@@ -77,47 +77,55 @@ class XpSegmentedBar extends StatelessWidget {
     final totalXp = segments.fold<int>(0, (sum, s) => sum + s.xp);
     if (totalXp <= 0) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 6,
-          child: Row(
+    // Identifier-bearing wrapper so the post-session E2E suite can pin the
+    // bar's visibility through the AOM accessibility tree without grepping
+    // hue-tinted segment colors. Phase 31 — Suggestion 2.
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: 'mission-debrief-xp-bar',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 6,
+            child: Row(
+              children: [
+                for (var i = 0; i < segments.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 2),
+                  Expanded(
+                    flex: segments[i].xp,
+                    child: ColoredBox(color: segments[i].hue),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
             children: [
               for (var i = 0; i < segments.length; i++) ...[
                 if (i > 0) const SizedBox(width: 2),
                 Expanded(
                   flex: segments[i].xp,
-                  child: ColoredBox(color: segments[i].hue),
+                  child: Text(
+                    (bodyPartLabels[segments[i].bodyPart] ??
+                            segments[i].bodyPart.dbValue)
+                        .toUpperCase(),
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: 10,
+                      letterSpacing: 0.20 * 10,
+                      color: segments[i].hue,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ],
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            for (var i = 0; i < segments.length; i++) ...[
-              if (i > 0) const SizedBox(width: 2),
-              Expanded(
-                flex: segments[i].xp,
-                child: Text(
-                  (bodyPartLabels[segments[i].bodyPart] ??
-                          segments[i].bodyPart.dbValue)
-                      .toUpperCase(),
-                  style: AppTextStyles.label.copyWith(
-                    fontSize: 10,
-                    letterSpacing: 0.20 * 10,
-                    color: segments[i].hue,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1485,6 +1485,14 @@ export const POST_SESSION = {
    * `[flt-semantics-identifier="mission-debrief-bp-row-chest"]`.
    */
   missionDebriefBpRow: '[flt-semantics-identifier^="mission-debrief-bp-row-"]',
+
+  /**
+   * Segmented XP-by-BP bar inside the Mission Debrief (Phase 31). Pins
+   * the bar's visibility through the AOM tree without grepping hue colors
+   * out of the segment widgets.
+   * Semantics(identifier: 'mission-debrief-xp-bar').
+   */
+  missionDebriefXpBar: '[flt-semantics-identifier="mission-debrief-xp-bar"]',
 } as const;
 
 // ---------------------------------------------------------------------------
