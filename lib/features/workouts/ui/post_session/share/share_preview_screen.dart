@@ -231,6 +231,20 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                   // PR 30c device bug 2: the AspectRatio is wrapped in a
                   // ClipRect so the photoOffset Transform inside the
                   // renderer cannot paint outside the card's 9:16 frame.
+                  //
+                  // Phase 31 device fix (Bugs A + C): the visible
+                  // preview tree now renders at **device-native dp**.
+                  // Pre-fix the AspectRatio contained
+                  // `FittedBox → SizedBox(1080×1920) → Renderer` which
+                  // scaled the 1080-unit tree down by ~0.38× on a
+                  // 412dp viewport — the D3 collars and preview
+                  // typography collapsed to 4-15sp on-screen. The
+                  // LayoutBuilder below forwards the actual laid-out
+                  // card width / height into the renderer so the
+                  // variant subtree computes proportional collar
+                  // heights + paddings against the real card size, and
+                  // the preview-target typography reads at-screen sp
+                  // (XP hero 42sp = 42sp on-device).
                   Expanded(
                     child: GestureDetector(
                       onVerticalDragUpdate: isDiscreet
@@ -247,12 +261,18 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                         child: ClipRect(
                           child: AspectRatio(
                             aspectRatio: 9 / 16,
-                            child: FittedBox(
-                              fit: BoxFit.contain,
-                              child: SizedBox(
-                                width: 1080,
-                                height: 1920,
-                                child: Stack(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final w = constraints.maxWidth;
+                                final h = constraints.maxHeight;
+                                // photoOffset.dy is scaled by ~4% of
+                                // the card height so the drag-band
+                                // matches the user-visible reframe
+                                // range. Pre-Phase-31 the multiplier
+                                // was an absolute `80` units inside
+                                // the 1080-canvas — 80 / 1920 ≈ 4.2%.
+                                final photoDragRange = h * 0.04;
+                                return Stack(
                                   fit: StackFit.expand,
                                   children: [
                                     // Photo offset forwarded into the
@@ -268,17 +288,26 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                                           : FileImage(File(photo.path)),
                                       photoOffset: Offset(
                                         0,
-                                        _photoAlignmentY * 80,
+                                        _photoAlignmentY * photoDragRange,
                                       ),
                                       renderTarget:
                                           ShareCardRenderTarget.preview,
+                                      cardWidthDp: w,
+                                      cardHeightDp: h,
                                     ),
                                     // Tap-to-hide affordances — Mockup §7.
+                                    // Heights expressed as fractions
+                                    // of the laid-out card so the hit
+                                    // zones scale with the bottom-
+                                    // collar's actual on-screen size
+                                    // (0.20 cardHeight = bottom collar
+                                    // body; 0.10 above it covers the
+                                    // PR line).
                                     Positioned(
                                       left: 0,
                                       right: 0,
                                       bottom: 0,
-                                      height: 280,
+                                      height: h * 0.20,
                                       child: GestureDetector(
                                         behavior: HitTestBehavior.translucent,
                                         onTap: () => setState(
@@ -290,8 +319,8 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                                       Positioned(
                                         left: 0,
                                         right: 0,
-                                        bottom: 320,
-                                        height: 120,
+                                        bottom: h * 0.20,
+                                        height: h * 0.10,
                                         child: GestureDetector(
                                           behavior: HitTestBehavior.translucent,
                                           onTap: () => setState(
@@ -300,8 +329,8 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                                         ),
                                       ),
                                   ],
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ),
                         ),

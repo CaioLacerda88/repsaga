@@ -120,6 +120,8 @@ class ShareCardRenderer extends StatelessWidget {
     this.photo,
     this.photoOffset = Offset.zero,
     this.renderTarget = ShareCardRenderTarget.export,
+    this.cardWidthDp = 1080.0,
+    this.cardHeightDp = 1920.0,
   });
 
   /// Snapshot of the finished workout, projected for the share card.
@@ -164,6 +166,21 @@ class ShareCardRenderer extends StatelessWidget {
   /// `RepaintBoundary` capture. See PR 30c device bug 1 / bug 3.
   final ShareCardRenderTarget renderTarget;
 
+  /// Card width in dp / px — forwarded to the variant subtree so the
+  /// chrome (collars, side bars, paddings) computes proportional to the
+  /// laid-out card. Defaults to `1080.0` (matches the export tree
+  /// 1080×1920 canvas). The preview screen forwards the
+  /// `LayoutBuilder.constraints.maxWidth` from the `AspectRatio(9/16)`
+  /// host so the visible card renders at device-native dp (see
+  /// `share_card_typography.dart` `ShareCardRenderTarget` dartdoc for
+  /// the Phase 31 architecture rationale).
+  final double cardWidthDp;
+
+  /// Card height in dp / px — forwarded to the variant subtree.
+  /// Defaults to `1920.0` (export 9:16 canvas). Drives collar heights
+  /// (top × 0.13, bottom × 0.20) inside the Achievement Frame.
+  final double cardHeightDp;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -186,6 +203,8 @@ class ShareCardRenderer extends StatelessWidget {
           prDetail: strings.discreetPrDetail,
           wordmark: strings.wordmark,
           renderTarget: renderTarget,
+          cardWidthDp: cardWidthDp,
+          cardHeightDp: cardHeightDp,
         );
       case ShareCardVariant.achievementFrame:
         return Stack(
@@ -203,6 +222,8 @@ class ShareCardRenderer extends StatelessWidget {
               wordmark: strings.wordmark,
               isClassChange: payload.isClassChange,
               renderTarget: renderTarget,
+              cardWidthDp: cardWidthDp,
+              cardHeightDp: cardHeightDp,
             ),
           ],
         );

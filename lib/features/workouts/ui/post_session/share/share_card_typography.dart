@@ -3,39 +3,52 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 
 /// Whether a share-card variant widget is rendering for the **preview**
-/// surface (visible inside `SharePreviewScreen` on the device's native
-/// screen) or the **export** surface (offscreen 1080×1920 tree captured
-/// by `ShareImageRenderer.toImage(pixelRatio: 3.0)` and handed to the
-/// native share sheet).
+/// surface (visible inside `SharePreviewScreen` at the device's native
+/// dp constraints) or the **export** surface (offscreen 1080×1920 tree
+/// captured by `ShareImageRenderer.toImage(pixelRatio: 3.0)` and handed
+/// to the native share sheet).
 ///
-/// **Why two targets?** The card lives in a 1080×1920 logical-pixel tree.
-/// On the export path that's the final image size. On the preview path
-/// the same tree is scaled by `FittedBox` down to roughly the device
-/// width (≈360dp on a typical Android phone — about a 0.333 scale
-/// factor). Typography sized for the 1080×1920 export collapses to 7-9px
-/// effective on-screen, well below the readable threshold.
+/// **Why two targets?** Phase 31 device verification surfaced that the
+/// previous architecture wrapped the visible tree in
+/// `AspectRatio(9/16) → FittedBox(contain) → SizedBox(1080×1920)`. The
+/// FittedBox scaled the inner 1080-unit tree down to device width
+/// (≈412dp → 0.381× scale factor on Samsung S25 Ultra). Typography
+/// values that were authored as "what to read on-screen" then collapsed
+/// to 4-15sp after the FittedBox shrink — the D3 collars looked
+/// invisible and the XP hero was microscopic (Bugs A + C).
 ///
-/// The fix is two trees with **identical geometry** (same strip placement,
-/// same collar clip paths, same slash position, same vertical rhythm)
-/// but **different per-element font sizes**. The export tree keeps the
-/// locked mockup §6 sizes — the visual contract for the shipped image —
-/// while the preview tree uses larger sizes that survive the FittedBox
-/// scale-down.
+/// **Post-Phase-31 architecture:** the visible preview tree renders at
+/// **device-native dp** (no FittedBox wrapping). Variants compute
+/// collar heights + paddings as proportional fractions of the card's
+/// laid-out dimensions (forwarded through `cardWidthDp` + `cardHeightDp`
+/// constructor params, defaulting to the export 1080 / 1920). Typography
+/// values mean what they say:
 ///
-/// Mockup §6 typography sizes live in [ShareCardTypography.export]; the
-/// preview-screen-sized typography lives in [ShareCardTypography.preview].
-/// Both are derived from the sanctioned [AppTextStyles] entry points so
-/// the typography call-sites gate (`check_typography_call_sites.sh`)
-/// still sees a single source of family + weight rules.
+///   * `ShareCardRenderTarget.preview` — sp / dp values on the device
+///     screen. e.g. XP hero = 42sp reads at 42sp on-device.
+///   * `ShareCardRenderTarget.export` — px values inside the 1080×1920
+///     offscreen tree captured by `toImage`. e.g. XP hero = 64px lands
+///     at 64px in the shipped JPEG.
+///
+/// Geometry stays identical at the proportional level (15% collar slant,
+/// 13% top-collar height fraction, 20% bottom-collar height fraction,
+/// 4dp side bars) so the two targets render the same shape — only the
+/// per-element font sizes vary.
+///
+/// Both maps are derived from the sanctioned [AppTextStyles] entry
+/// points so the typography call-sites gate
+/// (`check_typography_call_sites.sh`) still sees a single source of
+/// family + weight rules.
 enum ShareCardRenderTarget {
-  /// The visible, FittedBox-scaled preview inside `SharePreviewScreen`.
-  /// Typography is sized so it stays readable after the scale-down to
-  /// the device's logical-pixel viewport.
+  /// The visible preview tree inside `SharePreviewScreen`, laid out at
+  /// the device's native dp constraints (no FittedBox shrink).
+  /// Typography is sized so it reads at-screen in sp.
   preview,
 
   /// The offscreen 1080×1920 tree captured by
   /// `ShareImageRenderer.toImage(pixelRatio: 3.0)` and handed to the
-  /// native share sheet. Typography matches the locked mockup §6 sizes.
+  /// native share sheet. Typography matches the locked mockup §6 sizes
+  /// expressed as px values inside the 1080-unit canvas.
   export,
 }
 
@@ -121,14 +134,23 @@ class ShareCardTypography {
   // The single photo-overlay treatment for the share-card photo path
   // (Phase 31 — replaces Variant A + Variant B). Two trapezoidal collars
   // (top + bottom) frame the photo zone, with 4dp side bars in the
-  // dominant-BP hue (left) + hotViolet (right). Typography sizes are
-  // locked per docs/WIP.md § "Typography decisions" — D3 Achievement
-  // Frame export + preview tables.
+  // dominant-BP hue (left) + hotViolet (right).
+  //
+  // **Phase 31 device-fix rescale (Bugs A + C).** Preview values
+  // pre-rescale were authored assuming the visible tree wrapped a
+  // 1080×1920 SizedBox in a FittedBox (so the rendered sp values would
+  // shrink by the ~0.38× scale factor on a 412dp viewport). After Phase
+  // 31 device verification, that wrapping was removed — the visible
+  // tree now renders at device-native dp. Preview values are restated
+  // so they read at-screen in sp (XP hero 42sp = 42sp on-device).
+  //
+  // Sizes are locked per `docs/WIP.md` § Typography decisions (D3
+  // Achievement Frame export + preview tables, refreshed Phase 31).
 
   /// Top-collar class name (Rajdhani 700, +0.04em tracking, textCream).
-  /// 36px export / 24sp preview.
+  /// 36px export / 22sp preview.
   static TextStyle achievementFrameClassName(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 24.0 : 36.0;
+    final size = target == ShareCardRenderTarget.preview ? 22.0 : 36.0;
     return AppTextStyles.numeric.copyWith(
       fontSize: size,
       letterSpacing: 0.04 * size,
@@ -147,10 +169,10 @@ class ShareCardTypography {
   }
 
   /// Bottom-collar XP hero (Rajdhani 700, -0.02em tracking, textCream).
-  /// The primary numeric register of the share card. 64px export / 38sp
-  /// preview.
+  /// The primary numeric register of the share card. 64px export / 42sp
+  /// preview — the primary visual the user reads on the preview screen.
   static TextStyle achievementFrameXpHero(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 38.0 : 64.0;
+    final size = target == ShareCardRenderTarget.preview ? 42.0 : 64.0;
     return AppTextStyles.numeric.copyWith(
       fontSize: size,
       letterSpacing: -0.02 * size,
@@ -160,12 +182,12 @@ class ShareCardTypography {
 
   /// Bottom-collar lift detail (Rajdhani 700, +0.04em tracking). Color
   /// is `heroGold` when [isPr] is true (PR is the canonical reward) and
-  /// `textCream` otherwise. 28px export / 16sp preview.
+  /// `textCream` otherwise. 28px export / 15sp preview.
   static TextStyle achievementFrameLiftDetail(
     ShareCardRenderTarget target, {
     required bool isPr,
   }) {
-    final size = target == ShareCardRenderTarget.preview ? 16.0 : 28.0;
+    final size = target == ShareCardRenderTarget.preview ? 15.0 : 28.0;
     return AppTextStyles.numeric.copyWith(
       fontSize: size,
       letterSpacing: 0.04 * size,
@@ -176,12 +198,12 @@ class ShareCardTypography {
 
   /// Bottom-collar BP rank line (Barlow Condensed 600, +0.22em tracking,
   /// hue). Rendered in the dominant-BP hue to mirror the left side bar.
-  /// 20px export / 12sp preview.
+  /// 20px export / 11sp preview.
   static TextStyle achievementFrameBpRank(
     ShareCardRenderTarget target, {
     required Color hue,
   }) {
-    final size = target == ShareCardRenderTarget.preview ? 12.0 : 20.0;
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 20.0;
     return AppTextStyles.label.copyWith(
       fontSize: size,
       letterSpacing: 0.22 * size,
@@ -190,9 +212,9 @@ class ShareCardTypography {
   }
 
   /// Bottom-collar wordmark (Rajdhani 700, +0.24em tracking, textDim).
-  /// 18px export / 11sp preview.
+  /// 18px export / 10sp preview.
   static TextStyle achievementFrameWordmark(ShareCardRenderTarget target) {
-    final size = target == ShareCardRenderTarget.preview ? 11.0 : 18.0;
+    final size = target == ShareCardRenderTarget.preview ? 10.0 : 18.0;
     return AppTextStyles.numeric.copyWith(
       fontSize: size,
       letterSpacing: 0.24 * size,

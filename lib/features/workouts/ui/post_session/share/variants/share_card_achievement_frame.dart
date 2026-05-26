@@ -15,8 +15,10 @@ import '../share_card_typography.dart';
 ///
 /// **Visual contract (mockup §6 D3):**
 ///
-///   * Top collar — `ClipPath` trapezoid, 84dp preview / 252px export tall,
-///     abyss at 92% opacity. Polygon vertices (top→bottom):
+///   * Top collar — `ClipPath` trapezoid sized at `cardHeightDp × 0.13`
+///     (~95dp on a 412dp Android viewport; ~250px in the 1080×1920
+///     export canvas). Abyss at 92% opacity. Polygon vertices
+///     (top→bottom):
 ///       - `(0.0, 0.0)` — top-left
 ///       - `(1.0, 0.0)` — top-right
 ///       - `(0.85, 1.0)` — bottom-right (15% inward slant)
@@ -24,8 +26,9 @@ import '../share_card_typography.dart';
 ///     Renders the new class name (e.g. "BULWARK") + saga eyebrow
 ///     (e.g. "SAGA 76", omitted on class-change sessions per Q4 lock).
 ///
-///   * Bottom collar — mirrored trapezoid, 130dp preview / 390px export.
-///     Polygon vertices:
+///   * Bottom collar — mirrored trapezoid sized at `cardHeightDp × 0.22`
+///     (~161dp on a 412dp viewport; ~422px in the 1080×1920 export
+///     canvas). Polygon vertices:
 ///       - `(0.15, 0.0)` — top-left (mirror of top-collar bottom-left)
 ///       - `(0.85, 0.0)` — top-right
 ///       - `(1.0, 1.0)` — bottom-right
@@ -66,6 +69,8 @@ class ShareCardAchievementFrame extends StatelessWidget {
     this.hasPr = false,
     this.isClassChange = false,
     this.renderTarget = ShareCardRenderTarget.export,
+    this.cardWidthDp = 1080.0,
+    this.cardHeightDp = 1920.0,
   });
 
   /// Dominant body-part hue — drives the left side bar (unless overridden
@@ -122,24 +127,78 @@ class ShareCardAchievementFrame extends StatelessWidget {
   /// change (caller passes the NEW class name as [className] per Q4 lock).
   final bool isClassChange;
 
-  /// Whether this widget is the export (1080×1920 offscreen) tree OR the
-  /// preview (FittedBox-scaled visible) tree. Drives the typography
-  /// sizing — see [ShareCardTypography] for the per-element pairs.
-  /// Defaults to [ShareCardRenderTarget.export] so the golden contract
-  /// stays correct.
+  /// Whether this widget is the **export** (1080×1920 offscreen) tree
+  /// OR the **preview** (device-native dp visible) tree. Drives the
+  /// typography sizing — see [ShareCardTypography] for the per-element
+  /// pairs. Defaults to [ShareCardRenderTarget.export] so the golden
+  /// contract stays correct.
   final ShareCardRenderTarget renderTarget;
+
+  /// Device-native (or canvas-native, on export) card width in dp / px.
+  /// Drives the proportional horizontal padding inside the collars so
+  /// the gutter scales with the card on small viewports.
+  ///
+  /// Defaults to `1080.0` so the export tree's golden contract is
+  /// preserved without callers touching the param. The preview tree
+  /// (`SharePreviewScreen`) wraps the card in a `LayoutBuilder` and
+  /// forwards the laid-out constraints — typically 320 / 360 / 412dp.
+  final double cardWidthDp;
+
+  /// Device-native card height in dp / px. Drives proportional collar
+  /// heights and inner top/bottom padding. Defaults to `1920.0` so the
+  /// export tree's golden contract is preserved.
+  ///
+  /// **Phase 31 device-fix structural change (Bugs A + C):** pre-fix
+  /// the variant computed collar heights from a fixed absolute table
+  /// (252 / 390 export, 84 / 130 preview) — but the preview tree was
+  /// wrapped in a `FittedBox` that shrank the entire 1080-unit subtree
+  /// to fit the device width. The preview values were then themselves
+  /// scaled down (~0.38× on a 412dp viewport) and the collars all but
+  /// disappeared. Post-fix the preview tree no longer FittedBox-scales,
+  /// so the variant computes heights from the actual `cardHeightDp` it
+  /// was given:
+  ///
+  ///   * Top collar    = `cardHeightDp × 0.13`
+  ///   * Bottom collar = `cardHeightDp × 0.20`
+  ///
+  /// At 1920px (export) that's 250 / 384 — matches the prior absolute
+  /// 252 / 390 within 2px (golden re-baseline is in-spec). At 720dp
+  /// (412dp × 16/9 viewport landed inside an `AspectRatio(9/16)`)
+  /// that's 94 / 144 — readable collar bodies on the device.
+  final double cardHeightDp;
 
   @override
   Widget build(BuildContext context) {
-    final isPreview = renderTarget == ShareCardRenderTarget.preview;
-    // Collar heights — locked per WIP.md typography decisions §4 D3.
-    // Preview heights pair with the preview-target typography sizes; the
-    // export heights pair with the locked mockup §6 D3 sizes.
-    final topCollarHeight = isPreview ? 84.0 : 252.0;
-    final bottomCollarHeight = isPreview ? 130.0 : 390.0;
-    // Side-bar width — 4dp absolute regardless of viewport (WIP.md
-    // §screen real-estate plan locks this as a non-responsive constant).
-    final sideBarWidth = isPreview ? 4.0 : 12.0;
+    // Proportional collar heights — see [cardHeightDp] for the rationale.
+    //   * Top collar: 13% of card height. Holds class name + optional
+    //     saga eyebrow (1-2 lines of typography, light vertical content).
+    //   * Bottom collar: 22% of card height. Holds XP hero + optional
+    //     lift detail + BP rank + wordmark (4 lines, heaviest content).
+    final topCollarHeight = cardHeightDp * 0.13;
+    final bottomCollarHeight = cardHeightDp * 0.22;
+    // Horizontal padding inside the collars — proportional to card width
+    // so small viewports keep gutters in scale with content.
+    final hPad = cardWidthDp * 0.04;
+    // Top-of-collar inner padding — proportional to collar height so
+    // the class name + saga eyebrow stack sits well-centered.
+    final topInnerPad = topCollarHeight * 0.16;
+    // Bottom-collar inner top-padding (above XP hero) — proportional to
+    // collar height. Slightly less than topInnerPad because the bottom
+    // collar packs more vertical content and the main XP hero needs
+    // visual breathing space, not extra padding.
+    final bottomInnerTopPad = bottomCollarHeight * 0.12;
+    final bottomInnerBottomPad = bottomCollarHeight * 0.08;
+    // Inter-text gaps within each collar — proportional to collar
+    // height so vertical rhythm scales with the chrome.
+    final topGap = topCollarHeight * 0.05;
+    final bottomGap = bottomCollarHeight * 0.04;
+    // Side-bar width — 4dp absolute regardless of viewport on preview,
+    // 12px on export (mockup §6 — 4dp at the 3.0 pixelRatio capture).
+    // The bar is a chrome detail, NOT a layout proportion. Keep
+    // absolute.
+    final sideBarWidth = renderTarget == ShareCardRenderTarget.preview
+        ? 4.0
+        : 12.0;
     // Class-change left-bar swap — keeps the chrome from collapsing both
     // bars to a single hue (would read as drained, not highlighted).
     // ignore: reward_accent — class-change is the canonical class identity reward; heroGold scarcity contract met (class-change-only render).
@@ -157,7 +216,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
               key: const ValueKey('share-card-achievement-frame-top-collar'),
               height: topCollarHeight,
               color: AppColors.abyss.withValues(alpha: 0.92),
-              padding: EdgeInsets.fromLTRB(28, isPreview ? 16.0 : 48.0, 28, 0),
+              padding: EdgeInsets.fromLTRB(hPad, topInnerPad, hPad, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -173,7 +232,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (sagaEyebrow != null) ...[
-                    SizedBox(height: isPreview ? 4.0 : 12.0),
+                    SizedBox(height: topGap),
                     Text(
                       sagaEyebrow!,
                       style: ShareCardTypography.achievementFrameSagaEyebrow(
@@ -198,10 +257,10 @@ class ShareCardAchievementFrame extends StatelessWidget {
               height: bottomCollarHeight,
               color: AppColors.abyss.withValues(alpha: 0.92),
               padding: EdgeInsets.fromLTRB(
-                28,
-                isPreview ? 16.0 : 84.0,
-                28,
-                isPreview ? 10.0 : 48.0,
+                hPad,
+                bottomInnerTopPad,
+                hPad,
+                bottomInnerBottomPad,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -217,7 +276,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                     maxLines: 1,
                   ),
                   if (liftDetail != null) ...[
-                    SizedBox(height: isPreview ? 2.0 : 12.0),
+                    SizedBox(height: bottomGap),
                     // ignore: reward_accent — PR is the canonical reward; heroGold scarcity contract met (only renders when hasPr is true via achievementFrameLiftDetail).
                     Text(
                       liftDetail!,
@@ -230,7 +289,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  SizedBox(height: isPreview ? 4.0 : 18.0),
+                  SizedBox(height: bottomGap),
                   Text(
                     bpRank,
                     style: ShareCardTypography.achievementFrameBpRank(
@@ -240,7 +299,7 @@ class ShareCardAchievementFrame extends StatelessWidget {
                     textAlign: TextAlign.center,
                     maxLines: 1,
                   ),
-                  SizedBox(height: isPreview ? 4.0 : 18.0),
+                  SizedBox(height: bottomGap),
                   Text(
                     wordmark,
                     style: ShareCardTypography.achievementFrameWordmark(

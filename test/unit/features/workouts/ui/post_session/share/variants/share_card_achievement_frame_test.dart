@@ -13,17 +13,38 @@ import 'package:repsaga/features/workouts/ui/post_session/share/variants/share_c
 /// / Container property the user actually sees. The collar + side-bar
 /// `ValueKey`s exist so chrome contracts can be probed at the boundary
 /// without painter mocking.
+///
+/// **Card dimensions.** Tests pump the widget at the export 1080×1920
+/// dimensions inside a SizedBox host. The widget computes collar
+/// heights + paddings proportional to `cardWidthDp` / `cardHeightDp`
+/// (defaulting to 1080×1920 for export-target back-compat — see
+/// [ShareCardAchievementFrame.cardHeightDp] dartdoc). Tests that need
+/// to probe the preview render path pass `cardWidthDp / cardHeightDp`
+/// matching a device-native 9:16 card (e.g. 360×640) so the
+/// proportional sizes stay in sync with the host.
 void main() {
+  // Default export-target host at 1080×1920 — matches the widget's
+  // default cardWidthDp / cardHeightDp so the collar Containers fit
+  // inside the host exactly.
   Widget host(Widget child) {
     return MaterialApp(
       home: Scaffold(
         backgroundColor: AppColors.abyss,
-        body: SizedBox(
-          // 9:16 share card aspect at a stable size.
-          width: 270,
-          height: 480,
-          child: child,
-        ),
+        body: SizedBox(width: 1080, height: 1920, child: child),
+      ),
+    );
+  }
+
+  // Preview-target host sized for a device-native 9:16 card layout
+  // (~360dp wide → 640dp tall after AspectRatio(9/16)). Tests that
+  // assert preview-target typography use this host AND pass matching
+  // `cardWidthDp` / `cardHeightDp` so the proportional collar
+  // computations align with the laid-out card.
+  Widget previewHost(Widget child) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: AppColors.abyss,
+        body: SizedBox(width: 360, height: 640, child: child),
       ),
     );
   }
@@ -299,11 +320,16 @@ void main() {
   );
 
   testWidgets(
-    'preview target uses scaled-down sizes so the FittedBox-shrunk visible '
-    'preview reads (XP hero 38sp / class name 24sp / wordmark 11sp)',
+    'preview target uses device-native dp sizes so the visible preview '
+    'reads at-screen (XP hero 42sp / class name 22sp / wordmark 10sp) — '
+    'Phase 31 Bugs A + C device-fix typography rescale',
     (tester) async {
+      // Pump at preview-target dimensions so the proportional collar
+      // computations stay in sync with the host (the visible preview
+      // tree no longer FittedBox-shrinks a 1080-canvas — it renders
+      // at device-native dp).
       await tester.pumpWidget(
-        host(
+        previewHost(
           const ShareCardAchievementFrame(
             dominantHue: AppColors.bodyPartChest,
             className: 'BULWARK',
@@ -312,13 +338,15 @@ void main() {
             bpRank: 'Peito · Rank 19',
             wordmark: 'REPSAGA',
             renderTarget: ShareCardRenderTarget.preview,
+            cardWidthDp: 360,
+            cardHeightDp: 640,
           ),
         ),
       );
 
-      expect(tester.widget<Text>(find.text('+618 XP')).style?.fontSize, 38);
-      expect(tester.widget<Text>(find.text('BULWARK')).style?.fontSize, 24);
-      expect(tester.widget<Text>(find.text('REPSAGA')).style?.fontSize, 11);
+      expect(tester.widget<Text>(find.text('+618 XP')).style?.fontSize, 42);
+      expect(tester.widget<Text>(find.text('BULWARK')).style?.fontSize, 22);
+      expect(tester.widget<Text>(find.text('REPSAGA')).style?.fontSize, 10);
     },
   );
 
@@ -412,6 +440,183 @@ void main() {
       );
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Phase 31 Bugs A + C — device-fix regression guards
+  //
+  // The visible preview tree pre-fix wrapped a 1080×1920 SizedBox in a
+  // `FittedBox(fit: contain)` so the inner 1080-canvas was scaled down
+  // by ~0.38× on a 412dp viewport. Collar heights + typography were
+  // authored as if they'd render at the inner-canvas size, then the
+  // FittedBox shrank them on-screen — collars all but vanished and the
+  // XP hero collapsed to 4-15sp. Post-fix the variant accepts
+  // `cardWidthDp` + `cardHeightDp` from the screen-layer `LayoutBuilder`
+  // so its proportional geometry stays in sync with the laid-out card.
+  // These tests pin that contract.
+  // ---------------------------------------------------------------------------
+
+  testWidgets('preview-target collars are proportional to cardHeightDp '
+      '(top ≈13%, bottom ≈22%) — Phase 31 Bugs A + C structural fix', (
+    tester,
+  ) async {
+    // Pump at a 360×640 device-native card (matches the inner card
+    // size on a typical 412dp viewport laid out in AspectRatio(9/16)).
+    await tester.pumpWidget(
+      previewHost(
+        const ShareCardAchievementFrame(
+          dominantHue: AppColors.bodyPartChest,
+          className: 'BULWARK',
+          sagaEyebrow: 'SAGA 76',
+          xpHero: '+618 XP',
+          bpRank: 'Peito · Rank 19',
+          wordmark: 'REPSAGA',
+          renderTarget: ShareCardRenderTarget.preview,
+          cardWidthDp: 360,
+          cardHeightDp: 640,
+        ),
+      ),
+    );
+
+    final topCollarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-top-collar')),
+    );
+    final bottomCollarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-bottom-collar')),
+    );
+
+    // 13% of 640 = 83.2 (collar inner sized by Container.height).
+    expect(topCollarSize.height, closeTo(640 * 0.13, 0.5));
+    // 22% of 640 = 140.8.
+    expect(bottomCollarSize.height, closeTo(640 * 0.22, 0.5));
+  });
+
+  testWidgets('preview-target XP hero is large enough to read on-device '
+      '(≥40sp, primary visual — Phase 31 Bug A device-fix regression guard)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      previewHost(
+        const ShareCardAchievementFrame(
+          dominantHue: AppColors.bodyPartChest,
+          className: 'BULWARK',
+          sagaEyebrow: 'SAGA 76',
+          xpHero: '+618 XP',
+          bpRank: 'Peito · Rank 19',
+          wordmark: 'REPSAGA',
+          renderTarget: ShareCardRenderTarget.preview,
+          cardWidthDp: 360,
+          cardHeightDp: 640,
+        ),
+      ),
+    );
+
+    // The xpHero is the primary visual register of the card. Pre-fix
+    // it landed at ~14sp on-device after the FittedBox shrink — a
+    // user complaint that triggered the architectural rebuild. Pin
+    // the post-fix lower bound: at-screen sp must be ≥ 40.
+    final xpHero = tester.widget<Text>(find.text('+618 XP'));
+    expect(
+      xpHero.style?.fontSize,
+      greaterThanOrEqualTo(40.0),
+      reason:
+          'XP hero must render at ≥40sp on the preview target so it stays '
+          'readable on-device (Phase 31 Bug A device-fix regression).',
+    );
+  });
+
+  testWidgets('preview-target side bars stay at absolute 4dp regardless of '
+      'cardWidthDp (chrome detail, not a layout proportion)', (tester) async {
+    // Pump at a small viewport.
+    await tester.pumpWidget(
+      previewHost(
+        const ShareCardAchievementFrame(
+          dominantHue: AppColors.bodyPartChest,
+          className: 'BULWARK',
+          xpHero: '+320 XP',
+          bpRank: 'Peito · Rank 12',
+          wordmark: 'REPSAGA',
+          renderTarget: ShareCardRenderTarget.preview,
+          cardWidthDp: 360,
+          cardHeightDp: 640,
+        ),
+      ),
+    );
+
+    final leftBarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-left-bar')),
+    );
+    final rightBarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-right-bar')),
+    );
+
+    expect(
+      leftBarSize.width,
+      4.0,
+      reason: 'left side bar must paint at absolute 4dp on preview target',
+    );
+    expect(
+      rightBarSize.width,
+      4.0,
+      reason: 'right side bar must paint at absolute 4dp on preview target',
+    );
+  });
+
+  testWidgets(
+    'export-target side bars stay at absolute 12px (4dp × 3.0 pixelRatio) '
+    'regardless of cardWidthDp',
+    (tester) async {
+      await tester.pumpWidget(
+        host(
+          const ShareCardAchievementFrame(
+            dominantHue: AppColors.bodyPartChest,
+            className: 'BULWARK',
+            xpHero: '+320 XP',
+            bpRank: 'Peito · Rank 12',
+            wordmark: 'REPSAGA',
+            renderTarget: ShareCardRenderTarget.export,
+            // Defaults: cardWidthDp = 1080, cardHeightDp = 1920.
+          ),
+        ),
+      );
+
+      final leftBarSize = tester.getSize(
+        find.byKey(const ValueKey('share-card-achievement-frame-left-bar')),
+      );
+      expect(leftBarSize.width, 12.0);
+    },
+  );
+
+  testWidgets('export-target collars are proportional to cardHeightDp '
+      '(top 13% of 1920 ≈ 250 / bottom 22% of 1920 ≈ 422) — backward-compat', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        const ShareCardAchievementFrame(
+          dominantHue: AppColors.bodyPartChest,
+          className: 'BULWARK',
+          sagaEyebrow: 'SAGA 76',
+          xpHero: '+618 XP',
+          bpRank: 'Peito · Rank 19',
+          wordmark: 'REPSAGA',
+          renderTarget: ShareCardRenderTarget.export,
+        ),
+      ),
+    );
+
+    final topCollarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-top-collar')),
+    );
+    final bottomCollarSize = tester.getSize(
+      find.byKey(const ValueKey('share-card-achievement-frame-bottom-collar')),
+    );
+
+    // 13% of 1920 = 249.6 (matches the prior absolute 252 within 2px).
+    expect(topCollarSize.height, closeTo(1920 * 0.13, 1.0));
+    // 22% of 1920 = 422.4 (was 390 pre-fix; the new spec pulled bottom
+    // collar up to fit the heavier content stack).
+    expect(bottomCollarSize.height, closeTo(1920 * 0.22, 1.0));
+  });
 
   testWidgets(
     'class-change with no PR and null liftDetail: class name renders, '

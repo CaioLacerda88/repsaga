@@ -70,6 +70,25 @@ void main() {
     openSettings: 'Abrir configurações',
   );
 
+  // Pump every test at a realistic Android phone viewport (412dp wide ×
+  // 915dp tall — Samsung S25 Ultra reference device for Phase 31). The
+  // post-Phase-31 preview tree renders at device-native dp via
+  // `LayoutBuilder` — Flutter test's default 800×600 viewport would
+  // squeeze the AspectRatio(9/16) card down below the bottom-collar's
+  // intrinsic content height. See `share_card_typography.dart`
+  // `ShareCardRenderTarget` dartdoc for the device-native dp architecture.
+  setUp(() {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.platformDispatcher.views.first.physicalSize = const Size(412, 915);
+    binding.platformDispatcher.views.first.devicePixelRatio = 1.0;
+  });
+
+  tearDown(() {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.platformDispatcher.views.first.resetPhysicalSize();
+    binding.platformDispatcher.views.first.resetDevicePixelRatio();
+  });
+
   SharePayload buildPayload() {
     return SharePayload.fromPostSessionState(
       tier: RewardTier.thresholdAnticipatory,
@@ -103,6 +122,8 @@ void main() {
     required XFile? previewPhoto,
     _RecordingRenderer? renderer,
   }) async {
+    // Viewport is set globally by setUp() — 412×915 matches the Samsung
+    // S25 Ultra reference device used in Phase 31 verification.
     final spy = _CloseSpy();
     final container = ProviderContainer(
       overrides: [
@@ -848,6 +869,102 @@ void main() {
       expect(find.text('REFAZER'), findsNothing);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Phase 31 Bugs A + C — device-fix regression guards
+  //
+  // Pre-fix the visible preview tree wrapped
+  //   `AspectRatio(9/16) → FittedBox(contain) → SizedBox(1080×1920) → Renderer`
+  // so the inner 1080-unit canvas was scaled down by ~0.38× on a 412dp
+  // viewport. The preview-target typography (authored for the inner
+  // canvas) collapsed to 4-15sp on-screen — D3 collars looked invisible
+  // and the XP hero was microscopic. Post-fix the visible tree drops
+  // the FittedBox/SizedBox(1080×1920) wrapper and forwards device-
+  // native dp via `LayoutBuilder` into the renderer's `cardWidthDp`
+  // / `cardHeightDp` params. The renderer's preview-target typography
+  // now reads at-screen sp.
+  // ---------------------------------------------------------------------------
+
+  testWidgets('visible preview tree drops the FittedBox(1080×1920) wrapper — '
+      'renders at device-native dp via LayoutBuilder (Phase 31 Bug A+C '
+      'architectural fix)', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    // The visible preview tree must NOT contain a FittedBox wrapping
+    // a 1080×1920 SizedBox. The export tree wraps a 1080×1920 SizedBox
+    // (Positioned at left: -10000) but it's NOT wrapped in a FittedBox.
+    // Walk the tree and assert: the path from SharePreviewScreen down
+    // to the visible ShareCardRenderer (renderTarget: preview) must
+    // not pass through a FittedBox.
+    final visibleRendererFinder = find.byWidgetPredicate(
+      (w) =>
+          w is ShareCardRenderer &&
+          w.renderTarget == ShareCardRenderTarget.preview,
+    );
+    final fittedBoxAncestors = find.ancestor(
+      of: visibleRendererFinder,
+      matching: find.byType(FittedBox),
+    );
+    expect(
+      fittedBoxAncestors,
+      findsNothing,
+      reason:
+          'Visible preview tree must not be wrapped in FittedBox — '
+          'pre-Phase-31 architecture caused the preview typography to '
+          'shrink by ~0.38× on a 412dp viewport (Bugs A + C).',
+    );
+
+    // The preview tree path must contain a LayoutBuilder so the
+    // renderer can receive device-native dp constraints.
+    final layoutBuilderAncestors = find.ancestor(
+      of: visibleRendererFinder,
+      matching: find.byType(LayoutBuilder),
+    );
+    expect(
+      layoutBuilderAncestors,
+      findsAtLeastNWidgets(1),
+      reason:
+          'Visible preview tree must thread device-native dp through a '
+          'LayoutBuilder so the renderer can compute collar geometry '
+          'against the laid-out card.',
+    );
+  });
+
+  testWidgets('visible preview renderer receives device-native cardWidthDp / '
+      'cardHeightDp from the LayoutBuilder (NOT the export 1080×1920) — '
+      'Phase 31 Bugs A + C', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    final visible = visibleRenderer(tester);
+    // At a 412×915 viewport the AspectRatio(9/16) card lays out to a
+    // width of ~412dp (minus padding) and a height of ~733dp. The
+    // renderer must receive these device-native dp values, NOT the
+    // 1080×1920 export defaults.
+    expect(
+      visible.cardWidthDp,
+      lessThan(1000.0),
+      reason:
+          'Visible preview tree must forward device-native dp to the '
+          'renderer (typically 300-420dp on Android phones); pre-fix '
+          'the renderer received the 1080×1920 export defaults inside a '
+          'FittedBox that shrank everything by ~0.38×.',
+    );
+    expect(visible.cardHeightDp, lessThan(1000.0));
+
+    // The export renderer keeps the 1080×1920 defaults so the
+    // captured PNG bytes still match the golden contract.
+    final export = exportRenderer(tester);
+    expect(export.cardWidthDp, 1080.0);
+    expect(export.cardHeightDp, 1920.0);
+  });
 
   // ---------------------------------------------------------------------------
   // Semantics identifier
