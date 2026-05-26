@@ -46,6 +46,7 @@ class MissionDebriefSection extends StatelessWidget {
     super.key,
     required this.localizations,
     required this.state,
+    this.classLabel,
   });
 
   /// Pre-localized string bundle from the screen layer.
@@ -53,9 +54,16 @@ class MissionDebriefSection extends StatelessWidget {
 
   /// Snapshot of the post-session state. Reads `topLifts`,
   /// `totalExercisesTrained`, `bpXpDeltas`, `bpRankAfter`, `queueResult`,
-  /// `dominantBodyPart`, `dominantXpToNextRank`, `dominantNextRank`, and
-  /// `bodyPartLabels`.
+  /// `dominantBodyPart`, `dominantXpToNextRank`, `dominantNextRank`,
+  /// `bodyPartLabels`, and `totalXpEarned`.
   final PostSessionState state;
+
+  /// Pre-localized character-class label rendered as the right-side accent
+  /// of the XP hero block ("+340 XP EARNED · IRON SENTINEL"). `null` for
+  /// Initiate (so the accent cleanly omits) or when no class is set.
+  /// Caller resolves via `localizedClassCopy(cls, l10n).name` and uppercases
+  /// at the call site.
+  final String? classLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +112,61 @@ class MissionDebriefSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 10),
+          // 0) XP hero block (Phase 31 round-2 Bug F).
+          //
+          // Spec'd by mockup Direction 2 as the FIRST child of the Mission
+          // Debrief — "+340 XP EARNED / IRON SENTINEL" framed by a hair
+          // divider on its bottom edge. Hides cleanly when no XP was
+          // earned (defensive — the section is already gated upstream
+          // for sets > 0, but guarding here keeps the widget self-safe).
+          if (state.totalXpEarned > 0) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: const BoxDecoration(
+                // `AppColors.hair` is the canonical hair-divider color
+                // (rgba(179,109,255,0.14) — see `app_theme.dart`). The
+                // mockup CSS calls for rgba(179,109,255,0.10) but the
+                // hairline difference is below the visual-noise floor
+                // and using the canonical token keeps the design system
+                // contract intact (no parallel hair-violet variant).
+                border: Border(
+                  bottom: BorderSide(color: AppColors.hair, width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '+${state.totalXpEarned}',
+                    style: AppTextStyles.numeric.copyWith(
+                      fontSize: 22,
+                      letterSpacing: -0.02 * 22,
+                      color: AppColors.textCream,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    localizations.xpEarnedLabel.toUpperCase(),
+                    style: AppTextStyles.label.copyWith(
+                      fontSize: 11,
+                      letterSpacing: 0.16 * 11,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (classLabel != null)
+                    Text(
+                      classLabel!.toUpperCase(),
+                      style: AppTextStyles.label.copyWith(
+                        fontSize: 10,
+                        letterSpacing: 0.10 * 10,
+                        color: AppColors.hotViolet,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           // 1) Section eyebrow.
           Text(
             localizations.debriefEyebrow.toUpperCase(),
@@ -179,10 +242,18 @@ class MissionDebriefSection extends StatelessWidget {
               rankUpArrow: localizations.rankUpArrow,
             ),
           ],
-          if (sortedBpEntries.isNotEmpty) const SizedBox(height: 16),
+          // Spacing + structural divider before the next-target callout
+          // (Phase 31 round-2 Bug G). The mockup Direction 2 spec'd a hair
+          // divider between the rank-delta rows and the "PRÓXIMO PASSO"
+          // eyebrow so the callout reads as its own structural block, not
+          // a continuation of the deltas. 16 → 20 dp gap above the rule,
+          // 10 dp gap below.
+          if (sortedBpEntries.isNotEmpty) const SizedBox(height: 20),
 
           // 5) Next-target callout.
           if (showNextTarget) ...[
+            const Divider(color: AppColors.hair, height: 1, thickness: 1),
+            const SizedBox(height: 10),
             Text(
               localizations.nextTargetEyebrow.toUpperCase(),
               textAlign: TextAlign.left,

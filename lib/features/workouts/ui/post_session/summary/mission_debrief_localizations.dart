@@ -25,6 +25,7 @@ class MissionDebriefLocalizations {
     required this.rankLabel,
     required this.rankUpArrow,
     required this.weightUnit,
+    required this.xpEarnedLabel,
   });
 
   /// Bridge from the generated [AppLocalizations] to the typed bundle.
@@ -39,6 +40,7 @@ class MissionDebriefLocalizations {
       rankLabel: l10n.postSessionRankLabel,
       rankUpArrow: l10n.postSessionRankUpArrow,
       weightUnit: l10n.postSessionWeightUnit,
+      xpEarnedLabel: l10n.postSessionXpEarnedLabel,
     );
   }
 
@@ -75,4 +77,11 @@ class MissionDebriefLocalizations {
 
   /// Weight unit suffix, e.g. "kg" / "lb". Passed into each LiftRow.
   final String weightUnit;
+
+  /// "XP EARNED" / "XP GANHO" — right-of-numeral label rendered on the
+  /// Mission Debrief XP hero block ("+340 XP EARNED"). Phase 31 round-2
+  /// Bug F — was missing from the implementation; mockup Direction 2
+  /// spec'd it as the FIRST child of the Mission Debrief section.
+  /// Pre-uppercased to match the tracked-label register.
+  final String xpEarnedLabel;
 }

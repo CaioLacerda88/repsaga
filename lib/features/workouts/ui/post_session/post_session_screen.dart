@@ -631,9 +631,23 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     // Build the S2 Mission Debrief section (Phase 31 Pass 3). The
     // section subsumes the legacy nextStepHook block on the panel — the
     // panel hides its eyebrow + hook when `debriefSection` is non-null.
+    //
+    // Phase 31 round-2 Bug F — resolve the character class to the
+    // localized display name so the XP hero block can render
+    // "+340 XP EARNED · IRON SENTINEL" as its right-side accent. Initiate
+    // (the day-zero placeholder) collapses to `null` so the accent
+    // omits cleanly — the mockup spec'd the right column as the
+    // class-identity slot, not a generic forever-rendered chip.
+    final classForDebrief = ref.read(characterClassProvider);
+    final classLabel = classForDebrief == null
+        ? null
+        : (classForDebrief == CharacterClass.initiate
+              ? null
+              : localizedClassCopy(classForDebrief, l10n).name);
     final debriefSection = MissionDebriefSection(
       state: state,
       localizations: MissionDebriefLocalizations.from(l10n),
+      classLabel: classLabel,
     );
 
     return PostSessionSummaryPanel(

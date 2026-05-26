@@ -54,6 +54,7 @@ MissionDebriefLocalizations _ptLocalizations() {
     rankLabel: (rank) => 'Rank $rank',
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
+    xpEarnedLabel: 'XP GANHO',
   );
 }
 
@@ -68,6 +69,7 @@ MissionDebriefLocalizations _enLocalizations() {
     rankLabel: (rank) => 'Rank $rank',
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
+    xpEarnedLabel: 'XP EARNED',
   );
 }
 
@@ -134,6 +136,7 @@ Future<void> _pumpDebrief(
   WidgetTester tester, {
   required PostSessionState state,
   MissionDebriefLocalizations? localizations,
+  String? classLabel,
   Size viewport = const Size(360, 1200),
 }) async {
   tester.view.devicePixelRatio = 1.0;
@@ -149,6 +152,7 @@ Future<void> _pumpDebrief(
             child: MissionDebriefSection(
               state: state,
               localizations: localizations ?? _ptLocalizations(),
+              classLabel: classLabel,
             ),
           ),
         ),
@@ -605,6 +609,182 @@ void main() {
 
         expect(find.byType(XpSegmentedBar), findsNothing);
         expect(find.byType(LiftRow), findsNothing);
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Phase 31 round-2 Bugs F + G — XP hero block + structural divider
+    // -------------------------------------------------------------------------
+
+    testWidgets(
+      'XP hero block: renders "+{totalXp} XP EARNED · CLASS_LABEL" as the '
+      'first child (Phase 31 round-2 Bug F)',
+      (tester) async {
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'supino',
+              exerciseName: 'Supino reto',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 95,
+              peakReps: 5,
+              xpContribution: 800,
+              isPR: true,
+            ),
+          ],
+          bpXpDeltas: const {BodyPart.chest: 340},
+          bpRankAfter: const {BodyPart.chest: 18},
+        );
+
+        await _pumpDebrief(
+          tester,
+          state: state,
+          localizations: _enLocalizations(),
+          classLabel: 'Iron Sentinel',
+        );
+
+        // Hero numeric — "+340".
+        expect(find.text('+340'), findsOneWidget);
+        // Eyebrow label — pre-uppercased "XP EARNED".
+        expect(find.text('XP EARNED'), findsOneWidget);
+        // Class accent — uppercased at the call site by the widget.
+        expect(find.text('IRON SENTINEL'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'XP hero block: hides when totalXpEarned == 0 (defensive — keeps the '
+      'section self-safe outside the upstream sets > 0 gate)',
+      (tester) async {
+        final state = _buildState(
+          topLifts: const [],
+          bpXpDeltas: const {},
+          bpRankAfter: const {},
+          dominantBodyPart: BodyPart.chest,
+        );
+        final overridden = state.copyWith(
+          dominantBodyPart: BodyPart.chest,
+          dominantXpToNextRank: 120,
+          dominantNextRank: 12,
+        );
+
+        await _pumpDebrief(
+          tester,
+          state: overridden,
+          localizations: _enLocalizations(),
+          classLabel: 'Iron Sentinel',
+        );
+
+        // No XP hero numeric.
+        expect(find.text('+0'), findsNothing);
+        // No "XP EARNED" eyebrow.
+        expect(find.text('XP EARNED'), findsNothing);
+      },
+    );
+
+    testWidgets('XP hero block: hides the class accent when classLabel is null '
+        '(Initiate / day-zero — right column collapses cleanly)', (
+      tester,
+    ) async {
+      final state = _buildState(
+        topLifts: const [
+          SessionLiftSummary(
+            exerciseId: 'supino',
+            exerciseName: 'Supino',
+            bodyPart: BodyPart.chest,
+            peakWeightKg: 80,
+            peakReps: 8,
+            xpContribution: 640,
+            isPR: false,
+          ),
+        ],
+        bpXpDeltas: const {BodyPart.chest: 200},
+        bpRankAfter: const {BodyPart.chest: 4},
+      );
+
+      await _pumpDebrief(
+        tester,
+        state: state,
+        localizations: _enLocalizations(),
+        // classLabel intentionally omitted (Initiate path).
+      );
+
+      // Numeric + eyebrow still present.
+      expect(find.text('+200'), findsOneWidget);
+      expect(find.text('XP EARNED'), findsOneWidget);
+      // Class accent absent — the right column collapses to the Spacer.
+      // Negative pin via a known class string the test would otherwise
+      // surface.
+      expect(find.text('IRON SENTINEL'), findsNothing);
+    });
+
+    testWidgets('XP hero block: 320dp viewport does not overflow the Row '
+        '(Phase 31 round-2 Bug F regression guard)', (tester) async {
+      final state = _buildState(
+        topLifts: const [
+          SessionLiftSummary(
+            exerciseId: 'supino',
+            exerciseName: 'Supino',
+            bodyPart: BodyPart.chest,
+            peakWeightKg: 80,
+            peakReps: 8,
+            xpContribution: 640,
+            isPR: false,
+          ),
+        ],
+        bpXpDeltas: const {BodyPart.chest: 999},
+        bpRankAfter: const {BodyPart.chest: 18},
+      );
+
+      await _pumpDebrief(
+        tester,
+        state: state,
+        localizations: _enLocalizations(),
+        classLabel: 'Iron Sentinel',
+        viewport: const Size(320, 1200),
+      );
+
+      // No layout overflow on the tightest production viewport.
+      expect(tester.takeException(), isNull);
+      // Hero still renders.
+      expect(find.text('+999'), findsOneWidget);
+    });
+
+    testWidgets(
+      'structural divider renders between rank-delta rows and next-target '
+      'callout (Phase 31 round-2 Bug G — visually separates blocks)',
+      (tester) async {
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'supino',
+              exerciseName: 'Supino',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 80,
+              peakReps: 8,
+              xpContribution: 640,
+              isPR: false,
+            ),
+          ],
+          bpXpDeltas: const {BodyPart.chest: 200},
+          bpRankAfter: const {BodyPart.chest: 18},
+        );
+
+        await _pumpDebrief(tester, state: state);
+
+        // Find the section's Column children and locate the Divider that
+        // sits before the "PRÓXIMO PASSO" eyebrow. The Mission Debrief
+        // owns ONE Divider — the structural rule above the next-target
+        // callout.
+        expect(
+          find.byType(Divider),
+          findsOneWidget,
+          reason:
+              'A Divider must render between the rank-delta rows and the '
+              'next-target callout when both blocks are visible.',
+        );
+        // Next-target eyebrow is what the divider precedes.
+        expect(find.text('PRÓXIMO PASSO'), findsOneWidget);
       },
     );
   });
