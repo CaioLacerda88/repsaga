@@ -240,6 +240,7 @@ class _BpRankDeltaRow extends StatelessWidget {
 
     return Semantics(
       container: true,
+      explicitChildNodes: true,
       identifier: 'mission-debrief-bp-row-${bodyPart.dbValue}',
       label: '$bodyPartLabel · $rankText',
       child: Text.rich(
@@ -253,9 +254,12 @@ class _BpRankDeltaRow extends StatelessWidget {
                 color: hue,
               ),
             ),
-            const TextSpan(
+            TextSpan(
               text: '  ·  ',
-              style: TextStyle(color: AppColors.textDim),
+              style: AppTextStyles.label.copyWith(
+                color: AppColors.textDim,
+                letterSpacing: 0,
+              ),
             ),
             TextSpan(
               text: rankText,
