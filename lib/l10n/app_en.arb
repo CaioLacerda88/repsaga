@@ -2330,5 +2330,13 @@
     }
   },
   "postSessionWeightUnit": "kg",
-  "@postSessionWeightUnit": { "description": "Phase 31 Pass 3 — Weight unit suffix on Mission Debrief lift rows. v1 ships kg only; the key exists so a future lb locale can override without code touch." }
+  "@postSessionWeightUnit": { "description": "Phase 31 Pass 3 — Weight unit suffix on Mission Debrief lift rows. v1 ships kg only; the key exists so a future lb locale can override without code touch." },
+  "postSessionLeaveTitle": "Leave the post-battle?",
+  "@postSessionLeaveTitle": { "description": "Phase 31 round-2 Bug E — Confirmation dialog title shown when the user presses the system back button on the post-session screen. The user has just finished a workout; backing out of the cinematic/debrief is permanent (no re-entry path), so the dialog blocks accidental dismissal." },
+  "postSessionLeaveCancel": "Cancel",
+  "@postSessionLeaveCancel": { "description": "Phase 31 round-2 Bug E — Cancel action on the post-session leave-confirmation dialog. Returns the user to the post-session surface." },
+  "postSessionLeaveConfirm": "Leave",
+  "@postSessionLeaveConfirm": { "description": "Phase 31 round-2 Bug E — Confirm action on the post-session leave-confirmation dialog. Routes the user through the same `onContinue` path the CONTINUAR button uses (back to /home)." },
+  "postSessionXpEarnedLabel": "XP EARNED",
+  "@postSessionXpEarnedLabel": { "description": "Phase 31 round-2 Bug F — Mission Debrief XP hero block right-of-numeral label. Renders alongside the '+{totalXp}' numeric ('+340 XP EARNED'). Pre-uppercased — already in the tracked-label register." }
 }

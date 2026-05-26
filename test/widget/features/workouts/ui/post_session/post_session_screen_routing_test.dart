@@ -22,6 +22,8 @@
 /// section of CLAUDE.md for the rationale.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -267,6 +269,83 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
+
+    testWidgets(
+      'system back gesture shows leave-confirmation dialog; Leave routes '
+      'through onContinue; Cancel keeps the screen mounted (Phase 31 Bug E)',
+      (tester) async {
+        // Track whether the route's onContinue ran.
+        var onContinueFired = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              titleCatalogProvider.overrideWith(
+                (_) async => _kPillarWalkerCatalog,
+              ),
+              rpgProgressProvider.overrideWith(
+                () => _FakeRpgProgress(RpgProgressSnapshot.empty),
+              ),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context);
+                  return PostSessionScreen(
+                    params: _params(
+                      queueResult: const CelebrationQueueResult(queue: []),
+                      prResult: null,
+                      l10n: l10n,
+                    ),
+                    onContinue: () => onContinueFired++,
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        // Round 1 — Cancel path. PopScope intercept fires a system back
+        // (NavigatorState.maybePop), which routes through the screen's
+        // onPopInvokedWithResult callback → showDialog.
+        final NavigatorState navigator = tester.state(find.byType(Navigator));
+        unawaited(navigator.maybePop());
+        await tester.pumpAndSettle();
+
+        // Dialog visible with localized copy.
+        expect(find.text('Leave the post-battle?'), findsOneWidget);
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(find.text('Leave'), findsOneWidget);
+
+        // Tap Cancel — dialog dismisses, screen still mounted, onContinue
+        // NOT fired.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.text('Leave the post-battle?'), findsNothing);
+        expect(find.byType(PostSessionScreen), findsOneWidget);
+        expect(onContinueFired, 0, reason: 'Cancel must not fire onContinue');
+
+        // Round 2 — Leave path. Same intercept → dialog → Leave button
+        // routes through the controller's onContinue + the widget's
+        // onContinue callback.
+        unawaited(navigator.maybePop());
+        await tester.pumpAndSettle();
+        expect(find.text('Leave the post-battle?'), findsOneWidget);
+
+        await tester.tap(find.text('Leave'));
+        await tester.pumpAndSettle();
+        expect(
+          onContinueFired,
+          1,
+          reason: 'Leave must route through the screen onContinue exactly once',
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
 
     testWidgets(
       'routes to b1CopyMaxLevelUp when a level-up co-occurs with class change',

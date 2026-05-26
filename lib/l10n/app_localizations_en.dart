@@ -2941,4 +2941,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get postSessionWeightUnit => 'kg';
+
+  @override
+  String get postSessionLeaveTitle => 'Leave the post-battle?';
+
+  @override
+  String get postSessionLeaveCancel => 'Cancel';
+
+  @override
+  String get postSessionLeaveConfirm => 'Leave';
+
+  @override
+  String get postSessionXpEarnedLabel => 'XP EARNED';
 }

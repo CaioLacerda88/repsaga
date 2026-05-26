@@ -913,5 +913,9 @@
   "postSessionMoreLifts": "{count, plural, =1{+1 outro exercício} other{+{count} outros exercícios}}",
   "postSessionRankLabel": "Rank {n}",
   "postSessionRankUpArrow": "Rank {fromRank} → {toRank}",
-  "postSessionWeightUnit": "kg"
+  "postSessionWeightUnit": "kg",
+  "postSessionLeaveTitle": "Sair da pós-batalha?",
+  "postSessionLeaveCancel": "Não",
+  "postSessionLeaveConfirm": "Sair",
+  "postSessionXpEarnedLabel": "XP GANHO"
 }

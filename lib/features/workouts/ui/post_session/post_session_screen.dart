@@ -236,23 +236,75 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       container: true,
       explicitChildNodes: true,
       identifier: 'post-session-screen',
-      child: Scaffold(
-        backgroundColor: AppColors.abyss,
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _handleTap,
-          onLongPress: _handleLongPress,
-          child: ListenableBuilder(
-            listenable: _stateController,
-            builder: (context, _) {
-              final state = _stateController.state;
-              return state.showSummary
-                  ? _buildSummary(state, l10n)
-                  : _buildCinematic(state, l10n);
-            },
+      // Phase 31 round-2 Bug E — intercept the Android system back gesture
+      // (predictive-back on targetSdk ≥ 34) so an accidental back-swipe
+      // doesn't finish the FlutterActivity → exit the app. The post-session
+      // route is push-only and there is NO re-entry path — once dismissed,
+      // the cinematic + debrief are gone for that session. Block the pop
+      // unconditionally, then show a confirmation dialog. Tapping LEAVE
+      // routes through the same [onContinue] callback CONTINUAR uses, so
+      // the route container (GoRouter) owns the actual nav (Decoupling
+      // Rule 8 preserved).
+      //
+      // This route is a top-level GoRoute, NOT inside the shell's nested
+      // navigator, so cluster `nested-nav-back-gate` does not apply — a
+      // single PopScope is sufficient.
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          final shouldLeave = await _showLeaveConfirmDialog(context, l10n);
+          if (shouldLeave == true && context.mounted) {
+            // Same path as CONTINUAR — controller cleanup + route exit.
+            _stateController.onContinue();
+            widget.onContinue();
+          }
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.abyss,
+          body: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _handleTap,
+            onLongPress: _handleLongPress,
+            child: ListenableBuilder(
+              listenable: _stateController,
+              builder: (context, _) {
+                final state = _stateController.state;
+                return state.showSummary
+                    ? _buildSummary(state, l10n)
+                    : _buildCinematic(state, l10n);
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Phase 31 round-2 Bug E — confirmation dialog shown when the user
+  /// presses the system back button. Returns `true` if the user confirms
+  /// leaving; `false` (or `null` on outside-tap dismiss) keeps the screen.
+  Future<bool?> _showLeaveConfirmDialog(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.postSessionLeaveTitle),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.postSessionLeaveCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.postSessionLeaveConfirm),
+            ),
+          ],
+        );
+      },
     );
   }
 

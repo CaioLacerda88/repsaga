@@ -2953,4 +2953,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get postSessionWeightUnit => 'kg';
+
+  @override
+  String get postSessionLeaveTitle => 'Sair da pós-batalha?';
+
+  @override
+  String get postSessionLeaveCancel => 'Não';
+
+  @override
+  String get postSessionLeaveConfirm => 'Sair';
+
+  @override
+  String get postSessionXpEarnedLabel => 'XP GANHO';
 }
