@@ -23,8 +23,7 @@ import 'widgets/xp_segmented_bar.dart';
 ///   2. Up to 4 [LiftRow]s (top by XP contribution) + optional
 ///      "+N more exercises" footer when the total trained count exceeds
 ///      4.
-///   3. [XpSegmentedBar] — proportional segments per BP, hue-coded,
-///      labels under each segment.
+///   3. [XpSegmentedBar] — proportional segments per BP, hue-coded.
 ///   4. Per-BP rank delta rows — `Costas · Rank 11 → 12` (rank-up
 ///      session) or `Costas · Rank 12` (no rank-up).
 ///   5. Next-target callout — eyebrow + body line pointing to the closest
@@ -212,11 +211,7 @@ class MissionDebriefSection extends StatelessWidget {
           const SizedBox(height: 16),
 
           // 3) Segmented XP bar.
-          if (segments.isNotEmpty)
-            XpSegmentedBar(
-              bodyPartLabels: state.bodyPartLabels,
-              segments: segments,
-            ),
+          if (segments.isNotEmpty) XpSegmentedBar(segments: segments),
           if (segments.isNotEmpty) const SizedBox(height: 16),
 
           // 4) Per-BP rank delta rows.
