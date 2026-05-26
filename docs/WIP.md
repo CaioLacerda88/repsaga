@@ -25,7 +25,7 @@ the phase summary in PROJECT.md §4.
 1. **Variant toggle retired.** D3 Achievement Frame is the single overlay treatment for the photo path. Retire `ShareCardVariantA` + `ShareCardVariantB` + their tests + 3 goldens + the `share-variant-toggle` E2E selector + the `SegmentedButton` on `SharePreviewScreen`. Discreet path (no-photo) stays unchanged.
 2. **Top-K lift rows = 4 + footer.** S2 Mission Debrief renders top 4 lifts by XP contribution desc (tiebreak alphabetical by exercise name, mirroring `PostSessionChoreographer._buildPrCut`). On 5+ exercise sessions: "+N outros exercícios" footer row in textDim.
 3. **Phase numbering = Phase 31 standalone.** Gets its own §3 In-flight entry; eventual §4 Completed Phases entry. Treated as a discrete pre-Launch UI refinement phase.
-4. **Class-change top-collar = new class name only.** D3 top collar reads "BULWARK" (or whichever new class slug). The "DESPERTOU" cinematic framing stays in the B3 Class-Change Cut. Left side bar swaps to `hotViolet` per existing class-change override rule.
+4. **Class-change top-collar = new class name only.** D3 top collar reads "BULWARK" (or whichever new class slug). The "DESPERTOU" cinematic framing stays in the B3 Class-Change Cut. Left side bar swaps to `heroGold` (avoids both bars collapsing to `hotViolet` — the right bar is already `hotViolet`, so reusing it on the left would erase the dual-bar identity contract).
 
 ### Code impact summary
 
@@ -141,7 +141,7 @@ Mission Debrief vertical budget (sum of rows at 360dp):
 | Case | Handling |
 |---|---|
 | No photo (user tapped "Sem foto · só a saga") | Routes to Discreet variant (unchanged). |
-| Class-change session | Top collar shows new class name (e.g. "BULWARK"); no "DESPERTOU" suffix (Q4 above). Hue accent switches to `hotViolet` on the LEFT side bar per existing Discreet class-change rule. |
+| Class-change session | Top collar shows new class name (e.g. "BULWARK"); no "DESPERTOU" suffix (Q4 above). LEFT side bar swaps to `heroGold` (right bar is `hotViolet`; reusing it on the left would collapse the dual-bar identity contract). |
 | Multiple PRs | Bottom-collar lift detail shows the HERO PR (`shared prScore` helper from PR 30c). Other PRs surface in S2 debrief, not on the share card. |
 | Dominant BP null (no XP earned — pathological) | Left side bar falls back to `hotViolet` (existing pattern in `share_payload.dart:dominantHue`). |
 | Long exercise name in lift detail | Truncate with ellipsis at `bottom-collar width minus XP-number width`. Lift detail is single-line. |
@@ -201,6 +201,11 @@ Commit: `feat(workouts): D3 Achievement Frame share-card overlay (Phase 31 Pass 
 Commit: `feat(workouts): S2 Mission Debrief summary section (Phase 31 Pass 3)`.
 
 #### Pass 4 — Final gates + visual verification
+
+> **Pass 4 closeout: deferred to ship gate.** Visual verification + final `make ci` + physical-device pass run as part of the ship sequence (CLAUDE.md pipeline steps 9-11), NOT as a discrete commit on the branch. There is no `chore(workouts): Phase 31 closeout` commit — the gates below are the orchestrator's responsibility once code review + QA have signed off.
+
+Gates run by the orchestrator:
+
 1. `dart format .`
 2. `dart analyze --fatal-infos`
 3. 3 style scripts clean
@@ -213,8 +218,6 @@ Commit: `feat(workouts): S2 Mission Debrief summary section (Phase 31 Pass 3)`.
    - Lift rows readable; XP segmented bar reads as a meaningful info graphic
    - PR row gold flag visible
    - 320dp emulator pass (if user runs an emulator) OR document the 320dp risk if device-only
-
-Commit: `chore(workouts): Phase 31 closeout (visual verification + final gates)`.
 
 ### Boundary inventory — completed 2026-05-25 (Explore agent dispatch)
 
@@ -329,7 +332,7 @@ This change crosses 3 boundaries:
 
 1. D3 Achievement Frame renders correctly at 320dp / 360dp / 412dp viewports, photo + collars + side bars all on-screen with no clipping artifacts.
 2. Bottom collar XP hero reads as the design's primary numeric (38sp preview / 64px export).
-3. Class-change session: top collar shows new class name; left side bar swaps to `hotViolet`.
+3. Class-change session: top collar shows new class name; left side bar swaps to `heroGold` (avoids both bars collapsing to `hotViolet`).
 4. PR session: lift-detail row shows `heroGold` weight × reps; bottom-collar lift detail truncates with ellipsis on long exercise names.
 5. Discreet path (no-photo) unchanged from PR 30c shape.
 6. Mission Debrief renders below the existing eyebrow + hook (or consolidated as Pass 3 decides):
