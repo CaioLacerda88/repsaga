@@ -37,6 +37,23 @@ async function reseedDebriefUser(): Promise<void> {
 
   await admin.from('workouts').delete().eq('user_id', userId);
   await admin.from('xp_events').delete().eq('user_id', userId);
+
+  // Re-seed a minimal past workout so workoutCount > 0 after the delete.
+  // Without this the ActionHero lands on _CreateFirstRoutineHero (0-workout
+  // state) and startEmptyWorkout can't find home-action-hero-free-workout.
+  // The warmup workout is intentionally finished 90 min ago and not part of
+  // a weekly plan, so ActionHero resolves to _FreeWorkoutHero (no suggested
+  // next — the rpgRankUpThreshold user has no user-built routines).
+  const now = new Date();
+  const startedAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const finishedAt = new Date(now.getTime() - 90 * 60 * 1000);
+  await admin.from('workouts').insert({
+    user_id: userId,
+    name: 'E2E Debrief Warmup',
+    started_at: startedAt.toISOString(),
+    finished_at: finishedAt.toISOString(),
+    duration_seconds: 1800,
+  });
 }
 
 test.describe('Post-session summary', { tag: '@smoke' }, () => {

@@ -353,4 +353,120 @@ void main() {
     expect(bottomColor.b, AppColors.abyss.b);
     expect((bottomColor.a - 0.92).abs() < 0.01, isTrue);
   });
+
+  testWidgets(
+    'class-change + PR combo: left bar uses heroGold AND lift detail uses '
+    'heroGold without visual conflict (separate chrome zones)',
+    (tester) async {
+      // Fixture: class-change session that also set a hero PR.
+      // Left bar (full-card-height vertical strip, left:0) and the lift-detail
+      // line (bottom-collar text) both render in heroGold, but they occupy
+      // entirely separate chrome zones — Positioned left bar vs Column text
+      // inside the bottom ClipPath. Verify both are heroGold and that the
+      // widget tree renders cleanly (no exceptions, both elements present).
+      await tester.pumpWidget(
+        host(
+          const ShareCardAchievementFrame(
+            dominantHue: AppColors.hotViolet,
+            className: 'SENTINEL',
+            xpHero: '+750 XP',
+            liftDetail: '120kg × 3 · Supino',
+            hasPr: true,
+            isClassChange: true,
+            bpRank: 'Peito · Rank 22',
+            wordmark: 'REPSAGA',
+          ),
+        ),
+      );
+
+      // Left side bar (full-card-height vertical strip, Positioned left:0)
+      // uses heroGold — class-change override.
+      final leftBar = tester.widget<ColoredBox>(
+        find.byKey(const ValueKey('share-card-achievement-frame-left-bar')),
+      );
+      expect(
+        leftBar.color,
+        AppColors.heroGold,
+        reason: 'class-change left bar must use heroGold',
+      );
+
+      // Lift-detail line (bottom-collar text) uses heroGold — PR reward accent.
+      final liftText = tester.widget<Text>(find.text('120kg × 3 · Supino'));
+      expect(
+        liftText.style?.color,
+        AppColors.heroGold,
+        reason: 'PR lift detail must render in heroGold',
+      );
+
+      // Both heroGold elements coexist in separate chrome zones:
+      // left bar is a Positioned strip; lift detail is inside the bottom
+      // collar Column — they are structural siblings in the Stack, not
+      // overlapping. Verify the bottom-collar Container is still present
+      // (no layout exception collapsed it).
+      expect(
+        find.byKey(
+          const ValueKey('share-card-achievement-frame-bottom-collar'),
+        ),
+        findsOneWidget,
+        reason: 'bottom collar must render alongside the heroGold left bar',
+      );
+    },
+  );
+
+  testWidgets(
+    'class-change with no PR and null liftDetail: class name renders, '
+    'left bar uses heroGold, lift-detail row absent, BP rank line present',
+    (tester) async {
+      // Fixture: class-change session, baseline lift (no PR), no liftDetail.
+      // This is a pure rank-up / class-boundary session with no hero PR.
+      await tester.pumpWidget(
+        host(
+          const ShareCardAchievementFrame(
+            dominantHue: AppColors.hotViolet,
+            className: 'BULWARK',
+            xpHero: '+420 XP',
+            // liftDetail intentionally omitted (null) — no PR this session.
+            bpRank: 'Peito · Rank 18',
+            wordmark: 'REPSAGA',
+            isClassChange: true,
+          ),
+        ),
+      );
+
+      // Top collar renders the new class name correctly.
+      expect(
+        find.text('BULWARK'),
+        findsOneWidget,
+        reason: 'top collar must display the new class name',
+      );
+
+      // Left side bar uses heroGold (class-change override — dominantHue
+      // is already hotViolet on class-change per SharePayload rule; without
+      // the swap both bars would drain to the same hue).
+      final leftBar = tester.widget<ColoredBox>(
+        find.byKey(const ValueKey('share-card-achievement-frame-left-bar')),
+      );
+      expect(
+        leftBar.color,
+        AppColors.heroGold,
+        reason: 'left side bar must be heroGold on class-change',
+      );
+
+      // Lift-detail row is absent — no heroGold reward accent leaks on a
+      // baseline / class-change-only session with no PR.
+      expect(
+        find.textContaining('kg'),
+        findsNothing,
+        reason: 'lift-detail row must not render when liftDetail is null',
+      );
+
+      // BP rank line (bottom collar) is always rendered as the fallback
+      // body-part context — it must be present even without a liftDetail.
+      expect(
+        find.text('Peito · Rank 18'),
+        findsOneWidget,
+        reason: 'BP rank line must render in bottom collar as fallback context',
+      );
+    },
+  );
 }
