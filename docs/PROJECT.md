@@ -15,7 +15,7 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-26).** **Phase 31 COMPLETE (PR #266, `26d1e40`)** — Post-Phase-30 overlay + summary refinement. D3 Achievement Frame replaces the old Variant A/B + toggle as the single photo-overlay treatment (diagonal `ClipPath` collars + dominant-BP-hue left bar + hotViolet right bar; left swaps to `heroGold` on class-change). S2 Mission Debrief replaces the post-cinematic empty `Spacer()` with named lift rows (top 4 + "+N more" footer) + segmented XP-by-BP bar (16dp, labels-off per UX round-3) + per-BP rank delta rows (multi-rank-jump-correct via new `bpRankBefore` field) + next-target callout (hairline-divider separated). Architectural fix: visible preview tree drops the FittedBox+SizedBox(1080×1920) wrapper — renderer now accepts `cardWidthDp/cardHeightDp` and lays out at device-native dp via `LayoutBuilder`; offscreen export tree stays at 1080×1920 for the share JPEG. SHARE CTA gate widened to `totalXpEarned > 0` (was: `prResult.hasNewRecords || RankUpEvent || TitleUnlockEvent || ClassChangeEvent`). PopScope leave-confirm dialog on `/workout/finish/:workoutId` (Bug E). XP hero "+N XP EARNED · CLASS" block at 36sp Rajdhani above the debrief section (Bugs F/G + round-3 polish). Leave-dialog typography aligned to brand stack (round-3 follow-up). Process: 3 implementation passes + 3 device-verification rounds on Samsung S25 Ultra + 3 UX-critic reviews; 10 bugs found across rounds, all fixed in-cycle per `feedback_no_deferring_review_findings`. **Phase 30 COMPLETE** (29.5 / 30a / 30b / 30c). 6 cluster ledger entries from Phase 30 cycle (`safearea-system-overlay-overlap`, `spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`, `developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`, `permission-handler-web-silent-failure`) — Phase 31 reinforced `spec-caption-vs-implementation-drift` (the FittedBox preview→export scale-direction inversion in round-1 + the trapezoid-clip text overflow in round-2 both fit the cluster). Per-PR detail in §4. Next: **Launch Phase**. **Phase 29 COMPLETE** (#251 #252 #253). **Phase 27 COMPLETE.** Post-26f open-scope sweep landed across two PRs: PR #244 bundled the L1–L18 polish + the L13.4 Android back-press fix (cluster `nested-nav-back-gate`) + the five device-QA bug-burst (Week-plan persistence via `onConflict`, optimistic engagement update, Saga chart edge unclip + label halo, redundant vitality-table dot removal, Home cold-mount skeleton gate with `PendingSyncBadge` lifted outside it); PR #245 (L18.4) landed the typography sweep + a new `scripts/check_typography_call_sites.sh` CI gate to structurally prevent the recurring sweep cycle. New `AppTextStyles.titleDisplay` token (Rajdhani 600 16dp) — Routines cards as action surfaces, Exercises stay on Inter `title`. **Phase 26 COMPLETE.** All six
+**Current state (2026-05-27).** **Phase 32 IN FLIGHT** — Pre-launch polish, 6 PRs (32a-f) covering pt-BR grammar + i18n leaks, Google Sign-In E2E + Credential Manager autofill + targeted security audit, week-plan picker repeat-fix + weekday `.toLocal()` bug, analytics expansion, profile avatar default + upload, history screen redesign with sticky week headers. Spec locked 2026-05-27 (this doc) after 3-agent investigation (Explore bug confirmation + state mapping, product-owner market context, ui-ux-critic design direction). Class-resolver verified working for caiolacerda88 (chest=18 dominates, others ≤12, back/core=7 → Bulwark per `class_resolver.dart`). Order: 32a → 32c → 32d → 32b → 32e → 32f. **Phase 31 COMPLETE (PR #266, `26d1e40`)** — Post-Phase-30 overlay + summary refinement. D3 Achievement Frame replaces the old Variant A/B + toggle as the single photo-overlay treatment (diagonal `ClipPath` collars + dominant-BP-hue left bar + hotViolet right bar; left swaps to `heroGold` on class-change). S2 Mission Debrief replaces the post-cinematic empty `Spacer()` with named lift rows (top 4 + "+N more" footer) + segmented XP-by-BP bar (16dp, labels-off per UX round-3) + per-BP rank delta rows (multi-rank-jump-correct via new `bpRankBefore` field) + next-target callout (hairline-divider separated). Architectural fix: visible preview tree drops the FittedBox+SizedBox(1080×1920) wrapper — renderer now accepts `cardWidthDp/cardHeightDp` and lays out at device-native dp via `LayoutBuilder`; offscreen export tree stays at 1080×1920 for the share JPEG. SHARE CTA gate widened to `totalXpEarned > 0` (was: `prResult.hasNewRecords || RankUpEvent || TitleUnlockEvent || ClassChangeEvent`). PopScope leave-confirm dialog on `/workout/finish/:workoutId` (Bug E). XP hero "+N XP EARNED · CLASS" block at 36sp Rajdhani above the debrief section (Bugs F/G + round-3 polish). Leave-dialog typography aligned to brand stack (round-3 follow-up). Process: 3 implementation passes + 3 device-verification rounds on Samsung S25 Ultra + 3 UX-critic reviews; 10 bugs found across rounds, all fixed in-cycle per `feedback_no_deferring_review_findings`. **Phase 30 COMPLETE** (29.5 / 30a / 30b / 30c). 6 cluster ledger entries from Phase 30 cycle (`safearea-system-overlay-overlap`, `spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`, `developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`, `permission-handler-web-silent-failure`) — Phase 31 reinforced `spec-caption-vs-implementation-drift` (the FittedBox preview→export scale-direction inversion in round-1 + the trapezoid-clip text overflow in round-2 both fit the cluster). Per-PR detail in §4. Next: **Launch Phase**. **Phase 29 COMPLETE** (#251 #252 #253). **Phase 27 COMPLETE.** Post-26f open-scope sweep landed across two PRs: PR #244 bundled the L1–L18 polish + the L13.4 Android back-press fix (cluster `nested-nav-back-gate`) + the five device-QA bug-burst (Week-plan persistence via `onConflict`, optimistic engagement update, Saga chart edge unclip + label halo, redundant vitality-table dot removal, Home cold-mount skeleton gate with `PendingSyncBadge` lifted outside it); PR #245 (L18.4) landed the typography sweep + a new `scripts/check_typography_call_sites.sh` CI gate to structurally prevent the recurring sweep cycle. New `AppTextStyles.titleDisplay` token (Rajdhani 600 16dp) — Routines cards as action surfaces, Exercises stay on Inter `title`. **Phase 26 COMPLETE.** All six
 sub-phases shipped: 26a (PR #232) color system foundation (`bodyPartChest`
 pink, `bodyPartBack` sky, `xpTrack`, vitality aliases); 26b (PR #234) Saga
 Option B v4; 26c (PR #236) Stats deep-dive revamp (HP-drain vitality,
@@ -64,6 +64,7 @@ reference: `docs/xp-difficulty-framework.md`.
 | 30b | Share card pipeline: `SharePayload` Freezed domain model + 3 variants (Minimal Strip / Full-Bleed Collars / Discreet) + `ShareCardRenderer` composer + `ShareController` 6-state machine + `ShareImageRenderer` (RepaintBoundary→PNG at 1080×1920) + `ShareService` IO wrapper (image_picker 1.x / share_plus 10.x / permission_handler 11.x) + `ShareSheet` modal + `SharePreviewScreen` (A↔B toggle + retake + tap-to-hide + drag-to-reframe) + wire `share_cta_button.dart` from placeholder snackbar to sheet opener. Shared `prScore` helper aligns hero-PR selection between share card and choreographer. `BodyPartHues` domain map relocated from `rpg/ui/utils/`. 2 new cluster ledger entries: `parallel-agents-shared-working-tree-thrash` (workflow) + `permission-handler-web-silent-failure` (tooling). 4 E2E smoke + 9 + 25 + 8 + 10 + 12 + 7 + 8 unit/widget tests added + 3 goldens at 1080×1920. Variant A/B physical-device verification deferred to PR 30c ship gate. | DONE | #263 |
 | 30c | Cleanup + retire `pr_celebration_screen.dart` + E2E migration + test-hygiene audit (3 specs at `--workers=4 --repeat-each=3` green) + Phase 30 §4 condensation | DONE | #265 |
 | 31 | Post-Phase-30 overlay + summary refinement — D3 Achievement Frame single photo overlay (replaces Variant A/B + toggle) + S2 Mission Debrief summary section (lift rows + segmented XP bar + per-BP rank deltas + next-target callout). Architectural fix: visible preview tree drops FittedBox wrapper, renders at device-native dp via LayoutBuilder + `cardWidthDp/cardHeightDp` params. SHARE CTA gate widened to `totalXpEarned > 0`. PopScope leave-confirm dialog on the post-session route. 3 device-verification rounds + 3 UX-critic passes (10 bugs found across rounds, all fixed in-cycle). | DONE | #266 |
+| 32 | Pre-launch polish — 6 PRs spanning pt-BR grammar + i18n leaks, Google Sign-In E2E + Credential Manager autofill + targeted security audit, week-plan picker repeat-fix + weekday `.toLocal()` bug, analytics expansion (first_rank_up / post_session_cinematic_shown / share_card_exported / title_unlocked / session_zero_xp), profile avatar default + upload, history screen redesign (sticky week headers + per-card XP eyebrow). | IN FLIGHT | — |
 
 ### Cluster Ledger — named bug patterns
 
@@ -362,66 +363,173 @@ one passes reliably in normal CI single-run mode.
 > running checklist. Post-merge, the spec collapses into §4 Completed
 > Phases.
 
-### Phase 24 — XP Balancing
+### Phase 32 — Pre-Launch Polish
 
-Refines the XP-per-set formula so total set XP reflects real-world
-exercise difficulty within a defensible 0.85–1.25 cap. Expands the
-default exercise library to fill identified gaps. Validates the
-recalibration against simulated user profiles before declaring done.
+Pre-launch correctness + UX gloss pass between Phase 31 and Launch
+Phase. Six PRs: pt-BR grammar + i18n leaks, Google Sign-In E2E +
+Credential Manager autofill + targeted security audit, week-plan
+picker repeat-fix + weekday `.toLocal()` bug, analytics expansion
+(RPG / share / churn events), profile avatar default + upload,
+history screen redesign with sticky week headers + per-card XP.
 
-Permanent reference for the curation framework + tier assignments +
-formula constants: `docs/xp-difficulty-framework.md`. Citations to
-NSCA, ACSM, Schoenfeld, McGill, Verkhoshansky & Siff, Garhammer,
-Schwanbeck — see that file. Future tuning of tier multipliers,
-secondary-muscle bumps, or floor/ceiling constants requires a new
-phase; Phase 24d is the final calibration sign-off.
+| Sub-PR | Scope | Size | Status |
+|---|---|---|---|
+| 32a | Locale leaks + meus-treinos + workout_template_translations + CI gate | 1-2d | NOT STARTED |
+| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | NOT STARTED |
+| 32c | Week-plan picker repeat-fix + `week_plan_screen.dart::_shortDayLabel` `.toLocal()` fix + behavior test | 1-2d | NOT STARTED |
+| 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | NOT STARTED |
+| 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
+| 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
 
-| Sub-phase | Status | Scope |
+Order: 32a → 32c → 32d → 32b → 32e → 32f.
+
+#### Decisions locked (2026-05-27 planning session)
+
+| Item | Decision | Rationale |
 |---|---|---|
-| 24a — Difficulty multiplier infrastructure | DONE (PR #222) | See §4 condensed entry. |
-| 24b — New default exercises | DONE (PR #224) | See §4 condensed entry. |
-| 24c — Bodyweight load semantics | DONE (PR #227) | See §4 condensed entry. |
-| 24d — Balance simulation gate | DONE (PR #229) | See §4 condensed entry. Constants snapshot locked in `docs/xp-balance-baseline.md`. |
+| Post-workout XP overlay | No new overlay — XP surfaces in History detail only | Phase 30/31 cinematic already ships the moment; History needs the persistence layer |
+| Routine i18n | `workout_template_translations` table | Mirrors `exercise_translations` from Phase 15f; scales to more locales |
+| Week-plan picker | Allow repeating routines across days | Users with simple splits do "Push Day" Mon/Wed/Fri; current filter blocks that |
+| Default avatar | Monogram over BP-hue → hotViolet gradient | UX-critic pick; no new icon assets; consistent with Phase 26 color tokens |
+| Remember password | Android Credential Manager autofill only | Industry standard, low-friction; biometric deferred to v1.1 |
+| Security audit depth | Targeted (RLS, Edge Fn, JWT, bundle secrets) | Full `/security-review` reserved as backstop if scope balloons |
+| Samsung Account | Dropped | Zero competitor parity; no user-asked; engineering cost ≠ value |
+| Paywall analytics | Deferred to Launch Phase 16b | Paywall code doesn't exist yet |
+| Saga XP | Out of scope | Already shows rank progression; History is the missing surface |
+| Class resolver bug check | Verified working — no bug | caiolacerda88 stats (chest=18, shoulders=arms=12, legs=10, back=core=7) → spread=0.611 > 0.30 → dominant=chest → Bulwark per `class_resolver.dart` |
 
-#### 24d acceptance criteria (the calibration gate)
+#### PR 32a — Locale leaks + meus-treinos + routine translations
 
-Six user profiles each simulated for 12 weeks of training. Each profile
-captures a realistic training pattern from the user spectrum:
+**Files to modify**
+- `lib/l10n/app_pt.arb` — L199 + L313: `MINHAS TREINOS` → `MEUS TREINOS`
+- `lib/l10n/app_en.arb` + `app_pt.arb` — 3 new keys: `homeActionHeroStartEyebrow` / `homeActionHeroFreeEyebrow` / `homeActionHeroWelcomeEyebrow`
+- `lib/features/workouts/ui/widgets/action_hero.dart` — replace hardcoded `'INICIAR'` (L219) / `'TREINO LIVRE'` (L255) / `'BEM-VINDO'` (L283) with l10n reads
+- `lib/features/routines/data/repository/routine_repository.dart` (or wherever default-routine names are fetched) — join on `workout_template_translations` by `(template_slug, locale)` with `'en'` fallback
 
-| Profile | Training pattern | What it stress-tests |
-|---|---|---|
-| Beginner | 3×/wk, light weights, all working sets, progressive overload | Steady rank-up, no early ceiling |
-| Intermediate compound-focused | 4×/wk, 5×5 style, mostly T2/T3 exercises | Baseline expected progression curve |
-| Advanced powerlifter | 3×/wk, low reps (1-5), heavy T2 lifts near 90% 1RM | `strength_mult` floor keeps user productive near ceiling |
-| Hypertrophy bodybuilder | 5-6×/wk, high volume, T3 + T5 mix, isolation-heavy | `cap_mult` bites; `novelty_mult` diminishes; still feels rewarding |
-| Bodyweight-only | 4×/wk, T2/T3 bodyweight only | Bodyweight load + tier_mult keeps them competitive with weighted lifters |
-| Machine-only | 4×/wk, T4/T5 machine work only | Ranks slower than free-weight lifters but not punitively |
+**Files to create**
+- `supabase/migrations/0006X_workout_template_translations.sql` — `CREATE TABLE workout_template_translations (template_slug TEXT, locale TEXT, name TEXT, PRIMARY KEY (template_slug, locale))` + RLS (read-all, write-service-role) + en seed for existing 5 templates ("Upper/Lower — Upper", "Upper/Lower — Lower", "5x5 Strength", "Full Body Beginner", "Arms & Abs") + pt seed
+- `scripts/check_workout_template_translation_coverage.sh` — CI gate mirroring `check_exercise_translation_coverage.sh`; fail if any default template lacks both en+pt rows
+- Wire the gate into `.github/workflows/ci.yml`
 
-Pass criteria (all must hold):
+**Test plan**
+- Widget: `action_hero.dart` under en + pt locales; assert ARB-resolved eyebrow strings render (no hardcoded chars)
+- Unit: routine name resolver returns pt for pt locale, en for en, en fallback for unknown locales
+- E2E: Treinos screen in en shows "MY ROUTINES", in pt shows "MEUS TREINOS"; spawn a fresh user, assert default routine names render in pt-BR
+- CI: gate script returns non-zero when a seed row lacks pt
 
-- Every profile reaches a reasonable character level by week 12; no
-  profile is impossible to rank up.
-- Spread between fastest and slowest profile ≤ ~25% in total XP earned.
-- Bodyweight-only profile is competitive (within ~20%) with the
-  intermediate-compound profile.
-- Machine-only profile ranks meaningfully slower than the free-weight
-  profile but earns enough to feel progress (no "machines are useless").
-- Powerlifter doesn't grossly underperform the bodybuilder despite
-  lower volume — `strength_mult` should compensate.
-- No exercise produces an XP "lottery ticket" — outliers in `set_xp`
-  must be explained.
+**Acceptance**
+- `make ci` green including the new coverage gate
+- `git grep -E 'TREINO LIVRE|INICIAR|BEM-VINDO|MINHAS TREINOS'` returns zero hits in `lib/` (ARB strings are now the localized values)
+- pt-BR Treinos screen header renders `MEUS TREINOS`
 
-Deliverables:
+#### PR 32b — Auth correctness + Credential Manager + targeted security audit
 
-- Python simulator extension at `tasks/rpg-xp-simulation.py` with the
-  six profile scenarios.
-- Results table at `docs/xp-balance-baseline.md` showing per-profile
-  week-12 XP totals, rank, body-part progression.
-- If any criterion fails, retune constants and rerun. The PR for 24d
-  is the calibration sign-off.
-- Snapshot of `difficulty_mult` values + tier table + secondary-muscle
-  bump + all formula constants as the **launch baseline**. Future
-  tuning is a new phase.
+**Files to modify**
+- `lib/features/auth/ui/login_screen.dart` — Android Credential Manager integration: autofill on field-mount + save on successful sign-in
+- `pubspec.yaml` — add Credential Manager dependency (use Context7 to look up the official package + pinned version)
+
+**Files to create**
+- `test/widget/features/auth/duplicate_email_snackbar_test.dart` — pump signup with mock Supabase `'user already registered'` response; assert `authErrorAlreadyRegistered` snackbar renders and dismisses on duration
+- `test/e2e/specs/auth-google.spec.ts` — Google Sign-In smoke (use existing E2E user infrastructure; mock the OAuth redirect)
+
+**Investigation tasks (report in PR description; no code unless findings warrant a follow-up)**
+- RLS audit on `profiles`, `routines`, `workouts`, `body_part_progress`, `xp_events`, `subscriptions`, `analytics_events` — every policy reviewed for tenant isolation
+- Edge Function endpoints — JWT verification, Pub/Sub origin check, idempotency UNIQUE constraints
+- Client-bundle secret leak check: `git grep -i 'service_role\|sk_live\|sk_test' lib/` returns 0
+- `flutter analyze --fatal-infos` clean on `lib/`
+
+**Acceptance**
+- Google Sign-In flow completes on physical Android (visual verification per CLAUDE.md step 9)
+- Duplicate-email snackbar test green
+- Credential Manager autofill works on physical Android (manual verification, screenshot in PR)
+- Security audit report attached to PR description; zero criticals (any criticals → block + fix in same PR per `feedback_no_deferring_review_findings`)
+
+#### PR 32c — Week-plan picker + weekday `.toLocal()`
+
+**Files to modify**
+- `lib/features/weekly_plan/ui/week_plan_screen.dart` L692 — `format(date)` → `format(date.toLocal())` matching `bucket_chip_row.dart::_shortDayLabel` (L338-339)
+- The week-plan picker UI file (likely `lib/features/weekly_plan/ui/widgets/<picker>.dart`) — remove the filter that excludes already-picked routines so the same routine can be added to multiple days
+
+**Files to create**
+- `test/unit/features/weekly_plan/weekday_consistency_test.dart` — pumps a `BucketRoutine` with `completedAt: DateTime.parse('2026-05-27T02:00:00Z')` (UTC Wed = local Tue evening in BRT); asserts both `bucket_chip_row._shortDayLabel` and `week_plan_screen._shortDayLabel` return the same local-Tuesday label under `intl` BRT
+- `test/widget/features/weekly_plan/picker_repeat_test.dart` — pump picker with a routine already in this week's bucket; assert it still appears in the list
+
+**Acceptance**
+- Both bucket-chip-row + week-plan-screen render the same weekday for the same `completedAt` under BRT
+- Picker shows previously-picked routines; week plan can have the same routine on multiple days
+- Reference cluster `e2e-global-setup-seed-verify` if any test fixture is added
+
+#### PR 32d — Analytics expansion (RPG + share + churn)
+
+**Files to modify**
+- `lib/features/analytics/data/models/analytics_event.dart` — extend sealed union with 5 variants
+- `supabase/migrations/0006Y_analytics_event_kinds_phase32.sql` — add event-kind enum values
+- Finish-coordinator (post-session emit path) — fire `first_rank_up` on rank-up detection (only the FIRST ever rank-up per user-body-part; idempotent check)
+- `post_session_screen.dart` — fire `post_session_cinematic_shown` on route mount with props `{total_xp, had_rank_up, had_title_unlock, had_class_change}`
+- `share_controller.dart` — fire `share_card_exported` on successful export with `{variant, had_custom_photo}`
+- Title-unlock detection site — fire `title_unlocked` with `{title_slug, workout_number}`
+- `active_workout_notifier.dart` empty-session guard — fire `session_zero_xp` when `totalSetsCount == 0` on finish
+
+**Files to create**
+- `test/unit/features/analytics/data/analytics_event_test.dart` (extend existing) — JSON round-trip for the 5 new events
+
+**Acceptance**
+- All 5 events fire from their emit sites (unit-tested)
+- Hosted Supabase enum updated (`npx supabase db push` succeeds)
+- `first_rank_up` idempotency: emitting the event a second time for the same `(user_id, body_part)` is a no-op
+- Paywall events explicitly NOT added (deferred to Launch Phase 16b)
+
+#### PR 32e — Profile avatar default + upload
+
+**Files to create**
+- `lib/features/profile/ui/widgets/profile_avatar.dart` — monogram + dominant-BP-hue → `hotViolet` gradient. Day-0 fallback gradient: `abyss` → `primaryViolet`. Takes `user.displayName` initial (Rajdhani 700, white). 64dp default size, configurable.
+- `lib/features/profile/ui/widgets/avatar_crop_sheet.dart` — bottom-sheet modal with circular crop mask, pinch-to-zoom + drag-to-reposition. Confirm button thumb-reachable.
+- `lib/features/profile/data/avatar_repository.dart` — Supabase Storage upload (`avatars/{user_id}.jpg`) + Hive optimistic cache + invalidation on profile update
+- `supabase/migrations/0006Z_avatars_bucket.sql` — Storage bucket + RLS (read-public, write-own-row-only)
+
+**Files to modify**
+- `lib/features/profile/ui/profile_settings_screen.dart` (or wherever `IdentityCard` lives) — swap `CircleAvatar` for `ProfileAvatar`
+- `lib/features/profile/data/user_profile.dart` (model) — add `avatar_url` nullable field; mirror SQL nullability per `cluster_jsonb_payload_vs_typed_dart`
+- Home `CharacterCard` keeps `RuneHalo` unchanged; share cards stay avatar-free (D3 frame is avatar-free by design)
+
+**Test plan**
+- Widget: monogram renders correct gradient for each of 6 dominant body parts
+- Widget: avatar with `avatar_url` set renders network image (NetworkImage mocked)
+- Behavior: upload flow happy path (image_picker mock → crop → upload → optimistic local cache reflects new avatar before network resolves)
+- Visual verification per CLAUDE.md step 9 on physical Android
+
+**Acceptance**
+- Default avatar visibly differs from previous flat-violet monogram per UX-critic mockup
+- Upload + crop works on physical Android
+- `image_picker` already in pubspec (Phase 30b) — no new dep
+- Hive cache invalidates on profile update; no stale avatar after change
+
+#### PR 32f — History screen redesign
+
+**Files to modify**
+- `lib/features/workouts/ui/workout_history_screen.dart` — switch from `ListView.builder` to `CustomScrollView` with `SliverList` + `SliverPersistentHeader` for sticky week headers
+- The history card widget (currently inline `_WorkoutHistoryCard` per Explore findings) — add eyebrow XP line + optional PR diamond
+- Workout detail screen (at `/home/history/<id>`) — add 48dp `surface2` header strip with `+N XP · N PRs` above the existing set-by-set log
+
+**Files to create**
+- `lib/features/workouts/ui/widgets/history_week_header.dart` — sticky persistent header; renders week label + roll-up (sets total + XP total in `heroGold`)
+- `lib/features/workouts/domain/workout_history_grouping.dart` — pure function grouping `List<Workout>` by ISO week start (Monday in pt-BR locale)
+
+**Data dependency**
+- `Workout` model must expose `totalXp` and PR count. Verify; if missing, extend the model + repository (Supabase view recommended for the aggregate read)
+
+**Test plan**
+- Unit: grouping function with workouts spanning multiple weeks → correct partitioning + ISO-week-start sort
+- Widget: pump 7 workouts across 2 weeks; assert 2 sticky headers render with correct roll-up
+- Widget: card eyebrow renders `+N XP` in heroGold `numericSmall` + `◆ N PR` in dominant-BP hue (omitted entirely when no PR — per UX-critic "no empty placeholders")
+- Golden: history with mixed XP/PR/no-PR cards across 2 weeks at 360dp
+- Visual verification per CLAUDE.md step 9 on physical Android
+
+**Acceptance**
+- Sticky week headers; per-card XP eyebrow visible
+- PR diamond appears only on sessions with ≥1 PR
+- Detail screen header strip renders above set-by-set log without breaking existing layout
+- E2E spec for History updated if selectors changed
 
 ### Launch Phase
 
