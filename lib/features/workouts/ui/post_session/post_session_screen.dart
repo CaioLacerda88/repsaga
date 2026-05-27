@@ -31,6 +31,8 @@ import 'cuts/cinematic_tap_hint.dart';
 import 'post_session_state.dart';
 import 'share/share_card_renderer.dart';
 import 'share/share_localizations.dart';
+import 'summary/mission_debrief_localizations.dart';
+import 'summary/mission_debrief_section.dart';
 import 'summary/next_step_hook.dart';
 import 'summary/post_session_summary_panel.dart';
 import 'summary/title_equip_row.dart';
@@ -234,23 +236,102 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       container: true,
       explicitChildNodes: true,
       identifier: 'post-session-screen',
-      child: Scaffold(
-        backgroundColor: AppColors.abyss,
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _handleTap,
-          onLongPress: _handleLongPress,
-          child: ListenableBuilder(
-            listenable: _stateController,
-            builder: (context, _) {
-              final state = _stateController.state;
-              return state.showSummary
-                  ? _buildSummary(state, l10n)
-                  : _buildCinematic(state, l10n);
-            },
+      // Phase 31 round-2 Bug E — intercept the Android system back gesture
+      // (predictive-back on targetSdk ≥ 34) so an accidental back-swipe
+      // doesn't finish the FlutterActivity → exit the app. The post-session
+      // route is push-only and there is NO re-entry path — once dismissed,
+      // the cinematic + debrief are gone for that session. Block the pop
+      // unconditionally, then show a confirmation dialog. Tapping LEAVE
+      // routes through the same [onContinue] callback CONTINUAR uses, so
+      // the route container (GoRouter) owns the actual nav (Decoupling
+      // Rule 8 preserved).
+      //
+      // This route is a top-level GoRoute, NOT inside the shell's nested
+      // navigator, so cluster `nested-nav-back-gate` does not apply — a
+      // single PopScope is sufficient.
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          final shouldLeave = await _showLeaveConfirmDialog(context, l10n);
+          if (shouldLeave == true && context.mounted) {
+            // Same path as CONTINUAR — controller cleanup + route exit.
+            _stateController.onContinue();
+            widget.onContinue();
+          }
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.abyss,
+          body: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _handleTap,
+            onLongPress: _handleLongPress,
+            child: ListenableBuilder(
+              listenable: _stateController,
+              builder: (context, _) {
+                final state = _stateController.state;
+                return state.showSummary
+                    ? _buildSummary(state, l10n)
+                    : _buildCinematic(state, l10n);
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Phase 31 round-2 Bug E — confirmation dialog shown when the user
+  /// presses the system back button. Returns `true` if the user confirms
+  /// leaving; `false` (or `null` on outside-tap dismiss) keeps the screen.
+  Future<bool?> _showLeaveConfirmDialog(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface2,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          title: Text(
+            l10n.postSessionLeaveTitle,
+            style: AppTextStyles.title.copyWith(color: AppColors.textCream),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                l10n.postSessionLeaveCancel.toUpperCase(),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 13,
+                  letterSpacing: 0.16 * 13,
+                  color: AppColors.textDim,
+                ),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryViolet,
+                foregroundColor: AppColors.textCream,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                l10n.postSessionLeaveConfirm.toUpperCase(),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 13,
+                  letterSpacing: 0.16 * 13,
+                  color: AppColors.textCream,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -547,29 +628,20 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       final classSlug =
           ref.read(characterClassProvider)?.slug ??
           CharacterClass.initiate.slug;
-      // Compute bp XP deltas from the queue + state; we use what the
-      // controller's state machine already projected — the share payload
-      // factory expects raw deltas, but the cinematic-side state stores
-      // the dominant-BP-derived hook. For the share card we just need
-      // the dominant BP, its rank, and progress fraction — all of which
-      // are already on PostSessionState. Construct a minimal deltas map
-      // (single entry on the dominant BP carrying its XP) so the
-      // factory's existing dominant-BP selection still resolves to the
-      // same value the cinematic chose.
-      final deltas = <BodyPart, int>{};
-      final ranks = <BodyPart, int>{};
-      if (state.dominantBodyPart != null) {
-        deltas[state.dominantBodyPart!] = state.totalXpEarned;
-        ranks[state.dominantBodyPart!] = state.dominantNextRank == null
-            ? 1
-            : state.dominantNextRank! - 1;
-      }
+      // Phase 31 Pass 1 — read the persisted deltas + ranks directly from
+      // state. Pre-Pass-1 the screen synthesized a single-entry deltas map
+      // from the dominant BP because the controller didn't persist the
+      // raw maps; the share factory then re-derived the dominant BP from
+      // that 1-entry map (the same BP it started from — round-trip). Now
+      // the state carries the full maps, so the factory's dominant-BP
+      // selection sees every BP that actually earned XP and ranks accent
+      // / hue fidelity matches the cinematic exactly.
       sharePayload = SharePayload.fromPostSessionState(
         tier: state.tier,
         queueResult: state.queueResult,
         prResult: state.prResult,
-        bpXpDeltas: deltas,
-        bpRankAfter: ranks,
+        bpXpDeltas: state.bpXpDeltas,
+        bpRankAfter: state.bpRankAfter,
         bpProgressFractionAfter: state.bpProgressFractionAfter,
         exerciseNames: state.exerciseNames,
         totalXp: state.totalXpEarned,
@@ -582,6 +654,28 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         l10n: l10n,
       );
     }
+
+    // Build the S2 Mission Debrief section (Phase 31 Pass 3). The
+    // section subsumes the legacy nextStepHook block on the panel — the
+    // panel hides its eyebrow + hook when `debriefSection` is non-null.
+    //
+    // Phase 31 round-2 Bug F — resolve the character class to the
+    // localized display name so the XP hero block can render
+    // "+340 XP EARNED · IRON SENTINEL" as its right-side accent. Initiate
+    // (the day-zero placeholder) collapses to `null` so the accent
+    // omits cleanly — the mockup spec'd the right column as the
+    // class-identity slot, not a generic forever-rendered chip.
+    final classForDebrief = ref.read(characterClassProvider);
+    final classLabel = classForDebrief == null
+        ? null
+        : (classForDebrief == CharacterClass.initiate
+              ? null
+              : localizedClassCopy(classForDebrief, l10n).name);
+    final debriefSection = MissionDebriefSection(
+      state: state,
+      localizations: MissionDebriefLocalizations.from(l10n),
+      classLabel: classLabel,
+    );
 
     return PostSessionSummaryPanel(
       sagaLabel: sagaLabel,
@@ -598,6 +692,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       hasShareCta: state.hasShareCta,
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
+      debriefSection: debriefSection,
       onContinue: () {
         _stateController.onContinue();
         widget.onContinue();
@@ -608,8 +703,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
   /// Compose the [ShareCardStrings] bundle from the post-session state
   /// snapshot + the active [AppLocalizations]. Mirrors the per-variant
-  /// copy specs in mockup §6 — Variant A bottom strip, Variant B
-  /// collars, Discreet flood-and-slash.
+  /// copy specs in mockup §6 D3 — Achievement Frame top + bottom collars,
+  /// Discreet flood-and-slash.
   ///
   /// Kept inside the screen so the cinematic + share card pull from the
   /// same `state.bodyPartLabels` / `state.exerciseNames` maps the
@@ -627,17 +722,25 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     final classSlug = payload.characterClassSlug;
     final className = classSlug.toUpperCase();
     final pr = payload.pr;
-    final prText = pr == null
+    // Achievement Frame top-collar saga eyebrow: dropped on class-change
+    // sessions (Q4 lock — top collar reads NEW class name only when the
+    // class boundary fires). Otherwise renders the current saga number.
+    final sagaEyebrow = payload.isClassChange
         ? null
-        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps} · PR';
-    final variantBLift = pr == null
-        ? ''
-        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps}';
-    final variantBPrTag = pr == null ? null : l10n.summaryNewTitleLabel;
-    final variantBBpSub = pr == null ? '' : '${pr.exerciseName} · $bpLabel';
+        : 'SAGA ${state.sagaNumber}';
+    // Achievement Frame bottom-collar lift detail: "{weight}kg × {reps}
+    // · {exerciseName}" on PR sessions (rendered heroGold); collapses
+    // entirely on non-PR sessions.
+    final liftDetail = pr == null
+        ? null
+        : '${pr.weightKg.toStringAsFixed(0)}kg × ${pr.reps} · ${pr.exerciseName}';
+    final bpRank = bpLabel.isEmpty || rank == null
+        ? bpLabel
+        : '$bpLabel · Rank $rank';
+    // Discreet eyebrow + d-hero keep their existing copy rules.
     final discreetEyebrow = payload.isClassChange
         ? '$className DESPERTOU.'
-        : (bpLabel.isEmpty || rank == null ? bpLabel : '$bpLabel · Rank $rank');
+        : bpRank;
     final discreetHero = payload.isClassChange
         ? className
         : '+${state.totalXpEarned}';
@@ -648,14 +751,12 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
 
     return ShareCardStrings(
       wordmark: l10n.shareWordmark,
-      variantAXpText: xpText,
-      variantAPrText: prText,
-      variantBBpEyebrow: bpLabel,
-      variantBClassName: className,
-      variantBPrTag: variantBPrTag,
-      variantBLift: variantBLift,
-      variantBBpSub: variantBBpSub,
-      variantBXpSub: xpText,
+      achievementFrameClassName: className,
+      achievementFrameSagaEyebrow: sagaEyebrow,
+      achievementFrameXpHero: xpText,
+      achievementFrameLiftDetail: liftDetail,
+      achievementFrameHasPr: pr != null,
+      achievementFrameBpRank: bpRank,
       discreetEyebrow: discreetEyebrow,
       discreetHero: discreetHero,
       discreetHeroSubLabel: 'XP',

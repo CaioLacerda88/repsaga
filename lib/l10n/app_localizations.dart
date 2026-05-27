@@ -4914,18 +4914,6 @@ abstract class AppLocalizations {
   /// **'No photo · just the saga'**
   String get shareSheetNoPhoto;
 
-  /// Phase 30 PR 30b — Variant toggle option label for the minimal-strip share card (Variant A).
-  ///
-  /// In en, this message translates to:
-  /// **'Minimal'**
-  String get sharePreviewMinimal;
-
-  /// Phase 30 PR 30b — Variant toggle option label for the full-bleed share card (Variant B). 'Destaque' in pt-BR.
-  ///
-  /// In en, this message translates to:
-  /// **'Bold'**
-  String get sharePreviewBold;
-
   /// Phase 30 PR 30b — Preview-screen retake button label. Returns to the share-sheet step.
   ///
   /// In en, this message translates to:
@@ -5027,6 +5015,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SKIP'**
   String get cinematicSkipLabel;
+
+  /// Phase 31 Pass 3 — Mission Debrief section eyebrow above the lift rows. Pre-title-cased; widget uppercases for the +0.22em tracked label register.
+  ///
+  /// In en, this message translates to:
+  /// **'Session report'**
+  String get postSessionDebriefEyebrow;
+
+  /// Phase 31 Pass 3 — Personal record flag rendered next to the weight × reps on a Mission Debrief lift row. heroGold-tinted; canonical reward signal.
+  ///
+  /// In en, this message translates to:
+  /// **'PR'**
+  String get postSessionPrFlag;
+
+  /// Phase 31 Pass 3 — '+N more exercises' footer on the Mission Debrief lift table when the session trained more than 4 exercises.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{+1 more exercise} other{+{count} more exercises}}'**
+  String postSessionMoreLifts(int count);
+
+  /// Phase 31 Pass 3 — Per-BP rank line in the Mission Debrief (no rank-up). Used on every BP that earned XP this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank {n}'**
+  String postSessionRankLabel(int n);
+
+  /// Phase 31 Pass 3 — Per-BP rank-up grammar in the Mission Debrief (rank-up session). Renders the rank delta arrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank {fromRank} → {toRank}'**
+  String postSessionRankUpArrow(int fromRank, int toRank);
+
+  /// Phase 31 Pass 3 — Weight unit suffix on Mission Debrief lift rows. v1 ships kg only; the key exists so a future lb locale can override without code touch.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get postSessionWeightUnit;
+
+  /// Phase 31 round-2 Bug E — Confirmation dialog title shown when the user presses the system back button on the post-session screen. The user has just finished a workout; backing out of the cinematic/debrief is permanent (no re-entry path), so the dialog blocks accidental dismissal.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave the post-battle?'**
+  String get postSessionLeaveTitle;
+
+  /// Phase 31 round-2 Bug E — Cancel action on the post-session leave-confirmation dialog. Returns the user to the post-session surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get postSessionLeaveCancel;
+
+  /// Phase 31 round-2 Bug E — Confirm action on the post-session leave-confirmation dialog. Routes the user through the same `onContinue` path the CONTINUAR button uses (back to /home).
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get postSessionLeaveConfirm;
+
+  /// Phase 31 round-2 Bug F — Mission Debrief XP hero block right-of-numeral label. Renders alongside the '+{totalXp}' numeric ('+340 XP EARNED'). Pre-uppercased — already in the tracked-label register.
+  ///
+  /// In en, this message translates to:
+  /// **'XP EARNED'**
+  String get postSessionXpEarnedLabel;
 }
 
 class _AppLocalizationsDelegate

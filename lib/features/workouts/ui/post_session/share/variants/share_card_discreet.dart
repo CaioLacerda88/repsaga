@@ -39,6 +39,8 @@ class ShareCardDiscreet extends StatelessWidget {
     this.prLine,
     this.prDetail,
     this.renderTarget = ShareCardRenderTarget.export,
+    this.cardWidthDp = 1080.0,
+    this.cardHeightDp = 1920.0,
   });
 
   /// Hue accent — drives the background flood top-left, the slash color,
@@ -70,15 +72,39 @@ class ShareCardDiscreet extends StatelessWidget {
   /// at the bottom-center.
   final String wordmark;
 
-  /// Whether this widget is the export (1080×1920 offscreen) tree OR the
-  /// preview (FittedBox-scaled visible) tree. Drives the typography
-  /// sizing — see [ShareCardTypography] for the per-element pairs.
-  /// Defaults to [ShareCardRenderTarget.export] so the golden contract
-  /// stays correct.
+  /// Whether this widget is the **export** (1080×1920 offscreen) tree
+  /// OR the **preview** (device-native dp visible) tree. Drives the
+  /// typography sizing — see [ShareCardTypography] for the per-element
+  /// pairs. Defaults to [ShareCardRenderTarget.export] so the golden
+  /// contract stays correct.
   final ShareCardRenderTarget renderTarget;
+
+  /// Device-native (or canvas-native, on export) card width in dp / px.
+  /// Defaults to `1080.0` so the export golden contract is preserved.
+  /// The preview tree forwards the laid-out constraints from
+  /// `SharePreviewScreen`'s `LayoutBuilder` so the Discreet's gradient
+  /// + slash + content scale with the card at small viewports.
+  final double cardWidthDp;
+
+  /// Device-native card height in dp / px. Defaults to `1920.0` so the
+  /// export golden contract is preserved. Drives proportional vertical
+  /// padding around the content stack.
+  final double cardHeightDp;
 
   @override
   Widget build(BuildContext context) {
+    // Proportional padding — scales with the card so Discreet renders
+    // identically across export (1080×1920) and preview (device-native
+    // dp). Pre-Phase-31 the SafeArea ran with absolute `60dp / 40dp`
+    // values that were sized assuming a FittedBox-scaled 1080-unit
+    // tree; with the FittedBox removed those values would dominate the
+    // device-native dp canvas. Proportional-to-cardHeight keeps the
+    // visual contract.
+    final hPad = cardWidthDp * 0.017; // 18 on 1080
+    final topPad = cardHeightDp * 0.031; // 60 on 1920
+    final bottomPad = cardHeightDp * 0.021; // 40 on 1920
+    final innerTopOffset = cardHeightDp * 0.019; // 36 on 1920
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -106,11 +132,11 @@ class ShareCardDiscreet extends StatelessWidget {
         // Content — top-padded so the slash + eyebrow stack naturally;
         // bottom-padded for the wordmark.
         SafeArea(
-          minimum: const EdgeInsets.fromLTRB(18, 60, 18, 40),
+          minimum: EdgeInsets.fromLTRB(hPad, topPad, hPad, bottomPad),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 36),
+              SizedBox(height: innerTopOffset),
               Text(
                 eyebrow,
                 key: const ValueKey('share-card-discreet-eyebrow'),

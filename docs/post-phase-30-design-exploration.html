@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RepSaga Post-Phase-30 Design Exploration</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --abyss:#0D0319; --surface:#1A0F2E; --surface2:#241640; --surface3:#2E1E52;
+  --primary-violet:#6A2FA8; --hot-violet:#B36DFF; --hero-gold:#FFB800;
+  --text-cream:#EEE7FA; --text-dim:#9C8DB8; --text-muted:#5C4F7A;
+  --success:#62C46D; --error:#FF6B6B;
+  --bp-chest:#F472B6; --bp-back:#38BDF8; --bp-legs:#4ADE80;
+  --bp-shoulders:#FBBF24; --bp-arms:#F87171; --bp-core:#A78BFA;
+  --hair:rgba(179,109,255,0.14);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--abyss);color:var(--text-cream);font-family:'Barlow',sans-serif;line-height:1.55;}
+body{padding:40px 28px 120px;max-width:1720px;margin:0 auto;}
+h1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:42px;letter-spacing:0.02em;line-height:1.05;margin-bottom:10px;}
+h2{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:30px;letter-spacing:0.02em;line-height:1.15;margin:64px 0 14px;padding-bottom:10px;border-bottom:2px solid var(--hot-violet);}
+h3{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:22px;letter-spacing:0.02em;margin:36px 0 10px;color:var(--hot-violet);}
+h4{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:16px;letter-spacing:0.02em;margin:14px 0 6px;color:var(--text-cream);}
+p{font-size:14px;line-height:1.6;color:var(--text-dim);margin-bottom:10px;}
+p strong{color:var(--text-cream);}
+ul{padding-left:20px;margin-bottom:10px;}
+li{font-size:13.5px;line-height:1.65;color:var(--text-dim);}
+li strong{color:var(--text-cream);}
+code{background:var(--surface2);padding:1px 6px;font-size:12px;color:var(--hot-violet);font-family:ui-monospace,Menlo,monospace;}
+.eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--hot-violet);margin-bottom:6px;}
+.lede{font-size:15px;color:var(--text-dim);max-width:960px;margin-bottom:20px;}
+.complaint-block{background:rgba(255,184,0,0.06);border-left:3px solid var(--hero-gold);padding:14px 18px;margin:20px 0 28px;max-width:960px;}
+.complaint-block p{color:var(--text-cream);font-style:italic;}
+.constraint-block{background:rgba(179,109,255,0.06);border-left:3px solid var(--hot-violet);padding:14px 18px;margin:20px 0 28px;max-width:960px;}
+.divider{border:none;border-top:1px solid var(--hair);margin:48px 0;}
+.phone{width:200px;height:434px;background:var(--abyss);border:1.5px solid rgba(179,109,255,0.25);position:relative;overflow:hidden;flex:0 0 200px;display:flex;flex-direction:column;}
+.phone.share-preview{height:360px;}
+.photo-bg{position:absolute;inset:0;background:linear-gradient(135deg,rgba(50,30,30,0.97) 0%,rgba(80,65,65,0.88) 40%,rgba(110,95,95,0.72) 100%);z-index:0;}
+.photo-bg::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,transparent,transparent 14px,rgba(0,0,0,0.06) 14px,rgba(0,0,0,0.06) 15px);}
+.abyss-bg{position:absolute;inset:0;background:var(--abyss);z-index:0;}
+.frame-content{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;}
+.proposal-row{display:flex;gap:40px;align-items:flex-start;margin:32px 0 48px;flex-wrap:wrap;}
+.proposal-phone-col{display:flex;flex-direction:column;align-items:center;gap:8px;flex:0 0 auto;}
+.proposal-phone-label{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);text-align:center;}
+.proposal-copy{flex:1;min-width:280px;max-width:600px;}
+.ref-line{font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:0.06em;color:var(--text-muted);margin:10px 0 4px;}
+.risk-line{font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:0.06em;color:var(--error);margin-top:6px;}
+.comparison-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:32px 0 16px;}
+.cmp-card{background:var(--surface);border:1px solid var(--hair);padding:16px 14px;}
+.cmp-card.pick{border-color:var(--hot-violet);background:rgba(106,47,168,0.18);}
+.cmp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.04em;color:var(--text-cream);margin-bottom:6px;}
+.cmp-thesis{font-size:12.5px;color:var(--text-dim);margin-bottom:6px;line-height:1.5;}
+.cmp-tradeoff{font-size:11.5px;color:var(--text-muted);line-height:1.5;}
+.pick-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--hot-violet);border:1px solid var(--hot-violet);padding:1px 6px;margin-bottom:6px;}
+.stamp-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-52%) rotate(-12deg);z-index:4;text-align:center;width:134px;}
+.stamp-outer{border:3px solid var(--hot-violet);padding:10px 14px 8px;position:relative;}
+.stamp-inner-rule{position:absolute;inset:5px;border:1px solid rgba(179,109,255,0.38);pointer-events:none;}
+.stamp-saga{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:0.04em;line-height:1;color:var(--hot-violet);}
+.stamp-class{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.24em;text-transform:uppercase;color:var(--text-dim);margin-top:2px;}
+.stamp-xp-row{display:flex;align-items:baseline;justify-content:center;gap:3px;margin-top:4px;}
+.stamp-xp-num{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--text-cream);}
+.stamp-xp-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);}
+.stamp-desat{position:absolute;inset:0;background:rgba(13,3,25,0.52);z-index:1;}
+.stamp-desat-center{position:absolute;top:28%;left:14%;right:14%;bottom:18%;background:rgba(13,3,25,0.70);z-index:1;}
+.slash-cut{position:absolute;left:-8%;right:-8%;height:2px;background:var(--hot-violet);transform:rotate(-8deg);z-index:3;}
+.d1-strip{position:absolute;bottom:0;left:0;right:0;padding:6px 12px 8px;background:rgba(13,3,25,0.90);z-index:5;display:flex;align-items:center;justify-content:space-between;}
+.d1-wordmark{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:var(--hot-violet);}
+.d1-meta{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.10em;text-transform:uppercase;color:var(--text-dim);}
+.sb-header{background:rgba(13,3,25,0.95);padding:8px 12px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--hot-violet);position:relative;z-index:4;}
+.sb-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--hot-violet);}
+.sb-date{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.10em;color:var(--text-dim);margin-top:1px;}
+.sb-badge{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:0.04em;color:var(--hot-violet);opacity:0.5;}
+.sb-footer{background:rgba(13,3,25,0.93);position:relative;z-index:4;border-top:1px solid rgba(179,109,255,0.18);}
+.sb-stat-grid{display:flex;align-items:stretch;border-bottom:1px solid rgba(179,109,255,0.12);}
+.sb-stat-col{flex:1;padding:6px 0;display:flex;flex-direction:column;align-items:center;border-right:1px solid rgba(179,109,255,0.12);}
+.sb-stat-col:last-child{border-right:none;}
+.sb-snum{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;line-height:1;letter-spacing:-0.01em;color:var(--text-cream);}
+.sb-sunit{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);margin-top:1px;}
+.sb-xp-row{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;}
+.sb-xp-num{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:var(--text-cream);letter-spacing:-0.02em;}
+.sb-xp-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);}
+.sb-wm-row{display:flex;align-items:center;justify-content:center;gap:6px;padding:3px 0 5px;border-top:1px solid rgba(179,109,255,0.08);}
+.sb-wm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:8px;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-muted);}
+.sb-url{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.10em;color:var(--hot-violet);opacity:0.6;}
+.af-collar-top{position:absolute;top:0;left:0;right:0;height:46px;background:rgba(13,3,25,0.92);z-index:4;clip-path:polygon(0 0,100% 0,100% 66%,0 100%);padding:8px 12px 0;display:flex;flex-direction:column;justify-content:flex-start;}
+.af-collar-bot{position:absolute;bottom:0;left:0;right:0;height:72px;background:rgba(13,3,25,0.92);z-index:4;clip-path:polygon(0 24%,100% 0,100% 100%,0 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:0 12px 8px;}
+.af-bar-left{position:absolute;top:0;bottom:0;left:0;width:4px;z-index:5;}
+.af-bar-right{position:absolute;top:0;bottom:0;right:0;width:4px;background:var(--hot-violet);z-index:5;}
+.af-saga-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.20em;text-transform:uppercase;color:var(--hot-violet);}
+.af-class-lbl{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:9px;letter-spacing:0.04em;color:var(--text-dim);margin-top:1px;}
+.af-xp-row{display:flex;align-items:baseline;gap:3px;margin-top:4px;}
+.af-xp-num{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.02em;line-height:1;color:var(--text-cream);}
+.af-xp-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);}
+.af-meta-row{display:flex;justify-content:space-between;align-items:center;}
+.af-meta{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.10em;color:var(--text-dim);}
+.af-wm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:8px;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-muted);}
+.bs-dark-field{position:absolute;inset:0;background:rgba(13,3,25,0.62);z-index:1;}
+.bs-slash1{position:absolute;top:34%;left:-6%;right:-6%;height:3px;background:var(--hot-violet);transform:rotate(-8deg);z-index:5;}
+.bs-slash2{position:absolute;top:37.5%;left:-6%;right:-6%;height:1px;background:rgba(179,109,255,0.32);transform:rotate(-8deg);z-index:5;}
+.bs-content{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 14px;}
+.bs-eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-dim);margin-bottom:0;}
+.bs-xp{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:80px;line-height:0.88;letter-spacing:-0.03em;color:var(--text-cream);}
+.bs-unit{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:0.16em;text-transform:uppercase;color:var(--hot-violet);margin-top:4px;}
+.bs-secondary{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;letter-spacing:0.04em;color:var(--text-dim);margin-top:8px;}
+.bs-bottom{position:absolute;bottom:0;left:0;right:0;z-index:6;display:flex;justify-content:space-between;align-items:center;padding:6px 14px 8px;background:rgba(13,3,25,0.88);border-top:1px solid rgba(179,109,255,0.14);}
+.bs-wm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:9px;letter-spacing:0.22em;text-transform:uppercase;color:var(--hot-violet);}
+.bs-meta{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.10em;text-transform:uppercase;color:var(--text-dim);}
+.bs-pr{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--hero-gold);}
+.sum-header{padding:12px 14px 8px;border-bottom:1px solid rgba(179,109,255,0.12);}
+.sum-saga-line{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:0.04em;color:var(--text-cream);line-height:1;}
+.sum-meta-line{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10px;letter-spacing:0.10em;text-transform:uppercase;color:var(--text-dim);margin-top:3px;}
+.sum-cta-row{display:flex;gap:8px;padding:8px 14px 10px;}
+.btn-share{flex:1;background:transparent;border:1px solid var(--hot-violet);color:var(--hot-violet);font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;padding:7px 0;text-align:center;}
+.btn-continue{flex:1;background:var(--primary-violet);border:none;color:var(--text-cream);font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;padding:7px 0;text-align:center;}
+.rank-rail{padding:6px 14px 4px;}
+.rank-rail-title{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8.5px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px;}
+.rail-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.rail-bp-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;width:28px;flex-shrink:0;}
+.rail-track{flex:1;height:6px;background:rgba(255,255,255,0.06);position:relative;overflow:visible;}
+.rail-fill{height:100%;position:relative;}
+.rail-delta{position:absolute;right:-1px;top:-4px;width:2px;height:14px;background:rgba(255,255,255,0.55);}
+.rail-rank{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;width:18px;text-align:right;flex-shrink:0;letter-spacing:0.02em;}
+.rail-lvlup{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;color:var(--hot-violet);background:rgba(106,47,168,0.25);padding:1px 3px;flex-shrink:0;}
+.sum-next-target{padding:4px 14px 0;border-top:1px solid rgba(179,109,255,0.08);}
+.sum-next-line{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.08em;color:var(--text-dim);}
+.sum-next-line strong{color:var(--hot-violet);}
+.debrief-section{padding:0 14px;}
+.debrief-eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.20em;text-transform:uppercase;color:var(--text-muted);margin:7px 0 3px;}
+.debrief-lift-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(179,109,255,0.07);}
+.debrief-lift-name{font-family:'Barlow',sans-serif;font-weight:400;font-size:10px;color:var(--text-dim);}
+.debrief-lift-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:-0.01em;color:var(--text-cream);}
+.debrief-lift-pr{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:7px;letter-spacing:0.12em;text-transform:uppercase;color:var(--hero-gold);margin-left:3px;}
+.debrief-xp-bar{display:flex;gap:0;height:14px;margin:5px 0;}
+.debrief-xp-seg{display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:7px;overflow:hidden;}
+.debrief-hint{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.06em;color:var(--text-dim);margin-top:5px;padding-top:5px;border-top:1px solid rgba(179,109,255,0.10);}
+.debrief-hint strong{color:var(--hot-violet);}
+.card-stack-area{flex:1;position:relative;padding:10px 14px 0;}
+.stack-card{position:absolute;left:14px;right:14px;border:1px solid rgba(179,109,255,0.20);background:var(--surface);padding:9px 11px 8px;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);}
+.stack-card.active{background:var(--surface2);border-color:var(--hot-violet);z-index:4;}
+.stack-card.b1{transform:translateY(8px) rotate(1.5deg);z-index:3;}
+.stack-card.b2{transform:translateY(15px) rotate(-1deg);z-index:2;}
+.stack-card.b3{transform:translateY(22px) rotate(2deg);z-index:1;}
+.sc-eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:2px;}
+.sc-value{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.01em;line-height:1;color:var(--text-cream);}
+.sc-sub{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.08em;color:var(--text-dim);margin-top:2px;}
+.sc-slash{position:absolute;bottom:16px;left:-4%;right:-4%;height:1px;background:rgba(179,109,255,0.22);transform:rotate(-8deg);}
+.stack-nav{display:flex;justify-content:center;gap:5px;margin-top:90px;}
+.stack-dot{width:5px;height:5px;background:rgba(179,109,255,0.22);}
+.stack-dot.active{background:var(--hot-violet);}
+.journal-body{padding:6px 14px;flex:1;}
+.journal-divider{height:1px;background:linear-gradient(90deg,var(--hot-violet) 0%,transparent 100%);margin:3px 0;}
+.journal-row{display:flex;align-items:baseline;gap:5px;padding:2.5px 0;}
+.journal-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-muted);width:38px;flex-shrink:0;}
+.journal-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.02em;color:var(--text-cream);line-height:1.2;}
+.journal-val.dim{color:var(--text-dim);font-weight:600;}
+.journal-narration{font-family:'Barlow Condensed',sans-serif;font-weight:500;font-size:10px;letter-spacing:0.04em;color:var(--text-dim);line-height:1.5;margin:5px 0;padding:5px 0;border-top:1px solid rgba(179,109,255,0.08);border-bottom:1px solid rgba(179,109,255,0.08);}
+.journal-narration strong{color:var(--hot-violet);}
+.journal-next-ey{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.20em;text-transform:uppercase;color:var(--text-muted);margin-bottom:2px;}
+.journal-next-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.02em;color:var(--hot-violet);line-height:1.2;}
+</style>
+</head>
+<body>
+
+<div class="eyebrow">Post-Phase-30 Design Exploration</div>
+<h1>Share Card Overlay + Post-Battle Summary</h1>
+<p class="lede">Two surfaces flagged in on-device verification after Phase 30 shipped. The share-card overlay lacks photo presence despite PR 30c typography bumps. The post-battle summary panel has dead real-estate after the cinematic ends. Eight proposals total, four per surface, each structurally distinct.</p>
+<div class="complaint-block">
+<p><strong>User (share card):</strong> Still feels too small / not present enough in the photo even after PR 30c bumped preview typography. Want more presence. Claim the moment.</p>
+<p style="margin-top:8px"><strong>User (summary panel):</strong> Not enough info, lot of free real estate. After cinematic crescendo, feels underwhelming.</p>
+</div>
+<div class="constraint-block">
+<h4>Load-bearing constraints</h4>
+<ul>
+<li><strong>Color tokens:</strong> <code>--abyss</code> #0D0319 · <code>--hot-violet</code> #B36DFF · <code>--primary-violet</code> #6A2FA8 · <code>--hero-gold</code> #FFB800 (PR/class-change ONLY) · body-part hues per BP. No raw hex outside AppColors.</li>
+<li><strong>Typography:</strong> Rajdhani 700 for numerics/display. Barlow Condensed 600 for tracked uppercase labels. Barlow for prose. No w800/w900.</li>
+<li><strong>Shape grammar:</strong> Hard edges. ClipPath diagonal cuts. Slash primitive (2dp, -8deg, at 28%). No border-radius on card chrome. No BoxShadow/blur. No glassmorphism.</li>
+<li><strong>Reward accent:</strong> heroGold reserved for PR moments and class-change only. Not routine XP or rank bars.</li>
+<li><strong>RPG thesis:</strong> Every element must pin that RPG progression is earned through real lifts, not check-ins or abstract stats.</li>
+</ul>
+</div>
+<hr class="divider">
+
+<h2>Surface 1 — Share-Card Overlay</h2>
+<p class="lede">Sits on top of a user-taken photo at share preview. Current variants claim only the bottom strip or top+bottom diagonal collars. Each proposal below claims more photo real-estate. Photo background simulated as a CSS gym-equipment gradient.</p>
+
+<h3>Direction 1 — Stamp / Sigil</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone share-preview">
+  <div class="photo-bg"></div>
+  <div class="stamp-desat"></div>
+  <div class="stamp-desat-center"></div>
+  <div class="stamp-wrap">
+    <div class="stamp-outer">
+      <div class="stamp-inner-rule"></div>
+      <div class="stamp-saga">SAGA 76</div>
+      <div class="stamp-class">IRON SENTINEL</div>
+      <div class="stamp-xp-row"><span class="stamp-xp-num">+340</span><span class="stamp-xp-lbl">XP</span></div>
+    </div>
+  </div>
+  <div class="slash-cut" style="top:44%;"></div>
+  <div class="d1-strip">
+    <span class="d1-wordmark">REPSAGA</span>
+    <span class="d1-meta">3 SETS · 42 MIN · 0.7 TON</span>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 1<br>Stamp / Sigil</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> Saga number at display size dominates the center. Class name second (identity). XP delta third (reward). Meta stats demoted to thin bottom strip.</li>
+<li><strong>Photo claim:</strong> The stamp sits at photo center, rotated -12°. The region behind it is darkened to ~70% opacity — still reads as gym context without destroying the photo. Everything outside the stamp block remains partially visible as atmosphere.</li>
+<li><strong>Angled rotation -12°:</strong> More severe than the -8° slash primitive. Intentional: stamps are applied physical objects, not UI overlays. The double border (outer 3dp + 5px inset 1dp) gives the stamp a die-cut quality without blur or shadow.</li>
+<li><strong>Slash relation:</strong> The 2dp violet slash crosses through the stamp body, below center mass. Reinforces RepSaga cut grammar. Not decorative: it anchors the overlay as a RepSaga artifact even without the wordmark.</li>
+<li><strong>Anti-generic:</strong> No rounded badge. No gradient pill. No glow. Stark rectangular double-border is typographic, not premium-UI.</li>
+<li><strong>Bottom strip:</strong> 10px Rajdhani wordmark left, Barlow Condensed meta right. Deliberately thin — the stamp is the hero, not the strip.</li>
+</ul>
+<div class="ref-line">Borrows from: Persona 5R All-Out-Attack card / passport visa stamp / official rubber-stamp certificate aesthetics.</div>
+<div class="risk-line">Risk: center placement may clash with photo subject. At very bright photos the desat-center region may still read as AI transparent overlay. Test at 1x pixel density on device.</div>
+</div>
+</div>
+
+<h3>Direction 2 — Scoreboard</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone share-preview" style="display:flex;flex-direction:column;">
+  <div class="photo-bg"></div>
+  <div style="position:relative;z-index:4;">
+    <div class="sb-header">
+      <div>
+        <div class="sb-title">REPSAGA · SAGA 76</div>
+        <div class="sb-date">25 MAI 2026 · IRON SENTINEL</div>
+      </div>
+      <div class="sb-badge">#076</div>
+    </div>
+  </div>
+  <div style="flex:1;"></div>
+  <div class="sb-footer">
+    <div class="sb-stat-grid">
+      <div class="sb-stat-col"><div class="sb-snum">42</div><div class="sb-sunit">MIN</div></div>
+      <div class="sb-stat-col"><div class="sb-snum">12</div><div class="sb-sunit">SETS</div></div>
+      <div class="sb-stat-col"><div class="sb-snum">0.7</div><div class="sb-sunit">TON</div></div>
+    </div>
+    <div class="sb-xp-row"><span class="sb-xp-lbl">SESSION XP</span><span class="sb-xp-num">+340</span></div>
+    <div class="sb-wm-row"><span class="sb-wm">REPSAGA</span><span style="color:var(--text-muted);font-size:8px;">·</span><span class="sb-url">repsaga.app</span></div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 2<br>Scoreboard</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> Header anchors identity (wordmark + saga # + date + class). Mid zone is pure photo — maximum real-estate. Footer is a three-column stat grid (time/sets/volume) then a full-width XP row, then wordmark footnote.</li>
+<li><strong>Photo claim:</strong> Claims both top and bottom, leaving only mid as untouched. The photo becomes the field inside a fight-card frame. Unlike strip variants, the photo IS the content not a backdrop — the user is framed as the athlete.</li>
+<li><strong>Diegetic gym grammar:</strong> Scoreboard/fight-card aesthetic is native to athletic culture. Boxing, MMA, Olympic weightlifting all use this format. A gym user reads it as a real-sport broadcast artifact, not an app UI overlay.</li>
+<li><strong>Stat column grid:</strong> Hard vertical rules separate time/sets/volume. Numbers at 20sp Rajdhani 700 are the largest footer element — they are what the eye hits first when scrolling a social feed.</li>
+<li><strong>Anti-generic:</strong> No gradient pill, no rounded card, no frosted blur. Flat, full-bleed, structural. The 2dp bottom border on the header IS the slash primitive functioning as a horizontal cut edge.</li>
+<li><strong>Scale:</strong> Works for portrait photos. For square or landscape crops the header+footer proportions stay identical; only the mid zone height changes.</li>
+</ul>
+<div class="ref-line">Borrows from: ESPN/UFC fight-card broadcast graphics · Olympic scoreboard overlays · locker-room chalk stat boards.</div>
+<div class="risk-line">Risk: if photo subject is dark at both extremes, header and footer may merge into background. A thin 1dp luminance-boosting rule at each junction would fix contrast at device pixel density.</div>
+</div>
+</div>
+
+<h3>Direction 3 — Achievement Frame</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone share-preview">
+  <div class="photo-bg"></div>
+  <div class="af-bar-left" style="background:var(--bp-arms);"></div>
+  <div class="af-bar-right"></div>
+  <div class="af-collar-top">
+    <div class="af-saga-lbl">REPSAGA · SAGA 76</div>
+    <div class="af-class-lbl">IRON SENTINEL · 25 MAI 2026</div>
+  </div>
+  <div style="position:absolute;top:32%;left:-8%;right:-8%;height:1.5px;background:var(--bp-arms);transform:rotate(-8deg);z-index:3;opacity:0.55;"></div>
+  <div class="af-collar-bot">
+    <div class="af-meta-row">
+      <div>
+        <div class="af-xp-row"><span class="af-xp-num">+340</span><span class="af-xp-lbl">XP</span></div>
+        <div class="af-meta">12 SETS · 42 MIN · 0.7 TON</div>
+      </div>
+      <div class="af-wm">REPSAGA</div>
+    </div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 3<br>Achievement Frame</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> The frame itself is the primary signal — the photo is presented as a trophy artifact. Top collar: Saga # + class name (identity). Bottom collar: XP delta (reward) + compact meta + wordmark. Photo occupies 55-60% of card area.</li>
+<li><strong>Photo claim:</strong> Diagonal-clipped collars cut INTO the photo with angular geometry. The 4dp accent bars complete the frame on left and right edges. Together they claim all four photo edges without obscuring center content.</li>
+<li><strong>Dual hue identity:</strong> Left bar = this session's dominant body-part color (Arms = #F87171). Right bar = brand hot-violet. The session's dominant BP is encoded directly into the card chrome structure — data embedded in form, not in a label.</li>
+<li><strong>ClipPath at macro scale:</strong> The polygon clip on the collars is the slash primitive operating at layout scale — a ClipPath, not just a 2dp line. This makes the overlay feel physically cut rather than digitally overlaid.</li>
+<li><strong>Anti-generic:</strong> No glassmorphism. No rounded corners. Hard clipped edges throughout. The frame changes body-part color every session without redesigning anything — the system is data-driven by design.</li>
+<li><strong>Scalability:</strong> Chest session = pink left bar. Back session = sky blue. Legs = green. The frame is a system, not a static mockup.</li>
+</ul>
+<div class="ref-line">Borrows from: Championship sports trading cards · polaroid with heavy matte border · Hermes agenda insert tabs.</div>
+<div class="risk-line">Risk: at very light photos the collar edges may lose contrast. A 1dp inner stroke on the clip edges resolves this. Keep that in scope for implementation.</div>
+</div>
+</div>
+
+<h3>Direction 4 — Big-Stat Overlay</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone share-preview">
+  <div class="photo-bg"></div>
+  <div class="bs-dark-field"></div>
+  <div class="bs-slash1"></div>
+  <div class="bs-slash2"></div>
+  <div class="bs-content">
+    <div class="bs-eyebrow">SAGA 76 · SESSION XP</div>
+    <div class="bs-xp">+340</div>
+    <div class="bs-unit">EXPERIENCE</div>
+    <div class="bs-secondary">IRON SENTINEL · ARMS DOMINANT</div>
+  </div>
+  <div class="bs-bottom">
+    <span class="bs-wm">REPSAGA</span>
+    <span class="bs-meta">12 SETS · 42 MIN · 0.7 TON</span>
+    <span class="bs-pr">PR</span>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 4<br>Big-Stat Overlay</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> The XP number IS the entire design. At 80sp Rajdhani 700 it occupies approximately 30% of the card height. Nothing else competes. The eyebrow (8.5sp) and unit label (14sp) serve as rulers for the number, not as equal-weight elements.</li>
+<li><strong>Photo claim:</strong> The photo is darkened globally to ~62% — visible as gym context but the type is unambiguously primary. Two slashes cut through the number's shadow zone: one at full hot-violet opacity, one at 32%. The number appears physically embedded in the photo, not floating on it.</li>
+<li><strong>Why the number works as design:</strong> +340 XP means nothing to outsiders — it means everything to a peer RepSaga user. This is intentional exclusivity. The XP number is the fitness equivalent of a powerlifting total on a meet result board: incomprehensible to a casual, instantly legible to a lifter.</li>
+<li><strong>Secondary line:</strong> IRON SENTINEL + ARMS DOMINANT at 13sp encodes class + dominant body part without competing with the hero number. It's supporting context, not competing hierarchy.</li>
+<li><strong>heroGold PR flag:</strong> When the session has a PR, the single word PR in heroGold at the bottom-right corner is the only gold element. Reward-accent contract maintained — scarcity makes it pop.</li>
+<li><strong>Anti-generic:</strong> The aesthetic is HSR/P5R stat-reveal cinematic — a number slammed onto a dark field with geometric slashes. Not a result pill, not a badge. Pure data-as-identity.</li>
+</ul>
+<div class="ref-line">Borrows from: Honkai Star Rail damage-number cinematics · powerlifting meet result boards · Strava KOM card stripped to its core data.</div>
+<div class="risk-line">Risk: at 62% darken the photo reads as muddied rather than contextualized for very dark source photos. Tune dark-field opacity by photo luminance bucket. Also: sessions with low XP numbers (less than 80) may feel self-defeating to share — consider a minimum threshold before offering this template to the user.</div>
+</div>
+</div>
+
+<h3>Overlay — Side-by-Side Comparison</h3>
+<div class="comparison-grid">
+  <div class="cmp-card">
+    <div class="cmp-name">D1 — Stamp</div>
+    <div class="cmp-thesis">Angled center-stamp with double border, class name, XP. Photo visible as field. Stamp is a physical applied object, not a UI overlay.</div>
+    <div class="cmp-tradeoff">Tradeoff: center placement may clash with photo subject. Needs smart crop guidance or photo-region detection.</div>
+  </div>
+  <div class="cmp-card">
+    <div class="cmp-name">D2 — Scoreboard</div>
+    <div class="cmp-thesis">Header + photo-mid + stat-footer. Locker-room fight-card aesthetic. Stats in a three-column grid with hard vertical rules.</div>
+    <div class="cmp-tradeoff">Tradeoff: works best when photo subject lives in the center mid-zone. Thin subjects or landscape crops may leave awkward dead zones.</div>
+  </div>
+  <div class="cmp-card pick">
+    <div class="pick-badge">Top Pick</div>
+    <div class="cmp-name">D3 — Frame</div>
+    <div class="cmp-thesis">Diagonal ClipPath collars + 4dp BP-hue side bars. The body-part dominant color changes every session, encoding data into chrome structure. Works on any photo composition.</div>
+    <div class="cmp-tradeoff">Tradeoff: collar edges may lose contrast on very light photos. Needs a 1dp inner stroke safety net. Implementation requires ClipPath precision at pixel density.</div>
+  </div>
+  <div class="cmp-card">
+    <div class="cmp-name">D4 — Big Stat</div>
+    <div class="cmp-thesis">XP number at 30% card height IS the design. Photo darkened as field. Slashes cut through. Maximum bold claim. Data-as-identity.</div>
+    <div class="cmp-tradeoff">Tradeoff: only works when XP number is impressive. Low-XP sessions may feel self-defeating to share. Needs minimum-threshold logic before offering this template.</div>
+  </div>
+</div>
+<p><strong>My pick: Direction 3 — Achievement Frame.</strong> It is the only proposal that encodes session data (dominant body-part hue) into the card chrome itself. The frame changes color every session without redesigning anything. The ClipPath collars solve the presence problem by claiming all four edges simultaneously. It works regardless of photo subject composition — the photo is always the trophy inside the frame.</p>
+<hr class="divider">
+
+<h2>Surface 2 — Post-Battle Summary Panel</h2>
+<p class="lede">After the cinematic ends, the summary panel mounts. Current state: Saga line + meta + NEXT eyebrow + two CTAs + large empty void. These proposals fill that void with RPG-grounded, lift-level data. All four proposals share the same header and CTA structure; only the information body differs.</p>
+<p class="lede"><strong>Available data:</strong> per-body-part XP delta · session PRs · closest rank-up callout · class progress near threshold · title progress (1-2 sessions away). <strong>Not available:</strong> streak/consistency · comparison to last session.</p>
+
+<h3>Direction 1 — Rank Rail</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone">
+  <div class="abyss-bg"></div>
+  <div class="frame-content">
+    <div class="sum-header">
+      <div class="sum-saga-line">SAGA 76 COMPLETE</div>
+      <div class="sum-meta-line">42 MIN · 12 SETS · 0.7 TON</div>
+    </div>
+    <div style="padding:5px 14px 4px;border-bottom:1px solid rgba(179,109,255,0.10);">
+      <div style="display:flex;align-items:baseline;gap:4px;">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.02em;color:var(--text-cream);">+340</span>
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-dim);">XP EARNED</span>
+      </div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.10em;color:var(--hot-violet);">NEXT: ARMS RANK 12 · 47 XP</div>
+    </div>
+    <div class="rank-rail">
+      <div class="rank-rail-title">Body-Part Progress This Session</div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-arms);">ARMS</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-arms);width:88%;"><div class="rail-delta"></div></div></div>
+        <span class="rail-rank" style="color:var(--bp-arms);">11</span><span class="rail-lvlup">+LVL</span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-chest);">CHEST</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-chest);width:62%;"><div class="rail-delta"></div></div></div>
+        <span class="rail-rank" style="color:var(--bp-chest);">8</span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-back);">BACK</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-back);width:45%;"></div></div>
+        <span class="rail-rank" style="color:var(--bp-back);">6</span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-legs);">LEGS</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-legs);width:28%;"></div></div>
+        <span class="rail-rank" style="color:var(--bp-legs);">4</span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-shoulders);">SHLDR</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-shoulders);width:18%;"></div></div>
+        <span class="rail-rank" style="color:var(--bp-shoulders);">3</span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-bp-lbl" style="color:var(--bp-core);">CORE</span>
+        <div class="rail-track"><div class="rail-fill" style="background:var(--bp-core);width:9%;"></div></div>
+        <span class="rail-rank" style="color:var(--bp-core);">2</span>
+      </div>
+    </div>
+    <div class="sum-next-target">
+      <div class="sum-next-line"><strong>Arms</strong> · 47 XP to Rank 12. ~2 sets next session.</div>
+    </div>
+    <div class="sum-cta-row" style="margin-top:auto;">
+      <div class="btn-share">SHARE SAGA</div>
+      <div class="btn-continue">CONTINUE</div>
+    </div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 1<br>Rank Rail</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> XP total (primary) · six body-part rank bars (secondary, all visible without scrolling) · closest rank-up callout (tertiary) · CTAs pinned to bottom.</li>
+<li><strong>Data density without scroll:</strong> Six 6dp bars at equal spacing fit within the panel. Each bar encodes: color (which BP), fill (current rank position in tier), a white tick (this session's XP delta placement), current rank number, and a +LVL badge when a threshold was crossed.</li>
+<li><strong>Level-up moment:</strong> The +LVL badge is the celebration signal for the panel. In implementation this would be a 300ms opacity pulse on the bar fill during panel mount. Single animation, state-change only, no loop.</li>
+<li><strong>RPG thesis:</strong> Every bar maps to a real body part worked in real lifts. The bar only fills when you train that muscle. You cannot game it by checking in.</li>
+<li><strong>Anti-generic:</strong> No progress ring. No donut chart. Flat bars, hard edges, monochromatic per body-part hue token. The bar IS the data.</li>
+<li><strong>Empty-space resolution:</strong> The 6-bar rail fills the full panel height between XP header and CTAs. No dead space.</li>
+</ul>
+<div class="ref-line">Borrows from: Pokemon EV/IV stat bars · fighting game per-attribute character radar stripped to bars.</div>
+<div class="risk-line">Risk: sessions training only 1-2 BPs show 4-5 nearly empty bars. Recommend showing all 6 always — the neglected bars are information, not failure states. Must frame the eyebrow label accordingly.</div>
+</div>
+</div>
+
+<h3>Direction 2 — Mission Debrief</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone">
+  <div class="abyss-bg"></div>
+  <div class="frame-content">
+    <div class="sum-header">
+      <div class="sum-saga-line">SAGA 76 COMPLETE</div>
+      <div class="sum-meta-line">42 MIN · 12 SETS · 0.7 TON</div>
+    </div>
+    <div style="padding:5px 14px 4px;display:flex;align-items:baseline;gap:4px;border-bottom:1px solid rgba(179,109,255,0.10);">
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.02em;color:var(--text-cream);">+340</span>
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-dim);">XP EARNED</span>
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:8px;letter-spacing:0.10em;text-transform:uppercase;color:var(--hot-violet);margin-left:auto;">IRON SENTINEL</span>
+    </div>
+    <div class="debrief-section">
+      <div class="debrief-eyebrow">Top Lifts This Session</div>
+      <div class="debrief-lift-row">
+        <span class="debrief-lift-name">Barbell Curl</span>
+        <span><span class="debrief-lift-val">40 kg × 8</span><span class="debrief-lift-pr">PR</span></span>
+      </div>
+      <div class="debrief-lift-row">
+        <span class="debrief-lift-name">Hammer Curl</span>
+        <span class="debrief-lift-val">22 kg × 10</span>
+      </div>
+      <div class="debrief-lift-row">
+        <span class="debrief-lift-name">Tricep Pushdown</span>
+        <span class="debrief-lift-val">25 kg × 12</span>
+      </div>
+      <div class="debrief-eyebrow" style="margin-top:8px;">XP by Body Part</div>
+      <div class="debrief-xp-bar">
+        <div class="debrief-xp-seg" style="background:var(--bp-arms);width:52%;color:var(--abyss);">ARMS</div>
+        <div class="debrief-xp-seg" style="background:var(--bp-chest);width:30%;color:var(--abyss);">CHST</div>
+        <div class="debrief-xp-seg" style="background:var(--bp-core);width:18%;color:var(--abyss);">CORE</div>
+      </div>
+      <div class="debrief-hint"><strong>Next target:</strong> Arms Rank 12 · 47 XP · ~2 sets next session</div>
+    </div>
+    <div class="sum-cta-row" style="margin-top:auto;">
+      <div class="btn-share">SHARE SAGA</div>
+      <div class="btn-continue">CONTINUE</div>
+    </div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 2<br>Mission Debrief</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> XP total (primary) · top 3 lift rows with weight × reps and PR flagged in heroGold (secondary) · XP breakdown as a segmented horizontal bar (tertiary) · next-target hint (quaternary).</li>
+<li><strong>Lift-level data surfaces the RPG thesis:</strong> This is the only proposal that names the actual exercises by name. That is the critical moment: Barbell Curl 40kg×8 PR is the receipt. The XP you earned is because of that lift. The causal chain is visible, not abstracted into a rank bar.</li>
+<li><strong>XP segmented bar:</strong> A single horizontal bar divided proportionally by BP hue. Glanceable: arms dominated this session. More compact than 6 separate rank bars, appropriate when only 2-3 BPs were trained in a focused session.</li>
+<li><strong>heroGold PR flag:</strong> Appears only on the specific lift row where a PR was set. Scarcity maintained. One gold flag in a table of neutral cream text demands attention without decorating the whole panel.</li>
+<li><strong>Persona 5R debrief grammar:</strong> Eyebrow / data rows / summary bar / next mission. Matches P5R Confidant ranking screen after a chapter: compact, loaded, forward-looking. The panel is a debrief, not a celebration banner.</li>
+<li><strong>Empty-space resolution:</strong> Three lift rows + XP breakdown bar + next-target hint fills the panel exactly. No scroll needed for a normal session of 3-5 exercises.</li>
+</ul>
+<div class="ref-line">Borrows from: Persona 5 Royal confidant screen · Dark Souls death-screen stat reveal · training log receipt format.</div>
+<div class="risk-line">Risk: sessions with many exercises (6+) truncate to top 3 — needs a see-all affordance. Also needs a spec for how top lifts are ranked: heaviest set, most volume, most XP contribution? The algorithm must be defined before implementation.</div>
+</div>
+</div>
+
+<h3>Direction 3 — Card Stack</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone">
+  <div class="abyss-bg"></div>
+  <div class="frame-content">
+    <div class="sum-header">
+      <div class="sum-saga-line">SAGA 76 COMPLETE</div>
+      <div class="sum-meta-line">42 MIN · 12 SETS · 0.7 TON · +340 XP</div>
+    </div>
+    <div style="flex:1;position:relative;padding:12px 14px 0;overflow:hidden;">
+      <div class="stack-card b3" style="top:76px;">
+        <div class="sc-eyebrow" style="color:var(--bp-core);">TITLE PROGRESS</div>
+        <div class="sc-value" style="font-size:13px;color:var(--text-dim);">Iron Monk · 2 sessions away</div>
+      </div>
+      <div class="stack-card b2" style="top:58px;">
+        <div class="sc-eyebrow" style="color:var(--hot-violet);">NEXT RANK UP</div>
+        <div class="sc-value">ARMS 12</div>
+        <div class="sc-sub">47 XP remaining · ~2 sets</div>
+      </div>
+      <div class="stack-card b1" style="top:38px;">
+        <div class="sc-eyebrow" style="color:var(--bp-arms);">ARMS DOMINANT</div>
+        <div class="sc-value">+178 XP</div>
+        <div class="sc-sub">RANK 11 ACHIEVED</div>
+      </div>
+      <div class="stack-card active" style="top:18px;">
+        <div class="sc-eyebrow" style="color:var(--hero-gold);">PERSONAL RECORD</div>
+        <div class="sc-value" style="font-size:22px;">40 kg × 8</div>
+        <div class="sc-sub">Barbell Curl · +12 kg since Saga 61</div>
+        <div class="sc-slash"></div>
+      </div>
+      <div class="stack-nav">
+        <div class="stack-dot active"></div><div class="stack-dot"></div><div class="stack-dot"></div><div class="stack-dot"></div>
+      </div>
+    </div>
+    <div class="sum-cta-row">
+      <div class="btn-share">SHARE SAGA</div>
+      <div class="btn-continue">CONTINUE</div>
+    </div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 3<br>Card Stack</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> Active (front) card gets full attention — one fact, maximum. Hidden cards are partially visible behind at slight rotation, teasing content. Tap or swipe left to cycle.</li>
+<li><strong>Card order = narrative arc:</strong> Front = biggest win (PR if exists, otherwise dominant BP rank-up). Card 2 = next immediate target. Card 3 = session dominant BP XP summary. Card 4 = title progress. The sequence is dramatic: most exciting first, planning horizon last.</li>
+<li><strong>Dual engagement mode:</strong> Users who want to exit fast ignore the stack and tap CONTINUE. Users who want to marinate swipe through 4 cards. The design respects both modes without padding the default view.</li>
+<li><strong>heroGold PR card:</strong> The PR card uses heroGold eyebrow label ONLY when a PR exists. No PR this session = no gold anywhere. Scarcity preserved.</li>
+<li><strong>ClipPath corner notch:</strong> Each card uses polygon clip with a notched bottom-right corner — hard edge, no border-radius. Physical card-deck presence without any shadow or blur.</li>
+<li><strong>Stacked rotation:</strong> Behind cards at 1-2 degrees rotation give physical card-deck depth. Not a flat list. Not a carousel. A stack you can rifle through.</li>
+</ul>
+<div class="ref-line">Borrows from: Pokemon trainer card collection mechanic · Dead Cells meta-progression unlock reveal · physical boxing fight-card stack presentation.</div>
+<div class="risk-line">Risk: if user has no PR and no rank-up, the front card defaults to a bland stat. Need a fallback card hierarchy spec. Also: horizontal swipe may conflict with parent screen vertical scroll on Android — wrap in a GestureDetector with direction locking.</div>
+</div>
+</div>
+
+<h3>Direction 4 — Saga Journal</h3>
+<div class="proposal-row">
+<div class="proposal-phone-col">
+<div class="phone">
+  <div class="abyss-bg"></div>
+  <div class="frame-content">
+    <div class="sum-header">
+      <div class="sum-saga-line">SAGA 76 COMPLETE</div>
+      <div class="sum-meta-line">42 MIN · 12 SETS · 0.7 TON</div>
+    </div>
+    <div style="position:relative;height:3px;overflow:hidden;">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--hot-violet);transform-origin:left center;transform:rotate(-8deg);"></div>
+    </div>
+    <div class="journal-body">
+      <div class="journal-row">
+        <span class="journal-lbl">XP</span>
+        <span class="journal-val">+340 EARNED</span>
+      </div>
+      <div class="journal-divider"></div>
+      <div class="journal-row">
+        <span class="journal-lbl">LED BY</span>
+        <span class="journal-val" style="color:var(--bp-arms);">ARMS +178 XP</span>
+      </div>
+      <div class="journal-row">
+        <span class="journal-lbl">RANK</span>
+        <span class="journal-val">ARMS → 11</span>
+      </div>
+      <div class="journal-row">
+        <span class="journal-lbl">PR</span>
+        <span class="journal-val" style="color:var(--hero-gold);">CURL 40 kg × 8</span>
+      </div>
+      <div class="journal-divider"></div>
+      <div class="journal-narration">76th saga · arms led the charge · 47 XP from rank 12 · <strong>~2 sets next session</strong></div>
+      <div style="margin-top:6px;">
+        <div class="journal-next-ey">Next Target</div>
+        <div class="journal-next-val">ARMS RANK 12 · 47 XP · ~2 SESSIONS</div>
+      </div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(179,109,255,0.08);">
+        <div class="journal-next-ey">Title Progress</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.02em;color:var(--text-dim);">Iron Monk · 2 sessions · 120 XP away</div>
+      </div>
+    </div>
+    <div class="sum-cta-row" style="margin-top:auto;">
+      <div class="btn-share">SHARE SAGA</div>
+      <div class="btn-continue">CONTINUE</div>
+    </div>
+  </div>
+</div>
+<div class="proposal-phone-label">Direction 4<br>Saga Journal</div>
+</div>
+<div class="proposal-copy">
+<ul>
+<li><strong>Info hierarchy:</strong> Label-value tabular structure. Each row is a discrete fact: XP · dominant BP · rank achieved · PR · narration sentence · next target · title progress. Top-to-bottom read order. No decoding required.</li>
+<li><strong>Narration line as connective tissue:</strong> One sentence connecting all the facts — 76th saga · arms led the charge · 47 XP from rank 12 · ~2 sets next session. Converts data into a memory. In implementation this is a string template, not AI-generated copy. The template must be authored with edge cases guarded.</li>
+<li><strong>Label column as structure:</strong> 38dp label column (Barlow Condensed 600 tracked uppercase) gives the layout a spec-sheet quality. Labels and values are instantly distinguishable at a glance: same font, different role (label=dim+tracked, value=cream+Rajdhani 700).</li>
+<li><strong>heroGold PR value:</strong> The PR row value is the only heroGold text element in the journal. One line in a sea of cream and violet. Your eye snaps to it without being led there by arrows or badges.</li>
+<li><strong>Pacing logic:</strong> The cinematic played at maximum energy. The journal is the quiet exhale. Sparse feel is intentional. It respects the pacing of the full experience arc — you do not want a second crescendo immediately after the first.</li>
+<li><strong>Title progress footer:</strong> A dim secondary block at the bottom surfaces long-horizon progression without crowding the immediate session facts. It is a whisper, not a shout.</li>
+</ul>
+<div class="ref-line">Borrows from: Darkest Dungeon post-expedition summary · physical training logbook · Moleskin field-notes aesthetic.</div>
+<div class="risk-line">Risk: the narration template needs edge-case coverage. A session with no PR and no rank-up must not render a sentence that reads as empty. Add guard conditions: narration only surfaces when at least one notable event (PR, rank-up, level-up) occurred.</div>
+</div>
+</div>
+
+<h3>Summary Panel — Side-by-Side Comparison</h3>
+<div class="comparison-grid">
+  <div class="cmp-card">
+    <div class="cmp-name">S1 — Rank Rail</div>
+    <div class="cmp-thesis">All 6 body parts in one view as colored progress bars. Level-up badge on crossed thresholds. Closest rank-up callout below. Structural and comprehensive.</div>
+    <div class="cmp-tradeoff">Tradeoff: sessions training only 1-2 BPs leave 4-5 dim bars. Feels like a growth map (correct framing). Must not present empty bars as failure states.</div>
+  </div>
+  <div class="cmp-card pick">
+    <div class="pick-badge">Top Pick</div>
+    <div class="cmp-name">S2 — Mission Debrief</div>
+    <div class="cmp-thesis">Named lift rows with weight×reps + heroGold PR flag + XP segmented bar + next-target hint. The only proposal that names actual exercises. Pins the RPG thesis at lift-level granularity.</div>
+    <div class="cmp-tradeoff">Tradeoff: requires a top-lifts ranking algorithm spec. Truncates to 3 rows and needs a see-all affordance for sessions with many exercises.</div>
+  </div>
+  <div class="cmp-card">
+    <div class="cmp-name">S3 — Card Stack</div>
+    <div class="cmp-thesis">One fact per card, swipeable. Front card = biggest win. Dramatic first impression. Works for both quick-exit and I-want-to-marinate user modes.</div>
+    <div class="cmp-tradeoff">Tradeoff: most complex implementation. Needs fallback cards for sessions without PR or rank-up. Horizontal swipe may conflict with vertical scroll gesture on Android.</div>
+  </div>
+  <div class="cmp-card">
+    <div class="cmp-name">S4 — Saga Journal</div>
+    <div class="cmp-thesis">Label-value spec sheet + one narration sentence. Lowest density, highest readability. Quiet exhale after the cinematic crescendo. Includes title progress at the bottom.</div>
+    <div class="cmp-tradeoff">Tradeoff: the narration template needs careful edge-case authoring. The sparse feel may still read as insufficient to users who want the rank-rail comprehensiveness.</div>
+  </div>
+</div>
+<p><strong>My pick: Direction 2 — Mission Debrief.</strong> It is the only proposal that names actual exercises with weight and reps. That is the load-bearing RPG-thesis moment: your XP came from that specific lift. The causal chain is explicit, not abstracted. The XP segmented bar gives body-part breakdown without the complexity of 6 rank bars for a focused session. The heroGold PR flag earns its placement through scarcity. The next-target hint closes the narrative loop. It is P5R-grade debrief in a panel that has been validated by multiple prior mockup iterations on this project.</p>
+<hr class="divider">
+
+<h2>Design Axioms for Implementation Handoff</h2>
+<p class="lede">These constraints apply to whichever proposals advance to implementation. Non-negotiable.</p>
+<ul>
+<li><strong>No border-radius on card chrome.</strong> Cards, strips, collars: hard rectangular or ClipPath polygon. The only exception is the internal corner notch (polygon clip) which reads as a cut, not a curve.</li>
+<li><strong>heroGold is scarcity.</strong> One instance per screen, on the highest-value reward signal. In the summary panel: only on the PR row value or PR card eyebrow. In the share card: only on the PR flag in the bottom strip. No PR = no gold anywhere on that surface.</li>
+<li><strong>Slash primitive is structural, not decorative.</strong> It appears once per surface. In the share card it cuts through the overlay and anchors the card as a RepSaga artifact. In the summary it separates header from content body. Multiple slashes used as wallpaper = rejected.</li>
+<li><strong>Font splits are non-negotiable.</strong> Rajdhani 700 for every number, every saga/rank label, every XP value. Barlow Condensed 600 for tracked uppercase section labels. Barlow for narration prose and lift names. Cross-mixing degrades scannability in the 2-second between-set window.</li>
+<li><strong>Body-part hues are identity tokens.</strong> Arms #F87171 · Back #38BDF8 · Chest #F472B6 · Legs #4ADE80 · Shoulders #FBBF24 · Core #A78BFA. Never use primaryViolet or hotViolet as a body-part color. Never use a BP hue as a brand UI accent.</li>
+<li><strong>Motion budget.</strong> Panel mount: slide up 280ms ease-out. Bar fills: staggered 50ms per rail, 220ms each. Level-up badge: single 300ms opacity pulse on mount. PR card entrance: 200ms scale 0.96 to 1.0. No looping animations. No entrance choreography for aesthetic purposes only.</li>
+<li><strong>Dominant body-part derivation.</strong> For any surface that uses the dominant BP (share card left bar, debrief header, journal LED BY row): dominant BP = BP that contributed the most XP this session. Tie-break by volume. Must be computed server-side or in the state machine choreographer, not in the widget layer.</li>
+</ul>
+</body>
+</html>

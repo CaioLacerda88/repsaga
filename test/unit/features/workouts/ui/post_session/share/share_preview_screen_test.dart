@@ -16,8 +16,8 @@ import 'package:repsaga/features/workouts/ui/post_session/share/share_preview_sc
 import 'package:share_plus/share_plus.dart';
 
 /// Pins [SharePreviewScreen]'s observable behavior:
-///   * Variant toggle (A ↔ B) swaps the rendered variant subtree.
-///   * Discreet path locks the variant — no toggle visible.
+///   * D3 Achievement Frame is the single photo overlay; Discreet renders
+///     on the no-photo path (Phase 31 retired the A ↔ B segmented toggle).
 ///   * Retake resets the controller + invokes onClose.
 ///   * Share dispatches sharePreview into the controller.
 ///   * Tap-to-hide XP / PR toggles affected strings (best-effort: assert
@@ -43,14 +43,12 @@ ShareCardRenderer exportRenderer(WidgetTester tester) {
 void main() {
   const strings = ShareCardStrings(
     wordmark: 'REPSAGA',
-    variantAXpText: '+618 XP',
-    variantAPrText: '95kg × 5 · PR',
-    variantBBpEyebrow: 'Peito',
-    variantBClassName: 'BULWARK',
-    variantBPrTag: '!! Recorde',
-    variantBLift: '95kg × 5',
-    variantBBpSub: 'Supino · Peito',
-    variantBXpSub: '+618 XP',
+    achievementFrameClassName: 'BULWARK',
+    achievementFrameSagaEyebrow: 'SAGA 76',
+    achievementFrameXpHero: '+618 XP',
+    achievementFrameLiftDetail: '95kg × 5 · Supino',
+    achievementFrameHasPr: true,
+    achievementFrameBpRank: 'Peito · Rank 19',
     discreetEyebrow: 'Peito · Rank 19',
     discreetHero: '+618',
     discreetHeroSubLabel: 'XP NESTA SAGA',
@@ -63,8 +61,6 @@ void main() {
     takePhoto: 'Tirar foto',
     fromGallery: 'Escolher da galeria',
     noPhoto: 'Sem foto · só a saga',
-    previewMinimal: 'Mínimo',
-    previewBold: 'Destaque',
     previewRetake: 'Refazer',
     previewShare: 'Compartilhar',
     wordmark: 'REPSAGA',
@@ -73,6 +69,25 @@ void main() {
     renderError: 'Erro ao gerar imagem',
     openSettings: 'Abrir configurações',
   );
+
+  // Pump every test at a realistic Android phone viewport (412dp wide ×
+  // 915dp tall — Samsung S25 Ultra reference device for Phase 31). The
+  // post-Phase-31 preview tree renders at device-native dp via
+  // `LayoutBuilder` — Flutter test's default 800×600 viewport would
+  // squeeze the AspectRatio(9/16) card down below the bottom-collar's
+  // intrinsic content height. See `share_card_typography.dart`
+  // `ShareCardRenderTarget` dartdoc for the device-native dp architecture.
+  setUp(() {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.platformDispatcher.views.first.physicalSize = const Size(412, 915);
+    binding.platformDispatcher.views.first.devicePixelRatio = 1.0;
+  });
+
+  tearDown(() {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.platformDispatcher.views.first.resetPhysicalSize();
+    binding.platformDispatcher.views.first.resetDevicePixelRatio();
+  });
 
   SharePayload buildPayload() {
     return SharePayload.fromPostSessionState(
@@ -107,6 +122,8 @@ void main() {
     required XFile? previewPhoto,
     _RecordingRenderer? renderer,
   }) async {
+    // Viewport is set globally by setUp() — 412×915 matches the Samsung
+    // S25 Ultra reference device used in Phase 31 verification.
     final spy = _CloseSpy();
     final container = ProviderContainer(
       overrides: [
@@ -145,10 +162,11 @@ void main() {
   }
 
   // ---------------------------------------------------------------------------
-  // Variant toggle
+  // Variant selection — Phase 31: D3 Achievement Frame is the single
+  // photo overlay; Discreet renders on the no-photo path. No A ↔ B toggle.
   // ---------------------------------------------------------------------------
 
-  testWidgets('starts on minimalStrip variant when a photo is present', (
+  testWidgets('renders D3 Achievement Frame variant when a photo is present', (
     tester,
   ) async {
     await pumpScreen(
@@ -157,37 +175,22 @@ void main() {
       previewPhoto: _StubXFile('/tmp/photo.jpg'),
     );
 
-    expect(visibleRenderer(tester).variant, ShareCardVariant.minimalStrip);
-    // Toggle chips visible.
-    expect(find.text('MÍNIMO'), findsOneWidget);
-    expect(find.text('DESTAQUE'), findsOneWidget);
+    expect(visibleRenderer(tester).variant, ShareCardVariant.achievementFrame);
+    // No toggle UI on the photo path post-Phase-31.
+    expect(find.text('MÍNIMO'), findsNothing);
+    expect(find.text('DESTAQUE'), findsNothing);
   });
 
-  testWidgets('tapping the Destaque chip switches to fullBleed variant', (
+  testWidgets('discreet path (null photo) renders the Discreet variant', (
     tester,
   ) async {
-    await pumpScreen(
-      tester,
-      payload: buildPayload(),
-      previewPhoto: _StubXFile('/tmp/photo.jpg'),
-    );
+    await pumpScreen(tester, payload: buildPayload(), previewPhoto: null);
 
-    await tester.tap(find.text('DESTAQUE'));
-    await tester.pump();
-
-    expect(visibleRenderer(tester).variant, ShareCardVariant.fullBleed);
+    expect(visibleRenderer(tester).variant, ShareCardVariant.discreet);
+    // Same no-toggle invariant.
+    expect(find.text('MÍNIMO'), findsNothing);
+    expect(find.text('DESTAQUE'), findsNothing);
   });
-
-  testWidgets(
-    'discreet path (null photo) locks the variant and hides the toggle',
-    (tester) async {
-      await pumpScreen(tester, payload: buildPayload(), previewPhoto: null);
-
-      expect(visibleRenderer(tester).variant, ShareCardVariant.discreet);
-      expect(find.text('MÍNIMO'), findsNothing);
-      expect(find.text('DESTAQUE'), findsNothing);
-    },
-  );
 
   // ---------------------------------------------------------------------------
   // Retake
@@ -490,7 +493,7 @@ void main() {
   // Tap-to-hide
   // ---------------------------------------------------------------------------
 
-  testWidgets('tap-to-hide XP zone blanks the variant A XP text', (
+  testWidgets('tap-to-hide XP zone blanks the Achievement Frame XP hero text', (
     tester,
   ) async {
     await pumpScreen(
@@ -500,14 +503,12 @@ void main() {
     );
 
     // Sanity: XP text rendered initially on the visible preview tree.
-    expect(visibleRenderer(tester).strings.variantAXpText, '+618 XP');
+    expect(visibleRenderer(tester).strings.achievementFrameXpHero, '+618 XP');
 
-    // Tap inside the XP hit zone — bottom-strip Positioned overlay.
-    // The XP overlay sits at `bottom: 0, height: 280` inside a
-    // 1080×1920 stack — tap the bottom of the visible preview. The
-    // offscreen export renderer (at `left: -10000`) sits outside the
-    // viewport so taps land on the visible one only; we scope the
-    // hit-test rect to the visible renderer to be explicit.
+    // Tap inside the XP hit zone — bottom Positioned overlay over the
+    // bottom 280px of the card. The offscreen export renderer (at
+    // `left: -10000`) sits outside the viewport so taps land on the
+    // visible one only.
     final visible = find.byWidgetPredicate(
       (w) =>
           w is ShareCardRenderer &&
@@ -520,7 +521,7 @@ void main() {
     // Both renderers share the same `strings` reference, so checking
     // either one reflects the tap-to-hide state. We probe the visible
     // one for consistency with the rest of the suite.
-    expect(visibleRenderer(tester).strings.variantAXpText, '');
+    expect(visibleRenderer(tester).strings.achievementFrameXpHero, '');
   });
 
   // ---------------------------------------------------------------------------
@@ -566,13 +567,13 @@ void main() {
   //
   // Pre-fix: drag-to-reframe applied a Transform.translate to the photo
   // subtree. The card's AspectRatio host had no clipping ancestor, so the
-  // translated pixels could overflow the 9:16 outer bounds and paint over
-  // the variant toggle row above. On a real device the user saw the photo
-  // creeping up onto the MÍNIMO / DESTAQUE chips during an upward drag.
+  // translated pixels could overflow the 9:16 outer bounds and paint
+  // outside the card frame. On a real device the user saw the photo
+  // creeping out of the card during an upward drag.
   //
   // Post-fix: a ClipRect wraps the AspectRatio. The card's outer paint
   // bounds clamp to the AspectRatio's bounds regardless of the inner
-  // Transform — the toggle row above is untouched.
+  // Transform.
   // ---------------------------------------------------------------------------
   testWidgets('photo cannot paint outside the card frame after max upward drag '
       '(ClipRect contract — PR 30c device bug 2)', (tester) async {
@@ -625,13 +626,6 @@ void main() {
           'ClipRect bounds must equal the AspectRatio bounds — '
           'photo overflow cannot escape the card frame',
     );
-
-    // Bottom action row (Refazer/Compartilhar) sits BELOW the card
-    // frame on screen. If the photo overflow leaked, it would paint
-    // ABOVE the card too — over the variant toggle. The toggle still
-    // renders its labels post-drag, which means no overflow ate them.
-    expect(find.text('MÍNIMO'), findsOneWidget);
-    expect(find.text('DESTAQUE'), findsOneWidget);
   });
 
   // ---------------------------------------------------------------------------
@@ -875,6 +869,102 @@ void main() {
       expect(find.text('REFAZER'), findsNothing);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Phase 31 Bugs A + C — device-fix regression guards
+  //
+  // Pre-fix the visible preview tree wrapped
+  //   `AspectRatio(9/16) → FittedBox(contain) → SizedBox(1080×1920) → Renderer`
+  // so the inner 1080-unit canvas was scaled down by ~0.38× on a 412dp
+  // viewport. The preview-target typography (authored for the inner
+  // canvas) collapsed to 4-15sp on-screen — D3 collars looked invisible
+  // and the XP hero was microscopic. Post-fix the visible tree drops
+  // the FittedBox/SizedBox(1080×1920) wrapper and forwards device-
+  // native dp via `LayoutBuilder` into the renderer's `cardWidthDp`
+  // / `cardHeightDp` params. The renderer's preview-target typography
+  // now reads at-screen sp.
+  // ---------------------------------------------------------------------------
+
+  testWidgets('visible preview tree drops the FittedBox(1080×1920) wrapper — '
+      'renders at device-native dp via LayoutBuilder (Phase 31 Bug A+C '
+      'architectural fix)', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    // The visible preview tree must NOT contain a FittedBox wrapping
+    // a 1080×1920 SizedBox. The export tree wraps a 1080×1920 SizedBox
+    // (Positioned at left: -10000) but it's NOT wrapped in a FittedBox.
+    // Walk the tree and assert: the path from SharePreviewScreen down
+    // to the visible ShareCardRenderer (renderTarget: preview) must
+    // not pass through a FittedBox.
+    final visibleRendererFinder = find.byWidgetPredicate(
+      (w) =>
+          w is ShareCardRenderer &&
+          w.renderTarget == ShareCardRenderTarget.preview,
+    );
+    final fittedBoxAncestors = find.ancestor(
+      of: visibleRendererFinder,
+      matching: find.byType(FittedBox),
+    );
+    expect(
+      fittedBoxAncestors,
+      findsNothing,
+      reason:
+          'Visible preview tree must not be wrapped in FittedBox — '
+          'pre-Phase-31 architecture caused the preview typography to '
+          'shrink by ~0.38× on a 412dp viewport (Bugs A + C).',
+    );
+
+    // The preview tree path must contain a LayoutBuilder so the
+    // renderer can receive device-native dp constraints.
+    final layoutBuilderAncestors = find.ancestor(
+      of: visibleRendererFinder,
+      matching: find.byType(LayoutBuilder),
+    );
+    expect(
+      layoutBuilderAncestors,
+      findsAtLeastNWidgets(1),
+      reason:
+          'Visible preview tree must thread device-native dp through a '
+          'LayoutBuilder so the renderer can compute collar geometry '
+          'against the laid-out card.',
+    );
+  });
+
+  testWidgets('visible preview renderer receives device-native cardWidthDp / '
+      'cardHeightDp from the LayoutBuilder (NOT the export 1080×1920) — '
+      'Phase 31 Bugs A + C', (tester) async {
+    await pumpScreen(
+      tester,
+      payload: buildPayload(),
+      previewPhoto: _StubXFile('/tmp/photo.jpg'),
+    );
+
+    final visible = visibleRenderer(tester);
+    // At a 412×915 viewport the AspectRatio(9/16) card lays out to a
+    // width of ~412dp (minus padding) and a height of ~733dp. The
+    // renderer must receive these device-native dp values, NOT the
+    // 1080×1920 export defaults.
+    expect(
+      visible.cardWidthDp,
+      lessThan(1000.0),
+      reason:
+          'Visible preview tree must forward device-native dp to the '
+          'renderer (typically 300-420dp on Android phones); pre-fix '
+          'the renderer received the 1080×1920 export defaults inside a '
+          'FittedBox that shrank everything by ~0.38×.',
+    );
+    expect(visible.cardHeightDp, lessThan(1000.0));
+
+    // The export renderer keeps the 1080×1920 defaults so the
+    // captured PNG bytes still match the golden contract.
+    final export = exportRenderer(tester);
+    expect(export.cardWidthDp, 1080.0);
+    expect(export.cardHeightDp, 1920.0);
+  });
 
   // ---------------------------------------------------------------------------
   // Semantics identifier

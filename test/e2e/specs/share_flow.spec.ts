@@ -179,34 +179,12 @@ test.describe('Share flow', { tag: '@smoke' }, () => {
     await expect(page.locator(SHARE_FLOW.previewScreen)).toBeVisible({
       timeout: 5_000,
     });
-    // Discreet path locks the variant — the toggle is hidden.
-    await expect(page.locator(SHARE_FLOW.variantToggle)).toBeHidden();
-    // Retake + share CTAs are present on the preview screen.
+    // Phase 31: the A ↔ B variant toggle is retired (D3 Achievement Frame
+    // is the single photo overlay; Discreet renders here for the no-photo
+    // path). Retake + share CTAs remain.
     await expect(page.locator(SHARE_FLOW.previewRetake)).toBeVisible();
     await expect(page.locator(SHARE_FLOW.previewShareButton)).toBeVisible();
   });
-
-  test(
-    'should toggle between Minimal and Destaque variants on preview screen',
-    async ({ page }) => {
-      // Web can't drive the camera or gallery picker — gallery-tap on web
-      // routes to the file-input dialog which Playwright can't proceed past
-      // without `setInputFiles`. We document the gap and skip this case on
-      // web. Manual / device coverage owns the photo-variant toggle path.
-      // (Kept here so the spec captures the intent — flip the skip when
-      // a file-picker harness lands.)
-      test.skip(
-        true,
-        'Variant toggle requires a photo from camera/gallery; not driveable on web E2E without a file-input harness.',
-      );
-
-      await page.locator(POST_SESSION.shareCta).click();
-      await expect(page.locator(SHARE_FLOW.sheet)).toBeVisible({
-        timeout: 5_000,
-      });
-      // Would need gallery file-input mock here.
-    },
-  );
 
   test('should return to share sheet when retake tapped', async ({ page }) => {
     await page.locator(POST_SESSION.shareCta).click();

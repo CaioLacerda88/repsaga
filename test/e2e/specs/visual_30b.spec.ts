@@ -239,11 +239,10 @@ test.describe('PR 30b visual verification', () => {
       });
       await page.waitForTimeout(800); // allow canvas render
 
-      // Check variant toggle is hidden (Discreet path locks variant)
-      const toggleVisible = await page
-        .locator(SHARE_FLOW.variantToggle)
-        .isVisible()
-        .catch(() => false);
+      // Phase 31: Variant toggle retired — preview screen renders the
+      // single D3 Achievement Frame variant on the photo path and the
+      // Discreet variant on the no-photo path. Retake + share CTAs
+      // remain.
       const retakeVisible = await page
         .locator(SHARE_FLOW.previewRetake)
         .isVisible()
@@ -253,7 +252,7 @@ test.describe('PR 30b visual verification', () => {
         .isVisible()
         .catch(() => false);
       console.log(
-        `[Surface 3 @ ${vp.name}] VariantToggle hidden: ${!toggleVisible}, Retake: ${retakeVisible}, ShareBtn: ${shareButtonVisible}`,
+        `[Surface 3 @ ${vp.name}] Retake: ${retakeVisible}, ShareBtn: ${shareButtonVisible}`,
       );
 
       await page.screenshot({
@@ -270,17 +269,18 @@ test.describe('PR 30b visual verification', () => {
     }
   });
 
-  test('note surface 4+5 — variant A/B require photo (web gap)', async ({
+  test('note surface 4 — D3 Achievement Frame requires photo (web gap)', async ({
     page: _page,
   }) => {
-    // Variant A (Minimal Strip) and Variant B (Full-Bleed Collars) require a
-    // photo from camera or gallery — the browser file-picker is not driveable
-    // by Playwright without a file-input harness. These paths need physical
-    // Android coverage per feedback_visual_verification_physical_device.
+    // The D3 Achievement Frame requires a photo from camera or gallery —
+    // the browser file-picker is not driveable by Playwright without a
+    // file-input harness. This path needs physical Android coverage per
+    // feedback_visual_verification_physical_device.
     //
-    // This test exists to document the coverage gap — it does not assert anything.
+    // This test exists to document the coverage gap — it does not assert
+    // anything.
     console.log(
-      '[Surfaces 4+5] Variant A/B require photo → physical-device follow-up required.',
+      '[Surface 4] D3 Achievement Frame requires photo → physical-device follow-up required.',
     );
     expect(true).toBe(true); // placeholder so test runner counts it
   });

@@ -2268,10 +2268,6 @@
   "@shareSheetFromGallery": { "description": "Phase 30 PR 30b — Gallery option row in the share-card bottom sheet." },
   "shareSheetNoPhoto": "No photo · just the saga",
   "@shareSheetNoPhoto": { "description": "Phase 30 PR 30b — Discreet (no-photo) option row in the share-card bottom sheet. Mockup §7." },
-  "sharePreviewMinimal": "Minimal",
-  "@sharePreviewMinimal": { "description": "Phase 30 PR 30b — Variant toggle option label for the minimal-strip share card (Variant A)." },
-  "sharePreviewBold": "Bold",
-  "@sharePreviewBold": { "description": "Phase 30 PR 30b — Variant toggle option label for the full-bleed share card (Variant B). 'Destaque' in pt-BR." },
   "sharePreviewRetake": "Retake",
   "@sharePreviewRetake": { "description": "Phase 30 PR 30b — Preview-screen retake button label. Returns to the share-sheet step." },
   "sharePreviewShare": "Share",
@@ -2310,5 +2306,37 @@
   "postSessionTitleEquipped": "Equipped ✓",
   "@postSessionTitleEquipped": { "description": "Phase 30 PR 30a — Summary panel title-equip success state. Mockup §5 State 8 + WIP.md PR 30a Open question #6." },
   "cinematicSkipLabel": "SKIP",
-  "@cinematicSkipLabel": { "description": "Phase 30 PR 30a UX pass 2 (2026-05-23) — Label inside the top-right skip pill that jumps the post-session cinematic to the summary panel. Pre-uppercased to match the letter-spaced eyebrow casing convention (AppTextStyles.label)." }
+  "@cinematicSkipLabel": { "description": "Phase 30 PR 30a UX pass 2 (2026-05-23) — Label inside the top-right skip pill that jumps the post-session cinematic to the summary panel. Pre-uppercased to match the letter-spaced eyebrow casing convention (AppTextStyles.label)." },
+  "postSessionDebriefEyebrow": "Session report",
+  "@postSessionDebriefEyebrow": { "description": "Phase 31 Pass 3 — Mission Debrief section eyebrow above the lift rows. Pre-title-cased; widget uppercases for the +0.22em tracked label register." },
+  "postSessionPrFlag": "PR",
+  "@postSessionPrFlag": { "description": "Phase 31 Pass 3 — Personal record flag rendered next to the weight × reps on a Mission Debrief lift row. heroGold-tinted; canonical reward signal." },
+  "postSessionMoreLifts": "{count, plural, =1{+1 more exercise} other{+{count} more exercises}}",
+  "@postSessionMoreLifts": {
+    "description": "Phase 31 Pass 3 — '+N more exercises' footer on the Mission Debrief lift table when the session trained more than 4 exercises.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "postSessionRankLabel": "Rank {n}",
+  "@postSessionRankLabel": {
+    "description": "Phase 31 Pass 3 — Per-BP rank line in the Mission Debrief (no rank-up). Used on every BP that earned XP this session.",
+    "placeholders": { "n": { "type": "int" } }
+  },
+  "postSessionRankUpArrow": "Rank {fromRank} → {toRank}",
+  "@postSessionRankUpArrow": {
+    "description": "Phase 31 Pass 3 — Per-BP rank-up grammar in the Mission Debrief (rank-up session). Renders the rank delta arrow.",
+    "placeholders": {
+      "fromRank": { "type": "int" },
+      "toRank": { "type": "int" }
+    }
+  },
+  "postSessionWeightUnit": "kg",
+  "@postSessionWeightUnit": { "description": "Phase 31 Pass 3 — Weight unit suffix on Mission Debrief lift rows. v1 ships kg only; the key exists so a future lb locale can override without code touch." },
+  "postSessionLeaveTitle": "Leave the post-battle?",
+  "@postSessionLeaveTitle": { "description": "Phase 31 round-2 Bug E — Confirmation dialog title shown when the user presses the system back button on the post-session screen. The user has just finished a workout; backing out of the cinematic/debrief is permanent (no re-entry path), so the dialog blocks accidental dismissal." },
+  "postSessionLeaveCancel": "Cancel",
+  "@postSessionLeaveCancel": { "description": "Phase 31 round-2 Bug E — Cancel action on the post-session leave-confirmation dialog. Returns the user to the post-session surface." },
+  "postSessionLeaveConfirm": "Leave",
+  "@postSessionLeaveConfirm": { "description": "Phase 31 round-2 Bug E — Confirm action on the post-session leave-confirmation dialog. Routes the user through the same `onContinue` path the CONTINUAR button uses (back to /home)." },
+  "postSessionXpEarnedLabel": "XP EARNED",
+  "@postSessionXpEarnedLabel": { "description": "Phase 31 round-2 Bug F — Mission Debrief XP hero block right-of-numeral label. Renders alongside the '+{totalXp}' numeric ('+340 XP EARNED'). Pre-uppercased — already in the tracked-label register." }
 }

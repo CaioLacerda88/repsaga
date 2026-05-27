@@ -1462,6 +1462,37 @@ export const POST_SESSION = {
    * Semantics(identifier: 'post-session-share-cta').
    */
   shareCta: '[flt-semantics-identifier="post-session-share-cta"]',
+
+  /**
+   * S2 Mission Debrief section root (Phase 31 Pass 3). Fills the post-
+   * cinematic real estate above the share/continue CTAs with the lift
+   * table, segmented XP bar, per-BP rank deltas, and next-target callout.
+   * Semantics(identifier: 'mission-debrief-section').
+   */
+  missionDebriefSection: '[flt-semantics-identifier="mission-debrief-section"]',
+
+  /**
+   * Per-row lift selector pattern (Phase 31 Pass 3). Index is 0-based;
+   * top-4 lifts by XP contribution descending. Use as
+   * `${POST_SESSION.missionDebriefLiftRow}-0` for the hero row.
+   * Semantics(identifier: 'mission-debrief-lift-row-{i}').
+   */
+  missionDebriefLiftRow: '[flt-semantics-identifier^="mission-debrief-lift-row-"]',
+
+  /**
+   * Per-BP rank delta row selector pattern (Phase 31 Pass 3). Slug is the
+   * BodyPart.dbValue (chest/back/legs/...). Use as
+   * `[flt-semantics-identifier="mission-debrief-bp-row-chest"]`.
+   */
+  missionDebriefBpRow: '[flt-semantics-identifier^="mission-debrief-bp-row-"]',
+
+  /**
+   * Segmented XP-by-BP bar inside the Mission Debrief (Phase 31). Pins
+   * the bar's visibility through the AOM tree without grepping hue colors
+   * out of the segment widgets.
+   * Semantics(identifier: 'mission-debrief-xp-bar').
+   */
+  missionDebriefXpBar: '[flt-semantics-identifier="mission-debrief-xp-bar"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1484,8 +1515,6 @@ export const SHARE_FLOW = {
 
   /** Preview screen root — Semantics(identifier: 'share-preview-screen'). */
   previewScreen: '[flt-semantics-identifier="share-preview-screen"]',
-  /** Variant toggle (Mínimo ↔ Destaque) — hidden on the Discreet path. */
-  variantToggle: '[flt-semantics-identifier="share-variant-toggle"]',
   /** Primary share CTA on the preview screen. */
   previewShareButton: '[flt-semantics-identifier="share-preview-share-button"]',
   /** Retake button — resets the controller + pops back to the share sheet. */

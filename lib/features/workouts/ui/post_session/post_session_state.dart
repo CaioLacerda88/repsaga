@@ -5,9 +5,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../personal_records/domain/pr_detection_service.dart';
 import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
-import '../../../rpg/models/celebration_event.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
+import '../../domain/session_lift_summary.dart';
 
 part 'post_session_state.freezed.dart';
 
@@ -45,6 +45,49 @@ abstract class PostSessionState with _$PostSessionState {
     /// that earned XP this session. Stored so `SharePayload.fromPostSessionState`
     /// can project the dominant BP's progress fraction into the share card.
     required Map<BodyPart, double> bpProgressFractionAfter,
+
+    /// Per-body-part XP earned this session, mirroring the choreographer's
+    /// `bpXpDeltas` argument. Persisted so the S2 Mission Debrief XP
+    /// segmented bar can render proportional widths without re-deriving
+    /// from the active workout state (which has been disposed by finish
+    /// time). Phase 31 Pass 1.
+    required Map<BodyPart, int> bpXpDeltas,
+
+    /// Per-body-part rank AFTER the session, for every BP that earned XP.
+    /// Drives the Mission Debrief per-BP rank delta rows ("Costas · Rank
+    /// 11 → 12"). Computed by the controller from the post-finish RPG
+    /// progress snapshot. Phase 31 Pass 1.
+    required Map<BodyPart, int> bpRankAfter,
+
+    /// Per-body-part rank BEFORE the session, for every BP that earned XP.
+    /// Captured by [FinishWorkoutCoordinator] from the pre-finish RPG
+    /// progress snapshot (BEFORE `await notifier.finishWorkout()` mutates
+    /// state) and threaded through [PostSessionParams]. Drives the
+    /// Mission Debrief per-BP rank delta arrow when [didRankUp] is true:
+    /// `Rank N → M` where `N = bpRankBefore[bp]` and `M = bpRankAfter[bp]`.
+    ///
+    /// **Why this exists separately from [bpRankAfter]:** a session can
+    /// jump multiple ranks at once (e.g. rank 5 → 8 in one finish). Deriving
+    /// "before" as `after - 1` is wrong in the multi-rank-jump case.
+    /// Persisting both endpoints is the only correct projection.
+    ///
+    /// Phase 31 Blocker 1 fix.
+    required Map<BodyPart, int> bpRankBefore,
+
+    /// Top lifts by XP contribution this session — capped at 4 rows with
+    /// alphabetical tiebreak on exercise name (matches
+    /// `PostSessionChoreographer._buildPrCut`'s ordering rule so the
+    /// debrief table and the hero PR cut surface the same exercise when
+    /// both apply). Rendered by the S2 Mission Debrief section; "+N more
+    /// exercises" footer derives from comparing this list's length to
+    /// [totalExercisesTrained]. Phase 31 Pass 1.
+    required List<SessionLiftSummary> topLifts,
+
+    /// Total count of completed exercises trained this session (any
+    /// exercise with at least one completed working set). Used by the S2
+    /// Mission Debrief to compute the "+N more exercises" footer:
+    /// `more = totalExercisesTrained - topLifts.length`. Phase 31 Pass 3.
+    required int totalExercisesTrained,
 
     /// Post-finish total XP earned.
     required int totalXpEarned,
@@ -87,15 +130,9 @@ abstract class PostSessionState with _$PostSessionState {
 extension PostSessionStateX on PostSessionState {
   bool get isPlayingCinematic => !showSummary && cutIndex < cuts.length;
 
-  /// Returns true when the queue or PR result indicates the share CTA
-  /// should render on the summary panel.
-  bool get hasShareCta {
-    if (prResult != null && prResult!.hasNewRecords) return true;
-    for (final e in queueResult.queue) {
-      if (e is RankUpEvent || e is TitleUnlockEvent || e is ClassChangeEvent) {
-        return true;
-      }
-    }
-    return false;
-  }
+  /// SHARE CTA visibility: any session with XP earned can be shared.
+  /// The "rare moment" event-queue rule was the right call for which
+  /// share-card VARIANT to render, but the wrong call for whether the
+  /// SHARE button itself should be visible (UX-critic round-3, 2026-05-26).
+  bool get hasShareCta => totalXpEarned > 0;
 }

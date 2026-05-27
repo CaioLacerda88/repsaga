@@ -2858,12 +2858,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareSheetNoPhoto => 'No photo · just the saga';
 
   @override
-  String get sharePreviewMinimal => 'Minimal';
-
-  @override
-  String get sharePreviewBold => 'Bold';
-
-  @override
   String get sharePreviewRetake => 'Retake';
 
   @override
@@ -2917,4 +2911,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cinematicSkipLabel => 'SKIP';
+
+  @override
+  String get postSessionDebriefEyebrow => 'Session report';
+
+  @override
+  String get postSessionPrFlag => 'PR';
+
+  @override
+  String postSessionMoreLifts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '+$count more exercises',
+      one: '+1 more exercise',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String postSessionRankLabel(int n) {
+    return 'Rank $n';
+  }
+
+  @override
+  String postSessionRankUpArrow(int fromRank, int toRank) {
+    return 'Rank $fromRank → $toRank';
+  }
+
+  @override
+  String get postSessionWeightUnit => 'kg';
+
+  @override
+  String get postSessionLeaveTitle => 'Leave the post-battle?';
+
+  @override
+  String get postSessionLeaveCancel => 'Cancel';
+
+  @override
+  String get postSessionLeaveConfirm => 'Leave';
+
+  @override
+  String get postSessionXpEarnedLabel => 'XP EARNED';
 }

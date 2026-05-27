@@ -9,10 +9,10 @@ import 'package:repsaga/features/workouts/ui/post_session/share/share_card_rende
 
 import '../../../../../../helpers/tolerant_golden_comparator.dart';
 
-/// Pixel-faithful goldens for the three share-card variants at the
-/// shipping 1080×1920 9:16 resolution.
+/// Pixel-faithful goldens for the share-card variants at the shipping
+/// 1080×1920 9:16 resolution.
 ///
-/// **Why 1080×1920 exactly?** That's the render target Pass 2's
+/// **Why 1080×1920 exactly?** That's the render target
 /// `ShareImageRenderer.toImage(pixelRatio: 3.0)` produces for the export
 /// path. The visible preview at 360×640 dp + DPR 3 produces the same
 /// pixel grid, so the visual contract here matches what users actually
@@ -24,12 +24,18 @@ import '../../../../../../helpers/tolerant_golden_comparator.dart';
 /// `TolerantGoldenFileComparator` gives a 3% headroom — well above the
 /// noise floor, well below any meaningful regression.
 ///
-/// **Pass 1 fixture choice.** The photo zone is a synthetic neutral gray
-/// `ColorImageProvider` — no external fixture image dependency. The
-/// goldens lock the overlay grammar (strip, collars, slash, content
-/// layout) against a fixed background tone; Pass 3 swaps in real photos
-/// only at the preview level and they're rendered through the same
-/// `ShareCardRenderer` so the overlay never re-references the underlay.
+/// **Fixture choice.** The photo zone is a synthetic neutral gray
+/// `_ColorImageProvider` — no external fixture image dependency. The
+/// goldens lock the overlay grammar (collars, slash, side bars, content
+/// layout) against a fixed background tone; real photos only get rendered
+/// through the same `ShareCardRenderer` so the overlay never re-references
+/// the underlay.
+///
+/// **Phase 31 scope.** The Achievement Frame goldens are added in Group D
+/// of the Pass 2 commit chain. This file holds the Discreet class-change
+/// case which has lived since Phase 30. The retired Variant A baseline /
+/// Variant B PR / Variant A max-drag goldens were removed alongside the
+/// Variant A + Variant B widget files.
 void main() {
   late GoldenFileComparator previousComparator;
 
@@ -78,18 +84,15 @@ void main() {
   }
 
   // ---------------------------------------------------------------------------
-  // Variant A baseline — no PR, baseline tier, chest dominant
+  // Achievement Frame baseline — no PR, baseline tier, chest dominant
   // ---------------------------------------------------------------------------
-  testWidgets('share_card_variant_a_baseline.png', (tester) async {
+  testWidgets('share_card_achievement_frame_baseline.png', (tester) async {
     await sizeFor(tester);
     const payload = SharePayload(
       tier: RewardTier.baseline,
       totalXp: 320,
       dominantBodyPart: BodyPart.chest,
       dominantBodyPartRank: 12,
-      // Baseline tier — bar fill at zero (no rank progress earned at this
-      // viewport in the snapshot). Locked here so the golden's bar width
-      // stays deterministic across runs.
       rankProgressFraction: 0.0,
       pr: null,
       characterClassSlug: 'bulwark',
@@ -99,14 +102,12 @@ void main() {
     );
     const strings = ShareCardStrings(
       wordmark: 'REPSAGA',
-      variantAXpText: '+320 XP',
-      variantAPrText: null,
-      variantBBpEyebrow: 'Peito',
-      variantBClassName: 'BULWARK',
-      variantBPrTag: null,
-      variantBLift: '',
-      variantBBpSub: '',
-      variantBXpSub: '+320 XP',
+      achievementFrameClassName: 'BULWARK',
+      achievementFrameSagaEyebrow: 'SAGA 76',
+      achievementFrameXpHero: '+320 XP',
+      achievementFrameLiftDetail: null,
+      achievementFrameHasPr: false,
+      achievementFrameBpRank: 'Peito · Rank 12',
       discreetEyebrow: 'Peito · Rank 12',
       discreetHero: '+320',
       discreetHeroSubLabel: 'XP NESTA SAGA',
@@ -118,33 +119,30 @@ void main() {
       host(
         const ShareCardRenderer(
           payload: payload,
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           photo: _ColorImageProvider(Color(0xFF666666)),
         ),
       ),
     );
-    // Let the image stream resolve.
     await tester.pumpAndSettle();
 
     await expectLater(
       find.byType(ShareCardRenderer),
-      matchesGoldenFile('goldens/share_card_variant_a_baseline.png'),
+      matchesGoldenFile('goldens/share_card_achievement_frame_baseline.png'),
     );
   });
 
   // ---------------------------------------------------------------------------
-  // Variant B PR — gold-tier PR, back dominant
+  // Achievement Frame PR — gold-tier PR, back dominant
   // ---------------------------------------------------------------------------
-  testWidgets('share_card_variant_b_pr.png', (tester) async {
+  testWidgets('share_card_achievement_frame_pr.png', (tester) async {
     await sizeFor(tester);
     const payload = SharePayload(
       tier: RewardTier.thresholdAnticipatory,
       totalXp: 618,
       dominantBodyPart: BodyPart.back,
       dominantBodyPartRank: 19,
-      // Note: Variant B doesn't render the rank bar — the field is still
-      // required on the payload for consistency, but visually inert here.
       rankProgressFraction: 0.6,
       pr: SharePayloadPr(exerciseName: 'Deadlift', weightKg: 160, reps: 3),
       characterClassSlug: 'berserker',
@@ -154,26 +152,24 @@ void main() {
     );
     const strings = ShareCardStrings(
       wordmark: 'REPSAGA',
-      variantAXpText: '+618 XP',
-      variantAPrText: '160kg × 3 · PR',
-      variantBBpEyebrow: 'Costas',
-      variantBClassName: 'BERSERKER',
-      variantBPrTag: '!! Recorde',
-      variantBLift: '160kg × 3',
-      variantBBpSub: 'Levantamento · Costas',
-      variantBXpSub: '+618 XP',
+      achievementFrameClassName: 'BERSERKER',
+      achievementFrameSagaEyebrow: 'SAGA 76',
+      achievementFrameXpHero: '+618 XP',
+      achievementFrameLiftDetail: '160kg × 3 · Deadlift',
+      achievementFrameHasPr: true,
+      achievementFrameBpRank: 'Costas · Rank 19',
       discreetEyebrow: 'Costas · Rank 19',
       discreetHero: '+618',
       discreetHeroSubLabel: 'XP NESTA SAGA',
       discreetPrLine: '!! 160kg × 3',
-      discreetPrDetail: 'Levantamento · novo recorde',
+      discreetPrDetail: 'Deadlift · novo recorde',
     );
 
     await tester.pumpWidget(
       host(
         const ShareCardRenderer(
           payload: payload,
-          variant: ShareCardVariant.fullBleed,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           photo: _ColorImageProvider(Color(0xFF666666)),
         ),
@@ -183,68 +179,53 @@ void main() {
 
     await expectLater(
       find.byType(ShareCardRenderer),
-      matchesGoldenFile('goldens/share_card_variant_b_pr.png'),
+      matchesGoldenFile('goldens/share_card_achievement_frame_pr.png'),
     );
   });
 
   // ---------------------------------------------------------------------------
-  // Variant A at max drag-to-reframe offset — overlay must not clip.
-  //
-  // PR 30b Important 3: the pre-fix shape wrapped the entire renderer in
-  // Transform.translate which shifted overlay + photo together and clipped
-  // the bottom strip at 1080×1920 edges on max drag. Post-fix: photoOffset
-  // flows into _PhotoZone only. This golden locks that contract: at the
-  // maximum drag value (Offset(0, 1080 * 0.4) = Offset(0, 432)) the
-  // Variant A bottom-strip overlay must appear intact at its original
-  // y-position, and the photo must appear shifted down.
-  //
-  // Run with `--update-goldens` once to baseline on the CI platform.
+  // Achievement Frame class-change — left side bar swaps to heroGold
+  // (per `share_card_achievement_frame.dart` isClassChange rule), top
+  // collar shows the NEW class name only (Q4 lock — no "DESPERTOU"
+  // framing on the card).
   // ---------------------------------------------------------------------------
-  testWidgets('share_card_variant_a_max_drag_offset.png', (tester) async {
+  testWidgets('share_card_achievement_frame_class_change.png', (tester) async {
     await sizeFor(tester);
     const payload = SharePayload(
-      tier: RewardTier.thresholdAnticipatory,
-      totalXp: 618,
+      tier: RewardTier.classChangeAnticipatory,
+      totalXp: 540,
       dominantBodyPart: BodyPart.chest,
-      dominantBodyPartRank: 19,
-      rankProgressFraction: 0.5,
+      dominantBodyPartRank: 18,
+      rankProgressFraction: 0.7,
       pr: SharePayloadPr(exerciseName: 'Bench Press', weightKg: 95, reps: 5),
       characterClassSlug: 'bulwark',
-      isClassChange: false,
+      isClassChange: true,
       hasTitleUnlock: false,
       hasRankUp: false,
     );
     const strings = ShareCardStrings(
       wordmark: 'REPSAGA',
-      variantAXpText: '+618 XP',
-      variantAPrText: '95kg × 5 · PR',
-      variantBBpEyebrow: 'Peito',
-      variantBClassName: 'BULWARK',
-      variantBPrTag: null,
-      variantBLift: '',
-      variantBBpSub: '',
-      variantBXpSub: '+618 XP',
-      discreetEyebrow: 'Peito · Rank 19',
-      discreetHero: '+618',
+      achievementFrameClassName: 'BULWARK',
+      // Q4 lock: saga eyebrow dropped on class-change sessions.
+      achievementFrameSagaEyebrow: null,
+      achievementFrameXpHero: '+540 XP',
+      achievementFrameLiftDetail: '95kg × 5 · Bench Press',
+      achievementFrameHasPr: true,
+      achievementFrameBpRank: 'Peito · Rank 18',
+      discreetEyebrow: 'BULWARK DESPERTOU.',
+      discreetHero: 'BULWARK',
       discreetHeroSubLabel: 'XP NESTA SAGA',
-      discreetPrLine: null,
-      discreetPrDetail: null,
+      discreetPrLine: '!! 95kg × 5',
+      discreetPrDetail: 'Bench Press · PR',
     );
 
     await tester.pumpWidget(
       host(
         const ShareCardRenderer(
           payload: payload,
-          variant: ShareCardVariant.minimalStrip,
+          variant: ShareCardVariant.achievementFrame,
           strings: strings,
           photo: _ColorImageProvider(Color(0xFF666666)),
-          // Max drag = Alignment.y clamped to 1.0 × 80px in the preview
-          // screen (_photoAlignmentY * 80). The golden test exercises the
-          // raw renderer at the wider reviewer-spec value (1080 * 0.4 = 432)
-          // to stress-test the overlay-clipping contract at the 1080×1920
-          // frame edge. At this extreme the photo is translated well off
-          // the bottom boundary — the overlay strip must remain unaffected.
-          photoOffset: Offset(0, 1080 * 0.4),
         ),
       ),
     );
@@ -252,7 +233,9 @@ void main() {
 
     await expectLater(
       find.byType(ShareCardRenderer),
-      matchesGoldenFile('goldens/share_card_variant_a_max_drag_offset.png'),
+      matchesGoldenFile(
+        'goldens/share_card_achievement_frame_class_change.png',
+      ),
     );
   });
 
@@ -266,7 +249,6 @@ void main() {
       totalXp: 420,
       dominantBodyPart: BodyPart.chest,
       dominantBodyPartRank: 18,
-      // Discreet variant doesn't render the rank bar — required-but-inert.
       rankProgressFraction: 0.4,
       pr: null,
       characterClassSlug: 'bulwark',
@@ -276,14 +258,12 @@ void main() {
     );
     const strings = ShareCardStrings(
       wordmark: 'REPSAGA',
-      variantAXpText: '+420 XP',
-      variantAPrText: null,
-      variantBBpEyebrow: 'Peito',
-      variantBClassName: 'BULWARK',
-      variantBPrTag: null,
-      variantBLift: '',
-      variantBBpSub: '',
-      variantBXpSub: '+420 XP',
+      achievementFrameClassName: 'BULWARK',
+      achievementFrameSagaEyebrow: null,
+      achievementFrameXpHero: '+420 XP',
+      achievementFrameLiftDetail: null,
+      achievementFrameHasPr: false,
+      achievementFrameBpRank: 'Peito · Rank 18',
       discreetEyebrow: 'BULWARK DESPERTOU.',
       discreetHero: '+420',
       discreetHeroSubLabel: 'XP NESTA SAGA',
@@ -311,8 +291,7 @@ void main() {
 
 /// Solid-color ImageProvider for the photo-zone fixture — synthesizes a
 /// 4×4 image of the supplied color. BoxFit.cover handles the scale-up to
-/// the 1080×1920 render target. Keeps the goldens fixture-image-free
-/// (Pass 1 simplicity).
+/// the 1080×1920 render target. Keeps the goldens fixture-image-free.
 class _ColorImageProvider extends ImageProvider<_ColorImageProvider> {
   const _ColorImageProvider(this.color);
 

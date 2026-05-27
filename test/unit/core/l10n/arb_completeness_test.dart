@@ -94,6 +94,12 @@ void main() {
       // placeholders only, no localizable prose.
       'b3PrPillTemplate', // "{exercise} · {weight}kg × {reps}"
       'b2RankCopy', // "{bodyPart} · RANK {n}"
+      // Phase 31 Pass 3 — Mission Debrief rank-up arrow grammar. "Rank"
+      // is the gym-vernacular loanword used identically in pt-BR + en
+      // (same precedent as `rankUpOverflowFlipbookLabel`); the rest is
+      // pure format (placeholders + arrow glyph). 22 chars trips the
+      // placeholderOnly length floor, so allow-list it explicitly.
+      'postSessionRankUpArrow', // "Rank {fromRank} → {toRank}"
     };
 
     /// Pattern for format-only strings (only placeholders and punctuation).

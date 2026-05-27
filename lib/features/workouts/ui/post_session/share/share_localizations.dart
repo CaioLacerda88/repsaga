@@ -19,8 +19,6 @@ class ShareLocalizations {
     required this.takePhoto,
     required this.fromGallery,
     required this.noPhoto,
-    required this.previewMinimal,
-    required this.previewBold,
     required this.previewRetake,
     required this.previewShare,
     required this.wordmark,
@@ -38,8 +36,6 @@ class ShareLocalizations {
       takePhoto: l10n.shareSheetTakePhoto,
       fromGallery: l10n.shareSheetFromGallery,
       noPhoto: l10n.shareSheetNoPhoto,
-      previewMinimal: l10n.sharePreviewMinimal,
-      previewBold: l10n.sharePreviewBold,
       previewRetake: l10n.sharePreviewRetake,
       previewShare: l10n.sharePreviewShare,
       wordmark: l10n.shareWordmark,
@@ -62,12 +58,6 @@ class ShareLocalizations {
   /// Discreet row label, e.g. "Sem foto · só a saga" / "No photo · just
   /// the saga".
   final String noPhoto;
-
-  /// Preview-screen variant toggle: "Mínimo" / "Minimal".
-  final String previewMinimal;
-
-  /// Preview-screen variant toggle: "Destaque" / "Bold".
-  final String previewBold;
 
   /// Preview-screen retake button, e.g. "Refazer" / "Retake".
   final String previewRetake;
