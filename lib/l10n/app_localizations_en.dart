@@ -552,6 +552,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get homeActionHeroStartEyebrow => 'START';
+
+  @override
+  String get homeActionHeroFreeEyebrow => 'FREE WORKOUT';
+
+  @override
+  String get homeActionHeroWelcomeEyebrow => 'WELCOME';
+
+  @override
   String homeBucketDaysTrained(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);

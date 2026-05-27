@@ -14,12 +14,16 @@ import 'package:repsaga/core/local_storage/cache_service.dart';
 import 'package:repsaga/features/exercises/data/exercise_repository.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/routines/data/routine_repository.dart';
+import 'package:repsaga/features/routines/data/workout_template_translation_resolver.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../../../fixtures/test_factories.dart';
 
 class _MockExerciseRepository extends Mock implements ExerciseRepository {}
+
+class _MockTemplateTranslations extends Mock
+    implements WorkoutTemplateTranslationResolver {}
 
 // ---------------------------------------------------------------------------
 // Fake Supabase infrastructure (templates only — exercise reads go through
@@ -149,8 +153,22 @@ _RepoBundle _makeRepo({
       ids: any(named: 'ids'),
     ),
   ).thenAnswer((_) async => exerciseMap);
+  // Default: resolver returns empty map (no translations). Tests covering the
+  // template-translation rewrite path override this explicitly.
+  final mockTemplateTranslations = _MockTemplateTranslations();
+  when(
+    () => mockTemplateTranslations.resolveNames(
+      slugs: any(named: 'slugs'),
+      locale: any(named: 'locale'),
+    ),
+  ).thenAnswer((_) async => const <String, String>{});
   return _RepoBundle(
-    RoutineRepository(client, const CacheService(), mockExerciseRepo),
+    RoutineRepository(
+      client,
+      const CacheService(),
+      mockExerciseRepo,
+      mockTemplateTranslations,
+    ),
     mockExerciseRepo,
   );
 }

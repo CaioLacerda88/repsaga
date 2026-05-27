@@ -555,6 +555,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get homeActionHeroStartEyebrow => 'INICIAR';
+
+  @override
+  String get homeActionHeroFreeEyebrow => 'TREINO LIVRE';
+
+  @override
+  String get homeActionHeroWelcomeEyebrow => 'BEM-VINDO';
+
+  @override
   String homeBucketDaysTrained(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -636,7 +645,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get samePlanThisWeek => 'Mesmo plano esta semana?';
 
   @override
-  String get myRoutines => 'MINHAS TREINOS';
+  String get myRoutines => 'MEUS TREINOS';
 
   @override
   String get seeAll => 'Ver tudo';
@@ -996,7 +1005,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get failedToLoadRoutines => 'Falha ao carregar treinos';
 
   @override
-  String get myRoutinesSection => 'MINHAS TREINOS';
+  String get myRoutinesSection => 'MEUS TREINOS';
 
   @override
   String get starterRoutinesSection => 'TREINOS INICIAIS';

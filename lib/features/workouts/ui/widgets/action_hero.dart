@@ -213,10 +213,7 @@ class _StartNextRoutineHero extends ConsumerWidget {
     );
 
     return _HeroBanner(
-      // Inlined uppercase Portuguese — single-locale launch (Phase 26f
-      // decision). T1's l10n key set did not include eyebrow labels, and we
-      // explicitly defer adding them until the second locale lands.
-      label: 'INICIAR',
+      label: l10n.homeActionHeroStartEyebrow,
       headline: l10n.homeActionHeroStartRoutine(routine.name),
       subline: subline,
       onTap: () => startRoutineWorkout(context, ref, routine),
@@ -252,7 +249,7 @@ class _FreeWorkoutHero extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return _HeroBanner(
-      label: 'TREINO LIVRE',
+      label: l10n.homeActionHeroFreeEyebrow,
       headline: l10n.homeActionHeroFreeWorkout,
       subline: weekComplete
           ? l10n.homeActionHeroFreeWorkoutSubtitleWeekComplete
@@ -280,7 +277,7 @@ class _CreateFirstRoutineHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return _HeroBanner(
-      label: 'BEM-VINDO',
+      label: l10n.homeActionHeroWelcomeEyebrow,
       headline: l10n.homeActionHeroCreateFirstRoutine,
       // No new ARB key for the subline. Reuse `pickRoutinesForWeek`'s
       // existing nav-cue copy — semantically close enough for the

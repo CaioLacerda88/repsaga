@@ -44,6 +44,10 @@ abstract class Routine with _$Routine {
     @JsonKey(defaultValue: <RoutineExercise>[])
     required List<RoutineExercise> exercises,
     required DateTime createdAt,
+    // Stable identifier for default routines (e.g. 'push_day', '5x5_strength').
+    // Used to join `workout_template_translations` for per-locale display
+    // names. NULL on user-created routines. Phase 32 PR 32a.
+    String? templateSlug,
   }) = _Routine;
 
   factory Routine.fromJson(Map<String, dynamic> json) =>

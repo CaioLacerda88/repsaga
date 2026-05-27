@@ -5,8 +5,18 @@ import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../../core/local_storage/cache_service.dart';
 import '../../exercises/providers/exercise_providers.dart';
 import '../data/routine_repository.dart';
+import '../data/workout_template_translation_resolver.dart';
 
 export 'notifiers/routine_list_notifier.dart';
+
+/// Provides the [WorkoutTemplateTranslationResolver] singleton.
+final workoutTemplateTranslationResolverProvider =
+    Provider<WorkoutTemplateTranslationResolver>((ref) {
+      return WorkoutTemplateTranslationResolver(
+        Supabase.instance.client,
+        recoveryRecorder: ref.watch(recoveryRecorderProvider),
+      );
+    });
 
 /// Provides the [RoutineRepository] singleton.
 final routineRepositoryProvider = Provider<RoutineRepository>((ref) {
@@ -14,6 +24,7 @@ final routineRepositoryProvider = Provider<RoutineRepository>((ref) {
     Supabase.instance.client,
     ref.watch(cacheServiceProvider),
     ref.watch(exerciseRepositoryProvider),
+    ref.watch(workoutTemplateTranslationResolverProvider),
     recoveryRecorder: ref.watch(recoveryRecorderProvider),
   );
 });

@@ -1106,6 +1106,24 @@ abstract class AppLocalizations {
   /// **'Start {routineName}'**
   String homeActionHeroStartRoutine(String routineName);
 
+  /// Uppercase eyebrow label above the ActionHero start-routine headline. Phase 32 PR 32a.
+  ///
+  /// In en, this message translates to:
+  /// **'START'**
+  String get homeActionHeroStartEyebrow;
+
+  /// Uppercase eyebrow label above the ActionHero free-workout headline. Phase 32 PR 32a.
+  ///
+  /// In en, this message translates to:
+  /// **'FREE WORKOUT'**
+  String get homeActionHeroFreeEyebrow;
+
+  /// Uppercase eyebrow label above the ActionHero create-first-routine headline shown to day-0 users. Phase 32 PR 32a.
+  ///
+  /// In en, this message translates to:
+  /// **'WELCOME'**
+  String get homeActionHeroWelcomeEyebrow;
+
   /// Right-aligned counter on the home bucket section header. Phase 26f.
   ///
   /// In en, this message translates to:

@@ -56,6 +56,28 @@ jobs:
           fi
           bash scripts/check_exercise_difficulty_mult_coverage.sh "${base}"
 
+  workout-template-translation-coverage-check:
+    name: workout-template-translation-coverage-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Fetch enough history to diff against the PR base / main head.
+          fetch-depth: 0
+
+      - name: Verify default-template slugs are paired with en+pt translations
+        # Phase 32 PR 32a — see
+        # scripts/check_workout_template_translation_coverage.sh docstring
+        # for rationale. Sibling to the exercise-translation-coverage check.
+        run: |
+          if [ -n "${GITHUB_BASE_REF}" ]; then
+            git fetch --no-tags --depth=1 origin "${GITHUB_BASE_REF}"
+            base="origin/${GITHUB_BASE_REF}"
+          else
+            base="HEAD~1"
+          fi
+          bash scripts/check_workout_template_translation_coverage.sh "${base}"
+
   analyze:
     runs-on: ubuntu-latest
     # Both content-coverage gates must pass before we spend cycles on
@@ -63,7 +85,7 @@ jobs:
     # `ci` aggregator's `needs` list so a failing difficulty-mult gate
     # short-circuits the pipeline at the same point as a failing
     # translation gate.
-    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check]
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -280,23 +302,25 @@ jobs:
     name: ci
     runs-on: ubuntu-latest
     if: always()
-    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, analyze, test, build, deno-tests]
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests]
     steps:
       - name: Check all jobs passed
         run: |
           if [[ "${{ needs.exercise-translation-coverage-check.result }}" != "success" || \
                 "${{ needs.exercise-difficulty-mult-coverage-check.result }}" != "success" || \
+                "${{ needs.workout-template-translation-coverage-check.result }}" != "success" || \
                 "${{ needs.analyze.result }}" != "success" || \
                 "${{ needs.test.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
                 "${{ needs.deno-tests.result }}" != "success" ]]; then
             echo "One or more required jobs failed or were skipped"
-            echo "  exercise-translation-coverage-check:     ${{ needs.exercise-translation-coverage-check.result }}"
-            echo "  exercise-difficulty-mult-coverage-check: ${{ needs.exercise-difficulty-mult-coverage-check.result }}"
-            echo "  analyze:                                 ${{ needs.analyze.result }}"
-            echo "  test:                                    ${{ needs.test.result }}"
-            echo "  build:                                   ${{ needs.build.result }}"
-            echo "  deno-tests:                              ${{ needs.deno-tests.result }}"
+            echo "  exercise-translation-coverage-check:        ${{ needs.exercise-translation-coverage-check.result }}"
+            echo "  exercise-difficulty-mult-coverage-check:    ${{ needs.exercise-difficulty-mult-coverage-check.result }}"
+            echo "  workout-template-translation-coverage-check:${{ needs.workout-template-translation-coverage-check.result }}"
+            echo "  analyze:                                    ${{ needs.analyze.result }}"
+            echo "  test:                                       ${{ needs.test.result }}"
+            echo "  build:                                      ${{ needs.build.result }}"
+            echo "  deno-tests:                                 ${{ needs.deno-tests.result }}"
             exit 1
           fi
           echo "All required jobs passed"
