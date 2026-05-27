@@ -14,17 +14,26 @@ import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/exercises/data/exercise_repository.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/routines/data/routine_repository.dart';
+import 'package:repsaga/features/routines/data/workout_template_translation_resolver.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../_helpers/fake_supabase.dart';
 
 class _MockExerciseRepository extends Mock implements ExerciseRepository {}
 
+class _MockTemplateTranslations extends Mock
+    implements WorkoutTemplateTranslationResolver {}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(<String>[]);
+  });
+
   late Directory tempDir;
   late CacheService cache;
   late Box<dynamic> routineBox;
   late _MockExerciseRepository mockExerciseRepo;
+  late _MockTemplateTranslations mockTemplateTranslations;
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('routine_cache_test_');
@@ -32,6 +41,7 @@ void main() {
     routineBox = await Hive.openBox<dynamic>(HiveService.routineCache);
     cache = const CacheService();
     mockExerciseRepo = _MockExerciseRepository();
+    mockTemplateTranslations = _MockTemplateTranslations();
     // Default: empty exercise map. Individual tests override as needed.
     when(
       () => mockExerciseRepo.getExercisesByIds(
@@ -40,6 +50,15 @@ void main() {
         ids: any(named: 'ids'),
       ),
     ).thenAnswer((_) async => <String, Exercise>{});
+    // Default: no template translations. Cache tests don't care about the
+    // template_slug rewrite path — they assert exercise resolution survives
+    // the envelope round-trip.
+    when(
+      () => mockTemplateTranslations.resolveNames(
+        slugs: any(named: 'slugs'),
+        locale: any(named: 'locale'),
+      ),
+    ).thenAnswer((_) async => const <String, String>{});
   });
 
   tearDown(() async {
@@ -76,7 +95,12 @@ void main() {
         final client = FakeSupabaseClient(
           FakeQueryBuilder(error: Exception('offline')),
         );
-        final repo = RoutineRepository(client, cache, mockExerciseRepo);
+        final repo = RoutineRepository(
+          client,
+          cache,
+          mockExerciseRepo,
+          mockTemplateTranslations,
+        );
 
         final result = await repo.getRoutines(userId: 'user-001', locale: 'en');
 
@@ -91,7 +115,12 @@ void main() {
       // Online fetch with one routine — must write under the locale-prefixed key.
       final templateRow = TestRoutineFactory.create(id: 'r-1', exercises: []);
       final client = FakeSupabaseClient(FakeQueryBuilder(data: [templateRow]));
-      final repo = RoutineRepository(client, cache, mockExerciseRepo);
+      final repo = RoutineRepository(
+        client,
+        cache,
+        mockExerciseRepo,
+        mockTemplateTranslations,
+      );
 
       await repo.getRoutines(userId: 'user-001', locale: 'en');
 
@@ -120,7 +149,12 @@ void main() {
       final client = FakeSupabaseClient(
         FakeQueryBuilder(error: Exception('offline')),
       );
-      final repo = RoutineRepository(client, cache, mockExerciseRepo);
+      final repo = RoutineRepository(
+        client,
+        cache,
+        mockExerciseRepo,
+        mockTemplateTranslations,
+      );
 
       await expectLater(
         repo.getRoutines(userId: 'user-001', locale: 'pt'),
@@ -152,7 +186,12 @@ void main() {
         final client = FakeSupabaseClient(
           FakeQueryBuilder(error: Exception('offline')),
         );
-        final repo = RoutineRepository(client, cache, mockExerciseRepo);
+        final repo = RoutineRepository(
+          client,
+          cache,
+          mockExerciseRepo,
+          mockTemplateTranslations,
+        );
 
         final result = await repo.getRoutines(userId: 'user-001', locale: 'en');
 
@@ -166,7 +205,12 @@ void main() {
       final client = FakeSupabaseClient(
         FakeQueryBuilder(error: Exception('offline')),
       );
-      final repo = RoutineRepository(client, cache, mockExerciseRepo);
+      final repo = RoutineRepository(
+        client,
+        cache,
+        mockExerciseRepo,
+        mockTemplateTranslations,
+      );
 
       expect(
         () => repo.getRoutines(userId: 'user-001', locale: 'en'),
@@ -191,7 +235,12 @@ void main() {
         final client = FakeSupabaseClient(
           FakeQueryBuilder(error: Exception('offline')),
         );
-        final repo = RoutineRepository(client, cache, mockExerciseRepo);
+        final repo = RoutineRepository(
+          client,
+          cache,
+          mockExerciseRepo,
+          mockTemplateTranslations,
+        );
 
         final result = await repo.getRoutines(userId: 'user-001', locale: 'en');
 
@@ -235,6 +284,7 @@ void main() {
           onlineClient,
           cache,
           mockExerciseRepo,
+          mockTemplateTranslations,
         ).getRoutines(userId: 'user-001', locale: 'en');
 
         // Second call: network fails — must return data from cache.
@@ -245,6 +295,7 @@ void main() {
           offlineClient,
           cache,
           mockExerciseRepo,
+          mockTemplateTranslations,
         ).getRoutines(userId: 'user-001', locale: 'en');
 
         expect(result, hasLength(1));

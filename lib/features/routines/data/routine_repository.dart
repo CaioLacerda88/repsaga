@@ -6,6 +6,7 @@ import '../../../core/local_storage/hive_service.dart';
 import '../../exercises/data/exercise_repository.dart';
 import '../../exercises/models/exercise.dart';
 import '../models/routine.dart';
+import 'workout_template_translation_resolver.dart';
 
 /// Repository for routine reads and writes.
 ///
@@ -29,13 +30,15 @@ class RoutineRepository extends BaseRepository {
   RoutineRepository(
     this._client,
     this._cache,
-    this._exerciseRepo, {
+    this._exerciseRepo,
+    this._templateTranslations, {
     super.recoveryRecorder,
   });
 
   final supabase.SupabaseClient _client;
   final CacheService _cache;
   final ExerciseRepository _exerciseRepo;
+  final WorkoutTemplateTranslationResolver _templateTranslations;
 
   supabase.SupabaseQueryBuilder get _templates =>
       _client.from('workout_templates');
@@ -60,8 +63,12 @@ class RoutineRepository extends BaseRepository {
             .order('created_at', ascending: false);
 
         final routines = data.map(Routine.fromJson).toList();
-        return _resolveExercises(
+        final localized = await _applyTemplateTranslations(
           routines: routines,
+          locale: locale,
+        );
+        return _resolveExercises(
+          routines: localized,
           userId: userId,
           locale: locale,
         );
@@ -88,8 +95,12 @@ class RoutineRepository extends BaseRepository {
     return mapException(() async {
       final data = await _templates.select().eq('id', id).single();
       final routine = Routine.fromJson(data);
-      final resolved = await _resolveExercises(
+      final localized = await _applyTemplateTranslations(
         routines: [routine],
+        locale: locale,
+      );
+      final resolved = await _resolveExercises(
+        routines: localized,
         userId: userId,
         locale: locale,
       );
@@ -226,6 +237,35 @@ class RoutineRepository extends BaseRepository {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /// Rewrite [Routine.name] for default templates with their per-locale
+  /// translation from `workout_template_translations`.
+  ///
+  /// Cascade: requested [locale] → `'en'` → original (verbatim from the DB).
+  /// User-created routines (`templateSlug == null`) pass through unchanged.
+  /// Empty default-routine set short-circuits without a network call.
+  Future<List<Routine>> _applyTemplateTranslations({
+    required List<Routine> routines,
+    required String locale,
+  }) async {
+    final slugs = <String>{
+      for (final r in routines)
+        if (r.isDefault && r.templateSlug != null) r.templateSlug!,
+    };
+    if (slugs.isEmpty) return routines;
+
+    final names = await _templateTranslations.resolveNames(
+      slugs: slugs,
+      locale: locale,
+    );
+
+    return routines.map((r) {
+      final slug = r.templateSlug;
+      if (slug == null) return r;
+      final localized = names[slug];
+      return localized != null ? r.copyWith(name: localized) : r;
+    }).toList();
+  }
 
   /// Resolve [RoutineExercise.exercise] for every exercise referenced in
   /// [routines] by batch-fetching localized rows and copying them onto each

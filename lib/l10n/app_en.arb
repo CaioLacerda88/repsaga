@@ -390,6 +390,12 @@
       "routineName": { "type": "String", "example": "Push Day" }
     }
   },
+  "homeActionHeroStartEyebrow": "START",
+  "@homeActionHeroStartEyebrow": { "description": "Uppercase eyebrow label above the ActionHero start-routine headline. Phase 32 PR 32a." },
+  "homeActionHeroFreeEyebrow": "FREE WORKOUT",
+  "@homeActionHeroFreeEyebrow": { "description": "Uppercase eyebrow label above the ActionHero free-workout headline. Phase 32 PR 32a." },
+  "homeActionHeroWelcomeEyebrow": "WELCOME",
+  "@homeActionHeroWelcomeEyebrow": { "description": "Uppercase eyebrow label above the ActionHero create-first-routine headline shown to day-0 users. Phase 32 PR 32a." },
   "homeBucketDaysTrained": "{count, plural, =0{No days trained} =1{1 day trained} other{{count} days trained}}",
   "@homeBucketDaysTrained": {
     "description": "Right-aligned counter on the home bucket section header. Phase 26f.",
