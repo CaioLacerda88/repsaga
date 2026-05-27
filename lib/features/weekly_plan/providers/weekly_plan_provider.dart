@@ -393,6 +393,16 @@ const String weeklyPlanConfirmNeededKeyPrefix = 'weeklyPlanConfirmNeeded:';
 String weeklyPlanConfirmNeededKey(DateTime weekStart) {
   // Normalize to date-only ISO so timezone-aware DateTime calls don't drift
   // the key across consecutive reads on the same calendar week.
+  //
+  // The `DateTime(...)` constructor returns local-time midnight (no `Z`
+  // suffix in the ISO output: `2026-05-25T00:00:00.000`). This is
+  // intentional — Phase 32c's audit found that `bucket_chip_row.dart`
+  // and `week_plan_screen.dart` disagreed on whether to call `.toLocal()`
+  // before formatting weekdays, producing day drift. The Hive key here
+  // is computed identically on every `build()` + `set()` from the same
+  // helper, so the read/write keys agree on a given calendar day on a
+  // given device. Migration is a no-op — the pre-PR-32g `StateProvider`
+  // had no durable state to migrate.
   final monday = DateTime(weekStart.year, weekStart.month, weekStart.day);
   return '$weeklyPlanConfirmNeededKeyPrefix${monday.toIso8601String()}';
 }

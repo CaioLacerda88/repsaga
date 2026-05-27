@@ -22,7 +22,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, POST_SESSION } from '../helpers/selectors';
+import { WORKOUT, POST_SESSION, NAV } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -152,15 +152,21 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
     // Dialog must be visible.
     await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
 
-    // Cancel keeps the user on /workout/finish/...
+    // Cancel keeps the user on the post-session summary panel. Assert on
+    // content visibility (the summary stays mounted) instead of `toHaveURL`
+    // — Flutter web hash routing makes URL assertions after `context.push`
+    // unreliable (cluster `flutter-web-url-assertion`).
     await page.locator('role=button[name="CANCEL"]').click();
     await expect(leaveTitle).toBeHidden({ timeout: 2_000 });
-    await expect(page).toHaveURL(/\/workout\/finish\//, { timeout: 2_000 });
+    await expect(page.locator(POST_SESSION.summary)).toBeVisible({
+      timeout: 2_000,
+    });
 
-    // Press back again, then Leave — URL flips to /home.
+    // Press back again, then Leave — destination is /home. Assert on the
+    // home tab visibility instead of `toHaveURL` (same cluster).
     await page.goBack();
     await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
     await page.locator('role=button[name="LEAVE"]').click();
-    await expect(page).toHaveURL(/#?\/home$/, { timeout: 5_000 });
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 5_000 });
   });
 });

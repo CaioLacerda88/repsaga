@@ -22,8 +22,12 @@
 ///
 /// The closure shape mirrors `PostSessionScreen._buildSummary`'s
 /// `onEquipPressed`: try { await repo.equipTitle(slug); } catch { if
-/// (!mounted) rethrow; ScaffoldMessenger.of(context).showSnackBar(...);
-/// rethrow; }
+/// (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(...);
+/// rethrow; }. The `!mounted` branch returns (not rethrows) because
+/// the row that owns the rethrow contract has already been disposed
+/// — there is no consumer for the rethrow on an unmounted widget,
+/// and propagating into a dead closure produces the exact unhandled
+/// async rejection this fix exists to eliminate.
 library;
 
 import 'package:flutter/material.dart';
@@ -42,7 +46,7 @@ Future<void> Function() _buildClosure({
       await repoEquip();
     } catch (_) {
       final ctx = context();
-      if (!ctx.mounted) rethrow;
+      if (!ctx.mounted) return;
       ScaffoldMessenger.of(
         ctx,
       ).showSnackBar(SnackBar(content: Text(errorMessage)));

@@ -19,15 +19,15 @@
 # legitimately use developer.log because their failures fire BEFORE the
 # user can observe a "save broken" or "celebration silent" symptom).
 #
-# Gates:
+# Gates (order matches the script body below):
 #   1. `import 'dart:developer'` (with optional `as <alias>`) inside
 #      the scoped paths.
-#   2. Bare `log(` calls preceded by a non-identifier character (so
+#   2. Qualified `developer.log(` calls (when the import is aliased).
+#   3. Bare `log(` calls preceded by a non-identifier character (so
 #      `RouteSettings.log(` / `_log.log(` / similar accessor calls do
 #      NOT trigger). The contract is "use a stable prefixed
 #      `debugPrint('[Scope] msg')` instead", so the gate fires the
 #      moment a `log(` literal reappears.
-#   3. Qualified `developer.log(` calls (when the import is aliased).
 #
 # Comment exclusion: lines where the violating literal lives inside a
 # `//` comment are skipped. Mirrors the pattern from

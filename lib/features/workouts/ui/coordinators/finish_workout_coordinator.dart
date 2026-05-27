@@ -449,7 +449,7 @@ class FinishWorkoutCoordinator {
           // The notifier is authoritative for the workout timeline; we
           // consume the single source of truth via `finishResult`.
           // Cluster: `async-caller-broke-snackbar` (extended).
-          durationMinutes: ((finishResult?.durationSeconds ?? 0) / 60).floor(),
+          durationMinutes: (finishResult?.durationSeconds ?? 0) ~/ 60,
           setsCount: _computeSetsCount(currentState),
           tonnageTons: _computeTonnage(currentState),
           // Phase 31 Pass 1 — carry the per-exercise + per-set snapshot so

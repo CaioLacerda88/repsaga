@@ -571,8 +571,11 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
             // navigating away mid-RPC. The analyzer's
             // `use_build_context_synchronously` lint is satisfied by
             // checking `mounted` (not `context.mounted`) before reading
-            // `context`.
-            if (!mounted) rethrow;
+            // `context`. If the widget has been unmounted, swallow:
+            // there's no row left to reset and no surface to snack on, and
+            // rethrowing into a dead closure produces an unhandled async
+            // rejection — the exact symptom this fix was eliminating.
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(l10n.postSessionTitleEquipFailed)),
             );
