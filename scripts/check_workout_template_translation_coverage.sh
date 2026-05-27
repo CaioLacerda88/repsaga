@@ -552,18 +552,25 @@ run_self_test() {
   local script_dir
   script_dir="$(cd "$(dirname "$0")" && pwd)"
   local fixture_complete="${script_dir}/fixtures/workout_template_complete.sql"
+  local fixture_insert="${script_dir}/fixtures/workout_template_insert_complete.sql"
   local fixture_missing="${script_dir}/fixtures/workout_template_pt_missing.sql"
 
-  if [ ! -f "${fixture_complete}" ] || [ ! -f "${fixture_missing}" ]; then
+  if [ ! -f "${fixture_complete}" ] || [ ! -f "${fixture_insert}" ] || [ ! -f "${fixture_missing}" ]; then
     echo "FAIL: self-test fixtures missing under ${script_dir}/fixtures/"
-    echo "  expected: workout_template_complete.sql + workout_template_pt_missing.sql"
+    echo "  expected: workout_template_complete.sql + workout_template_insert_complete.sql + workout_template_pt_missing.sql"
     return 1
   fi
 
-  echo "Self-test: running coverage check against workout_template_complete.sql"
+  echo "Self-test: running coverage check against workout_template_complete.sql (UPDATE-backfill pattern)"
   echo "------------------------------------------------------------------"
   local rc_complete=0
-  run_check "${fixture_complete}" "complete fixture" || rc_complete=$?
+  run_check "${fixture_complete}" "complete fixture (UPDATE backfill)" || rc_complete=$?
+  echo ""
+
+  echo "Self-test: running coverage check against workout_template_insert_complete.sql (INSERT pattern)"
+  echo "------------------------------------------------------------------"
+  local rc_insert=0
+  run_check "${fixture_insert}" "complete fixture (INSERT)" || rc_insert=$?
   echo ""
 
   echo "Self-test: running coverage check against workout_template_pt_missing.sql"
@@ -573,14 +580,18 @@ run_self_test() {
   echo ""
 
   if [ "${rc_complete}" -ne 0 ]; then
-    echo "Self-test FAILED: complete fixture should have passed (got rc=${rc_complete})."
+    echo "Self-test FAILED: UPDATE-backfill complete fixture should have passed (got rc=${rc_complete})."
+    return 1
+  fi
+  if [ "${rc_insert}" -ne 0 ]; then
+    echo "Self-test FAILED: INSERT complete fixture should have passed (got rc=${rc_insert})."
     return 1
   fi
   if [ "${rc_missing}" -eq 0 ]; then
     echo "Self-test FAILED: pt-missing fixture should have failed (got rc=0)."
     return 1
   fi
-  echo "Self-test: complete passed; pt-missing failed."
+  echo "Self-test: both complete fixtures (UPDATE + INSERT) passed; pt-missing failed."
   return 0
 }
 

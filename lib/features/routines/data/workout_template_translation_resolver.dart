@@ -8,8 +8,12 @@ import '../../../core/data/base_repository.dart';
 /// Phase 32 PR 32a contract:
 ///   * Default templates carry a stable `template_slug` (e.g. `push_day`).
 ///   * `(template_slug, locale)` is the PK of `workout_template_translations`.
-///   * `'en'` is the source-of-truth seed in migration 00014 — any unsupported
-///     locale falls back to `'en'` rather than the verbatim DB literal.
+///   * `'en'` rows are seeded in migration 00067 alongside `'pt'` rows; that
+///     same migration backfills the slug column on the legacy
+///     `workout_templates` rows originally seeded in migration 00014.
+///   * Any unsupported locale falls back to `'en'`; slugs without either an
+///     `(slug, locale)` or `(slug, 'en')` row are omitted, and the caller
+///     keeps the verbatim `routine.name` from `workout_templates`.
 ///
 /// The resolver is a thin pure-data adapter. It takes a set of `templateSlug`s
 /// and a requested locale, executes one `IN`-list query, and returns a

@@ -4,7 +4,10 @@
 -- display names for default workout templates, joined by `template_slug`.
 -- Replaces the legacy ARB-keyed `localizedRoutineName()` lookup (which never
 -- ran at the render sites — `routine.name` was emitted verbatim). Scales to
--- additional locales without re-shipping the binary.
+-- additional locales without re-shipping the binary, with one caveat: the
+-- `locale CHECK` constraint below is an explicit allowlist — adding a new
+-- locale (e.g. `'es'`) requires a paired migration that broadens the CHECK,
+-- mirroring the `exercise_translations` 00031 pattern.
 --
 -- Coverage rule (enforced by scripts/check_workout_template_translation_coverage.sh):
 -- every default `INSERT INTO workout_templates` MUST be paired with EN + PT
@@ -22,10 +25,14 @@ BEGIN;
 ALTER TABLE workout_templates
   ADD COLUMN IF NOT EXISTS template_slug TEXT;
 
--- One slug per default template — partial unique index on the default subset.
-CREATE UNIQUE INDEX IF NOT EXISTS workout_templates_default_slug_uidx
-  ON workout_templates (template_slug)
-  WHERE is_default = true;
+-- Non-partial unique index so the column is FK-targetable from
+-- `workout_template_translations.template_slug` below. Postgres treats NULL
+-- as distinct under default NULLS DISTINCT semantics — user-routine rows
+-- (template_slug IS NULL) coexist freely; only the 9 default templates carry
+-- non-null slugs, which the index uniques in lockstep with the partial-index
+-- intent.
+CREATE UNIQUE INDEX IF NOT EXISTS workout_templates_template_slug_uidx
+  ON workout_templates (template_slug);
 
 -- Backfill the 9 known default templates by name. Idempotent: only updates
 -- rows whose `template_slug` is still NULL.
@@ -56,7 +63,9 @@ UPDATE workout_templates SET template_slug = 'arms_abs'
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS workout_template_translations (
-  template_slug TEXT        NOT NULL,
+  template_slug TEXT        NOT NULL
+                            REFERENCES workout_templates (template_slug)
+                            ON DELETE CASCADE,
   locale        TEXT        NOT NULL
                             CHECK (locale IN ('en', 'pt')),
   name          TEXT        NOT NULL

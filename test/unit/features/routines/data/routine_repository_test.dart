@@ -132,9 +132,10 @@ class _FakeTransformBuilder<T> extends Fake
 // ---------------------------------------------------------------------------
 
 class _RepoBundle {
-  _RepoBundle(this.repo, this.mockExerciseRepo);
+  _RepoBundle(this.repo, this.mockExerciseRepo, this.mockTemplateTranslations);
   final RoutineRepository repo;
   final _MockExerciseRepository mockExerciseRepo;
+  final _MockTemplateTranslations mockTemplateTranslations;
 }
 
 _RepoBundle _makeRepo({
@@ -154,7 +155,8 @@ _RepoBundle _makeRepo({
     ),
   ).thenAnswer((_) async => exerciseMap);
   // Default: resolver returns empty map (no translations). Tests covering the
-  // template-translation rewrite path override this explicitly.
+  // template-translation rewrite path override this via the exposed
+  // `mockTemplateTranslations` on the bundle.
   final mockTemplateTranslations = _MockTemplateTranslations();
   when(
     () => mockTemplateTranslations.resolveNames(
@@ -170,6 +172,7 @@ _RepoBundle _makeRepo({
       mockTemplateTranslations,
     ),
     mockExerciseRepo,
+    mockTemplateTranslations,
   );
 }
 
@@ -463,6 +466,70 @@ void main() {
       expect(routine.exercises[0].setConfigs[0].targetWeight, 100.0);
       expect(routine.exercises[0].setConfigs[0].restSeconds, 180);
       expect(routine.exercises[0].setConfigs[1].targetReps, 3);
+    });
+  });
+
+  group('RoutineRepository._applyTemplateTranslations (Phase 32 PR 32a)', () {
+    test('rewrites default-template name with resolver-supplied localized '
+        'name when templateSlug is non-null', () async {
+      final templateRow = TestRoutineFactory.create(
+        id: 'r-push',
+        userId: null,
+        name: 'Push Day',
+        isDefault: true,
+        templateSlug: 'push_day',
+      );
+      final bundle = _makeRepo(templates: [templateRow]);
+      // Override the default empty-map stub: resolver returns a pt translation
+      // for the push_day slug. This pins the rewrite contract — if
+      // `_applyTemplateTranslations` ever stops calling `copyWith(name: ...)`
+      // the assertion below catches it.
+      when(
+        () => bundle.mockTemplateTranslations.resolveNames(
+          slugs: any(named: 'slugs'),
+          locale: 'pt',
+        ),
+      ).thenAnswer((_) async => const {'push_day': 'Dia de Empurrar'});
+
+      final routines = await bundle.repo.getRoutines(
+        userId: 'user-001',
+        locale: 'pt',
+      );
+
+      expect(routines, hasLength(1));
+      expect(routines.single.name, 'Dia de Empurrar');
+      expect(routines.single.templateSlug, 'push_day');
+    });
+
+    test('leaves user-created routine name untouched when templateSlug is '
+        'null even if resolver has unrelated entries', () async {
+      final userRoutine = TestRoutineFactory.create(
+        id: 'r-user',
+        userId: 'user-001',
+        name: 'My Custom Push',
+        isDefault: false,
+        templateSlug: null,
+      );
+      final bundle = _makeRepo(templates: [userRoutine]);
+      // Resolver advertises a translation that shouldn't apply — the user
+      // routine has slug == null, so the resolver shouldn't even be called
+      // for it. Even if some bug fed it the empty slug set, the rewrite must
+      // not touch the user's verbatim name.
+      when(
+        () => bundle.mockTemplateTranslations.resolveNames(
+          slugs: any(named: 'slugs'),
+          locale: any(named: 'locale'),
+        ),
+      ).thenAnswer((_) async => const {'push_day': 'Dia de Empurrar'});
+
+      final routines = await bundle.repo.getRoutines(
+        userId: 'user-001',
+        locale: 'pt',
+      );
+
+      expect(routines, hasLength(1));
+      expect(routines.single.name, 'My Custom Push');
+      expect(routines.single.templateSlug, isNull);
     });
   });
 }
