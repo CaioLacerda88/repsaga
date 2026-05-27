@@ -44,6 +44,13 @@ class WeekdayFormatter {
     final local = date.toLocal();
     final raw = DateFormat.E(locale).format(local);
     final trimmed = raw.endsWith('.') ? raw.substring(0, raw.length - 1) : raw;
+    // intl should never return an empty short-weekday for a supported locale.
+    // Surface unexpected stripping early in tests rather than silently
+    // rendering a blank chip label in production.
+    assert(
+      trimmed.isNotEmpty,
+      'WeekdayFormatter: intl returned empty short weekday for locale "$locale"',
+    );
     if (trimmed.isEmpty) return trimmed;
     if (uppercase) return trimmed.toUpperCase();
     return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();

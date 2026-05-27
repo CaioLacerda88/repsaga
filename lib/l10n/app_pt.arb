@@ -416,7 +416,6 @@
   "unknownRoutine": "Treino Desconhecido",
 
   "addRoutinesSheet": "Adicionar Treinos",
-  "allRoutinesInPlan": "Todos os treinos estão no plano",
   "createMoreRoutines": "Crie mais treinos para adicioná-los aqui.",
   "addCountRoutines": "{count, plural, =1{ADICIONAR 1 TREINO} other{ADICIONAR {count} TREINOS}}",
   "createNewRoutine": "Criar nova rotina",

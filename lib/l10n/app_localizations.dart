@@ -2378,12 +2378,6 @@ abstract class AppLocalizations {
   /// **'Add Routines'**
   String get addRoutinesSheet;
 
-  /// All routines already in plan
-  ///
-  /// In en, this message translates to:
-  /// **'All routines in plan'**
-  String get allRoutinesInPlan;
-
   /// Hint: no more routines to add
   ///
   /// In en, this message translates to:

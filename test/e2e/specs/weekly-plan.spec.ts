@@ -85,9 +85,10 @@ const PUSH_DAY = 'Push Day';
  *     when the popup menu doesn't render in the 3 s observation window —
  *     so under CI 4-vCPU contention the defensive branch can run, hit a
  *     transient hidden-popup state, and proceed to "add" Push Day on top
- *     of a stale plan. Once Push Day is in the plan, the AddRoutinesSheet
- *     correctly filters it OUT (server-side dedupe), so a retry of test 3
- *     finds nothing to scroll to and times out on `scrollSheetAndClick`.
+ *     of a stale plan. (Pre-PR 32c the picker filtered already-added
+ *     routines, which would surface as a missing row in the sheet on the
+ *     duplicate-add path; post-PR 32c the picker lists ALL routines, so
+ *     the symptom now manifests as a duplicate row in the plan instead.)
  *
  *   - Test 5 ('should remove routines ...') clears the plan, but that
  *     runs AFTER test 3, so it doesn't repair test 3's setup pollution.
@@ -562,15 +563,15 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
       .first();
     await expect(chip).toBeVisible({ timeout: 15_000 });
 
-    // Read the chip's accessible name (Playwright merges Flutter's AOM
-    // sub-tree into a single string for elements with `explicitChildNodes`
-    // — the dayLabel Text is one of those children when isDone).
-    const accessibleName = await chip.getAttribute('aria-label');
-    expect(
-      accessibleName,
-      `chip aria-label should carry a localized weekday abbreviation when ` +
-        `the routine is in the done state — got "${accessibleName}"`,
-    ).toMatch(
+    // Read the chip's accessible name from the AOM (NOT the DOM
+    // `aria-label` attribute — Flutter 3.41.6+ exposes labels via the
+    // accessibility tree, not via DOM attributes). `toHaveAccessibleName`
+    // reads from the same AOM that screen readers see.
+    await expect(
+      chip,
+      `chip accessibleName should carry a localized weekday abbreviation ` +
+        `when the routine is in the done state`,
+    ).toHaveAccessibleName(
       /\b(MON|TUE|WED|THU|FRI|SAT|SUN|SEG|TER|QUA|QUI|SEX|SÁB|SAB|DOM)\b/,
     );
   });

@@ -158,16 +158,6 @@ class _AddRoutinesSheetState extends State<AddRoutinesSheet> {
                       style: AppTextStyles.title.copyWith(fontSize: 20),
                     ),
                   ),
-                  const Spacer(),
-                  if (widget.availableRoutines.isEmpty)
-                    Text(
-                      l10n.allRoutinesInPlan,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.55,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),

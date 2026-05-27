@@ -157,7 +157,12 @@ void main() {
         await tester.tap(find.text('Push Day'));
         await tester.pumpAndSettle();
 
-        // Tap the "ADD 1 ROUTINE" confirm button.
+        // Tap the "ADD 1 ROUTINE" confirm button. The fixture mounts under
+        // `MaterialApp` with default delegates (en locale), so the en ARB
+        // value of `addCountRoutines` resolves at render time. If the test
+        // harness ever locale-pumps, the string would shift to "ADICIONAR
+        // 1 TREINO" — keep this lookup in sync with the active fixture
+        // locale.
         await tester.tap(find.text('ADD 1 ROUTINE'));
         await tester.pumpAndSettle();
 

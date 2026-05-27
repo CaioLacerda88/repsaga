@@ -332,8 +332,11 @@ class _BucketChip extends ConsumerWidget {
   }
 
   /// 3-letter localized weekday label ("Mon"/"Seg", "Tue"/"Ter", …),
-  /// uppercased per mockup. Same `DateFormat.E(locale)` pattern as
-  /// `week_plan_screen.dart::_shortDayLabel`.
+  /// uppercased per mockup. Intentionally mirrors
+  /// `WeekdayFormatter.shortDayLabel(..., uppercase: true)` from
+  /// `lib/core/utils/weekday_formatter.dart`; kept local here as a stable
+  /// hot-path leaf widget. `weekday_consistency_test.dart` carries a
+  /// byte-identical snapshot replica that asserts the two stay in lockstep.
   static String _shortDayLabel(DateTime completedAt, String locale) {
     final local = completedAt.toLocal();
     final raw = DateFormat.E(locale).format(local);

@@ -148,40 +148,43 @@ void main() {
       },
     );
 
-    test('title-case mode emits 3-char output with first letter uppercase', () {
-      // The Week Plan editor renders the row meta as "Ter", not "TER" or
-      // "ter". This pins the title-case contract for the editor surface.
-      final wedUtc = DateTime.utc(2026, 5, 27, 12, 0);
-      for (final locale in <String>['en', 'pt']) {
-        final label = WeekdayFormatter.shortDayLabel(
-          wedUtc,
-          locale,
-          uppercase: false,
-        );
-        expect(
-          label.length,
-          equals(3),
-          reason:
-              'Title-case label must be 3 chars (intl emits "Mon"/"Seg" — '
-              'we strip a trailing dot if the locale adds one). Got '
-              '"$label" for locale $locale.',
-        );
-        expect(
-          label[0],
-          equals(label[0].toUpperCase()),
-          reason:
-              'First letter must be uppercase ("Mon" not "mon"). '
-              'Got "$label" for locale $locale.',
-        );
-        expect(
-          label.substring(1),
-          equals(label.substring(1).toLowerCase()),
-          reason:
-              'Letters 2-3 must be lowercase ("Mon" not "MOn"). '
-              'Got "$label" for locale $locale.',
-        );
-      }
-    });
+    test(
+      'title-case mode emits first-letter-uppercase rest-lowercase output',
+      () {
+        // The Week Plan editor renders the row meta as "Ter", not "TER" or
+        // "ter". This pins the title-case contract for the editor surface.
+        //
+        // Length is NOT asserted here — `DateFormat.E` emits 3-char abbrevs
+        // for en + pt (the locales RepSaga ships today) but other intl
+        // locales emit 2-char abbrevs (e.g. de "Mo", "Di"). The case-shape
+        // assertion holds for every intl-abbreviated weekday regardless of
+        // length, so it survives future locale additions without churn.
+        final wedUtc = DateTime.utc(2026, 5, 27, 12, 0);
+        for (final locale in <String>['en', 'pt']) {
+          final label = WeekdayFormatter.shortDayLabel(
+            wedUtc,
+            locale,
+            uppercase: false,
+          );
+          expect(
+            label[0],
+            equals(label[0].toUpperCase()),
+            reason:
+                'First letter must be uppercase ("Mon" not "mon"). '
+                'Got "$label" for locale $locale.',
+          );
+          if (label.length > 1) {
+            expect(
+              label.substring(1),
+              equals(label.substring(1).toLowerCase()),
+              reason:
+                  'Letters 2+ must be lowercase ("Mon" not "MOn"). '
+                  'Got "$label" for locale $locale.',
+            );
+          }
+        }
+      },
+    );
 
     test(
       'agrees with bucket_chip_row._shortDayLabel for the same input (cross-surface contract)',
