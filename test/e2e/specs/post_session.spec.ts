@@ -22,7 +22,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, POST_SESSION, NAV } from '../helpers/selectors';
+import { WORKOUT, POST_SESSION } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -130,43 +130,15 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
     ).toBeVisible();
   });
 
-  test('should show leave-confirm dialog when pressing back on post-session route (Phase 31)', async ({
-    page,
-  }) => {
-    // Phase 32 PR 32g — pins the Phase 31 round-2 Bug E invariant: the
-    // post-session route must intercept the system back button with a
-    // confirmation dialog. "Cancel" keeps the user on /workout/finish/...
-    // and "Leave" navigates to /home, persisting the workout.
-    //
-    // The dialog title text comes from `postSessionLeaveTitle`. The
-    // dialog itself has no Semantics identifier today — text selector is
-    // the load-bearing match. en default; if the test user's locale ever
-    // flips to pt, swap the assertion to 'Sair da pós-batalha?'.
-    const leaveTitle = page.locator(
-      'text=Leave the post-battle?',
-    );
-
-    // Browser back triggers the route's PopScope handler.
-    await page.goBack();
-
-    // Dialog must be visible.
-    await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
-
-    // Cancel keeps the user on the post-session summary panel. Assert on
-    // content visibility (the summary stays mounted) instead of `toHaveURL`
-    // — Flutter web hash routing makes URL assertions after `context.push`
-    // unreliable (cluster `flutter-web-url-assertion`).
-    await page.locator('role=button[name="CANCEL"]').click();
-    await expect(leaveTitle).toBeHidden({ timeout: 2_000 });
-    await expect(page.locator(POST_SESSION.summary)).toBeVisible({
-      timeout: 2_000,
-    });
-
-    // Press back again, then Leave — destination is /home. Assert on the
-    // home tab visibility instead of `toHaveURL` (same cluster).
-    await page.goBack();
-    await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
-    await page.locator('role=button[name="LEAVE"]').click();
-    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 5_000 });
-  });
+  // PR 32g leave-confirm E2E removed — cluster
+  // `flutter-web-popscope-unreachable`. GoRouter's
+  // `MultiEntriesBrowserHistory` consumes `popstate` BEFORE the
+  // route's PopScope handler runs on Flutter web, so
+  // `page.goBack()` cannot trigger the leave-confirm dialog. The
+  // contract is exercised on Android (where the OS back button
+  // routes through PopScope normally) and pinned by widget tests
+  // at `test/widget/features/workouts/ui/post_session/`. Audit
+  // entry in `docs/home-to-workout-flow-audit.md` §3.4 is closed
+  // by the widget-test coverage; this stays an Android-only
+  // contract on the E2E side.
 });

@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW, POST_SESSION } from '../helpers/selectors';
+import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -251,32 +251,19 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     });
   });
 
-  test('should show EmptySessionGuardSheet when finishing with zero completed sets (Phase 30 PR 30a)', async ({
-    page,
-  }) => {
-    // Phase 32 PR 32g — pins the Phase 30 PR 30a empty-session guard
-    // invariant. The user adds an exercise but never completes a set,
-    // taps Finish, and must see the disambiguation sheet — NOT the
-    // post-session route. Playing a celebration for zero work would
-    // train users that the RPG layer is fake.
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.benchPress);
-
-    // Tap Finish WITHOUT completing any sets.
-    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
-      timeout: 15_000,
-    });
-    await page.click(WORKOUT.finishButton);
-
-    // Empty-session guard sheet must appear. Visibility of the guard sheet
-    // is the contract — the finish coordinator's empty-session guard fires
-    // BEFORE the post-session push branch, so the sheet's presence implies
-    // the cinematic route was not entered. URL assertion dropped per
-    // cluster `flutter-web-url-assertion`.
-    await expect(page.locator(POST_SESSION.emptySessionGuardSheet)).toBeVisible(
-      { timeout: 5_000 },
-    );
-  });
+  // PR 32g EmptySessionGuardSheet E2E removed — guard is unreachable
+  // from the UI's standard finish path. `FinishBottomBar.enabled` is
+  // gated on `_hasCompletedSet` in `active_workout_screen.dart:561`,
+  // so the Finish button is DISABLED whenever `totalSetsCount == 0` —
+  // the very precondition for the guard at
+  // `finish_workout_coordinator.dart:97`. The guard exists as
+  // defense-in-depth (covers an un-complete-then-finish edge that
+  // the UI shouldn't allow), and the contract is already pinned by
+  // widget tests at:
+  //   - `test/widget/features/workouts/ui/coordinators/finish_workout_coordinator_empty_guard_test.dart`
+  //   - `test/unit/features/workouts/ui/widgets/empty_session_guard_sheet_test.dart`
+  // The audit entry in `docs/home-to-workout-flow-audit.md` §3.4 is
+  // closed by that coverage.
 
   test('should return to home without saving when discarding a workout', async ({
     page,

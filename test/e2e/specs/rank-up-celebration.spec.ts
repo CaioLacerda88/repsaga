@@ -50,7 +50,14 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, SAGA, HOME, CELEBRATION, SET_ROW } from '../helpers/selectors';
+import {
+  WORKOUT,
+  SAGA,
+  HOME,
+  CELEBRATION,
+  SET_ROW,
+  POST_SESSION,
+} from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES, EXERCISE_NAMES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
