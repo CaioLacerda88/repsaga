@@ -386,17 +386,60 @@ test.describe('Home bucket chip row (planned routines)', () => {
       timeout: 10_000,
     });
   });
+
+  // Phase 32 PR 32g (D5) — bucket-chip → RoutineActionSheet → Start.
+  // Pre-PR-32g this flow was never covered at the E2E layer (audit row #6).
+  // Tapping a chip opens `showRoutineActionSheet` for the routine; tapping
+  // Start routes through `startRoutineAction` → /workout/active. The
+  // active-workout screen becomes visible.
+  test('should open RoutineActionSheet when tapping a planned bucket chip and start active workout', async ({
+    page,
+  }) => {
+    // `ensurePushDayInPlan` already ran in this describe block's beforeEach,
+    // so a chip is present. Tap any chip — Push Day is a default routine,
+    // so the action sheet's Start option is text-labeled (no Semantics id).
+    const chipSelector =
+      '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])';
+    const chip = page.locator(chipSelector).first();
+    await chip.waitFor({ state: 'attached', timeout: 10_000 });
+    await chip.click();
+
+    // The action sheet's ListTile labelled "Start" comes from
+    // `l10n.start`. Default-routine variant (chip routine is Push Day,
+    // is_default = true). Text-based selector — no Semantics id on the
+    // default branch.
+    const startListTile = page.locator('role=button[name*="Start"]').first();
+    await expect(startListTile).toBeVisible({ timeout: 5_000 });
+    await startListTile.click();
+
+    // Active workout screen mounts — the Finish button is the canonical
+    // post-PR-30 marker.
+    await expect(page.locator('[flt-semantics-identifier="workout-finish-btn"]')).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });
 
 // =============================================================================
-// REGRESSION — Create-first-routine ActionHero branch (skipped)
+// REGRESSION — Create-first-routine ActionHero branch (deferred)
 //
 // The third ActionHero branch fires only when the user has zero routines
-// (including no default routines visible). The current Supabase seed exposes
-// the default routines (Full Body, Push Day, …) to every account, so
-// `routineListProvider.value.isEmpty` is unreachable through the public seed.
-// Reproducing this branch requires a custom seed that deletes/hides defaults
-// for one user — out of scope for T13.
+// (including no default routines visible). The Supabase seed exposes the
+// default routines (Full Body, Push Day, …) as GLOBAL rows with no
+// `user_id` — `routineListProvider` returns them via a RLS SELECT for
+// every authenticated user. There is no per-user "hide default routines"
+// affordance, so we cannot reach `routineListProvider.value.isEmpty`
+// through any combination of beforeEach DELETEs against a single user
+// (deleting the rows would break the seeded routines for every other
+// test user too).
+//
+// Phase 32 PR 32g investigation (2026-05-27): looked at three approaches —
+// (1) per-user `is_visible_to` join column, (2) RLS predicate skipping
+// defaults for a specific test email, (3) provider-side override at app
+// bootstrap. (1) and (2) are migrations + new RLS rules — out of scope
+// for a hotfix wave. (3) bypasses real UI state — defeats the E2E
+// contract. Defer to a follow-up PR carrying the per-user-default-hide
+// migration; either schema- or feature-flag-driven works.
 //
 // Unit tests already pin the branch: see
 // `test/widget/features/workouts/ui/widgets/action_hero_test.dart`.
@@ -405,9 +448,8 @@ test.describe('Home ActionHero create-first-routine branch', () => {
   test.skip(
     'should show create-first-routine ActionHero when user has zero routines',
     () => {
-      // Skipped — no seeded user has zero routines (default routines are
-      // global). Add a dedicated fixture that filters default routines
-      // out for one user before un-skipping. Branch covered by unit tests.
+      // Deferred — see describe-block comment. Branch covered by unit
+      // tests in action_hero_test.dart.
     },
   );
 });

@@ -152,6 +152,16 @@ jobs:
         # (`AppColors.*`). See script header for opt-out grammar.
         run: bash scripts/check_hardcoded_colors.sh
 
+      - name: Check no dart:developer.log in workouts/rpg
+        # Phase 32 PR 32g — enforces cluster
+        # `developer-log-invisible-logcat`: `dart:developer.log` is
+        # INVISIBLE on `adb logcat` (writes to Dart VM developer stream
+        # only) so on-device triage of "save failed" / "celebration
+        # didn't fire" is impossible. Replace with
+        # `debugPrint('[Scope] msg')`. See script header for the gate
+        # scope + remediation hint.
+        run: bash scripts/check_no_developer_log.sh
+
   test:
     runs-on: ubuntu-latest
     needs: analyze

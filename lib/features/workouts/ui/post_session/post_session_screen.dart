@@ -554,10 +554,30 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         laterLabel: l10n.summaryEquipLater,
         equippedLabel: l10n.postSessionTitleEquipped,
         onEquipPressed: () async {
-          final repo = ref.read(titlesRepositoryProvider);
-          await repo.equipTitle(slug);
-          ref.invalidate(earnedTitlesProvider);
-          ref.invalidate(equippedTitleSlugProvider);
+          // PR 32g (Bug 3) — surface RPC errors as a localized snackbar.
+          // Pre-fix the closure had no try/catch, so the row's `rethrow`
+          // became an unhandled Future rejection: the button reset to its
+          // idle state but the user got no feedback. The row's contract is
+          // "screen layer surfaces error snackbars" (see title_equip_row.dart
+          // L76) — this fulfills that.
+          try {
+            final repo = ref.read(titlesRepositoryProvider);
+            await repo.equipTitle(slug);
+            ref.invalidate(earnedTitlesProvider);
+            ref.invalidate(equippedTitleSlugProvider);
+          } catch (_) {
+            // `mounted` is the State's mounted flag (this closure runs on
+            // the State, see `_buildSummary`). Guards against the user
+            // navigating away mid-RPC. The analyzer's
+            // `use_build_context_synchronously` lint is satisfied by
+            // checking `mounted` (not `context.mounted`) before reading
+            // `context`.
+            if (!mounted) rethrow;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l10n.postSessionTitleEquipFailed)),
+            );
+            rethrow;
+          }
         },
       );
     }

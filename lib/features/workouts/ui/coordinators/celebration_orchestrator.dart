@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -100,10 +99,11 @@ class CelebrationOrchestrator {
       await SagaIntroSequencer.waitForIntroDismissed(userId).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          developer.log(
-            'SagaIntroSequencer timed out — proceeding with '
-            'celebration without intro dismissal signal',
-            name: 'CelebrationPlayer',
+          // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+          // visibility for SagaIntroSequencer timeouts on physical devices.
+          debugPrint(
+            '[CelebrationOrchestrator] SagaIntroSequencer timed out — '
+            'proceeding with celebration without intro dismissal signal',
           );
         },
       );
@@ -180,17 +180,14 @@ class CelebrationOrchestrator {
         await pulseStorage.recordRankUp(event.bodyPart);
       } on Exception catch (e, stack) {
         // Fire-and-forget: cosmetic pulse failure must not abort the
-        // post-workout flow, and must not skip the remaining body
-        // parts. Log via developer.log so the failure is in
-        // `adb logcat` for diagnosis without invoking crash-report
-        // surfaces — consistent with the rest of celebration
-        // playback's never-throws posture.
-        developer.log(
-          'recordRankUp for ${event.bodyPart.dbValue} failed; continuing. '
-          'Cause: $e',
-          name: 'CelebrationOrchestrator',
-          error: e,
-          stackTrace: stack,
+        // post-workout flow, and must not skip the remaining body parts.
+        // Cluster: developer-log-invisible-logcat (PR 32g) — pre-PR-32g
+        // this used `developer.log` whose output is invisible on
+        // `adb logcat`. `debugPrint` routes to the platform's print
+        // sink so on-device triage works.
+        debugPrint(
+          '[CelebrationOrchestrator] recordRankUp for '
+          '${event.bodyPart.dbValue} failed; continuing. Cause: $e\n$stack',
         );
       }
     }

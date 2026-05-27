@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:ui' show Locale;
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -82,6 +81,16 @@ typedef FinishWorkoutResult = ({
   PRDetectionResult? prResult,
   bool savedOffline,
   bool serverErrorQueued,
+  // Phase 32 PR 32g (Bug 1) — surface the durationSeconds the notifier
+  // computed against `DateTime.now().toUtc()` so the coordinator doesn't
+  // recompute against `DateTime.now()` (local) and disagree by the device
+  // UTC offset on every finish. The notifier is authoritative for the
+  // workout timeline; downstream consumers read this single source of truth.
+  // `null` means the save short-circuited before timing (offline save +
+  // pre-commit, or the notifier guard returned null) — callers fall back
+  // to 0 in that case.
+  // Cluster: `async-caller-broke-snackbar` (extended).
+  int? durationSeconds,
 });
 
 /// Core state machine for active workouts.
@@ -1372,12 +1381,18 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     // Hoisted so the analytics event can still report a number (0) when PR
     // detection throws before the count is fetched.
     int workoutCount = 0;
+    // PR 32g (Bug 1) — hoisted out of the guard scope so the return record
+    // can surface the same value the notifier persisted. Stays null when
+    // the guard short-circuits before computing it (e.g. an exception
+    // before the `now/durationSeconds` capture below); caller defaults to 0.
+    int? finishDurationSeconds;
 
     final result = await AsyncValue.guard(() async {
       final now = DateTime.now().toUtc();
       final durationSeconds = now
           .difference(current.workout.startedAt)
           .inSeconds;
+      finishDurationSeconds = durationSeconds;
 
       final workout = current.workout.copyWith(
         finishedAt: now,
@@ -1438,17 +1453,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         //     pick a "server error — saved offline, will retry" copy variant
         //     (Q1.3 in the impact analysis).
         if (SyncErrorClassifier.isTerminal(e)) {
-          log(
-            'Terminal save error, surfacing to UI: $e',
-            name: 'ActiveWorkoutNotifier',
-            level: 1000,
+          // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+          // visibility for terminal save errors on physical-device triage.
+          debugPrint(
+            '[ActiveWorkoutNotifier] Terminal save error, surfacing to UI: $e',
           );
           rethrow;
         }
-        log(
-          'Network save failed, queueing offline: $e',
-          name: 'ActiveWorkoutNotifier',
-          level: 900,
+        debugPrint(
+          '[ActiveWorkoutNotifier] Network save failed, queueing offline: $e',
         );
         savedOffline = true;
         // 5xx is transient (queue) but distinct from connectivity failure;
@@ -1685,12 +1698,11 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
               try {
                 await prRepo.upsertRecords(newRecordsForUpsert);
               } catch (e, st) {
-                log(
-                  'Direct PR upsert failed, falling back to queue: $e',
-                  name: 'ActiveWorkoutNotifier',
-                  level: 900,
-                  error: e,
-                  stackTrace: st,
+                // Cluster: developer-log-invisible-logcat (PR 32g) — adb
+                // logcat visibility for the PR-upsert fallback path.
+                debugPrint(
+                  '[ActiveWorkoutNotifier] Direct PR upsert failed, falling '
+                  'back to queue: $e\n$st',
                 );
                 try {
                   await pendingNotifier.enqueue(
@@ -1707,13 +1719,11 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                 } catch (queueErr, queueSt) {
                   // The queue itself failing is rare (Hive box write) but
                   // we never want this background task to crash the
-                  // notifier. Log loud and move on.
-                  log(
-                    'Fallback enqueue also failed: $queueErr',
-                    name: 'ActiveWorkoutNotifier',
-                    level: 1000,
-                    error: queueErr,
-                    stackTrace: queueSt,
+                  // notifier. Log loud and move on. Cluster:
+                  // developer-log-invisible-logcat (PR 32g).
+                  debugPrint(
+                    '[ActiveWorkoutNotifier] Fallback enqueue also failed: '
+                    '$queueErr\n$queueSt',
                   );
                 }
               }
@@ -1744,11 +1754,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // this catch historically masked BUG-001 by silently dropping
         // detection-side null casts. Workout still saves; user is not
         // surfaced anything because PRs are non-essential.
-        log(
-          'PR detection failed: $e',
-          name: 'ActiveWorkoutNotifier',
-          level: 900,
-        );
+        // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+        // visibility for swallowed PR-detection failures.
+        debugPrint('[ActiveWorkoutNotifier] PR detection failed: $e');
         unawaited(SentryReport.captureException(e, stackTrace: st));
       }
 
@@ -1864,6 +1872,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       prResult: prResult,
       savedOffline: savedOffline,
       serverErrorQueued: serverErrorQueued,
+      durationSeconds: finishDurationSeconds,
     );
   }
 
@@ -1952,11 +1961,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
 
       _lastCelebration = result;
     } catch (e, st) {
-      log(
-        'Celebration build failed: $e\n$st',
-        name: 'ActiveWorkoutNotifier',
-        level: 900,
-      );
+      // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+      // visibility for celebration-build failures on physical devices.
+      debugPrint('[ActiveWorkoutNotifier] Celebration build failed: $e\n$st');
       _lastCelebration = null;
     }
   }
@@ -1969,10 +1976,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     try {
       await _localStorage.saveActiveWorkout(activeState);
     } catch (e) {
-      log(
-        'Failed to persist workout to Hive: $e',
-        name: 'ActiveWorkoutNotifier',
-        level: 900,
+      // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+      // visibility for Hive persistence failures on physical devices.
+      debugPrint(
+        '[ActiveWorkoutNotifier] Failed to persist workout to Hive: $e',
       );
     }
   }

@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
+import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW, POST_SESSION } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -249,6 +249,34 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     await expect(page.locator('text=Last session')).toBeVisible({
       timeout: 15_000,
     });
+  });
+
+  test('should show EmptySessionGuardSheet when finishing with zero completed sets (Phase 30 PR 30a)', async ({
+    page,
+  }) => {
+    // Phase 32 PR 32g — pins the Phase 30 PR 30a empty-session guard
+    // invariant. The user adds an exercise but never completes a set,
+    // taps Finish, and must see the disambiguation sheet — NOT the
+    // post-session route. Playing a celebration for zero work would
+    // train users that the RPG layer is fake.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // Tap Finish WITHOUT completing any sets.
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.click(WORKOUT.finishButton);
+
+    // Empty-session guard sheet must appear.
+    await expect(page.locator(POST_SESSION.emptySessionGuardSheet)).toBeVisible(
+      { timeout: 5_000 },
+    );
+
+    // And critically — URL must NOT have advanced to /workout/finish/...
+    // (the post-session route). The finish coordinator's empty-session
+    // guard fires BEFORE the post-session push branch.
+    await expect(page).not.toHaveURL(/\/workout\/finish\//, { timeout: 1_000 });
   });
 
   test('should return to home without saving when discarding a workout', async ({

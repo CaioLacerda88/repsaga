@@ -129,4 +129,38 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
       page.locator(POST_SESSION.missionDebriefXpBar),
     ).toBeVisible();
   });
+
+  test('should show leave-confirm dialog when pressing back on post-session route (Phase 31)', async ({
+    page,
+  }) => {
+    // Phase 32 PR 32g — pins the Phase 31 round-2 Bug E invariant: the
+    // post-session route must intercept the system back button with a
+    // confirmation dialog. "Cancel" keeps the user on /workout/finish/...
+    // and "Leave" navigates to /home, persisting the workout.
+    //
+    // The dialog title text comes from `postSessionLeaveTitle`. The
+    // dialog itself has no Semantics identifier today — text selector is
+    // the load-bearing match. en default; if the test user's locale ever
+    // flips to pt, swap the assertion to 'Sair da pós-batalha?'.
+    const leaveTitle = page.locator(
+      'text=Leave the post-battle?',
+    );
+
+    // Browser back triggers the route's PopScope handler.
+    await page.goBack();
+
+    // Dialog must be visible.
+    await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
+
+    // Cancel keeps the user on /workout/finish/...
+    await page.locator('role=button[name="CANCEL"]').click();
+    await expect(leaveTitle).toBeHidden({ timeout: 2_000 });
+    await expect(page).toHaveURL(/\/workout\/finish\//, { timeout: 2_000 });
+
+    // Press back again, then Leave — URL flips to /home.
+    await page.goBack();
+    await expect(leaveTitle).toBeVisible({ timeout: 5_000 });
+    await page.locator('role=button[name="LEAVE"]').click();
+    await expect(page).toHaveURL(/#?\/home$/, { timeout: 5_000 });
+  });
 });

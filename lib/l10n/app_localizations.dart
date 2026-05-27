@@ -5022,6 +5022,12 @@ abstract class AppLocalizations {
   /// **'Equipped ✓'**
   String get postSessionTitleEquipped;
 
+  /// Phase 32 PR 32g (Bug 3) — Snackbar shown on the post-session screen when the title-equip RPC fails. The TitleEquipRow's contract is to reset its loading state and rethrow so the screen surfaces the error.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not equip title. Please try again.'**
+  String get postSessionTitleEquipFailed;
+
   /// Phase 30 PR 30a UX pass 2 (2026-05-23) — Label inside the top-right skip pill that jumps the post-session cinematic to the summary panel. Pre-uppercased to match the letter-spaced eyebrow casing convention (AppTextStyles.label).
   ///
   /// In en, this message translates to:

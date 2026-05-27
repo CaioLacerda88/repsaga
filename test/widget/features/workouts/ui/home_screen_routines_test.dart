@@ -122,6 +122,21 @@ class _ZeroPendingSyncNotifier extends PendingSyncNotifier {
   int build() => 0;
 }
 
+/// PR 32g — `weeklyPlanNeedsConfirmationProvider` migrated from
+/// `StateProvider<bool>` to a Hive-backed `NotifierProvider<...,bool>`.
+class _NeedsConfirmationStub extends WeeklyPlanNeedsConfirmationNotifier {
+  _NeedsConfirmationStub(this._value);
+  final bool _value;
+
+  @override
+  bool build() => _value;
+
+  @override
+  Future<void> set(bool value) async {
+    state = value;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Factories
 // ---------------------------------------------------------------------------
@@ -196,7 +211,9 @@ Widget _build({
       workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
-      weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
+      weeklyPlanNeedsConfirmationProvider.overrideWith(
+        () => _NeedsConfirmationStub(false),
+      ),
       workoutCountProvider.overrideWith((ref) => Future.value(workoutCount)),
       profileProvider.overrideWith(() => _ProfileStub()),
       pendingSyncProvider.overrideWith(() => _ZeroPendingSyncNotifier()),
@@ -262,7 +279,9 @@ Widget _buildWithRouter({
       workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
-      weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
+      weeklyPlanNeedsConfirmationProvider.overrideWith(
+        () => _NeedsConfirmationStub(false),
+      ),
       workoutCountProvider.overrideWith((ref) => Future.value(workoutCount)),
       profileProvider.overrideWith(() => _ProfileStub()),
       pendingSyncProvider.overrideWith(() => _ZeroPendingSyncNotifier()),

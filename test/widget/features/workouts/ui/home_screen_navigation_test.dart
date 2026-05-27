@@ -119,6 +119,21 @@ class _ZeroPendingSyncNotifier extends PendingSyncNotifier {
   int build() => 0;
 }
 
+/// PR 32g — `weeklyPlanNeedsConfirmationProvider` migrated from
+/// `StateProvider<bool>` to a Hive-backed `NotifierProvider<...,bool>`.
+class _NeedsConfirmationStub extends WeeklyPlanNeedsConfirmationNotifier {
+  _NeedsConfirmationStub(this._value);
+  final bool _value;
+
+  @override
+  bool build() => _value;
+
+  @override
+  Future<void> set(bool value) async {
+    state = value;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fixture builders
 // ---------------------------------------------------------------------------
@@ -195,7 +210,9 @@ Widget _buildTestApp({
       workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
       activeWorkoutProvider.overrideWith(() => _NullActiveWorkoutNotifier()),
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
-      weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
+      weeklyPlanNeedsConfirmationProvider.overrideWith(
+        () => _NeedsConfirmationStub(false),
+      ),
       workoutCountProvider.overrideWith((ref) => Future.value(workouts.length)),
       profileProvider.overrideWith(
         () => _ProfileStub(

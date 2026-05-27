@@ -1,5 +1,4 @@
-import 'dart:developer' as developer;
-
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -72,9 +71,11 @@ final earnedTitlesBackfillProvider = FutureProvider<void>((ref) async {
   }
 
   if (!Hive.isBoxOpen(HiveService.userPrefs)) {
-    developer.log(
-      'userPrefs box is not open — skipping earned_titles backfill',
-      name: 'EarnedTitlesBackfill',
+    // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+    // visibility for backfill-skip diagnostics on physical devices.
+    debugPrint(
+      '[EarnedTitlesBackfill] userPrefs box is not open — skipping '
+      'earned_titles backfill',
     );
     return;
   }
@@ -94,15 +95,14 @@ final earnedTitlesBackfillProvider = FutureProvider<void>((ref) async {
     ref.invalidate(earnedTitlesProvider);
   } catch (e, stack) {
     // Best-effort: a network failure here is recoverable. The flag stays
-    // unset so the next session retries. Logging at level 900 (warning) so
-    // a regression that breaks the backfill is visible in adb logcat /
-    // browser dev tools without crashing the shell.
-    developer.log(
-      'backfill_earned_titles failed (best-effort, will retry next session): $e',
-      name: 'EarnedTitlesBackfill',
-      level: 900,
-      error: e,
-      stackTrace: stack,
+    // unset so the next session retries. Cluster:
+    // developer-log-invisible-logcat (PR 32g) — `developer.log` is
+    // invisible on `adb logcat`. `debugPrint` routes to the platform
+    // print sink so a regression breaking backfill is triagable from
+    // a physical device.
+    debugPrint(
+      '[EarnedTitlesBackfill] backfill_earned_titles failed (best-effort, '
+      'will retry next session): $e\n$stack',
     );
   }
 });
