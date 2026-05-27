@@ -1005,8 +1005,6 @@
 
   "addRoutinesSheet": "Add Routines",
   "@addRoutinesSheet": { "description": "Add routines sheet title" },
-  "allRoutinesInPlan": "All routines in plan",
-  "@allRoutinesInPlan": { "description": "All routines already in plan" },
   "createMoreRoutines": "Create more routines to add them here.",
   "@createMoreRoutines": { "description": "Hint: no more routines to add" },
   "addCountRoutines": "{count, plural, =1{ADD 1 ROUTINE} other{ADD {count} ROUTINES}}",

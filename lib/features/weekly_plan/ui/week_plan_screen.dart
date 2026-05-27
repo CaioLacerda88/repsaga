@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/device/platform_info.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/weekday_formatter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/snackbar_tap_out_dismiss_scope.dart';
 import '../../analytics/data/analytics_repository.dart';
@@ -258,7 +258,11 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
                     isDone: bucket.completedWorkoutId != null,
                     isSpontaneous: bucket.isSpontaneous,
                     completionDayLabel: bucket.completedAt != null
-                        ? _shortDayLabel(bucket.completedAt!, l10n)
+                        ? WeekdayFormatter.shortDayLabel(
+                            bucket.completedAt!,
+                            l10n.localeName,
+                            uppercase: false,
+                          )
                         : null,
                     spontaneousLabel: l10n.spontaneousTag,
                     onOverflowTap: bucket.completedWorkoutId != null
@@ -413,16 +417,18 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
     List<Routine> allRoutines, {
     Set<String> preSelectedRoutineIds = const <String>{},
   }) async {
-    final existingIds = _bucketRoutines.map((b) => b.routineId).toSet();
-    final available = allRoutines
-        .where((r) => !existingIds.contains(r.id))
-        .toList();
-
+    // PR 32c — picker no longer filters routines already in the bucket.
+    // BucketRoutine is keyed on `(routineId, order)` not `routineId` alone,
+    // so the data model already supports the same routine appearing on
+    // multiple days. The previous filter was a UX gate that blocked users
+    // with classic splits (Push Day Mon/Wed/Fri) from re-adding the same
+    // routine. The full routine list now goes through; ordering is
+    // controlled at the consumer (BucketRoutine.order assigned on insert).
     final result = await showModalBottomSheet<AddRoutinesSheetResult>(
       context: context,
       isScrollControlled: true,
       builder: (context) => AddRoutinesSheet(
-        availableRoutines: available,
+        availableRoutines: allRoutines,
         preSelectedRoutineIds: preSelectedRoutineIds,
       ),
     );
@@ -679,20 +685,6 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
         appVersion: currentAppVersion(),
       ),
     );
-  }
-
-  /// 3-letter localized weekday label ("Mon"/"Seg", "Tue"/"Ter", …).
-  ///
-  /// Uses [DateFormat.E] (intl) seeded against the active [AppLocalizations]
-  /// locale — same pattern as `resume_workout_dialog.dart`. Title-cased + 3
-  /// chars in both en + pt-BR; we strip a trailing dot if intl emits one
-  /// (the pt locale formats Mon as "seg." in some platforms).
-  String _shortDayLabel(DateTime date, AppLocalizations l10n) {
-    final locale = l10n.localeName;
-    final raw = DateFormat.E(locale).format(date);
-    final trimmed = raw.endsWith('.') ? raw.substring(0, raw.length - 1) : raw;
-    if (trimmed.isEmpty) return trimmed;
-    return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
 }
 

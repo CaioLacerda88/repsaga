@@ -1326,9 +1326,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get addRoutinesSheet => 'Adicionar Treinos';
 
   @override
-  String get allRoutinesInPlan => 'Todos os treinos estão no plano';
-
-  @override
   String get createMoreRoutines => 'Crie mais treinos para adicioná-los aqui.';
 
   @override

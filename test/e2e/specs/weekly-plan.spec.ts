@@ -85,9 +85,10 @@ const PUSH_DAY = 'Push Day';
  *     when the popup menu doesn't render in the 3 s observation window —
  *     so under CI 4-vCPU contention the defensive branch can run, hit a
  *     transient hidden-popup state, and proceed to "add" Push Day on top
- *     of a stale plan. Once Push Day is in the plan, the AddRoutinesSheet
- *     correctly filters it OUT (server-side dedupe), so a retry of test 3
- *     finds nothing to scroll to and times out on `scrollSheetAndClick`.
+ *     of a stale plan. (Pre-PR 32c the picker filtered already-added
+ *     routines, which would surface as a missing row in the sheet on the
+ *     duplicate-add path; post-PR 32c the picker lists ALL routines, so
+ *     the symptom now manifests as a duplicate row in the plan instead.)
  *
  *   - Test 5 ('should remove routines ...') clears the plan, but that
  *     runs AFTER test 3, so it doesn't repair test 3's setup pollution.
@@ -530,6 +531,49 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
     await expect(page.locator(WEEKLY_PLAN.sessionsStatsText)).toBeVisible({
       timeout: 5_000,
     });
+  });
+
+  test('should render bucket chip in done state for completed routine (PR 32c)', async ({
+    page,
+  }) => {
+    // PR 32c — pins the bucket-chip done-flip on Home.
+    //
+    // The smokeWeeklyPlanReview user is seeded (global-setup.ts) with a
+    // weekly plan containing 2 Push Day entries, both completed (workout
+    // FK + completed_at populated). `_BucketChip` renders the done state
+    // as a filled-check icon AND appends a localized 3-letter uppercase
+    // weekday label (e.g. "TER", "MON") to the Semantics group — the
+    // weekday label is ONLY emitted when `isDone && completedAt != null`
+    // (see `bucket_chip_row.dart::_BucketChip.build`).
+    //
+    // Asserting the chip's accessible name carries that weekday label
+    // is the strongest non-visual proof of done state: a pending chip
+    // would not include it. The previous test in this describe only
+    // asserted "section header visible" — this one closes the gap by
+    // pinning the actual done-state render contract.
+    //
+    // Selector pattern matches the existing weekly-plan spec (line 350
+    // `home-bucket-chip-*`). Regex covers en + pt-BR 3-letter abbrevs.
+    // `\b` boundaries keep the match from spuriously hitting routine
+    // names that happen to contain those substrings.
+    const chip = page
+      .locator(
+        '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
+      )
+      .first();
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+
+    // Read the chip's accessible name from the AOM (NOT the DOM
+    // `aria-label` attribute — Flutter 3.41.6+ exposes labels via the
+    // accessibility tree, not via DOM attributes). `toHaveAccessibleName`
+    // reads from the same AOM that screen readers see.
+    await expect(
+      chip,
+      `chip accessibleName should carry a localized weekday abbreviation ` +
+        `when the routine is in the done state`,
+    ).toHaveAccessibleName(
+      /\b(MON|TUE|WED|THU|FRI|SAT|SUN|SEG|TER|QUA|QUI|SEX|SÁB|SAB|DOM)\b/,
+    );
   });
 });
 

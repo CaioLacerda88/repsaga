@@ -1320,9 +1320,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addRoutinesSheet => 'Add Routines';
 
   @override
-  String get allRoutinesInPlan => 'All routines in plan';
-
-  @override
   String get createMoreRoutines => 'Create more routines to add them here.';
 
   @override

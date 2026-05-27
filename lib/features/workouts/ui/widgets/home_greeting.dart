@@ -16,8 +16,8 @@ import '../../../profile/providers/profile_providers.dart';
 ///      via [DateFormat.EEEE] + [DateFormat.MMMd]. Locale is sourced from
 ///      [AppLocalizations.localeName] so the eyebrow matches the rest of
 ///      the app's date rendering (same pattern used by
-///      `week_plan_screen._shortDayLabel` and
-///      `resume_workout_dialog`).
+///      `WeekdayFormatter.shortDayLabel` in `core/utils/weekday_formatter.dart`
+///      and `resume_workout_dialog`).
 ///   2. Name — the user's display name, with email-prefix fallback when
 ///      [Profile.displayName] is null/empty, then empty string when neither
 ///      source resolves.
