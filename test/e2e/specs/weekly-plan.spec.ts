@@ -531,6 +531,49 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
       timeout: 5_000,
     });
   });
+
+  test('should render bucket chip in done state for completed routine (PR 32c)', async ({
+    page,
+  }) => {
+    // PR 32c — pins the bucket-chip done-flip on Home.
+    //
+    // The smokeWeeklyPlanReview user is seeded (global-setup.ts) with a
+    // weekly plan containing 2 Push Day entries, both completed (workout
+    // FK + completed_at populated). `_BucketChip` renders the done state
+    // as a filled-check icon AND appends a localized 3-letter uppercase
+    // weekday label (e.g. "TER", "MON") to the Semantics group — the
+    // weekday label is ONLY emitted when `isDone && completedAt != null`
+    // (see `bucket_chip_row.dart::_BucketChip.build`).
+    //
+    // Asserting the chip's accessible name carries that weekday label
+    // is the strongest non-visual proof of done state: a pending chip
+    // would not include it. The previous test in this describe only
+    // asserted "section header visible" — this one closes the gap by
+    // pinning the actual done-state render contract.
+    //
+    // Selector pattern matches the existing weekly-plan spec (line 350
+    // `home-bucket-chip-*`). Regex covers en + pt-BR 3-letter abbrevs.
+    // `\b` boundaries keep the match from spuriously hitting routine
+    // names that happen to contain those substrings.
+    const chip = page
+      .locator(
+        '[flt-semantics-identifier^="home-bucket-chip-"]:not([flt-semantics-identifier="home-bucket-chip-row"])',
+      )
+      .first();
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+
+    // Read the chip's accessible name (Playwright merges Flutter's AOM
+    // sub-tree into a single string for elements with `explicitChildNodes`
+    // — the dayLabel Text is one of those children when isDone).
+    const accessibleName = await chip.getAttribute('aria-label');
+    expect(
+      accessibleName,
+      `chip aria-label should carry a localized weekday abbreviation when ` +
+        `the routine is in the done state — got "${accessibleName}"`,
+    ).toMatch(
+      /\b(MON|TUE|WED|THU|FRI|SAT|SUN|SEG|TER|QUA|QUI|SEX|SÁB|SAB|DOM)\b/,
+    );
+  });
 });
 
 // =============================================================================

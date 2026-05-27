@@ -52,8 +52,13 @@ class AddRoutinesSheetResultCreateNew extends AddRoutinesSheetResult {
 
 /// Bottom sheet for selecting routines to add to the weekly bucket.
 ///
-/// Multi-select with checkmarks. Routines already in the plan are
-/// filtered out by the caller; the sheet shows only `availableRoutines`.
+/// Multi-select with checkmarks. The sheet renders the full list of
+/// `availableRoutines` passed in by the caller; it does NOT filter
+/// routines already in the bucket. PR 32c removed the caller-side
+/// filter so users with classic splits (Push Day Mon/Wed/Fri) can
+/// re-add the same routine on multiple days — `BucketRoutine` is
+/// keyed on `(routineId, order)` not `routineId` alone, so the data
+/// model already supports it.
 ///
 /// Fix 1B (`fix/active-and-plan-ux`):
 ///   * Adds a "Create new routine" action row at the bottom (above the
@@ -72,7 +77,8 @@ class AddRoutinesSheet extends StatefulWidget {
     super.key,
   });
 
-  /// Routines not already in the bucket.
+  /// Full list of user-accessible routines. The sheet does NOT filter
+  /// routines already in the bucket — repeats are valid (see class doc).
   final List<Routine> availableRoutines;
 
   /// IDs to pre-select on first build. Used by the create-new return
