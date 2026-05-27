@@ -329,14 +329,17 @@ void main() {
         unawaited(navigator.maybePop());
         await tester.pumpAndSettle();
 
-        // Dialog visible with localized copy.
+        // Dialog visible with localized copy. Button labels render
+        // uppercased per the project's button-typography convention
+        // (CONTINUAR / COMPARTILHAR / REFAZER all uppercase at the widget
+        // layer — the dialog buttons match that aesthetic via .toUpperCase()).
         expect(find.text('Leave the post-battle?'), findsOneWidget);
-        expect(find.text('Cancel'), findsOneWidget);
-        expect(find.text('Leave'), findsOneWidget);
+        expect(find.text('CANCEL'), findsOneWidget);
+        expect(find.text('LEAVE'), findsOneWidget);
 
         // Tap Cancel — dialog dismisses, screen still mounted, onContinue
         // NOT fired.
-        await tester.tap(find.text('Cancel'));
+        await tester.tap(find.text('CANCEL'));
         await tester.pumpAndSettle();
         expect(find.text('Leave the post-battle?'), findsNothing);
         expect(find.byType(PostSessionScreen), findsOneWidget);
@@ -349,7 +352,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Leave the post-battle?'), findsOneWidget);
 
-        await tester.tap(find.text('Leave'));
+        await tester.tap(find.text('LEAVE'));
         await tester.pumpAndSettle();
         expect(
           onContinueFired,

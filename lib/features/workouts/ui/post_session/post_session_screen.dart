@@ -292,15 +292,42 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(l10n.postSessionLeaveTitle),
+          backgroundColor: AppColors.surface2,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          title: Text(
+            l10n.postSessionLeaveTitle,
+            style: AppTextStyles.title.copyWith(color: AppColors.textCream),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(l10n.postSessionLeaveCancel),
+              child: Text(
+                l10n.postSessionLeaveCancel.toUpperCase(),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 13,
+                  letterSpacing: 0.16 * 13,
+                  color: AppColors.textDim,
+                ),
+              ),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryViolet,
+                foregroundColor: AppColors.textCream,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(l10n.postSessionLeaveConfirm),
+              child: Text(
+                l10n.postSessionLeaveConfirm.toUpperCase(),
+                style: AppTextStyles.label.copyWith(
+                  fontSize: 13,
+                  letterSpacing: 0.16 * 13,
+                  color: AppColors.textCream,
+                ),
+              ),
             ),
           ],
         );
