@@ -106,6 +106,16 @@ class _ZeroSetNotifier extends AsyncNotifier<ActiveWorkoutState?>
   @override
   CelebrationQueueResult? consumeLastCelebration() => null;
 
+  /// Phase 32 PR 32d: the coordinator's finish() path now calls
+  /// [ActiveWorkoutNotifier.recordZeroXpSession] BEFORE showing the guard
+  /// sheet so the funnel signal lands regardless of which branch the user
+  /// picks. Stubbed as a no-op here — the analytics emit contract is
+  /// covered separately in
+  /// `active_workout_notifier_zero_xp_emit_test.dart`. The guard-sheet
+  /// route assertions remain the contract pinned by this file.
+  @override
+  void recordZeroXpSession() {}
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

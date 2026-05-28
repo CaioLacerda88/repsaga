@@ -1,8 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive/hive.dart';
 
+import '../../../../core/device/platform_info.dart';
+import '../../../../core/local_storage/hive_service.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../analytics/data/analytics_repository.dart';
+import '../../../analytics/data/models/analytics_event.dart';
+import '../../../analytics/providers/analytics_providers.dart';
+import '../../../auth/providers/auth_providers.dart';
 import '../../../personal_records/providers/pr_providers.dart';
 import '../../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../../rpg/domain/celebration_queue.dart';
@@ -95,6 +104,13 @@ class FinishWorkoutCoordinator {
       // through to the post-session screen. Playing a celebration for
       // zero work would train users that the RPG layer is fake.
       if (notifier.totalSetsCount == 0) {
+        // Phase 32 PR 32d — fire `session_zero_xp` BEFORE showing the
+        // guard sheet so the funnel signal lands regardless of which
+        // branch the user picks (discard / continue / dismiss). The
+        // event captures intent-to-finish-blocked-by-guard; the
+        // subsequent `workoutDiscarded` (if the user discards) is a
+        // separate signal and is wired independently inside the notifier.
+        notifier.recordZeroXpSession();
         final l10n = AppLocalizations.of(context);
         final guard = await EmptySessionGuardSheet.show(
           context,
@@ -336,6 +352,36 @@ class FinishWorkoutCoordinator {
       final celebration = notifier.consumeLastCelebration();
       if (!wasSavedOffline && context.mounted) {
         if (celebration != null) {
+          // Phase 32 PR 32d — emit `first_rank_up` per body-part rank-up
+          // delta the user has never produced before. Gated by a Hive
+          // cache (per-user list of fired body-part slugs) so the event
+          // fires at most once per (user, body_part) lifetime.
+          //
+          // Dispatched BEFORE the celebration orchestrator plays so the
+          // event ordering reflects "rank-up detected → may animate" —
+          // even if the orchestrator's playback is interrupted (e.g.
+          // user backgrounds the app), the analytics signal lands.
+          //
+          // `unawaited` because this is informational: the celebration
+          // orchestrator's B1 XP slam cut must not wait for Hive + the
+          // Supabase insert to flush. Dispatch order is preserved (the
+          // emitter's synchronous Hive read + dirty-flag dance still
+          // happens before the orchestrator's first frame), only the
+          // tail IO becomes background.
+          //
+          // Tradeoff: the Hive cache is device-local. A user installing
+          // on a new device will re-fire `first_rank_up` for body parts
+          // they already crossed previously. Acceptable because the event
+          // is informational (not used for billing/gating); avoiding the
+          // per-finish Supabase query for "have I ever fired this?" is
+          // worth the occasional re-fire on new-device installs.
+          unawaited(
+            FirstRankUpEmitter.emitForCelebration(
+              ref: ref,
+              celebration: celebration,
+            ),
+          );
+          if (!rootContext.mounted) return;
           final outcome = await celebrationOrchestrator.play(
             rootContext: rootContext,
             ref: ref,
@@ -576,5 +622,155 @@ class FinishWorkoutCoordinator {
       }
     }
     return kg / 1000.0;
+  }
+}
+
+/// Phase 32 PR 32d — Hive-cached emitter for the `first_rank_up` analytics
+/// event.
+///
+/// **Why this lives in the coordinator file (no new file):** the WIP plan
+/// for this PR scopes "no new files except tests". The class is small +
+/// focused enough to colocate; tests reach it via the public API
+/// ([writeFiredSlugs], [readFiredSlugs], [emitForCelebration]).
+///
+/// **Idempotency contract:** at most one `first_rank_up` event fires per
+/// (user_id, body_part) lifetime, gated by a Hive list at key
+/// `firstRankUpEmittedBPs:<user_id>` in the [HiveService.userPrefs] box.
+/// The cache is device-local — re-installing on a new device produces a
+/// fresh slate (acceptable for an informational event; saves a per-finish
+/// Supabase round-trip).
+///
+/// **No-ops cleanly:**
+///   * Missing user id (logged-out edge) → silent no-op.
+///   * Celebration with no [RankUpEvent] → silent no-op.
+///   * Hive box missing (test harness without init) → caught + treated as
+///     "no slugs fired yet" so a test environment doesn't crash production
+///     code paths.
+///
+/// `abstract final` because every member is static and no subtype is
+/// meaningful — the private constructor is just belt-and-braces against
+/// accidental instantiation.
+abstract final class FirstRankUpEmitter {
+  FirstRankUpEmitter._();
+
+  /// Hive key prefix for the fired-body-part list. Composed with the user
+  /// id so multiple accounts on one device stay isolated.
+  @visibleForTesting
+  static const String hiveKeyPrefix = 'firstRankUpEmittedBPs:';
+
+  /// Compose the per-user Hive key. Visible so tests can seed + inspect
+  /// the cache directly.
+  @visibleForTesting
+  static String hiveKeyFor(String userId) => '$hiveKeyPrefix$userId';
+
+  /// Read the list of body-part slugs that have already fired
+  /// `first_rank_up` for [userId]. Returns an empty list when the cache
+  /// is empty, the box is missing, or the stored value is the wrong shape.
+  static List<String> readFiredSlugs(String userId) {
+    try {
+      final box = Hive.box<dynamic>(HiveService.userPrefs);
+      final raw = box.get(hiveKeyFor(userId));
+      if (raw is List) {
+        return raw.cast<String>().toList();
+      }
+      return const <String>[];
+    } on Object {
+      // Box not open / Hive not initialised in this test harness.
+      // Treat as empty — production callers always run inside HiveService.init.
+      return const <String>[];
+    }
+  }
+
+  /// Persist [slugs] as the fired-body-part list for [userId].
+  ///
+  /// Visible for tests so the idempotency assertion can be made against
+  /// the canonical write path (not by bypassing into the box directly).
+  @visibleForTesting
+  static Future<void> writeFiredSlugs(String userId, List<String> slugs) async {
+    try {
+      final box = Hive.box<dynamic>(HiveService.userPrefs);
+      await box.put(hiveKeyFor(userId), List<String>.unmodifiable(slugs));
+    } on Object {
+      // Same rationale as [readFiredSlugs]: silent no-op when Hive
+      // isn't available. The analytics event is informational; losing it
+      // because the cache write failed must not break the finish flow.
+    }
+  }
+
+  /// Iterate every [RankUpEvent] in [celebration]. For each body part not
+  /// already in the fired-slugs cache, record a `first_rank_up` event +
+  /// append the slug to the cache.
+  ///
+  /// All Hive + analytics IO is awaited so the cache is durable before
+  /// the method returns; future test fixtures can call this directly and
+  /// then assert against [readFiredSlugs].
+  ///
+  /// Errors at any stage are caught and swallowed — `first_rank_up` is
+  /// non-critical funnel signal that must never break the finish flow.
+  /// The Hive read/write paths swallow internally (see
+  /// [readFiredSlugs] / [writeFiredSlugs]); the analytics repo is the
+  /// no-op fallback when Supabase isn't initialised (see
+  /// [analyticsRepositoryProvider]), and [insertEvent] swallows its own
+  /// Supabase failures. No call-site catch needed.
+  static Future<void> emitForCelebration({
+    required WidgetRef ref,
+    required CelebrationQueueResult celebration,
+  }) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final analyticsRepo = ref.read(analyticsRepositoryProvider);
+    await emitForRankUps(
+      userId: userId,
+      analyticsRepo: analyticsRepo,
+      rankUps: celebration.queue.whereType<RankUpEvent>().toList(),
+    );
+  }
+
+  /// Lower-level emit path that takes the rank-up list + repository
+  /// explicitly. Public for unit tests that don't want to plumb a full
+  /// [WidgetRef].
+  ///
+  /// **Ordering invariant:** the fired-slug cache write only reflects
+  /// rank-ups whose [AnalyticsRepository.insertEvent] returned without
+  /// throwing. If the insert throws, the slug stays UNRECORDED so the
+  /// next finish can retry — otherwise a single transient failure would
+  /// permanently mark a body-part as "fired" on this device and prevent
+  /// the event from ever landing.
+  @visibleForTesting
+  static Future<void> emitForRankUps({
+    required String userId,
+    required AnalyticsRepository analyticsRepo,
+    required List<RankUpEvent> rankUps,
+  }) async {
+    if (rankUps.isEmpty) return;
+    final fired = List<String>.from(readFiredSlugs(userId));
+    var dirty = false;
+    for (final event in rankUps) {
+      final slug = event.bodyPart.dbValue;
+      if (fired.contains(slug)) continue;
+      try {
+        await analyticsRepo.insertEvent(
+          userId: userId,
+          event: AnalyticsEvent.firstRankUp(
+            bodyPart: slug,
+            newRank: event.newRank,
+          ),
+          platform: currentPlatform(),
+          appVersion: currentAppVersion(),
+        );
+        // Only mark the slug as fired AFTER the insert returns without
+        // throwing — a future signature change that surfaces a real
+        // exception here must not silently lock the cache.
+        fired.add(slug);
+        dirty = true;
+      } on Object {
+        // `insertEvent` already swallows internally; this catch is the
+        // belt for any future signature change. The slug stays out of
+        // the fired list so a subsequent finish retries.
+      }
+    }
+    if (dirty) {
+      await writeFiredSlugs(userId, fired);
+    }
   }
 }

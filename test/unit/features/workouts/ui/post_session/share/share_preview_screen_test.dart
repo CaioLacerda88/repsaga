@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
@@ -131,6 +132,12 @@ void main() {
         shareImageRendererProvider.overrideWithValue(
           renderer ?? _RecordingRenderer(),
         ),
+        // Per PR #277 review: share-success now reads `currentUserIdProvider`
+        // directly (no call-site try/catch). Override here so the read
+        // doesn't surface a `Supabase not initialised` provider exception.
+        // [analyticsRepositoryProvider] is already fault-tolerant by
+        // construction — no override needed for the no-op path.
+        currentUserIdProvider.overrideWithValue('user-share-preview-test'),
       ],
     );
     addTearDown(container.dispose);

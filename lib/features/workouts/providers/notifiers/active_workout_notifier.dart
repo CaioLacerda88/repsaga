@@ -1209,6 +1209,40 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     _isDiscarding = false;
   }
 
+  /// Phase 32 PR 32d — emit the `session_zero_xp` analytics event when the
+  /// empty-session guard sheet (`FinishWorkoutCoordinator.finish`) opens.
+  ///
+  /// The coordinator owns the guard UI; the notifier owns analytics
+  /// emission (centralized via [_trackWorkoutEvent] so platform/version
+  /// plumbing stays in one place). Computes `elapsed_seconds` from the
+  /// captured `workout.startedAt` — same source the finish-flow uses for
+  /// `workoutFinished.durationSeconds`.
+  ///
+  /// No-op when there is no active workout (defensive — the coordinator
+  /// only calls this after reading `totalSetsCount`, which requires an
+  /// active workout, but a concurrent discard could clear state between
+  /// the read and this call).
+  void recordZeroXpSession() {
+    final current = state.value;
+    if (current == null) return;
+    final elapsedSeconds = DateTime.now()
+        .toUtc()
+        .difference(current.workout.startedAt)
+        .inSeconds;
+    _trackWorkoutEvent(
+      event: AnalyticsEvent.sessionZeroXp(
+        exerciseCount: current.exercises.length,
+        elapsedSeconds: elapsedSeconds,
+      ),
+      breadcrumbMessage: 'finish blocked by zero-XP guard',
+      breadcrumbData: {
+        'workout_id': current.workout.id,
+        'exercise_count': current.exercises.length,
+        'elapsed_seconds': elapsedSeconds,
+      },
+    );
+  }
+
   /// Session-throttle for the first-awakening overlay (Phase 18c, spec §13).
   ///
   /// Reset to `false` when a workout STARTS (not when the app starts, not

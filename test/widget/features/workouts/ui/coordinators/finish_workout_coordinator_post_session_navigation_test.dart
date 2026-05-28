@@ -64,6 +64,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
 import 'package:repsaga/features/personal_records/models/personal_record.dart';
@@ -442,6 +443,14 @@ Widget _buildHarness({
       // State is still mounted, so the override is what the
       // post-session params see.
       workoutCountProvider.overrideWith((ref) async => initialWorkoutCount),
+      // Per PR #277 review: [FirstRankUpEmitter.emitForCelebration] reads
+      // `currentUserIdProvider` directly (no call-site try/catch). The
+      // default provider reads `Supabase.instance.client`, which throws
+      // in this test harness. Override with a stable id so the emit
+      // proceeds without an exception that would mask the navigation
+      // contract this test pins. The analytics repo provider is
+      // fault-tolerant by construction (no-op fallback).
+      currentUserIdProvider.overrideWithValue('user-nav-test'),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -27,6 +27,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
@@ -97,6 +98,13 @@ Widget _harness({
       rpgProgressProvider.overrideWith(
         () => _FakeRpgProgress(RpgProgressSnapshot.empty),
       ),
+      // Per PR #277 review: the mount analytics emit reads
+      // `currentUserIdProvider` in the post-frame callback, which by
+      // default reads `Supabase.instance.client` and throws under
+      // `flutter_test`. The analytics repository provider falls back to
+      // a no-op on its own, so only `currentUserIdProvider` needs an
+      // override here.
+      currentUserIdProvider.overrideWithValue('user-routing-test'),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -299,6 +307,8 @@ void main() {
               rpgProgressProvider.overrideWith(
                 () => _FakeRpgProgress(RpgProgressSnapshot.empty),
               ),
+              // PR #277 review — see [_harness] for rationale.
+              currentUserIdProvider.overrideWithValue('user-back-gesture-test'),
             ],
             child: MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
