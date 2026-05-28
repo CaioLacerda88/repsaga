@@ -17,7 +17,6 @@
  *   - _SearchBar:          'role=textbox[name="Search exercises"]'
  *   - _EquipmentFilter:    'role=checkbox[name="<name>"]'
  *   - _ExerciseCard:       'role=button[name="Exercise: <name>"]'
- *   - _CreateExerciseFab:  'role=button[name="Create new exercise"]'
  *   - _TappableImage:      'role=img[name="<name> start position"]' / "end position"
  *   - Delete button:       'role=button[name="Delete exercise"]'
  */
