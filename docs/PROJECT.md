@@ -375,14 +375,15 @@ history screen redesign with sticky week headers + per-card XP.
 | Sub-PR | Scope | Size | Status |
 |---|---|---|---|
 | 32a | Locale leaks + meus-treinos + workout_template_translations + CI gate | 1-2d | DONE (#270) |
-| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | NOT STARTED |
+| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | DONE (#279) |
 | 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
 | 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
 | 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
 | 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
+| 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | NOT STARTED |
 
-Order: 32a → 32c → 32g → 32d → 32b → 32e → 32f.
+Order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f.
 
 Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05-27 3-agent investigation (code map, E2E coverage matrix, full test plan, code-reviewer findings).
 
@@ -425,27 +426,35 @@ Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05
 - `git grep -E 'TREINO LIVRE|INICIAR|BEM-VINDO|MINHAS TREINOS'` returns zero hits in `lib/` (ARB strings are now the localized values)
 - pt-BR Treinos screen header renders `MEUS TREINOS`
 
-#### PR 32b — Auth correctness + Credential Manager + targeted security audit
+#### PR 32b — Auth correctness + Credential Manager + targeted security audit — DONE (#279)
 
-**Files to modify**
-- `lib/features/auth/ui/login_screen.dart` — Android Credential Manager integration: autofill on field-mount + save on successful sign-in
-- `pubspec.yaml` — add Credential Manager dependency (use Context7 to look up the official package + pinned version)
-
-**Files to create**
-- `test/widget/features/auth/duplicate_email_snackbar_test.dart` — pump signup with mock Supabase `'user already registered'` response; assert `authErrorAlreadyRegistered` snackbar renders and dismisses on duration
-- `test/e2e/specs/auth-google.spec.ts` — Google Sign-In smoke (use existing E2E user infrastructure; mock the OAuth redirect)
-
-**Investigation tasks (report in PR description; no code unless findings warrant a follow-up)**
-- RLS audit on `profiles`, `routines`, `workouts`, `body_part_progress`, `xp_events`, `subscriptions`, `analytics_events` — every policy reviewed for tenant isolation
-- Edge Function endpoints — JWT verification, Pub/Sub origin check, idempotency UNIQUE constraints
-- Client-bundle secret leak check: `git grep -i 'service_role\|sk_live\|sk_test' lib/` returns 0
-- `flutter analyze --fatal-infos` clean on `lib/`
-
-**Acceptance**
-- Google Sign-In flow completes on physical Android (visual verification per CLAUDE.md step 9)
-- Duplicate-email snackbar test green
-- Credential Manager autofill works on physical Android (manual verification, screenshot in PR)
-- Security audit report attached to PR description; zero criticals (any criticals → block + fix in same PR per `feedback_no_deferring_review_findings`)
+Shipped Android OS-level credential autofill via first-party Flutter
+APIs — NO new dependency. `AppTextField` gained optional
+`autofillHints` param (forwarded to the underlying `TextFormField` /
+`EditableText.autofillHints`); `LoginScreen`'s form wraps in an
+`AutofillGroup(onDisposeAction: AutofillContextAction.cancel)` so the
+OS save prompt only fires on success, never on mid-flow abandonment.
+Email field always advertises `AutofillHints.email`; password field
+switches between `AutofillHints.password` (login) and
+`AutofillHints.newPassword` (signup) so Android Credential Manager
+distinguishes the two flows. `_finishAutofillIfSucceeded()` calls
+`TextInput.finishAutofillContext(shouldSave: true)` after successful
+email/password auth — gated on `!ref.read(authNotifierProvider).hasError`.
+Dead try/catch in the signup branch removed (AuthNotifier uses
+`AsyncValue.guard`, never re-throws). `auth-send-reset` Semantics got
+`explicitChildNodes: true` per cluster
+`semantics-identifier-pair-rule`. 9 new tests across 3 files
+(duplicate-email banner contract incl. negative pin against
+`cluster_persist_eats_duration`, 5 autofill-hints contracts incl.
+`onDisposeAction: cancel` pin, 2 Google-Sign-In E2E smoke). Targeted
+security audit shipped 0 criticals — 21 user-data tables with
+`auth.uid()`-scoped RLS, 4 Edge Functions verifying JWT + CORS-restricted
+to `SUPABASE_URL` + idempotency via PK/UPSERT, `git grep` returned 0
+hits for service-role/sk_live/sk_test/raw-JWT prefixes in `lib/`.
+Physical-Android verification on Galaxy S938B (Android 16 / API 36)
+confirmed save-on-success + no-prompt-on-abandon. iOS scope deferred
+(Android-first launch). Paywall events analytics still owned by Launch
+Phase 16b.
 
 #### PR 32c — Week-plan picker + weekday `.toLocal()`
 
@@ -529,6 +538,56 @@ try/catches to a single provider-construction catch. No migration —
 - PR diamond appears only on sessions with ≥1 PR
 - Detail screen header strip renders above set-by-set log without breaking existing layout
 - E2E spec for History updated if selectors changed
+
+#### PR 32h — Retire user-created exercises (RPG thesis preservation)
+
+**Why this exists**
+Phase 29 XP formula v2 derives per-set XP from each exercise's calibrated
+`tier_diff_mult` + `xp_attribution` (set in `supabase/migrations/00065`).
+User-created exercises (`is_default = false`) have no calibration — logging
+them would silently produce zero-XP sets, breaking
+[[project_rpg_thesis]] ("RPG layer never decouples from real lifts"). No
+live users yet → silent retirement, no migration / suggest-CTA / banner.
+
+**Files to delete**
+- `lib/features/exercises/ui/create_exercise_screen.dart` — the whole form screen
+- `test/widget/features/exercises/ui/create_exercise_screen_test.dart` — its widget test
+
+**Files to modify**
+- `lib/core/router/app_router.dart` L22 (import) + L204 (`/create-exercise` route entry) — drop both
+- `lib/features/workouts/ui/widgets/exercise_picker_sheet.dart` L10 import + the "create new exercise" inline link/CTA — drop both
+- `lib/features/exercises/ui/exercise_list_screen.dart` — drop the "Add" CTA (likely a `FloatingActionButton` or AppBar action) + any empty-state "create your first exercise" copy
+- `lib/features/exercises/data/exercise_repository.dart` — drop `createExercise` method (and its `PendingCreateExercise` queue plumbing if not used elsewhere)
+- `lib/core/offline/sync_service.dart` L441 — drop the `PendingCreateExercise()` case (and its model definition + tests if exclusively used by this flow)
+- `lib/l10n/app_en.arb` + `app_pt.arb` — drop now-unused l10n keys (any `createExercise*`, `newExercise*`, `addExercise*` copy)
+
+**Files to update (tests)**
+- `test/unit/features/exercises/data/exercise_repository_test.dart` — drop the `createExercise` test group
+- `test/unit/core/offline/sync_service_test.dart` + `test/unit/core/offline/offline_queue_service_test.dart` — drop the `PendingCreateExercise` flow tests
+- `test/e2e/specs/exercises.spec.ts` — drop any create-exercise spec(s); add a negative pin that asserts the Add CTA is NOT present
+- `test/fixtures/test_factories.dart` — drop the `createExerciseRequest` factory if exclusive
+
+**Data audit (no migration needed)**
+- `exercises` table keeps the `is_default` + `user_id` columns (used by RLS).
+  Future-proofing in case we re-introduce user-created exercises.
+- RLS policies stay intact — the write paths just become unreachable from
+  the UI. No new policy needed.
+
+**Acceptance**
+- Code grep for `CreateExerciseScreen` / `createExercise` / `/create-exercise`
+  / `PendingCreateExercise` returns 0 references after the PR
+- `make ci` green
+- Smoke E2E green; new negative-pin test confirms Add CTA absence on
+  `exercise_list_screen` and `exercise_picker_sheet`
+- Physical-Android verification: SKIPPED (deletion-only, no new UX
+  surface). E2E negative-pins are sufficient.
+
+**Out of scope**
+- Suggest-an-exercise affordance (decision locked: silent removal — no live
+  users to communicate with)
+- Any database migration removing the `user_id` column on `exercises` —
+  keep the schema flexible
+- iOS-side UI work (Android-first launch)
 
 ### Launch Phase
 
