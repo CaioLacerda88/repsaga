@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,10 +38,8 @@ class OfflineQueueService {
       final json = jsonEncode(action.toJson());
       await _box.put(action.id, json);
     } catch (e, st) {
-      log(
-        'Failed to enqueue action ${action.id}: $e',
-        name: 'OfflineQueueService',
-        level: 900,
+      debugPrint(
+        '[OfflineQueueService] Failed to enqueue action ${action.id}: $e',
       );
       unawaited(SentryReport.captureException(e, stackTrace: st));
       rethrow;
@@ -57,11 +54,7 @@ class OfflineQueueService {
     try {
       await _box.delete(id);
     } catch (e, st) {
-      log(
-        'Failed to dequeue action $id: $e',
-        name: 'OfflineQueueService',
-        level: 900,
-      );
+      debugPrint('[OfflineQueueService] Failed to dequeue action $id: $e');
       unawaited(SentryReport.captureException(e, stackTrace: st));
       rethrow;
     }
@@ -83,10 +76,8 @@ class OfflineQueueService {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
         actions.add(PendingAction.fromJson(decoded));
       } catch (e, st) {
-        log(
-          'Skipping corrupt queue entry "$key": $e',
-          name: 'OfflineQueueService',
-          level: 900,
+        debugPrint(
+          '[OfflineQueueService] Skipping corrupt queue entry "$key": $e',
         );
         unawaited(SentryReport.captureException(e, stackTrace: st));
       }
@@ -105,10 +96,8 @@ class OfflineQueueService {
       final json = jsonEncode(action.toJson());
       await _box.put(action.id, json);
     } catch (e, st) {
-      log(
-        'Failed to update action ${action.id}: $e',
-        name: 'OfflineQueueService',
-        level: 900,
+      debugPrint(
+        '[OfflineQueueService] Failed to update action ${action.id}: $e',
       );
       unawaited(SentryReport.captureException(e, stackTrace: st));
       rethrow;
@@ -144,7 +133,13 @@ class OfflineQueueService {
   /// break the calling service's init path.
   ///
   /// Returns the number of legacy entries that were dropped.
-  int purgeRetiredKinds() {
+  ///
+  /// Async because [BoxBase.delete] returns `Future<void>` — the disk write
+  /// must resolve BEFORE the next [getAll] is called or the legacy entry is
+  /// still readable and [PendingAction.fromJson] throws on the unknown union
+  /// key. Callers running during cold-launch init MUST `await` this. See
+  /// [SyncService._coldLaunchDrain] for the canonical wiring.
+  Future<int> purgeRetiredKinds() async {
     var dropped = 0;
     try {
       // Snapshot keys first — modifying the box during iteration is unsafe.
@@ -159,21 +154,23 @@ class OfflineQueueService {
           final decoded = jsonDecode(raw);
           if (decoded is! Map) continue;
           if (decoded['type'] == 'createExercise') {
-            _box.delete(key);
+            await _box.delete(key);
             dropped++;
             debugPrint(
               '[OfflineQueueService] Purged legacy queue entry "$key" '
               '(retired kind: createExercise)',
             );
           }
-        } catch (e) {
-          // Malformed row — leave it for `getAll`'s corrupt-row guard to
-          // surface via Sentry. We don't want a single bad blob to break
-          // the purge for other healthy legacy entries.
+        } catch (e, st) {
+          // Malformed row — mirror getAll's pattern: log locally + capture
+          // to Sentry so we get production rates on corruption that the
+          // sweep couldn't process. Leaves the row in place for getAll's
+          // corrupt-row guard to surface again on the next read.
           debugPrint(
             '[OfflineQueueService] purgeRetiredKinds: skipping unparseable '
             'entry "$key": $e',
           );
+          unawaited(SentryReport.captureException(e, stackTrace: st));
         }
       }
     } catch (e) {

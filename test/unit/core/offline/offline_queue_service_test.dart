@@ -278,7 +278,7 @@ void main() {
 
         expect(service.pendingCount, 3);
 
-        final dropped = service.purgeRetiredKinds();
+        final dropped = await service.purgeRetiredKinds();
 
         expect(dropped, 2);
         expect(service.pendingCount, 1);
@@ -295,8 +295,8 @@ void main() {
             '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
         await Hive.box<dynamic>('offline_queue').put('ce-old', legacy);
 
-        expect(service.purgeRetiredKinds(), 1);
-        expect(service.purgeRetiredKinds(), 0);
+        expect(await service.purgeRetiredKinds(), 1);
+        expect(await service.purgeRetiredKinds(), 0);
         expect(service.pendingCount, 0);
       });
 
@@ -311,7 +311,7 @@ void main() {
           ),
         );
 
-        final dropped = service.purgeRetiredKinds();
+        final dropped = await service.purgeRetiredKinds();
 
         expect(dropped, 0);
         expect(service.pendingCount, 2);
@@ -327,12 +327,41 @@ void main() {
             '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
         await Hive.box<dynamic>('offline_queue').put('ce-old', legacy);
 
-        final dropped = service.purgeRetiredKinds();
+        final dropped = await service.purgeRetiredKinds();
 
         // Only the legacy entry was dropped; the malformed row stays for
         // `getAll`'s corrupt-row guard to surface via Sentry.
         expect(dropped, 1);
       });
+
+      // BUG-007 + Phase 32 PR 32h race-safety contract: the disk delete
+      // inside the sweep must resolve BEFORE the next getAll() read. If
+      // purgeRetiredKinds left the _box.delete future unawaited, a
+      // subsequent getAll() would still observe the legacy entry and
+      // PendingAction.fromJson would throw on the unknown union key — the
+      // exact failure mode the purge exists to prevent. This test guards
+      // against that regression.
+      test(
+        'getAll observes 0 legacy entries immediately after the await',
+        () async {
+          const legacy =
+              '{"type":"createExercise","id":"ce-old","exercise_id":"e",'
+              '"user_id":"u","locale":"en","name":"X","muscle_group":"chest",'
+              '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
+          await Hive.box<dynamic>('offline_queue').put('ce-old', legacy);
+          expect(service.pendingCount, 1);
+
+          await service.purgeRetiredKinds();
+
+          // No synchronous gap, no microtask wait — getAll runs in the same
+          // tick as the await's continuation. If the delete were unawaited
+          // this would still surface the legacy entry, getAll's corrupt-row
+          // guard would log to Sentry, and the queue would leak forever.
+          final all = service.getAll();
+          expect(all, isEmpty);
+          expect(service.pendingCount, 0);
+        },
+      );
     });
   });
 }

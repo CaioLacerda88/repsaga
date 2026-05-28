@@ -160,8 +160,8 @@ logging them would silently produce zero-XP work, breaking
 - **No migration; no replacement UX.** Library + picker both lose the
   create affordance entirely.
 - **Sealed-union purge over no-op stub.** Cleaner — the union becomes
-  3 variants (`saveWorkout`, `updateExercise`, `deleteExercise`), and
-  any code path that asserts exhaustiveness gets simpler.
+  3 variants (`saveWorkout`, `upsertRecords`, `markRoutineComplete`),
+  and any code path that asserts exhaustiveness gets simpler.
 - **Repository method drops, not stubs.** No `@Deprecated` annotation
   needed — the method has no external consumers post-deletion.
 - **Skip iOS work** — Android-first launch.
