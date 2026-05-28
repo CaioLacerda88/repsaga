@@ -135,5 +135,34 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets(
+      'AutofillGroup has onDisposeAction: cancel (no spurious OS save prompt on abandon)',
+      (tester) async {
+        // User-visible behavior: navigating away mid-flow (toggling mode,
+        // pressing back) must NOT surface an OS "Save credentials?" prompt
+        // for the partial or wrong credentials typed so far.
+        //
+        // The only mechanism that prevents this is
+        // `AutofillGroup.onDisposeAction = AutofillContextAction.cancel`.
+        // Without it Flutter defaults to `commit`, which asks the OS to save
+        // whatever is in the fields at dispose time — including the wrong
+        // password a user typed before realising they had the wrong account.
+        //
+        // This test pins the contract so a future "just clean up the params"
+        // refactor cannot silently revert to the default-commit behaviour.
+        await tester.pumpWidget(buildTestWidget());
+
+        final group = tester.widget<AutofillGroup>(find.byType(AutofillGroup));
+        expect(
+          group.onDisposeAction,
+          equals(AutofillContextAction.cancel),
+          reason:
+              'onDisposeAction must be cancel so that abandoning the form '
+              'mid-flow (back-press, mode toggle) never triggers the OS '
+              'save-credentials prompt with partial or wrong credentials.',
+        );
+      },
+    );
   });
 }
