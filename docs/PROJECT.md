@@ -377,7 +377,7 @@ history screen redesign with sticky week headers + per-card XP.
 | 32a | Locale leaks + meus-treinos + workout_template_translations + CI gate | 1-2d | DONE (#270) |
 | 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | NOT STARTED |
 | 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
-| 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | NOT STARTED |
+| 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
 | 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
 | 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
@@ -462,25 +462,21 @@ Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05
 - Picker shows previously-picked routines; week plan can have the same routine on multiple days
 - Reference cluster `e2e-global-setup-seed-verify` if any test fixture is added
 
-#### PR 32d — Analytics expansion (RPG + share + churn)
+#### PR 32d — Analytics expansion (RPG + share + churn) — DONE (#277)
 
-**Files to modify**
-- `lib/features/analytics/data/models/analytics_event.dart` — extend sealed union with 5 variants
-- `supabase/migrations/0006Y_analytics_event_kinds_phase32.sql` — add event-kind enum values
-- Finish-coordinator (post-session emit path) — fire `first_rank_up` on rank-up detection (only the FIRST ever rank-up per user-body-part; idempotent check)
-- `post_session_screen.dart` — fire `post_session_cinematic_shown` on route mount with props `{total_xp, had_rank_up, had_title_unlock, had_class_change}`
-- `share_controller.dart` — fire `share_card_exported` on successful export with `{variant, had_custom_photo}`
-- Title-unlock detection site — fire `title_unlocked` with `{title_slug, workout_number}`
-- `active_workout_notifier.dart` empty-session guard — fire `session_zero_xp` when `totalSetsCount == 0` on finish
-
-**Files to create**
-- `test/unit/features/analytics/data/analytics_event_test.dart` (extend existing) — JSON round-trip for the 5 new events
-
-**Acceptance**
-- All 5 events fire from their emit sites (unit-tested)
-- Hosted Supabase enum updated (`npx supabase db push` succeeds)
-- `first_rank_up` idempotency: emitting the event a second time for the same `(user_id, body_part)` is a no-op
-- Paywall events explicitly NOT added (deferred to Launch Phase 16b)
+Shipped 5 sealed-union variants to `AnalyticsEvent` + emit sites at the
+finish coordinator (`first_rank_up` per body-part on first rank-up with
+Hive-cache idempotency), post-session screen (`post_session_cinematic_shown`
+on mount with `_analyticsFired` guard + `title_unlocked` per queued
+unlock), share controller (`share_card_exported` on `ShareResultStatus.success`
+only — discreet vs with_photo), and active-workout notifier
+(`session_zero_xp` from the empty-session guard branch). 33 new tests
+including positive + negative-branch DI contracts for the
+`_NoOpAnalyticsRepository` fallback added during code review to move
+the "analytics must never break user flow" guarantee from per-call-site
+try/catches to a single provider-construction catch. No migration —
+`analytics_events.name` is free-form text + `props jsonb` (see migration
+00015). Paywall events deferred to Launch Phase 16b.
 
 #### PR 32e — Profile avatar default + upload
 
