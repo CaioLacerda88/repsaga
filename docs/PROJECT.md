@@ -375,7 +375,7 @@ history screen redesign with sticky week headers + per-card XP.
 | Sub-PR | Scope | Size | Status |
 |---|---|---|---|
 | 32a | Locale leaks + meus-treinos + workout_template_translations + CI gate | 1-2d | DONE (#270) |
-| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | NOT STARTED |
+| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | DONE (#279) |
 | 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
 | 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
 | 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
@@ -425,27 +425,35 @@ Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05
 - `git grep -E 'TREINO LIVRE|INICIAR|BEM-VINDO|MINHAS TREINOS'` returns zero hits in `lib/` (ARB strings are now the localized values)
 - pt-BR Treinos screen header renders `MEUS TREINOS`
 
-#### PR 32b — Auth correctness + Credential Manager + targeted security audit
+#### PR 32b — Auth correctness + Credential Manager + targeted security audit — DONE (#279)
 
-**Files to modify**
-- `lib/features/auth/ui/login_screen.dart` — Android Credential Manager integration: autofill on field-mount + save on successful sign-in
-- `pubspec.yaml` — add Credential Manager dependency (use Context7 to look up the official package + pinned version)
-
-**Files to create**
-- `test/widget/features/auth/duplicate_email_snackbar_test.dart` — pump signup with mock Supabase `'user already registered'` response; assert `authErrorAlreadyRegistered` snackbar renders and dismisses on duration
-- `test/e2e/specs/auth-google.spec.ts` — Google Sign-In smoke (use existing E2E user infrastructure; mock the OAuth redirect)
-
-**Investigation tasks (report in PR description; no code unless findings warrant a follow-up)**
-- RLS audit on `profiles`, `routines`, `workouts`, `body_part_progress`, `xp_events`, `subscriptions`, `analytics_events` — every policy reviewed for tenant isolation
-- Edge Function endpoints — JWT verification, Pub/Sub origin check, idempotency UNIQUE constraints
-- Client-bundle secret leak check: `git grep -i 'service_role\|sk_live\|sk_test' lib/` returns 0
-- `flutter analyze --fatal-infos` clean on `lib/`
-
-**Acceptance**
-- Google Sign-In flow completes on physical Android (visual verification per CLAUDE.md step 9)
-- Duplicate-email snackbar test green
-- Credential Manager autofill works on physical Android (manual verification, screenshot in PR)
-- Security audit report attached to PR description; zero criticals (any criticals → block + fix in same PR per `feedback_no_deferring_review_findings`)
+Shipped Android OS-level credential autofill via first-party Flutter
+APIs — NO new dependency. `AppTextField` gained optional
+`autofillHints` param (forwarded to the underlying `TextFormField` /
+`EditableText.autofillHints`); `LoginScreen`'s form wraps in an
+`AutofillGroup(onDisposeAction: AutofillContextAction.cancel)` so the
+OS save prompt only fires on success, never on mid-flow abandonment.
+Email field always advertises `AutofillHints.email`; password field
+switches between `AutofillHints.password` (login) and
+`AutofillHints.newPassword` (signup) so Android Credential Manager
+distinguishes the two flows. `_finishAutofillIfSucceeded()` calls
+`TextInput.finishAutofillContext(shouldSave: true)` after successful
+email/password auth — gated on `!ref.read(authNotifierProvider).hasError`.
+Dead try/catch in the signup branch removed (AuthNotifier uses
+`AsyncValue.guard`, never re-throws). `auth-send-reset` Semantics got
+`explicitChildNodes: true` per cluster
+`semantics-identifier-pair-rule`. 9 new tests across 3 files
+(duplicate-email banner contract incl. negative pin against
+`cluster_persist_eats_duration`, 5 autofill-hints contracts incl.
+`onDisposeAction: cancel` pin, 2 Google-Sign-In E2E smoke). Targeted
+security audit shipped 0 criticals — 21 user-data tables with
+`auth.uid()`-scoped RLS, 4 Edge Functions verifying JWT + CORS-restricted
+to `SUPABASE_URL` + idempotency via PK/UPSERT, `git grep` returned 0
+hits for service-role/sk_live/sk_test/raw-JWT prefixes in `lib/`.
+Physical-Android verification on Galaxy S938B (Android 16 / API 36)
+confirmed save-on-success + no-prompt-on-abandon. iOS scope deferred
+(Android-first launch). Paywall events analytics still owned by Launch
+Phase 16b.
 
 #### PR 32c — Week-plan picker + weekday `.toLocal()`
 
