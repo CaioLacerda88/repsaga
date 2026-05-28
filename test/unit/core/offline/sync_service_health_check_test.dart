@@ -68,6 +68,15 @@ class _ThrowingQueueService implements OfflineQueueService {
   @override
   int get pendingCount =>
       throw HiveError('Box not found. Did you forget to call Hive.openBox()?');
+
+  @override
+  int purgeRetiredKinds() {
+    // Stub follows the real impl's defensive contract: box-level failures
+    // are swallowed and the call returns 0 dropped. This keeps the
+    // SyncService.build cold-launch purge from breaking when the queue
+    // box is unavailable in this test harness.
+    return 0;
+  }
 }
 
 class _FakeWorkout extends Fake implements Workout {}

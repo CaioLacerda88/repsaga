@@ -50,16 +50,14 @@ enum SyncErrorCategory {
 /// with typed models (e.g. `WorkoutExercise.exercise` is excluded from
 /// `toJson`). The RPC and repository calls already accept these shapes.
 ///
-/// **Dependency ordering (BUG-002, BUG-003):** every variant carries an
-/// optional [dependsOn] list of parent action IDs. The drain holds an action
-/// back until every ID in [dependsOn] has either been dequeued (parent
+/// **Dependency ordering (BUG-002):** every variant carries an optional
+/// [dependsOn] list of parent action IDs. The drain holds an action back
+/// until every ID in [dependsOn] has either been dequeued (parent
 /// committed) or no longer exists in the queue (parent dismissed). Children
 /// of the same parent batch (e.g. a `PendingUpsertRecords` whose `set_id`
-/// references rows that the parent `PendingSaveWorkout` is about to insert,
-/// or a `PendingSaveWorkout` whose `exercise_id` references an exercise the
-/// `PendingCreateExercise` will insert first) MUST be enqueued with the
-/// parent's `id` in [dependsOn] — otherwise replay can race the FK and we
-/// get `*_fkey` constraint violations.
+/// references rows that the parent `PendingSaveWorkout` is about to insert)
+/// MUST be enqueued with the parent's `id` in [dependsOn] — otherwise
+/// replay can race the FK and we get `*_fkey` constraint violations.
 ///
 /// **`lastError` is dev-facing only (BUG-042):** the field stores a raw
 /// `.toString()` of the most recent failure for log inspection and Sentry
@@ -110,37 +108,6 @@ sealed class PendingAction with _$PendingAction {
     @Default(<String>[]) List<String> dependsOn,
     @Default(SyncErrorCategory.none) SyncErrorCategory errorCategory,
   }) = PendingMarkRoutineComplete;
-
-  /// Custom exercise the user created while offline.
-  ///
-  /// The exercise is materialized client-side first (a UUID is generated and
-  /// stamped onto the row in the local cache so workouts logged in the same
-  /// offline session can attach to it). On replay the [exerciseId] is passed
-  /// to the server insert so the row's primary key matches what the local
-  /// session already wrote — every downstream `PendingSaveWorkout` that
-  /// references this exercise carries `dependsOn: [thisAction.id]` so the
-  /// drain commits the exercise before the workout (BUG-003).
-  ///
-  /// [locale] is the locale the user typed the name in; the server insert
-  /// writes a single `exercise_translations` row keyed by `(exerciseId,
-  /// locale)` and returns the row keyed back as the cascade default.
-  @JsonSerializable(fieldRename: FieldRename.snake)
-  const factory PendingAction.createExercise({
-    required String id,
-    required String exerciseId,
-    required String userId,
-    required String locale,
-    required String name,
-    required String muscleGroup,
-    required String equipmentType,
-    String? description,
-    String? formTips,
-    required DateTime queuedAt,
-    @Default(0) int retryCount,
-    String? lastError,
-    @Default(<String>[]) List<String> dependsOn,
-    @Default(SyncErrorCategory.none) SyncErrorCategory errorCategory,
-  }) = PendingCreateExercise;
 
   factory PendingAction.fromJson(Map<String, dynamic> json) =>
       _$PendingActionFromJson(json);

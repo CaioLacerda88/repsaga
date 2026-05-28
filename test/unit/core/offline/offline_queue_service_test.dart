@@ -222,7 +222,7 @@ void main() {
       );
     });
 
-    test('getAll deserializes all four action types', () async {
+    test('getAll deserializes every supported action type', () async {
       await service.enqueue(makeSaveWorkout('w-1'));
       await service.enqueue(
         PendingAction.upsertRecords(
@@ -241,35 +241,98 @@ void main() {
           queuedAt: now.add(const Duration(seconds: 2)),
         ),
       );
-      // BUG-003: PendingCreateExercise was added in this PR; ensure the
-      // round-trip serialization works so a schema change is caught here.
-      await service.enqueue(
-        PendingAction.createExercise(
-          id: 'ce-1',
-          exerciseId: 'ex-local-1',
-          userId: 'user-1',
-          locale: 'en',
-          name: 'Custom Bench',
-          muscleGroup: 'chest',
-          equipmentType: 'barbell',
-          queuedAt: now.add(const Duration(seconds: 3)),
-        ),
-      );
 
       final all = service.getAll();
-      expect(all.length, 4);
+      expect(all.length, 3);
       expect(all[0], isA<PendingSaveWorkout>());
       expect(all[1], isA<PendingUpsertRecords>());
       expect(all[2], isA<PendingMarkRoutineComplete>());
-      expect(all[3], isA<PendingCreateExercise>());
+    });
 
-      // Verify field-level round-trip for the new type.
-      final ce = all[3] as PendingCreateExercise;
-      expect(ce.id, 'ce-1');
-      expect(ce.exerciseId, 'ex-local-1');
-      expect(ce.name, 'Custom Bench');
-      expect(ce.muscleGroup, 'chest');
-      expect(ce.equipmentType, 'barbell');
+    // -----------------------------------------------------------------
+    // purgeRetiredKinds: defensive cleanup for queue entries whose
+    // discriminator was removed from the PendingAction sealed union.
+    // Currently covers the retired `createExercise` kind (Phase 32 PR
+    // 32h). Without this purge, a legacy local-dev Hive box from before
+    // the retirement would throw on PendingAction.fromJson — Freezed
+    // raises on an unknown `type` union key. The purge string-matches
+    // raw JSON BEFORE deserialization so it sidesteps that crash.
+    // -----------------------------------------------------------------
+    group('purgeRetiredKinds', () {
+      test('drops legacy createExercise rows and returns the count', () async {
+        // Mix one healthy save_workout with two legacy createExercise blobs
+        // shaped exactly as Freezed would have serialized them pre-deletion.
+        await service.enqueue(makeSaveWorkout('w-healthy'));
+        const legacyA =
+            '{"type":"createExercise","id":"ce-old-1",'
+            '"exercise_id":"ex-1","user_id":"u-1","locale":"en",'
+            '"name":"Custom Bench","muscle_group":"chest",'
+            '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
+        const legacyB =
+            '{"type":"createExercise","id":"ce-old-2",'
+            '"exercise_id":"ex-2","user_id":"u-1","locale":"pt",'
+            '"name":"Supino","muscle_group":"chest",'
+            '"equipment_type":"barbell","queued_at":"2026-04-17T11:00:00.000Z"}';
+        await Hive.box<dynamic>('offline_queue').put('ce-old-1', legacyA);
+        await Hive.box<dynamic>('offline_queue').put('ce-old-2', legacyB);
+
+        expect(service.pendingCount, 3);
+
+        final dropped = service.purgeRetiredKinds();
+
+        expect(dropped, 2);
+        expect(service.pendingCount, 1);
+        // The healthy entry survives — deserializing it works as before.
+        final all = service.getAll();
+        expect(all, hasLength(1));
+        expect(all.first.id, 'w-healthy');
+      });
+
+      test('is idempotent: a second call drops nothing', () async {
+        const legacy =
+            '{"type":"createExercise","id":"ce-old","exercise_id":"e",'
+            '"user_id":"u","locale":"en","name":"X","muscle_group":"chest",'
+            '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
+        await Hive.box<dynamic>('offline_queue').put('ce-old', legacy);
+
+        expect(service.purgeRetiredKinds(), 1);
+        expect(service.purgeRetiredKinds(), 0);
+        expect(service.pendingCount, 0);
+      });
+
+      test('leaves healthy queues untouched', () async {
+        await service.enqueue(makeSaveWorkout('w-1'));
+        await service.enqueue(
+          PendingAction.upsertRecords(
+            id: 'pr-1',
+            recordsJson: const [],
+            userId: 'user-1',
+            queuedAt: now,
+          ),
+        );
+
+        final dropped = service.purgeRetiredKinds();
+
+        expect(dropped, 0);
+        expect(service.pendingCount, 2);
+      });
+
+      test('swallows unparseable rows without aborting the sweep', () async {
+        // One unparseable blob plus a legitimate legacy entry. The bad blob
+        // must not block the purge of the legacy entry that follows it.
+        await Hive.box<dynamic>('offline_queue').put('bad', 'not json{');
+        const legacy =
+            '{"type":"createExercise","id":"ce-old","exercise_id":"e",'
+            '"user_id":"u","locale":"en","name":"X","muscle_group":"chest",'
+            '"equipment_type":"barbell","queued_at":"2026-04-17T10:00:00.000Z"}';
+        await Hive.box<dynamic>('offline_queue').put('ce-old', legacy);
+
+        final dropped = service.purgeRetiredKinds();
+
+        // Only the legacy entry was dropped; the malformed row stays for
+        // `getAll`'s corrupt-row guard to surface via Sentry.
+        expect(dropped, 1);
+      });
     });
   });
 }

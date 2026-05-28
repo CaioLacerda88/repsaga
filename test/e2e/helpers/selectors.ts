@@ -116,8 +116,6 @@ export const EXERCISE_LIST = {
     `[flt-semantics-identifier="exercise-equip-${enumName.toLowerCase()}"]`,
   /** Individual exercise card — role selector for computed accessible name */
   exerciseCard: (name: string) => `role=button[name*="Exercise: ${name}"]`,
-  /** FAB — Semantics(identifier: 'exercise-list-create-fab') */
-  createFab: '[flt-semantics-identifier="exercise-list-create-fab"]',
   /** Empty state when no filters applied — Semantics(identifier: 'exercise-list-empty-no-filter') */
   emptyStateNoFilter: '[flt-semantics-identifier="exercise-list-empty-no-filter"]',
   /** Empty state when filters yield no results — Semantics(identifier: 'exercise-list-empty-filtered') */
@@ -187,17 +185,6 @@ export const EXERCISE_DETAIL = {
    * Rendered when workoutCount == 0 and no points exist.
    */
   progressChartEmptyCopy: '[flt-semantics-identifier="exercise-detail-chart-empty"]',
-} as const;
-
-// ---------------------------------------------------------------------------
-// Create exercise — CreateExerciseScreen
-// AppTextField label is "Exercise Name", button label is "CREATE EXERCISE"
-// ---------------------------------------------------------------------------
-export const CREATE_EXERCISE = {
-  /** Name text field — Semantics(identifier: 'create-exercise-name') */
-  nameInput: '[flt-semantics-identifier="create-exercise-name"]',
-  /** CREATE EXERCISE button — Semantics(identifier: 'create-exercise-save') */
-  saveButton: '[flt-semantics-identifier="create-exercise-save"]',
 } as const;
 
 // ---------------------------------------------------------------------------

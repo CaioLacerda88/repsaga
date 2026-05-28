@@ -2,8 +2,6 @@ import 'dart:developer';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/exercises/models/exercise.dart';
-import '../../features/exercises/providers/exercise_providers.dart';
 import '../../features/personal_records/models/personal_record.dart';
 import '../../features/personal_records/providers/pr_providers.dart';
 import '../../features/workouts/models/exercise_set.dart';
@@ -142,38 +140,6 @@ class PendingSyncNotifier extends Notifier<int> {
           'routine=$routineId)',
           name: 'PendingSyncNotifier',
         );
-
-      case PendingCreateExercise(
-        :final exerciseId,
-        :final userId,
-        :final locale,
-        :final name,
-        :final muscleGroup,
-        :final equipmentType,
-        :final description,
-        :final formTips,
-      ):
-        // BUG-003: replay the offline exercise creation so the row exists
-        // server-side BEFORE any dependent PendingSaveWorkout drains. We
-        // forward the local stub [exerciseId] as `p_id` so the server row's
-        // PK matches what the local Hive cache and any queued
-        // `PendingSaveWorkout.exercisesJson` (whose `exercise_id` is the
-        // local stub) already wrote. Without this the server allocates a
-        // fresh UUID and downstream `workout_exercises.exercise_id` rows
-        // commit with a dangling FK pointer — the dependsOn gate prevents a
-        // crash but the data is structurally broken. Migration 00044 added
-        // the optional `p_id` parameter to fn_insert_user_exercise.
-        final repo = ref.read(exerciseRepositoryProvider);
-        await repo.createExercise(
-          id: exerciseId,
-          locale: locale,
-          name: name,
-          muscleGroup: MuscleGroup.fromString(muscleGroup),
-          equipmentType: EquipmentType.fromString(equipmentType),
-          userId: userId,
-          description: description,
-          formTips: formTips,
-        );
     }
   }
 
@@ -196,11 +162,6 @@ class PendingSyncNotifier extends Notifier<int> {
         errorCategory: category,
       ),
       PendingMarkRoutineComplete() => action.copyWith(
-        retryCount: action.retryCount + 1,
-        lastError: error,
-        errorCategory: category,
-      ),
-      PendingCreateExercise() => action.copyWith(
         retryCount: action.retryCount + 1,
         lastError: error,
         errorCategory: category,

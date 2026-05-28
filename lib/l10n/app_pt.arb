@@ -224,7 +224,6 @@
   "noExercisesMatchFilters": "Nenhum exercício corresponde aos filtros",
   "yourExercisesWillAppear": "Seus exercícios aparecerão aqui",
   "clearFilters": "Limpar Filtros",
-  "createExercise": "Criar Exercício",
 
   "exerciseDetails": "Detalhes do Exercício",
   "failedToLoadExercise": "Falha ao carregar exercício",
@@ -245,9 +244,6 @@
   "equipmentType": "Tipo de Equipamento",
   "selectMuscleAndEquipment": "Selecione um grupo muscular e tipo de equipamento",
   "sessionExpired": "Sessão expirada. Faça login novamente.",
-  "exerciseCreated": "Exercício criado com sucesso",
-  "exerciseCreatedOffline": "Exercício salvo localmente. Será sincronizado quando você voltar a ficar online.",
-  "createExerciseButton": "CRIAR EXERCÍCIO",
   "description": "Descrição",
   "descriptionHint": "Breve descrição do exercício (opcional)",
   "formTips": "Dicas de Forma",
@@ -442,7 +438,6 @@
   "pendingActionSaveWorkout": "Salvar treino",
   "pendingActionUpdateRecords": "Atualizar recordes",
   "pendingActionMarkComplete": "Marcar treino como concluído",
-  "pendingActionCreateExercise": "Criar exercício",
   "queuedAt": "Na fila às {time}",
   "retryCount": "{count} tentativas",
 
@@ -459,7 +454,6 @@
 
   "noExercisesFound": "Nenhum exercício encontrado",
   "failedToLoadExercises": "Falha ao carregar exercícios",
-  "createWithName": "Criar \"{name}\"",
 
   "durationLessThanOneMin": "< 1m",
 
@@ -528,7 +522,6 @@
 
   "searchExercisesSemantics": "Buscar exercícios",
   "exerciseItemSemantics": "Exercício: {name}",
-  "createNewExerciseSemantics": "Criar novo exercício",
   "muscleGroupSemanticsPrefix": "Grupo muscular",
   "equipmentTypeSemanticsPrefix": "Tipo de equipamento",
   "deleteExerciseSemantics": "Excluir exercício",

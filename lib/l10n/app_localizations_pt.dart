@@ -718,9 +718,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clearFilters => 'Limpar Filtros';
 
   @override
-  String get createExercise => 'Criar Exercício';
-
-  @override
   String get exerciseDetails => 'Detalhes do Exercício';
 
   @override
@@ -778,16 +775,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sessionExpired => 'Sessão expirada. Faça login novamente.';
-
-  @override
-  String get exerciseCreated => 'Exercício criado com sucesso';
-
-  @override
-  String get exerciseCreatedOffline =>
-      'Exercício salvo localmente. Será sincronizado quando você voltar a ficar online.';
-
-  @override
-  String get createExerciseButton => 'CRIAR EXERCÍCIO';
 
   @override
   String get description => 'Descrição';
@@ -1418,9 +1405,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get pendingActionMarkComplete => 'Marcar treino como concluído';
 
   @override
-  String get pendingActionCreateExercise => 'Criar exercício';
-
-  @override
   String queuedAt(String time) {
     return 'Na fila às $time';
   }
@@ -1471,11 +1455,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get failedToLoadExercises => 'Falha ao carregar exercícios';
-
-  @override
-  String createWithName(String name) {
-    return 'Criar \"$name\"';
-  }
 
   @override
   String get durationLessThanOneMin => '< 1m';
@@ -1700,9 +1679,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String exerciseItemSemantics(String name) {
     return 'Exercício: $name';
   }
-
-  @override
-  String get createNewExerciseSemantics => 'Criar novo exercício';
 
   @override
   String get muscleGroupSemanticsPrefix => 'Grupo muscular';

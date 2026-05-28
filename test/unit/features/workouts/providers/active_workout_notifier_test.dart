@@ -1908,126 +1908,13 @@ void main() {
       },
     );
 
-    // BUG-003 wiring pin (notifier-level): when an offline-finished workout
-    // references an exercise the user created offline (still queued as
-    // PendingCreateExercise), the new PendingSaveWorkout must declare
-    // `dependsOn: [createExerciseAction.id]`. SyncService's drain test
-    // asserts that the gate behaves correctly given seeded `dependsOn`,
-    // but doesn't cover the wiring — i.e. that the notifier actually
-    // scans the queue and stamps the dependency. Without this pin a
-    // refactor of `_enqueueOfflineWorkout` could silently drop the scan
-    // and the SyncService test would still pass.
-    test('BUG-003: offline saveWorkout carries dependsOn = [createExercise id] '
-        'when an exercise is queued', () async {
-      // Build a workout whose single exercise's id matches a queued
-      // PendingCreateExercise stub. The notifier must scan the queue,
-      // find the match, and stamp the dependency on the new save.
-      const offlineExerciseId = 'ex-offline-123';
-      final exercise = Exercise.fromJson(
-        TestExerciseFactory.create(
-          id: offlineExerciseId,
-          name: 'Custom Bench',
-          equipmentType: 'barbell',
-        ),
-      );
-      final we = WorkoutExercise(
-        id: 'we-1',
-        workoutId: 'workout-001',
-        exerciseId: offlineExerciseId,
-        order: 0,
-        exercise: exercise,
-      );
-      final sets = [
-        ExerciseSet.fromJson(
-          TestSetFactory.create(
-            id: 'set-1',
-            workoutExerciseId: 'we-1',
-            setNumber: 1,
-            weight: 100.0,
-            reps: 8,
-            isCompleted: true,
-          ),
-        ),
-      ];
-      final initial = ActiveWorkoutState(
-        workout: Workout.fromJson(
-          TestWorkoutFactory.create(id: 'workout-001', isActive: true),
-        ),
-        exercises: [ActiveWorkoutExercise(workoutExercise: we, sets: sets)],
-      );
-
-      final mockRepo = MockWorkoutRepository();
-      final mockStorage = MockWorkoutLocalStorage();
-      final mockAuth = MockAuthRepository();
-      final capturedNotifier = _CapturingPendingSyncNotifier();
-
-      // Pre-seed the queue with the PendingCreateExercise the workout
-      // depends on. This mirrors the production sequence: user creates an
-      // exercise offline (NetworkException → enqueue), then logs a
-      // workout against it (saveWorkout throws → enqueue with dependsOn).
-      capturedNotifier.enqueued.add(
-        PendingAction.createExercise(
-          id: 'create-ex-action-id',
-          exerciseId: offlineExerciseId,
-          userId: 'user-test-001',
-          locale: 'en',
-          name: 'Custom Bench',
-          muscleGroup: 'chest',
-          equipmentType: 'barbell',
-          queuedAt: DateTime.utc(2026, 4, 17, 9, 0, 0),
-        ),
-      );
-
-      when(() => mockStorage.loadActiveWorkout()).thenReturn(initial);
-      when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
-      when(() => mockStorage.clearActiveWorkout()).thenAnswer((_) async {});
-      when(() => mockAuth.currentUser).thenReturn(fakeUser());
-      when(() => mockRepo.getCachedWorkoutCount(any())).thenReturn(5);
-
-      // Offline path: saveWorkout throws so the workout enqueues offline.
-      when(
-        () => mockRepo.saveWorkout(
-          workout: any(named: 'workout'),
-          exercises: any(named: 'exercises'),
-          sets: any(named: 'sets'),
-        ),
-      ).thenThrow(Exception('Network error'));
-      when(
-        () => mockRepo.getFinishedWorkoutCount(any()),
-      ).thenThrow(Exception('Offline'));
-
-      final container = ProviderContainer(
-        overrides: [
-          workoutRepositoryProvider.overrideWithValue(mockRepo),
-          workoutLocalStorageProvider.overrideWithValue(mockStorage),
-          authRepositoryProvider.overrideWithValue(mockAuth),
-          analyticsRepositoryProvider.overrideWithValue(
-            const _FakeAnalyticsRepository(),
-          ),
-          pendingSyncProvider.overrideWith(() => capturedNotifier),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await container.read(activeWorkoutProvider.future);
-      await container.read(activeWorkoutProvider.notifier).finishWorkout();
-
-      // The newly-enqueued PendingSaveWorkout must declare its dependency
-      // on the queued create action so the SyncService drain holds the
-      // workout back until the exercise row commits server-side.
-      final saves = capturedNotifier.enqueued
-          .whereType<PendingSaveWorkout>()
-          .toList();
-      expect(saves, hasLength(1));
-      expect(saves.single.dependsOn, ['create-ex-action-id']);
-    });
-
-    // BUG-003 negative pin: when no PendingCreateExercise references the
-    // workout's exercise IDs, the new PendingSaveWorkout must NOT carry any
-    // dependsOn entries. Spurious dependencies would hold the save back
-    // forever waiting for a parent that doesn't exist.
-    test('BUG-003: offline saveWorkout has empty dependsOn when no '
-        'createExercise is queued', () async {
+    // Offline saveWorkout carries no parent `dependsOn` — Phase 32 PR 32h
+    // retired user-created exercises (the only path that produced an
+    // exercise-row-write ahead of a workout-row-write). All offline-logged
+    // workouts now reference server-side default exercises, so the new
+    // save action has no upstream queue dependency. A spurious dependency
+    // would hold the save back waiting for a parent that doesn't exist.
+    test('offline saveWorkout has empty dependsOn', () async {
       final initial = makeState(exerciseCount: 1, setsPerExercise: 1);
       final bundle = makeOfflineContainer(initial);
       addTearDown(bundle.container.dispose);

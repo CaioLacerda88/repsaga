@@ -97,25 +97,32 @@ void main() {
       expect(find.byIcon(Icons.search_rounded), findsOneWidget);
     });
 
-    testWidgets('renders FAB for creating exercises', (tester) async {
+    // Phase 32 PR 32h: the create-exercise FAB and empty-state CTA were
+    // retired. The library no longer renders a FloatingActionButton in any
+    // data state, and the no-filter empty state collapses to icon + heading
+    // copy only.
+    testWidgets('does not render a FAB', (tester) async {
       await tester.pumpWidget(
         buildTestWidget(exerciseValue: AsyncData(testExercises)),
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(FloatingActionButton), findsOneWidget);
-      expect(find.byIcon(Icons.add_rounded), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsNothing);
     });
 
-    testWidgets('shows empty state without filters', (tester) async {
-      await tester.pumpWidget(
-        buildTestWidget(exerciseValue: const AsyncData([])),
-      );
-      await tester.pumpAndSettle();
+    testWidgets(
+      'shows icon + heading only when empty and no filters are applied',
+      (tester) async {
+        await tester.pumpWidget(
+          buildTestWidget(exerciseValue: const AsyncData([])),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('Your exercises will appear here'), findsOneWidget);
-      expect(find.text('Create Exercise'), findsOneWidget);
-    });
+        expect(find.text('Your exercises will appear here'), findsOneWidget);
+        // The retired "Create Exercise" CTA must not resurface.
+        expect(find.text('Create Exercise'), findsNothing);
+      },
+    );
 
     testWidgets('shows filtered empty state with Clear Filters button', (
       tester,

@@ -90,7 +90,6 @@ class _ExerciseListScreenState extends ConsumerState<ExerciseListScreen> {
                     return _EmptyState(
                       hasFilters: hasFilters,
                       onClearFilters: _clearFilters,
-                      onCreateExercise: () => context.go('/exercises/create'),
                     );
                   }
                   return _ExerciseList(
@@ -107,9 +106,6 @@ class _ExerciseListScreenState extends ConsumerState<ExerciseListScreen> {
             ),
           ],
         ),
-      ),
-      floatingActionButton: _CreateExerciseFab(
-        onPressed: () => context.go('/exercises/create'),
       ),
     );
   }
@@ -518,15 +514,10 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.hasFilters,
-    required this.onClearFilters,
-    required this.onCreateExercise,
-  });
+  const _EmptyState({required this.hasFilters, required this.onClearFilters});
 
   final bool hasFilters;
   final VoidCallback onClearFilters;
-  final VoidCallback onCreateExercise;
 
   @override
   Widget build(BuildContext context) {
@@ -558,8 +549,14 @@ class _EmptyState extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 16),
-            if (hasFilters)
+            // Phase 32 PR 32h retired the user-create-exercise surface — the
+            // no-filter empty state collapses to icon + heading only. The
+            // seeded default exercises ship with the app, so an unfiltered
+            // empty state is only reachable via the cache schema migration
+            // path (and self-recovers on next online fetch). The filtered
+            // branch keeps its "Clear Filters" affordance.
+            if (hasFilters) ...[
+              const SizedBox(height: 16),
               Semantics(
                 container: true,
                 identifier: 'exercise-list-clear-filters',
@@ -570,50 +567,9 @@ class _EmptyState extends StatelessWidget {
                     style: TextStyle(color: theme.colorScheme.primary),
                   ),
                 ),
-              )
-            else
-              TextButton(
-                onPressed: onCreateExercise,
-                child: Text(
-                  l10n.createExercise,
-                  style: TextStyle(color: theme.colorScheme.primary),
-                ),
               ),
+            ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CreateExerciseFab extends StatelessWidget {
-  const _CreateExerciseFab({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Semantics(
-      container: true,
-      identifier: 'exercise-list-create-fab',
-      label: AppLocalizations.of(context).createNewExerciseSemantics,
-      button: true,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: AppTheme.primaryGradient,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: FloatingActionButton(
-          onPressed: onPressed,
-          backgroundColor: Colors.transparent,
-          foregroundColor: theme.colorScheme.onPrimary,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: const Icon(Icons.add_rounded, weight: 600),
         ),
       ),
     );

@@ -55,6 +55,15 @@ class SyncService extends Notifier<SyncState> {
 
   @override
   SyncState build() {
+    // One-shot purge for legacy queue entries whose `kind` was retired from
+    // the `PendingAction` sealed union (currently: `createExercise`, retired
+    // in Phase 32 PR 32h). Runs before any `getAll()` read so a legacy row
+    // can't trip the union-key exhaustiveness on first drain. Idempotent —
+    // calling once per cold launch is enough; subsequent rebuilds no-op.
+    // String-matched at the raw-JSON layer so the purge itself doesn't go
+    // through the post-deletion Freezed parser.
+    ref.read(offlineQueueServiceProvider).purgeRetiredKinds();
+
     // Synchronize _lastOnline with the current connectivity state so that
     // the first listener callback can correctly detect a transition.
     _lastOnline = ref.read(isOnlineProvider);
@@ -438,7 +447,6 @@ class SyncService extends Notifier<SyncState> {
       PendingSaveWorkout() => 'save_workout',
       PendingUpsertRecords() => 'upsert_records',
       PendingMarkRoutineComplete() => 'mark_routine_complete',
-      PendingCreateExercise() => 'create_exercise',
     };
   }
 
@@ -457,11 +465,6 @@ class SyncService extends Notifier<SyncState> {
         errorCategory: SyncErrorCategory.none,
       ),
       PendingMarkRoutineComplete() => action.copyWith(
-        retryCount: 0,
-        lastError: null,
-        errorCategory: SyncErrorCategory.none,
-      ),
-      PendingCreateExercise() => action.copyWith(
         retryCount: 0,
         lastError: null,
         errorCategory: SyncErrorCategory.none,
@@ -518,7 +521,6 @@ class SyncService extends Notifier<SyncState> {
       PendingSaveWorkout(:final userId) => userId,
       PendingUpsertRecords(:final userId) => userId,
       PendingMarkRoutineComplete() => 'unknown',
-      PendingCreateExercise(:final userId) => userId,
     };
   }
 

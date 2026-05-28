@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -118,6 +119,73 @@ class OfflineQueueService {
   ///
   /// Assumes the box is used exclusively for [PendingAction] JSON strings.
   int get pendingCount => _box.length;
+
+  /// One-shot purge for legacy queue entries whose `kind` discriminator was
+  /// removed from the [PendingAction] sealed union.
+  ///
+  /// At time of writing the only such variant is the retired
+  /// `createExercise` kind (Phase 32 PR 32h retired the user-create-exercise
+  /// surface entirely). Without this purge, a legacy Hive row from a pre-PR
+  /// build would either:
+  ///   - throw on [PendingAction.fromJson] because the `type` discriminator
+  ///     is unknown to the post-deletion union (Freezed throws on missing
+  ///     union key match), OR
+  ///   - get silently skipped by [getAll]'s corrupt-row guard but leak
+  ///     pendingCount and Sentry breadcrumbs forever.
+  ///
+  /// String-matches on the raw JSON before deserialization so the purge
+  /// itself can't trip the same union-key exhaustiveness it's defending
+  /// against. Pre-launch we have no live users — this is cheap insurance
+  /// for local-dev Hive boxes that may have queued entries from a pre-PR
+  /// build.
+  ///
+  /// Idempotent and safe to call multiple times: the second call finds no
+  /// matching rows and no-ops. Wrapped in try/catch so a corrupt blob can't
+  /// break the calling service's init path.
+  ///
+  /// Returns the number of legacy entries that were dropped.
+  int purgeRetiredKinds() {
+    var dropped = 0;
+    try {
+      // Snapshot keys first — modifying the box during iteration is unsafe.
+      final keys = _box.keys.toList();
+      for (final key in keys) {
+        try {
+          final raw = _box.get(key);
+          if (raw is! String) continue;
+          // Cheap pre-check: most entries won't match. The full JSON parse
+          // only runs on hits so we don't waste cycles on healthy queues.
+          if (!raw.contains('"createExercise"')) continue;
+          final decoded = jsonDecode(raw);
+          if (decoded is! Map) continue;
+          if (decoded['type'] == 'createExercise') {
+            _box.delete(key);
+            dropped++;
+            debugPrint(
+              '[OfflineQueueService] Purged legacy queue entry "$key" '
+              '(retired kind: createExercise)',
+            );
+          }
+        } catch (e) {
+          // Malformed row — leave it for `getAll`'s corrupt-row guard to
+          // surface via Sentry. We don't want a single bad blob to break
+          // the purge for other healthy legacy entries.
+          debugPrint(
+            '[OfflineQueueService] purgeRetiredKinds: skipping unparseable '
+            'entry "$key": $e',
+          );
+        }
+      }
+    } catch (e) {
+      // Box-level failure (closed / missing). Safe to swallow — the purge
+      // is best-effort defensive cleanup; the calling service still works
+      // if no purge ever runs.
+      debugPrint(
+        '[OfflineQueueService] purgeRetiredKinds: box read failed: $e',
+      );
+    }
+    return dropped;
+  }
 }
 
 /// Provides an [OfflineQueueService] instance via Riverpod.
