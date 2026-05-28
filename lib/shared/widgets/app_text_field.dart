@@ -16,6 +16,7 @@ class AppTextField extends StatefulWidget {
     this.maxLength,
     this.showCounter = true,
     this.semanticsIdentifier,
+    this.autofillHints,
   });
 
   final String label;
@@ -40,6 +41,15 @@ class AppTextField extends StatefulWidget {
   /// Optional Semantics identifier for locale-independent E2E selectors.
   /// When non-null, wraps the field in `Semantics(container: true, identifier: ...)`.
   final String? semanticsIdentifier;
+
+  /// OS-level autofill hints (e.g. [AutofillHints.email],
+  /// [AutofillHints.password], [AutofillHints.newPassword]). Forwarded
+  /// verbatim to the underlying [TextFormField.autofillHints]; when the
+  /// containing form is wrapped in an [AutofillGroup], Flutter surfaces the
+  /// OS save / fill prompts (Android Credential Manager on API 34+, the
+  /// iOS Passwords sheet on iOS 12+). Defaults to `null` so existing call
+  /// sites stay opt-out.
+  final Iterable<String>? autofillHints;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -66,6 +76,7 @@ class _AppTextFieldState extends State<AppTextField> {
       focusNode: widget.focusNode,
       onFieldSubmitted: widget.onFieldSubmitted,
       maxLength: widget.maxLength,
+      autofillHints: widget.autofillHints,
       decoration: InputDecoration(
         labelText: widget.label,
         counterText: widget.showCounter ? null : '',
@@ -80,8 +91,12 @@ class _AppTextFieldState extends State<AppTextField> {
     );
 
     if (widget.semanticsIdentifier != null) {
+      // cluster: semantics-identifier-pair-rule — every Semantics(identifier:)
+      // needs container:true + explicitChildNodes:true so the AOM emits a
+      // dedicated node that Playwright's role-based selectors can resolve.
       field = Semantics(
         container: true,
+        explicitChildNodes: true,
         identifier: widget.semanticsIdentifier!,
         child: field,
       );
