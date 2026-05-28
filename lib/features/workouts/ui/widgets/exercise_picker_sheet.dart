@@ -7,7 +7,6 @@ import '../../../../core/utils/enum_l10n.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../exercises/models/exercise.dart';
 import '../../../exercises/providers/exercise_providers.dart';
-import '../../../exercises/ui/create_exercise_screen.dart';
 
 /// Shows the exercise picker as a modal bottom sheet.
 ///
@@ -157,6 +156,11 @@ class _SheetBodyState extends ConsumerState<_SheetBody> {
               ),
               data: (list) {
                 if (list.isEmpty) {
+                  // Phase 32 PR 32h retired user-created exercises — the
+                  // empty state no longer offers a "create one" CTA. The
+                  // user clears the search/filter to recover; default
+                  // exercises are seeded so a fully empty library is not
+                  // a reachable state from the picker.
                   return SingleChildScrollView(
                     controller: widget.scrollController,
                     child: Center(
@@ -176,33 +180,6 @@ class _SheetBodyState extends ConsumerState<_SheetBody> {
                             Text(
                               l10n.noExercisesFound,
                               style: AppTextStyles.body.copyWith(fontSize: 16),
-                            ),
-                            const SizedBox(height: 16),
-                            FilledButton.icon(
-                              onPressed: () {
-                                // Close the sheet first to avoid a stale modal
-                                // lingering behind the create screen. The parent
-                                // receives null (no exercise selected), and we
-                                // push CreateExerciseScreen on the root
-                                // navigator so it replaces the sheet cleanly.
-                                final nav = Navigator.of(
-                                  context,
-                                  rootNavigator: true,
-                                );
-                                nav.pop(null);
-                                nav.push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CreateExerciseScreen(),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.add),
-                              label: Text(
-                                _query.isNotEmpty
-                                    ? l10n.createWithName(_query)
-                                    : l10n.createExercise,
-                              ),
                             ),
                           ],
                         ),

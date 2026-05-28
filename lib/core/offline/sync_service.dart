@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
@@ -206,8 +206,20 @@ class SyncService extends Notifier<SyncState> {
   /// when online. Errors are swallowed — the listener path will still
   /// catch subsequent connectivity changes, so a stream error here is
   /// recoverable rather than fatal.
+  ///
+  /// **Phase 32 PR 32h.** Runs the one-shot legacy-kind purge BEFORE the
+  /// first `getAll()` so a Hive row with a retired `type` discriminator
+  /// (currently `createExercise`) can't trip the union-key exhaustiveness
+  /// in [PendingAction.fromJson]. The purge is awaited because
+  /// [OfflineQueueService.purgeRetiredKinds] must complete its disk
+  /// `_box.delete` before any read; an unawaited call would let the drain's
+  /// `getAll()` race against an unresolved delete and re-surface the legacy
+  /// entry. The purge is idempotent and box-failure-tolerant, so cold-launch
+  /// invocations are cheap on healthy queues.
   Future<void> _coldLaunchDrain() async {
     try {
+      await ref.read(offlineQueueServiceProvider).purgeRetiredKinds();
+      if (_disposed) return;
       final firstReal = await ref.read(onlineStatusProvider.future);
       if (_disposed) return;
       if (firstReal) {
@@ -293,7 +305,7 @@ class SyncService extends Notifier<SyncState> {
       for (final action in actions) {
         // Stop if connectivity dropped mid-drain.
         if (!ref.read(isOnlineProvider)) {
-          log('Connectivity lost mid-drain, stopping', name: 'SyncService');
+          debugPrint('[SyncService] Connectivity lost mid-drain, stopping');
           break;
         }
 
@@ -438,7 +450,6 @@ class SyncService extends Notifier<SyncState> {
       PendingSaveWorkout() => 'save_workout',
       PendingUpsertRecords() => 'upsert_records',
       PendingMarkRoutineComplete() => 'mark_routine_complete',
-      PendingCreateExercise() => 'create_exercise',
     };
   }
 
@@ -457,11 +468,6 @@ class SyncService extends Notifier<SyncState> {
         errorCategory: SyncErrorCategory.none,
       ),
       PendingMarkRoutineComplete() => action.copyWith(
-        retryCount: 0,
-        lastError: null,
-        errorCategory: SyncErrorCategory.none,
-      ),
-      PendingCreateExercise() => action.copyWith(
         retryCount: 0,
         lastError: null,
         errorCategory: SyncErrorCategory.none,
@@ -518,7 +524,6 @@ class SyncService extends Notifier<SyncState> {
       PendingSaveWorkout(:final userId) => userId,
       PendingUpsertRecords(:final userId) => userId,
       PendingMarkRoutineComplete() => 'unknown',
-      PendingCreateExercise(:final userId) => userId,
     };
   }
 
@@ -548,7 +553,7 @@ class SyncService extends Notifier<SyncState> {
       try {
         invalidate();
       } catch (e) {
-        log('invalidate failed for $name: $e', name: 'SyncService', level: 900);
+        debugPrint('[SyncService] invalidate failed for $name: $e');
       }
     }
   }
@@ -587,11 +592,7 @@ class SyncService extends Notifier<SyncState> {
             'PR cache reconciled (re-seed scheduled) for ${userIds.length} users',
       );
     } catch (e) {
-      log(
-        'PR cache reconciliation failed: $e',
-        name: 'SyncService',
-        level: 900,
-      );
+      debugPrint('[SyncService] PR cache reconciliation failed: $e');
     }
   }
 }

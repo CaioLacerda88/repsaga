@@ -13,9 +13,6 @@ import 'package:repsaga/core/offline/sync_service.dart';
 import 'package:repsaga/features/analytics/data/analytics_repository.dart';
 import 'package:repsaga/features/analytics/data/models/analytics_event.dart';
 import 'package:repsaga/features/analytics/providers/analytics_providers.dart';
-import 'package:repsaga/features/exercises/data/exercise_repository.dart';
-import 'package:repsaga/features/exercises/models/exercise.dart';
-import 'package:repsaga/features/exercises/providers/exercise_providers.dart';
 import 'package:repsaga/features/personal_records/data/pr_repository.dart';
 import 'package:repsaga/features/personal_records/models/personal_record.dart';
 import 'package:repsaga/features/personal_records/providers/pr_cache_bootstrap_provider.dart';
@@ -37,8 +34,6 @@ class _MockWorkoutRepository extends Mock implements WorkoutRepository {}
 class _MockPRRepository extends Mock implements PRRepository {}
 
 class _MockAnalyticsRepository extends Mock implements AnalyticsRepository {}
-
-class _MockExerciseRepository extends Mock implements ExerciseRepository {}
 
 // ---------------------------------------------------------------------------
 // Fakes (for registerFallbackValue)
@@ -125,10 +120,6 @@ void main() {
       registerFallbackValue(<WorkoutExercise>[]);
       registerFallbackValue(<ExerciseSet>[]);
       registerFallbackValue(<PersonalRecord>[]);
-      // BUG-003: enums are passed by value to ExerciseRepository.createExercise
-      // and must be registered for `any(named: ...)` matchers to work.
-      registerFallbackValue(MuscleGroup.chest);
-      registerFallbackValue(EquipmentType.barbell);
     });
 
     setUp(() async {
@@ -1489,225 +1480,6 @@ void main() {
           await _pumpAsync(50);
 
           expect(bundle.buildCount(), equals(initialBuilds + 1));
-        },
-      );
-    });
-
-    // ------------------------------------------------------------------
-    // BUG-003: PendingCreateExercise drains BEFORE dependent
-    // PendingSaveWorkout via the dependsOn gate. If the parent
-    // create-exercise fails on the same pass, the child save MUST NOT be
-    // attempted — otherwise the workout's `workout_exercises.exercise_id`
-    // FK would crash on replay because the row doesn't exist yet.
-    // ------------------------------------------------------------------
-    group('BUG-003: PendingCreateExercise dependency ordering', () {
-      late _MockExerciseRepository mockExerciseRepo;
-
-      setUp(() {
-        mockExerciseRepo = _MockExerciseRepository();
-      });
-
-      ProviderContainer createContainerWithExerciseRepo({
-        bool initialOnline = false,
-      }) {
-        final container = ProviderContainer(
-          overrides: [
-            onlineStatusProvider.overrideWith(
-              (ref) => connectivityController.stream,
-            ),
-            isOnlineProvider.overrideWith((ref) {
-              return ref.watch(onlineStatusProvider).value ?? initialOnline;
-            }),
-            offlineQueueServiceProvider.overrideWithValue(queueService),
-            workoutRepositoryProvider.overrideWithValue(mockWorkoutRepo),
-            prRepositoryProvider.overrideWithValue(mockPRRepo),
-            analyticsRepositoryProvider.overrideWithValue(mockAnalyticsRepo),
-            exerciseRepositoryProvider.overrideWithValue(mockExerciseRepo),
-          ],
-        );
-        addTearDown(container.dispose);
-        container.listen(syncServiceProvider, (_, _) {});
-        return container;
-      }
-
-      PendingCreateExercise makeCreateExerciseAction({
-        String id = 'create-ex-1',
-        String exerciseId = 'ex-local-1',
-        String userId = 'user-1',
-        DateTime? queuedAt,
-      }) {
-        return PendingAction.createExercise(
-              id: id,
-              exerciseId: exerciseId,
-              userId: userId,
-              locale: 'en',
-              name: 'Custom Bench',
-              muscleGroup: 'chest',
-              equipmentType: 'barbell',
-              queuedAt: queuedAt ?? DateTime.utc(2026, 4, 17, 10, 0, 0),
-            )
-            as PendingCreateExercise;
-      }
-
-      test(
-        'createExercise drains before dependent saveWorkout when both succeed',
-        () async {
-          final container = createContainerWithExerciseRepo();
-          final notifier = container.read(pendingSyncProvider.notifier);
-
-          // Enqueue create-exercise FIRST, then a dependent save-workout.
-          await notifier.enqueue(
-            makeCreateExerciseAction(
-              id: 'create-ex-ok',
-              exerciseId: 'ex-local-1',
-              queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 0),
-            ),
-          );
-          await notifier.enqueue(
-            PendingAction.saveWorkout(
-              id: 'w-with-custom-ex',
-              workoutJson: _workoutJson(id: 'w-with-custom-ex'),
-              exercisesJson: const [],
-              setsJson: const [],
-              userId: 'user-1',
-              queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 1),
-              dependsOn: const ['create-ex-ok'],
-            ),
-          );
-
-          // Track the order of calls across both repos.
-          final callOrder = <String>[];
-          when(
-            () => mockExerciseRepo.createExercise(
-              locale: any(named: 'locale'),
-              name: any(named: 'name'),
-              muscleGroup: any(named: 'muscleGroup'),
-              equipmentType: any(named: 'equipmentType'),
-              userId: any(named: 'userId'),
-              description: any(named: 'description'),
-              formTips: any(named: 'formTips'),
-              id: any(named: 'id'),
-            ),
-          ).thenAnswer((_) async {
-            callOrder.add('create-exercise');
-            return Exercise.fromJson({
-              'id': 'ex-server-1',
-              'name': 'Custom Bench',
-              'muscle_group': 'chest',
-              'equipment_type': 'barbell',
-              'is_default': false,
-              'user_id': 'user-1',
-              'created_at': '2026-04-17T10:00:00Z',
-              'slug': 'custom-bench',
-            });
-          });
-          when(
-            () => mockWorkoutRepo.saveWorkout(
-              workout: any(named: 'workout'),
-              exercises: any(named: 'exercises'),
-              sets: any(named: 'sets'),
-            ),
-          ).thenAnswer((invocation) async {
-            callOrder.add('save-workout');
-            return Workout.fromJson(_workoutJson(id: 'w-with-custom-ex'));
-          });
-
-          connectivityController.add(true);
-          await _pumpAsync(300);
-
-          // Parent commits first, child second.
-          expect(callOrder, ['create-exercise', 'save-workout']);
-          expect(container.read(pendingSyncProvider), 0);
-
-          // BUG-003: the drain MUST forward the local stub UUID as `id` so
-          // the server row's PK matches what the local Hive cache and any
-          // queued workout's `exercise_id` already wrote. Without this the
-          // post-drain workout_exercises row holds a dangling FK pointer.
-          verify(
-            () => mockExerciseRepo.createExercise(
-              locale: any(named: 'locale'),
-              name: any(named: 'name'),
-              muscleGroup: any(named: 'muscleGroup'),
-              equipmentType: any(named: 'equipmentType'),
-              userId: any(named: 'userId'),
-              description: any(named: 'description'),
-              formTips: any(named: 'formTips'),
-              id: 'ex-local-1',
-            ),
-          ).called(1);
-        },
-      );
-
-      test(
-        'saveWorkout is HELD when its dependent createExercise fails',
-        () async {
-          final container = createContainerWithExerciseRepo();
-          final notifier = container.read(pendingSyncProvider.notifier);
-
-          await notifier.enqueue(
-            makeCreateExerciseAction(
-              id: 'create-ex-fail',
-              exerciseId: 'ex-local-2',
-              queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 0),
-            ),
-          );
-          await notifier.enqueue(
-            PendingAction.saveWorkout(
-              id: 'w-blocked',
-              workoutJson: _workoutJson(id: 'w-blocked'),
-              exercisesJson: const [],
-              setsJson: const [],
-              userId: 'user-1',
-              queuedAt: DateTime.utc(2026, 4, 17, 10, 0, 1),
-              dependsOn: const ['create-ex-fail'],
-            ),
-          );
-
-          // Parent transient-fails (stays live in the queue).
-          when(
-            () => mockExerciseRepo.createExercise(
-              locale: any(named: 'locale'),
-              name: any(named: 'name'),
-              muscleGroup: any(named: 'muscleGroup'),
-              equipmentType: any(named: 'equipmentType'),
-              userId: any(named: 'userId'),
-              description: any(named: 'description'),
-              formTips: any(named: 'formTips'),
-              id: any(named: 'id'),
-            ),
-          ).thenThrow(const SocketException('flaky network'));
-
-          // saveWorkout would succeed if invoked — but it MUST NOT be.
-          stubSaveWorkoutSuccess(id: 'w-blocked');
-
-          connectivityController.add(true);
-          // Parent retry backoff is 1s for retryCount=1.
-          await _pumpAsync(1500);
-
-          // Parent attempted exactly once; child must NEVER be invoked.
-          verify(
-            () => mockExerciseRepo.createExercise(
-              locale: any(named: 'locale'),
-              name: any(named: 'name'),
-              muscleGroup: any(named: 'muscleGroup'),
-              equipmentType: any(named: 'equipmentType'),
-              userId: any(named: 'userId'),
-              description: any(named: 'description'),
-              formTips: any(named: 'formTips'),
-              id: any(named: 'id'),
-            ),
-          ).called(1);
-          verifyNever(
-            () => mockWorkoutRepo.saveWorkout(
-              workout: any(named: 'workout'),
-              exercises: any(named: 'exercises'),
-              sets: any(named: 'sets'),
-            ),
-          );
-
-          // Both items remain in the queue.
-          final remaining = queueService.getAll();
-          expect(remaining, hasLength(2));
         },
       );
     });

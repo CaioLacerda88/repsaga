@@ -1,5 +1,5 @@
 /**
- * Exercise content localization — E2E scenarios A1-A5, B1-B2, G1-G2.
+ * Exercise content localization — E2E scenarios A1-A5, B1-B2.
  * Phase 15f: exercise name/description/form_tips served from
  * exercise_translations table via fn_exercises_localized RPC.
  *
@@ -11,8 +11,10 @@
  *   A5         — pt user filters chest → pt chest exercises only
  *   B1         — pt user searches "supino" → finds pt-named bench press
  *   B2         — pt user searches "bench" → finds via en-name fallback
- *   G1         — pt user creates custom exercise → visible with pt name; en user doesn't see it
- *   G2         — Accented chars round-trip correctly (name + description)
+ *
+ * G1 / G2 (user-created exercise pt locale) retired in Phase 32 PR 32h —
+ * the create-exercise surface no longer exists; see exercises.spec.ts for
+ * the negative pin guarding against accidental re-introduction.
  */
 
 import { test, expect } from '@playwright/test';
@@ -22,7 +24,6 @@ import {
   EXERCISE_LIST,
   EXERCISE_DETAIL,
   EXERCISE_LOC,
-  CREATE_EXERCISE,
 } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { EXERCISE_NAMES } from '../fixtures/test-exercises';
@@ -363,157 +364,6 @@ test.describe('Exercise list pt locale filters and search', () => {
   });
 });
 
-// =============================================================================
-// FULL: User-created exercise pt (G1, G2)
-// G1 uses TWO browser contexts to actually verify cross-user RLS:
-//   - context A: pt creator (smokeLocalization) creates the exercise
-//   - context B: en user (fullExercises) logs in fresh and confirms it does
-//     not appear in their list. Without two contexts the RLS contract is
-//     untested — a single context would just be a logout-cancel.
-// =============================================================================
-
-test.describe('User-created exercise pt locale', () => {
-  // G1: pt user creates "Meu Exercício" → visible with pt name on creator's list;
-  //     en user (fullExercises) does NOT see it (RLS on user_id).
-  test('should show custom pt-named exercise for creator but not for en user (G1)', async ({
-    browser,
-  }) => {
-    const ptExerciseName = `Meu Exercício ${Date.now()}`;
-
-    // ─ Context A: pt creator creates the exercise ───────────────────────
-    const creatorContext = await browser.newContext();
-    const creatorPage = await creatorContext.newPage();
-    try {
-      await login(
-        creatorPage,
-        getUser('smokeLocalization').email,
-        getUser('smokeLocalization').password,
-      );
-      await navigateToTab(creatorPage, 'Exercises');
-
-      await creatorPage.click(EXERCISE_LIST.createFab);
-      await expect(creatorPage.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-        timeout: 10_000,
-      });
-      await flutterFill(creatorPage, CREATE_EXERCISE.nameInput, ptExerciseName);
-      // pt locale: "Grupo muscular: Peito" / "Tipo de equipamento: Barra".
-      await creatorPage
-        .locator('role=button[name*="Grupo muscular: Peito"]')
-        .first()
-        .click();
-      await creatorPage
-        .locator('role=button[name*="Tipo de equipamento: Barra"]')
-        .first()
-        .click();
-      await creatorPage.click(CREATE_EXERCISE.saveButton);
-
-      // Must navigate back to the list.
-      await expect(
-        creatorPage.locator(EXERCISE_LIST.heading).first(),
-      ).toBeVisible({ timeout: 15_000 });
-
-      // Search for the exercise — creator MUST see it with pt prefix.
-      await flutterFill(
-        creatorPage,
-        EXERCISE_LIST.searchInput,
-        ptExerciseName.substring(0, 10),
-      );
-      await creatorPage.waitForTimeout(800);
-      const creatorCard = creatorPage
-        .locator(EXERCISE_LOC.exerciseCard(ptExerciseName, 'pt'))
-        .first();
-      await expect(creatorCard).toBeVisible({ timeout: 10_000 });
-
-      // Owner must see the custom badge on detail (RLS allows owner to read
-      // their own custom exercise).
-      await creatorCard.click();
-      await expect(
-        creatorPage.locator(EXERCISE_DETAIL.customBadge),
-      ).toBeVisible({ timeout: 5_000 });
-    } finally {
-      // Keep creatorContext open until after we verify with en user, then close.
-    }
-
-    // ─ Context B: en user logs in fresh and MUST NOT see the pt exercise ──
-    const enContext = await browser.newContext();
-    const enPage = await enContext.newPage();
-    try {
-      await login(
-        enPage,
-        getUser('fullExercises').email,
-        getUser('fullExercises').password,
-      );
-      await navigateToTab(enPage, 'Exercises');
-
-      // Wait for the en list to render.
-      await expect(
-        enPage.locator('role=button[name*="Exercise:"]').first(),
-      ).toBeVisible({ timeout: 15_000 });
-
-      // Search for the pt exercise name. RLS must hide it from this user.
-      await flutterFill(
-        enPage,
-        EXERCISE_LIST.searchInput,
-        ptExerciseName.substring(0, 10),
-      );
-      await enPage.waitForTimeout(800);
-
-      // Hard RLS contract: the pt user's custom exercise MUST NOT appear in
-      // the en user's list under EITHER locale prefix.
-      await expect(
-        enPage.locator(EXERCISE_LOC.exerciseCard(ptExerciseName, 'en')),
-      ).not.toBeVisible({ timeout: 5_000 });
-      await expect(
-        enPage.locator(EXERCISE_LOC.exerciseCard(ptExerciseName, 'pt')),
-      ).not.toBeVisible({ timeout: 3_000 });
-    } finally {
-      await enContext.close();
-      await creatorContext.close();
-    }
-  });
-
-  // G2: Accented chars round-trip correctly (name + description).
-  test('should round-trip accented characters in exercise name and description (G2)', async ({
-    page,
-  }) => {
-    const accentedName = `Levantamento Específico ${Date.now()}`;
-
-    await login(
-      page,
-      getUser('smokeLocalization').email,
-      getUser('smokeLocalization').password,
-    );
-    await navigateToTab(page, 'Exercises');
-
-    // Create the exercise with accented name.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, CREATE_EXERCISE.nameInput, accentedName);
-    // pt locale: "Grupo muscular: Costas" / "Tipo de equipamento: Halter".
-    await page.locator('role=button[name*="Grupo muscular: Costas"]').first().click();
-    await page.locator('role=button[name*="Tipo de equipamento: Halter"]').first().click();
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // Navigate back to list.
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for the accented name.
-    await flutterFill(
-      page,
-      EXERCISE_LIST.searchInput,
-      accentedName.substring(0, 12),
-    );
-    await page.waitForTimeout(800);
-
-    // The accented name must appear exactly as entered (no mangling of
-    // ã, é, ü, ô, ç, or em-dash).
-    // pt locale: AOM prefix is "Exercício:".
-    await expect(
-      page.locator(EXERCISE_LOC.exerciseCard(accentedName, 'pt')),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-});
+// User-created exercise pt locale (G1, G2) tests were retired in Phase 32
+// PR 32h — see exercises.spec.ts negative pin for the steady-state contract
+// that the create-exercise FAB is no longer rendered.

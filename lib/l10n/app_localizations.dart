@@ -1328,12 +1328,6 @@ abstract class AppLocalizations {
   /// **'Clear Filters'**
   String get clearFilters;
 
-  /// Create exercise button
-  ///
-  /// In en, this message translates to:
-  /// **'Create Exercise'**
-  String get createExercise;
-
   /// Exercise detail screen title
   ///
   /// In en, this message translates to:
@@ -1441,24 +1435,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Session expired. Please log in again.'**
   String get sessionExpired;
-
-  /// Snackbar: exercise created
-  ///
-  /// In en, this message translates to:
-  /// **'Exercise created successfully'**
-  String get exerciseCreated;
-
-  /// Snackbar: exercise queued for offline sync (BUG-003).
-  ///
-  /// In en, this message translates to:
-  /// **'Exercise saved locally. It will sync when you\'re back online.'**
-  String get exerciseCreatedOffline;
-
-  /// Create exercise submit button
-  ///
-  /// In en, this message translates to:
-  /// **'CREATE EXERCISE'**
-  String get createExerciseButton;
 
   /// Description field label
   ///
@@ -2510,12 +2486,6 @@ abstract class AppLocalizations {
   /// **'Mark routine complete'**
   String get pendingActionMarkComplete;
 
-  /// Pending action: create custom exercise. BUG-003.
-  ///
-  /// In en, this message translates to:
-  /// **'Create exercise'**
-  String get pendingActionCreateExercise;
-
   /// Pending action queued time
   ///
   /// In en, this message translates to:
@@ -2593,12 +2563,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to load exercises'**
   String get failedToLoadExercises;
-
-  /// Exercise picker: create exercise with search query name
-  ///
-  /// In en, this message translates to:
-  /// **'Create \"{name}\"'**
-  String createWithName(String name);
 
   /// Duration format: less than 1 minute
   ///
@@ -2951,12 +2915,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exercise: {name}'**
   String exerciseItemSemantics(String name);
-
-  /// Accessibility: create exercise FAB
-  ///
-  /// In en, this message translates to:
-  /// **'Create new exercise'**
-  String get createNewExerciseSemantics;
 
   /// Accessibility prefix for muscle group picker
   ///

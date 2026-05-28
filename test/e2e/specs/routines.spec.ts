@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { login } from '../helpers/auth';
 import {
   navigateToTab,
@@ -27,12 +28,10 @@ import {
   ROUTINE_MANAGEMENT,
   WORKOUT,
   HOME,
-  EXERCISE_LIST,
-  EXERCISE_DETAIL,
-  CREATE_EXERCISE,
 } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 // The Push Day starter routine is seeded by seed.sql and always present.
 const PUSH_DAY = 'Push Day';
@@ -458,6 +457,129 @@ test.describe('Routine start', { tag: '@smoke' }, () => {
 // =============================================================================
 // SMOKE — Routine error handling (smokeRoutineError user, BUG-003)
 // =============================================================================
+//
+// BUG-003 contract (Phase 32 PR 32h rewire):
+//   Phase 32 retired the user-create-exercise UI surface, so the original test
+//   path (create exercise via UI -> add to routine -> soft-delete via UI ->
+//   attempt start) no longer reaches its assertion. We preserve the bug
+//   contract — "start routine whose every exercise is soft-deleted must show
+//   the error snackbar, not silently fail" — by exercising the data layer
+//   directly via the Supabase Admin API.
+//
+//   The contract under test lives in `lib/features/routines/ui/start_routine_action.dart`:
+//     routine.exercises.where((re) => re.exercise != null && re.exercise!.deletedAt == null)
+//   so a routine pointing at a soft-deleted exercise still surfaces the snackbar
+//   regardless of whether the exercise was user-created or default.
+//
+//   The seed inserts a custom user-owned exercise + translation rows + a routine
+//   referencing it (mirrors the JSONB shape from migration 00014). The test then
+//   soft-deletes the exercise via Admin API and drives the UI's start tap. This
+//   keeps coverage on the SQL deletedAt -> Dart filter -> SnackBar path while
+//   bypassing the retired user-create-exercise UI.
+//   See cluster_e2e_selector_full_audit — deleting a UI surface requires
+//   rewiring every E2E setup that depended on it.
+
+/**
+ * Seed a custom (user-owned, non-default) exercise + en/pt translation pair
+ * via the Supabase Admin API. Returns the new exercise UUID.
+ */
+async function seedCustomExerciseForUser(
+  admin: SupabaseClient,
+  userId: string,
+  name: string,
+): Promise<string> {
+  // Phase 15f Stage 4 requires `slug` explicitly on every `exercises` INSERT
+  // (it's the NOT NULL join key for `exercise_translations`). Derive a
+  // sanitised slug from the unique-suffixed name so the test isolates per
+  // run without colliding on slug uniqueness.
+  const slug = `bug003-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const { data, error } = await admin
+    .from('exercises')
+    .insert({
+      slug,
+      muscle_group: 'chest',
+      equipment_type: 'barbell',
+      is_default: false,
+      user_id: userId,
+    })
+    .select('id')
+    .single();
+  if (error || !data) {
+    throw new Error(
+      `BUG-003 seed failed (exercises insert): ${error?.message ?? 'no row'}`,
+    );
+  }
+  const exerciseId = data.id as string;
+
+  const { error: trErr } = await admin.from('exercise_translations').insert([
+    {
+      exercise_id: exerciseId,
+      locale: 'en',
+      name,
+    },
+    {
+      exercise_id: exerciseId,
+      locale: 'pt',
+      name,
+    },
+  ]);
+  if (trErr) {
+    throw new Error(`BUG-003 seed failed (translations): ${trErr.message}`);
+  }
+  return exerciseId;
+}
+
+/**
+ * Seed a single-exercise user routine pointing at `exerciseId`. JSONB shape
+ * matches `workout_templates.exercises` (see migration 00014). Returns the
+ * routine UUID.
+ */
+async function seedRoutineForUser(
+  admin: SupabaseClient,
+  userId: string,
+  routineName: string,
+  exerciseId: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from('workout_templates')
+    .insert({
+      user_id: userId,
+      name: routineName,
+      is_default: false,
+      exercises: [
+        {
+          exercise_id: exerciseId,
+          set_configs: [
+            { target_reps: 10, rest_seconds: 90 },
+            { target_reps: 10, rest_seconds: 90 },
+            { target_reps: 10, rest_seconds: 90 },
+          ],
+        },
+      ],
+    })
+    .select('id')
+    .single();
+  if (error || !data) {
+    throw new Error(
+      `BUG-003 seed failed (workout_templates): ${error?.message ?? 'no row'}`,
+    );
+  }
+  return data.id as string;
+}
+
+/** Soft-delete an exercise via Admin API. */
+async function softDeleteExercise(
+  admin: SupabaseClient,
+  exerciseId: string,
+): Promise<void> {
+  const { error } = await admin
+    .from('exercises')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', exerciseId);
+  if (error) {
+    throw new Error(`BUG-003 soft-delete failed: ${error.message}`);
+  }
+}
 
 test.describe('Routine error handling', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page }) => {
@@ -475,97 +597,44 @@ test.describe('Routine error handling', { tag: '@smoke' }, () => {
     const exerciseName = `Smoke BUG-003 Ex ${suffix}`;
     const routineName = `Smoke BUG-003 Routine ${suffix}`;
 
-    // Step 1: Create a custom exercise.
-    await navigateToTab(page, 'Exercises');
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, CREATE_EXERCISE.nameInput, exerciseName);
-    await page.locator('role=button[name*="Muscle group: Chest"]').first().click();
-    await page.locator('role=button[name*="Equipment type: Barbell"]').first().click();
-    await page.click(CREATE_EXERCISE.saveButton);
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Step 2: Create a routine with only this exercise.
-    await navigateToTab(page, 'Routines');
-    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
-
-    const nameInput = page.locator(CREATE_ROUTINE.nameInput);
-    await expect(nameInput).toBeVisible({ timeout: 10_000 });
-    await nameInput.click();
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type(routineName, { delay: 10 });
-
-    await page.click(CREATE_ROUTINE.addExerciseButton);
-    await expect(
-      page.locator('role=textbox[name*="Search exercises to add"]'),
-    ).toBeVisible({ timeout: 10_000 });
-    await flutterFill(
-      page,
-      'role=textbox[name*="Search exercises to add"]',
+    // Seed via Admin API: custom exercise + routine + soft-delete.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('smokeRoutineError').email,
+    );
+    if (!userId) {
+      throw new Error('BUG-003 setup: smokeRoutineError user not found');
+    }
+    const exerciseId = await seedCustomExerciseForUser(
+      admin,
+      userId,
       exerciseName,
     );
-    await page.waitForTimeout(600);
+    await seedRoutineForUser(admin, userId, routineName, exerciseId);
+    await softDeleteExercise(admin, exerciseId);
 
-    const addBtn = page
-      .locator(`role=button[name*="Add ${exerciseName}"]`)
-      .first();
-    await expect(addBtn).toBeVisible({ timeout: 10_000 });
-    await addBtn.click();
-
-    await page.click(CREATE_ROUTINE.saveButton);
-    await expect(page.locator(ROUTINE.starterRoutinesSection)).toBeVisible({ timeout: 15_000 });
-
-    // Step 3: Delete the exercise (soft-delete).
-    await navigateToTab(page, 'Exercises');
-    // Use flutterFillByInput to target the search input's underlying HTML element
-    // directly — clicking the flt-semantics overlay does not reliably transfer focus.
-    await flutterFillByInput(page, 'Search exercises', exerciseName);
-    await page.waitForTimeout(800);
-
-    const card = page.locator(EXERCISE_LIST.exerciseCard(exerciseName)).first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    await card.click();
-
-    await expect(page.locator(EXERCISE_DETAIL.deleteButton)).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteButton);
-    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteConfirmButton);
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Step 4: Reload the page to clear Riverpod's cached state for routineListProvider.
-    // Without a reload, the provider serves stale data where the exercise still
-    // appears non-deleted (Riverpod AsyncNotifier without autoDispose does not
-    // re-fetch on tab navigation). The reload forces a cold re-fetch so that
-    // startRoutineWorkout sees the updated deletedAt timestamp.
+    // Reload so the cold re-fetch picks up the seeded routine + deletedAt
+    // exercise. Without this, `routineListProvider` (AsyncNotifier without
+    // autoDispose) keeps the pre-login empty cache.
     await page.reload();
     await waitForAppReady(page);
     await navigateToTab(page, 'Routines');
-    await page.waitForTimeout(500);
 
-    const myRoutineCard = page.locator(ROUTINE.routineName(routineName)).first();
+    const myRoutineCard = page
+      .locator(ROUTINE.routineName(routineName))
+      .first();
     await expect(myRoutineCard).toBeVisible({ timeout: 10_000 });
     await myRoutineCard.click();
 
-    // Step 5-6: The error snackbar must appear.
-    // The deleted exercise is filtered out -> exercises is empty -> snackbar fires.
-    // Use .first() because Flutter renders both <flt-announcement-polite> (a11y)
-    // and a <span> (visual) for SnackBar text — strict mode requires one element.
+    // The error snackbar must appear. Use .first() — Flutter renders the
+    // SnackBar text in both <flt-announcement-polite> (a11y) and a visual
+    // span; strict mode requires one match.
     await expect(
       page.locator('text=Could not load exercises').first(),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Step 7: The active workout screen must NOT have appeared.
-    // If Finish Workout is visible the silent-failure bug is present.
+    // Active workout must NOT have started — Finish Workout absent.
     await expect(page.locator(WORKOUT.finishButton)).not.toBeVisible({
       timeout: 3_000,
     });
@@ -806,124 +875,69 @@ test.describe('Routine regressions', () => {
   test('should show error snackbar when starting routine whose only exercise was deleted (BUG-003)', async ({
     page,
   }) => {
+    // Phase 32 PR 32h rewire — see SMOKE BUG-003 comment block above for the
+    // full rationale. Same Admin-API seed + soft-delete pattern; this variant
+    // runs against the `fullRoutineRegression` user as part of the regression
+    // suite. The bug contract under test is identical: a routine whose every
+    // exercise has `deletedAt != null` must surface the error snackbar instead
+    // of silently navigating into an empty active workout.
     const uniqueSuffix = Date.now();
     const exerciseName = `BUG-003 Exercise ${uniqueSuffix}`;
     const routineName = `BUG-003 Routine ${uniqueSuffix}`;
 
-    // Step 1: Create a custom exercise.
-    await navigateToTab(page, 'Exercises');
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, CREATE_EXERCISE.nameInput, exerciseName);
-    await page.locator('role=button[name*="Muscle group: Chest"]').first().click();
-    await page.locator('role=button[name*="Equipment type: Barbell"]').first().click();
-    await page.click(CREATE_EXERCISE.saveButton);
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('fullRoutineRegression').email,
+    );
+    if (!userId) {
+      throw new Error('BUG-003 setup: fullRoutineRegression user not found');
+    }
+    const exerciseId = await seedCustomExerciseForUser(
+      admin,
+      userId,
+      exerciseName,
+    );
+    await seedRoutineForUser(admin, userId, routineName, exerciseId);
+    await softDeleteExercise(admin, exerciseId);
 
-    // Step 2: Create a routine that uses this exercise.
-    await navigateToTab(page, 'Routines');
-    // The Create Routine button is the + icon in the AppBar (no accessible label).
-    // It is the first flt-semantics[role="button"] in the DOM on the Routines screen.
-    await page.locator('flt-semantics[role="button"]').first().click();
-
-    // Fill in the routine name.
-    const nameInput = page.locator(CREATE_ROUTINE.nameInput);
-    await expect(nameInput).toBeVisible({ timeout: 10_000 });
-    await nameInput.click();
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type(routineName, { delay: 10 });
-
-    // Add the custom exercise to the routine.
-    await page.click(CREATE_ROUTINE.addExerciseButton);
-    const searchInput = page.locator('role=textbox[name*="Search exercises to add"]');
-    await expect(searchInput).toBeVisible({ timeout: 10_000 });
-    await flutterFill(page, 'role=textbox[name*="Search exercises to add"]', exerciseName.substring(0, 10));
-    await page.waitForTimeout(600);
-
-    const addBtn = page.locator(`role=button[name*="Add ${exerciseName}"]`).first();
-    await expect(addBtn).toBeVisible({ timeout: 10_000 });
-    await addBtn.click();
-
-    // Save the routine.
-    await page.click(CREATE_ROUTINE.saveButton);
-    await expect(page.locator(ROUTINE.starterRoutinesSection)).toBeVisible({ timeout: 15_000 });
-
-    // Verify the custom routine appears. The fullRoutineRegression user
-    // accumulates state across the suite, so MY ROUTINES may overflow the
-    // viewport — scroll the new routine card into view before asserting.
-    await scrollToVisible(page, ROUTINE.routineName(routineName));
-    await expect(page.locator(ROUTINE.routineName(routineName)).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Step 3: Delete the exercise so it becomes soft-deleted (deletedAt is set).
-    await navigateToTab(page, 'Exercises');
-    // Use flutterFillByInput to target the underlying HTML input directly —
-    // clicking the flt-semantics overlay does not reliably transfer focus.
-    await flutterFillByInput(page, 'Search exercises', exerciseName.substring(0, 10));
-    await page.waitForTimeout(800);
-
-    const exerciseCard = page
-      .locator(EXERCISE_LIST.exerciseCard(exerciseName))
-      .first();
-    await expect(exerciseCard).toBeVisible({ timeout: 10_000 });
-    await exerciseCard.click();
-
-    await expect(page.locator(EXERCISE_DETAIL.deleteButton)).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteButton);
-    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteConfirmButton);
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Step 4: Reload the page to clear Riverpod's cached routineListProvider state.
-    // Without a reload, the cached routine data still shows the exercise as non-deleted
-    // (Riverpod AsyncNotifier without autoDispose does not re-fetch on tab navigation).
-    // The reload forces a cold re-fetch so startRoutineWorkout filters the deleted exercise.
+    // Reload to force a cold re-fetch of routineListProvider so the seeded
+    // routine + soft-deleted exercise are picked up.
     await page.reload();
     await waitForAppReady(page);
     await navigateToTab(page, 'Routines');
 
-    // The routine may appear in MY ROUTINES section.
+    // The seeded routine accumulates in MY ROUTINES — may overflow the
+    // viewport if the fullRoutineRegression user has other custom routines
+    // from earlier suite runs. Scroll into view before tapping.
+    await scrollToVisible(page, ROUTINE.routineName(routineName));
     const myRoutineCard = page
       .locator(ROUTINE.routineName(routineName))
       .first();
     await expect(myRoutineCard).toBeVisible({ timeout: 10_000 });
     await myRoutineCard.click();
 
-    // Step 5-6: The snackbar with the error message must appear.
-    // The start action filters out the soft-deleted exercise -> exercises is empty
-    // -> shows SnackBar("Could not load exercises. Please try again.").
-    // Use .first() because Flutter renders both <flt-announcement-polite> (a11y)
-    // and a <span> (visual) for SnackBar text — strict mode requires one element.
+    // SnackBar must surface — startRoutineWorkout filters every soft-deleted
+    // exercise -> exercises empty -> error path fires.
+    // Use .first() — Flutter renders SnackBar text in both
+    // <flt-announcement-polite> (a11y) and a visual span; strict mode requires
+    // one match.
     await expect(
       page.locator('text=Could not load exercises').first(),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Step 7: The app must NOT have navigated to the active workout screen.
-    // "Finish Workout" button must NOT be visible.
+    // The app must NOT have navigated to the active workout screen.
     await expect(page.locator(WORKOUT.finishButton)).not.toBeVisible({
       timeout: 3_000,
     });
 
-    // We must still be on the Routines tab (or Home — either is fine as long
-    // as we did not land on the active workout screen).
+    // We must still be on the Routines tab (or Home) — anything but the
+    // workout screen confirms the silent-failure bug is absent.
     const onRoutines = await page
       .locator(ROUTINE.heading)
       .first()
       .isVisible({ timeout: 3_000 })
       .catch(() => false);
-    // "Start Empty Workout" was removed in W8. Check for home URL or the
-    // NAV home tab instead to confirm we did not land on the workout screen.
     const onHome = await page
       .locator(NAV.homeTab)
       .isVisible({ timeout: 3_000 })

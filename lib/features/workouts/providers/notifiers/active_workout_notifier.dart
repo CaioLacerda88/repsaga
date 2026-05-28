@@ -1554,22 +1554,14 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // `DateTime.parse(json['created_at'] as String)` unconditionally.
         final setsJson = sets.map((s) => s.toRpcJson()).toList();
 
-        // BUG-003: when a workout references an exercise the user created
-        // offline (still queued as PendingCreateExercise), tag this save
-        // with `dependsOn: [createExerciseAction.id]` so the drain commits
-        // the exercise BEFORE this workout — otherwise replay races the
-        // `workout_exercises.exercise_id` FK and the workout fails terminally.
-        final referencedExerciseIds = workoutExercises
-            .map((e) => e.exerciseId)
-            .toSet();
-        final pendingActions = ref.read(pendingSyncProvider.notifier).getAll();
-        final exerciseDependsOn = <String>[
-          for (final a in pendingActions)
-            if (a is PendingCreateExercise &&
-                referencedExerciseIds.contains(a.exerciseId))
-              a.id,
-        ];
-
+        // Phase 32 PR 32h retired the user-create-exercise surface, so a
+        // queued workout can no longer depend on an offline exercise create
+        // (the `PendingCreateExercise` variant was deleted from the sealed
+        // union). All offline workouts reference exercises that already
+        // exist server-side (defaults), so the new save needs no parent
+        // `dependsOn`. Pre-existing `PendingUpsertRecords` children of THIS
+        // workout are wired with the workout's id further down — that
+        // ordering is unaffected.
         await ref
             .read(pendingSyncProvider.notifier)
             .enqueue(
@@ -1580,7 +1572,6 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                 setsJson: setsJson,
                 userId: workout.userId,
                 queuedAt: now,
-                dependsOn: exerciseDependsOn,
               ),
             );
 

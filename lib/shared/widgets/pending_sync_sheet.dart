@@ -188,14 +188,12 @@ class _ActionRow extends StatelessWidget {
     PendingSaveWorkout() => Icons.fitness_center,
     PendingUpsertRecords() => Icons.emoji_events,
     PendingMarkRoutineComplete() => Icons.check_circle_outline,
-    PendingCreateExercise() => Icons.add_circle_outline,
   };
 
   String _label(AppLocalizations l10n) => switch (action) {
     PendingSaveWorkout() => l10n.pendingActionSaveWorkout,
     PendingUpsertRecords() => l10n.pendingActionUpdateRecords,
     PendingMarkRoutineComplete() => l10n.pendingActionMarkComplete,
-    PendingCreateExercise() => l10n.pendingActionCreateExercise,
   };
 
   /// BUG-008: the CTA depends on the last classified error category. Only

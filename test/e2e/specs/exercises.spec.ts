@@ -21,17 +21,12 @@ import { login } from '../helpers/auth';
 import {
   EXERCISE_LIST,
   EXERCISE_DETAIL,
-  CREATE_EXERCISE,
   NAV,
   WORKOUT,
 } from '../helpers/selectors';
 import { startEmptyWorkout, addExercise } from '../helpers/workout';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
-
-// The custom exercise name used across tests in the smoke describe block.
-// Includes a timestamp so repeated runs don't collide on the same name.
-const CUSTOM_EXERCISE_NAME = `Smoke Test Exercise ${Date.now()}`;
 
 // =============================================================================
 // SMOKE: Exercises (merged exercise.smoke + exercise-library.smoke)
@@ -48,9 +43,7 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
     await navigateToTab(page, 'Exercises');
   });
 
-  // --- From exercise.smoke.spec.ts ---
-
-  test('should render exercise list screen with search and create FAB', async ({
+  test('should render exercise list screen with search', async ({
     page,
   }) => {
     // The page heading and search input must be present.
@@ -62,59 +55,27 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
     await expect(
       page.locator(EXERCISE_LIST.allMuscleGroupFilter),
     ).toBeVisible();
-
-    // The FAB for creating exercises must be present.
-    await expect(page.locator(EXERCISE_LIST.createFab)).toBeVisible();
   });
 
-  test('should show validation error when name is empty (QA-007)', async ({
+  // -----------------------------------------------------------------
+  // Negative pin: the user-create-exercise surface has been retired.
+  // The Add FAB and its underlying route must remain absent so a
+  // future contributor can't accidentally re-introduce a logging path
+  // for un-calibrated user-created exercises (RPG thesis: every logged
+  // set must carry a calibrated tier_diff_mult / xp_attribution).
+  // -----------------------------------------------------------------
+  test('should not render an Add Exercise affordance on the library', async ({
     page,
   }) => {
-    // Open the create exercise screen via the FAB.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.saveButton)).toBeVisible({
-      timeout: 10_000,
-    });
+    // Wait for the library to settle (heading + seeded cards visible).
+    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible();
+    const seededCards = page.locator('role=button[name*="Exercise:"]');
+    await expect(seededCards.first()).toBeVisible({ timeout: 10_000 });
 
-    // Click CREATE EXERCISE without filling in any fields.
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // The form must show a "Name is required" validation error.
-    // Flutter CanvasKit renders multiple semantics nodes with this text
-    // (visible error + ARIA announcement elements). Use .first() to avoid
-    // strict mode violations.
+    // The retired FAB identifier must NOT mount in the AOM.
     await expect(
-      page.locator('flt-semantics:has-text("Name is required")').first(),
-    ).toBeVisible({ timeout: 5_000 });
-
-    // The screen should NOT navigate away — we should still be on create.
-    await expect(page.locator(CREATE_EXERCISE.saveButton)).toBeVisible();
-  });
-
-  test('should create custom exercise and navigate back to list', async ({
-    page,
-  }) => {
-    // Open the create exercise screen.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Fill in the exercise name.
-    await flutterFill(page,CREATE_EXERCISE.nameInput, CUSTOM_EXERCISE_NAME);
-
-    // Select a muscle group (Chest) and equipment (Barbell).
-    // Use role selectors — aria-label may not be set on these buttons.
-    await page.locator('role=button[name*="Muscle group: Chest"]').first().click();
-    await page.locator('role=button[name*="Equipment type: Barbell"]').first().click();
-
-    // Submit the form.
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // Should navigate back to the exercise list.
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
+      page.locator('[flt-semantics-identifier="exercise-list-create-fab"]'),
+    ).not.toBeVisible({ timeout: 3_000 });
   });
 
   test('should filter exercise list by name via search', async ({ page }) => {
@@ -227,63 +188,6 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
     await expect(searchInput).toHaveValue('', { timeout: 5_000 });
   });
 
-  test('should delete custom exercise and remove it from the list (QA-003)', async ({
-    page,
-  }) => {
-    // Create a dedicated exercise for this test so the delete does not
-    // interfere with the shared CUSTOM_EXERCISE_NAME used in other tests.
-    const deleteTargetName = `Delete Me ${Date.now()}`;
-
-    // Create the exercise.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page,CREATE_EXERCISE.nameInput, deleteTargetName);
-    await page.locator('role=button[name*="Muscle group: Back"]').first().click();
-    await page.locator('role=button[name*="Equipment type: Dumbbell"]').first().click();
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // Wait for navigation back to the list.
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for the newly created exercise to ensure it is present before
-    // attempting to delete it.
-    await flutterFill(page,EXERCISE_LIST.searchInput, deleteTargetName.substring(0, 10));
-    await page.waitForTimeout(600);
-
-    // Open the detail screen for the exercise. Use first() because Flutter
-    // CanvasKit renders duplicate semantics nodes for each exercise card.
-    const card = page.locator(EXERCISE_LIST.exerciseCard(deleteTargetName)).first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    await card.click();
-
-    // The detail screen must show the delete button.
-    await expect(page.locator(EXERCISE_DETAIL.deleteButton)).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Click delete and confirm in the dialog.
-    await page.click(EXERCISE_DETAIL.deleteButton);
-    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteConfirmButton);
-
-    // After deletion the app should navigate back to the exercise list.
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // The deleted exercise must no longer appear in the list.
-    await page.waitForTimeout(500); // allow list to refresh
-    await expect(
-      page.locator(EXERCISE_LIST.exerciseCard(deleteTargetName)),
-    ).not.toBeVisible({ timeout: 5_000 });
-  });
-
   test('should narrow exercise list with muscle group filter', async ({ page }) => {
     // Apply the "Chest" muscle group filter.
     await page.click(EXERCISE_LIST.muscleGroupFilter('Chest'));
@@ -321,23 +225,6 @@ test.describe('Exercises', { tag: '@smoke' }, () => {
         page.locator(EXERCISE_LIST.equipmentFilter(equip)),
       ).toBeVisible({ timeout: 5_000 });
     }
-  });
-
-  // --- From exercise-library.smoke.spec.ts ---
-
-  test('should render heading and filter controls', async ({
-    page,
-  }) => {
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible();
-    await expect(page.locator(EXERCISE_LIST.searchInput).last()).toBeVisible();
-
-    // The "All" muscle group filter is always present.
-    await expect(
-      page.locator(EXERCISE_LIST.allMuscleGroupFilter),
-    ).toBeVisible();
-
-    // FAB for creating exercises must be present.
-    await expect(page.locator(EXERCISE_LIST.createFab)).toBeVisible();
   });
 
   test('should show seeded exercises in exercise list', async ({ page }) => {
@@ -523,65 +410,6 @@ test.describe('Exercise form tips', { tag: '@smoke' }, () => {
     // assertion above would catch the regression.)
   });
 
-  // ---------------------------------------------------------------------------
-  // Additional guard: form tips section is absent for exercises with no tips.
-  //
-  // A custom exercise created without form tips must NOT show a "FORM TIPS"
-  // heading with empty content. This guards against the section rendering
-  // an empty state when formTips is null/empty.
-  // ---------------------------------------------------------------------------
-  test('should not show form tips section for exercises with no tips data', async ({
-    page,
-  }) => {
-    // Create a custom exercise with no form tips — only name required.
-    const customName = `No Tips Exercise ${Date.now()}`;
-
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator('role=textbox[name*="Exercise Name"]')).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, 'role=textbox[name*="Exercise Name"]', customName);
-    await page.locator('role=button[name*="Muscle group: Chest"]').first().click();
-    await page.locator('role=button[name*="Equipment type: Barbell"]').first().click();
-    await page.click('text="CREATE EXERCISE"');
-
-    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for and open the custom exercise.
-    // Flake fix (#20/form-tips): register waitForResponse BEFORE flutterFillByInput
-    // so the fn_search_exercises_localized RPC response is never missed.
-    // Don't filter on status — 4xx is a fast, clear failure vs a 15s timeout.
-    const searchResponsePromise = page.waitForResponse(
-      (resp) => resp.url().includes('fn_search_exercises_localized'),
-      { timeout: 15_000 },
-    );
-    await flutterFillByInput(page, 'Search exercises', customName.substring(0, 10));
-    await searchResponsePromise;
-
-    const card = page.locator(EXERCISE_LIST.exerciseCard(customName)).first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    await card.click();
-
-    // Wait for the detail screen to be fully rendered before asserting absence
-    // of the FORM TIPS section — this anchors the negative assertion to the
-    // correct screen and prevents a false pass during navigation transitions.
-    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).toBeVisible({
-      timeout: 10_000,
-    });
-    // Ensure the custom badge is visible to confirm we're past the loading state.
-    await expect(page.locator(EXERCISE_DETAIL.customBadge)).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // "FORM TIPS" section must NOT be visible when there are no tips.
-    // EXERCISE_DETAIL.formTipsSection = 'text=FORM TIPS'; safe after confirming
-    // detail screen is rendered above.
-    await expect(page.locator(EXERCISE_DETAIL.formTipsSection)).not.toBeVisible({
-      timeout: 3_000,
-    });
-  });
 });
 
 // =============================================================================
@@ -661,7 +489,6 @@ test.describe('Exercise library', () => {
     await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible();
     await expect(page.locator(EXERCISE_LIST.searchInput).last()).toBeVisible();
     await expect(page.locator(EXERCISE_LIST.allMuscleGroupFilter)).toBeVisible();
-    await expect(page.locator(EXERCISE_LIST.createFab)).toBeVisible();
 
     // At least one exercise card from seed data must be visible.
     const cards = page.locator('role=button[name^="Exercise:"]');
@@ -837,98 +664,6 @@ test.describe('Exercise library', () => {
     });
   });
 
-  test('should create a custom exercise and show it in the list', async ({
-    page,
-  }) => {
-    const customName = `E2E Cable Fly ${Date.now()}`;
-
-    // Open the create exercise screen via the FAB.
-    await page.click(EXERCISE_LIST.createFab);
-
-    // Fill in the exercise name.
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    // Flutter CanvasKit text fields require flutterFill (keyboard events) —
-    // page.fill() doesn't reliably commit values to the TextEditingController.
-    await flutterFill(page, CREATE_EXERCISE.nameInput, customName);
-
-    // Select Chest muscle group and Cable equipment (required fields).
-    await page.click('role=button[name*="Muscle group: Chest"]');
-    await page.click('role=button[name*="Equipment type: Cable"]');
-
-    // Save the exercise.
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // After saving the app navigates back to the exercise list.
-    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for the new exercise — the virtualized list may not have it in
-    // the viewport after returning from the create screen.
-    await flutterFill(page, EXERCISE_LIST.searchInput, customName);
-    await page.waitForTimeout(600);
-
-    // The new exercise must appear in the filtered list.
-    await expect(
-      page.locator(EXERCISE_LIST.exerciseCard(customName)),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('should delete a custom exercise and remove it from the list', async ({
-    page,
-  }) => {
-    const customName = `E2E Delete Target ${Date.now()}`;
-
-    // Create the exercise to delete.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, CREATE_EXERCISE.nameInput, customName);
-    await page.click('role=button[name*="Muscle group: Chest"]');
-    await page.click('role=button[name*="Equipment type: Barbell"]');
-    await page.click(CREATE_EXERCISE.saveButton);
-
-    // Verify it was created — search to find it in the virtualized list.
-    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({
-      timeout: 15_000,
-    });
-    await flutterFill(page, EXERCISE_LIST.searchInput, customName);
-    await page.waitForTimeout(600);
-    const card = page.locator(EXERCISE_LIST.exerciseCard(customName));
-    await expect(card).toBeVisible({ timeout: 10_000 });
-
-    // Open the detail screen.
-    await card.click();
-    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Tap delete and confirm.
-    await page.click(EXERCISE_DETAIL.deleteButton);
-    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteConfirmButton);
-
-    // Should navigate back to the list — wait for detail screen to disappear
-    // and search input to appear (search input is unique to the list screen;
-    // text=Exercises also matches the bottom nav tab and gives false positives).
-    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).not.toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.locator(EXERCISE_LIST.searchInput).last()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // The deleted exercise must no longer appear.
-    await expect(
-      page.locator(EXERCISE_LIST.exerciseCard(customName)),
-    ).not.toBeVisible({ timeout: 5_000 });
-  });
-
   test('should return to the list on back navigation from detail screen', async ({
     page,
   }) => {
@@ -950,71 +685,6 @@ test.describe('Exercise library', () => {
     await expect(
       page.locator('role=button[name^="Exercise:"]').first(),
     ).toBeVisible({ timeout: 10_000 });
-  });
-
-  // ---------------------------------------------------------------------------
-  // EX-003 (P0) — Soft-deleted exercise excluded from search
-  // Extends the delete test: after deletion, searching for the deleted name
-  // must return zero results.
-  // ---------------------------------------------------------------------------
-  test('should not show deleted exercise in search results (EX-003)', async ({
-    page,
-  }) => {
-    const customName = `E2E SoftDel ${Date.now()}`;
-
-    // Create the exercise.
-    await page.click(EXERCISE_LIST.createFab);
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 10_000,
-    });
-    await flutterFill(page, CREATE_EXERCISE.nameInput, customName);
-    await page.click('role=button[name*="Muscle group: Chest"]');
-    await page.click('role=button[name*="Equipment type: Barbell"]');
-    await page.click(CREATE_EXERCISE.saveButton);
-    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for the exercise — virtualized list may not have it in viewport.
-    await flutterFill(page, EXERCISE_LIST.searchInput, customName);
-    await page.waitForTimeout(600);
-
-    // Verify it exists in the list before deletion.
-    const card = page.locator(EXERCISE_LIST.exerciseCard(customName));
-    await expect(card).toBeVisible({ timeout: 10_000 });
-
-    // Open the detail and delete.
-    await card.click();
-    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteButton);
-    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.click(EXERCISE_DETAIL.deleteConfirmButton);
-
-    // Should navigate back to the list — wait for the detail screen's AppBar
-    // to disappear and the search input to become visible. `text=Exercises`
-    // alone is insufficient because it also matches the bottom nav tab.
-    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).not.toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.locator(EXERCISE_LIST.searchInput).last()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Now search for the deleted exercise name — must return zero results.
-    await flutterFill(page, EXERCISE_LIST.searchInput, customName);
-    // Allow the 300 ms debounce to fire plus a safety buffer.
-    await page.waitForTimeout(700);
-
-    // Either the filtered empty state or zero matching cards must be shown.
-    const matchingCards = page.locator(
-      EXERCISE_LIST.exerciseCard(customName),
-    );
-    const count = await matchingCards.count();
-    expect(count).toBe(0);
   });
 
   // ---------------------------------------------------------------------------
@@ -1058,77 +728,6 @@ test.describe('Exercise library', () => {
     // The "Clear Filters" button must accompany the empty state.
     await expect(page.locator(EXERCISE_LIST.clearFiltersButton)).toBeVisible({
       timeout: 3_000,
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // EX-007 (P1) — Duplicate exercise name validation
-  // Create one exercise, then attempt to create another with the same name.
-  // The server (or client-side check) must return a validation error.
-  // ---------------------------------------------------------------------------
-  test('should show validation error when submitting a duplicate exercise name (EX-007)', async ({
-    page,
-  }) => {
-    const uniqueName = `E2E DuplicateCheck ${Date.now()}`;
-
-    // Helper: fill the create form with the given name and the required
-    // muscle group + equipment type selections, then submit.
-    async function createExercise(name: string) {
-      await page.click(EXERCISE_LIST.createFab);
-      await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-        timeout: 10_000,
-      });
-      await flutterFill(page, CREATE_EXERCISE.nameInput, name);
-
-      // Select Chest muscle group (first selectable card in the grid).
-      await page.click('role=button[name*="Muscle group: Chest"]');
-      // Select Barbell equipment type.
-      await page.click('role=button[name*="Equipment type: Barbell"]');
-
-      await page.click(CREATE_EXERCISE.saveButton);
-    }
-
-    // First creation — must succeed and return to the list.
-    await createExercise(uniqueName);
-    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Search for the new exercise — virtualized list may not have it in viewport.
-    await flutterFill(page, EXERCISE_LIST.searchInput, uniqueName);
-    await page.waitForTimeout(600);
-    await expect(
-      page.locator(EXERCISE_LIST.exerciseCard(uniqueName)),
-    ).toBeVisible({ timeout: 10_000 });
-
-    // Clear search before second creation attempt.
-    await flutterFill(page, EXERCISE_LIST.searchInput, '');
-    await page.waitForTimeout(600);
-
-    // Second creation with the same name — must show a validation error.
-    await createExercise(uniqueName);
-
-    // The validation error appears as inline form field error text.
-    // The CreateExerciseScreen surfaces it via ValidationException → _nameError.
-    const hasValidationError =
-      (await page
-        .locator('text=already exists')
-        .isVisible({ timeout: 10_000 })
-        .catch(() => false)) ||
-      (await page
-        .locator('text=duplicate')
-        .isVisible({ timeout: 3_000 })
-        .catch(() => false)) ||
-      (await page
-        .locator('[aria-live="polite"]')
-        .isVisible({ timeout: 3_000 })
-        .catch(() => false));
-
-    expect(hasValidationError).toBe(true);
-
-    // Must still be on the create screen (no navigation on error).
-    await expect(page.locator(CREATE_EXERCISE.nameInput)).toBeVisible({
-      timeout: 5_000,
     });
   });
 

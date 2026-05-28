@@ -19,7 +19,6 @@ import '../../features/auth/ui/email_confirmation_screen.dart';
 import '../../features/auth/ui/login_screen.dart';
 import '../../features/auth/ui/onboarding_screen.dart';
 import '../../features/auth/ui/splash_screen.dart';
-import '../../features/exercises/ui/create_exercise_screen.dart';
 import '../../features/exercises/ui/exercise_detail_screen.dart';
 import '../../features/exercises/ui/exercise_list_screen.dart';
 import '../../features/rpg/ui/saga_intro_gate.dart';
@@ -199,10 +198,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/exercises',
             builder: (context, state) => const ExerciseListScreen(),
             routes: [
-              GoRoute(
-                path: 'create',
-                builder: (context, state) => const CreateExerciseScreen(),
-              ),
               GoRoute(
                 path: ':id',
                 builder: (context, state) => ExerciseDetailScreen(
