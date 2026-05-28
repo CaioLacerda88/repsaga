@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/device/platform_info.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../analytics/data/models/analytics_event.dart';
+import '../../../analytics/providers/analytics_providers.dart';
+import '../../../auth/providers/auth_providers.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/models/character_class.dart';
@@ -104,6 +108,15 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// 2s elapses.
   Timer? _tapHintTimer;
 
+  /// Phase 32 PR 32d — one-shot guard for the
+  /// `post_session_cinematic_shown` + per-title `title_unlocked` events.
+  /// `initState` schedules a single post-frame callback that emits both;
+  /// this flag prevents Riverpod rebuilds (or hot-reload) from re-firing
+  /// the events. Structural guarantee preferred over a flag would require
+  /// pinning the screen mount to a one-shot widget, which is heavier than
+  /// a single bool for an analytics emit-site.
+  bool _analyticsFired = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +129,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     // Kick off the first cut after the initial state is built.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _fireMountAnalytics();
       _playCurrentCut();
     });
 
@@ -143,6 +157,72 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     _controller.dispose();
     _stateController.dispose();
     super.dispose();
+  }
+
+  /// Phase 32 PR 32d — emit `post_session_cinematic_shown` once on mount
+  /// plus one `title_unlocked` per [TitleUnlockEvent] in the queue.
+  ///
+  /// Both events read from [widget.params.queueResult] — the same source
+  /// the cinematic + summary panel render against — so the analytics
+  /// payload matches what the user actually sees.
+  ///
+  /// `sagaNumber` (current finished workout count) is used as
+  /// `title_unlocked.workout_number`: the title was unlocked AT this
+  /// session, so the saga number IS the workout number.
+  ///
+  /// Defensive guards:
+  ///   * `_analyticsFired` — Riverpod rebuilds + hot-reload safety.
+  ///   * Missing user id (logged-out edge) → silent no-op.
+  ///   * Analytics insert errors swallowed inside [AnalyticsRepository].
+  ///   * Whole-body try/catch — [analyticsRepositoryProvider] reads
+  ///     `Supabase.instance.client` eagerly; if that throws (test harness
+  ///     without override, or a partial bootstrap failure) the failure must
+  ///     not propagate into the post-frame callback and break the
+  ///     cinematic. The "analytics must never break the user's flow"
+  ///     contract applies at the call site.
+  void _fireMountAnalytics() {
+    if (_analyticsFired) return;
+    _analyticsFired = true;
+    try {
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null) return;
+      final analyticsRepo = ref.read(analyticsRepositoryProvider);
+      final state = _stateController.state;
+      final queue = state.queueResult.queue;
+      final platform = currentPlatform();
+      final appVersion = currentAppVersion();
+
+      unawaited(
+        analyticsRepo.insertEvent(
+          userId: userId,
+          event: AnalyticsEvent.postSessionCinematicShown(
+            totalXp: state.totalXpEarned,
+            hadRankUp: queue.any((e) => e is RankUpEvent),
+            hadTitleUnlock: queue.any((e) => e is TitleUnlockEvent),
+            hadClassChange: queue.any((e) => e is ClassChangeEvent),
+          ),
+          platform: platform,
+          appVersion: appVersion,
+        ),
+      );
+
+      for (final event in queue.whereType<TitleUnlockEvent>()) {
+        unawaited(
+          analyticsRepo.insertEvent(
+            userId: userId,
+            event: AnalyticsEvent.titleUnlocked(
+              titleSlug: event.slug,
+              workoutNumber: state.sagaNumber,
+            ),
+            platform: platform,
+            appVersion: appVersion,
+          ),
+        );
+      }
+    } catch (_) {
+      // Analytics is fire-and-forget — a missing repo / Supabase-not-init
+      // edge must not break the cinematic playback.
+    }
   }
 
   void _onAnimationStatus(AnimationStatus status) {

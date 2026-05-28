@@ -1,11 +1,17 @@
 // ignore_for_file: invalid_annotation_target
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/device/platform_info.dart';
+import '../../analytics/data/models/analytics_event.dart';
+import '../../analytics/providers/analytics_providers.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../data/share_image_renderer.dart';
 import '../data/share_service.dart';
 
@@ -180,7 +186,14 @@ class ShareController extends Notifier<ShareState> {
     // Guard: only valid from preview. Defensive — the UI gates the
     // button visibility, but a stale tap could fire after a navigator
     // pop. Silently no-op rather than crashing.
-    if (state is! ShareStatePreview) return;
+    final previewState = state;
+    if (previewState is! ShareStatePreview) return;
+
+    // Phase 32 PR 32d — capture the photo state BEFORE the rendering /
+    // sharing transitions so analytics can read it on the success branch
+    // below. After `state = ShareState.rendering()` the union variant
+    // changes and the photo isn't accessible from `state` anymore.
+    final hadCustomPhoto = previewState.photo != null;
 
     state = const ShareState.rendering();
     final XFile file;
@@ -201,9 +214,55 @@ class ShareController extends Notifier<ShareState> {
         state = const ShareState.error(code: ShareErrorCodes.shareFailed);
         return;
       }
+      // Phase 32 PR 32d — `share_card_exported` fires only on the
+      // confirmed-success branch. `dismissed` (user backed out of the
+      // sheet without picking a target) and `unavailable` (above) /
+      // exception (below) all skip the emit. v1 emits `discreet` vs
+      // `with_photo` only; A vs B granularity is deferred to Launch
+      // Phase if the signal proves load-bearing.
+      if (result.status == ShareResultStatus.success) {
+        _recordShareExported(hadCustomPhoto: hadCustomPhoto);
+      }
       state = const ShareState.idle();
     } catch (_) {
       state = const ShareState.error(code: ShareErrorCodes.shareFailed);
+    }
+  }
+
+  /// Phase 32 PR 32d — record the `share_card_exported` analytics event.
+  ///
+  /// Fire-and-forget: errors are swallowed inside
+  /// [AnalyticsRepository.insertEvent], and the missing-user-id edge
+  /// no-ops silently (no logged-out user should ever reach this code
+  /// path, but the gate is cheap defense-in-depth).
+  ///
+  /// The entire body is wrapped in a try/catch because [analyticsRepositoryProvider]
+  /// reads `Supabase.instance.client` eagerly — in test harnesses that
+  /// don't override the provider, that read throws and would otherwise
+  /// escape into the caller's `catch (_)` block, turning a successful
+  /// share into a `share_failed` error. The "analytics must never break
+  /// the user's flow" contract from [AnalyticsRepository] applies here
+  /// at the call site too.
+  void _recordShareExported({required bool hadCustomPhoto}) {
+    try {
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null) return;
+      final analyticsRepo = ref.read(analyticsRepositoryProvider);
+      unawaited(
+        analyticsRepo.insertEvent(
+          userId: userId,
+          event: AnalyticsEvent.shareCardExported(
+            variant: hadCustomPhoto ? 'with_photo' : 'discreet',
+            hadCustomPhoto: hadCustomPhoto,
+          ),
+          platform: currentPlatform(),
+          appVersion: currentAppVersion(),
+        ),
+      );
+    } catch (_) {
+      // Analytics is fire-and-forget — a missing repo / Supabase-not-init
+      // edge must not propagate into the share-flow's `catch (_)` and
+      // misclassify a confirmed-success share as a share_failed error.
     }
   }
 

@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:repsaga/core/data/base_repository.dart';
+import 'package:repsaga/features/analytics/data/analytics_repository.dart';
+import 'package:repsaga/features/analytics/data/models/analytics_event.dart';
+import 'package:repsaga/features/analytics/providers/analytics_providers.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
 import 'package:repsaga/features/workouts/data/share_service.dart';
 import 'package:repsaga/features/workouts/providers/share_controller.dart';
@@ -45,11 +50,16 @@ void main() {
   ProviderContainer makeContainer({
     required ShareService service,
     required ShareImageRenderer renderer,
+    _RecordingAnalyticsRepository? analyticsRepo,
+    String? userId = 'user-share-001',
   }) {
     final container = ProviderContainer(
       overrides: [
         shareServiceProvider.overrideWithValue(service),
         shareImageRendererProvider.overrideWithValue(renderer),
+        if (analyticsRepo != null)
+          analyticsRepositoryProvider.overrideWithValue(analyticsRepo),
+        currentUserIdProvider.overrideWithValue(userId),
       ],
     );
     addTearDown(container.dispose);
@@ -276,6 +286,149 @@ void main() {
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // sharePreview — Phase 32 PR 32d analytics emit
+  // ---------------------------------------------------------------------------
+
+  test(
+    'sharePreview emits share_card_exported with variant=discreet on success '
+    'without photo',
+    () async {
+      final analyticsRepo = _RecordingAnalyticsRepository();
+      final container = makeContainer(
+        service: buildService(
+          fileShareSink: (_, {text}) async =>
+              const ShareResult('ok', ShareResultStatus.success),
+        ),
+        renderer: buildRenderer(
+          onRender: () async => _FakeXFile('/tmp/share.png'),
+        ),
+        analyticsRepo: analyticsRepo,
+      );
+
+      final notifier = container.read(shareControllerProvider.notifier);
+      // No photo selected — discreet path.
+      notifier.useDiscreet();
+
+      await notifier.sharePreview(repaintKey: GlobalKey());
+
+      // Assert the exact event payload — behavior, not "was called".
+      expect(analyticsRepo.events, [
+        const AnalyticsEvent.shareCardExported(
+          variant: 'discreet',
+          hadCustomPhoto: false,
+        ),
+      ]);
+    },
+  );
+
+  test('sharePreview emits share_card_exported with variant=with_photo when a '
+      'photo is attached', () async {
+    final analyticsRepo = _RecordingAnalyticsRepository();
+    final photo = _FakeXFile('/tmp/photo.jpg');
+    final container = makeContainer(
+      service: buildService(
+        fileShareSink: (_, {text}) async =>
+            const ShareResult('ok', ShareResultStatus.success),
+      ),
+      renderer: buildRenderer(
+        onRender: () async => _FakeXFile('/tmp/share.png'),
+      ),
+      analyticsRepo: analyticsRepo,
+    );
+
+    final notifier = container.read(shareControllerProvider.notifier);
+    notifier.resetToPreview(photo: photo);
+
+    await notifier.sharePreview(repaintKey: GlobalKey());
+
+    expect(analyticsRepo.events, [
+      const AnalyticsEvent.shareCardExported(
+        variant: 'with_photo',
+        hadCustomPhoto: true,
+      ),
+    ]);
+  });
+
+  test(
+    'sharePreview does NOT emit share_card_exported on dismissed sheet',
+    () async {
+      final analyticsRepo = _RecordingAnalyticsRepository();
+      final container = makeContainer(
+        service: buildService(
+          fileShareSink: (_, {text}) async =>
+              const ShareResult('na', ShareResultStatus.dismissed),
+        ),
+        renderer: buildRenderer(
+          onRender: () async => _FakeXFile('/tmp/share.png'),
+        ),
+        analyticsRepo: analyticsRepo,
+      );
+
+      final notifier = container.read(shareControllerProvider.notifier);
+      notifier.useDiscreet();
+
+      await notifier.sharePreview(repaintKey: GlobalKey());
+
+      // Dismissed transitions back to idle but must NOT fire the funnel
+      // event — `share_card_exported` is a confirmed-success-only signal.
+      expect(container.read(shareControllerProvider), const ShareState.idle());
+      expect(
+        analyticsRepo.events,
+        isEmpty,
+        reason: 'dismissed share-sheet must not record share_card_exported',
+      );
+    },
+  );
+
+  test('sharePreview does NOT emit share_card_exported on share-sheet '
+      'unavailable', () async {
+    final analyticsRepo = _RecordingAnalyticsRepository();
+    final container = makeContainer(
+      service: buildService(
+        fileShareSink: (_, {text}) async =>
+            const ShareResult('na', ShareResultStatus.unavailable),
+      ),
+      renderer: buildRenderer(
+        onRender: () async => _FakeXFile('/tmp/share.png'),
+      ),
+      analyticsRepo: analyticsRepo,
+    );
+
+    final notifier = container.read(shareControllerProvider.notifier);
+    notifier.useDiscreet();
+
+    await notifier.sharePreview(repaintKey: GlobalKey());
+
+    // Unavailable transitions to error and must NOT record.
+    expect(
+      analyticsRepo.events,
+      isEmpty,
+      reason: 'unavailable share-sheet must not record share_card_exported',
+    );
+  });
+
+  test(
+    'sharePreview does NOT emit share_card_exported on renderer exception',
+    () async {
+      final analyticsRepo = _RecordingAnalyticsRepository();
+      final container = makeContainer(
+        service: buildService(),
+        renderer: buildRenderer(
+          onRender: () async => throw StateError('render blew up'),
+        ),
+        analyticsRepo: analyticsRepo,
+      );
+
+      final notifier = container.read(shareControllerProvider.notifier);
+      notifier.useDiscreet();
+
+      await notifier.sharePreview(repaintKey: GlobalKey());
+
+      expect(analyticsRepo.events, isEmpty);
+    },
+  );
+
   test('sharePreview is a no-op when state is not preview', () async {
     final container = makeContainer(
       service: buildService(),
@@ -390,6 +543,25 @@ void main() {
 
 class _FakeXFile extends XFile {
   _FakeXFile(super.path);
+}
+
+/// Recording fake — captures every event the controller pushes through
+/// [AnalyticsRepository.insertEvent] so tests can assert on the EXACT
+/// payload (not just the call count). See
+/// `feedback_test_user_visible_behavior` in MEMORY.md.
+class _RecordingAnalyticsRepository extends BaseRepository
+    implements AnalyticsRepository {
+  final List<AnalyticsEvent> events = [];
+
+  @override
+  Future<void> insertEvent({
+    required String userId,
+    required AnalyticsEvent event,
+    required String? platform,
+    required String? appVersion,
+  }) async {
+    events.add(event);
+  }
 }
 
 /// Renderer fake that lets each test inject a synchronous callback (or

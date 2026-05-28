@@ -91,6 +91,63 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
     required int elapsedSecondsInQueue,
   }) = _WorkoutSyncFailed;
 
+  // ─── Phase 32 PR 32d — RPG + share + churn events ──────────────────────
+  //
+  // Five new product-analytics events that round out the launch-phase
+  // funnel. Paywall events (`paywall_shown`, `paywall_converted`,
+  // `trial_started`) are explicitly deferred to Launch Phase 16b — they
+  // ship with the paywall screen itself.
+  //
+  // No migration needed: `analytics_events.name` is free-form text and
+  // `analytics_events.props` is jsonb (see migration 00015). New events
+  // are surfaced by adding the factory + name/props cases here — no enum
+  // alteration required.
+
+  /// Fires once per (user, body_part) on the user's first ever rank-up for
+  /// that body part. Idempotency is enforced by a Hive cache at the emit
+  /// site (`firstRankUpEmittedBPs:<user_id>`); see
+  /// `FinishWorkoutCoordinator.finish` for the cache check.
+  const factory AnalyticsEvent.firstRankUp({
+    required String bodyPart,
+    required int newRank,
+  }) = _FirstRankUp;
+
+  /// Fires when the post-session screen mounts and the 3-beat cinematic
+  /// begins. Guarded by `_analyticsFired` on the screen so Riverpod
+  /// rebuilds can't double-fire.
+  const factory AnalyticsEvent.postSessionCinematicShown({
+    required int totalXp,
+    required bool hadRankUp,
+    required bool hadTitleUnlock,
+    required bool hadClassChange,
+  }) = _PostSessionCinematicShown;
+
+  /// Fires on successful native share-sheet completion (not on dismissed
+  /// or unavailable). [variant] is `discreet` when no photo is attached,
+  /// `with_photo` otherwise — A vs B distinction is deferred until the
+  /// signal proves load-bearing.
+  const factory AnalyticsEvent.shareCardExported({
+    required String variant,
+    required bool hadCustomPhoto,
+  }) = _ShareCardExported;
+
+  /// Fires per unlocked title surfaced in the post-session pipeline. One
+  /// emit per `TitleUnlockEvent` in the celebration queue — multiple
+  /// titles in one session produce multiple events.
+  const factory AnalyticsEvent.titleUnlocked({
+    required String titleSlug,
+    required int workoutNumber,
+  }) = _TitleUnlocked;
+
+  /// Fires when the user taps "Finish" with zero completed sets and the
+  /// empty-session guard sheet is shown. Distinct from `workout_discarded`
+  /// because the user has not yet made a discard/continue choice — this
+  /// event captures the churn signal (intent to finish blocked by guard).
+  const factory AnalyticsEvent.sessionZeroXp({
+    required int exerciseCount,
+    required int elapsedSeconds,
+  }) = _SessionZeroXp;
+
   // NOTE: the `account_deleted` event is intentionally NOT in this sealed
   // class. It's written from inside the `delete-user` Edge Function to a
   // separate no-FK table (`account_deletion_events`) so the row survives
@@ -108,6 +165,11 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
     _WorkoutSyncQueued() => 'workout_sync_queued',
     _WorkoutSyncSucceeded() => 'workout_sync_succeeded',
     _WorkoutSyncFailed() => 'workout_sync_failed',
+    _FirstRankUp() => 'first_rank_up',
+    _PostSessionCinematicShown() => 'post_session_cinematic_shown',
+    _ShareCardExported() => 'share_card_exported',
+    _TitleUnlocked() => 'title_unlocked',
+    _SessionZeroXp() => 'session_zero_xp',
   };
 
   /// Props as stored in the `props` jsonb column. Keys are snake_case.
@@ -207,5 +269,33 @@ sealed class AnalyticsEvent with _$AnalyticsEvent {
         'error_class': errorClass,
         'elapsed_seconds_in_queue': elapsedSecondsInQueue,
       },
+    _FirstRankUp(:final bodyPart, :final newRank) => {
+      'body_part': bodyPart,
+      'new_rank': newRank,
+    },
+    _PostSessionCinematicShown(
+      :final totalXp,
+      :final hadRankUp,
+      :final hadTitleUnlock,
+      :final hadClassChange,
+    ) =>
+      {
+        'total_xp': totalXp,
+        'had_rank_up': hadRankUp,
+        'had_title_unlock': hadTitleUnlock,
+        'had_class_change': hadClassChange,
+      },
+    _ShareCardExported(:final variant, :final hadCustomPhoto) => {
+      'variant': variant,
+      'had_custom_photo': hadCustomPhoto,
+    },
+    _TitleUnlocked(:final titleSlug, :final workoutNumber) => {
+      'title_slug': titleSlug,
+      'workout_number': workoutNumber,
+    },
+    _SessionZeroXp(:final exerciseCount, :final elapsedSeconds) => {
+      'exercise_count': exerciseCount,
+      'elapsed_seconds': elapsedSeconds,
+    },
   };
 }

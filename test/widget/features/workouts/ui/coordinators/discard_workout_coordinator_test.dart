@@ -150,6 +150,11 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
   );
 
   @override
+  void recordZeroXpSession() => throw UnimplementedError(
+    'recordZeroXpSession is not stubbed for this test',
+  );
+
+  @override
   int get incompleteSetsCount => throw UnimplementedError(
     '_StubActiveWorkoutNotifier.incompleteSetsCount getter is not stubbed',
   );
