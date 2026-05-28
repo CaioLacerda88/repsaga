@@ -417,4 +417,3 @@ class _FakeRpgProgress extends RpgProgressNotifier {
   @override
   Future<RpgProgressSnapshot> build() async => _snapshot;
 }
-
