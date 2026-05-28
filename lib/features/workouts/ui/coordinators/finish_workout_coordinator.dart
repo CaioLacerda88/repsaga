@@ -440,7 +440,16 @@ class FinishWorkoutCoordinator {
           // `priorWorkoutCount` capture above. Reading `ref` here would
           // throw because the active-workout State is disposed by now.
           priorFinishedWorkoutCount: priorWorkoutCount,
-          durationMinutes: _computeDurationMinutes(currentState),
+          // PR 32g (Bug 1) — read the duration the notifier computed in
+          // UTC. Pre-fix this branch called `_computeDurationMinutes` which
+          // read `currentState.workout.finishedAt` (always null pre-await),
+          // so the fallback `?? DateTime.now()` (LOCAL) was the only branch
+          // taken — disagreeing with the notifier's persisted
+          // `DateTime.now().toUtc()` by the device UTC offset every finish.
+          // The notifier is authoritative for the workout timeline; we
+          // consume the single source of truth via `finishResult`.
+          // Cluster: `async-caller-broke-snackbar` (extended).
+          durationMinutes: (finishResult?.durationSeconds ?? 0) ~/ 60,
           setsCount: _computeSetsCount(currentState),
           tonnageTons: _computeTonnage(currentState),
           // Phase 31 Pass 1 — carry the per-exercise + per-set snapshot so
@@ -542,13 +551,6 @@ class FinishWorkoutCoordinator {
 
   Map<BodyPart, double> _emptyBpFractions() {
     return <BodyPart, double>{};
-  }
-
-  int _computeDurationMinutes(ActiveWorkoutState? state) {
-    if (state == null) return 0;
-    final start = state.workout.startedAt;
-    final end = state.workout.finishedAt ?? DateTime.now();
-    return end.difference(start).inMinutes;
   }
 
   int _computeSetsCount(ActiveWorkoutState? state) {

@@ -17,6 +17,7 @@ analyze:
 	dart analyze --fatal-infos
 	bash scripts/check_hardcoded_colors.sh
 	bash scripts/check_typography_call_sites.sh
+	bash scripts/check_no_developer_log.sh
 
 test:
 	flutter test --exclude-tags integration --exclude-tags golden

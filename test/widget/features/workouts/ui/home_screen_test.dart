@@ -125,6 +125,23 @@ class _ZeroPendingSyncNotifier extends PendingSyncNotifier {
   int build() => 0;
 }
 
+/// PR 32g — `weeklyPlanNeedsConfirmationProvider` migrated from
+/// `StateProvider<bool>` to a Hive-backed `NotifierProvider<...,bool>`.
+/// Tests override with this fake to seed the flag value without
+/// touching Hive.
+class _NeedsConfirmationStub extends WeeklyPlanNeedsConfirmationNotifier {
+  _NeedsConfirmationStub(this._value);
+  final bool _value;
+
+  @override
+  bool build() => _value;
+
+  @override
+  Future<void> set(bool value) async {
+    state = value;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fixture builders
 // ---------------------------------------------------------------------------
@@ -251,7 +268,7 @@ Widget _build({
     overrides: [
       weeklyPlanProvider.overrideWith(() => _PlanStub(plan)),
       weeklyPlanNeedsConfirmationProvider.overrideWith(
-        (ref) => needsConfirmation,
+        () => _NeedsConfirmationStub(needsConfirmation),
       ),
       routineListProvider.overrideWith(() => _RoutineStub(routines)),
       workoutHistoryProvider.overrideWith(() => _HistoryStub(workouts)),
@@ -308,7 +325,9 @@ void main() {
           ProviderScope(
             overrides: [
               weeklyPlanProvider.overrideWith(() => _PlanStub(null)),
-              weeklyPlanNeedsConfirmationProvider.overrideWith((ref) => false),
+              weeklyPlanNeedsConfirmationProvider.overrideWith(
+                () => _NeedsConfirmationStub(false),
+              ),
               routineListProvider.overrideWith(() => _RoutineStub(const [])),
               workoutHistoryProvider.overrideWith(() => _HistoryStub(const [])),
               workoutCountProvider.overrideWith((ref) => block.future),

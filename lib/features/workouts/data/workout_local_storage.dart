@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:developer';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../../core/local_storage/hive_service.dart';
@@ -26,10 +26,12 @@ class WorkoutLocalStorage {
       final version = _box.get(_schemaVersionKey) as int?;
       if (version != _currentSchemaVersion) {
         if (version != null) {
-          log(
-            'Schema version mismatch: expected $_currentSchemaVersion, '
-            'got $version. Discarding stale workout data.',
-            name: 'WorkoutLocalStorage',
+          // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+          // visibility for schema-mismatch fallbacks on physical devices.
+          debugPrint(
+            '[WorkoutLocalStorage] Schema version mismatch: expected '
+            '$_currentSchemaVersion, got $version. Discarding stale workout '
+            'data.',
           );
         }
         return null;
@@ -41,10 +43,9 @@ class WorkoutLocalStorage {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return ActiveWorkoutState.fromJson(json);
     } catch (e) {
-      log(
-        'Failed to load active workout from Hive: $e',
-        name: 'WorkoutLocalStorage',
-        level: 900,
+      // Cluster: developer-log-invisible-logcat (PR 32g).
+      debugPrint(
+        '[WorkoutLocalStorage] Failed to load active workout from Hive: $e',
       );
       return null;
     }

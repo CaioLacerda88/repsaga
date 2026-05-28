@@ -909,6 +909,7 @@
   "postSessionCascadeTruncationPill": "+{n} mais",
   "postSessionXpLabel": "XP",
   "postSessionTitleEquipped": "Equipado ✓",
+  "postSessionTitleEquipFailed": "Não foi possível equipar o título. Tente novamente.",
   "cinematicSkipLabel": "PULAR",
   "postSessionDebriefEyebrow": "Relatório da sessão",
   "postSessionPrFlag": "PR",

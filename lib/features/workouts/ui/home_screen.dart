@@ -358,8 +358,14 @@ class _ConfirmBanner extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () {
-                  ref.read(weeklyPlanNeedsConfirmationProvider.notifier).state =
-                      false;
+                  // PR 32g — durable Hive write replaces the in-memory
+                  // StateProvider mutation. Fire-and-forget is fine: the
+                  // notifier updates `state` synchronously BEFORE the
+                  // Hive box write completes, so the banner hides on the
+                  // next frame regardless of disk-write latency.
+                  ref
+                      .read(weeklyPlanNeedsConfirmationProvider.notifier)
+                      .set(false);
                 },
                 child: Text(AppLocalizations.of(context).confirm),
               ),

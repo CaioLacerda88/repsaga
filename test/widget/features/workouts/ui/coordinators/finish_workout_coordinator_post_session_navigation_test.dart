@@ -242,6 +242,7 @@ class _PRRewardNotifier extends AsyncNotifier<ActiveWorkoutState?>
       ),
       savedOffline: false,
       serverErrorQueued: false,
+      durationSeconds: 1800, // 30 min — arbitrary fixture value.
     );
   }
 
@@ -328,7 +329,12 @@ class _BaselineNotifier extends AsyncNotifier<ActiveWorkoutState?>
     _state = null;
     state = const AsyncData(null);
     await Future<void>.delayed(Duration.zero);
-    return (prResult: null, savedOffline: false, serverErrorQueued: false);
+    return (
+      prResult: null,
+      savedOffline: false,
+      serverErrorQueued: false,
+      durationSeconds: 1800,
+    );
   }
 
   @override
@@ -632,6 +638,32 @@ void main() {
             'after the await would throw `Bad state: Using "ref" when '
             'a widget is about to or has been unmounted is unsafe` '
             'because the active-workout State is disposed by then.',
+      );
+
+      // PR 32g (Bug 1) — durationMinutes MUST come from the
+      // FinishWorkoutResult.durationSeconds the notifier surfaces, NOT
+      // from a coordinator-side recompute against `DateTime.now()`
+      // (local). The notifier persisted `durationSeconds` against
+      // `DateTime.now().toUtc()`; the pre-fix code computed
+      // `(now - startedAt).inMinutes` with a LOCAL `DateTime.now()`
+      // fallback, which disagreed with the persisted value by the
+      // device UTC offset on every finish. The fixture notifier returns
+      // `durationSeconds: 1800` (30 minutes); the captured params must
+      // carry 30 regardless of which timezone the test runs in.
+      // Cluster: `async-caller-broke-snackbar` (extended).
+      expect(
+        captured.single.durationMinutes,
+        equals(30),
+        reason:
+            'durationMinutes MUST be derived from '
+            'FinishWorkoutResult.durationSeconds (the notifier-side '
+            'UTC computation), not from a coordinator-side recompute '
+            'against `DateTime.now()` (local). Pre-fix the coordinator '
+            'read `currentState.workout.finishedAt ?? DateTime.now()` '
+            '— but `finishedAt` is always null pre-await, so the local '
+            'fallback was the only branch taken and the result '
+            'disagreed with the persisted value by the device UTC '
+            'offset (off by 3 h on BRT every finish).',
       );
     });
 

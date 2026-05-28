@@ -2916,6 +2916,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get postSessionTitleEquipped => 'Equipped ✓';
 
   @override
+  String get postSessionTitleEquipFailed =>
+      'Could not equip title. Please try again.';
+
+  @override
   String get cinematicSkipLabel => 'SKIP';
 
   @override

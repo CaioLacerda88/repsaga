@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../../core/device/platform_info.dart';
+import '../../../core/local_storage/hive_service.dart';
 import '../../analytics/data/models/analytics_event.dart';
 import '../../analytics/providers/analytics_providers.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -135,7 +137,9 @@ class WeeklyPlanNotifier extends AsyncNotifier<WeeklyPlan?> {
     state = AsyncData(plan);
 
     // Signal the UI to show the "Same plan this week?" confirmation banner.
-    ref.read(weeklyPlanNeedsConfirmationProvider.notifier).state = true;
+    // PR 32g — persisted to Hive so a process kill between auto-populate
+    // and the user's tap does not silently hide the banner.
+    await ref.read(weeklyPlanNeedsConfirmationProvider.notifier).set(true);
   }
 
   /// Synchronously replaces the provider's state with a copy of the
@@ -361,5 +365,83 @@ final hasActivePlanProvider = Provider<bool>((ref) {
 /// explicitly confirmed by the user). True when plan exists and was just
 /// created by auto-populate at the start of the week.
 ///
-/// This is a simple client-side state — we track it in memory only.
-final weeklyPlanNeedsConfirmationProvider = StateProvider<bool>((ref) => false);
+/// **Persistence (PR 32g — "Likely Bug 2"):** the flag is keyed by the
+/// current week's Monday ISO date and stored in the durable [userPrefs]
+/// Hive box (excluded from the cache-schema wipe). A hot-reload, process
+/// kill, or week rollover correctly preserves the "needs confirmation"
+/// state until the user explicitly acts on the banner. On a new week, the
+/// key for the new monday is absent → banner hidden until
+/// [WeeklyPlanNotifier._rollForwardFromLastWeek] flips it to `true`.
+///
+/// The previous in-memory `StateProvider<bool>` lost the flag on every
+/// process restart, which made the banner invisible to any user who
+/// opened the app fresh at the start of a new week (the most common
+/// case the flag exists to surface).
+final weeklyPlanNeedsConfirmationProvider =
+    NotifierProvider<WeeklyPlanNeedsConfirmationNotifier, bool>(
+      WeeklyPlanNeedsConfirmationNotifier.new,
+    );
+
+/// Hive key prefix for the per-week "needs confirmation" flag.
+/// Full key shape: `weeklyPlanConfirmNeeded:<weekStartIso>` (e.g.
+/// `weeklyPlanConfirmNeeded:2026-05-25T00:00:00.000`).
+@visibleForTesting
+const String weeklyPlanConfirmNeededKeyPrefix = 'weeklyPlanConfirmNeeded:';
+
+/// Builds the Hive key for the given week start. Public for tests + for
+/// [WeeklyPlanNotifier._rollForwardFromLastWeek] to flip the flag.
+String weeklyPlanConfirmNeededKey(DateTime weekStart) {
+  // Normalize to date-only ISO so timezone-aware DateTime calls don't drift
+  // the key across consecutive reads on the same calendar week.
+  //
+  // The `DateTime(...)` constructor returns local-time midnight (no `Z`
+  // suffix in the ISO output: `2026-05-25T00:00:00.000`). This is
+  // intentional — Phase 32c's audit found that `bucket_chip_row.dart`
+  // and `week_plan_screen.dart` disagreed on whether to call `.toLocal()`
+  // before formatting weekdays, producing day drift. The Hive key here
+  // is computed identically on every `build()` + `set()` from the same
+  // helper, so the read/write keys agree on a given calendar day on a
+  // given device. Migration is a no-op — the pre-PR-32g `StateProvider`
+  // had no durable state to migrate.
+  final monday = DateTime(weekStart.year, weekStart.month, weekStart.day);
+  return '$weeklyPlanConfirmNeededKeyPrefix${monday.toIso8601String()}';
+}
+
+/// Reads + writes the per-week confirmation flag from Hive `userPrefs`.
+///
+/// **Why durable:** the banner exists to ask the user "same plan this
+/// week?" after auto-populate rolled forward the prior week. The user
+/// answers by tapping Confirm (clear) or Edit (also clears via the
+/// editor flow). A process kill between auto-populate and the user's
+/// answer must NOT silently hide the banner — that's the regression
+/// "Likely Bug 2" fixes.
+class WeeklyPlanNeedsConfirmationNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    // userPrefs is opened by `HiveService.init()` at app startup. If for
+    // some reason it isn't (e.g. opening recovery failed and the box was
+    // deleted), default to `false` — the banner stays hidden, which is
+    // the safe default (failing closed). The next auto-populate run will
+    // flip it once the box is back.
+    if (!Hive.isBoxOpen(HiveService.userPrefs)) return false;
+    final box = Hive.box<dynamic>(HiveService.userPrefs);
+    final key = weeklyPlanConfirmNeededKey(currentWeekMonday());
+    return box.get(key) == true;
+  }
+
+  /// Set the flag for the current week.
+  ///
+  /// Writes are idempotent — calling [set] with the same value the box
+  /// already holds is a no-op (Hive overwrites with the same bytes).
+  Future<void> set(bool value) async {
+    state = value;
+    if (!Hive.isBoxOpen(HiveService.userPrefs)) return;
+    final box = Hive.box<dynamic>(HiveService.userPrefs);
+    final key = weeklyPlanConfirmNeededKey(currentWeekMonday());
+    if (value) {
+      await box.put(key, true);
+    } else {
+      await box.delete(key);
+    }
+  }
+}

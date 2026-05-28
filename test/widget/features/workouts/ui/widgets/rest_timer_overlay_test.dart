@@ -515,6 +515,106 @@ void main() {
     // 48dp tap-target floor on every screen size.
     //
     // This pin guards both contracts: tap-target floor + single-line.
+    group(
+      'PR 32g — countdown expiry + auto-advance (rendered, not controller)',
+      () {
+        // Cluster: `pump-duration-masks-forward`. The contract we're pinning
+        // is "the overlay actually disappears" — not "the timer's
+        // `remainingSeconds` field became 0". The auto-dismiss path is:
+        //
+        //   1. Notifier transitions to (remaining=0, isActive=false).
+        //   2. `listenManual` in initState fires HapticFeedback + a 600ms
+        //      Future.delayed.
+        //   3. The delayed callback invokes `restTimerProvider.notifier.stop()`
+        //      which sets state to null.
+        //   4. Widget rebuilds with `timerState == null` and returns
+        //      SizedBox.shrink — the overlay is gone.
+        //
+        // The test asserts the rendered widget tree at step 4, not the
+        // intermediate state at step 1.
+        testWidgets(
+          '30s timer expiry → overlay collapses to SizedBox.shrink after the '
+          'haptic-dismiss delay (no CircularProgressIndicator + no Skip)',
+          (tester) async {
+            // Seed an active state, then drive the notifier to expired so the
+            // overlay's listenManual fires and schedules the 600ms dismiss.
+            const expired = RestTimerState(
+              totalSeconds: 30,
+              remainingSeconds: 0,
+              isActive: false,
+            );
+
+            final container = ProviderContainer(
+              overrides: [
+                restTimerProvider.overrideWith(
+                  () => _FakeRestTimerNotifier(
+                    const RestTimerState(
+                      totalSeconds: 30,
+                      remainingSeconds: 30,
+                      isActive: true,
+                    ),
+                  ),
+                ),
+              ],
+            );
+            addTearDown(container.dispose);
+
+            await tester.pumpWidget(
+              UncontrolledProviderScope(
+                container: container,
+                child: TestMaterialApp(
+                  theme: AppTheme.dark,
+                  home: const Scaffold(body: RestTimerOverlay()),
+                ),
+              ),
+            );
+
+            // Overlay is visible at the start.
+            expect(find.byType(CircularProgressIndicator), findsOneWidget);
+            expect(find.text('Skip'), findsOneWidget);
+
+            // Drive the notifier to the expired terminal state. This is the
+            // state transition the production code emits on the final tick.
+            container.read(restTimerProvider.notifier).state = expired;
+            await tester.pump();
+
+            // Mid-dismiss: the overlay still renders 0:00 — the haptic delay
+            // hasn't elapsed yet. Asserting this would prove too much (the
+            // delay is implementation-specific). What we DO assert: after
+            // enough pumps to drain the 600ms delayed stop, the overlay is
+            // gone AND the underlying surface is reachable.
+            //
+            // Pump past the 600ms haptic delay + a generous margin so the
+            // Future.delayed completes and the notifier transitions to null.
+            await tester.pump(const Duration(milliseconds: 700));
+            await tester.pumpAndSettle();
+
+            // Notifier was reset to null — the rendered tree no longer
+            // contains the progress ring / Skip button. SizedBox.shrink is
+            // what remains.
+            expect(
+              container.read(restTimerProvider),
+              isNull,
+              reason:
+                  'Auto-dismiss did not flip the notifier to null. The '
+                  '600ms delayed stop() chained off listenManual is the '
+                  'auto-advance contract.',
+            );
+            expect(
+              find.byType(CircularProgressIndicator),
+              findsNothing,
+              reason:
+                  'CircularProgressIndicator is the progress ring — its '
+                  'presence post-dismiss means the overlay still renders '
+                  'and the user is stuck in a 0:00 rest screen.',
+            );
+            expect(find.text('Skip'), findsNothing);
+            expect(find.text('0:00'), findsNothing);
+          },
+        );
+      },
+    );
+
     group('PR-5 — control button sizing (device-feedback fix)', () {
       testWidgets(
         '-30s, Skip, +30s render single-line + meet 48dp tap-target floor',

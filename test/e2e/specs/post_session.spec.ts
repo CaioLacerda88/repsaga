@@ -129,4 +129,16 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
       page.locator(POST_SESSION.missionDebriefXpBar),
     ).toBeVisible();
   });
+
+  // PR 32g leave-confirm E2E removed — cluster
+  // `flutter-web-popscope-unreachable`. GoRouter's
+  // `MultiEntriesBrowserHistory` consumes `popstate` BEFORE the
+  // route's PopScope handler runs on Flutter web, so
+  // `page.goBack()` cannot trigger the leave-confirm dialog. The
+  // contract is exercised on Android (where the OS back button
+  // routes through PopScope normally) and pinned by widget tests
+  // at `test/widget/features/workouts/ui/post_session/`. Audit
+  // entry in `docs/home-to-workout-flow-audit.md` §3.4 is closed
+  // by the widget-test coverage; this stays an Android-only
+  // contract on the E2E side.
 });

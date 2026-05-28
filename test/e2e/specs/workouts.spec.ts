@@ -251,6 +251,20 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     });
   });
 
+  // PR 32g EmptySessionGuardSheet E2E removed — guard is unreachable
+  // from the UI's standard finish path. `FinishBottomBar.enabled` is
+  // gated on `_hasCompletedSet` in `active_workout_screen.dart:561`,
+  // so the Finish button is DISABLED whenever `totalSetsCount == 0` —
+  // the very precondition for the guard at
+  // `finish_workout_coordinator.dart:97`. The guard exists as
+  // defense-in-depth (covers an un-complete-then-finish edge that
+  // the UI shouldn't allow), and the contract is already pinned by
+  // widget tests at:
+  //   - `test/widget/features/workouts/ui/coordinators/finish_workout_coordinator_empty_guard_test.dart`
+  //   - `test/unit/features/workouts/ui/widgets/empty_session_guard_sheet_test.dart`
+  // The audit entry in `docs/home-to-workout-flow-audit.md` §3.4 is
+  // closed by that coverage.
+
   test('should return to home without saving when discarding a workout', async ({
     page,
   }) => {

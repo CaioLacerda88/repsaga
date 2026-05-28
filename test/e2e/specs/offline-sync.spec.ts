@@ -651,4 +651,66 @@ test.describe('Offline banner — browser network', { tag: '@smoke' }, () => {
 
     // Note: afterEach calls setOffline(false) again — idempotent, safe.
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 32 PR 32g (D4) — server-error snackbar copy disambiguation
+  //
+  // Pre-PR1B every save failure was uniformly shown as
+  // `workoutSavedOffline` ("Workout saved. Will sync when back online.").
+  // PR1B (AW-EX-D-US1-03) introduced a distinct copy variant for 5xx
+  // server errors (`workoutSavedServerError`) so the user can tell apart
+  // "phone is offline" from "server outage". Pin the copy switch.
+  //
+  // Why a 500 (not `connectionrefused`): `blockSupabaseRest` aborts with
+  // `connectionrefused`, which the classifier treats as connectivity
+  // loss → `workoutSavedOffline`. A 500 status is "transient server
+  // error" → `serverErrorQueued = true` → `workoutSavedServerError`.
+  // Both still enqueue offline (the queue auto-drains either way).
+  //
+  // Cluster: `jsonb-payload-vs-typed-dart` neighborhood (audit §3.3 DB
+  // failure modes).
+  // -------------------------------------------------------------------------
+  test('should show server-error snackbar when save_workout RPC returns 500 (not connection-refused)', async ({
+    page,
+  }) => {
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await setWeight(page, '80');
+    await setReps(page, '5');
+    await completeSet(page, 0);
+
+    // Intercept the save_workout RPC and return a 5xx response. The
+    // pattern matches both the `/rest/v1/rpc/save_workout` POST and any
+    // sibling RPCs that might also fire on finish.
+    await page.route('**/rest/v1/rpc/save_workout*', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'internal_server_error' }),
+      }),
+    );
+
+    await page.click(WORKOUT.finishButton);
+    const dialogFinish = page.locator(WORKOUT.dialogFinishButton);
+    await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
+    await dialogFinish.click();
+
+    // The server-error snackbar copy must appear (not the plain
+    // offline copy). Use .first() — Flutter renders two DOM elements
+    // per SnackBar.
+    await expect(
+      page.locator('text=Server error — saved locally').first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Negative pin: the connection-refused / offline copy must NOT
+    // appear. A regression that drops the 5xx branch would re-route
+    // every failure into the offline copy.
+    await expect(
+      page.locator('text=Will sync when back online'),
+    ).toHaveCount(0);
+
+    // Cleanup: drop the 5xx intercept so the afterEach's reset doesn't
+    // hit it.
+    await page.unroute('**/rest/v1/rpc/save_workout*');
+  });
 });

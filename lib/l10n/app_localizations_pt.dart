@@ -2928,6 +2928,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get postSessionTitleEquipped => 'Equipado ✓';
 
   @override
+  String get postSessionTitleEquipFailed =>
+      'Não foi possível equipar o título. Tente novamente.';
+
+  @override
   String get cinematicSkipLabel => 'PULAR';
 
   @override

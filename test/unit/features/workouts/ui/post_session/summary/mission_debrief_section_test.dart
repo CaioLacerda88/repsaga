@@ -531,6 +531,95 @@ void main() {
       expect(_hasRichTextSpan(tester, 'Rank 14'), isTrue);
     });
 
+    testWidgets(
+      'PR 32g — long debrief (6 BPs trained) renders a 6-segment XP bar '
+      'at 320dp without RenderFlex overflow',
+      (tester) async {
+        // Phase 32 PR 32g — pins the worst-case Mission Debrief layout:
+        // every active body part trained in one session at the tightest
+        // production viewport. The XpSegmentedBar grew from 4 (multi-BP
+        // baseline) → 6 segments; verifies no Row overflow + that every
+        // segment lays out.
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'a',
+              exerciseName: 'Bench',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 80,
+              peakReps: 8,
+              xpContribution: 640,
+              isPR: false,
+            ),
+            SessionLiftSummary(
+              exerciseId: 'b',
+              exerciseName: 'Row',
+              bodyPart: BodyPart.back,
+              peakWeightKg: 70,
+              peakReps: 8,
+              xpContribution: 560,
+              isPR: false,
+            ),
+            SessionLiftSummary(
+              exerciseId: 'c',
+              exerciseName: 'Squat',
+              bodyPart: BodyPart.legs,
+              peakWeightKg: 100,
+              peakReps: 5,
+              xpContribution: 500,
+              isPR: false,
+            ),
+            SessionLiftSummary(
+              exerciseId: 'd',
+              exerciseName: 'OHP',
+              bodyPart: BodyPart.shoulders,
+              peakWeightKg: 50,
+              peakReps: 8,
+              xpContribution: 400,
+              isPR: false,
+            ),
+          ],
+          bpXpDeltas: const {
+            BodyPart.chest: 640,
+            BodyPart.back: 560,
+            BodyPart.legs: 500,
+            BodyPart.shoulders: 400,
+            BodyPart.arms: 200,
+            BodyPart.core: 100,
+          },
+          bpRankAfter: const {
+            BodyPart.chest: 12,
+            BodyPart.back: 11,
+            BodyPart.legs: 10,
+            BodyPart.shoulders: 9,
+            BodyPart.arms: 6,
+            BodyPart.core: 4,
+          },
+        );
+
+        await _pumpDebrief(
+          tester,
+          state: state,
+          viewport: const Size(320, 1600),
+        );
+
+        // No RenderFlex overflow on the tightest production viewport.
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'Long Mission Debrief (6 BPs trained) overflowed at 320dp. '
+              'Phase 32 PR 32g regression guard — see audit §3.4 "Long '
+              'Mission Debrief 6-BP layout".',
+        );
+        // 6 segments laid out (one per active BP).
+        final segments = tester
+            .widgetList<XpSegmentedBar>(find.byType(XpSegmentedBar))
+            .single;
+        expect(segments.segments.length, 6);
+      },
+    );
+
     testWidgets('320dp viewport: 4 lift rows still render without overflow', (
       tester,
     ) async {
