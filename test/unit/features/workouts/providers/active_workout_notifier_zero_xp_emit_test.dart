@@ -133,8 +133,8 @@ void main() {
         expect(recorded.name, 'session_zero_xp');
         expect(recorded.props['exercise_count'], 3);
 
-        // elapsed_seconds is computed at-call-time — allow 0–3 seconds of
-        // slack for the test environment's runtime jitter.
+        // elapsed_seconds is computed at-call-time — allow 5 seconds of
+        // slack (60..65) for the test environment's runtime jitter.
         final elapsed = recorded.props['elapsed_seconds'] as int;
         expect(
           elapsed,

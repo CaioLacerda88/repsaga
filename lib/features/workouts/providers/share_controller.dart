@@ -231,39 +231,27 @@ class ShareController extends Notifier<ShareState> {
 
   /// Phase 32 PR 32d — record the `share_card_exported` analytics event.
   ///
-  /// Fire-and-forget: errors are swallowed inside
-  /// [AnalyticsRepository.insertEvent], and the missing-user-id edge
+  /// Fire-and-forget. The "analytics must never break the user's flow"
+  /// contract is enforced at [analyticsRepositoryProvider]: when Supabase
+  /// is uninitialised the provider hands back a no-op repository, so this
+  /// call site is free of defensive wrapping. The missing-user-id edge
   /// no-ops silently (no logged-out user should ever reach this code
   /// path, but the gate is cheap defense-in-depth).
-  ///
-  /// The entire body is wrapped in a try/catch because [analyticsRepositoryProvider]
-  /// reads `Supabase.instance.client` eagerly — in test harnesses that
-  /// don't override the provider, that read throws and would otherwise
-  /// escape into the caller's `catch (_)` block, turning a successful
-  /// share into a `share_failed` error. The "analytics must never break
-  /// the user's flow" contract from [AnalyticsRepository] applies here
-  /// at the call site too.
   void _recordShareExported({required bool hadCustomPhoto}) {
-    try {
-      final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
-      final analyticsRepo = ref.read(analyticsRepositoryProvider);
-      unawaited(
-        analyticsRepo.insertEvent(
-          userId: userId,
-          event: AnalyticsEvent.shareCardExported(
-            variant: hadCustomPhoto ? 'with_photo' : 'discreet',
-            hadCustomPhoto: hadCustomPhoto,
-          ),
-          platform: currentPlatform(),
-          appVersion: currentAppVersion(),
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final analyticsRepo = ref.read(analyticsRepositoryProvider);
+    unawaited(
+      analyticsRepo.insertEvent(
+        userId: userId,
+        event: AnalyticsEvent.shareCardExported(
+          variant: hadCustomPhoto ? 'with_photo' : 'discreet',
+          hadCustomPhoto: hadCustomPhoto,
         ),
-      );
-    } catch (_) {
-      // Analytics is fire-and-forget — a missing repo / Supabase-not-init
-      // edge must not propagate into the share-flow's `catch (_)` and
-      // misclassify a confirmed-success share as a share_failed error.
-    }
+        platform: currentPlatform(),
+        appVersion: currentAppVersion(),
+      ),
+    );
   }
 
   /// Read the current camera-permission status without prompting. Used

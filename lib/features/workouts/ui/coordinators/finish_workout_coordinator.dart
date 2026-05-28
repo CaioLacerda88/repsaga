@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -355,10 +357,17 @@ class FinishWorkoutCoordinator {
           // cache (per-user list of fired body-part slugs) so the event
           // fires at most once per (user, body_part) lifetime.
           //
-          // Fires BEFORE the celebration orchestrator plays so the event
-          // ordering reflects "rank-up detected → may animate" — even if
-          // the orchestrator's playback is interrupted (e.g. user
-          // backgrounds the app), the analytics signal lands.
+          // Dispatched BEFORE the celebration orchestrator plays so the
+          // event ordering reflects "rank-up detected → may animate" —
+          // even if the orchestrator's playback is interrupted (e.g.
+          // user backgrounds the app), the analytics signal lands.
+          //
+          // `unawaited` because this is informational: the celebration
+          // orchestrator's B1 XP slam cut must not wait for Hive + the
+          // Supabase insert to flush. Dispatch order is preserved (the
+          // emitter's synchronous Hive read + dirty-flag dance still
+          // happens before the orchestrator's first frame), only the
+          // tail IO becomes background.
           //
           // Tradeoff: the Hive cache is device-local. A user installing
           // on a new device will re-fire `first_rank_up` for body parts
@@ -366,13 +375,12 @@ class FinishWorkoutCoordinator {
           // is informational (not used for billing/gating); avoiding the
           // per-finish Supabase query for "have I ever fired this?" is
           // worth the occasional re-fire on new-device installs.
-          await FirstRankUpEmitter.emitForCelebration(
-            ref: ref,
-            celebration: celebration,
+          unawaited(
+            FirstRankUpEmitter.emitForCelebration(
+              ref: ref,
+              celebration: celebration,
+            ),
           );
-          // Re-check after the analytics await: a process tear-down
-          // between the Hive write and the orchestrator hand-off would
-          // otherwise pass a stale rootContext to `play`.
           if (!rootContext.mounted) return;
           final outcome = await celebrationOrchestrator.play(
             rootContext: rootContext,
@@ -638,7 +646,11 @@ class FinishWorkoutCoordinator {
 ///   * Hive box missing (test harness without init) → caught + treated as
 ///     "no slugs fired yet" so a test environment doesn't crash production
 ///     code paths.
-class FirstRankUpEmitter {
+///
+/// `abstract final` because every member is static and no subtype is
+/// meaningful — the private constructor is just belt-and-braces against
+/// accidental instantiation.
+abstract final class FirstRankUpEmitter {
   FirstRankUpEmitter._();
 
   /// Hive key prefix for the fired-body-part list. Composed with the user
@@ -695,32 +707,35 @@ class FirstRankUpEmitter {
   ///
   /// Errors at any stage are caught and swallowed — `first_rank_up` is
   /// non-critical funnel signal that must never break the finish flow.
+  /// The Hive read/write paths swallow internally (see
+  /// [readFiredSlugs] / [writeFiredSlugs]); the analytics repo is the
+  /// no-op fallback when Supabase isn't initialised (see
+  /// [analyticsRepositoryProvider]), and [insertEvent] swallows its own
+  /// Supabase failures. No call-site catch needed.
   static Future<void> emitForCelebration({
     required WidgetRef ref,
     required CelebrationQueueResult celebration,
   }) async {
-    // [analyticsRepositoryProvider] reads `Supabase.instance.client`
-    // eagerly — wrap the whole emit so a Supabase-not-init failure can
-    // never break the finish flow. Analytics is fire-and-forget per the
-    // class doc; the coordinator must reach the celebration orchestrator
-    // regardless of whether this fires.
-    try {
-      final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
-      final analyticsRepo = ref.read(analyticsRepositoryProvider);
-      await emitForRankUps(
-        userId: userId,
-        analyticsRepo: analyticsRepo,
-        rankUps: celebration.queue.whereType<RankUpEvent>().toList(),
-      );
-    } catch (_) {
-      // Swallowed — same rationale as [readFiredSlugs] / [writeFiredSlugs].
-    }
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final analyticsRepo = ref.read(analyticsRepositoryProvider);
+    await emitForRankUps(
+      userId: userId,
+      analyticsRepo: analyticsRepo,
+      rankUps: celebration.queue.whereType<RankUpEvent>().toList(),
+    );
   }
 
   /// Lower-level emit path that takes the rank-up list + repository
   /// explicitly. Public for unit tests that don't want to plumb a full
   /// [WidgetRef].
+  ///
+  /// **Ordering invariant:** the fired-slug cache write only reflects
+  /// rank-ups whose [AnalyticsRepository.insertEvent] returned without
+  /// throwing. If the insert throws, the slug stays UNRECORDED so the
+  /// next finish can retry — otherwise a single transient failure would
+  /// permanently mark a body-part as "fired" on this device and prevent
+  /// the event from ever landing.
   @visibleForTesting
   static Future<void> emitForRankUps({
     required String userId,
@@ -733,8 +748,6 @@ class FirstRankUpEmitter {
     for (final event in rankUps) {
       final slug = event.bodyPart.dbValue;
       if (fired.contains(slug)) continue;
-      fired.add(slug);
-      dirty = true;
       try {
         await analyticsRepo.insertEvent(
           userId: userId,
@@ -745,9 +758,15 @@ class FirstRankUpEmitter {
           platform: currentPlatform(),
           appVersion: currentAppVersion(),
         );
+        // Only mark the slug as fired AFTER the insert returns without
+        // throwing — a future signature change that surfaces a real
+        // exception here must not silently lock the cache.
+        fired.add(slug);
+        dirty = true;
       } on Object {
         // `insertEvent` already swallows internally; this catch is the
-        // belt for any future signature change.
+        // belt for any future signature change. The slug stays out of
+        // the fired list so a subsequent finish retries.
       }
     }
     if (dirty) {

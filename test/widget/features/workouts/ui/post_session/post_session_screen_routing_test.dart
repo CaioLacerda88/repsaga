@@ -27,6 +27,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/core/data/base_repository.dart';
+import 'package:repsaga/features/analytics/data/analytics_repository.dart';
+import 'package:repsaga/features/analytics/data/models/analytics_event.dart';
+import 'package:repsaga/features/analytics/providers/analytics_providers.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
@@ -96,6 +101,17 @@ Widget _harness({
       // race entirely).
       rpgProgressProvider.overrideWith(
         () => _FakeRpgProgress(RpgProgressSnapshot.empty),
+      ),
+      // Per PR #277 review: the mount analytics emit reads
+      // [currentUserIdProvider] + [analyticsRepositoryProvider] in the
+      // post-frame callback. Both providers default to reading
+      // `Supabase.instance.client`, which throws in this test harness.
+      // The analytics provider already returns a no-op fallback on its
+      // own; `currentUserIdProvider` needs an explicit override here so
+      // the read doesn't surface a provider exception during pump.
+      currentUserIdProvider.overrideWithValue('user-routing-test'),
+      analyticsRepositoryProvider.overrideWithValue(
+        _NoOpAnalyticsRepositoryForTests(),
       ),
     ],
     child: MaterialApp(
@@ -299,6 +315,11 @@ void main() {
               rpgProgressProvider.overrideWith(
                 () => _FakeRpgProgress(RpgProgressSnapshot.empty),
               ),
+              // PR #277 review — see [_harness] for rationale.
+              currentUserIdProvider.overrideWithValue('user-back-gesture-test'),
+              analyticsRepositoryProvider.overrideWithValue(
+                _NoOpAnalyticsRepositoryForTests(),
+              ),
             ],
             child: MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -406,4 +427,22 @@ class _FakeRpgProgress extends RpgProgressNotifier {
   final RpgProgressSnapshot _snapshot;
   @override
   Future<RpgProgressSnapshot> build() async => _snapshot;
+}
+
+/// No-op repo used to satisfy [analyticsRepositoryProvider] when the test
+/// isn't asserting on the analytics surface (this file pins routing /
+/// title display contracts, not analytics). The post-session screen calls
+/// `insertEvent` from a post-frame callback during mount; this fake lets
+/// the call complete without throwing or contaminating the test signal.
+class _NoOpAnalyticsRepositoryForTests extends BaseRepository
+    implements AnalyticsRepository {
+  @override
+  Future<void> insertEvent({
+    required String userId,
+    required AnalyticsEvent event,
+    required String? platform,
+    required String? appVersion,
+  }) async {
+    // No-op.
+  }
 }

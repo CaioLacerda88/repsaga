@@ -171,57 +171,52 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
   /// session, so the saga number IS the workout number.
   ///
   /// Defensive guards:
-  ///   * `_analyticsFired` — Riverpod rebuilds + hot-reload safety.
-  ///   * Missing user id (logged-out edge) → silent no-op.
-  ///   * Analytics insert errors swallowed inside [AnalyticsRepository].
-  ///   * Whole-body try/catch — [analyticsRepositoryProvider] reads
-  ///     `Supabase.instance.client` eagerly; if that throws (test harness
-  ///     without override, or a partial bootstrap failure) the failure must
-  ///     not propagate into the post-frame callback and break the
-  ///     cinematic. The "analytics must never break the user's flow"
-  ///     contract applies at the call site.
+  ///   * `_analyticsFired` — Riverpod rebuilds + hot-reload safety. Set
+  ///     AFTER the userId guard so a logged-out screen can still retry on
+  ///     a subsequent build once auth resolves.
+  ///   * Missing user id (logged-out edge) → silent no-op, no flag set.
+  ///   * Analytics insert errors swallowed inside [AnalyticsRepository] /
+  ///     the no-op fallback returned by [analyticsRepositoryProvider]
+  ///     when Supabase isn't available. Either way the call below is
+  ///     guaranteed not to break the cinematic.
   void _fireMountAnalytics() {
     if (_analyticsFired) return;
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
     _analyticsFired = true;
-    try {
-      final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
-      final analyticsRepo = ref.read(analyticsRepositoryProvider);
-      final state = _stateController.state;
-      final queue = state.queueResult.queue;
-      final platform = currentPlatform();
-      final appVersion = currentAppVersion();
 
+    final analyticsRepo = ref.read(analyticsRepositoryProvider);
+    final state = _stateController.state;
+    final queue = state.queueResult.queue;
+    final platform = currentPlatform();
+    final appVersion = currentAppVersion();
+
+    unawaited(
+      analyticsRepo.insertEvent(
+        userId: userId,
+        event: AnalyticsEvent.postSessionCinematicShown(
+          totalXp: state.totalXpEarned,
+          hadRankUp: queue.any((e) => e is RankUpEvent),
+          hadTitleUnlock: queue.any((e) => e is TitleUnlockEvent),
+          hadClassChange: queue.any((e) => e is ClassChangeEvent),
+        ),
+        platform: platform,
+        appVersion: appVersion,
+      ),
+    );
+
+    for (final event in queue.whereType<TitleUnlockEvent>()) {
       unawaited(
         analyticsRepo.insertEvent(
           userId: userId,
-          event: AnalyticsEvent.postSessionCinematicShown(
-            totalXp: state.totalXpEarned,
-            hadRankUp: queue.any((e) => e is RankUpEvent),
-            hadTitleUnlock: queue.any((e) => e is TitleUnlockEvent),
-            hadClassChange: queue.any((e) => e is ClassChangeEvent),
+          event: AnalyticsEvent.titleUnlocked(
+            titleSlug: event.slug,
+            workoutNumber: state.sagaNumber,
           ),
           platform: platform,
           appVersion: appVersion,
         ),
       );
-
-      for (final event in queue.whereType<TitleUnlockEvent>()) {
-        unawaited(
-          analyticsRepo.insertEvent(
-            userId: userId,
-            event: AnalyticsEvent.titleUnlocked(
-              titleSlug: event.slug,
-              workoutNumber: state.sagaNumber,
-            ),
-            platform: platform,
-            appVersion: appVersion,
-          ),
-        );
-      }
-    } catch (_) {
-      // Analytics is fire-and-forget — a missing repo / Supabase-not-init
-      // edge must not break the cinematic playback.
     }
   }
 

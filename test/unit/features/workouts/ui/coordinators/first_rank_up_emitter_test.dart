@@ -152,6 +152,66 @@ void main() {
       expect(repo.events, isEmpty);
       expect(FirstRankUpEmitter.readFiredSlugs('user-1'), isEmpty);
     });
+
+    test(
+      'insertEvent throwing leaves the slug OUT of the fired cache so the '
+      'next session retries (PR #277 review fix — ordering invariant)',
+      () async {
+        // Production [AnalyticsRepository.insertEvent] swallows internally,
+        // but the emitter's per-event `on Object` catch is a belt against
+        // future signature changes. A throw must NOT poison the cache —
+        // otherwise a single transient outage permanently marks the body
+        // part as "fired" on this device and the event never lands.
+        final throwingRepo = _ThrowingAnalyticsRepository();
+
+        await FirstRankUpEmitter.emitForRankUps(
+          userId: 'user-1',
+          analyticsRepo: throwingRepo,
+          rankUps: const [RankUpEvent(bodyPart: BodyPart.chest, newRank: 2)],
+        );
+
+        expect(
+          FirstRankUpEmitter.readFiredSlugs('user-1'),
+          isEmpty,
+          reason:
+              'failed insertEvent must leave the slug unrecorded so a '
+              'subsequent finish can retry',
+        );
+
+        // The next emit with a working repo lands the event.
+        await FirstRankUpEmitter.emitForRankUps(
+          userId: 'user-1',
+          analyticsRepo: repo,
+          rankUps: const [RankUpEvent(bodyPart: BodyPart.chest, newRank: 2)],
+        );
+        expect(repo.events, [
+          const AnalyticsEvent.firstRankUp(bodyPart: 'chest', newRank: 2),
+        ]);
+        expect(FirstRankUpEmitter.readFiredSlugs('user-1'), ['chest']);
+      },
+    );
+
+    test(
+      'mixed throw + success in one batch caches only the succeeded slug',
+      () async {
+        final partialRepo = _ThrowOnSlugAnalyticsRepository(throwOn: 'chest');
+
+        await FirstRankUpEmitter.emitForRankUps(
+          userId: 'user-1',
+          analyticsRepo: partialRepo,
+          rankUps: const [
+            RankUpEvent(bodyPart: BodyPart.chest, newRank: 2),
+            RankUpEvent(bodyPart: BodyPart.back, newRank: 1),
+          ],
+        );
+
+        // Only `back` made it through — `chest` threw, so it stays unrecorded.
+        expect(partialRepo.events, [
+          const AnalyticsEvent.firstRankUp(bodyPart: 'back', newRank: 1),
+        ]);
+        expect(FirstRankUpEmitter.readFiredSlugs('user-1'), ['back']);
+      },
+    );
   });
 }
 
@@ -169,6 +229,48 @@ class _RecordingAnalyticsRepository extends BaseRepository
     required String? platform,
     required String? appVersion,
   }) async {
+    events.add(event);
+  }
+}
+
+/// Always-throwing fake — production `insertEvent` swallows internally,
+/// but the emitter's per-event `on Object` catch must defend against a
+/// future signature change. Used to pin the "failed insert leaves the
+/// fired-cache untouched" ordering invariant.
+class _ThrowingAnalyticsRepository extends BaseRepository
+    implements AnalyticsRepository {
+  @override
+  Future<void> insertEvent({
+    required String userId,
+    required AnalyticsEvent event,
+    required String? platform,
+    required String? appVersion,
+  }) async {
+    throw StateError('synthetic insert failure');
+  }
+}
+
+/// Throws when [insertEvent] is called for a specific body-part slug,
+/// records the event otherwise. Used to assert mixed-success batches
+/// only persist the succeeded slugs.
+class _ThrowOnSlugAnalyticsRepository extends BaseRepository
+    implements AnalyticsRepository {
+  _ThrowOnSlugAnalyticsRepository({required this.throwOn});
+
+  final String throwOn;
+  final List<AnalyticsEvent> events = [];
+
+  @override
+  Future<void> insertEvent({
+    required String userId,
+    required AnalyticsEvent event,
+    required String? platform,
+    required String? appVersion,
+  }) async {
+    final maybeSlug = event.props['body_part'];
+    if (maybeSlug == throwOn) {
+      throw StateError('synthetic insert failure for $throwOn');
+    }
     events.add(event);
   }
 }
