@@ -488,9 +488,15 @@ async function seedCustomExerciseForUser(
   userId: string,
   name: string,
 ): Promise<string> {
+  // Phase 15f Stage 4 requires `slug` explicitly on every `exercises` INSERT
+  // (it's the NOT NULL join key for `exercise_translations`). Derive a
+  // sanitised slug from the unique-suffixed name so the test isolates per
+  // run without colliding on slug uniqueness.
+  const slug = `bug003-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   const { data, error } = await admin
     .from('exercises')
     .insert({
+      slug,
       muscle_group: 'chest',
       equipment_type: 'barbell',
       is_default: false,
