@@ -105,10 +105,35 @@ void main() {
     testWidgets('form is wrapped in an AutofillGroup', (tester) async {
       // The OS only surfaces save/fill prompts when the fields share an
       // AutofillGroup ancestor. Without this, the per-field
-      // `autofillHints` are ignored on commit.
+      // `autofillHints` are ignored on commit. `find.descendant` pins the
+      // wrapping relationship — a regression that pulls the AutofillGroup
+      // out of the form (or wraps only one field) fails loud here.
       await tester.pumpWidget(buildTestWidget());
 
       expect(find.byType(AutofillGroup), findsOneWidget);
+
+      expect(
+        find.descendant(
+          of: find.byType(AutofillGroup),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics && w.properties.identifier == 'auth-email-input',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      expect(
+        find.descendant(
+          of: find.byType(AutofillGroup),
+          matching: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'auth-password-input',
+          ),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

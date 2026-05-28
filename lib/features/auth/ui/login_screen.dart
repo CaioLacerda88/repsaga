@@ -57,19 +57,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final notifier = ref.read(authNotifierProvider.notifier);
 
     if (_isSignUp) {
-      try {
-        await notifier.signUpWithEmail(email: email, password: password);
-        // Only set onboarding flag after signup succeeds.
-        if (mounted && !ref.read(authNotifierProvider).hasError) {
-          ref.read(needsOnboardingProvider.notifier).state = true;
-        }
-      } catch (_) {
-        // Error is surfaced via authNotifierProvider listener.
-        return;
+      // `signUpWithEmail` wraps its work in `AsyncValue.guard`, so it
+      // catches all exceptions internally and never re-throws — a
+      // try/catch here would be unreachable. We gate every post-call
+      // side-effect on `!hasError` instead so a failed signup leaves
+      // the onboarding flag, autofill commit, and navigation untouched.
+      await notifier.signUpWithEmail(email: email, password: password);
+      if (mounted && !ref.read(authNotifierProvider).hasError) {
+        ref.read(needsOnboardingProvider.notifier).state = true;
       }
       _finishAutofillIfSucceeded();
       // If signup succeeded and email confirmation is pending, navigate.
-      if (mounted && ref.read(signupPendingEmailProvider) != null) {
+      if (mounted &&
+          !ref.read(authNotifierProvider).hasError &&
+          ref.read(signupPendingEmailProvider) != null) {
         context.go('/email-confirmation');
       }
     } else {
@@ -82,14 +83,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// OS surfaces its save-credentials prompt — Android Credential Manager on
   /// API 34+, the iOS Passwords sheet on iOS 12+. Only fires when the
   /// notifier did NOT land in [AsyncError]; a failed sign-in / sign-up must
-  /// not trigger the OS save flow with the wrong credentials. The call is a
+  /// not trigger the OS save flow with the wrong credentials. Passes
+  /// `shouldSave: true` explicitly so the OS prompt is requested only here,
+  /// never on a dispose-without-success (the [AutofillGroup] is configured
+  /// with `onDisposeAction: cancel` for the same reason). The call is a
   /// pure platform-channel message (`TextInput.finishAutofillContext`) — it
   /// does not emit `AuthChangeEvent`s, so `_RouterRefreshListenable` and the
   /// `authStateProvider` redirect chain are untouched.
   void _finishAutofillIfSucceeded() {
     if (!mounted) return;
     if (ref.read(authNotifierProvider).hasError) return;
-    TextInput.finishAutofillContext();
+    TextInput.finishAutofillContext(shouldSave: true);
   }
 
   Future<void> _signInWithGoogle() async {
@@ -193,12 +197,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               key: _formKey,
               // AutofillGroup binds the email + password fields into a single
               // OS-level autofill scope. On successful submit `_submit` calls
-              // `TextInput.finishAutofillContext`, which prompts Android
-              // Credential Manager (API 34+) / iOS Passwords sheet to save
-              // the just-entered credentials. The `disposeAction` defaults to
-              // `commit`, which is what we want — saving on a clean dispose
-              // would surface the prompt even after navigating away mid-flow.
+              // `TextInput.finishAutofillContext(shouldSave: true)`, which
+              // prompts Android Credential Manager (API 34+) / iOS Passwords
+              // sheet to save the just-entered credentials. We pin
+              // `onDisposeAction: cancel` so abandoning the form mid-flow
+              // (toggle to signup, route away, hot-reload) NEVER surfaces a
+              // save prompt with partial / wrong credentials. The save flow
+              // fires exclusively from our explicit
+              // `finishAutofillContext(shouldSave: true)` call on success.
               child: AutofillGroup(
+                onDisposeAction: AutofillContextAction.cancel,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,

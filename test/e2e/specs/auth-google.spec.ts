@@ -33,39 +33,17 @@ test.describe('Google Sign-In', { tag: '@smoke' }, () => {
   test('should trigger an OAuth flow when the Google button is tapped', async ({
     page,
   }) => {
-    // Capture every URL the page tries to navigate to OR fetch. Supabase's
-    // `signInWithOAuth(OAuthProvider.google, ...)` issues a GET to
-    // `/auth/v1/authorize?provider=google&...` — that hit is the
-    // observable side-effect we pin. Playwright can't follow the redirect
-    // to accounts.google.com (Google rejects headless browsers), but the
-    // outbound request to Supabase IS exercisable.
-    let oauthRequestSeen = false;
-    page.on('request', (request) => {
-      const url = request.url();
-      if (
-        url.includes('/auth/v1/authorize') &&
-        url.includes('provider=google')
-      ) {
-        oauthRequestSeen = true;
-      }
-    });
-
-    // Some Flutter builds open the OAuth URL via `window.location.assign`
-    // / `window.open` rather than fetch — intercept those too via the
-    // `popup`/`framenavigated` events. We give both paths up to 10s after
-    // the click to fire.
-    page.on('popup', () => {
-      oauthRequestSeen = true;
-    });
-    page.on('framenavigated', (frame) => {
-      if (
-        frame === page.mainFrame() &&
-        (frame.url().includes('accounts.google.com') ||
-          frame.url().includes('/auth/v1/authorize'))
-      ) {
-        oauthRequestSeen = true;
-      }
-    });
+    // We pin two observable signals from a successful Google button wire-up:
+    //   (a) the Supabase SDK fires a GET to
+    //       `/auth/v1/authorize?provider=google&...` — observable via
+    //       `page.waitForRequest()`. This is the deterministic happy path.
+    //   (b) the page navigates away from the login screen — observable via
+    //       the Google button disappearing. This is the fallback for
+    //       Flutter builds that issue the OAuth URL via
+    //       `window.location.assign` rather than fetch.
+    //
+    // `page.waitForRequest` is event-driven (no racy sleep) and short-
+    // circuits the moment the authorize request fires.
 
     // Block real navigation to accounts.google.com so the test stays on
     // the login page if the redirect chain reaches Google. We're only
@@ -78,16 +56,24 @@ test.describe('Google Sign-In', { tag: '@smoke' }, () => {
       }),
     );
 
+    // Start waiting BEFORE clicking — `waitForRequest` must be primed so
+    // it catches the request fired by the click handler.
+    const oauthRequestPromise = page
+      .waitForRequest(
+        req =>
+          req.url().includes('/auth/v1/authorize') &&
+          req.url().includes('provider=google'),
+        { timeout: 10_000 },
+      )
+      .catch(() => null);
+
     await page.click(AUTH.googleButton);
 
-    // Wait for the OAuth side-effect to fire. The Supabase SDK launches
-    // the URL via `url_launcher` on web; the request lands on the
-    // authorize endpoint either via XHR or top-level navigation. 10s is
-    // generous to accommodate first-load JS warm-up under CI contention.
-    await page.waitForTimeout(2_000);
-    // Two acceptable signals: (a) an authorize-endpoint hit OR (b) the
-    // user is no longer on the login screen (button gone / navigated
-    // away). Either confirms the click was wired through.
+    const oauthRequest = await oauthRequestPromise;
+    const oauthRequestSeen = oauthRequest !== null;
+
+    // Fallback: the user is no longer on the login screen (button gone /
+    // navigated away). Either signal confirms the click was wired through.
     const stillOnLogin = await page
       .locator(AUTH.googleButton)
       .isVisible({ timeout: 1_000 })

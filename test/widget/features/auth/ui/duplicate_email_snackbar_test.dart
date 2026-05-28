@@ -26,6 +26,12 @@ import '../../../../helpers/test_material_app.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
 
+// LoginScreen does not read `hiveServiceProvider` directly, but the
+// AuthNotifier it depends on reads it inside `build()` to wire up cache
+// clears on signOut / deleteAccount. Without this override the test would
+// instantiate the real HiveService and try to open Hive boxes in the test
+// process. The signup paths exercised here never invoke any Hive method, so
+// no `when()` stubs are needed — the mock is intentionally a no-op fake.
 class MockHiveService extends Mock implements HiveService {}
 
 void main() {
@@ -48,6 +54,15 @@ void main() {
     );
   }
 
+  // Locale-independent selectors via Semantics identifiers. Avoids
+  // hard-coding English copy from app_en.arb in the test body.
+  Finder signupToggle() => find.byWidgetPredicate(
+    (w) => w is Semantics && w.properties.identifier == 'auth-toggle-signup',
+  );
+  Finder signupSubmit() => find.byWidgetPredicate(
+    (w) => w is Semantics && w.properties.identifier == 'auth-signup-btn',
+  );
+
   group('LoginScreen — duplicate email', () {
     testWidgets(
       'shows authErrorAlreadyRegistered banner when signup hits an existing email',
@@ -65,9 +80,9 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
 
         // Toggle to signup mode so the SIGN UP button is the active CTA.
-        await tester.ensureVisible(find.text("Don't have an account? Sign up"));
+        await tester.ensureVisible(signupToggle());
         await tester.pump();
-        await tester.tap(find.text("Don't have an account? Sign up"));
+        await tester.tap(signupToggle());
         await tester.pump();
 
         // Fill in credentials. Email + password validators both pass.
@@ -81,7 +96,7 @@ void main() {
         );
 
         // Trigger signup.
-        await tester.tap(find.text('SIGN UP'));
+        await tester.tap(signupSubmit());
         // Pump twice: once for the listener microtask, once for the setState
         // that lifts the inline banner into the tree.
         await tester.pump();
@@ -107,9 +122,9 @@ void main() {
 
       await tester.pumpWidget(buildTestWidget());
 
-      await tester.ensureVisible(find.text("Don't have an account? Sign up"));
+      await tester.ensureVisible(signupToggle());
       await tester.pump();
-      await tester.tap(find.text("Don't have an account? Sign up"));
+      await tester.tap(signupToggle());
       await tester.pump();
 
       await tester.enterText(
@@ -121,7 +136,7 @@ void main() {
         'TestPassword123!',
       );
 
-      await tester.tap(find.text('SIGN UP'));
+      await tester.tap(signupSubmit());
       await tester.pump();
       await tester.pump();
 

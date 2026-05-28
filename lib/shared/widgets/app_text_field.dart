@@ -91,8 +91,12 @@ class _AppTextFieldState extends State<AppTextField> {
     );
 
     if (widget.semanticsIdentifier != null) {
+      // cluster: semantics-identifier-pair-rule — every Semantics(identifier:)
+      // needs container:true + explicitChildNodes:true so the AOM emits a
+      // dedicated node that Playwright's role-based selectors can resolve.
       field = Semantics(
         container: true,
+        explicitChildNodes: true,
         identifier: widget.semanticsIdentifier!,
         child: field,
       );
