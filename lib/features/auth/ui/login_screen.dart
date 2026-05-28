@@ -129,8 +129,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: () => Navigator.of(ctx).pop(false),
               child: Text(l10n.cancel),
             ),
+            // cluster: semantics-identifier-pair-rule — container +
+            // explicitChildNodes pair prevents AOM label-merge with the
+            // FilledButton's child Text node.
             Semantics(
               container: true,
+              explicitChildNodes: true,
               identifier: 'auth-send-reset',
               child: FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
