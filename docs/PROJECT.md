@@ -381,8 +381,9 @@ history screen redesign with sticky week headers + per-card XP.
 | 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
 | 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
+| 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | NOT STARTED |
 
-Order: 32a → 32c → 32g → 32d → 32b → 32e → 32f.
+Order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f.
 
 Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05-27 3-agent investigation (code map, E2E coverage matrix, full test plan, code-reviewer findings).
 
@@ -537,6 +538,56 @@ try/catches to a single provider-construction catch. No migration —
 - PR diamond appears only on sessions with ≥1 PR
 - Detail screen header strip renders above set-by-set log without breaking existing layout
 - E2E spec for History updated if selectors changed
+
+#### PR 32h — Retire user-created exercises (RPG thesis preservation)
+
+**Why this exists**
+Phase 29 XP formula v2 derives per-set XP from each exercise's calibrated
+`tier_diff_mult` + `xp_attribution` (set in `supabase/migrations/00065`).
+User-created exercises (`is_default = false`) have no calibration — logging
+them would silently produce zero-XP sets, breaking
+[[project_rpg_thesis]] ("RPG layer never decouples from real lifts"). No
+live users yet → silent retirement, no migration / suggest-CTA / banner.
+
+**Files to delete**
+- `lib/features/exercises/ui/create_exercise_screen.dart` — the whole form screen
+- `test/widget/features/exercises/ui/create_exercise_screen_test.dart` — its widget test
+
+**Files to modify**
+- `lib/core/router/app_router.dart` L22 (import) + L204 (`/create-exercise` route entry) — drop both
+- `lib/features/workouts/ui/widgets/exercise_picker_sheet.dart` L10 import + the "create new exercise" inline link/CTA — drop both
+- `lib/features/exercises/ui/exercise_list_screen.dart` — drop the "Add" CTA (likely a `FloatingActionButton` or AppBar action) + any empty-state "create your first exercise" copy
+- `lib/features/exercises/data/exercise_repository.dart` — drop `createExercise` method (and its `PendingCreateExercise` queue plumbing if not used elsewhere)
+- `lib/core/offline/sync_service.dart` L441 — drop the `PendingCreateExercise()` case (and its model definition + tests if exclusively used by this flow)
+- `lib/l10n/app_en.arb` + `app_pt.arb` — drop now-unused l10n keys (any `createExercise*`, `newExercise*`, `addExercise*` copy)
+
+**Files to update (tests)**
+- `test/unit/features/exercises/data/exercise_repository_test.dart` — drop the `createExercise` test group
+- `test/unit/core/offline/sync_service_test.dart` + `test/unit/core/offline/offline_queue_service_test.dart` — drop the `PendingCreateExercise` flow tests
+- `test/e2e/specs/exercises.spec.ts` — drop any create-exercise spec(s); add a negative pin that asserts the Add CTA is NOT present
+- `test/fixtures/test_factories.dart` — drop the `createExerciseRequest` factory if exclusive
+
+**Data audit (no migration needed)**
+- `exercises` table keeps the `is_default` + `user_id` columns (used by RLS).
+  Future-proofing in case we re-introduce user-created exercises.
+- RLS policies stay intact — the write paths just become unreachable from
+  the UI. No new policy needed.
+
+**Acceptance**
+- Code grep for `CreateExerciseScreen` / `createExercise` / `/create-exercise`
+  / `PendingCreateExercise` returns 0 references after the PR
+- `make ci` green
+- Smoke E2E green; new negative-pin test confirms Add CTA absence on
+  `exercise_list_screen` and `exercise_picker_sheet`
+- Physical-Android verification: SKIPPED (deletion-only, no new UX
+  surface). E2E negative-pins are sufficient.
+
+**Out of scope**
+- Suggest-an-exercise affordance (decision locked: silent removal — no live
+  users to communicate with)
+- Any database migration removing the `user_id` column on `exercises` —
+  keep the schema flexible
+- iOS-side UI work (Android-first launch)
 
 ### Launch Phase
 
