@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../l10n/app_localizations.dart';
@@ -40,12 +40,14 @@ class SyncErrorMapper {
 
   /// Returns a user-safe message for [error], localized via [l10n].
   ///
-  /// Side effect: logs the raw exception to `developer.log` and forwards
+  /// Side effect: logs the raw exception via `debugPrint` and forwards
   /// it as a Sentry breadcrumb. The caller does not need to log separately.
+  /// cluster: developer-log-invisible-logcat — `developer.log` is invisible
+  /// in adb logcat; `debugPrint` reaches the on-device log stream.
   static String toUserMessage(AppLocalizations l10n, Object error) {
     // Always log the raw error — this is what we need for diagnosis and
     // it MUST stay out of the UI.
-    log('Sync error: $error', name: 'SyncErrorMapper', level: 900);
+    debugPrint('[SyncErrorMapper] Sync error: $error');
     SentryReport.addBreadcrumb(
       category: 'sync.error',
       message: 'Sync error mapped to user',
