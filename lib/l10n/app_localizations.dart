@@ -1772,11 +1772,17 @@ abstract class AppLocalizations {
   /// **'Notes'**
   String get notes;
 
-  /// Total volume footer in workout detail
+  /// PR #285 device-verification (UX-critic Q2) — label half of the 48dp surface2 strip below the exercise list on the workout-detail screen. Mirrors the top XP/PRs strip pattern. Rendered in AppTextStyles.label (Barlow Condensed tracked) at textDim alpha 0.6, paired with workoutDetailTotalVolumeValue (Rajdhani numeric) for the value.
   ///
   /// In en, this message translates to:
-  /// **'Total Volume: {volume}'**
-  String totalVolume(String volume);
+  /// **'Total volume'**
+  String get workoutDetailTotalVolumeLabel;
+
+  /// PR #285 device-verification (UX-critic Q2) — value half of the 48dp total-volume strip on the workout-detail screen. Passes through a pre-formatted volume string from WorkoutFormatters.formatVolume() which already includes the weight-unit suffix (e.g. '1,740 kg' / '1,740 lbs'). No additional formatting at the localization layer — keeps weight-unit handling centralized in the formatter.
+  ///
+  /// In en, this message translates to:
+  /// **'{volume}'**
+  String workoutDetailTotalVolumeValue(String volume);
 
   /// Routines screen title
   ///
@@ -5136,10 +5142,10 @@ abstract class AppLocalizations {
   /// **'+{xp} XP'**
   String historyCardXpEyebrow(int xp);
 
-  /// Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon.
+  /// Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon. ICU plural added per PR #285 device-verification finding so '6 PR' becomes '6 PRs'.
   ///
   /// In en, this message translates to:
-  /// **'◆ {count} PR'**
+  /// **'◆ {count, plural, =1{1 PR} other{{count} PRs}}'**
   String historyCardPrCount(int count);
 
   /// Phase 32 PR 32f — XP portion of the 48dp summary strip on the Workout Detail screen. Rendered in hotViolet (daily-driver register) via Text.rich so the PR portion can pick up heroGold via RewardAccent independently. Replaces the prior single-string historyDetailStrip after PR #285 split the colors per the reward-scarcity rule.
@@ -5148,10 +5154,10 @@ abstract class AppLocalizations {
   /// **'+{xp} XP'**
   String historyDetailStripXpPart(int xp);
 
-  /// Phase 32 PR 32f — PR portion of the 48dp summary strip on the Workout Detail screen. Rendered inside a RewardAccent scope so the digits + label inherit heroGold. Rendered only when prCount > 0; the leading separator dot is supplied by the screen layer.
+  /// Phase 32 PR 32f — PR portion of the 48dp summary strip on the Workout Detail screen. Rendered inside a RewardAccent scope so the digits + label inherit heroGold. Rendered only when prCount > 0; the leading separator dot is supplied by the screen layer. ICU plural added per PR #285 device-verification finding so '1 PR' / '6 PRs' grammar matches.
   ///
   /// In en, this message translates to:
-  /// **'{prs} PRs'**
+  /// **'{prs, plural, =1{1 PR} other{{prs} PRs}}'**
   String historyDetailStripPrPart(int prs);
 
   /// Phase 32 PR 32f — Sticky week-header label for the current ISO week (Monday-of-week == Monday of today). Replaces the date-formatted historyWeekLabel for the current week so the heading reads as a relative anchor instead of repeating a date the user already knows.

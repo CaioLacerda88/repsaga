@@ -729,11 +729,15 @@
   "@exerciseGeneric": { "description": "Fallback exercise name when name is null" },
   "notes": "Notes",
   "@notes": { "description": "Notes section label" },
-  "totalVolume": "Total Volume: {volume}",
-  "@totalVolume": {
-    "description": "Total volume footer in workout detail",
+  "workoutDetailTotalVolumeLabel": "Total volume",
+  "@workoutDetailTotalVolumeLabel": {
+    "description": "PR #285 device-verification (UX-critic Q2) — label half of the 48dp surface2 strip below the exercise list on the workout-detail screen. Mirrors the top XP/PRs strip pattern. Rendered in AppTextStyles.label (Barlow Condensed tracked) at textDim alpha 0.6, paired with workoutDetailTotalVolumeValue (Rajdhani numeric) for the value."
+  },
+  "workoutDetailTotalVolumeValue": "{volume}",
+  "@workoutDetailTotalVolumeValue": {
+    "description": "PR #285 device-verification (UX-critic Q2) — value half of the 48dp total-volume strip on the workout-detail screen. Passes through a pre-formatted volume string from WorkoutFormatters.formatVolume() which already includes the weight-unit suffix (e.g. '1,740 kg' / '1,740 lbs'). No additional formatting at the localization layer — keeps weight-unit handling centralized in the formatter.",
     "placeholders": {
-      "volume": { "type": "String", "example": "1,234 kg" }
+      "volume": { "type": "String", "example": "1,740 kg" }
     }
   },
 
@@ -2366,9 +2370,9 @@
     "description": "Phase 32 PR 32f — Per-workout XP eyebrow line above the title row on each History card. Rendered in heroGold via AppTextStyles.numericSmall.",
     "placeholders": { "xp": { "type": "int" } }
   },
-  "historyCardPrCount": "◆ {count} PR",
+  "historyCardPrCount": "◆ {count, plural, =1{1 PR} other{{count} PRs}}",
   "@historyCardPrCount": {
-    "description": "Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon.",
+    "description": "Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon. ICU plural added per PR #285 device-verification finding so '6 PR' becomes '6 PRs'.",
     "placeholders": { "count": { "type": "int" } }
   },
   "historyDetailStripXpPart": "+{xp} XP",
@@ -2376,9 +2380,9 @@
     "description": "Phase 32 PR 32f — XP portion of the 48dp summary strip on the Workout Detail screen. Rendered in hotViolet (daily-driver register) via Text.rich so the PR portion can pick up heroGold via RewardAccent independently. Replaces the prior single-string historyDetailStrip after PR #285 split the colors per the reward-scarcity rule.",
     "placeholders": { "xp": { "type": "int" } }
   },
-  "historyDetailStripPrPart": "{prs} PRs",
+  "historyDetailStripPrPart": "{prs, plural, =1{1 PR} other{{prs} PRs}}",
   "@historyDetailStripPrPart": {
-    "description": "Phase 32 PR 32f — PR portion of the 48dp summary strip on the Workout Detail screen. Rendered inside a RewardAccent scope so the digits + label inherit heroGold. Rendered only when prCount > 0; the leading separator dot is supplied by the screen layer.",
+    "description": "Phase 32 PR 32f — PR portion of the 48dp summary strip on the Workout Detail screen. Rendered inside a RewardAccent scope so the digits + label inherit heroGold. Rendered only when prCount > 0; the leading separator dot is supplied by the screen layer. ICU plural added per PR #285 device-verification finding so '1 PR' / '6 PRs' grammar matches.",
     "placeholders": { "prs": { "type": "int" } }
   },
   "historyWeekLabelCurrent": "This Week",

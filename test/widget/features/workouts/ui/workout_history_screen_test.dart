@@ -296,8 +296,12 @@ void main() {
           await tester.pump();
           await tester.pump();
 
-          // Week B workout has prCount: 2 → diamond renders.
-          expect(find.text('◆ 2 PR'), findsOneWidget);
+          // Week B workout has prCount: 2 → diamond renders with ICU
+          // plural ("2 PRs", not "2 PR"). Per PR #285 device-verification
+          // finding the historyCardPrCount key now uses {count, plural,
+          // =1{1 PR} other{{count} PRs}} so 1 stays singular and ≥2
+          // renders the plural form. See lib/l10n/app_en.arb.
+          expect(find.text('◆ 2 PRs'), findsOneWidget);
           // Week A workout has prCount: 0 → no PR row anywhere.
           expect(find.textContaining('◆ 0'), findsNothing);
         },
@@ -362,9 +366,7 @@ void main() {
 
           await tester.pumpWidget(
             ProviderScope(
-              overrides: [
-                workoutHistoryProvider.overrideWith(() => stub),
-              ],
+              overrides: [workoutHistoryProvider.overrideWith(() => stub)],
               child: TestMaterialApp(
                 theme: AppTheme.dark,
                 home: const WorkoutHistoryScreen(),
@@ -381,11 +383,7 @@ void main() {
           // This simulates the mid-loadMore window where the API call is
           // in-flight. The workouts list is identical — the rebuild must be
           // driven by the state-class emit, not a list diff.
-          stub.push((
-            workouts: workouts,
-            isLoadingMore: true,
-            hasMore: false,
-          ));
+          stub.push((workouts: workouts, isLoadingMore: true, hasMore: false));
           await tester.pump();
 
           // Scroll to bottom so the load-more sliver enters the viewport.
@@ -437,8 +435,19 @@ void main() {
       // XP eyebrow color — hotViolet (daily-driver register, NOT heroGold)
       // -----------------------------------------------------------------------
 
+      // -----------------------------------------------------------------------
+      // PR diamond effective rendered color — PR #285 device-verification.
+      // `AppTextStyles.numericSmall` bakes `color: textDim` which would
+      // override RewardAccent's heroGold via the
+      // `DefaultTextStyle.merge(style: TextStyle(color: heroGold))` → Text's
+      // own style merge (explicit-color-wins). The fix strips the baked
+      // color at the call site by composing a TextStyle WITHOUT a `color:`
+      // — letting the ambient DefaultTextStyle's heroGold win. The lint
+      // (`check_reward_accent.sh`) gates the source; this test gates the
+      // rendered tree.
+      // -----------------------------------------------------------------------
       testWidgets(
-        'XP eyebrow text uses hotViolet color (not heroGold)',
+        'PR diamond effective color is heroGold (not textDim) — PR #285',
         (tester) async {
           await tester.pumpWidget(
             buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
@@ -446,27 +455,58 @@ void main() {
           await tester.pump();
           await tester.pump();
 
-          // Find the Text widget inside the first history-card-xp-eyebrow
-          // Semantics container and verify its resolved color is hotViolet
-          // (with alpha 0.85). The color assertion gates that the eyebrow
-          // is not accidentally painted heroGold (which would erode
-          // reward-scarcity — XP is an expected outcome, not a rare prize).
-          final eyebrowContainer = find.bySemanticsIdentifier(
-            'history-card-xp-eyebrow',
+          // weekB has prCount: 2 → diamond renders. Find the RichText
+          // descendant of the PR diamond's Semantics container — that's
+          // the leaf paint node Flutter actually rasterizes, with the
+          // merged effective style sitting on its `text.style`.
+          final diamondContainer = find.bySemanticsIdentifier(
+            'history-card-pr-diamond',
           );
-          expect(eyebrowContainer, findsAtLeastNWidgets(1));
-          final eyebrowText = find.descendant(
-            of: eyebrowContainer.first,
-            matching: find.byType(Text),
+          expect(diamondContainer, findsOneWidget);
+          final richText = find.descendant(
+            of: diamondContainer,
+            matching: find.byType(RichText),
           );
-          expect(eyebrowText, findsOneWidget);
-          final textWidget = tester.widget<Text>(eyebrowText);
-          expect(
-            textWidget.style?.color,
-            AppColors.hotViolet.withValues(alpha: 0.85),
-          );
+          expect(richText, findsOneWidget);
+          final rendered = tester.widget<RichText>(richText);
+          // The effective color sits on the root TextSpan's style after
+          // the DefaultTextStyle merge resolves. RewardAccent's heroGold
+          // wins because the per-call-site TextStyle does NOT bake a
+          // color of its own — the regression we're guarding against is
+          // numericSmall's textDim overriding the gold scope.
+          expect(rendered.text.style?.color, AppColors.heroGold);
         },
       );
+
+      testWidgets('XP eyebrow text uses hotViolet color (not heroGold)', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Find the Text widget inside the first history-card-xp-eyebrow
+        // Semantics container and verify its resolved color is hotViolet
+        // (with alpha 0.85). The color assertion gates that the eyebrow
+        // is not accidentally painted heroGold (which would erode
+        // reward-scarcity — XP is an expected outcome, not a rare prize).
+        final eyebrowContainer = find.bySemanticsIdentifier(
+          'history-card-xp-eyebrow',
+        );
+        expect(eyebrowContainer, findsAtLeastNWidgets(1));
+        final eyebrowText = find.descendant(
+          of: eyebrowContainer.first,
+          matching: find.byType(Text),
+        );
+        expect(eyebrowText, findsOneWidget);
+        final textWidget = tester.widget<Text>(eyebrowText);
+        expect(
+          textWidget.style?.color,
+          AppColors.hotViolet.withValues(alpha: 0.85),
+        );
+      });
     },
   );
 }

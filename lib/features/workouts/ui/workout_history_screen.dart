@@ -355,7 +355,24 @@ class _WorkoutHistoryCard extends StatelessWidget {
                           child: RewardAccent(
                             child: Text(
                               l10n.historyCardPrCount(workout.prCount),
-                              style: AppTextStyles.numericSmall,
+                              // Compose an inheriting TextStyle WITHOUT a
+                              // color — `numericSmall` bakes `color:
+                              // AppColors.textDim` which would override
+                              // RewardAccent's heroGold via
+                              // `DefaultTextStyle.merge`'s explicit-wins
+                              // semantics. Omitting `color:` lets the
+                              // ambient `DefaultTextStyle` (heroGold from
+                              // RewardAccent) win. See PR #285 device-
+                              // verification finding and Fix 2 in the
+                              // workout_detail_screen pair.
+                              style: const TextStyle(
+                                fontFamily: 'Rajdhani',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                                letterSpacing: 0.04 * 11,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ),

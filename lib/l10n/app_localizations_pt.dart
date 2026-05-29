@@ -981,8 +981,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get notes => 'Notas';
 
   @override
-  String totalVolume(String volume) {
-    return 'Volume Total: $volume';
+  String get workoutDetailTotalVolumeLabel => 'Volume total';
+
+  @override
+  String workoutDetailTotalVolumeValue(String volume) {
+    return '$volume';
   }
 
   @override
@@ -3006,7 +3009,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String historyCardPrCount(int count) {
-    return '◆ $count PR';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count PRs',
+      one: '1 PR',
+    );
+    return '◆ $_temp0';
   }
 
   @override
@@ -3016,7 +3025,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String historyDetailStripPrPart(int prs) {
-    return '$prs PRs';
+    String _temp0 = intl.Intl.pluralLogic(
+      prs,
+      locale: localeName,
+      other: '$prs PRs',
+      one: '1 PR',
+    );
+    return '$_temp0';
   }
 
   @override

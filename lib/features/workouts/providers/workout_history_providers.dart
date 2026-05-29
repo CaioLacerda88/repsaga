@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/locale_provider.dart';
@@ -100,17 +101,25 @@ class WorkoutHistoryNotifier extends AsyncNotifier<WorkoutHistoryState> {
         isLoadingMore: false,
         hasMore: more.length >= _pageSize,
       ));
-    } catch (_) {
+    } catch (e) {
       // Restore the pre-attempt flags so a transient failure doesn't strand
-      // the spinner in the rendered tree. Surfacing the error itself is the
-      // screen layer's job via the outer AsyncError branch on the next
-      // refresh.
+      // the spinner in the rendered tree. Transient pagination failures are
+      // swallowed — the spinner clears, the existing list stays mounted,
+      // and `refresh()` is the user's recovery path. Surfacing every
+      // transient pagination error as an unhandled async exception spams
+      // Sentry and provides no actionable signal: the caller `_onScroll`
+      // is fire-and-forget (no `await`, no `catch`), so a rethrow lands
+      // in Flutter's `dart_vm_initializer` as `Unhandled Exception`.
+      // `debugPrint` keeps the failure visible on-device via `adb logcat`
+      // per `cluster_developer_log_invisible_logcat` (a plain
+      // `developer.log` would route to the dart:developer stream and be
+      // silent in logcat).
       state = AsyncData((
         workouts: current.workouts,
         isLoadingMore: false,
         hasMore: current.hasMore,
       ));
-      rethrow;
+      debugPrint('[WorkoutHistoryNotifier] loadMore failed: $e');
     }
   }
 

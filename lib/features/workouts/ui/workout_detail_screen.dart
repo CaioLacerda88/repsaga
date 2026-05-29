@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/number_format.dart';
-import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
@@ -148,7 +147,21 @@ class _WorkoutDetailBody extends ConsumerWidget {
                           child: RewardAccent(
                             child: Text(
                               l10n.historyDetailStripPrPart(prCount),
-                              style: AppTextStyles.numericSmall,
+                              // Inheriting TextStyle WITHOUT a baked color
+                              // — `numericSmall` bakes `color: textDim`
+                              // which would override RewardAccent's
+                              // heroGold via `DefaultTextStyle.merge`'s
+                              // explicit-wins rule. See PR #285 device-
+                              // verification finding (Fix 2 paired with
+                              // workout_history_screen).
+                              style: const TextStyle(
+                                fontFamily: 'Rajdhani',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                                letterSpacing: 0.04 * 11,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ),
@@ -199,32 +212,47 @@ class _WorkoutDetailBody extends ConsumerWidget {
               ),
             ),
           ),
-        // Total volume footer
+        // 48dp total-volume strip — mirrors the top XP/PRs strip (lines
+        // ~120-160 above) so the screen reads as two anchor bands around
+        // the exercise list rather than a free-floating Material icon
+        // footnote. `Text.rich` splits the eyebrow label (Barlow
+        // Condensed tracked, textDim alpha 0.6) from the numeric value
+        // (Rajdhani 700 tabular, textCream) so the value half reads as
+        // the load-bearing data point in the same numeric register the
+        // top strip's XP/PR spans use. See PR #285 UX-critic memo (Q2).
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.fitness_center,
-                  size: 18,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.totalVolume(
-                    WorkoutFormatters.formatVolume(
-                      totalVolume,
-                      weightUnit: weightUnit,
-                      locale: locale,
+          child: Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-detail-total-volume-strip',
+            child: Container(
+              height: 48,
+              color: AppColors.surface2,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: l10n.workoutDetailTotalVolumeLabel,
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.textDim.withValues(alpha: 0.6),
+                      ),
                     ),
-                  ),
-                  style: AppTextStyles.title.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
+                    const TextSpan(text: '  '),
+                    TextSpan(
+                      text: l10n.workoutDetailTotalVolumeValue(
+                        WorkoutFormatters.formatVolume(
+                          totalVolume,
+                          weightUnit: weightUnit,
+                          locale: locale,
+                        ),
+                      ),
+                      style: AppTextStyles.numeric.copyWith(fontSize: 14),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -382,8 +410,31 @@ class _ReadOnlySetRow extends StatelessWidget {
           SizedBox(
             width: 40,
             child: isPR
-                ? RewardAccent(
-                    child: AppIcons.render(AppIcons.levelUp, size: 18),
+                // Gold diamond glyph — matches the per-card PR diamond
+                // pattern on the History feed (`history-card-pr-diamond`).
+                // Replaces the previous `AppIcons.levelUp` SVG which
+                // semantically belongs to the level-up / XP ceremony
+                // register (`saga_intro_overlay.dart`) and bled into the
+                // PR register here. The set number on PR rows is implicit
+                // from row position so the slot stays at 40dp without a
+                // numeric prefix. See PR #285 UX-critic memo (Q1).
+                ? const RewardAccent(
+                    child: Text(
+                      '◆',
+                      // Inheriting TextStyle WITHOUT a baked color so
+                      // RewardAccent's heroGold lands via DefaultTextStyle
+                      // — `numericSmall` would bake `color: textDim` and
+                      // override the gold per Fix 2. Same fix pattern as
+                      // the per-card diamond + detail-strip PR span.
+                      style: TextStyle(
+                        fontFamily: 'Rajdhani',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        letterSpacing: 0.04 * 11,
+                        height: 1.4,
+                      ),
+                    ),
                   )
                 : Text(
                     '${set.setNumber}.',

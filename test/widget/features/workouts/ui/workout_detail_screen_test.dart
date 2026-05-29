@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
@@ -75,17 +74,17 @@ void main() {
     );
   }
 
-  // The PR badge on a set row is an `AppIcons.levelUp` SVG rendered inside
-  // a `RewardAccent` — it replaces the pre-17.0d `Icon(Icons.emoji_events)`.
-  // Counting `RewardAccent` ancestors is the most stable selector: the glyph
-  // may change (icon-set-v2) but the scarcity-widget wrapper won't.
-  Finder prTrophyFinder() => find.descendant(
-    of: find.byType(RewardAccent),
-    matching: find.byType(SvgPicture),
-  );
+  // The PR badge on a set row is a gold diamond glyph (◆) rendered as a
+  // Text inside a `RewardAccent` — post-PR-#285 UX-critic Q1 it replaces
+  // the previous `AppIcons.levelUp` SVG. Counting `RewardAccent`
+  // descendants of `find.text('◆')` is the most stable selector: the
+  // glyph encodes the PR signal AND keeps the reward-scarcity scope
+  // explicit. See `RewardAccent` docs for the scarcity contract.
+  Finder prDiamondFinder() =>
+      find.descendant(of: find.byType(RewardAccent), matching: find.text('◆'));
 
   group('WorkoutDetailScreen PR badges', () {
-    testWidgets('shows trophy icon on PR sets', (tester) async {
+    testWidgets('shows gold diamond glyph on PR sets', (tester) async {
       final detail = makeDetail();
 
       await tester.pumpWidget(
@@ -103,8 +102,8 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // set-1 is a PR: trophy icon should appear
-      expect(prTrophyFinder(), findsOneWidget);
+      // set-1 is a PR: diamond glyph should appear in a RewardAccent scope.
+      expect(prDiamondFinder(), findsOneWidget);
     });
 
     testWidgets('shows set number text on non-PR sets', (tester) async {
@@ -131,7 +130,7 @@ void main() {
       expect(find.text('1.'), findsNothing);
     });
 
-    testWidgets('shows no trophy icons when PR set is empty', (tester) async {
+    testWidgets('shows no diamond glyphs when PR set is empty', (tester) async {
       final detail = makeDetail();
 
       await tester.pumpWidget(
@@ -149,15 +148,15 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // No PR sets: no trophy icons at all
-      expect(prTrophyFinder(), findsNothing);
+      // No PR sets: no diamond glyphs at all
+      expect(prDiamondFinder(), findsNothing);
       // Both set numbers shown
       expect(find.text('1.'), findsOneWidget);
       expect(find.text('2.'), findsOneWidget);
     });
 
     testWidgets(
-      'shows no trophy icons while workoutPRSetIdsProvider is loading',
+      'shows no diamond glyphs while workoutPRSetIdsProvider is loading',
       (tester) async {
         final detail = makeDetail();
         // Never completes during this test — simulates in-flight async fetch.
@@ -181,8 +180,8 @@ void main() {
 
         // Workout content is visible.
         expect(find.text('Bench Press'), findsOneWidget);
-        // No trophy icons rendered during loading state.
-        expect(prTrophyFinder(), findsNothing);
+        // No diamond glyphs rendered during loading state.
+        expect(prDiamondFinder(), findsNothing);
 
         // Resolve the completer to avoid pending timer assertion.
         completer.complete({'set-1'});
@@ -190,32 +189,9 @@ void main() {
         await tester.pump();
 
         // After resolution, badge appears for set-1.
-        expect(prTrophyFinder(), findsOneWidget);
+        expect(prDiamondFinder(), findsOneWidget);
       },
     );
-
-    testWidgets('trophy icon is rendered at 18dp', (tester) async {
-      final detail = makeDetail();
-
-      await tester.pumpWidget(
-        buildTestWidget(
-          overrides: [
-            workoutDetailProvider(
-              'w-1',
-            ).overrideWith((ref) => Future.value(detail)),
-            workoutPRSetIdsProvider(
-              'w-1',
-            ).overrideWith((ref) => Future.value({'set-1'})),
-          ],
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      final trophy = tester.widget<SvgPicture>(prTrophyFinder());
-      expect(trophy.width, 18.0);
-      expect(trophy.height, 18.0);
-    });
   });
 
   group('WorkoutDetailScreen weight unit threading', () {
@@ -295,8 +271,19 @@ void main() {
       expect(find.text('80 kg'), findsOneWidget);
       expect(find.text('100 kg'), findsOneWidget);
 
-      // Total volume footer: 60*10 + 80*8 + 100*5 = 1,740.
-      expect(find.text('Total Volume: 1,740 kg'), findsOneWidget);
+      // Total volume strip: 60*10 + 80*8 + 100*5 = 1,740. Post-PR-#285
+      // device-verification, the floating Material `Icons.fitness_center`
+      // footer was replaced with a second 48dp surface2 strip that
+      // mirrors the top XP/PRs strip (label "Total volume" + Rajdhani
+      // numeric value). The strip's Text.rich emits the value as its
+      // own TextSpan so a `find.textContaining('1,740 kg')` matches the
+      // value span without coupling to the eyebrow label.
+      expect(find.textContaining('1,740 kg'), findsOneWidget);
+      expect(find.textContaining('Total volume'), findsOneWidget);
+      expect(
+        find.bySemanticsIdentifier('workout-detail-total-volume-strip'),
+        findsOneWidget,
+      );
 
       // No lbs anywhere.
       expect(find.textContaining('lbs'), findsNothing);
@@ -459,11 +446,68 @@ void main() {
         expect(find.text('80 lbs'), findsOneWidget);
         expect(find.text('100 lbs'), findsOneWidget);
 
-        // Total volume footer: same numeric value, different suffix.
-        expect(find.text('Total Volume: 1,740 lbs'), findsOneWidget);
+        // Total volume strip: same numeric value, different suffix. See
+        // the kg test above for the rationale on the strip-vs-footer
+        // change introduced post-PR-#285 device-verification.
+        expect(find.textContaining('1,740 lbs'), findsOneWidget);
+        expect(find.textContaining('Total volume'), findsOneWidget);
 
         // And kg must not appear anywhere in the rendered tree.
         expect(find.textContaining(' kg'), findsNothing);
+      },
+    );
+
+    // -----------------------------------------------------------------
+    // Detail-page PR row glyph — Fix 4 (UX-critic Q1).
+    // The previous `AppIcons.levelUp` SVG bled into the XP/level-up
+    // ceremony register. PR sets now render the same gold diamond glyph
+    // as the History feed card, sourced via RewardAccent so heroGold is
+    // gated through the scarcity scope. The effective color must be
+    // heroGold — guards against the same baked-color regression as the
+    // history-card diamond (numericSmall bakes textDim which would
+    // override the gold via DefaultTextStyle.merge).
+    // -----------------------------------------------------------------
+    testWidgets(
+      'PR set rows render gold diamond glyph via RewardAccent (UX-critic Q1)',
+      (tester) async {
+        final detail = makeDetail();
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            overrides: [
+              workoutDetailProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value(detail)),
+              workoutPRSetIdsProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value({'set-1'})),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // The diamond Text("◆") sits inside a RewardAccent on the PR row.
+        final diamondText = find.descendant(
+          of: find.byType(RewardAccent),
+          matching: find.text('◆'),
+        );
+        expect(diamondText, findsOneWidget);
+
+        // Walk to the rendered RichText leaf to assert effective color.
+        // The Text widget composes a RichText whose root span carries the
+        // merged style — RewardAccent's heroGold must win over the
+        // numericSmall textDim default.
+        final richText = find.descendant(
+          of: find.byType(RewardAccent),
+          matching: find.byType(RichText),
+        );
+        expect(richText, findsAtLeastNWidgets(1));
+        // First RichText descendant of a RewardAccent on this screen is
+        // the diamond glyph (the only RewardAccent on the screen now
+        // wraps the diamond Text — the Material levelUp SVG was removed).
+        final rendered = tester.widget<RichText>(richText.first);
+        expect(rendered.text.style?.color, AppColors.heroGold);
       },
     );
   });
