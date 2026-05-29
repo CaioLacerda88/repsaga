@@ -929,5 +929,7 @@
   "historyWeekRollupSets": "{sets} séries",
   "historyCardXpEyebrow": "+{xp} XP",
   "historyCardPrCount": "◆ {count} PR",
-  "historyDetailStrip": "+{xp} XP · {prs} PRs"
+  "historyDetailStripXpPart": "+{xp} XP",
+  "historyDetailStripPrPart": "{prs} PRs",
+  "historyWeekLabelCurrent": "Esta semana"
 }

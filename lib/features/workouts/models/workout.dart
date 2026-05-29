@@ -41,6 +41,18 @@ abstract class Workout with _$Workout {
     /// route through the aggregate RPC still construct valid [Workout]
     /// instances.
     @JsonKey(name: 'pr_count', defaultValue: 0) @Default(0) int prCount,
+
+    /// Total `sets` rows logged across the session's exercises.
+    ///
+    /// Sourced from the Phase 32 PR 32f `get_workout_history_with_aggregates`
+    /// RPC's `set_count` aggregate; powers the History week-header roll-up
+    /// (`"N sets · +M XP"`). Defaults to 0 so non-RPC paths (offline-cached
+    /// row reads, legacy reads that bypass the aggregate function) still
+    /// deserialize without explosion. See PR #285 Nit 16 — the field
+    /// closes the gap where `WeekGroup.totalSets` was always 0 in
+    /// production because no `setCountFor` callback was wired into the
+    /// History screen.
+    @JsonKey(name: 'set_count', defaultValue: 0) @Default(0) int setCount,
   }) = _Workout;
 
   factory Workout.fromJson(Map<String, dynamic> json) =>

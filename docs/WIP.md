@@ -15,7 +15,9 @@ the phase summary in PROJECT.md §4.
 
 **Source spec:** `docs/PROJECT.md` §3 Phase 32 → "PR 32f — History screen redesign".
 
-**Scope:** Redesign History list — sticky week headers (Monday-start, pt-BR locale-aware) with per-week roll-up (sets + heroGold XP total); per-card XP eyebrow (`+N XP` in heroGold `numericSmall`) + optional PR diamond (`◆ N PR` in dominant-BP hue, omitted when zero); workout detail screen gets a 48dp `surface2` header strip with `+N XP · N PRs` above the existing set-by-set log.
+**Scope:** Redesign History list — sticky week headers (Monday-start, pt-BR locale-aware) with per-week roll-up (sets + `hotViolet` XP total); per-card XP eyebrow (`+N XP` in `hotViolet` `numericSmall`) + optional PR diamond (`◆ N PR` wrapped in `RewardAccent` for `heroGold` via the sanctioned scarcity scope, omitted when zero); workout detail screen gets a 52dp `surface2` header strip with `+N XP` (hotViolet) and `M PRs` (RewardAccent → heroGold) above the existing set-by-set log, hidden entirely when both aggregates are zero.
+
+**Color-register split (locked post-PR-#285 review):** XP is the daily-driver progress metric — every workout produces XP, so it maps to `hotViolet` (structural-accent register). PR diamonds and the strip's PR span go through `RewardAccent`, the single sanctioned `heroGold` emitter. This preserves the reward-scarcity contract that `scripts/check_reward_accent.sh` enforces. Painting the per-card XP eyebrow gold would have made the entire feed read as "reward", eroding the dopamine payoff the palette is engineered to deliver.
 
 ### Boundary inventory (from Explore audit 2026-05-29)
 
@@ -92,15 +94,15 @@ the phase summary in PROJECT.md §4.
   - Preserve `RefreshIndicator` wrapping (still works around `CustomScrollView`)
   - Preserve empty-state branch (unchanged — no week headers when zero workouts)
 - [ ] `lib/features/workouts/ui/workout_history_screen.dart` `_WorkoutHistoryCard` (L175-261)
-  - Add XP eyebrow row ABOVE the title: `Text('+${workout.totalXp} XP', style: AppTextStyles.numericSmall.copyWith(color: AppColors.heroGold))`
-  - Add PR diamond row (rendered only when `workout.prCount > 0`): `Text('◆ ${workout.prCount} PR', style: ... dominant-BP hue)` — tech-lead picks the placement (next to XP? separate line? — keep it light)
+  - Add XP eyebrow row ABOVE the title — `Text(l10n.historyCardXpEyebrow(workout.totalXp))` painted with `AppTextStyles.numericSmall.copyWith(color: AppColors.hotViolet.withValues(alpha: 0.85))` (NOT heroGold — reward-scarcity rule, see PR #285 Blocker 4)
+  - Add PR diamond row (rendered only when `workout.prCount > 0`) wrapped in `RewardAccent` so the heroGold color flows through the sanctioned scope rather than a raw token reference (PR #285 Blocker 5)
   - Add Semantics identifiers `history-card-xp-eyebrow` + `history-card-pr-diamond`
 - [ ] `lib/features/workouts/ui/workout_detail_screen.dart`
   - Insert a new `SliverToBoxAdapter` BETWEEN the existing `SliverAppBar(pinned: true)` and the first content sliver
   - 48dp height, `surface2` background
-  - Renders `+N XP · M PRs` (XP in heroGold `numericSmall`, PRs in dominant-BP hue — or both in heroGold if simpler)
-  - Reuse `workoutPRSetIdsProvider(workoutId)` for the PR count (.length)
-  - Reuse the new RPC's XP for the XP total (or new `get_workout_xp(workoutId)` mini-RPC)
+  - `Text.rich` with two spans: XP in `hotViolet` (daily-driver), PR span rendered only when `prCount > 0` and wrapped in `RewardAccent` for heroGold via the scarcity scope
+  - PR count reads from `workout.prCount` (RPC source of truth) — NOT from `workoutPRSetIdsProvider.length`. The PR provider is still used for the gold-ring on individual set rows (different purpose). Single source of truth per PR #285 Important 8.
+  - Hidden entirely when `totalXp == 0 && prCount == 0` (PR #285 Important 7 — no negative-confirmation `+0 XP · 0 PRs` strip)
   - Semantics identifier `history-detail-strip`
 - [ ] `lib/l10n/app_en.arb` + `app_pt.arb`
   - `historyWeekLabel(date)` — e.g. EN: `"Week of {date}"`, pt-BR: `"Semana de {date}"`

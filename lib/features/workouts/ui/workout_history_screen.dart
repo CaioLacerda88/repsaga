@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/reward_accent.dart';
 import '../domain/workout_history_grouping.dart';
 import '../models/workout.dart';
 import '../providers/workout_history_providers.dart';
@@ -46,13 +48,13 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-    final notifier = ref.read(workoutHistoryProvider.notifier);
-    if (!notifier.hasMore) return;
+    final hasMore = ref.read(workoutHistoryProvider).value?.hasMore ?? false;
+    if (!hasMore) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
     // Load more when within 200px of the bottom.
     if (currentScroll >= maxScroll - 200) {
-      notifier.loadMore();
+      ref.read(workoutHistoryProvider.notifier).loadMore();
     }
   }
 
@@ -89,15 +91,33 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
             ],
           ),
         ),
-        data: (workouts) {
+        data: (historyState) {
+          final workouts = historyState.workouts;
           if (workouts.isEmpty) {
             return _EmptyHistoryBody(onStartWorkout: () => context.go('/home'));
           }
 
-          final notifier = ref.read(workoutHistoryProvider.notifier);
-          final showLoadingMore = notifier.isLoadingMore || notifier.hasMore;
+          // Reactively derived from the emitted state class so the load-more
+          // spinner reflects flag transitions without a separate ref.read.
+          // See PR #285 Blocker 2.
+          final showLoadingMore =
+              historyState.isLoadingMore || historyState.hasMore;
           final locale = Localizations.localeOf(context).toString();
-          final groups = groupByIsoWeek(workouts, locale);
+          // Per-workout set count comes from `Workout.setCount`, populated
+          // by the `get_workout_history_with_aggregates` RPC's `set_count`
+          // aggregate. Plumbing it through `setCountFor` is what makes the
+          // week-header roll-up render real numbers in production instead
+          // of always-zero. See PR #285 Nit 16.
+          final groups = groupByIsoWeek(
+            workouts,
+            locale,
+            setCountFor: (w) => w.setCount,
+          );
+          // Current-ISO-week Monday-anchor for the "This Week" header
+          // treatment. Read via `package:clock` so tests can pin a
+          // deterministic now via `withClock(Clock.fixed(...), ...)` —
+          // same pattern as `streakProvider`.
+          final currentWeekStart = _mondayOfWeek(clock.now().toLocal());
 
           return RefreshIndicator(
             onRefresh: () =>
@@ -110,9 +130,11 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
                   SliverPersistentHeader(
                     pinned: true,
                     delegate: WeekHeaderDelegate(
-                      weekLabel: l10n.historyWeekLabel(
-                        _formatWeekStart(group.weekStart, locale),
-                      ),
+                      weekLabel: group.weekStart == currentWeekStart
+                          ? l10n.historyWeekLabelCurrent
+                          : l10n.historyWeekLabel(
+                              _formatWeekStart(group.weekStart, locale),
+                            ),
                       rollupSetsLabel: l10n.historyWeekRollupSets(
                         group.totalSets,
                       ),
@@ -153,6 +175,21 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
   /// open.
   String _formatWeekStart(DateTime weekStart, String locale) {
     return DateFormat.MMMd(locale).format(weekStart);
+  }
+
+  /// Returns the Monday-at-00:00 local instant for the week containing
+  /// [date]. Pure-copy of `workout_history_grouping.dart`'s same helper
+  /// so the screen's "is this group the current ISO week?" check
+  /// computes the exact same anchor the grouping function used — the two
+  /// values are compared by equality, so divergence in either would
+  /// silently break the "This Week" label.
+  DateTime _mondayOfWeek(DateTime date) {
+    final daysSinceMonday = date.weekday - 1;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: daysSinceMonday));
   }
 }
 
@@ -251,10 +288,15 @@ class _WorkoutHistoryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Phase 32 PR 32f eyebrow row: heroGold XP total
-                      // anchors each card as a session-completed artifact.
-                      // Always renders (even at 0 XP) so the vertical
-                      // rhythm holds across the feed.
+                      // XP eyebrow — `hotViolet` (daily-driver progress
+                      // register), NOT `heroGold` (reserved for variable-
+                      // ratio rewards via RewardAccent). The eyebrow
+                      // renders on every card in the feed, so painting it
+                      // gold would erode the reward-scarcity contract that
+                      // `scripts/check_reward_accent.sh` enforces. See PR
+                      // #285 UX-critic memo (Blocker 4) — XP is an expected
+                      // outcome of every workout, mapping it to the
+                      // structural-accent color keeps the gold signal rare.
                       Semantics(
                         container: true,
                         explicitChildNodes: true,
@@ -262,7 +304,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
                         child: Text(
                           l10n.historyCardXpEyebrow(workout.totalXp),
                           style: AppTextStyles.numericSmall.copyWith(
-                            color: AppColors.heroGold,
+                            color: AppColors.hotViolet.withValues(alpha: 0.85),
                           ),
                         ),
                       ),
@@ -295,22 +337,25 @@ class _WorkoutHistoryCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // PR diamond — rendered only when prCount > 0. Per
-                      // UX-critic "no empty placeholders" rule the row
-                      // collapses entirely on a zero count rather than
-                      // showing "0 PR". Color matches the heroGold XP
-                      // eyebrow so the two reward-signal lines read as a
-                      // single visual block on PR-bearing sessions.
+                      // PR diamond — rendered only when prCount > 0 (UX
+                      // "no empty placeholders" rule). Wrapped in
+                      // `RewardAccent` so the heroGold color is emitted
+                      // through the sanctioned scope rather than a raw
+                      // `AppColors.heroGold` reference — this keeps the
+                      // reward-scarcity contract auditable
+                      // (`scripts/check_reward_accent.sh`) and visually
+                      // separates the PR signal from the violet XP
+                      // eyebrow. See PR #285 UX-critic memo (Blocker 5).
                       if (showPr) ...[
                         const SizedBox(height: 4),
                         Semantics(
                           container: true,
                           explicitChildNodes: true,
                           identifier: 'history-card-pr-diamond',
-                          child: Text(
-                            l10n.historyCardPrCount(workout.prCount),
-                            style: AppTextStyles.numericSmall.copyWith(
-                              color: AppColors.heroGold,
+                          child: RewardAccent(
+                            child: Text(
+                              l10n.historyCardPrCount(workout.prCount),
+                              style: AppTextStyles.numericSmall,
                             ),
                           ),
                         ),

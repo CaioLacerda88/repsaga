@@ -108,7 +108,11 @@ void main() {
       // 20-char placeholderOnly floor, so allow-list them explicitly.
       'historyCardXpEyebrow', // "+{xp} XP"
       'historyCardPrCount', // "◆ {count} PR"
-      'historyDetailStrip', // "+{xp} XP · {prs} PRs"
+      // PR #285 — detail strip split into two spans so XP (hotViolet) and
+      // PRs (heroGold via RewardAccent) can be colored independently.
+      // Both spans remain pure format on the gym-vernacular loanwords.
+      'historyDetailStripXpPart', // "+{xp} XP"
+      'historyDetailStripPrPart', // "{prs} PRs"
     };
 
     /// Pattern for format-only strings (only placeholders and punctuation).

@@ -230,7 +230,21 @@ class WorkoutRepository extends BaseRepository {
           'get_workout_history_with_aggregates',
           params: {'p_user_id': userId, 'p_limit': limit, 'p_offset': offset},
         );
-        final data = (result as List<dynamic>).cast<Map<String, dynamic>>();
+        // Defensive type guard (mirrors saveWorkout's BUG-004 pattern at
+        // L112-119): an RPC that hits an unhandled error path may return
+        // null or a non-list payload. A raw `as List<dynamic>` cast would
+        // surface as a native `_TypeError` and bypass `mapException`'s
+        // domain-error translation, leaving the cache-fallback branch in
+        // an inconsistent state. We translate to a typed
+        // `DatabaseException` here so the surrounding `mapException`
+        // wrapper keeps the layer contract intact. See PR #285 Important 6.
+        if (result is! List) {
+          throw const app.DatabaseException(
+            'get_workout_history_with_aggregates RPC returned unexpected type',
+            code: 'rpc_unexpected_type',
+          );
+        }
+        final data = result.cast<Map<String, dynamic>>();
 
         // Step 2: collect distinct exercise IDs across all workouts in
         // the page and batch-fetch their localized names. One RPC call,

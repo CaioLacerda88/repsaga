@@ -91,16 +91,11 @@ class _ProfileStub extends AsyncNotifier<Profile?> implements ProfileNotifier {
   dynamic noSuchMethod(Invocation invocation) {}
 }
 
-class _EmptyHistoryNotifier extends AsyncNotifier<List<Workout>>
+class _EmptyHistoryNotifier extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   @override
-  Future<List<Workout>> build() async => [];
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
+  Future<WorkoutHistoryState> build() async =>
+      (workouts: const <Workout>[], isLoadingMore: false, hasMore: false);
 
   @override
   Future<void> loadMore() async {}

@@ -55,19 +55,14 @@ class _RoutineStub extends AsyncNotifier<List<Routine>>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _HistoryStub extends AsyncNotifier<List<Workout>>
+class _HistoryStub extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   _HistoryStub(this.workouts);
   final List<Workout> workouts;
 
   @override
-  Future<List<Workout>> build() async => workouts;
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
+  Future<WorkoutHistoryState> build() async =>
+      (workouts: workouts, isLoadingMore: false, hasMore: false);
 
   @override
   Future<void> loadMore() async {}

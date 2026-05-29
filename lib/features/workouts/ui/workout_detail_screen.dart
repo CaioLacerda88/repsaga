@@ -79,13 +79,19 @@ class _WorkoutDetailBody extends ConsumerWidget {
     final allSets = detail.setsByExercise.values.expand((s) => s).toList();
     final totalVolume = WorkoutFormatters.calculateVolume(allSets);
 
-    // Phase 32 PR 32f: PR count for the 48dp strip reuses the existing
-    // `workoutPRSetIdsProvider` (the gold-ring sets resolver). Its `.length`
-    // is the number of PR sets in the session — same definition as the
-    // History feed's `prCount`, so the two surfaces agree on the value the
-    // user sees.
-    final prCount =
-        ref.watch(workoutPRSetIdsProvider(workout.id)).value?.length ?? 0;
+    // PR count comes from `workout.prCount` (set by the `get_workout_xp`
+    // RPC during the detail fetch) — single source of truth shared with
+    // the History feed's per-card diamond, so the two surfaces never
+    // disagree on the value. The gold-ring on individual set rows still
+    // uses `workoutPRSetIdsProvider` for which-set-was-the-PR resolution,
+    // but the aggregate count for the strip reads from the workout model
+    // directly. See PR #285 Important 8.
+    final prCount = workout.prCount;
+
+    // Hide the strip when both aggregates are zero — a "+0 XP · 0 PRs"
+    // line on an incomplete or warm-up-only session reads as negative
+    // confirmation, not steady-state rhythm. See PR #285 Important 7.
+    final showStrip = workout.totalXp > 0 || prCount > 0;
 
     return CustomScrollView(
       slivers: [
@@ -105,31 +111,54 @@ class _WorkoutDetailBody extends ConsumerWidget {
             ),
           ),
         ),
-        // Phase 32 PR 32f 48dp summary strip: surface2 background sits flush
-        // against the AppBar's bottom edge, carrying "+N XP · M PRs" with
-        // the XP digits in heroGold. Renders even when both aggregates are
-        // zero so the vertical rhythm stays consistent across the feed
-        // (UX-critic "no jump" — a missing strip would push the first
-        // exercise card up by 48dp on zero-XP sessions).
-        SliverToBoxAdapter(
-          child: Semantics(
-            container: true,
-            explicitChildNodes: true,
-            identifier: 'history-detail-strip',
-            child: Container(
-              height: 48,
-              color: AppColors.surface2,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.center,
-              child: Text(
-                l10n.historyDetailStrip(workout.totalXp, prCount),
-                style: AppTextStyles.numericSmall.copyWith(
-                  color: AppColors.heroGold,
+        // 48dp summary strip — `surface2` background sits flush against the
+        // AppBar's bottom edge. Color split via Text.rich: XP digits in
+        // `hotViolet` (daily-driver register), PR digits routed through
+        // RewardAccent (heroGold scarcity register). Hidden entirely when
+        // the session produced neither XP nor PRs. See PR #285 Important 7.
+        if (showStrip)
+          SliverToBoxAdapter(
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              identifier: 'history-detail-strip',
+              child: Container(
+                height: 48,
+                color: AppColors.surface2,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: l10n.historyDetailStripXpPart(workout.totalXp),
+                        style: AppTextStyles.numericSmall.copyWith(
+                          color: AppColors.hotViolet.withValues(alpha: 0.85),
+                        ),
+                      ),
+                      if (prCount > 0) ...[
+                        TextSpan(
+                          text: ' · ',
+                          style: AppTextStyles.numericSmall.copyWith(
+                            color: AppColors.textDim.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: RewardAccent(
+                            child: Text(
+                              l10n.historyDetailStripPrPart(prCount),
+                              style: AppTextStyles.numericSmall,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
         // Exercise cards
         SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {

@@ -2998,7 +2998,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String historyDetailStrip(int xp, int prs) {
-    return '+$xp XP · $prs PRs';
+  String historyDetailStripXpPart(int xp) {
+    return '+$xp XP';
   }
+
+  @override
+  String historyDetailStripPrPart(int prs) {
+    return '$prs PRs';
+  }
+
+  @override
+  String get historyWeekLabelCurrent => 'This Week';
 }

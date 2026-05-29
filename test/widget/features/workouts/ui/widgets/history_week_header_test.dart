@@ -28,7 +28,9 @@ void main() {
       expect(find.text('+340 XP'), findsOneWidget);
     });
 
-    testWidgets('header sits at 48dp tall', (tester) async {
+    testWidgets('header sits at section-heading register height', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         TestMaterialApp(
           theme: AppTheme.dark,
@@ -42,23 +44,27 @@ void main() {
         ),
       );
 
-      // Find the Container hosting the row + padding. Its rendered height
-      // is the explicit 48dp constraint passed in the widget.
+      // 52dp — section-heading register, one tier above the 48dp input
+      // default. See PR #285 Important 9: the prior 48dp height read as a
+      // chip/input row, not a heading; bumping to 52dp gives the strip
+      // the depth of a section divider.
       final headerFinder = find.byType(HistoryWeekHeader);
       final size = tester.getSize(headerFinder);
-      expect(size.height, 48);
+      expect(size.height, HistoryWeekHeader.height);
+      expect(HistoryWeekHeader.height, 52);
     });
   });
 
   group('WeekHeaderDelegate', () {
-    test('minExtent == maxExtent == 48', () {
+    test('minExtent == maxExtent == 52 (section-heading register)', () {
       const delegate = WeekHeaderDelegate(
         weekLabel: 'Week of May 18',
         rollupSetsLabel: '5 sets',
         xpValue: 100,
       );
-      expect(delegate.minExtent, 48);
-      expect(delegate.maxExtent, 48);
+      // See PR #285 Important 9 for the 48→52 bump rationale.
+      expect(delegate.minExtent, 52);
+      expect(delegate.maxExtent, 52);
     });
 
     test('shouldRebuild returns false on identical totals', () {

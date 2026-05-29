@@ -303,25 +303,28 @@ void main() {
     });
 
     // -----------------------------------------------------------------
-    // Phase 32 PR 32f — 48dp summary strip
+    // 48dp summary strip — XP (hotViolet) + PR (heroGold via RewardAccent)
     // -----------------------------------------------------------------
 
-    /// Helper: rebuilds [makeDetail] with explicit XP overrides on the
+    /// Helper: rebuilds [makeDetail] with explicit XP + PR overrides on the
     /// returned `workout` so the strip can be asserted at known values.
-    WorkoutDetail makeDetailWithXp({required int totalXp}) {
+    /// Post-PR-#285 the prCount on the strip is sourced from
+    /// `workout.prCount` (not the `workoutPRSetIdsProvider` length) —
+    /// single source of truth shared with the History feed's per-card
+    /// diamond.
+    WorkoutDetail makeDetailWithXp({required int totalXp, int prCount = 0}) {
       final detail = makeDetail();
       return (
-        workout: detail.workout.copyWith(totalXp: totalXp),
+        workout: detail.workout.copyWith(totalXp: totalXp, prCount: prCount),
         exercises: detail.exercises,
         setsByExercise: detail.setsByExercise,
       );
     }
 
     testWidgets(
-      'Phase 32 PR 32f: 48dp summary strip renders +N XP · M PRs above '
-      'exercise cards',
+      '48dp summary strip renders +N XP and M PRs above exercise cards',
       (tester) async {
-        final detail = makeDetailWithXp(totalXp: 340);
+        final detail = makeDetailWithXp(totalXp: 340, prCount: 2);
 
         await tester.pumpWidget(
           buildTestWidget(
@@ -338,13 +341,26 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Strip renders +340 XP · 2 PRs.
-        expect(find.text('+340 XP · 2 PRs'), findsOneWidget);
+        // The strip Text.rich splits XP from PRs across two spans so the
+        // colors can be assigned independently (hotViolet vs heroGold via
+        // RewardAccent). The XP + separator live as inline TextSpans on
+        // the host RichText (matched via textContaining since the host's
+        // rendered text concatenates "+340 XP · "); the PR portion is a
+        // WidgetSpan wrapping a Text widget that surfaces as its own
+        // discrete `Text("2 PRs")`. Assert both render, plus the strip's
+        // Semantics identifier is mounted.
+        expect(find.textContaining('+340 XP'), findsOneWidget);
+        expect(find.text('2 PRs'), findsOneWidget);
+        expect(
+          find.bySemanticsIdentifier('history-detail-strip'),
+          findsOneWidget,
+        );
       },
     );
 
-    testWidgets('Phase 32 PR 32f: strip still renders at +0 XP · 0 PRs '
-        '(no jump on zero sessions)', (tester) async {
+    testWidgets('strip hides entirely when both totalXp and prCount are zero', (
+      tester,
+    ) async {
       final detail = makeDetailWithXp(totalXp: 0);
 
       await tester.pumpWidget(
@@ -362,9 +378,38 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // Even on a zero session, the strip renders for vertical rhythm.
-      expect(find.text('+0 XP · 0 PRs'), findsOneWidget);
+      // No "+0 XP" anywhere — strip collapsed (no negative confirmation).
+      expect(find.text('+0 XP'), findsNothing);
+      expect(find.textContaining('PRs'), findsNothing);
     });
+
+    testWidgets(
+      'strip renders XP-only (no PR span) when prCount is zero but XP > 0',
+      (tester) async {
+        final detail = makeDetailWithXp(totalXp: 120);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            overrides: [
+              workoutDetailProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value(detail)),
+              workoutPRSetIdsProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value(<String>{})),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // XP span renders, PR span omitted. When prCount == 0 the
+        // Text.rich has only the single XP TextSpan, so the host
+        // RichText's text is exactly "+120 XP" (no trailing separator).
+        expect(find.text('+120 XP'), findsOneWidget);
+        expect(find.textContaining('PRs'), findsNothing);
+      },
+    );
 
     testWidgets(
       'Per-set weight row and total flip to lbs when profile weightUnit '

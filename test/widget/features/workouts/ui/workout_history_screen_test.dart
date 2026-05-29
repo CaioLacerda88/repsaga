@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +15,7 @@ import '../../../../helpers/test_material_app.dart';
 // Stubs
 // ---------------------------------------------------------------------------
 
-class _WorkoutHistoryStub extends AsyncNotifier<List<Workout>>
+class _WorkoutHistoryStub extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   _WorkoutHistoryStub({
     required this.workouts,
@@ -27,13 +28,11 @@ class _WorkoutHistoryStub extends AsyncNotifier<List<Workout>>
   final bool hasMoreValue;
 
   @override
-  Future<List<Workout>> build() async => workouts;
-
-  @override
-  bool get hasMore => hasMoreValue;
-
-  @override
-  bool get isLoadingMore => isLoadingMoreValue;
+  Future<WorkoutHistoryState> build() async => (
+    workouts: workouts,
+    isLoadingMore: isLoadingMoreValue,
+    hasMore: hasMoreValue,
+  );
 
   @override
   Future<void> loadMore() async {}
@@ -144,11 +143,11 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Phase 32 PR 32f: with sticky week headers + 5 cards the load-more
-        // sliver sits below the 600dp test viewport. Scroll the list to the
-        // bottom so the spinner builds. Same user-visible behaviour the
-        // original PO-028 contract pinned — the user perceives the spinner
-        // by scrolling toward the load-more boundary.
+        // With sticky week headers + 5 cards the load-more sliver sits
+        // below the 600dp test viewport. Scroll the list to the bottom so
+        // the spinner builds. Same user-visible behaviour the original
+        // PO-028 contract pinned — the user perceives the spinner by
+        // scrolling toward the load-more boundary.
         await tester.drag(
           find.byType(CustomScrollView),
           const Offset(0, -1000),
@@ -169,8 +168,8 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Phase 32 PR 32f: see the parallel PO-028 test above — scroll
-        // the list so the load-more sliver builds inside the viewport.
+        // See the parallel PO-028 test above — scroll the list so the
+        // load-more sliver builds inside the viewport.
         await tester.drag(
           find.byType(CustomScrollView),
           const Offset(0, -1000),
@@ -218,71 +217,102 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // Phase 32 PR 32f — sticky week headers + XP eyebrow + PR diamond
+  // Sticky week headers + XP eyebrow + PR diamond
   // -------------------------------------------------------------------------
 
-  group('WorkoutHistoryScreen — Phase 32 PR 32f redesign', () {
-    testWidgets('renders one sticky week header per ISO week group', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+  group(
+    'WorkoutHistoryScreen — sticky week headers + XP eyebrow + PR diamond',
+    () {
+      testWidgets('renders one sticky week header per ISO week group', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Two distinct weeks → two HistoryWeekHeader widgets.
+        expect(find.byType(HistoryWeekHeader), findsNWidgets(2));
+      });
+
+      testWidgets('per-card XP eyebrow renders +N XP for each workout', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Both card eyebrows AND week-header roll-ups carry the same "+N XP"
+        // text because each week has a single workout — the eyebrow and the
+        // roll-up share the same XP total. Pin the eyebrow count by its
+        // Semantics identifier rather than the raw text so the assertion
+        // distinguishes the card-level signal from the section-header
+        // signal.
+        final eyebrows = find.bySemanticsIdentifier('history-card-xp-eyebrow');
+        expect(eyebrows, findsNWidgets(2));
+
+        // And the per-card eyebrow text values are present in both the card
+        // eyebrow AND the week-header roll-up that shares the same XP total
+        // — two renders each. Explicit count (not `findsWidgets`) so a
+        // regression that drops the card eyebrow while keeping only the
+        // roll-up still trips the assertion. See PR #285 Important 12.
+        expect(find.text('+120 XP'), findsNWidgets(2));
+        expect(find.text('+250 XP'), findsNWidgets(2));
+      });
+
+      testWidgets(
+        'PR diamond renders only when prCount > 0 (omitted on zero)',
+        (tester) async {
+          await tester.pumpWidget(
+            buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // Week B workout has prCount: 2 → diamond renders.
+          expect(find.text('◆ 2 PR'), findsOneWidget);
+          // Week A workout has prCount: 0 → no PR row anywhere.
+          expect(find.textContaining('◆ 0'), findsNothing);
+        },
       );
-      await tester.pump();
-      await tester.pump();
 
-      // Two distinct weeks → two HistoryWeekHeader widgets.
-      expect(find.byType(HistoryWeekHeader), findsNWidgets(2));
-    });
+      testWidgets('CustomScrollView replaces the flat ListView', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+        );
+        await tester.pump();
+        await tester.pump();
 
-    testWidgets('per-card XP eyebrow renders +N XP for each workout', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+        expect(find.byType(CustomScrollView), findsOneWidget);
+        // No top-level ListView — the redesign migrated to slivers.
+        expect(find.byType(ListView), findsNothing);
+      });
+
+      testWidgets(
+        'current ISO week renders "This Week" instead of the date format',
+        (tester) async {
+          // Pin "now" to a Wednesday inside the same week as weekB
+          // (2026-05-26 falls in the Mon 2026-05-25 → Sun 2026-05-31
+          // ISO week). With clock fixed, weekB's group should pick up
+          // the "This Week" treatment while weekA keeps the date label.
+          final now = DateTime(2026, 5, 27, 10);
+          await withClock(Clock.fixed(now), () async {
+            await tester.pumpWidget(
+              buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+            );
+            await tester.pump();
+            await tester.pump();
+
+            expect(find.text('This Week'), findsOneWidget);
+            expect(find.textContaining('Week of'), findsOneWidget);
+          });
+        },
       );
-      await tester.pump();
-      await tester.pump();
-
-      // Both card eyebrows AND week-header roll-ups carry the same "+N XP"
-      // text because each week has a single workout — the eyebrow and the
-      // roll-up share the same XP total. Pin the eyebrow count by its
-      // Semantics identifier rather than the raw text so the assertion
-      // distinguishes the card-level signal from the section-header
-      // signal.
-      final eyebrows = find.bySemanticsIdentifier('history-card-xp-eyebrow');
-      expect(eyebrows, findsNWidgets(2));
-
-      // And the per-card eyebrow text values are present overall.
-      expect(find.text('+120 XP'), findsWidgets);
-      expect(find.text('+250 XP'), findsWidgets);
-    });
-
-    testWidgets('PR diamond renders only when prCount > 0 (omitted on zero)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      // Week B workout has prCount: 2 → diamond renders.
-      expect(find.text('◆ 2 PR'), findsOneWidget);
-      // Week A workout has prCount: 0 → no PR row anywhere.
-      expect(find.textContaining('◆ 0'), findsNothing);
-    });
-
-    testWidgets('CustomScrollView replaces the flat ListView', (tester) async {
-      await tester.pumpWidget(
-        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
-      );
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.byType(CustomScrollView), findsOneWidget);
-      // No top-level ListView — the redesign migrated to slivers.
-      expect(find.byType(ListView), findsNothing);
-    });
-  });
+    },
+  );
 }

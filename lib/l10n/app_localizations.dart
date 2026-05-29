@@ -5124,7 +5124,7 @@ abstract class AppLocalizations {
   /// **'Week of {date}'**
   String historyWeekLabel(String date);
 
-  /// Phase 32 PR 32f — Sets portion of the sticky week-header roll-up on the History screen. Rendered alongside the XP total separately so the XP digits can pick up heroGold while the sets portion stays in default text color.
+  /// Phase 32 PR 32f — Sets portion of the sticky week-header roll-up on the History screen. Rendered alongside the XP total separately so the XP digits can pick up heroGold while the sets portion stays in default text color. TODO(pre-launch): swap to ICU plural ({sets, plural, =1{1 set} other{{sets} sets}}) — accepted as a known gap for PR #285; '1 sets' renders for single-set weeks until then.
   ///
   /// In en, this message translates to:
   /// **'{sets} sets'**
@@ -5142,11 +5142,23 @@ abstract class AppLocalizations {
   /// **'◆ {count} PR'**
   String historyCardPrCount(int count);
 
-  /// Phase 32 PR 32f — 48dp surface2 summary strip on the Workout Detail screen. Sits between the SliverAppBar and the first exercise card. Renders even when both aggregates are zero to keep the vertical rhythm consistent across sessions.
+  /// Phase 32 PR 32f — XP portion of the 48dp summary strip on the Workout Detail screen. Rendered in hotViolet (daily-driver register) via Text.rich so the PR portion can pick up heroGold via RewardAccent independently. Replaces the prior single-string historyDetailStrip after PR #285 split the colors per the reward-scarcity rule.
   ///
   /// In en, this message translates to:
-  /// **'+{xp} XP · {prs} PRs'**
-  String historyDetailStrip(int xp, int prs);
+  /// **'+{xp} XP'**
+  String historyDetailStripXpPart(int xp);
+
+  /// Phase 32 PR 32f — PR portion of the 48dp summary strip on the Workout Detail screen. Rendered inside a RewardAccent scope so the digits + label inherit heroGold. Rendered only when prCount > 0; the leading separator dot is supplied by the screen layer.
+  ///
+  /// In en, this message translates to:
+  /// **'{prs} PRs'**
+  String historyDetailStripPrPart(int prs);
+
+  /// Phase 32 PR 32f — Sticky week-header label for the current ISO week (Monday-of-week == Monday of today). Replaces the date-formatted historyWeekLabel for the current week so the heading reads as a relative anchor instead of repeating a date the user already knows.
+  ///
+  /// In en, this message translates to:
+  /// **'This Week'**
+  String get historyWeekLabelCurrent;
 }
 
 class _AppLocalizationsDelegate

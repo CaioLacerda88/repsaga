@@ -18,19 +18,14 @@ import 'package:repsaga/features/workouts/ui/widgets/last_session_line.dart';
 import '../../../../fixtures/test_factories.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
-class _HistoryStub extends AsyncNotifier<List<Workout>>
+class _HistoryStub extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   _HistoryStub(this.workouts);
   final List<Workout> workouts;
 
   @override
-  Future<List<Workout>> build() async => workouts;
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
+  Future<WorkoutHistoryState> build() async =>
+      (workouts: workouts, isLoadingMore: false, hasMore: false);
 
   @override
   Future<void> loadMore() async {}

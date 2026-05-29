@@ -100,6 +100,7 @@ RETURNS TABLE(
   created_at timestamptz,
   total_xp int,
   pr_count int,
+  set_count int,
   workout_exercises jsonb
 )
 LANGUAGE sql
@@ -107,12 +108,29 @@ STABLE
 SECURITY INVOKER
 SET search_path = public
 AS $$
+  -- Explicit column list (not `SELECT w.*`) so that adding columns to the
+  -- `workouts` table downstream (e.g. the Phase 26e `routine_id` from
+  -- migration 00063, or any future column) can't accidentally re-slot the
+  -- final SELECT's positional binding against this function's
+  -- `RETURNS TABLE(...)` signature. See PR #285 review (Blocker 1).
   WITH page AS (
-    SELECT w.*
+    SELECT
+      w.id,
+      w.user_id,
+      w.name,
+      w.started_at,
+      w.finished_at,
+      w.duration_seconds,
+      w.is_active,
+      w.notes,
+      w.created_at
     FROM workouts w
     WHERE w.user_id = p_user_id
       AND w.is_active = false
       AND w.finished_at IS NOT NULL
+    -- Outer ORDER BY drives the result order. The CTE-level ORDER BY only
+    -- matters as a LIMIT-window discriminator; LIMIT alone with the outer
+    -- sort would re-order across pages, so keep it.
     ORDER BY w.finished_at DESC
     LIMIT p_limit
     OFFSET p_offset
@@ -135,6 +153,19 @@ AS $$
     LEFT JOIN personal_records pr   ON pr.set_id = s.id
     GROUP BY page.id
   ),
+  -- Set count per session — total `sets` rows joined through workout_exercises
+  -- to the page workout. Powers the History week-header roll-up
+  -- ("N sets · M XP"). LEFT JOINs + COALESCE so a session with zero logged
+  -- sets still surfaces as 0 in the aggregate, not as a missing row.
+  set_per_session AS (
+    SELECT
+      page.id AS workout_id,
+      COUNT(s.*)::int AS set_count
+    FROM page
+    LEFT JOIN workout_exercises we ON we.workout_id = page.id
+    LEFT JOIN sets s                ON s.workout_exercise_id = we.id
+    GROUP BY page.id
+  ),
   wes_per_session AS (
     SELECT
       page.id AS workout_id,
@@ -151,6 +182,9 @@ AS $$
     LEFT JOIN workout_exercises we ON we.workout_id = page.id
     GROUP BY page.id
   )
+  -- Explicit column list (not `SELECT p.*`) so the positional binding to
+  -- `RETURNS TABLE(...)` slots can never silently re-slot when `workouts`
+  -- gains a new column. See PR #285 review (Blocker 1).
   SELECT
     p.id,
     p.user_id,
@@ -163,11 +197,15 @@ AS $$
     p.created_at,
     COALESCE(xp.total_xp, 0)  AS total_xp,
     COALESCE(pr.pr_count, 0)  AS pr_count,
+    COALESCE(sc.set_count, 0) AS set_count,
     COALESCE(wes.workout_exercises, '[]'::jsonb) AS workout_exercises
   FROM page p
   LEFT JOIN xp_per_session  xp  ON xp.workout_id  = p.id
   LEFT JOIN pr_per_session  pr  ON pr.workout_id  = p.id
+  LEFT JOIN set_per_session sc  ON sc.workout_id  = p.id
   LEFT JOIN wes_per_session wes ON wes.workout_id = p.id
+  -- Final sort: LEFT JOINs do not preserve the page CTE's ordering, so the
+  -- outer ORDER BY is the authoritative sort for the rows the caller sees.
   ORDER BY p.finished_at DESC;
 $$;
 
