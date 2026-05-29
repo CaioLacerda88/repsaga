@@ -355,6 +355,20 @@ void main() {
           find.bySemanticsIdentifier('history-detail-strip'),
           findsOneWidget,
         );
+
+        // Reward-scarcity contract: the PR portion of the strip must be
+        // rendered inside a RewardAccent widget (heroGold gated through the
+        // scarcity scope). A raw AppColors.heroGold reference would bypass
+        // the reward-scarcity audit script — this type check pins the tree.
+        // The WidgetSpan child is a Text wrapping the PR count; its nearest
+        // RewardAccent ancestor must exist.
+        expect(
+          find.descendant(
+            of: find.byType(RewardAccent),
+            matching: find.textContaining('PRs'),
+          ),
+          findsOneWidget,
+        );
       },
     );
 

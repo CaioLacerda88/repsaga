@@ -7,6 +7,7 @@ import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/history_week_header.dart';
 import 'package:repsaga/features/workouts/ui/workout_history_screen.dart';
+import 'package:repsaga/shared/widgets/reward_accent.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
@@ -33,6 +34,29 @@ class _WorkoutHistoryStub extends AsyncNotifier<WorkoutHistoryState>
     isLoadingMore: isLoadingMoreValue,
     hasMore: hasMoreValue,
   );
+
+  @override
+  Future<void> loadMore() async {}
+
+  @override
+  Future<void> refresh() async {}
+}
+
+/// A stub that lets tests push new [WorkoutHistoryState] snapshots mid-test
+/// via [push], so the reactivity contract (isLoadingMore flag transition
+/// rebuilds the spinner WITHOUT changing the workouts list) can be pinned.
+class _MutableWorkoutHistoryStub extends AsyncNotifier<WorkoutHistoryState>
+    implements WorkoutHistoryNotifier {
+  _MutableWorkoutHistoryStub(this._initial);
+
+  final WorkoutHistoryState _initial;
+
+  @override
+  Future<WorkoutHistoryState> build() async => _initial;
+
+  void push(WorkoutHistoryState next) {
+    state = AsyncData(next);
+  }
 
   @override
   Future<void> loadMore() async {}
@@ -311,6 +335,136 @@ void main() {
             expect(find.text('This Week'), findsOneWidget);
             expect(find.textContaining('Week of'), findsOneWidget);
           });
+        },
+      );
+
+      // -----------------------------------------------------------------------
+      // Reactivity contract — PR #285 Blocker 2
+      // The spinner must appear when isLoadingMore transitions false → true
+      // WITHOUT any change to the workouts list, proving the state-class emit
+      // (not a stale notifier getter) drives the rebuild.
+      // -----------------------------------------------------------------------
+
+      testWidgets(
+        'PR #285 Blocker 2: spinner appears when isLoadingMore transitions '
+        'false → true without workouts-list change',
+        (tester) async {
+          final workouts = makeWorkoutsInTwoWeeks();
+          // Initial state: list fully loaded (hasMore: false, isLoadingMore:
+          // false) — no spinner. This baseline guarantees the subsequent
+          // spinner is caused by the isLoadingMore flag flip alone, not by
+          // the hasMore flag being true at pump-time.
+          final stub = _MutableWorkoutHistoryStub((
+            workouts: workouts,
+            isLoadingMore: false,
+            hasMore: false,
+          ));
+
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                workoutHistoryProvider.overrideWith(() => stub),
+              ],
+              child: TestMaterialApp(
+                theme: AppTheme.dark,
+                home: const WorkoutHistoryScreen(),
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // Baseline: no spinner (hasMore: false, isLoadingMore: false).
+          expect(find.byType(CircularProgressIndicator), findsNothing);
+
+          // Mutate the state — same workouts, only isLoadingMore flips to true.
+          // This simulates the mid-loadMore window where the API call is
+          // in-flight. The workouts list is identical — the rebuild must be
+          // driven by the state-class emit, not a list diff.
+          stub.push((
+            workouts: workouts,
+            isLoadingMore: true,
+            hasMore: false,
+          ));
+          await tester.pump();
+
+          // Scroll to bottom so the load-more sliver enters the viewport.
+          await tester.drag(
+            find.byType(CustomScrollView),
+            const Offset(0, -1000),
+          );
+          await tester.pump();
+
+          // The spinner must now be visible — the rebuild was driven by the
+          // isLoadingMore flag transition in the emitted state object, not by
+          // a workouts-list diff.
+          expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        },
+      );
+
+      // -----------------------------------------------------------------------
+      // Reward-scarcity contract — PR #285 UX-critic Blocker 5
+      // The PR diamond must be rendered via RewardAccent (heroGold scope),
+      // not as a raw Text or Icon with a hardcoded color.
+      // -----------------------------------------------------------------------
+
+      testWidgets(
+        'PR diamond is rendered via RewardAccent widget (reward-scarcity '
+        'contract)',
+        (tester) async {
+          await tester.pumpWidget(
+            buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // weekB has prCount: 2 → diamond is in the tree.
+          // Assert the Text is a descendant of a RewardAccent instance so the
+          // heroGold color is provably gated through the scarcity widget,
+          // not a raw AppColors.heroGold reference. check_reward_accent.sh
+          // gates the source, this test gates the rendered tree.
+          expect(
+            find.descendant(
+              of: find.byType(RewardAccent),
+              matching: find.textContaining('PR'),
+            ),
+            findsAtLeastNWidgets(1),
+          );
+        },
+      );
+
+      // -----------------------------------------------------------------------
+      // XP eyebrow color — hotViolet (daily-driver register, NOT heroGold)
+      // -----------------------------------------------------------------------
+
+      testWidgets(
+        'XP eyebrow text uses hotViolet color (not heroGold)',
+        (tester) async {
+          await tester.pumpWidget(
+            buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          // Find the Text widget inside the first history-card-xp-eyebrow
+          // Semantics container and verify its resolved color is hotViolet
+          // (with alpha 0.85). The color assertion gates that the eyebrow
+          // is not accidentally painted heroGold (which would erode
+          // reward-scarcity — XP is an expected outcome, not a rare prize).
+          final eyebrowContainer = find.bySemanticsIdentifier(
+            'history-card-xp-eyebrow',
+          );
+          expect(eyebrowContainer, findsAtLeastNWidgets(1));
+          final eyebrowText = find.descendant(
+            of: eyebrowContainer.first,
+            matching: find.byType(Text),
+          );
+          expect(eyebrowText, findsOneWidget);
+          final textWidget = tester.widget<Text>(eyebrowText);
+          expect(
+            textWidget.style?.color,
+            AppColors.hotViolet.withValues(alpha: 0.85),
+          );
         },
       );
     },
