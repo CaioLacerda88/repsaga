@@ -2988,4 +2988,29 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get cameraPermissionDeniedForAvatar =>
       'Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso.';
+
+  @override
+  String historyWeekLabel(String date) {
+    return 'Semana de $date';
+  }
+
+  @override
+  String historyWeekRollupSets(int sets) {
+    return '$sets séries';
+  }
+
+  @override
+  String historyCardXpEyebrow(int xp) {
+    return '+$xp XP';
+  }
+
+  @override
+  String historyCardPrCount(int count) {
+    return '◆ $count PR';
+  }
+
+  @override
+  String historyDetailStrip(int xp, int prs) {
+    return '+$xp XP · $prs PRs';
+  }
 }

@@ -79,6 +79,14 @@ class _WorkoutDetailBody extends ConsumerWidget {
     final allSets = detail.setsByExercise.values.expand((s) => s).toList();
     final totalVolume = WorkoutFormatters.calculateVolume(allSets);
 
+    // Phase 32 PR 32f: PR count for the 48dp strip reuses the existing
+    // `workoutPRSetIdsProvider` (the gold-ring sets resolver). Its `.length`
+    // is the number of PR sets in the session — same definition as the
+    // History feed's `prCount`, so the two surfaces agree on the value the
+    // user sees.
+    final prCount =
+        ref.watch(workoutPRSetIdsProvider(workout.id)).value?.length ?? 0;
+
     return CustomScrollView(
       slivers: [
         SliverAppBar(
@@ -92,6 +100,31 @@ class _WorkoutDetailBody extends ConsumerWidget {
                 '$dateText  ·  $durationText',
                 style: AppTextStyles.body.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Phase 32 PR 32f 48dp summary strip: surface2 background sits flush
+        // against the AppBar's bottom edge, carrying "+N XP · M PRs" with
+        // the XP digits in heroGold. Renders even when both aggregates are
+        // zero so the vertical rhythm stays consistent across the feed
+        // (UX-critic "no jump" — a missing strip would push the first
+        // exercise card up by 48dp on zero-XP sessions).
+        SliverToBoxAdapter(
+          child: Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'history-detail-strip',
+            child: Container(
+              height: 48,
+              color: AppColors.surface2,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              child: Text(
+                l10n.historyDetailStrip(workout.totalXp, prCount),
+                style: AppTextStyles.numericSmall.copyWith(
+                  color: AppColors.heroGold,
                 ),
               ),
             ),

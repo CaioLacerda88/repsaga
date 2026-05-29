@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
+import 'package:repsaga/features/workouts/ui/widgets/history_week_header.dart';
 import 'package:repsaga/features/workouts/ui/workout_history_screen.dart';
 
 import '../../../../fixtures/test_factories.dart';
@@ -57,6 +58,27 @@ List<Workout> makeWorkouts(int count) {
       ),
     );
   });
+}
+
+/// Two workouts in distinct ISO weeks — used to assert that the sticky
+/// week header sliver renders one section per week. Uses fixed local
+/// dates so the test is deterministic regardless of when it runs.
+List<Workout> makeWorkoutsInTwoWeeks() {
+  final weekA = Workout.fromJson(
+    TestWorkoutFactory.create(
+      id: 'week-a',
+      name: 'Week A workout',
+      finishedAt: DateTime(2026, 5, 19, 10).toUtc().toIso8601String(),
+    ),
+  ).copyWith(totalXp: 120, prCount: 0);
+  final weekB = Workout.fromJson(
+    TestWorkoutFactory.create(
+      id: 'week-b',
+      name: 'Week B workout',
+      finishedAt: DateTime(2026, 5, 26, 10).toUtc().toIso8601String(),
+    ),
+  ).copyWith(totalXp: 250, prCount: 2);
+  return [weekB, weekA];
 }
 
 Widget buildTestWidget({
@@ -122,7 +144,17 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // The load-more spinner appears as an extra item at the bottom of the list.
+        // Phase 32 PR 32f: with sticky week headers + 5 cards the load-more
+        // sliver sits below the 600dp test viewport. Scroll the list to the
+        // bottom so the spinner builds. Same user-visible behaviour the
+        // original PO-028 contract pinned — the user perceives the spinner
+        // by scrolling toward the load-more boundary.
+        await tester.drag(
+          find.byType(CustomScrollView),
+          const Offset(0, -1000),
+        );
+        await tester.pump();
+
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
       },
     );
@@ -137,7 +169,14 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // hasMore also causes the loading item to render (next page anticipated).
+        // Phase 32 PR 32f: see the parallel PO-028 test above — scroll
+        // the list so the load-more sliver builds inside the viewport.
+        await tester.drag(
+          find.byType(CustomScrollView),
+          const Offset(0, -1000),
+        );
+        await tester.pump();
+
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
       },
     );
@@ -175,6 +214,75 @@ void main() {
       await tester.pump();
 
       expect(find.text('History'), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 32 PR 32f — sticky week headers + XP eyebrow + PR diamond
+  // -------------------------------------------------------------------------
+
+  group('WorkoutHistoryScreen — Phase 32 PR 32f redesign', () {
+    testWidgets('renders one sticky week header per ISO week group', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Two distinct weeks → two HistoryWeekHeader widgets.
+      expect(find.byType(HistoryWeekHeader), findsNWidgets(2));
+    });
+
+    testWidgets('per-card XP eyebrow renders +N XP for each workout', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Both card eyebrows AND week-header roll-ups carry the same "+N XP"
+      // text because each week has a single workout — the eyebrow and the
+      // roll-up share the same XP total. Pin the eyebrow count by its
+      // Semantics identifier rather than the raw text so the assertion
+      // distinguishes the card-level signal from the section-header
+      // signal.
+      final eyebrows = find.bySemanticsIdentifier('history-card-xp-eyebrow');
+      expect(eyebrows, findsNWidgets(2));
+
+      // And the per-card eyebrow text values are present overall.
+      expect(find.text('+120 XP'), findsWidgets);
+      expect(find.text('+250 XP'), findsWidgets);
+    });
+
+    testWidgets('PR diamond renders only when prCount > 0 (omitted on zero)', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Week B workout has prCount: 2 → diamond renders.
+      expect(find.text('◆ 2 PR'), findsOneWidget);
+      // Week A workout has prCount: 0 → no PR row anywhere.
+      expect(find.textContaining('◆ 0'), findsNothing);
+    });
+
+    testWidgets('CustomScrollView replaces the flat ListView', (tester) async {
+      await tester.pumpWidget(
+        buildTestWidget(workouts: makeWorkoutsInTwoWeeks()),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(CustomScrollView), findsOneWidget);
+      // No top-level ListView — the redesign migrated to slivers.
+      expect(find.byType(ListView), findsNothing);
     });
   });
 }

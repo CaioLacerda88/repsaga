@@ -72,3 +72,52 @@ test.describe('Workout history pt locale', () => {
     ).not.toBeVisible({ timeout: 3_000 });
   });
 });
+
+// =============================================================================
+// SMOKE: Phase 32 PR 32f — sticky week header + per-card XP eyebrow
+// Reuses the same fullHistoryPt user (5 seeded workouts → at least one week
+// group + one card). XP values are seed-dependent, so we pin presence,
+// NOT specific numerics.
+// =============================================================================
+
+test.describe('History redesign affordances', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('fullHistoryPt').email,
+      getUser('fullHistoryPt').password,
+    );
+  });
+
+  test('should render sticky week header and per-card XP eyebrow on history list', async ({
+    page,
+  }) => {
+    await navigateToTab(page, 'Home');
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expect(page.locator(HOME.lastSessionLine)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(HOME.lastSessionLine).click();
+
+    await expect(page.locator(HISTORY.heading)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Sticky week header: at least one must render once the feed loads.
+    // Use .first() because the seed may produce 2+ week groups depending
+    // on when global-setup ran.
+    await expect(page.locator(HISTORY.weekHeader).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Per-card XP eyebrow: at least one card with an eyebrow must render.
+    // No assertion on the XP value itself — that's seed-dependent and the
+    // exact number flakes when global-setup re-seeds.
+    await expect(page.locator(HISTORY.cardXpEyebrow).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+});

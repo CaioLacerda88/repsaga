@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
+import '../domain/workout_history_grouping.dart';
 import '../models/workout.dart';
 import '../providers/workout_history_providers.dart';
+import 'widgets/history_week_header.dart';
 
 /// Displays paginated workout history with pull-to-refresh.
+///
+/// Phase 32 PR 32f redesign: replaces the flat `ListView.builder` with a
+/// `CustomScrollView` that intersperses sticky [WeekHeaderDelegate]s
+/// between [SliverList] bodies — one section per ISO week (Monday-start,
+/// locale-aware), the most recent week first. The scroll listener and
+/// `RefreshIndicator` are preserved verbatim — slivers respect the same
+/// `ScrollController` API and the indicator wraps any `Scrollable`.
 class WorkoutHistoryScreen extends ConsumerStatefulWidget {
   const WorkoutHistoryScreen({super.key});
 
@@ -86,32 +96,63 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen> {
 
           final notifier = ref.read(workoutHistoryProvider.notifier);
           final showLoadingMore = notifier.isLoadingMore || notifier.hasMore;
+          final locale = Localizations.localeOf(context).toString();
+          final groups = groupByIsoWeek(workouts, locale);
 
           return RefreshIndicator(
             onRefresh: () =>
                 ref.read(workoutHistoryProvider.notifier).refresh(),
-            child: ListView.builder(
+            child: CustomScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.only(top: 8, bottom: 88),
-              itemCount: workouts.length + (showLoadingMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index >= workouts.length) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                return _WorkoutHistoryCard(
-                  workout: workouts[index],
-                  onTap: () =>
-                      context.go('/home/history/${workouts[index].id}'),
-                );
-              },
+              slivers: [
+                const SliverPadding(padding: EdgeInsets.only(top: 8)),
+                for (final group in groups) ...[
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: WeekHeaderDelegate(
+                      weekLabel: l10n.historyWeekLabel(
+                        _formatWeekStart(group.weekStart, locale),
+                      ),
+                      rollupSetsLabel: l10n.historyWeekRollupSets(
+                        group.totalSets,
+                      ),
+                      xpValue: group.totalXp,
+                    ),
+                  ),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final workout = group.workouts[index];
+                      return _WorkoutHistoryCard(
+                        workout: workout,
+                        onTap: () => context.go('/home/history/${workout.id}'),
+                      );
+                    }, childCount: group.workouts.length),
+                  ),
+                ],
+                if (showLoadingMore)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 88)),
+              ],
             ),
           );
         },
       ),
     );
+  }
+
+  /// Formats a Monday-of-week local-midnight instant as the date display
+  /// used inside the localized `historyWeekLabel` ARB template (e.g.
+  /// "May 20" / "20 mai"). Drops the year because the History feed never
+  /// surfaces workouts old enough for the year context to matter — the
+  /// most-recent-first ordering puts users near the top of their feed at
+  /// open.
+  String _formatWeekStart(DateTime weekStart, String locale) {
+    return DateFormat.MMMd(locale).format(weekStart);
   }
 }
 
@@ -192,6 +233,7 @@ class _WorkoutHistoryCard extends StatelessWidget {
       workout.durationSeconds,
       l10n: l10n,
     );
+    final showPr = workout.prCount > 0;
 
     return Semantics(
       label: '${workout.name}, $dateText, $durationText',
@@ -209,6 +251,22 @@ class _WorkoutHistoryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Phase 32 PR 32f eyebrow row: heroGold XP total
+                      // anchors each card as a session-completed artifact.
+                      // Always renders (even at 0 XP) so the vertical
+                      // rhythm holds across the feed.
+                      Semantics(
+                        container: true,
+                        explicitChildNodes: true,
+                        identifier: 'history-card-xp-eyebrow',
+                        child: Text(
+                          l10n.historyCardXpEyebrow(workout.totalXp),
+                          style: AppTextStyles.numericSmall.copyWith(
+                            color: AppColors.heroGold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
                       Text(
                         workout.name,
                         style: AppTextStyles.title,
@@ -237,6 +295,26 @@ class _WorkoutHistoryCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      // PR diamond — rendered only when prCount > 0. Per
+                      // UX-critic "no empty placeholders" rule the row
+                      // collapses entirely on a zero count rather than
+                      // showing "0 PR". Color matches the heroGold XP
+                      // eyebrow so the two reward-signal lines read as a
+                      // single visual block on PR-bearing sessions.
+                      if (showPr) ...[
+                        const SizedBox(height: 4),
+                        Semantics(
+                          container: true,
+                          explicitChildNodes: true,
+                          identifier: 'history-card-pr-diamond',
+                          child: Text(
+                            l10n.historyCardPrCount(workout.prCount),
+                            style: AppTextStyles.numericSmall.copyWith(
+                              color: AppColors.heroGold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -2350,5 +2350,33 @@
     "placeholders": { "name": { "type": "String" } }
   },
   "cameraPermissionDeniedForAvatar": "Camera access denied. Try the gallery, or open settings to grant access.",
-  "@cameraPermissionDeniedForAvatar": { "description": "Phase 32 PR 32e — Snackbar copy shown when the user denies camera permission during the avatar-upload flow. Distinct from avatarUploadFailed (network/storage error) so the user sees the actual cause. The screen layer pairs this with an Open settings action when the OS reports permanentlyDenied." }
+  "@cameraPermissionDeniedForAvatar": { "description": "Phase 32 PR 32e — Snackbar copy shown when the user denies camera permission during the avatar-upload flow. Distinct from avatarUploadFailed (network/storage error) so the user sees the actual cause. The screen layer pairs this with an Open settings action when the OS reports permanentlyDenied." },
+  "historyWeekLabel": "Week of {date}",
+  "@historyWeekLabel": {
+    "description": "Phase 32 PR 32f — Sticky week-header eyebrow label on the History screen. {date} is the localized Monday-of-week display (e.g. 'May 20').",
+    "placeholders": { "date": { "type": "String" } }
+  },
+  "historyWeekRollupSets": "{sets} sets",
+  "@historyWeekRollupSets": {
+    "description": "Phase 32 PR 32f — Sets portion of the sticky week-header roll-up on the History screen. Rendered alongside the XP total separately so the XP digits can pick up heroGold while the sets portion stays in default text color.",
+    "placeholders": { "sets": { "type": "int" } }
+  },
+  "historyCardXpEyebrow": "+{xp} XP",
+  "@historyCardXpEyebrow": {
+    "description": "Phase 32 PR 32f — Per-workout XP eyebrow line above the title row on each History card. Rendered in heroGold via AppTextStyles.numericSmall.",
+    "placeholders": { "xp": { "type": "int" } }
+  },
+  "historyCardPrCount": "◆ {count} PR",
+  "@historyCardPrCount": {
+    "description": "Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon.",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "historyDetailStrip": "+{xp} XP · {prs} PRs",
+  "@historyDetailStrip": {
+    "description": "Phase 32 PR 32f — 48dp surface2 summary strip on the Workout Detail screen. Sits between the SliverAppBar and the first exercise card. Renders even when both aggregates are zero to keep the vertical rhythm consistent across sessions.",
+    "placeholders": {
+      "xp": { "type": "int" },
+      "prs": { "type": "int" }
+    }
+  }
 }

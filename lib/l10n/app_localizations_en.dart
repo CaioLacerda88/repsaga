@@ -2976,4 +2976,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cameraPermissionDeniedForAvatar =>
       'Camera access denied. Try the gallery, or open settings to grant access.';
+
+  @override
+  String historyWeekLabel(String date) {
+    return 'Week of $date';
+  }
+
+  @override
+  String historyWeekRollupSets(int sets) {
+    return '$sets sets';
+  }
+
+  @override
+  String historyCardXpEyebrow(int xp) {
+    return '+$xp XP';
+  }
+
+  @override
+  String historyCardPrCount(int count) {
+    return '◆ $count PR';
+  }
+
+  @override
+  String historyDetailStrip(int xp, int prs) {
+    return '+$xp XP · $prs PRs';
+  }
 }

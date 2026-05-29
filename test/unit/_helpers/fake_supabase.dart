@@ -10,13 +10,67 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 /// A fake SupabaseClient that routes `from(table)` to a single builder.
+///
+/// **`rpc(...)` support (Phase 32 PR 32f):** an optional [rpcResponses] map
+/// keyed by function name lets callers seed RPC results without touching
+/// `from(...)`. When [fakeBuilder] carries an `error`, [rpc] propagates that
+/// error too — same offline-simulation pattern used by `.from().select()`
+/// callers — so cache fallback paths in `WorkoutRepository.getWorkoutHistory`
+/// (which calls `_client.rpc(...)` post-Phase-32) still exercise the
+/// existing offline-throw branch. Unseeded RPC names fall back to
+/// [fakeBuilder]'s `.data` list — keeping existing single-source tests
+/// working without per-test rewiring.
 class FakeSupabaseClient extends Fake implements supabase.SupabaseClient {
-  FakeSupabaseClient(this.fakeBuilder);
+  FakeSupabaseClient(this.fakeBuilder, {Map<String, Object?>? rpcResponses})
+    : rpcResponses = rpcResponses ?? const {};
 
   final FakeQueryBuilder fakeBuilder;
+  final Map<String, Object?> rpcResponses;
 
   @override
   supabase.SupabaseQueryBuilder from(String table) => fakeBuilder;
+
+  @override
+  supabase.PostgrestFilterBuilder<T> rpc<T>(
+    String fn, {
+    Map<String, dynamic>? params,
+    dynamic get,
+  }) {
+    return _FakeRpcResultBuilder<T>(() async {
+          if (fakeBuilder.error != null) {
+            throw fakeBuilder.error!;
+          }
+          if (rpcResponses.containsKey(fn)) {
+            return rpcResponses[fn];
+          }
+          // Fallback: surface the FakeQueryBuilder's `data` list so legacy tests
+          // that don't seed `rpcResponses` keep returning the same workout
+          // payload they were seeded with.
+          return fakeBuilder.data;
+        })
+        as supabase.PostgrestFilterBuilder<T>;
+  }
+}
+
+/// Terminal future for rpc() chains used by [FakeSupabaseClient]. Mirrors
+/// the simpler shape used by `test/fixtures/rpc_fakes.dart` but accepts
+/// `Object?` so callers can return either a list or a single map (e.g.
+/// `get_workout_xp` returns a single row).
+class _FakeRpcResultBuilder<T> extends Fake
+    implements supabase.PostgrestFilterBuilder<T> {
+  _FakeRpcResultBuilder(this._produce);
+
+  final FutureOr<Object?> Function() _produce;
+
+  Future<T> _resolve() async {
+    final result = await _produce();
+    return result as T;
+  }
+
+  @override
+  Future<S> then<S>(FutureOr<S> Function(T) onValue, {Function? onError}) {
+    return _resolve().then<S>(onValue, onError: onError);
+  }
 }
 
 /// A fake client that routes `from(table)` to different builders per table.

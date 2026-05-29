@@ -302,6 +302,70 @@ void main() {
       expect(find.textContaining('lbs'), findsNothing);
     });
 
+    // -----------------------------------------------------------------
+    // Phase 32 PR 32f — 48dp summary strip
+    // -----------------------------------------------------------------
+
+    /// Helper: rebuilds [makeDetail] with explicit XP overrides on the
+    /// returned `workout` so the strip can be asserted at known values.
+    WorkoutDetail makeDetailWithXp({required int totalXp}) {
+      final detail = makeDetail();
+      return (
+        workout: detail.workout.copyWith(totalXp: totalXp),
+        exercises: detail.exercises,
+        setsByExercise: detail.setsByExercise,
+      );
+    }
+
+    testWidgets(
+      'Phase 32 PR 32f: 48dp summary strip renders +N XP · M PRs above '
+      'exercise cards',
+      (tester) async {
+        final detail = makeDetailWithXp(totalXp: 340);
+
+        await tester.pumpWidget(
+          buildTestWidget(
+            overrides: [
+              workoutDetailProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value(detail)),
+              workoutPRSetIdsProvider(
+                'w-1',
+              ).overrideWith((ref) => Future.value({'set-1', 'set-2'})),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Strip renders +340 XP · 2 PRs.
+        expect(find.text('+340 XP · 2 PRs'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Phase 32 PR 32f: strip still renders at +0 XP · 0 PRs '
+        '(no jump on zero sessions)', (tester) async {
+      final detail = makeDetailWithXp(totalXp: 0);
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          overrides: [
+            workoutDetailProvider(
+              'w-1',
+            ).overrideWith((ref) => Future.value(detail)),
+            workoutPRSetIdsProvider(
+              'w-1',
+            ).overrideWith((ref) => Future.value(<String>{})),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Even on a zero session, the strip renders for vertical rhythm.
+      expect(find.text('+0 XP · 0 PRs'), findsOneWidget);
+    });
+
     testWidgets(
       'Per-set weight row and total flip to lbs when profile weightUnit '
       'is lbs',

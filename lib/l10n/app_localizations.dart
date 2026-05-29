@@ -5117,6 +5117,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Camera access denied. Try the gallery, or open settings to grant access.'**
   String get cameraPermissionDeniedForAvatar;
+
+  /// Phase 32 PR 32f — Sticky week-header eyebrow label on the History screen. {date} is the localized Monday-of-week display (e.g. 'May 20').
+  ///
+  /// In en, this message translates to:
+  /// **'Week of {date}'**
+  String historyWeekLabel(String date);
+
+  /// Phase 32 PR 32f — Sets portion of the sticky week-header roll-up on the History screen. Rendered alongside the XP total separately so the XP digits can pick up heroGold while the sets portion stays in default text color.
+  ///
+  /// In en, this message translates to:
+  /// **'{sets} sets'**
+  String historyWeekRollupSets(int sets);
+
+  /// Phase 32 PR 32f — Per-workout XP eyebrow line above the title row on each History card. Rendered in heroGold via AppTextStyles.numericSmall.
+  ///
+  /// In en, this message translates to:
+  /// **'+{xp} XP'**
+  String historyCardXpEyebrow(int xp);
+
+  /// Phase 32 PR 32f — Per-workout PR diamond row on a History card. Rendered only when prCount > 0 — omitted entirely when zero (UX-critic 'no empty placeholders' rule). The leading diamond glyph is part of the literal, not a separate icon.
+  ///
+  /// In en, this message translates to:
+  /// **'◆ {count} PR'**
+  String historyCardPrCount(int count);
+
+  /// Phase 32 PR 32f — 48dp surface2 summary strip on the Workout Detail screen. Sits between the SliverAppBar and the first exercise card. Renders even when both aggregates are zero to keep the vertical rhythm consistent across sessions.
+  ///
+  /// In en, this message translates to:
+  /// **'+{xp} XP · {prs} PRs'**
+  String historyDetailStrip(int xp, int prs);
 }
 
 class _AppLocalizationsDelegate

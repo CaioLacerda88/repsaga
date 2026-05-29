@@ -597,6 +597,34 @@ export const HISTORY = {
   emptyStateCta: '[flt-semantics-identifier="history-empty-cta"]',
   /** Retry button shown on error state — Semantics(identifier: 'history-retry') */
   retryButton: '[flt-semantics-identifier="history-retry"]',
+  /**
+   * Phase 32 PR 32f — Sticky week header (48dp surface2 row). Renders one
+   * per ISO week group at the top of each section. Pinned during scroll.
+   * Semantics(identifier: 'history-week-header')
+   */
+  weekHeader: '[flt-semantics-identifier="history-week-header"]',
+  /**
+   * Phase 32 PR 32f — Per-card "+N XP" eyebrow in heroGold above the title
+   * row. Always present (renders even at 0 XP). One per workout card.
+   * Semantics(identifier: 'history-card-xp-eyebrow')
+   */
+  cardXpEyebrow: '[flt-semantics-identifier="history-card-xp-eyebrow"]',
+  /**
+   * Phase 32 PR 32f — Per-card "◆ N PR" diamond row. Rendered only when
+   * the workout's prCount > 0 — omitted entirely on zero (per the
+   * "no empty placeholders" rule). Use `.count() === 0` to assert
+   * absence; use `.first()` when at least one is expected.
+   * Semantics(identifier: 'history-card-pr-diamond')
+   */
+  cardPrDiamond: '[flt-semantics-identifier="history-card-pr-diamond"]',
+  /**
+   * Phase 32 PR 32f — 48dp surface2 summary strip on the Workout Detail
+   * screen. Sits between the SliverAppBar and the first exercise card.
+   * Renders "+N XP · M PRs" with XP digits in heroGold. Always present
+   * (rendered even at zero aggregates).
+   * Semantics(identifier: 'history-detail-strip')
+   */
+  detailStrip: '[flt-semantics-identifier="history-detail-strip"]',
 } as const;
 
 // ---------------------------------------------------------------------------

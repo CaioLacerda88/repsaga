@@ -100,6 +100,15 @@ void main() {
       // pure format (placeholders + arrow glyph). 22 chars trips the
       // placeholderOnly length floor, so allow-list it explicitly.
       'postSessionRankUpArrow', // "Rank {fromRank} → {toRank}"
+      // Phase 32 PR 32f — History feed format strings. "XP" + "PR" are
+      // gym-vernacular loanwords used identically in pt-BR + en
+      // (same precedent as `postSessionXpLabel` /
+      // `rankUpOverflowFlipbookLabel`); the rest is pure format
+      // (placeholders + diamond glyph + middle dot). These exceed the
+      // 20-char placeholderOnly floor, so allow-list them explicitly.
+      'historyCardXpEyebrow', // "+{xp} XP"
+      'historyCardPrCount', // "◆ {count} PR"
+      'historyDetailStrip', // "+{xp} XP · {prs} PRs"
     };
 
     /// Pattern for format-only strings (only placeholders and punctuation).
