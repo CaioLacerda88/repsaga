@@ -378,7 +378,7 @@ history screen redesign with sticky week headers + per-card XP.
 | 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | DONE (#279) |
 | 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
 | 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
-| 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache | 4-5d | NOT STARTED |
+| 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache + Home/Saga RuneHalo substitution + private-bucket signed URLs + tappable halo + size bump + Exercises AppBar title | 4-5d | DONE (#283) |
 | 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
 | 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | DONE (#281) |
@@ -487,30 +487,52 @@ try/catches to a single provider-construction catch. No migration —
 `analytics_events.name` is free-form text + `props jsonb` (see migration
 00015). Paywall events deferred to Launch Phase 16b.
 
-#### PR 32e — Profile avatar default + upload
+#### PR 32e — Profile avatar default + upload — DONE (#283)
 
-**Files to create**
-- `lib/features/profile/ui/widgets/profile_avatar.dart` — monogram + dominant-BP-hue → `hotViolet` gradient. Day-0 fallback gradient: `abyss` → `primaryViolet`. Takes `user.displayName` initial (Rajdhani 700, white). 64dp default size, configurable.
-- `lib/features/profile/ui/widgets/avatar_crop_sheet.dart` — bottom-sheet modal with circular crop mask, pinch-to-zoom + drag-to-reposition. Confirm button thumb-reachable.
-- `lib/features/profile/data/avatar_repository.dart` — Supabase Storage upload (`avatars/{user_id}.jpg`) + Hive optimistic cache + invalidation on profile update
-- `supabase/migrations/0006Z_avatars_bucket.sql` — Storage bucket + RLS (read-public, write-own-row-only)
+Shipped a distinctive `ProfileAvatar` (RadialGradient Day-0 `primaryViolet → abyss`
+glow vs LinearGradient trained `dominantBodyPartHue → hotViolet` sweep; monogram
+Rajdhani 700 white; CachedNetworkImage on uploaded photos). Bottom-sheet
+`AvatarCropSheet` with circular mask + pinch-zoom + drag-to-reposition
+(48dp buttons, sealed `AvatarCropResult` discriminating cancel/success/error).
+`AvatarRepository` uploads to private bucket via 1-year **signed URLs** (LGPD/GDPR
+compliance — bucket flipped from public to private mid-PR per the
+`feedback_data_protection_compliance` rule; migration 00069 locked it down +
+own-prefix SELECT RLS). Hive `userPrefs` stores URL + companion
+`avatarUrlCacheExpiresAt` for expiry-aware fast-path; `regenerateSignedUrl`
+refreshes on cache miss. `Profile.avatarUrl` Freezed field added (DB column
+already existed at `profiles.avatar_url`). `upsertProfile` omit-on-null
+discipline.
 
-**Files to modify**
-- `lib/features/profile/ui/profile_settings_screen.dart` (or wherever `IdentityCard` lives) — swap `CircleAvatar` for `ProfileAvatar`
-- `lib/features/profile/data/user_profile.dart` (model) — add `avatar_url` nullable field; mirror SQL nullability per `cluster_jsonb_payload_vs_typed_dart`
-- Home `CharacterCard` keeps `RuneHalo` unchanged; share cards stay avatar-free (D3 frame is avatar-free by design)
+**RuneHalo substitution** — Home `CharacterCard` (48dp, up from 40dp) + Saga
+`SagaHeader` (44dp, up from 36dp) drop the abstract rune figure and embed
+`ProfileAvatar(compact: true)` inside the glow ring on all 4 state subtrees
+(dormant rotation now wraps only the glow shell so the avatar doesn't spin;
+radiant drops the gold tint argument since gold tinting a photo is wrong).
+Both surfaces become tappable via `GestureDetector(onTap: context.push('/profile/settings'))`
+per UX-critic memo — workout-context accidental-tap risk made direct picker
+the wrong call; the upload UI stays anchored to the IdentityCard. `_compactSizeThreshold`
+bumped 48→52 keeps the new sizes on the compact glow-pad.
 
-**Test plan**
-- Widget: monogram renders correct gradient for each of 6 dominant body parts
-- Widget: avatar with `avatar_url` set renders network image (NetworkImage mocked)
-- Behavior: upload flow happy path (image_picker mock → crop → upload → optimistic local cache reflects new avatar before network resolves)
-- Visual verification per CLAUDE.md step 9 on physical Android
+**IdentityCard polish** — `ProfileAvatar` (64dp) + `_CameraEditBadge` (22dp,
+hotViolet camera icon on surface2, surface border) for tappability affordance.
+Loading scrim during upload (`avatarUploadInProgressProvider`-driven). New
+`compact: bool` param suppresses badge + scrim + semantics + sub-30dp monogram
+when nested in RuneHalo. Camera-permission-denied snackbar copy distinct from
+upload-failed (with Open-Settings action on permanently denied). Semantics
+label localized (`avatarSemanticsLabel(name)` in EN + pt-BR).
 
-**Acceptance**
-- Default avatar visibly differs from previous flat-violet monogram per UX-critic mockup
-- Upload + crop works on physical Android
-- `image_picker` already in pubspec (Phase 30b) — no new dep
-- Hive cache invalidates on profile update; no stale avatar after change
+**Exercises title consistency** — `ExerciseListScreen` swapped its 28sp inline
+`Padding+Text` outlier for the standard `Scaffold(appBar: AppBar(title: Text(l10n.exercises)))`
+pattern matching Saga/History/Profile (theme's `appBarTitle` = Rajdhani 600 18sp
+centered). Drops the hardcoded `fontSize: 28` token bypass.
+
+Two migrations (00068 + 00069) applied to hosted Supabase mid-PR for device
+verification. 56 → 64+ tests (15 unit + 22 widget for ProfileAvatar; 19 for
+RuneHalo substitution incl. dormant-rotation-doesn't-wrap-avatar pin; +5 for
+character_card/saga_header tap-navigation; 11 for AvatarRepository signed-URL
+contract). Physical-Android verified end-to-end on Galaxy S938B (Android 16 /
+API 36): Day-0 vs trained gradient distinction, halo-state machine integrity,
+upload flow with signed URLs, tappable navigation, Exercises title consistency.
 
 #### PR 32f — History screen redesign
 
