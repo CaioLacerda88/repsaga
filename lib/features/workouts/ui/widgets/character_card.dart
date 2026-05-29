@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
@@ -195,11 +196,35 @@ class _HeaderRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Column 1: 40dp rune halo. Below RuneHalo's 48dp compact threshold,
-        // so the static states render with the compact glow-pad (Phase 26b
-        // retrospective: prevents the legacy +60dp glow from blowing out the
-        // home card's vertical rhythm).
-        RuneHalo(state: sheet.haloState, size: 40),
+        // Column 1: 48dp rune halo wrapped as a tappable target that
+        // navigates to Profile Settings (Phase 32 PR 32e scope add — per
+        // UX-critic memo: improve discoverability of the upload flow without
+        // inviting accidental taps in workout context). Tap routes to
+        // `/profile/settings`, NOT directly to the upload picker — the halo
+        // is a read-anchor RPG signal, not an edit surface, and the upload
+        // UI is already purpose-built on the IdentityCard. No badge inside
+        // the compact halo (would visually compete with the glow signal).
+        //
+        // Size bumped 40→48 to match the Pokemon GO trainer-figure register
+        // (the closest RPG-conditioning-photo analogue) while staying within
+        // the card's column budget. Still below RuneHalo's bumped 52dp
+        // compact threshold so static states keep the compact glow-pad.
+        //
+        // Semantics: identifier 'home-character-avatar' + button:true +
+        // explicitChildNodes:true per cluster_semantics_identifier_pair_rule
+        // — the inner ProfileAvatar's own Semantics nodes must not interfere
+        // with the AOM exposing this as a tappable target.
+        Semantics(
+          container: true,
+          explicitChildNodes: true,
+          identifier: 'home-character-avatar',
+          button: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.push('/profile/settings'),
+            child: RuneHalo(state: sheet.haloState, size: 48),
+          ),
+        ),
         const SizedBox(width: 12),
         // Column 2: level numeral + LVL tag + class label + title.
         Expanded(

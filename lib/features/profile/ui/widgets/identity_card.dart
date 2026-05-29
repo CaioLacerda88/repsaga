@@ -6,52 +6,88 @@ import '../../../../core/theme/radii.dart';
 import '../../../../features/auth/providers/auth_providers.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../providers/profile_providers.dart';
+import 'profile_avatar.dart';
 
 /// Avatar + display-name + email card at the top of the profile settings
-/// screen. Tap on the name opens the rename dialog.
-class IdentityCard extends StatelessWidget {
+/// screen. Tap on the name opens the rename dialog; tap on the avatar
+/// dispatches the [onAvatarTap] callback (typically opening the
+/// picker → crop → upload flow on the parent screen).
+class IdentityCard extends ConsumerWidget {
   const IdentityCard({
     super.key,
     required this.displayName,
     required this.email,
+    required this.avatarSemanticsLabel,
     this.loading = false,
     this.onEditName,
+    this.onAvatarTap,
   });
 
   final String? displayName;
   final String email;
+
+  /// Pre-localized semantics label for the avatar surface. Resolved at
+  /// the screen layer via `l10n.avatarSemanticsLabel(name)` and passed in
+  /// — per `feedback_widget_l10n_parameterization` the widget never
+  /// reads [AppLocalizations.of] for tunable text.
+  final String avatarSemanticsLabel;
+
   final bool loading;
   final VoidCallback? onEditName;
 
+  /// Tap callback for the avatar (drives the picker → crop → upload flow
+  /// on the parent screen). When null the avatar is rendered but not
+  /// tappable.
+  final VoidCallback? onAvatarTap;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final name = displayName ?? l10n.gymUser;
+    final uploadInProgress = ref.watch(avatarUploadInProgressProvider);
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: theme.colorScheme.primary,
-              child: Text(
-                (displayName?.isNotEmpty == true
-                        ? displayName![0]
-                        : email.isNotEmpty
-                        ? email[0]
-                        : '?')
-                    .toUpperCase(),
-                // [AppTextStyles.headline] = Rajdhani 600 24dp — the
-                // bundled SemiBold weight. Prior `headlineMedium +
-                // FontWeight.bold` requested Rajdhani 700, which IS
-                // bundled but the call site mixed token + raw weight
-                // override; routing through the token directly avoids
-                // unbundled-weight risk and reads cleaner.
-                style: AppTextStyles.headline.copyWith(
-                  color: theme.colorScheme.onPrimary,
+            // `ProfileAvatar` carries the monogram / gradient / uploaded-
+            // image render path. We forward the display name + email so
+            // the monogram derives from the IdentityCard's own props
+            // instead of double-reading providers; uploadInProgress drives
+            // the loading scrim on top of the disc.
+            //
+            // cluster: semantics-identifier-pair-rule — `container:true +
+            // explicitChildNodes:true` is required for the AOM to surface
+            // the identifier as a stable hit target; without
+            // `explicitChildNodes` the monogram glyph would merge into
+            // the parent's label and break the role.
+            Semantics(
+              container: true,
+              explicitChildNodes: true,
+              identifier: 'identity-card-avatar',
+              button: onAvatarTap != null,
+              child: GestureDetector(
+                onTap: onAvatarTap,
+                behavior: HitTestBehavior.opaque,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ProfileAvatar(
+                      size: 64,
+                      displayName:
+                          displayName ?? (email.isNotEmpty ? email : null),
+                      loading: uploadInProgress,
+                      semanticsLabel: avatarSemanticsLabel,
+                    ),
+                    if (onAvatarTap != null)
+                      const Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: _CameraEditBadge(),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -114,6 +150,38 @@ class _LoadingPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox(height: 16, child: LinearProgressIndicator());
+  }
+}
+
+/// Small camera-icon badge anchored to the bottom-right of the avatar so
+/// the surface reads as tappable. Without this affordance the avatar
+/// looks like a passive monogram disc — the gesture detector is
+/// invisible to first-time users. The badge persists after the first
+/// upload (still tappable to replace the picture).
+class _CameraEditBadge extends StatelessWidget {
+  const _CameraEditBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    // 22dp diameter (not 20dp): provides 5dp icon padding instead of 4dp so
+    // the camera glyph stays readable on 160dpi devices without looking
+    // oversized at the 64dp avatar register.
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface2,
+        border: Border.all(color: AppColors.surface, width: 1),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.camera_alt_outlined,
+          size: 12,
+          color: AppColors.hotViolet,
+        ),
+      ),
+    );
   }
 }
 

@@ -2951,4 +2951,41 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get postSessionXpEarnedLabel => 'XP GANHO';
+
+  @override
+  String get avatarPickerSheetTitle => 'Escolha a origem do avatar';
+
+  @override
+  String get avatarPickerCamera => 'Tirar foto';
+
+  @override
+  String get avatarPickerGallery => 'Escolher da galeria';
+
+  @override
+  String get avatarPickerCancel => 'Cancelar';
+
+  @override
+  String get avatarCropSheetTitle => 'Posicione seu avatar';
+
+  @override
+  String get avatarCropSheetConfirm => 'Usar esta';
+
+  @override
+  String get avatarCropSheetCancel => 'Cancelar';
+
+  @override
+  String get avatarUploadSuccess => 'Avatar atualizado.';
+
+  @override
+  String get avatarUploadFailed =>
+      'Não consegui atualizar seu avatar. Tente de novo.';
+
+  @override
+  String avatarSemanticsLabel(String name) {
+    return 'Avatar do perfil de $name';
+  }
+
+  @override
+  String get cameraPermissionDeniedForAvatar =>
+      'Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso.';
 }

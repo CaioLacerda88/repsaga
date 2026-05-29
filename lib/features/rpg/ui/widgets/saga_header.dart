@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -52,11 +53,28 @@ class SagaHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Column 1: 36dp rune.
+          // Column 1: 44dp rune wrapped as a tappable target that navigates
+          // to Profile Settings (Phase 32 PR 32e scope add — per UX-critic
+          // memo). Tap routes to `/profile/settings`, NOT directly to the
+          // upload picker — the halo is a read-anchor RPG signal, not an
+          // edit surface, and the upload UI is already purpose-built on the
+          // IdentityCard. The 'rune-halo' identifier stays (referenced by
+          // existing E2E specs); button:true + explicitChildNodes:true added
+          // per cluster_semantics_identifier_pair_rule so the AOM exposes
+          // the GestureDetector as a tappable target. Size bumped 36→44 to
+          // match Home's 48dp register while staying within the Saga
+          // header's vertical rhythm. Still below RuneHalo's bumped 52dp
+          // compact threshold so static states keep the compact glow-pad.
           Semantics(
             container: true,
+            explicitChildNodes: true,
             identifier: 'rune-halo',
-            child: RuneHalo(state: haloState, size: 36),
+            button: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.push('/profile/settings'),
+              child: RuneHalo(state: haloState, size: 44),
+            ),
           ),
           const SizedBox(width: 16),
           // Column 2: 56sp level numeral + 10sp LVL tag.

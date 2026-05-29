@@ -635,6 +635,20 @@ export const PROFILE = {
    */
   languageOption: (locale: 'en' | 'pt') =>
     `[flt-semantics-identifier="language-option-${locale}"]`,
+  /**
+   * Phase 32 PR 32e — IdentityCard avatar (ProfileAvatar widget).
+   * Semantics(identifier: 'identity-card-avatar'). Tappable when the user
+   * is signed in — opens the picker → crop → upload flow. The E2E spec
+   * only asserts visibility + tappability; the camera/gallery picker is
+   * OS-level and untestable by Playwright.
+   */
+  identityCardAvatar: '[flt-semantics-identifier="identity-card-avatar"]',
+  /**
+   * Phase 32 PR 32e — Avatar picker bottom sheet root.
+   * Semantics(identifier: 'avatar-picker-sheet'). Opens after tapping the
+   * identityCardAvatar selector.
+   */
+  avatarPickerSheet: '[flt-semantics-identifier="avatar-picker-sheet"]',
 } as const;
 
 // ---------------------------------------------------------------------------

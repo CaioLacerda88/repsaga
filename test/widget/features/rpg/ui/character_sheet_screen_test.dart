@@ -15,6 +15,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
+import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
@@ -38,6 +41,32 @@ import 'package:repsaga/l10n/app_localizations.dart';
 // The animation controller runs repeat() in both modes, so this file uses
 // manual tester.pump() advances instead of pumpAndSettle (which would hang).
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+
+/// Stub ProfileNotifier — RuneHalo embeds ProfileAvatar (Phase 32 PR 32e
+/// scope add); the avatar resolves identity through these providers.
+/// Without the override `currentUserEmailProvider` touches
+/// `Supabase.instance` which isn't initialized in the widget-test harness.
+class _StubProfileNotifier extends AsyncNotifier<Profile?>
+    implements ProfileNotifier {
+  _StubProfileNotifier(this._profile);
+  final Profile? _profile;
+
+  @override
+  Future<Profile?> build() async => _profile;
+
+  @override
+  Future<void> saveOnboardingProfile({
+    required String displayName,
+    required String fitnessLevel,
+    int trainingFrequencyPerWeek = 3,
+  }) async {}
+
+  @override
+  Future<void> updateTrainingFrequency(int frequency) async {}
+
+  @override
+  Future<void> toggleWeightUnit() async {}
+}
 
 BodyPartSheetEntry _entry({
   required BodyPart bp,
@@ -170,6 +199,12 @@ Widget _buildApp(CharacterSheetState state) {
     overrides: [
       characterSheetProvider.overrideWith((_) => AsyncData(state)),
       rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+      // RuneHalo embeds ProfileAvatar (Phase 32 PR 32e scope add).
+      profileProvider.overrideWith(
+        () =>
+            _StubProfileNotifier(const Profile(id: 'u', displayName: 'Alice')),
+      ),
+      currentUserEmailProvider.overrideWithValue('alice@example.test'),
     ],
     child: MaterialApp.router(
       theme: AppTheme.dark,

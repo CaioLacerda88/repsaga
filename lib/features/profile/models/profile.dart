@@ -47,6 +47,18 @@ abstract class Profile with _$Profile {
     // to the male table — same backward-compat semantics as the Python
     // sim's `female=False` default. Settable from profile settings.
     Gender? gender,
+    // Phase 32 PR 32e — public URL of the user's uploaded avatar (lives in
+    // the public `avatars` Supabase Storage bucket at path
+    // `{userId}.jpg`). NULL when the user has not uploaded one yet — the
+    // `ProfileAvatar` widget falls back to the dominant-body-part hue
+    // gradient + monogram in that case.
+    //
+    // Per `cluster_jsonb_payload_vs_typed_dart`: the SQL column
+    // `profiles.avatar_url text` is nullable, so the Dart field mirrors
+    // that with `String?`. Reads/writes route through
+    // `AvatarRepository.uploadAvatar` which stamps a `?v=<timestamp>`
+    // cache-bust suffix into the URL before persisting it here.
+    String? avatarUrl,
   }) = _Profile;
 
   factory Profile.fromJson(Map<String, dynamic> json) =>

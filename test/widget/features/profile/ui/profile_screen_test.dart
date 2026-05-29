@@ -1,20 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
-import 'dart:io';
-
-import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/profile/ui/profile_settings_screen.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:mocktail/mocktail.dart';
+import 'package:repsaga/features/profile/ui/widgets/profile_avatar.dart';
+import 'package:repsaga/features/workouts/data/share_service.dart';
+import 'package:repsaga/features/workouts/providers/share_controller.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../../helpers/test_material_app.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
@@ -60,6 +65,12 @@ Widget buildTestWidget({
       // safe — the listener only acts on emissions, and these tests don't
       // exercise sign-out/sign-in flows.
       authStateProvider.overrideWith((ref) => const Stream<AuthState>.empty()),
+      // PR #283 review (Blocker 3): the avatar widget now reads
+      // currentUserEmailProvider directly via ref.watch (no defensive
+      // try/catch). The provider's lambda hits Supabase.instance which
+      // is unset in widget tests — stub it explicitly with the
+      // mocked-out email value.
+      currentUserEmailProvider.overrideWithValue(email),
     ],
     child: TestMaterialApp(
       theme: AppTheme.dark,
@@ -232,13 +243,16 @@ void main() {
       verifyNever(() => mockAuth.signOut());
     });
 
-    testWidgets('shows monogram in CircleAvatar', (tester) async {
+    testWidgets('IdentityCard renders the ProfileAvatar surface', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildTestWidget(profile: null));
       await tester.pump();
 
-      // When profile is null and email is provided, the monogram shows the
-      // first letter of the email (uppercased).
-      expect(find.byType(CircleAvatar), findsOneWidget);
+      // Contract pin: the IdentityCard wires exactly one ProfileAvatar.
+      // Gradient color + monogram derivation are covered by
+      // `profile_avatar_test.dart`.
+      expect(find.byType(ProfileAvatar), findsOneWidget);
     });
 
     testWidgets(
@@ -271,6 +285,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -313,6 +330,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -348,6 +368,9 @@ void main() {
             authStateProvider.overrideWith(
               (ref) => const Stream<AuthState>.empty(),
             ),
+            // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+            // currentUserEmailProvider directly.
+            currentUserEmailProvider.overrideWithValue(null),
           ],
           child: TestMaterialApp(
             theme: AppTheme.dark,
@@ -433,6 +456,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -477,6 +503,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -684,6 +713,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -702,6 +734,123 @@ void main() {
         // After cancelling, the profile screen should still be visible.
         expect(find.text('Profile'), findsOneWidget);
         expect(find.text('John Doe'), findsOneWidget);
+      },
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // Avatar upload flow — camera permission denied snackbar
+  // -----------------------------------------------------------------------
+
+  group('avatar upload flow — camera permission denied snackbar', () {
+    testWidgets(
+      'shows cameraPermissionDeniedForAvatar snackbar with no action when '
+      'camera permission is denied (not permanently)',
+      (tester) async {
+        // cameraPermissionStatus → denied (camera row visible in picker)
+        // requestCameraPermission → denied (not permanently)
+        final service = ShareService(
+          permissionStatusReader: (_) async => PermissionStatus.denied,
+          permissionRequester: (_) async => PermissionStatus.denied,
+          imagePicker: (_) async => null,
+          fileShareSink: (_, {text}) async =>
+              const ShareResult('', ShareResultStatus.dismissed),
+        );
+
+        const profile = Profile(id: 'user-1', displayName: 'Alice');
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              profileProvider.overrideWith(() => MockProfileNotifier(profile)),
+              authRepositoryProvider.overrideWithValue(
+                MockAuthRepository()
+                  ..setCurrentUser(null)
+                  ..setSignOut(),
+              ),
+              authStateProvider.overrideWith(
+                (ref) => const Stream<AuthState>.empty(),
+              ),
+              currentUserEmailProvider.overrideWithValue(null),
+              shareServiceProvider.overrideWithValue(service),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const ProfileSettingsScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // Tap avatar → picker sheet → tap "Take a photo"
+        await tester.tap(find.byType(ProfileAvatar).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Take a photo'));
+        await tester.pumpAndSettle();
+
+        // Contract: correct copy — NOT the generic upload-failed copy.
+        expect(
+          find.text(
+            'Camera access denied. Try the gallery, or open settings to grant access.',
+          ),
+          findsOneWidget,
+        );
+        // Denied (not permanent) → no "Open settings" action button.
+        expect(find.text('Open settings'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'shows cameraPermissionDeniedForAvatar snackbar WITH "Open settings" '
+      'action when camera permission is permanently denied',
+      (tester) async {
+        // cameraPermissionStatus → denied (camera row still visible so user
+        // can tap it; the runtime-request then returns permanentlyDenied).
+        final service = ShareService(
+          permissionStatusReader: (_) async => PermissionStatus.denied,
+          permissionRequester: (_) async => PermissionStatus.permanentlyDenied,
+          imagePicker: (_) async => null,
+          fileShareSink: (_, {text}) async =>
+              const ShareResult('', ShareResultStatus.dismissed),
+          appSettingsOpener: () async => true,
+        );
+
+        const profile = Profile(id: 'user-1', displayName: 'Alice');
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              profileProvider.overrideWith(() => MockProfileNotifier(profile)),
+              authRepositoryProvider.overrideWithValue(
+                MockAuthRepository()
+                  ..setCurrentUser(null)
+                  ..setSignOut(),
+              ),
+              authStateProvider.overrideWith(
+                (ref) => const Stream<AuthState>.empty(),
+              ),
+              currentUserEmailProvider.overrideWithValue(null),
+              shareServiceProvider.overrideWithValue(service),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: const ProfileSettingsScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.byType(ProfileAvatar).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Take a photo'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            'Camera access denied. Try the gallery, or open settings to grant access.',
+          ),
+          findsOneWidget,
+        );
+        // PermanentlyDenied → "Open settings" SnackBarAction is present.
+        expect(find.text('Open settings'), findsOneWidget);
       },
     );
   });
