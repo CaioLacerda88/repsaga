@@ -269,4 +269,37 @@ void main() {
       );
     });
   });
+
+  group('ProfileAvatar — upload-in-progress scrim', () {
+    testWidgets('renders CircularProgressIndicator when loading is true', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          child: const ProfileAvatar(displayName: 'Alice', loading: true),
+          profile: const Profile(id: 'u'),
+        ),
+      );
+      await tester.pump();
+
+      // Contract: the _LoadingScrim is live when loading:true — the
+      // spinner is visible and the gradient/monogram is behind it.
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets(
+      'does not render CircularProgressIndicator when loading is false',
+      (tester) async {
+        await tester.pumpWidget(
+          _host(
+            child: const ProfileAvatar(displayName: 'Alice'),
+            profile: const Profile(id: 'u'),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+      },
+    );
+  });
 }
