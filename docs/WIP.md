@@ -64,8 +64,8 @@ the phase summary in PROJECT.md §4.
 - **`getWorkoutHistory()` rewires to call the new RPC.** Existing per-workout name resolution stays (exercises name map still resolved client-side via the existing 2-query merge — the new RPC returns workouts + their workout_exercises ID list, then the locale name resolution runs after).
 - **Detail screen XP source:** the existing `workoutPRSetIdsProvider` returns PR set IDs (used for the gold ring on individual set rows). For the new 48dp strip's total counts, reuse it (the count is `.length`); XP comes from the same RPC call enriched in the detail fetch OR a separate `get_workout_xp(workout_id)` mini-RPC. Cleaner: bundle XP into the detail fetch too via `get_workout_detail_with_xp` RPC or augment the existing detail-fetch return.
 - **`workout_history_grouping.dart` — pure function.** Takes `List<Workout>` + locale string, returns `List<({DateTime weekStart, List<Workout> workouts, int totalSets, int totalXp})>`. ISO week start = Monday at 00:00 local. Deterministic order (most recent week first).
-- **`history_week_header.dart` — new widget.** Receives `weekLabel` string + roll-up tuple. Renders 48dp pinned header: week label (`AppTextStyles.eyebrow`) + roll-up `"N sets · M XP"` (XP in `heroGold` `numericSmall`). Uses `SliverPersistentHeader(pinned: true, delegate: _WeekHeaderDelegate)`.
-- **`_WeekHeaderDelegate` — `SliverPersistentHeaderDelegate` subclass.** `minExtent == maxExtent == 48`. `shouldRebuild` compares week start + roll-up totals.
+- **`history_week_header.dart` — new widget.** Receives `weekLabel` string + roll-up tuple. Renders 52dp pinned header: week label (`AppTextStyles.sectionHeader`) + roll-up `"N sets · +M XP"` (XP in `hotViolet` `numericSmall`, sets in default body). Uses `SliverPersistentHeader(pinned: true, delegate: WeekHeaderDelegate)`. `overlapsContent` triggers a `BoxShadow(color: abyss×0.6, blur: 8)` when content scrolls behind.
+- **`WeekHeaderDelegate` — `SliverPersistentHeaderDelegate` subclass.** `minExtent == maxExtent == 52`. `shouldRebuild` compares week start + roll-up totals + label string (handles the "This Week" current-week substitution).
 - **PR diamond — omit when zero.** Per UX-critic "no empty placeholders" — the row collapses entirely (no "0 PRs" rendered).
 - **Per `feedback_no_deferring_review_findings` + `feedback_no_deferring_suggestions`:** all reviewer findings fix in cycle.
 
@@ -106,10 +106,11 @@ the phase summary in PROJECT.md §4.
   - Semantics identifier `history-detail-strip`
 - [ ] `lib/l10n/app_en.arb` + `app_pt.arb`
   - `historyWeekLabel(date)` — e.g. EN: `"Week of {date}"`, pt-BR: `"Semana de {date}"`
-  - `historyWeekRollup(sets, xp)` — e.g. EN: `"{sets} sets · {xp} XP"`, pt-BR: `"{sets} séries · {xp} XP"`
+  - `historyWeekRollupSets(sets)` — e.g. EN: `"{sets} sets"`, pt-BR: `"{sets} séries"` (XP part rendered inline by the widget for the hotViolet color split)
+  - `historyWeekLabelCurrent` — e.g. EN: `"This Week"`, pt-BR: `"Esta semana"` (substituted for the current ISO week)
   - `historyCardXpEyebrow(xp)` — e.g. EN: `"+{xp} XP"`, pt-BR: `"+{xp} XP"`
   - `historyCardPrCount(count)` — e.g. EN: `"◆ {count} PR"`, pt-BR: `"◆ {count} PR"`
-  - `historyDetailStrip(xp, prs)` — e.g. EN: `"+{xp} XP · {prs} PRs"`, pt-BR: `"+{xp} XP · {prs} PRs"`
+  - `historyDetailStripXpPart(xp)` + `historyDetailStripPrPart(prs)` — split spans so XP renders in hotViolet and PRs in heroGold via RewardAccent
 - [ ] `test/e2e/helpers/selectors.ts` (L591-600)
   - Add `HISTORY.weekHeader`, `HISTORY.cardXpEyebrow`, `HISTORY.cardPrDiamond`, `HISTORY.detailStrip` selectors using the new identifiers
 
@@ -123,7 +124,7 @@ the phase summary in PROJECT.md §4.
   - Locale + DateTime UTC vs local: feed a UTC DateTime that crosses a day boundary in pt-BR → assert the workout is grouped per the BRT local week, not UTC
 - [ ] **Widget (`test/widget/features/workouts/ui/workout_history_screen_test.dart`):**
   - Pump 7 workouts across 2 weeks → assert 2 sticky `history-week-header` widgets render
-  - Card eyebrow renders `+N XP` in heroGold for each workout
+  - Card eyebrow renders `+N XP` in hotViolet (alpha 0.85) for each workout — gold reserved for the PR diamond per reward-scarcity rule
   - PR diamond renders only when `prCount > 0` (negative pin: no widget when prCount == 0)
   - Empty state still works (no week headers)
 - [ ] **Widget (`test/widget/features/workouts/ui/widgets/history_week_header_test.dart`):**
