@@ -156,21 +156,13 @@ class _WorkoutDetailBody extends ConsumerWidget {
                           child: RewardAccent(
                             child: Text(
                               l10n.historyDetailStripPrPart(prCount),
-                              // Inheriting TextStyle WITHOUT a baked color
-                              // — `numericSmall` bakes `color: textDim`
-                              // which would override RewardAccent's
-                              // heroGold via `DefaultTextStyle.merge`'s
-                              // explicit-wins rule. See PR #285 device-
-                              // verification finding (Fix 2 paired with
-                              // workout_history_screen).
-                              style: const TextStyle(
-                                fontFamily: 'Rajdhani',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                fontFeatures: [FontFeature.tabularFigures()],
-                                letterSpacing: 0.04 * 11,
-                                height: 1.4,
-                              ),
+                              // `numericSmallInheriting` is the no-baked-
+                              // color sibling of `numericSmall` — see the
+                              // token's docstring for why bare
+                              // `numericSmall` would override RewardAccent's
+                              // heroGold via `Text.style.merge`. Caught in
+                              // PR #285 device verification.
+                              style: AppTextStyles.numericSmallInheriting,
                             ),
                           ),
                         ),
@@ -427,22 +419,16 @@ class _ReadOnlySetRow extends StatelessWidget {
                 // PR register here. The set number on PR rows is implicit
                 // from row position so the slot stays at 40dp without a
                 // numeric prefix. See PR #285 UX-critic memo (Q1).
-                ? const RewardAccent(
+                ? RewardAccent(
                     child: Text(
                       '◆',
-                      // Inheriting TextStyle WITHOUT a baked color so
-                      // RewardAccent's heroGold lands via DefaultTextStyle
-                      // — `numericSmall` would bake `color: textDim` and
-                      // override the gold per Fix 2. Same fix pattern as
-                      // the per-card diamond + detail-strip PR span.
-                      style: TextStyle(
-                        fontFamily: 'Rajdhani',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                        letterSpacing: 0.04 * 11,
-                        height: 1.4,
-                      ),
+                      // `numericSmallInheriting` is the no-baked-color
+                      // sibling of `numericSmall` — see the token's
+                      // docstring for the rationale; same fix pattern as
+                      // the card PR diamond + detail-strip PR span.
+                      // Outer `const` dropped because the getter call
+                      // isn't a compile-time constant.
+                      style: AppTextStyles.numericSmallInheriting,
                     ),
                   )
                 : Text(
