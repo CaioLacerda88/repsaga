@@ -52,11 +52,19 @@ class RuneHalo extends StatefulWidget {
 class _RuneHaloState extends State<RuneHalo> with TickerProviderStateMixin {
   AnimationController? _controller;
 
-  /// Compact outer-padding threshold (Phase 26b). Below this size, static
-  /// states use the compact glow-pad; at or above, the legacy reservation
-  /// applies. The threshold is Material's tap-target floor — RuneHalo
-  /// instances below 48dp are header sigils that never need glow room.
-  static const double _compactSizeThreshold = 48;
+  /// Compact outer-padding threshold (Phase 26b, bumped Phase 32 PR 32e).
+  /// Below this size, static states use the compact glow-pad; at or above,
+  /// the legacy reservation applies. Originally pinned to Material's 48dp
+  /// tap-target floor for the 36dp Saga sigil; bumped to 52dp so the new
+  /// tappable-avatar sizes (48dp Home + 44dp Saga, Phase 32 PR 32e scope
+  /// add) stay on the compact glow-pad branch instead of falling back to
+  /// the legacy 60dp pad for dormant + active. The `isAnimatedState` guard
+  /// in `build` already bypasses compact for fading + radiant — those
+  /// animated states keep the full reservation so their breathing pulse +
+  /// sweep arc don't clip.
+  // 52dp keeps 48dp Home + 44dp Saga avatars on the compact path;
+  // fading/radiant already bypass via isAnimatedState.
+  static const double _compactSizeThreshold = 52;
 
   /// Compact glow-pad for static states at sub-48dp sizes (Phase 26b).
   /// Reserves 6dp on each axis so the sigil has breathing room without

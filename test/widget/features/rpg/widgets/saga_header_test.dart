@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
@@ -40,9 +41,8 @@ Widget _wrap(Widget child, {double width = 360}) {
   return ProviderScope(
     overrides: [
       profileProvider.overrideWith(
-        () => _StubProfileNotifier(
-          const Profile(id: 'u', displayName: 'Alice'),
-        ),
+        () =>
+            _StubProfileNotifier(const Profile(id: 'u', displayName: 'Alice')),
       ),
       currentUserEmailProvider.overrideWithValue('alice@example.test'),
     ],
@@ -55,6 +55,48 @@ Widget _wrap(Widget child, {double width = 360}) {
           child: SizedBox(width: width, child: child),
         ),
       ),
+    ),
+  );
+}
+
+/// Router-backed harness for the Phase 32 PR 32e tap-to-settings test —
+/// the regular [_wrap] uses a plain MaterialApp, which can't service
+/// `context.push('/profile/settings')`. Mirrors the GoRouter setup in
+/// `character_card_test.dart` (NoTransitionPage so we don't need
+/// pumpAndSettle, which would hang on RuneHalo's infinite tickers).
+Widget _wrapRouter(Widget child, {double width = 360}) {
+  final router = GoRouter(
+    initialLocation: '/saga',
+    routes: [
+      GoRoute(
+        path: '/saga',
+        builder: (context, state) => Scaffold(
+          body: Center(
+            child: SizedBox(width: width, child: child),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/profile/settings',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: Scaffold(body: Text('profile-settings-placeholder')),
+        ),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      profileProvider.overrideWith(
+        () =>
+            _StubProfileNotifier(const Profile(id: 'u', displayName: 'Alice')),
+      ),
+      currentUserEmailProvider.overrideWithValue('alice@example.test'),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('pt'),
+      routerConfig: router,
     ),
   );
 }
@@ -152,6 +194,85 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('ferro'), findsOneWidget);
     });
+
+    testWidgets(
+      'tapping the rune halo navigates to /profile/settings (PR 32e UX)',
+      (tester) async {
+        // Phase 32 PR 32e scope add: per UX-critic memo the Saga halo is a
+        // tappable target that pushes `/profile/settings`. Pin the user-
+        // visible behavior — after tap, the Settings placeholder content
+        // renders. The `rune-halo` Semantics identifier stays (existing E2E
+        // selectors anchor on it); button:true + explicitChildNodes:true
+        // are added per cluster_semantics_identifier_pair_rule.
+        await tester.pumpWidget(
+          _wrapRouter(
+            const SagaHeader(
+              haloState: VitalityState.active,
+              characterLevel: 14,
+              characterClass: CharacterClass.bulwark,
+              activeTitle: 'chest_r5_initiate_of_the_forge',
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final haloFinder = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.identifier == 'rune-halo',
+        );
+        expect(
+          haloFinder,
+          findsOneWidget,
+          reason:
+              'Rune halo must carry the rune-halo Semantics identifier '
+              '(existing E2E selectors depend on it).',
+        );
+
+        await tester.tap(haloFinder);
+        // Single frame + small pump for the GoRouter transition; can't use
+        // pumpAndSettle because the source route's RuneHalo carries an
+        // infinite-loop active-state controller via _DormantHalo's parent
+        // (well, active is static — but the harness still benefits from the
+        // standardized single-frame swap).
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(
+          find.text('profile-settings-placeholder'),
+          findsOneWidget,
+          reason:
+              'Tapping the Saga halo must push /profile/settings (per UX-'
+              'critic memo: discoverability of upload flow).',
+        );
+      },
+    );
+
+    testWidgets(
+      'saga halo Semantics carries button:true for AOM tappable role',
+      (tester) async {
+        // cluster_semantics_button_missing: without button:true the AOM
+        // node is passive and screen-reader / Playwright clicks don't
+        // forward to the GestureDetector. Pin button:true so a refactor
+        // can't silently regress.
+        await tester.pumpWidget(
+          _wrap(
+            const SagaHeader(
+              haloState: VitalityState.active,
+              characterLevel: 14,
+              characterClass: CharacterClass.bulwark,
+              activeTitle: null,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final halo = tester.widget<Semantics>(
+          find.byWidgetPredicate(
+            (w) => w is Semantics && w.properties.identifier == 'rune-halo',
+          ),
+        );
+        expect(halo.properties.button, isTrue);
+      },
+    );
 
     testWidgets('renders without overflow at 320dp viewport', (tester) async {
       tester.view.physicalSize = const Size(320, 800);

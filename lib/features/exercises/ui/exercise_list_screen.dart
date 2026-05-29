@@ -51,20 +51,32 @@ class _ExerciseListScreenState extends ConsumerState<ExerciseListScreen> {
     final exercises = ref.watch(filteredExerciseListProvider);
 
     return Scaffold(
+      // Phase 32 PR 32e scope add — align the Exercises title to the
+      // standard AppBar pattern used by Saga, History, and Profile
+      // Settings. Previously a raw `Text(28sp)` lived inside a `Padding`
+      // tile at the top of the body, bypassing the theme's
+      // `appBarTitle` token (Rajdhani 600 18sp centered, defined in
+      // `app_theme.dart`). The inline 28sp + ad-hoc padding diverged
+      // from the rest of the top-level surfaces and lost the
+      // hairline divider + leading-affordance scaffolding that an
+      // AppBar normally owns. Conversion drops the fontSize override
+      // entirely and lets the theme resolve typography.
+      appBar: AppBar(
+        title: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          identifier: 'exercise-list-heading',
+          child: Text(l10n.exercises),
+        ),
+      ),
       body: SafeArea(
+        // AppBar owns the top inset (status bar + toolbar height); the
+        // body's SafeArea only needs to defend bottom + horizontal
+        // edges. Without `top: false` the SafeArea adds redundant top
+        // padding beneath the AppBar.
+        top: false,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Semantics(
-                container: true,
-                identifier: 'exercise-list-heading',
-                child: Text(
-                  l10n.exercises,
-                  style: AppTextStyles.headline.copyWith(fontSize: 28),
-                ),
-              ),
-            ),
             const SizedBox(height: 16),
             const _MuscleGroupSelector(),
             const SizedBox(height: 12),

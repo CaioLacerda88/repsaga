@@ -306,10 +306,13 @@ void main() {
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
-    testWidgets('outer reserved size shrinks below 48dp threshold', (
+    testWidgets('outer reserved size shrinks below compact threshold', (
       tester,
     ) async {
-      // At size: 36, compact pad +12 → outer 48dp.
+      // At size: 36, compact pad +12 → outer 48dp. Threshold was 48 in
+      // Phase 26b, bumped to 52 in Phase 32 PR 32e to cover the 48dp Home +
+      // 44dp Saga avatars. 36 still sits below the new threshold so this
+      // remains the compact-path canary.
       await tester.pumpWidget(
         _wrap(const RuneHalo(state: VitalityState.active, size: 36)),
       );
@@ -318,6 +321,34 @@ void main() {
       expect(size.width, closeTo(48, 1));
       expect(size.height, closeTo(48, 1));
     });
+
+    testWidgets(
+      'Phase 32 avatar sizes (44 Saga, 48 Home) stay on the compact path',
+      (tester) async {
+        // Phase 32 PR 32e: threshold bumped 48→52 so the new tappable-
+        // avatar sizes (44dp Saga, 48dp Home) both stay on the compact
+        // glow-pad branch for static states (avoids the legacy +60dp
+        // padding blowing out the header / card vertical rhythm).
+        //
+        // At size: 44, compact pad +12 → outer 56dp.
+        await tester.pumpWidget(
+          _wrap(const RuneHalo(state: VitalityState.active, size: 44)),
+        );
+        await tester.pumpAndSettle();
+        final saga = tester.getSize(find.byType(RuneHalo));
+        expect(saga.width, closeTo(56, 1));
+        expect(saga.height, closeTo(56, 1));
+
+        // At size: 48, compact pad +12 → outer 60dp.
+        await tester.pumpWidget(
+          _wrap(const RuneHalo(state: VitalityState.active, size: 48)),
+        );
+        await tester.pumpAndSettle();
+        final home = tester.getSize(find.byType(RuneHalo));
+        expect(home.width, closeTo(60, 1));
+        expect(home.height, closeTo(60, 1));
+      },
+    );
 
     testWidgets('radiant state at 36dp keeps legacy padding (no sweep clip)', (
       tester,

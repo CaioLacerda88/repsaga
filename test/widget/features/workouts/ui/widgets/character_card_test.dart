@@ -192,6 +192,15 @@ Widget _harness({
           );
         },
       ),
+      // Phase 32 PR 32e scope add: tapping the halo navigates here. Same
+      // NoTransitionPage trick so the route swap lands in one frame
+      // without pumpAndSettle (RuneHalo's infinite tickers would hang it).
+      GoRoute(
+        path: '/profile/settings',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: Scaffold(body: Text('profile-settings-placeholder')),
+        ),
+      ),
     ],
   );
   return ProviderScope(
@@ -203,9 +212,8 @@ Widget _harness({
       // a steady-state profile so the gradient + monogram render
       // deterministically across every test in this file.
       profileProvider.overrideWith(
-        () => _StubProfileNotifier(
-          const Profile(id: 'u', displayName: 'Alice'),
-        ),
+        () =>
+            _StubProfileNotifier(const Profile(id: 'u', displayName: 'Alice')),
       ),
       currentUserEmailProvider.overrideWithValue('alice@example.test'),
     ],
@@ -506,6 +514,81 @@ void main() {
           find.text('Begin your journey — first set awaits'),
           findsOneWidget,
         );
+      },
+    );
+
+    testWidgets(
+      'tapping the home avatar navigates to /profile/settings (PR 32e UX)',
+      (tester) async {
+        // Phase 32 PR 32e scope add: per UX-critic memo the Home halo is
+        // a tappable target that pushes `/profile/settings`. Tap routes to
+        // Settings (NOT directly to the upload picker) because the halo is
+        // a read-anchor RPG signal — not an edit surface — and the upload
+        // UI is already purpose-built on IdentityCard. This test pins the
+        // user-visible behavior (after tap, the Settings placeholder
+        // route's content renders), not the wiring.
+        //
+        // Behavior-not-wiring: the destination Text widget is the
+        // user-perceptible outcome. If the GestureDetector were removed,
+        // or the route argument were silently changed, this test would
+        // fail with the placeholder absent / wrong.
+        await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+        await tester.pump();
+
+        final avatarFinder = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.identifier == 'home-character-avatar',
+        );
+        expect(
+          avatarFinder,
+          findsOneWidget,
+          reason:
+              'Home halo must carry the home-character-avatar Semantics '
+              'identifier (Phase 32 PR 32e scope add).',
+        );
+
+        // Tap the avatar via its GestureDetector. The halo's identifier
+        // wraps a GestureDetector → RuneHalo subtree; tapping the
+        // Semantics-anchored region routes through the detector.
+        await tester.tap(avatarFinder);
+        // Pump several frames past the GoRouter transition (NoTransitionPage
+        // is synchronous but the framework still needs a frame to commit
+        // the route swap + paint the destination). pumpAndSettle would hang
+        // on the source route's infinite RuneHalo controllers.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(
+          find.text('profile-settings-placeholder'),
+          findsOneWidget,
+          reason:
+              'Tapping the home halo must push /profile/settings (per UX-'
+              'critic memo: discoverability of upload flow without inviting '
+              'accidental taps in workout context).',
+        );
+      },
+    );
+
+    testWidgets(
+      'home halo Semantics carries button:true for AOM tappable role',
+      (tester) async {
+        // cluster_semantics_button_missing: Semantics(container:true)
+        // without button:true makes the AOM node passive — Playwright +
+        // screen-reader clicks land but don't forward to the GestureDetector
+        // as a tap. Pin button:true here so a future refactor can't drop
+        // it silently.
+        await tester.pumpWidget(_harness(sheet: _trainedSheet()));
+        await tester.pump();
+
+        final avatar = tester.widget<Semantics>(
+          find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'home-character-avatar',
+          ),
+        );
+        expect(avatar.properties.button, isTrue);
       },
     );
 

@@ -201,9 +201,8 @@ Widget _buildApp(CharacterSheetState state) {
       rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
       // RuneHalo embeds ProfileAvatar (Phase 32 PR 32e scope add).
       profileProvider.overrideWith(
-        () => _StubProfileNotifier(
-          const Profile(id: 'u', displayName: 'Alice'),
-        ),
+        () =>
+            _StubProfileNotifier(const Profile(id: 'u', displayName: 'Alice')),
       ),
       currentUserEmailProvider.overrideWithValue('alice@example.test'),
     ],
