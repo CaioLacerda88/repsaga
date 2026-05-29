@@ -191,3 +191,40 @@ test.describe('Profile — weekly goal', { tag: '@smoke' }, () => {
     ).toBeVisible({ timeout: 5_000 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 32 PR 32e — IdentityCard avatar visibility smoke.
+//
+// Pin that the avatar surface (Semantics(identifier: 'identity-card-avatar'))
+// renders and is tappable. The picker/crop/upload pipeline drives an OS-level
+// image picker that Playwright cannot exercise; assertions stop at "the
+// avatar is the entry point" without driving the rest of the flow.
+// ---------------------------------------------------------------------------
+test.describe('Profile — avatar', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeProfileWeeklyGoal').email,
+      getUser('smokeProfileWeeklyGoal').password,
+    );
+    await navigateToTab(page, 'Profile');
+    await page
+      .locator(SAGA.characterSheet)
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator(SAGA.gearIcon).first().click();
+    await page
+      .locator(SAGA.profileSettingsScreen)
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 });
+  });
+
+  test('should render the IdentityCard avatar surface', async ({ page }) => {
+    // The identity-card-avatar semantics identifier is the entry point
+    // for the upload flow. Driving the picker is OS-level — Playwright
+    // can only assert the surface is present + tappable.
+    await expect(
+      page.locator(PROFILE.identityCardAvatar).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+});

@@ -6,9 +6,12 @@ import '../../../../core/theme/radii.dart';
 import '../../../../features/auth/providers/auth_providers.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../providers/profile_providers.dart';
+import 'profile_avatar.dart';
 
 /// Avatar + display-name + email card at the top of the profile settings
-/// screen. Tap on the name opens the rename dialog.
+/// screen. Tap on the name opens the rename dialog; tap on the avatar
+/// dispatches the [onAvatarTap] callback (typically opening the
+/// picker → crop → upload flow on the parent screen).
 class IdentityCard extends StatelessWidget {
   const IdentityCard({
     super.key,
@@ -16,12 +19,18 @@ class IdentityCard extends StatelessWidget {
     required this.email,
     this.loading = false,
     this.onEditName,
+    this.onAvatarTap,
   });
 
   final String? displayName;
   final String email;
   final bool loading;
   final VoidCallback? onEditName;
+
+  /// Phase 32 PR 32e — tap callback for the avatar (drives the
+  /// picker → crop → upload flow on the parent screen). When null the
+  /// avatar is rendered but not tappable.
+  final VoidCallback? onAvatarTap;
 
   @override
   Widget build(BuildContext context) {
@@ -34,24 +43,24 @@ class IdentityCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: theme.colorScheme.primary,
-              child: Text(
-                (displayName?.isNotEmpty == true
-                        ? displayName![0]
-                        : email.isNotEmpty
-                        ? email[0]
-                        : '?')
-                    .toUpperCase(),
-                // [AppTextStyles.headline] = Rajdhani 600 24dp — the
-                // bundled SemiBold weight. Prior `headlineMedium +
-                // FontWeight.bold` requested Rajdhani 700, which IS
-                // bundled but the call site mixed token + raw weight
-                // override; routing through the token directly avoids
-                // unbundled-weight risk and reads cleaner.
-                style: AppTextStyles.headline.copyWith(
-                  color: theme.colorScheme.onPrimary,
+            // Phase 32 PR 32e — `ProfileAvatar` replaces the inline
+            // `CircleAvatar` + monogram. The widget reads
+            // displayName / avatarUrl / dominantBodyPart from
+            // current-user providers when no explicit override is
+            // passed; here we forward the display name + email so the
+            // monogram derives from the IdentityCard's own props
+            // instead of double-reading providers.
+            Semantics(
+              container: true,
+              identifier: 'identity-card-avatar',
+              button: onAvatarTap != null,
+              child: GestureDetector(
+                onTap: onAvatarTap,
+                behavior: HitTestBehavior.opaque,
+                child: ProfileAvatar(
+                  size: 64,
+                  displayName: displayName ?? (email.isNotEmpty ? email : null),
+                  semanticsLabel: 'Profile avatar for $name',
                 ),
               ),
             ),

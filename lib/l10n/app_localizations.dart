@@ -5051,6 +5051,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'XP EARNED'**
   String get postSessionXpEarnedLabel;
+
+  /// Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose avatar source'**
+  String get avatarPickerSheetTitle;
+
+  /// Phase 32 PR 32e — Camera row in the avatar picker bottom sheet. Reuses the share-card camera-row pattern.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get avatarPickerCamera;
+
+  /// Phase 32 PR 32e — Gallery row in the avatar picker bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from gallery'**
+  String get avatarPickerGallery;
+
+  /// Phase 32 PR 32e — Cancel row in the avatar picker bottom sheet. Closes the sheet without picking.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get avatarPickerCancel;
+
+  /// Phase 32 PR 32e — Eyebrow title above the circular crop area in the AvatarCropSheet. The user pinches / drags inside the circle to frame their picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Position your avatar'**
+  String get avatarCropSheetTitle;
+
+  /// Phase 32 PR 32e — Confirm button on the AvatarCropSheet bottom bar. Rasterizes the visible crop area and uploads to Supabase Storage.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this'**
+  String get avatarCropSheetConfirm;
+
+  /// Phase 32 PR 32e — Cancel button on the AvatarCropSheet bottom bar. Dismisses without uploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get avatarCropSheetCancel;
+
+  /// Phase 32 PR 32e — Success snackbar shown after a successful avatar upload. The IdentityCard re-renders with the new image at the same time.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar updated.'**
+  String get avatarUploadSuccess;
+
+  /// Phase 32 PR 32e — Error snackbar shown when the avatar upload fails (network / storage error). The user can re-tap the avatar to retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update your avatar. Please try again.'**
+  String get avatarUploadFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -913,5 +913,14 @@
   "postSessionLeaveTitle": "Sair da pós-batalha?",
   "postSessionLeaveCancel": "Não",
   "postSessionLeaveConfirm": "Sair",
-  "postSessionXpEarnedLabel": "XP GANHO"
+  "postSessionXpEarnedLabel": "XP GANHO",
+  "avatarPickerSheetTitle": "Escolha a origem do avatar",
+  "avatarPickerCamera": "Tirar foto",
+  "avatarPickerGallery": "Escolher da galeria",
+  "avatarPickerCancel": "Cancelar",
+  "avatarCropSheetTitle": "Posicione seu avatar",
+  "avatarCropSheetConfirm": "Usar esta",
+  "avatarCropSheetCancel": "Cancelar",
+  "avatarUploadSuccess": "Avatar atualizado.",
+  "avatarUploadFailed": "Não consegui atualizar seu avatar. Tente de novo."
 }

@@ -2939,4 +2939,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get postSessionXpEarnedLabel => 'XP EARNED';
+
+  @override
+  String get avatarPickerSheetTitle => 'Choose avatar source';
+
+  @override
+  String get avatarPickerCamera => 'Take a photo';
+
+  @override
+  String get avatarPickerGallery => 'Pick from gallery';
+
+  @override
+  String get avatarPickerCancel => 'Cancel';
+
+  @override
+  String get avatarCropSheetTitle => 'Position your avatar';
+
+  @override
+  String get avatarCropSheetConfirm => 'Use this';
+
+  @override
+  String get avatarCropSheetCancel => 'Cancel';
+
+  @override
+  String get avatarUploadSuccess => 'Avatar updated.';
+
+  @override
+  String get avatarUploadFailed =>
+      'Couldn\'t update your avatar. Please try again.';
 }

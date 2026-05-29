@@ -1,14 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/connectivity/recovery_recorder_provider.dart';
+import '../../../core/local_storage/hive_service.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../data/avatar_repository.dart';
 import '../data/profile_repository.dart';
 import '../models/profile.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   return ProfileRepository(
     Supabase.instance.client,
+    recoveryRecorder: ref.watch(recoveryRecorderProvider),
+  );
+});
+
+/// Provides the [AvatarRepository] singleton — wires the live Supabase
+/// client + the `userPrefs` Hive box for the URL-cache fast-path.
+///
+/// **Box availability assumption.** [HiveService.init] opens every box
+/// (including `userPrefs`) before `runApp()` is called in `main.dart`,
+/// so consumers of this provider can assume the box is open. Tests must
+/// either open the box in their `setUpAll` (see
+/// `profile_screen_test.dart` for the pattern) OR override this
+/// provider entirely with a stub.
+final avatarRepositoryProvider = Provider<AvatarRepository>((ref) {
+  return AvatarRepository(
+    Supabase.instance.client,
+    Hive.box<dynamic>(HiveService.userPrefs),
     recoveryRecorder: ref.watch(recoveryRecorderProvider),
   );
 });

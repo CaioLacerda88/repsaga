@@ -29,6 +29,7 @@ class ProfileRepository extends BaseRepository {
     String? locale,
     double? bodyweightKg,
     Gender? gender,
+    String? avatarUrl,
   }) {
     return mapException(() async {
       final updates = <String, dynamic>{
@@ -55,6 +56,14 @@ class ProfileRepository extends BaseRepository {
         // matching tokens.
         // ignore: use_null_aware_elements
         if (gender != null) 'gender': gender.name,
+        // Phase 32 PR 32e — avatar URL. Same omit-on-null discipline:
+        // forwarding null would clobber a previously uploaded avatar
+        // on every unrelated profile update. The `AvatarRepository`
+        // upload flow calls this with the freshly cache-busted URL
+        // (`{publicUrl}?v=<timestamp>`) so subsequent reads bypass any
+        // stale CDN cache.
+        // ignore: use_null_aware_elements
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
       };
       final data = await _client
           .from('profiles')

@@ -12,6 +12,7 @@ import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/profile/ui/profile_settings_screen.dart';
+import 'package:repsaga/features/profile/ui/widgets/profile_avatar.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -232,13 +233,16 @@ void main() {
       verifyNever(() => mockAuth.signOut());
     });
 
-    testWidgets('shows monogram in CircleAvatar', (tester) async {
+    testWidgets('shows monogram in ProfileAvatar', (tester) async {
       await tester.pumpWidget(buildTestWidget(profile: null));
       await tester.pump();
 
-      // When profile is null and email is provided, the monogram shows the
-      // first letter of the email (uppercased).
-      expect(find.byType(CircleAvatar), findsOneWidget);
+      // Phase 32 PR 32e — the inline `CircleAvatar` + monogram in
+      // IdentityCard was replaced by the `ProfileAvatar` widget. The
+      // pin is now "exactly one ProfileAvatar renders" — that asserts
+      // the IdentityCard wires the new widget. Gradient color +
+      // monogram derivation are covered by `profile_avatar_test.dart`.
+      expect(find.byType(ProfileAvatar), findsOneWidget);
     });
 
     testWidgets(
