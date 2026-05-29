@@ -163,9 +163,12 @@ class _CameraEditBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 22dp diameter (not 20dp): provides 5dp icon padding instead of 4dp so
+    // the camera glyph stays readable on 160dpi devices without looking
+    // oversized at the 64dp avatar register.
     return Container(
-      width: 20,
-      height: 20,
+      width: 22,
+      height: 22,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.surface2,
