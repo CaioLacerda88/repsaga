@@ -40,7 +40,9 @@ class _FakeStorageBucket extends Fake implements supabase.StorageFileApi {
   String? lastUploadPath;
   Uint8List? lastUploadBytes;
   supabase.FileOptions? lastFileOptions;
-  String? lastPublicUrlPath;
+  String? lastSignedPath;
+  int? lastSignedExpiresIn;
+  int signedUrlCallCount = 0;
 
   @override
   Future<String> uploadBinary(
@@ -58,9 +60,17 @@ class _FakeStorageBucket extends Fake implements supabase.StorageFileApi {
   }
 
   @override
-  String getPublicUrl(String path, {supabase.TransformOptions? transform}) {
-    lastPublicUrlPath = path;
-    return 'https://supabase.test/storage/v1/object/public/avatars/$path';
+  Future<String> createSignedUrl(
+    String path,
+    int expiresIn, {
+    supabase.TransformOptions? transform,
+  }) async {
+    signedUrlCallCount++;
+    lastSignedPath = path;
+    lastSignedExpiresIn = expiresIn;
+    // Each call returns a deterministically-different token so tests can
+    // pin "regenerate produced a new URL" without time-dependent sleep.
+    return 'https://supabase.test/storage/v1/object/sign/avatars/$path?token=sig-$signedUrlCallCount';
   }
 }
 
@@ -85,6 +95,9 @@ class _FakeHiveBox extends Fake implements Box<dynamic> {
   Future<void> delete(dynamic key) async {
     _store.remove(key);
   }
+
+  // Test-only inspection helpers.
+  bool containsKey_(String key) => _store.containsKey(key);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,18 +160,26 @@ void main() {
       expect(bucket.lastFileOptions?.contentType, 'image/jpeg');
     });
 
-    test('returns a URL with a `?v=<millis>` cache-bust suffix', () async {
-      final repo = _makeRepo();
+    test('returns a signed URL minted via createSignedUrl', () async {
+      final bucket = _FakeStorageBucket();
+      final repo = _makeRepo(bucket: bucket);
 
       final url = await repo.uploadAvatar(
         userId: 'user-123',
         imageBytes: Uint8List(8),
       );
 
-      expect(url, contains('?v='));
-      final query = Uri.parse(url).queryParameters['v'];
-      expect(query, isNotNull);
-      expect(int.tryParse(query!), isNotNull);
+      // The signed URL comes from the fake's createSignedUrl path —
+      // proves the public-URL endpoint is NOT used. Migration 00069
+      // flipped the bucket to private; getPublicUrl would 401/403.
+      expect(url, contains('/object/sign/'));
+      expect(url, contains('token='));
+      expect(bucket.lastSignedPath, 'user-123/avatar.jpg');
+      expect(
+        bucket.lastSignedExpiresIn,
+        AvatarRepository.signedUrlExpirySeconds,
+      );
+      expect(bucket.signedUrlCallCount, 1);
     });
 
     test('caches the returned URL under the Hive cacheKeyPrefix', () async {
@@ -171,6 +192,22 @@ void main() {
       );
 
       expect(box.get('avatarUrlCache:user-abc'), url);
+    });
+
+    test('stamps the matching expiry instant in Hive', () async {
+      final box = _FakeHiveBox();
+      final repo = _makeRepo(box: box);
+      final beforeUpload = DateTime.now().millisecondsSinceEpoch;
+
+      await repo.uploadAvatar(userId: 'user-abc', imageBytes: Uint8List(8));
+
+      final expiry = box.get('avatarUrlCacheExpiresAt:user-abc') as int;
+      const lifetimeMs = AvatarRepository.signedUrlExpirySeconds * 1000;
+      // Expiry should be ~now + 1 year. Tolerate the millisecond gap
+      // between `DateTime.now()` captures (test setup vs. repo
+      // internals) by asserting on a small window.
+      expect(expiry, greaterThanOrEqualTo(beforeUpload + lifetimeMs - 1000));
+      expect(expiry, lessThanOrEqualTo(beforeUpload + lifetimeMs + 5000));
     });
 
     test('maps Supabase StorageException to AppException', () async {
@@ -188,7 +225,7 @@ void main() {
   });
 
   group('AvatarRepository.getCachedAvatarUrl', () {
-    test('returns the cached URL when present', () async {
+    test('returns the cached URL when present and unexpired', () async {
       final box = _FakeHiveBox();
       final repo = _makeRepo(box: box);
       await repo.uploadAvatar(userId: 'u', imageBytes: Uint8List(4));
@@ -196,7 +233,27 @@ void main() {
       final cached = repo.getCachedAvatarUrl('u');
 
       expect(cached, isNotNull);
-      expect(cached, contains('?v='));
+      // The signed URL replaces the legacy `?v=<timestamp>` cache-bust
+      // suffix — assertion shifts to the JWT-bearing signed-URL path.
+      expect(cached, contains('/object/sign/'));
+    });
+
+    test('returns null when the cached URL has expired', () async {
+      // Prime the cache with an URL whose expiry instant is already
+      // in the past. The contract: getCachedAvatarUrl filters expired
+      // entries so the screen layer doesn't render a dead URL.
+      final box = _FakeHiveBox();
+      await box.put('avatarUrlCache:u', 'https://stale.test/sign');
+      await box.put(
+        'avatarUrlCacheExpiresAt:u',
+        DateTime.now()
+            .subtract(const Duration(minutes: 1))
+            .millisecondsSinceEpoch,
+      );
+
+      final repo = _makeRepo(box: box);
+
+      expect(repo.getCachedAvatarUrl('u'), isNull);
     });
 
     test('returns null when no entry exists for the user', () {
@@ -206,15 +263,52 @@ void main() {
     });
   });
 
+  group('AvatarRepository.regenerateSignedUrl', () {
+    test('writes a new URL + expiry pair to the cache', () async {
+      final box = _FakeHiveBox();
+      final repo = _makeRepo(box: box);
+      final beforeRegen = DateTime.now().millisecondsSinceEpoch;
+
+      final url = await repo.regenerateSignedUrl('user-xyz');
+
+      expect(url, contains('/object/sign/'));
+      expect(box.get('avatarUrlCache:user-xyz'), url);
+      final expiry = box.get('avatarUrlCacheExpiresAt:user-xyz') as int;
+      const lifetimeMs = AvatarRepository.signedUrlExpirySeconds * 1000;
+      expect(expiry, greaterThanOrEqualTo(beforeRegen + lifetimeMs - 1000));
+      expect(expiry, lessThanOrEqualTo(beforeRegen + lifetimeMs + 5000));
+    });
+
+    test('mints a different token than the previous upload', () async {
+      final bucket = _FakeStorageBucket();
+      final repo = _makeRepo(bucket: bucket);
+
+      final first = await repo.uploadAvatar(
+        userId: 'u',
+        imageBytes: Uint8List(4),
+      );
+      final regenerated = await repo.regenerateSignedUrl('u');
+
+      // Fake increments the counter on each createSignedUrl call —
+      // proves the regenerate call hit the storage layer, not just
+      // returned the cached value.
+      expect(regenerated, isNot(equals(first)));
+      expect(bucket.signedUrlCallCount, 2);
+    });
+  });
+
   group('AvatarRepository.invalidateCache', () {
-    test('removes the cache entry for the user', () async {
+    test('removes BOTH the URL and the expiry companion entry', () async {
       final box = _FakeHiveBox();
       final repo = _makeRepo(box: box);
       await repo.uploadAvatar(userId: 'u', imageBytes: Uint8List(4));
-      expect(repo.getCachedAvatarUrl('u'), isNotNull);
+      expect(box.containsKey_('avatarUrlCache:u'), isTrue);
+      expect(box.containsKey_('avatarUrlCacheExpiresAt:u'), isTrue);
 
       await repo.invalidateCache('u');
 
+      expect(box.containsKey_('avatarUrlCache:u'), isFalse);
+      expect(box.containsKey_('avatarUrlCacheExpiresAt:u'), isFalse);
       expect(repo.getCachedAvatarUrl('u'), isNull);
     });
 

@@ -28,6 +28,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
+import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
@@ -41,6 +44,32 @@ import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+
+/// Stub ProfileNotifier for RuneHalo's embedded ProfileAvatar (Phase 32
+/// PR 32e scope add). Without this override the avatar's identity
+/// resolver pulls `currentUserEmailProvider` which touches
+/// `Supabase.instance` — unwound in the unit-test harness.
+class _StubProfileNotifier extends AsyncNotifier<Profile?>
+    implements ProfileNotifier {
+  _StubProfileNotifier(this._profile);
+  final Profile? _profile;
+
+  @override
+  Future<Profile?> build() async => _profile;
+
+  @override
+  Future<void> saveOnboardingProfile({
+    required String displayName,
+    required String fitnessLevel,
+    int trainingFrequencyPerWeek = 3,
+  }) async {}
+
+  @override
+  Future<void> updateTrainingFrequency(int frequency) async {}
+
+  @override
+  Future<void> toggleWeightUnit() async {}
+}
 
 // ---------------------------------------------------------------------------
 // Fixture builders
@@ -169,6 +198,16 @@ Widget _harness({
     overrides: [
       characterSheetProvider.overrideWith((_) => AsyncData(sheet)),
       rankUpPulseLocalStorageProvider.overrideWithValue(storage),
+      // RuneHalo embeds ProfileAvatar (Phase 32 PR 32e scope add); the
+      // avatar's identity resolver reads these providers. Stubbed with
+      // a steady-state profile so the gradient + monogram render
+      // deterministically across every test in this file.
+      profileProvider.overrideWith(
+        () => _StubProfileNotifier(
+          const Profile(id: 'u', displayName: 'Alice'),
+        ),
+      ),
+      currentUserEmailProvider.overrideWithValue('alice@example.test'),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

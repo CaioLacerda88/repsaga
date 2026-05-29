@@ -1,18 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
+import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/ui/widgets/saga_header.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
+/// Stub ProfileNotifier — SagaHeader's RuneHalo embeds ProfileAvatar
+/// (Phase 32 PR 32e scope add) which reads `profileProvider` +
+/// `currentUserEmailProvider` to resolve identity. Without the
+/// override the avatar throws (`currentUserEmailProvider` touches
+/// `Supabase.instance`).
+class _StubProfileNotifier extends AsyncNotifier<Profile?>
+    implements ProfileNotifier {
+  _StubProfileNotifier(this._profile);
+  final Profile? _profile;
+
+  @override
+  Future<Profile?> build() async => _profile;
+
+  @override
+  Future<void> saveOnboardingProfile({
+    required String displayName,
+    required String fitnessLevel,
+    int trainingFrequencyPerWeek = 3,
+  }) async {}
+
+  @override
+  Future<void> updateTrainingFrequency(int frequency) async {}
+
+  @override
+  Future<void> toggleWeightUnit() async {}
+}
+
 Widget _wrap(Widget child, {double width = 360}) {
-  return MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    locale: const Locale('pt'),
-    home: Scaffold(
-      body: Center(
-        child: SizedBox(width: width, child: child),
+  return ProviderScope(
+    overrides: [
+      profileProvider.overrideWith(
+        () => _StubProfileNotifier(
+          const Profile(id: 'u', displayName: 'Alice'),
+        ),
+      ),
+      currentUserEmailProvider.overrideWithValue('alice@example.test'),
+    ],
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('pt'),
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(width: width, child: child),
+        ),
       ),
     ),
   );

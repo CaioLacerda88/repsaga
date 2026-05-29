@@ -41,6 +41,22 @@ import '../../providers/profile_providers.dart';
 /// label is composed from [displayName] / `userEmailProvider` / a literal
 /// fallback. Surfaces wanting a localized semantics label pass it via
 /// [semanticsLabel].
+///
+/// **Compact mode.** When [compact] is true the widget runs as a leaf
+/// inside a parent that already owns the affordances normally bundled
+/// here — the canonical caller is `RuneHalo`, which carries its own
+/// state-driven glow, semantics wrapper, and (when in motion) animation
+/// signals. Compact mode therefore suppresses:
+///   * the camera-edit badge (the parent surface is read-only; tapping
+///     the halo doesn't open the upload flow),
+///   * the loading scrim (the halo ring carries its own busy state if
+///     the parent needs to express one — a scrim INSIDE the ring would
+///     read as a doubled overlay),
+///   * the Semantics wrapper (the parent's identifier + role gates the
+///     a11y tree; a nested Semantics here would conflict / duplicate),
+///   * the monogram glyph below [compactMonogramThreshold] dp (a single
+///     character at <12 sp is illegible — at small halo sizes the
+///     gradient disc alone reads more cleanly).
 class ProfileAvatar extends ConsumerWidget {
   const ProfileAvatar({
     super.key,
@@ -50,7 +66,15 @@ class ProfileAvatar extends ConsumerWidget {
     this.dominantBodyPart,
     this.loading = false,
     this.semanticsLabel,
+    this.compact = false,
   });
+
+  /// Pixel-diameter threshold below which compact mode drops the monogram
+  /// glyph entirely. Sized to the Material body-medium floor — below 30dp
+  /// the 40%-scaled monogram lands under 12 sp, which is below the WCAG
+  /// 2.1 minimum readable text size. The gradient disc alone is a more
+  /// honest signal at that size than a single illegible glyph.
+  static const double compactMonogramThreshold = 30;
 
   /// Pixel diameter of the rendered circle. Defaults to 64dp (IdentityCard
   /// register). The monogram glyph scales to `size * 0.4`.
@@ -80,12 +104,76 @@ class ProfileAvatar extends ConsumerWidget {
   /// Optional override for the Semantics label. When null, the widget
   /// composes the label from [displayName] (or current-user fallbacks)
   /// using a fixed English template — call sites needing l10n pass the
-  /// pre-localized string here.
+  /// pre-localized string here. Ignored when [compact] is true (the
+  /// parent surface owns the Semantics tree).
   final String? semanticsLabel;
+
+  /// When true, render the avatar as a halo-nested leaf: no Semantics
+  /// wrapper, no camera-edit badge, no loading scrim, and no monogram
+  /// glyph at sub-[compactMonogramThreshold] sizes. The canonical caller
+  /// is `RuneHalo`. See class-level docstring for the full rationale.
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final resolved = _resolveIdentity(ref);
+    // The monogram is suppressed in compact mode when the rendered
+    // size would push the glyph below the WCAG-readable floor. The
+    // gradient disc still renders — `_GradientMonogram` receives an
+    // empty string and skips the Text widget.
+    final showMonogramGlyph = !compact || size >= compactMonogramThreshold;
+    final monogramForDisc = showMonogramGlyph ? resolved.monogram : '';
+
+    final core = SizedBox(
+      width: size,
+      height: size,
+      child: ClipOval(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (resolved.avatarUrl != null)
+              CachedNetworkImage(
+                imageUrl: resolved.avatarUrl!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                // Fallback to the gradient + monogram while the image
+                // is in-flight, so the avatar never collapses to a
+                // blank disk. The placeholder/error widgets render the
+                // same gradient computed for the non-uploaded path —
+                // visually consistent during the brief network gap.
+                placeholder: (context, _) => _GradientMonogram(
+                  size: size,
+                  monogram: monogramForDisc,
+                  dominantBodyPart: resolved.dominantBodyPart,
+                ),
+                errorWidget: (context, _, _) => _GradientMonogram(
+                  size: size,
+                  monogram: monogramForDisc,
+                  dominantBodyPart: resolved.dominantBodyPart,
+                ),
+              )
+            else
+              _GradientMonogram(
+                size: size,
+                monogram: monogramForDisc,
+                dominantBodyPart: resolved.dominantBodyPart,
+              ),
+            // Compact mode suppresses the in-disc loading scrim — the
+            // parent halo owns its own busy treatment via the ring's
+            // animation states.
+            if (loading && !compact) _LoadingScrim(size: size),
+          ],
+        ),
+      ),
+    );
+
+    // Compact mode: skip the Semantics wrapper entirely. The parent
+    // (RuneHalo's outer Semantics container) owns the identifier + role;
+    // a nested Semantics here would either conflict with the parent's
+    // identifier or fragment the AOM tree.
+    if (compact) return core;
+
     // Semantics label: explicit override wins. Otherwise compose a
     // template — Nit 14: when displayLabel collapses to '?' (no
     // displayName + no email), fall back to the bare 'Profile avatar'
@@ -99,50 +187,7 @@ class ProfileAvatar extends ConsumerWidget {
       label = 'Profile avatar for ${resolved.displayLabel}';
     }
 
-    return Semantics(
-      label: label,
-      image: true,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: ClipOval(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (resolved.avatarUrl != null)
-                CachedNetworkImage(
-                  imageUrl: resolved.avatarUrl!,
-                  width: size,
-                  height: size,
-                  fit: BoxFit.cover,
-                  // Fallback to the gradient + monogram while the image
-                  // is in-flight, so the avatar never collapses to a
-                  // blank disk. The placeholder/error widgets render the
-                  // same gradient computed for the non-uploaded path —
-                  // visually consistent during the brief network gap.
-                  placeholder: (context, _) => _GradientMonogram(
-                    size: size,
-                    monogram: resolved.monogram,
-                    dominantBodyPart: resolved.dominantBodyPart,
-                  ),
-                  errorWidget: (context, _, _) => _GradientMonogram(
-                    size: size,
-                    monogram: resolved.monogram,
-                    dominantBodyPart: resolved.dominantBodyPart,
-                  ),
-                )
-              else
-                _GradientMonogram(
-                  size: size,
-                  monogram: resolved.monogram,
-                  dominantBodyPart: resolved.dominantBodyPart,
-                ),
-              if (loading) _LoadingScrim(size: size),
-            ],
-          ),
-        ),
-      ),
-    );
+    return Semantics(label: label, image: true, child: core);
   }
 
   /// Resolve the three identity inputs to render-ready values: the
@@ -275,22 +320,29 @@ class _GradientMonogram extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
-      child: Center(
-        child: Text(
-          monogram,
-          // Rajdhani 700 monogram — `headline` is Rajdhani 600/24dp, the
-          // closest bundled style. `copyWith` forces the weight to 700
-          // (also bundled) and scales the font-size to 40% of the avatar
-          // size so the glyph visually centers in the disc regardless of
-          // the configured [size] (64dp default → 25.6 sp monogram).
-          style: AppTextStyles.headline.copyWith(
-            color: AppColors.textCream,
-            fontSize: size * 0.4,
-            fontWeight: FontWeight.w700,
-            height: 1.0,
-          ),
-        ),
-      ),
+      // Compact callers below the WCAG-readable size pass an empty
+      // monogram — skip the Text entirely (a Text('') renders nothing
+      // but still consumes a layout pass + creates an empty semantics
+      // node). Plain gradient disc is the v1 small-halo render.
+      child: monogram.isEmpty
+          ? const SizedBox.shrink()
+          : Center(
+              child: Text(
+                monogram,
+                // Rajdhani 700 monogram — `headline` is Rajdhani 600/24dp,
+                // the closest bundled style. `copyWith` forces the weight
+                // to 700 (also bundled) and scales the font-size to 40%
+                // of the avatar size so the glyph visually centers in the
+                // disc regardless of the configured [size] (64dp default
+                // → 25.6 sp monogram).
+                style: AppTextStyles.headline.copyWith(
+                  color: AppColors.textCream,
+                  fontSize: size * 0.4,
+                  fontWeight: FontWeight.w700,
+                  height: 1.0,
+                ),
+              ),
+            ),
     );
   }
 }

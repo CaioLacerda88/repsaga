@@ -3,17 +3,26 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/reward_accent.dart';
+import '../../../profile/ui/widgets/profile_avatar.dart';
 import '../../models/vitality_state.dart';
 
-/// Hero rune halo shown on the character-sheet header.
+/// Hero rune halo shown on the character-sheet header and Home card.
 ///
-/// Wraps the app's hero sigil (`AppIcons.hero`) in one of four §8.4 visual
-/// states. Each state ships its own visual differentiator (motion + color +
-/// size) so the four reads as distinct intent at a glance, not a single ramp
-/// of "more glow".
+/// Wraps the user's `ProfileAvatar` (compact mode — gradient disc /
+/// monogram / uploaded photo, no badge or scrim) in one of four §8.4
+/// visual states. Each state ships its own visual differentiator
+/// (motion + color + size) so the four read as distinct intent at a
+/// glance, not a single ramp of "more glow".
+///
+/// **Identity substitution (Phase 32 PR 32e scope add):** the previous
+/// abstract "small man" rune figure was retired — the avatar's 3-tier
+/// fallback (photo > BP-gradient monogram > Day-0 radial) handles every
+/// user state cleanly. The glow-state machine (dormant / fading / active
+/// / radiant) stays unchanged — that's the load-bearing RPG signal. The
+/// avatar at the center is the user's *current* identity render; the
+/// ring around it is what state-of-conditioning that identity is in.
 ///
 /// Performance contract:
 ///   * One [AnimationController] per active state — torn down when the
@@ -162,21 +171,34 @@ class _DormantHalo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        return Transform.rotate(
-          angle: controller.value * 2 * math.pi,
-          child: Opacity(
-            opacity: 0.12,
-            child: AppIcons.render(
-              AppIcons.hero,
-              color: AppColors.textDim,
-              size: size,
-            ),
-          ),
-        );
-      },
+    // Rotation wraps ONLY the dim glow shell, never the avatar — a
+    // spinning user photo or monogram is jarring. The avatar sits
+    // stationary at the centre; the dim ring drifts around it at the
+    // 8s cadence.
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            return Transform.rotate(
+              angle: controller.value * 2 * math.pi,
+              child: Opacity(
+                opacity: 0.12,
+                child: Container(
+                  width: size + 8,
+                  height: size + 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.textDim, width: 1.5),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        ProfileAvatar(size: size, compact: true),
+      ],
     );
   }
 }
@@ -192,7 +214,9 @@ class _FadingHalo extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        // Pulse 0.6 → 1.0 → 0.6 on the halo glow alpha.
+        // Pulse 0.6 → 1.0 → 0.6 on the halo glow alpha. Only the ring
+        // breathes — the avatar at the centre is stationary, so the
+        // user's identity stays steady while the *state* signals decay.
         final t = controller.value;
         final pulse = 0.6 + (math.sin(t * math.pi) * 0.4);
         return Container(
@@ -208,13 +232,7 @@ class _FadingHalo extends StatelessWidget {
               ),
             ],
           ),
-          child: Center(
-            child: AppIcons.render(
-              AppIcons.hero,
-              color: AppColors.primaryViolet,
-              size: size,
-            ),
-          ),
+          child: Center(child: ProfileAvatar(size: size, compact: true)),
         );
       },
     );
@@ -240,13 +258,7 @@ class _ActiveHalo extends StatelessWidget {
     return SizedBox(
       width: size + 8,
       height: size + 8,
-      child: Center(
-        child: AppIcons.render(
-          AppIcons.hero,
-          color: AppColors.hotViolet,
-          size: size,
-        ),
-      ),
+      child: Center(child: ProfileAvatar(size: size, compact: true)),
     );
   }
 }
@@ -324,11 +336,12 @@ class _RadiantHaloState extends State<_RadiantHalo> {
                         color: reward,
                       ),
                     ),
-                    AppIcons.render(
-                      AppIcons.hero,
-                      color: reward,
-                      size: enlargedSize,
-                    ),
+                    // Avatar carries the user identity unchanged; the
+                    // gold reward signal lives in the sweep arc + bloom
+                    // around it. Applying a gold tint to a photo (or a
+                    // body-part-hue gradient) would visually corrupt
+                    // the identity render. Phase 32 PR 32e — scope add.
+                    ProfileAvatar(size: enlargedSize, compact: true),
                   ],
                 ),
               );

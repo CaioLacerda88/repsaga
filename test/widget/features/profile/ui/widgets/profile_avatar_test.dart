@@ -302,4 +302,121 @@ void main() {
       },
     );
   });
+
+  group('ProfileAvatar — compact mode (halo-nested)', () {
+    testWidgets('does not render the loading scrim even when loading is true', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          child: const ProfileAvatar(
+            displayName: 'Alice',
+            loading: true,
+            compact: true,
+            size: 40,
+          ),
+          profile: const Profile(id: 'u'),
+        ),
+      );
+      await tester.pump();
+
+      // Compact mode hands the busy state to the parent halo's ring;
+      // an in-disc scrim would read as a doubled overlay.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets(
+      'does not wrap the disc in a Semantics widget with the avatar label',
+      (tester) async {
+        await tester.pumpWidget(
+          _host(
+            child: const ProfileAvatar(
+              displayName: 'Alice',
+              compact: true,
+              size: 40,
+            ),
+            profile: const Profile(id: 'u'),
+          ),
+        );
+        await tester.pump();
+
+        // The parent halo owns the Semantics tree; compact mode must not
+        // emit a 'Profile avatar for X' label here, otherwise the AOM
+        // node duplicates the parent's announcement.
+        final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
+        final compactLeakedLabel = semantics.any(
+          (s) => s.properties.label == 'Profile avatar for Alice',
+        );
+        expect(
+          compactLeakedLabel,
+          isFalse,
+          reason:
+              'Compact mode must not emit its own "Profile avatar for X" '
+              'semantics label.',
+        );
+      },
+    );
+
+    testWidgets('suppresses the monogram glyph below 30dp threshold', (
+      tester,
+    ) async {
+      // 24dp compact disc: monogram would land below the WCAG floor.
+      // Compact mode drops the Text entirely — gradient disc only.
+      await tester.pumpWidget(
+        _host(
+          child: const ProfileAvatar(
+            displayName: 'Alice',
+            compact: true,
+            size: 24,
+          ),
+          profile: const Profile(id: 'u'),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('A'), findsNothing);
+    });
+
+    testWidgets('still renders the monogram glyph at or above 30dp threshold', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          child: const ProfileAvatar(
+            displayName: 'Alice',
+            compact: true,
+            size: 40,
+          ),
+          profile: const Profile(id: 'u'),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('A'), findsOneWidget);
+    });
+
+    testWidgets('non-compact (default) preserves the Semantics wrapper', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          child: const ProfileAvatar(displayName: 'Alice'),
+          profile: const Profile(id: 'u'),
+        ),
+      );
+      await tester.pump();
+
+      final semantics = tester.widgetList<Semantics>(find.byType(Semantics));
+      final hasLabel = semantics.any(
+        (s) => s.properties.label == 'Profile avatar for Alice',
+      );
+      expect(
+        hasLabel,
+        isTrue,
+        reason:
+            'Non-compact mode must still emit the labeled Semantics '
+            'wrapper.',
+      );
+    });
+  });
 }
