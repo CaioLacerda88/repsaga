@@ -143,7 +143,16 @@ class _WorkoutDetailBody extends ConsumerWidget {
                           ),
                         ),
                         WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
+                          // Align the WidgetSpan to the surrounding text's
+                          // alphabetic baseline so the gold "PRs" digits sit
+                          // on the same line as the violet "XP" digits.
+                          // `PlaceholderAlignment.middle` (the prior anchor)
+                          // mid-centers the child against the line's x-height,
+                          // which Rajdhani's tall ascenders push visibly
+                          // upward on a real device — caught during PR #285
+                          // physical-Android verification.
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
                           child: RewardAccent(
                             child: Text(
                               l10n.historyDetailStripPrPart(prCount),
