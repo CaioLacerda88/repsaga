@@ -106,17 +106,22 @@ AvatarRepository _makeRepo({_FakeStorageBucket? bucket, _FakeHiveBox? box}) {
 
 void main() {
   group('AvatarRepository.uploadAvatar', () {
-    test('uploads to avatars/{userId}.jpg with the supplied bytes', () async {
-      final bucket = _FakeStorageBucket();
-      final repo = _makeRepo(bucket: bucket);
-      final bytes = Uint8List.fromList(List.filled(128, 0xAA));
+    test(
+      'uploads to avatars/{userId}/avatar.jpg with the supplied bytes',
+      () async {
+        final bucket = _FakeStorageBucket();
+        final repo = _makeRepo(bucket: bucket);
+        final bytes = Uint8List.fromList(List.filled(128, 0xAA));
 
-      await repo.uploadAvatar(userId: 'user-123', imageBytes: bytes);
+        await repo.uploadAvatar(userId: 'user-123', imageBytes: bytes);
 
-      expect(bucket.lastBucketId, 'avatars');
-      expect(bucket.lastUploadPath, 'user-123.jpg');
-      expect(bucket.lastUploadBytes, bytes);
-    });
+        expect(bucket.lastBucketId, 'avatars');
+        // Nested layout — flat 'user-123.jpg' would fail the bucket's
+        // RLS predicate `(storage.foldername(name))[1] = auth.uid()`.
+        expect(bucket.lastUploadPath, 'user-123/avatar.jpg');
+        expect(bucket.lastUploadBytes, bytes);
+      },
+    );
 
     test('upserts (does not error on second upload)', () async {
       final bucket = _FakeStorageBucket();
@@ -221,8 +226,12 @@ void main() {
   });
 
   group('AvatarRepository.pathFor', () {
-    test('joins userId with .jpg extension', () {
-      expect(AvatarRepository.pathFor('user-123'), 'user-123.jpg');
+    test('returns nested {userId}/avatar.jpg layout', () {
+      // Critical RLS contract: the bucket policy is
+      // `(storage.foldername(name))[1] = auth.uid()::text`. A flat
+      // `{userId}.jpg` would collapse foldername to [] and every write
+      // would be RLS-rejected. See migration 00068 preamble.
+      expect(AvatarRepository.pathFor('user-123'), 'user-123/avatar.jpg');
     });
   });
 }

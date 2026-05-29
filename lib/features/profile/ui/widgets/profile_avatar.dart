@@ -8,7 +8,6 @@ import '../../../rpg/domain/body_part_hues.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/character_sheet_state.dart';
 import '../../../rpg/providers/character_sheet_provider.dart';
-import '../../models/profile.dart';
 import '../../providers/profile_providers.dart';
 
 /// Circular avatar widget with three render layers, in priority order:
@@ -21,16 +20,21 @@ import '../../providers/profile_providers.dart';
 ///      [characterSheetProvider]), the circle fills with a 45° linear
 ///      gradient from the body-part hue to [AppColors.hotViolet]; the
 ///      single-letter monogram (Rajdhani 700, white) overlays.
-///   3. **Day-0 gradient + monogram** — when the user has no trained body
-///      parts yet, the gradient falls to [AppColors.abyss] →
-///      [AppColors.primaryViolet]. Visually distinct enough to read as
-///      "no trained path yet" without dropping the user into a blank state.
+///   3. **Day-0 radial gradient + monogram** — when the user has no
+///      trained body parts yet, the circle fills with a radial gradient
+///      ([AppColors.primaryViolet] center → [AppColors.abyss] edge). The
+///      structural shift from "diagonal sweep" (trained) to "glowing
+///      center" (Day-0) makes the two states immediately distinguishable
+///      at a glance.
 ///
-/// **Future-proof constructor.** All identity inputs ([displayName],
-/// [avatarUrl], [dominantBodyPart], [userId]) are optional. When null,
-/// the widget reads from `userProfileProvider` / `characterSheetProvider`
-/// for the current user. Pass them explicitly when rendering for a user
-/// who is NOT the current session — e.g. a future leaderboard row.
+/// **Current-user fallback.** All identity inputs ([displayName],
+/// [avatarUrl], [dominantBodyPart]) are optional. When null, the widget
+/// reads from `profileProvider` / `characterSheetProvider` for the
+/// current user. Pass them explicitly when rendering for a user who is
+/// NOT the current session — once a cross-user surface (leaderboard,
+/// social) lands, that surface adds a `userId`-scoped provider override
+/// at the consumer level rather than threading a `userId` through this
+/// widget.
 ///
 /// **No l10n call.** Per `feedback_widget_l10n_parameterization`, this
 /// widget does not read `AppLocalizations.of(context)`. The Semantics
@@ -44,7 +48,7 @@ class ProfileAvatar extends ConsumerWidget {
     this.displayName,
     this.avatarUrl,
     this.dominantBodyPart,
-    this.userId,
+    this.loading = false,
     this.semanticsLabel,
   });
 
@@ -54,7 +58,7 @@ class ProfileAvatar extends ConsumerWidget {
 
   /// When non-null, the monogram is derived from this name's first letter.
   /// When null, the widget falls back to the current user's profile
-  /// display name (via `userProfileProvider`), then the email prefix.
+  /// display name (via `profileProvider`), then the email prefix.
   final String? displayName;
 
   /// When non-null, renders the uploaded image instead of the gradient
@@ -67,12 +71,11 @@ class ProfileAvatar extends ConsumerWidget {
   /// [characterSheetProvider] (current-user path).
   final BodyPart? dominantBodyPart;
 
-  /// Reserved for future cross-user surfaces (leaderboard, social).
-  /// Currently unused by the render path — every read goes through the
-  /// current-user providers when [displayName] / [avatarUrl] /
-  /// [dominantBodyPart] are null. Wired into the constructor so the
-  /// signature is forward-compatible without re-architecting.
-  final String? userId;
+  /// When true, overlays a translucent scrim + small spinner on top of
+  /// whichever render path is active (uploaded image OR gradient
+  /// monogram). Driven by the screen-layer upload orchestrator so the
+  /// silent 3-10s upload window has a visible affordance.
+  final bool loading;
 
   /// Optional override for the Semantics label. When null, the widget
   /// composes the label from [displayName] (or current-user fallbacks)
@@ -83,8 +86,18 @@ class ProfileAvatar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final resolved = _resolveIdentity(ref);
-    final label =
-        semanticsLabel ?? 'Profile avatar for ${resolved.displayLabel}';
+    // Semantics label: explicit override wins. Otherwise compose a
+    // template — Nit 14: when displayLabel collapses to '?' (no
+    // displayName + no email), fall back to the bare 'Profile avatar'
+    // string so the AOM label is meaningful.
+    final String label;
+    if (semanticsLabel != null) {
+      label = semanticsLabel!;
+    } else if (resolved.displayLabel == '?') {
+      label = 'Profile avatar';
+    } else {
+      label = 'Profile avatar for ${resolved.displayLabel}';
+    }
 
     return Semantics(
       label: label,
@@ -93,8 +106,11 @@ class ProfileAvatar extends ConsumerWidget {
         width: size,
         height: size,
         child: ClipOval(
-          child: resolved.avatarUrl != null
-              ? CachedNetworkImage(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (resolved.avatarUrl != null)
+                CachedNetworkImage(
                   imageUrl: resolved.avatarUrl!,
                   width: size,
                   height: size,
@@ -115,27 +131,33 @@ class ProfileAvatar extends ConsumerWidget {
                     dominantBodyPart: resolved.dominantBodyPart,
                   ),
                 )
-              : _GradientMonogram(
+              else
+                _GradientMonogram(
                   size: size,
                   monogram: resolved.monogram,
                   dominantBodyPart: resolved.dominantBodyPart,
                 ),
+              if (loading) _LoadingScrim(size: size),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// Resolve the four identity inputs to render-ready values: the
+  /// Resolve the three identity inputs to render-ready values: the
   /// monogram glyph, the dominant body part (if any), the avatar URL,
   /// and the display-label string used by Semantics.
   ///
-  /// All provider reads degrade defensively: a loading / error
-  /// [AsyncValue] short-circuits to the explicit-param value (or null
-  /// → Day-0 path). This makes the widget pump-safe in any harness
-  /// where upstream providers are not stubbed.
+  /// Reads from [profileProvider], [currentUserEmailProvider] and
+  /// [characterSheetProvider] when the corresponding constructor param
+  /// is null. `AsyncValue.value` is already null-safe for `AsyncLoading`
+  /// / `AsyncError`, so the widget's Day-0 path is the natural fallback
+  /// when an upstream provider has not resolved yet — no try/catch
+  /// needed at this layer (those swallow real bugs).
   _ResolvedIdentity _resolveIdentity(WidgetRef ref) {
-    final profile = _safeWatchProfile(ref);
-    final emailFallback = _safeReadEmail(ref);
+    final profile = ref.watch(profileProvider).value;
+    final emailFallback = ref.watch(currentUserEmailProvider);
 
     // displayName fallback chain: explicit param → current profile →
     // email prefix → '?'.
@@ -151,11 +173,11 @@ class ProfileAvatar extends ConsumerWidget {
 
     // dominantBodyPart fallback: explicit param → derived from the
     // character sheet's highest-ranked trained entry. Day-0 (no
-    // trained body parts) returns null and the gradient falls to the
-    // abyss → primaryViolet pair.
+    // trained body parts, OR sheet provider still loading) returns null
+    // and the gradient falls to the abyss → primaryViolet pair.
     var bp = dominantBodyPart;
     if (bp == null) {
-      final sheet = _safeWatchCharacterSheet(ref);
+      final sheet = ref.watch(characterSheetProvider).value;
       if (sheet != null) {
         bp = _dominantTrainedFor(sheet);
       }
@@ -170,40 +192,6 @@ class ProfileAvatar extends ConsumerWidget {
       dominantBodyPart: bp,
       avatarUrl: url,
     );
-  }
-
-  /// Watch [profileProvider] defensively — a provider in error state
-  /// (common in widget tests that don't stub it) short-circuits to
-  /// null instead of bubbling a `ProviderException` through every
-  /// ancestor rebuild.
-  static Profile? _safeWatchProfile(WidgetRef ref) {
-    try {
-      return ref.watch(profileProvider).value;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Read [currentUserEmailProvider] defensively.
-  static String? _safeReadEmail(WidgetRef ref) {
-    try {
-      return ref.read(currentUserEmailProvider);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Watch [characterSheetProvider] defensively. The sheet's upstream
-  /// providers (rpg progress, active title, class) can be in
-  /// `AsyncError` when tests pump the screen without stubbing them —
-  /// we want the avatar to render the Day-0 gradient in that case,
-  /// not crash the whole screen.
-  static CharacterSheetState? _safeWatchCharacterSheet(WidgetRef ref) {
-    try {
-      return ref.watch(characterSheetProvider).value;
-    } catch (_) {
-      return null;
-    }
   }
 
   /// Highest-ranked trained entry from a [CharacterSheetState] — mirrors
@@ -263,17 +251,30 @@ class _GradientMonogram extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = _gradientColorsFor(dominantBodyPart);
+    final isDay0 = dominantBodyPart == null;
+    // Day-0 path uses a RadialGradient so the disc reads as a glowing
+    // brand orb instead of a flat dark linear sweep (linear
+    // `abyss → primaryViolet` rendered as a near-uniform dark purple at
+    // 64dp, indistinguishable from a flat fill). Trained path keeps the
+    // diagonal LinearGradient — the body-part hue has enough chroma that
+    // the diagonal sweep reads clearly.
+    final Gradient gradient = isDay0
+        ? const RadialGradient(
+            center: Alignment.center,
+            radius: 0.6,
+            colors: [AppColors.primaryViolet, AppColors.abyss],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              BodyPartHues.hueFor(dominantBodyPart!),
+              AppColors.hotViolet,
+            ],
+          );
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: colors,
-        ),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
       child: Center(
         child: Text(
           monogram,
@@ -292,22 +293,37 @@ class _GradientMonogram extends StatelessWidget {
       ),
     );
   }
+}
 
-  /// Two-stop gradient pair for the disc.
-  ///
-  /// **Day-0 path (`dominantBodyPart == null`):** `abyss → primaryViolet`.
-  /// Reads as a deep brand void with a violet rise — distinct from the
-  /// trained-path gradient and intentionally lower contrast so the call
-  /// to action ("upload an avatar to claim your face") is implicit.
-  ///
-  /// **Trained path:** `bodyPartHue → hotViolet`. The hue identifies the
-  /// user's dominant trained body part; the second stop lands on the
-  /// brand violet so every trained variant shares the same end-state and
-  /// the body-part identity remains the leading hue.
-  static List<Color> _gradientColorsFor(BodyPart? bp) {
-    if (bp == null) {
-      return const [AppColors.abyss, AppColors.primaryViolet];
-    }
-    return [BodyPartHues.hueFor(bp), AppColors.hotViolet];
+/// Translucent scrim + small spinner overlaid on top of the avatar while
+/// the screen-layer upload orchestrator is in flight. Sized to the same
+/// circular bounds as the avatar so the loading affordance reads as "this
+/// disc is busy" instead of an unrelated overlay.
+class _LoadingScrim extends StatelessWidget {
+  const _LoadingScrim({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    // 20dp indicator matches the in-button spinner register used by the
+    // AvatarCropSheet — visually consistent across the upload flow.
+    final indicator = size >= 48 ? 20.0 : size * 0.4;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.abyss.withValues(alpha: 0.55),
+      ),
+      child: Center(
+        child: SizedBox(
+          width: indicator,
+          height: indicator,
+          child: const CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.hotViolet,
+          ),
+        ),
+      ),
+    );
   }
 }

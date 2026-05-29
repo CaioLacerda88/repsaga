@@ -100,6 +100,9 @@ Widget _buildTestApp() {
       authRepositoryProvider.overrideWithValue(_MockAuthRepository()),
       workoutCountProvider.overrideWith((ref) => Future.value(5)),
       prCountProvider.overrideWith((ref) => Future.value(3)),
+      // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+      // currentUserEmailProvider directly.
+      currentUserEmailProvider.overrideWithValue('test@example.com'),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

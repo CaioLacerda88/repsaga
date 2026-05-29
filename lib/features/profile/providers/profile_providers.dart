@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart' show StateProvider;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,6 +37,18 @@ final avatarRepositoryProvider = Provider<AvatarRepository>((ref) {
 final profileProvider = AsyncNotifierProvider<ProfileNotifier, Profile?>(
   ProfileNotifier.new,
 );
+
+/// Tracks whether an avatar upload is currently in flight. Toggled by the
+/// `profile_settings_screen.dart` `openAvatarUploadFlow` orchestrator
+/// around the `AvatarRepository.uploadAvatar + ProfileRepository.upsertProfile`
+/// pair so the IdentityCard can render a loading overlay on top of the
+/// avatar disc — without this, the 3-10s upload window has no visible
+/// affordance and the user re-taps thinking the action was dropped.
+///
+/// Per the architectural separation rule, this lives at the
+/// orchestration / provider layer; the leaf widget ([ProfileAvatar]) only
+/// reads the flag as a constructor param.
+final avatarUploadInProgressProvider = StateProvider<bool>((ref) => false);
 
 class ProfileNotifier extends AsyncNotifier<Profile?> {
   @override

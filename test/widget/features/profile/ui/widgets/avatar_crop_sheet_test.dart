@@ -1,3 +1,26 @@
+// AvatarCropSheet widget tests.
+//
+// **Rasterization contract is on-device.** The Confirm-tap →
+// `RepaintBoundary.toImage` → PNG-bytes pipeline does NOT complete under
+// `WidgetTester`'s synthetic clock — even when wrapped in
+// `tester.runAsync` + a real-time `Future.delayed`, the modal-pop future
+// stayed unresolved (`null`) and `pumpAndSettle` deadlocked. Three
+// investigation paths were tried:
+//   * `tester.runAsync` + staged `pump(Duration)` + `Future.delayed`
+//     → result remained null after runAsync's scope exited.
+//   * `pumpAndSettle(Duration(seconds: 2))` after `Use this` tap
+//     → timed out (the rasterization frame loop never settles).
+//   * Direct `findRenderObject().toImage` inside runAsync
+//     → boundary not yet laid out at the captured frame.
+//
+// The widget-layer tests below pin the user-visible structural contract
+// (title + buttons render, semantics identifier present, both buttons
+// meet 48dp tap target, Cancel pops with AvatarCropCancelled). The
+// byte-encoding contract is gated by visual verification on-device per
+// the PR #283 body's "visual verification required" section. DO NOT
+// downgrade to a wiring assertion (`confirmButton.onPressed != null`) —
+// the on-device path remains the canonical gate.
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -67,34 +90,67 @@ void main() {
       image.dispose();
     });
 
-    testWidgets('Confirm button is wired to the rasterize handler', (
+    testWidgets('Confirm + Cancel buttons clear the 48dp tap-target floor', (
       tester,
     ) async {
+      // `feedback_tap_target_measurement` — Playwright boundingBox and
+      // source `minimumSize` both miss Flutter's
+      // `MaterialTapTargetSize.padded` default, so we measure via
+      // `tester.getSize` against the actual rendered geometry.
       final image = await _pumpHostWithImage(tester);
 
-      final confirmButton = tester.widget<FilledButton>(
-        find.ancestor(
-          of: find.text('Use this'),
-          matching: find.byType(FilledButton),
-        ),
+      final confirmFinder = find.ancestor(
+        of: find.text('Use this'),
+        matching: find.byType(FilledButton),
       );
-      expect(confirmButton.onPressed, isNotNull);
+      final cancelFinder = find.ancestor(
+        of: find.text('Cancel'),
+        matching: find.byType(OutlinedButton),
+      );
+      expect(tester.getSize(confirmFinder).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(cancelFinder).height, greaterThanOrEqualTo(48));
 
       image.dispose();
     });
 
-    testWidgets('Cancel button is wired to the cancel handler', (tester) async {
-      final image = await _pumpHostWithImage(tester);
+    testWidgets('tapping Cancel pops the sheet with AvatarCropCancelled', (
+      tester,
+    ) async {
+      final image = await _makeTestImage();
+      AvatarCropResult? result;
 
-      final cancelButton = tester.widget<OutlinedButton>(
-        find.ancestor(
-          of: find.text('Cancel'),
-          matching: find.byType(OutlinedButton),
+      await tester.pumpWidget(
+        TestMaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await AvatarCropSheet.open(
+                      context,
+                      image: image,
+                      strings: _strings,
+                    );
+                  },
+                  child: const Text('open'),
+                );
+              },
+            ),
+          ),
         ),
       );
-      expect(cancelButton.onPressed, isNotNull);
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(result, isA<AvatarCropCancelled>());
 
       image.dispose();
     });
+
+    // Confirm rasterization contract is on-device-only — see the
+    // header comment for the runAsync investigation summary.
   });
 }

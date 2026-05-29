@@ -61,6 +61,12 @@ Widget buildTestWidget({
       // safe — the listener only acts on emissions, and these tests don't
       // exercise sign-out/sign-in flows.
       authStateProvider.overrideWith((ref) => const Stream<AuthState>.empty()),
+      // PR #283 review (Blocker 3): the avatar widget now reads
+      // currentUserEmailProvider directly via ref.watch (no defensive
+      // try/catch). The provider's lambda hits Supabase.instance which
+      // is unset in widget tests — stub it explicitly with the
+      // mocked-out email value.
+      currentUserEmailProvider.overrideWithValue(email),
     ],
     child: TestMaterialApp(
       theme: AppTheme.dark,
@@ -233,15 +239,15 @@ void main() {
       verifyNever(() => mockAuth.signOut());
     });
 
-    testWidgets('shows monogram in ProfileAvatar', (tester) async {
+    testWidgets('IdentityCard renders the ProfileAvatar surface', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildTestWidget(profile: null));
       await tester.pump();
 
-      // Phase 32 PR 32e — the inline `CircleAvatar` + monogram in
-      // IdentityCard was replaced by the `ProfileAvatar` widget. The
-      // pin is now "exactly one ProfileAvatar renders" — that asserts
-      // the IdentityCard wires the new widget. Gradient color +
-      // monogram derivation are covered by `profile_avatar_test.dart`.
+      // Contract pin: the IdentityCard wires exactly one ProfileAvatar.
+      // Gradient color + monogram derivation are covered by
+      // `profile_avatar_test.dart`.
       expect(find.byType(ProfileAvatar), findsOneWidget);
     });
 
@@ -275,6 +281,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -317,6 +326,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -352,6 +364,9 @@ void main() {
             authStateProvider.overrideWith(
               (ref) => const Stream<AuthState>.empty(),
             ),
+            // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+            // currentUserEmailProvider directly.
+            currentUserEmailProvider.overrideWithValue(null),
           ],
           child: TestMaterialApp(
             theme: AppTheme.dark,
@@ -437,6 +452,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -481,6 +499,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,
@@ -688,6 +709,9 @@ void main() {
               authStateProvider.overrideWith(
                 (ref) => const Stream<AuthState>.empty(),
               ),
+              // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+              // currentUserEmailProvider directly.
+              currentUserEmailProvider.overrideWithValue(null),
             ],
             child: TestMaterialApp(
               theme: AppTheme.dark,

@@ -61,23 +61,33 @@ class ProfileSettingsScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               // Identity card
               profileAsync.when(
-                data: (profile) => IdentityCard(
-                  displayName: profile?.displayName,
-                  email: email,
-                  onEditName: () => showEditDisplayNameDialog(
-                    context,
-                    ref,
-                    profile?.displayName,
-                  ),
-                  onAvatarTap: () => openAvatarUploadFlow(context, ref),
-                ),
-                loading: () => const IdentityCard(
+                data: (profile) {
+                  final displayName = profile?.displayName ?? l10n.gymUser;
+                  return IdentityCard(
+                    displayName: profile?.displayName,
+                    email: email,
+                    avatarSemanticsLabel: l10n.avatarSemanticsLabel(
+                      displayName,
+                    ),
+                    onEditName: () => showEditDisplayNameDialog(
+                      context,
+                      ref,
+                      profile?.displayName,
+                    ),
+                    onAvatarTap: () => openAvatarUploadFlow(context, ref),
+                  );
+                },
+                loading: () => IdentityCard(
                   displayName: null,
                   email: '',
+                  avatarSemanticsLabel: l10n.avatarSemanticsLabel(l10n.gymUser),
                   loading: true,
                 ),
-                error: (_, _) =>
-                    const IdentityCard(displayName: null, email: ''),
+                error: (_, _) => IdentityCard(
+                  displayName: null,
+                  email: '',
+                  avatarSemanticsLabel: l10n.avatarSemanticsLabel(l10n.gymUser),
+                ),
               ),
               const SizedBox(height: 24),
               // Stats section
@@ -224,6 +234,13 @@ Future<void> openAvatarUploadFlow(BuildContext context, WidgetRef ref) async {
   final l10n = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
   final shareService = ref.read(shareServiceProvider);
+  // Capture the StateController up-front so the `finally` reset doesn't
+  // depend on `ref` still being valid if the user navigates away during
+  // the upload. The provider lives at the ProviderScope, not the widget,
+  // so the controller reference survives unmount.
+  final uploadInProgressCtrl = ref.read(
+    avatarUploadInProgressProvider.notifier,
+  );
 
   // 1) Picker sheet (camera / gallery / cancel). Hide camera row when
   //    the OS reports `permanentlyDenied` — no recovery from inside the
@@ -244,7 +261,25 @@ Future<void> openAvatarUploadFlow(BuildContext context, WidgetRef ref) async {
     final status = await shareService.requestCameraPermission();
     if (!context.mounted) return;
     if (!status.isGranted) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.avatarUploadFailed)));
+      // Camera-denied path surfaces a dedicated copy that names the
+      // actual cause (instead of the generic `avatarUploadFailed` which
+      // implies a network/storage failure). When the OS reports
+      // `permanentlyDenied` the user can't re-prompt from inside the
+      // app — pair the snackbar with an "Open settings" action so the
+      // user can flip the toggle and retry. Re-uses the shareOpenSettings
+      // ARB key from Phase 30b for label parity across surfaces.
+      final isPermanent = status == PermissionStatus.permanentlyDenied;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.cameraPermissionDeniedForAvatar),
+          action: isPermanent
+              ? SnackBarAction(
+                  label: l10n.shareOpenSettings,
+                  onPressed: () => shareService.openAppSettings(),
+                )
+              : null,
+        ),
+      );
       return;
     }
     picked = await shareService.pickFromCamera();
@@ -266,9 +301,12 @@ Future<void> openAvatarUploadFlow(BuildContext context, WidgetRef ref) async {
   }
   if (!context.mounted) return;
 
-  // 4) Open the crop sheet — returns the rasterized bytes or null on
-  //    cancel.
-  final croppedBytes = await AvatarCropSheet.open(
+  // 4) Open the crop sheet — returns a [CropResult] sealed type so we
+  //    distinguish "user cancelled" (no snackbar) from "rasterize
+  //    failed" (avatarUploadFailed snackbar). The legacy null-return
+  //    contract conflated the two — a render failure presented as a
+  //    silent dismiss.
+  final cropResult = await AvatarCropSheet.open(
     context,
     image: decoded,
     strings: AvatarCropSheetStrings(
@@ -277,15 +315,29 @@ Future<void> openAvatarUploadFlow(BuildContext context, WidgetRef ref) async {
       cancel: l10n.avatarCropSheetCancel,
     ),
   );
-  if (croppedBytes == null || !context.mounted) return;
+  if (!context.mounted) return;
+  final Uint8List croppedBytes;
+  switch (cropResult) {
+    case AvatarCropCancelled():
+      return;
+    case AvatarCropFailed():
+      messenger.showSnackBar(SnackBar(content: Text(l10n.avatarUploadFailed)));
+      return;
+    case AvatarCropSuccess(:final bytes):
+      croppedBytes = bytes;
+  }
 
-  // 5) Upload + profile-row update.
+  // 5) Upload + profile-row update. Toggle the in-progress flag so the
+  //    IdentityCard surfaces a loading scrim on the avatar disc; flip
+  //    it back in `finally` so a thrown exception still clears the
+  //    overlay.
   final userId = ref.read(currentUserIdProvider);
   if (userId == null) {
     messenger.showSnackBar(SnackBar(content: Text(l10n.avatarUploadFailed)));
     return;
   }
 
+  uploadInProgressCtrl.state = true;
   try {
     final avatarRepo = ref.read(avatarRepositoryProvider);
     final url = await avatarRepo.uploadAvatar(
@@ -309,6 +361,11 @@ Future<void> openAvatarUploadFlow(BuildContext context, WidgetRef ref) async {
     debugPrint('[ProfileAvatar] upload unexpected error: $e');
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(l10n.avatarUploadFailed)));
+  } finally {
+    // Idempotent — clears the scrim whether the upload succeeded,
+    // failed gracefully, or the widget unmounted mid-upload. The
+    // captured controller survives unmount (lives at the ProviderScope).
+    uploadInProgressCtrl.state = false;
   }
 }
 

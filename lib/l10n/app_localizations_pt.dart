@@ -2979,4 +2979,13 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get avatarUploadFailed =>
       'Não consegui atualizar seu avatar. Tente de novo.';
+
+  @override
+  String avatarSemanticsLabel(String name) {
+    return 'Avatar do perfil de $name';
+  }
+
+  @override
+  String get cameraPermissionDeniedForAvatar =>
+      'Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso.';
 }

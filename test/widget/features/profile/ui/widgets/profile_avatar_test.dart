@@ -51,11 +51,10 @@ Widget _host({required Widget child, Profile? profile, String? email}) {
   );
 }
 
-/// Read the leaf [DecoratedBox] (the gradient disc) from a pumped
-/// [ProfileAvatar] subtree. Used to assert the gradient colors.
-LinearGradient _gradientOf(WidgetTester tester) {
-  // The leaf DecoratedBox carries the gradient; outer DecoratedBoxes
-  // (e.g. Card, Scaffold) don't have a gradient — filter on that.
+/// Read the leaf [DecoratedBox]'s [LinearGradient] (trained path) from a
+/// pumped [ProfileAvatar] subtree. Used to assert the trained-path
+/// gradient stops.
+LinearGradient _linearGradientOf(WidgetTester tester) {
   final boxes = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox));
   for (final box in boxes) {
     final deco = box.decoration;
@@ -64,6 +63,21 @@ LinearGradient _gradientOf(WidgetTester tester) {
     }
   }
   throw StateError('No DecoratedBox with a LinearGradient was found.');
+}
+
+/// Read the leaf [DecoratedBox]'s [RadialGradient] (Day-0 path) from a
+/// pumped [ProfileAvatar] subtree. Day-0 renders a radial glow (violet
+/// center → abyss edge) so the disc reads as a distinct brand orb,
+/// distinguishable at a glance from the diagonal trained-path sweep.
+RadialGradient _radialGradientOf(WidgetTester tester) {
+  final boxes = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox));
+  for (final box in boxes) {
+    final deco = box.decoration;
+    if (deco is BoxDecoration && deco.gradient is RadialGradient) {
+      return deco.gradient! as RadialGradient;
+    }
+  }
+  throw StateError('No DecoratedBox with a RadialGradient was found.');
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +101,7 @@ void main() {
         );
         await tester.pump();
 
-        final gradient = _gradientOf(tester);
+        final gradient = _linearGradientOf(tester);
         expect(gradient.colors.first, BodyPartHues.hueFor(bp));
         expect(gradient.colors.last, AppColors.hotViolet);
       });
@@ -96,7 +110,8 @@ void main() {
 
   group('ProfileAvatar — Day-0 fallback', () {
     testWidgets(
-      'renders abyss → primaryViolet gradient when no dominant body part',
+      'renders a RadialGradient (primaryViolet center → abyss edge) when '
+      'no dominant body part',
       (tester) async {
         await tester.pumpWidget(
           _host(
@@ -110,9 +125,13 @@ void main() {
         );
         await tester.pump();
 
-        final gradient = _gradientOf(tester);
-        expect(gradient.colors.first, AppColors.abyss);
-        expect(gradient.colors.last, AppColors.primaryViolet);
+        // Contract: the Day-0 disc renders a RadialGradient — structural
+        // difference from the trained path's LinearGradient. Asserting on
+        // the gradient TYPE pins that a future tweak can't silently fall
+        // back to a linear sweep (which renders flat-dark at 64dp).
+        final gradient = _radialGradientOf(tester);
+        expect(gradient.colors.first, AppColors.primaryViolet);
+        expect(gradient.colors.last, AppColors.abyss);
       },
     );
   });

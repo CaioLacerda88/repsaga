@@ -922,5 +922,7 @@
   "avatarCropSheetConfirm": "Usar esta",
   "avatarCropSheetCancel": "Cancelar",
   "avatarUploadSuccess": "Avatar atualizado.",
-  "avatarUploadFailed": "Não consegui atualizar seu avatar. Tente de novo."
+  "avatarUploadFailed": "Não consegui atualizar seu avatar. Tente de novo.",
+  "avatarSemanticsLabel": "Avatar do perfil de {name}",
+  "cameraPermissionDeniedForAvatar": "Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso."
 }

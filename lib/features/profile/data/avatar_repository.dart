@@ -10,10 +10,13 @@ import '../../../core/data/base_repository.dart';
 /// fast-path reads (so the IdentityCard avatar doesn't wait for the next
 /// profile-row fetch after the user uploads).
 ///
-/// **Storage layout:** `avatars/{userId}.jpg`. Migration 00068 created the
-/// bucket with read-public + write-own-user-prefix RLS — the user can only
-/// overwrite their own object. The bucket is configured for `image/jpeg`
-/// only at a 512KB ceiling.
+/// **Storage layout:** `avatars/{userId}/avatar.jpg`. Migration 00068 created
+/// the bucket with read-public + write-own-user-prefix RLS — the user can
+/// only overwrite their own object. The nested path (NOT a flat
+/// `{userId}.jpg`) is required: the bucket RLS predicate gates writes on
+/// `(storage.foldername(name))[1] = auth.uid()::text`, and `foldername`
+/// returns `[]` for flat filenames — every upload would be denied. The
+/// bucket accepts both `image/jpeg` and `image/png` at a 512KB ceiling.
 ///
 /// **Cache-busting:** uploads return a URL with a `?v=<timestamp>` suffix
 /// stamped at upload time. Subsequent reads on the same user route through
@@ -44,13 +47,20 @@ class AvatarRepository extends BaseRepository {
   /// Compute the canonical storage path for [userId]'s avatar object.
   /// Public so callers (the future delete-avatar flow) can refer to the
   /// same path without re-deriving the convention.
-  static String pathFor(String userId) => '$userId.jpg';
+  ///
+  /// **Nested layout required.** Returns `{userId}/avatar.jpg`, not
+  /// `{userId}.jpg`. The bucket RLS predicate uses
+  /// `(storage.foldername(name))[1] = auth.uid()::text`, which only
+  /// matches when the path has at least one slash-delimited folder
+  /// segment. A flat filename collapses `foldername` to `[]` and every
+  /// write is RLS-rejected — see migration 00068's preamble.
+  static String pathFor(String userId) => '$userId/avatar.jpg';
 
   /// Upload [imageBytes] to the user's avatar object and return the
   /// public URL with a `?v=<DateTime.now().millisecondsSinceEpoch>`
   /// cache-bust suffix. Idempotent: each call overwrites the same
   /// object via the `upsert: true` flag, so the user's
-  /// `avatars/{userId}.jpg` address is stable across uploads.
+  /// `avatars/{userId}/avatar.jpg` address is stable across uploads.
   ///
   /// [contentType] defaults to `'image/png'` because the v1
   /// `AvatarCropSheet` rasterizes via `dart:ui`'s PNG encoder; pass

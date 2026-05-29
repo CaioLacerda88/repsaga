@@ -24,6 +24,38 @@ class AvatarCropSheetStrings {
   final String cancel;
 }
 
+/// Sealed result type returned by [AvatarCropSheet.open].
+///
+/// **Why not `Uint8List?`?** A nullable byte buffer conflated two
+/// distinct outcomes — "user cancelled" (no UX needed) and "rasterize
+/// failed" (must surface an error snackbar). The orchestrator can't tell
+/// them apart and a render failure would silently dismiss. The sealed
+/// type forces the orchestrator to switch on every case explicitly.
+sealed class AvatarCropResult {
+  const AvatarCropResult();
+}
+
+/// User dismissed the sheet without confirming. The orchestrator returns
+/// silently — no snackbar.
+class AvatarCropCancelled extends AvatarCropResult {
+  const AvatarCropCancelled();
+}
+
+/// Confirm tap rasterized the visible square to PNG bytes. The
+/// orchestrator forwards [bytes] to `AvatarRepository.uploadAvatar`.
+class AvatarCropSuccess extends AvatarCropResult {
+  const AvatarCropSuccess(this.bytes);
+  final Uint8List bytes;
+}
+
+/// Confirm tap reached the rasterization path but `toImage` / encode
+/// threw. The orchestrator surfaces `avatarUploadFailed`. Distinct from
+/// [AvatarCropCancelled] so the user sees a useful snackbar instead of
+/// a silent dismiss.
+class AvatarCropFailed extends AvatarCropResult {
+  const AvatarCropFailed();
+}
+
 /// Bottom-sheet circular crop UI for an in-memory image.
 ///
 /// **Flow:** the user drops in via a picker (camera / gallery), the
@@ -31,7 +63,9 @@ class AvatarCropSheetStrings {
 /// crop area with a circular mask overlay, the user pinches / drags to
 /// reposition, and tapping Confirm rasterizes the visible square via
 /// `RepaintBoundary.toImage` → PNG bytes (downsampled to 512×512 max).
-/// Cancel returns `null`.
+/// The sheet returns an [AvatarCropResult] sealed type — Cancel pops
+/// [AvatarCropCancelled], Confirm pops [AvatarCropSuccess] (or
+/// [AvatarCropFailed] if rasterization throws).
 ///
 /// **PNG output, not JPEG.** Flutter's `dart:ui` exposes a public PNG
 /// encoder ([ui.ImageByteFormat.png]) but no public JPEG encoder. Rather
@@ -61,15 +95,16 @@ class AvatarCropSheet extends StatefulWidget {
   /// Localized strings (title + confirm + cancel labels).
   final AvatarCropSheetStrings strings;
 
-  /// Open the sheet on top of [context] and return the cropped image
-  /// bytes (PNG, or `null` if the user cancelled). The sheet is
+  /// Open the sheet on top of [context] and return an [AvatarCropResult]
+  /// — never null. The sealed type forces the caller to handle "user
+  /// cancelled" and "rasterize failed" distinctly. The sheet is
   /// full-width and uses the default bottom-sheet shape from [AppTheme].
-  static Future<Uint8List?> open(
+  static Future<AvatarCropResult> open(
     BuildContext context, {
     required ui.Image image,
     required AvatarCropSheetStrings strings,
-  }) {
-    return showModalBottomSheet<Uint8List?>(
+  }) async {
+    final result = await showModalBottomSheet<AvatarCropResult>(
       context: context,
       backgroundColor: AppColors.surface,
       isScrollControlled: true,
@@ -82,6 +117,11 @@ class AvatarCropSheet extends StatefulWidget {
         return AvatarCropSheet(image: image, strings: strings);
       },
     );
+    // `null` reaches here when the user drags the sheet down or taps
+    // the scrim — same UX as the explicit Cancel button. Collapse to
+    // [AvatarCropCancelled] so the caller's switch only handles the
+    // three sealed variants, not the legacy nullable contract.
+    return result ?? const AvatarCropCancelled();
   }
 
   @override
@@ -178,15 +218,29 @@ class _AvatarCropSheetState extends State<AvatarCropSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
+                      // `minimumSize: Size(0, 48)` enforces the WCAG /
+                      // Material 48dp tap-target baseline. The default
+                      // OutlinedButton renders ~41dp tall, below the
+                      // threshold; tap-target measurement via
+                      // tester.getSize is the only way to catch this
+                      // (see `feedback_tap_target_measurement`).
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                       onPressed: _exporting
                           ? null
-                          : () => Navigator.of(context).pop<Uint8List?>(null),
+                          : () => Navigator.of(context).pop<AvatarCropResult>(
+                              const AvatarCropCancelled(),
+                            ),
                       child: Text(widget.strings.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                       onPressed: _exporting ? null : _confirm,
                       child: _exporting
                           ? const SizedBox(
@@ -210,22 +264,18 @@ class _AvatarCropSheetState extends State<AvatarCropSheet> {
   }
 
   /// Rasterize the visible crop area to PNG bytes and pop the sheet
-  /// with the result. Errors during rasterization pop with null so the
-  /// caller falls back to the picker / re-attempt path instead of being
-  /// stuck on a frozen sheet.
+  /// with [AvatarCropSuccess]. Errors during rasterization pop with
+  /// [AvatarCropFailed] — distinct from [AvatarCropCancelled] so the
+  /// caller surfaces an error snackbar instead of silently dismissing.
   Future<void> _confirm() async {
     setState(() => _exporting = true);
     try {
       final bytes = await _rasterize();
       if (!mounted) return;
-      Navigator.of(context).pop<Uint8List?>(bytes);
+      Navigator.of(context).pop<AvatarCropResult>(AvatarCropSuccess(bytes));
     } catch (_) {
       if (!mounted) return;
-      // Pop with null so the caller can re-surface the picker / show
-      // an error snackbar. The screen-layer flow distinguishes "user
-      // cancelled" from "render failed" via a try/catch around the
-      // open() future — see `profile_settings_screen.dart`.
-      Navigator.of(context).pop<Uint8List?>(null);
+      Navigator.of(context).pop<AvatarCropResult>(const AvatarCropFailed());
     }
   }
 

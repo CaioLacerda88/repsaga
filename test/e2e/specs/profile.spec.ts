@@ -193,7 +193,7 @@ test.describe('Profile — weekly goal', { tag: '@smoke' }, () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 32 PR 32e — IdentityCard avatar visibility smoke.
+// IdentityCard avatar visibility smoke.
 //
 // Pin that the avatar surface (Semantics(identifier: 'identity-card-avatar'))
 // renders and is tappable. The picker/crop/upload pipeline drives an OS-level

@@ -2343,5 +2343,12 @@
   "avatarUploadSuccess": "Avatar updated.",
   "@avatarUploadSuccess": { "description": "Phase 32 PR 32e — Success snackbar shown after a successful avatar upload. The IdentityCard re-renders with the new image at the same time." },
   "avatarUploadFailed": "Couldn't update your avatar. Please try again.",
-  "@avatarUploadFailed": { "description": "Phase 32 PR 32e — Error snackbar shown when the avatar upload fails (network / storage error). The user can re-tap the avatar to retry." }
+  "@avatarUploadFailed": { "description": "Phase 32 PR 32e — Error snackbar shown when the avatar upload fails (network / storage error). The user can re-tap the avatar to retry." },
+  "avatarSemanticsLabel": "Profile avatar for {name}",
+  "@avatarSemanticsLabel": {
+    "description": "Phase 32 PR 32e — Accessibility label for the IdentityCard avatar surface. The {name} placeholder receives the user's display name (or email fallback). Read by screen readers when the user lands on the avatar.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "cameraPermissionDeniedForAvatar": "Camera access denied. Try the gallery, or open settings to grant access.",
+  "@cameraPermissionDeniedForAvatar": { "description": "Phase 32 PR 32e — Snackbar copy shown when the user denies camera permission during the avatar-upload flow. Distinct from avatarUploadFailed (network/storage error) so the user sees the actual cause. The screen layer pairs this with an Open settings action when the OS reports permanentlyDenied." }
 }

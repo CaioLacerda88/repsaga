@@ -5105,6 +5105,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t update your avatar. Please try again.'**
   String get avatarUploadFailed;
+
+  /// Phase 32 PR 32e — Accessibility label for the IdentityCard avatar surface. The {name} placeholder receives the user's display name (or email fallback). Read by screen readers when the user lands on the avatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile avatar for {name}'**
+  String avatarSemanticsLabel(String name);
+
+  /// Phase 32 PR 32e — Snackbar copy shown when the user denies camera permission during the avatar-upload flow. Distinct from avatarUploadFailed (network/storage error) so the user sees the actual cause. The screen layer pairs this with an Open settings action when the OS reports permanentlyDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access denied. Try the gallery, or open settings to grant access.'**
+  String get cameraPermissionDeniedForAvatar;
 }
 
 class _AppLocalizationsDelegate

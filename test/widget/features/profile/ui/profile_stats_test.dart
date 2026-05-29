@@ -41,6 +41,11 @@ Widget _buildProfileSettingsScreen({
       authRepositoryProvider.overrideWithValue(MockAuthRepository()),
       workoutCountProvider.overrideWith((ref) => Future.value(workoutCount)),
       prCountProvider.overrideWith((ref) => Future.value(prCount)),
+      // PR #283 review (Blocker 3): ProfileAvatar now ref.watches
+      // currentUserEmailProvider directly (no defensive try/catch). The
+      // real provider hits Supabase.instance which is unset in widget
+      // tests — stub the value to match the auth mock's email.
+      currentUserEmailProvider.overrideWithValue('test@example.com'),
     ],
     child: TestMaterialApp(
       theme: AppTheme.dark,
