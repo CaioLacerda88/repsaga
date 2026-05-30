@@ -20,7 +20,7 @@ import 'workout_history_providers.dart';
 /// Uses `package:clock`'s ambient clock so tests can pin a fixed reference
 /// time via `withClock(Clock.fixed(...), ...)`.
 final streakProvider = Provider<int>((ref) {
-  final history = ref.watch(workoutHistoryProvider).value;
+  final history = ref.watch(workoutHistoryProvider).value?.workouts;
   if (history == null || history.isEmpty) return 0;
 
   final now = clock.now();

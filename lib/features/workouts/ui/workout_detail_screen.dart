@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/number_format.dart';
-import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/workout_formatters.dart';
 import '../../../l10n/app_localizations.dart';
@@ -79,6 +78,20 @@ class _WorkoutDetailBody extends ConsumerWidget {
     final allSets = detail.setsByExercise.values.expand((s) => s).toList();
     final totalVolume = WorkoutFormatters.calculateVolume(allSets);
 
+    // PR count comes from `workout.prCount` (set by the `get_workout_xp`
+    // RPC during the detail fetch) — single source of truth shared with
+    // the History feed's per-card diamond, so the two surfaces never
+    // disagree on the value. The gold-ring on individual set rows still
+    // uses `workoutPRSetIdsProvider` for which-set-was-the-PR resolution,
+    // but the aggregate count for the strip reads from the workout model
+    // directly. See PR #285 Important 8.
+    final prCount = workout.prCount;
+
+    // Hide the strip when both aggregates are zero — a "+0 XP · 0 PRs"
+    // line on an incomplete or warm-up-only session reads as negative
+    // confirmation, not steady-state rhythm. See PR #285 Important 7.
+    final showStrip = workout.totalXp > 0 || prCount > 0;
+
     return CustomScrollView(
       slivers: [
         SliverAppBar(
@@ -97,6 +110,69 @@ class _WorkoutDetailBody extends ConsumerWidget {
             ),
           ),
         ),
+        // 48dp summary strip — `surface2` background sits flush against the
+        // AppBar's bottom edge. Color split via Text.rich: XP digits in
+        // `hotViolet` (daily-driver register), PR digits routed through
+        // RewardAccent (heroGold scarcity register). Hidden entirely when
+        // the session produced neither XP nor PRs. See PR #285 Important 7.
+        if (showStrip)
+          SliverToBoxAdapter(
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              identifier: 'history-detail-strip',
+              child: Container(
+                height: 48,
+                color: AppColors.surface2,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: l10n.historyDetailStripXpPart(workout.totalXp),
+                        style: AppTextStyles.numericSmall.copyWith(
+                          color: AppColors.hotViolet.withValues(alpha: 0.85),
+                        ),
+                      ),
+                      if (prCount > 0) ...[
+                        TextSpan(
+                          text: ' · ',
+                          style: AppTextStyles.numericSmall.copyWith(
+                            color: AppColors.textDim.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        WidgetSpan(
+                          // Align the WidgetSpan to the surrounding text's
+                          // alphabetic baseline so the gold "PRs" digits sit
+                          // on the same line as the violet "XP" digits.
+                          // `PlaceholderAlignment.middle` (the prior anchor)
+                          // mid-centers the child against the line's x-height,
+                          // which Rajdhani's tall ascenders push visibly
+                          // upward on a real device — caught during PR #285
+                          // physical-Android verification.
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: RewardAccent(
+                            child: Text(
+                              l10n.historyDetailStripPrPart(prCount),
+                              // `numericSmallInheriting` is the no-baked-
+                              // color sibling of `numericSmall` — see the
+                              // token's docstring for why bare
+                              // `numericSmall` would override RewardAccent's
+                              // heroGold via `Text.style.merge`. Caught in
+                              // PR #285 device verification.
+                              style: AppTextStyles.numericSmallInheriting,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Exercise cards
         SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
@@ -137,32 +213,47 @@ class _WorkoutDetailBody extends ConsumerWidget {
               ),
             ),
           ),
-        // Total volume footer
+        // 48dp total-volume strip — mirrors the top XP/PRs strip (lines
+        // ~120-160 above) so the screen reads as two anchor bands around
+        // the exercise list rather than a free-floating Material icon
+        // footnote. `Text.rich` splits the eyebrow label (Barlow
+        // Condensed tracked, textDim alpha 0.6) from the numeric value
+        // (Rajdhani 700 tabular, textCream) so the value half reads as
+        // the load-bearing data point in the same numeric register the
+        // top strip's XP/PR spans use. See PR #285 UX-critic memo (Q2).
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.fitness_center,
-                  size: 18,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.totalVolume(
-                    WorkoutFormatters.formatVolume(
-                      totalVolume,
-                      weightUnit: weightUnit,
-                      locale: locale,
+          child: Semantics(
+            container: true,
+            explicitChildNodes: true,
+            identifier: 'workout-detail-total-volume-strip',
+            child: Container(
+              height: 48,
+              color: AppColors.surface2,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: l10n.workoutDetailTotalVolumeLabel,
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.textDim.withValues(alpha: 0.6),
+                      ),
                     ),
-                  ),
-                  style: AppTextStyles.title.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
+                    const TextSpan(text: '  '),
+                    TextSpan(
+                      text: l10n.workoutDetailTotalVolumeValue(
+                        WorkoutFormatters.formatVolume(
+                          totalVolume,
+                          weightUnit: weightUnit,
+                          locale: locale,
+                        ),
+                      ),
+                      style: AppTextStyles.numeric.copyWith(fontSize: 14),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -320,8 +411,25 @@ class _ReadOnlySetRow extends StatelessWidget {
           SizedBox(
             width: 40,
             child: isPR
+                // Gold diamond glyph — matches the per-card PR diamond
+                // pattern on the History feed (`history-card-pr-diamond`).
+                // Replaces the previous `AppIcons.levelUp` SVG which
+                // semantically belongs to the level-up / XP ceremony
+                // register (`saga_intro_overlay.dart`) and bled into the
+                // PR register here. The set number on PR rows is implicit
+                // from row position so the slot stays at 40dp without a
+                // numeric prefix. See PR #285 UX-critic memo (Q1).
                 ? RewardAccent(
-                    child: AppIcons.render(AppIcons.levelUp, size: 18),
+                    child: Text(
+                      '◆',
+                      // `numericSmallInheriting` is the no-baked-color
+                      // sibling of `numericSmall` — see the token's
+                      // docstring for the rationale; same fix pattern as
+                      // the card PR diamond + detail-strip PR span.
+                      // Outer `const` dropped because the getter call
+                      // isn't a compile-time constant.
+                      style: AppTextStyles.numericSmallInheriting,
+                    ),
                   )
                 : Text(
                     '${set.setNumber}.',

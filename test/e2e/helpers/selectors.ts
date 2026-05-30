@@ -597,6 +597,40 @@ export const HISTORY = {
   emptyStateCta: '[flt-semantics-identifier="history-empty-cta"]',
   /** Retry button shown on error state — Semantics(identifier: 'history-retry') */
   retryButton: '[flt-semantics-identifier="history-retry"]',
+  /**
+   * Sticky week header (52dp surface2 row, shadow on overlapsContent).
+   * Renders one per ISO week group at the top of each section. Pinned
+   * during scroll. Current ISO week shows "This Week" / "Esta semana"
+   * instead of the date format.
+   * Semantics(identifier: 'history-week-header')
+   */
+  weekHeader: '[flt-semantics-identifier="history-week-header"]',
+  /**
+   * Per-card "+N XP" eyebrow in hotViolet (daily-driver progress register)
+   * above the title row. Always present (renders even at 0 XP). One per
+   * workout card.
+   * Semantics(identifier: 'history-card-xp-eyebrow')
+   */
+  cardXpEyebrow: '[flt-semantics-identifier="history-card-xp-eyebrow"]',
+  /**
+   * Per-card "◆ N PR" diamond row in heroGold via RewardAccent (sanctioned
+   * scarcity scope). Rendered only when the workout's prCount > 0 —
+   * omitted entirely on zero (per the "no empty placeholders" rule).
+   * Use `.count() === 0` to assert absence; use `.first()` when at least
+   * one is expected.
+   * Semantics(identifier: 'history-card-pr-diamond')
+   */
+  cardPrDiamond: '[flt-semantics-identifier="history-card-pr-diamond"]',
+  /**
+   * 48dp surface2 summary strip on the Workout Detail screen. Sits
+   * between the SliverAppBar and the first exercise card. Renders
+   * "+N XP" in hotViolet with optional " · M PRs" span in heroGold
+   * (via RewardAccent) when prCount > 0. Hidden entirely when both
+   * totalXp and prCount are zero (no negative-confirmation strip on
+   * incomplete sessions).
+   * Semantics(identifier: 'history-detail-strip')
+   */
+  detailStrip: '[flt-semantics-identifier="history-detail-strip"]',
 } as const;
 
 // ---------------------------------------------------------------------------

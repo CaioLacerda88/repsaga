@@ -975,8 +975,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notes => 'Notes';
 
   @override
-  String totalVolume(String volume) {
-    return 'Total Volume: $volume';
+  String get workoutDetailTotalVolumeLabel => 'Total volume';
+
+  @override
+  String workoutDetailTotalVolumeValue(String volume) {
+    return '$volume';
   }
 
   @override
@@ -2976,4 +2979,49 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cameraPermissionDeniedForAvatar =>
       'Camera access denied. Try the gallery, or open settings to grant access.';
+
+  @override
+  String historyWeekLabel(String date) {
+    return 'Week of $date';
+  }
+
+  @override
+  String historyWeekRollupSets(int sets) {
+    return '$sets sets';
+  }
+
+  @override
+  String historyCardXpEyebrow(int xp) {
+    return '+$xp XP';
+  }
+
+  @override
+  String historyCardPrCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count PRs',
+      one: '1 PR',
+    );
+    return '◆ $_temp0';
+  }
+
+  @override
+  String historyDetailStripXpPart(int xp) {
+    return '+$xp XP';
+  }
+
+  @override
+  String historyDetailStripPrPart(int prs) {
+    String _temp0 = intl.Intl.pluralLogic(
+      prs,
+      locale: localeName,
+      other: '$prs PRs',
+      one: '1 PR',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get historyWeekLabelCurrent => 'This Week';
 }

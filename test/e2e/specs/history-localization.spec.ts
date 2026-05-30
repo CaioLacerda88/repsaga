@@ -61,14 +61,71 @@ test.describe('Workout history pt locale', () => {
 
     // Hard assertion (D1's primary contract): the most recent workout's
     // exerciseSummary line must render the pt-localized exercise name.
-    // The summary is the bodySmall Text below the workout title.
+    // Per `cluster_aom_label_text_merge`, adding the XP-eyebrow
+    // `Semantics(identifier:)` sibling inside the card caused the card's
+    // title + summary + duration + date to merge into AOM labels rather
+    // than discrete text nodes. The merge stratifies: the outer button's
+    // accessible name is just `"<title>, <date>, <duration>"` (NO
+    // exercise summary); the inner `group` node carries the full
+    // `"<title> <summary> <duration> <date>"` label. Target the group
+    // role, not the button, so the pt-localized exercise name match
+    // resolves. Verified against the failing AOM snapshot.
     await expect(
-      page.locator(`text=${ptBenchName}`).first(),
+      page.getByRole('group', { name: new RegExp(ptBenchName) }).first(),
     ).toBeVisible({ timeout: 10_000 });
 
     // Hard assertion: the en name must NOT leak into the pt user's history.
     await expect(
-      page.locator(`text=${enBenchName}`),
+      page.getByRole('group', { name: new RegExp(enBenchName) }),
     ).not.toBeVisible({ timeout: 3_000 });
+  });
+});
+
+// =============================================================================
+// SMOKE: Phase 32 PR 32f — sticky week header + per-card XP eyebrow
+// Reuses the same fullHistoryPt user (5 seeded workouts → at least one week
+// group + one card). XP values are seed-dependent, so we pin presence,
+// NOT specific numerics.
+// =============================================================================
+
+test.describe('History redesign affordances', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('fullHistoryPt').email,
+      getUser('fullHistoryPt').password,
+    );
+  });
+
+  test('should render sticky week header and per-card XP eyebrow on history list', async ({
+    page,
+  }) => {
+    await navigateToTab(page, 'Home');
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expect(page.locator(HOME.lastSessionLine)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(HOME.lastSessionLine).click();
+
+    await expect(page.locator(HISTORY.heading)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Sticky week header: at least one must render once the feed loads.
+    // Use .first() because the seed may produce 2+ week groups depending
+    // on when global-setup ran.
+    await expect(page.locator(HISTORY.weekHeader).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Per-card XP eyebrow: at least one card with an eyebrow must render.
+    // No assertion on the XP value itself — that's seed-dependent and the
+    // exact number flakes when global-setup re-seeds.
+    await expect(page.locator(HISTORY.cardXpEyebrow).first()).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

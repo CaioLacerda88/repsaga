@@ -502,7 +502,7 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
       if (confirmed != true || !mounted) return;
     }
 
-    final history = ref.read(workoutHistoryProvider).value ?? [];
+    final history = ref.read(workoutHistoryProvider).value?.workouts ?? [];
     final nameFrequency = <String, int>{};
     for (final workout in history) {
       nameFrequency[workout.name] = (nameFrequency[workout.name] ?? 0) + 1;

@@ -305,7 +305,8 @@
   "workout": "Treino",
   "exerciseGeneric": "Exercício",
   "notes": "Notas",
-  "totalVolume": "Volume Total: {volume}",
+  "workoutDetailTotalVolumeLabel": "Volume total",
+  "workoutDetailTotalVolumeValue": "{volume}",
 
   "routines": "Treinos",
   "failedToLoadRoutines": "Falha ao carregar treinos",
@@ -924,5 +925,12 @@
   "avatarUploadSuccess": "Avatar atualizado.",
   "avatarUploadFailed": "Não consegui atualizar seu avatar. Tente de novo.",
   "avatarSemanticsLabel": "Avatar do perfil de {name}",
-  "cameraPermissionDeniedForAvatar": "Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso."
+  "cameraPermissionDeniedForAvatar": "Acesso à câmera negado. Tente a galeria, ou abra as configurações para liberar o acesso.",
+  "historyWeekLabel": "Semana de {date}",
+  "historyWeekRollupSets": "{sets} séries",
+  "historyCardXpEyebrow": "+{xp} XP",
+  "historyCardPrCount": "◆ {count, plural, =1{1 PR} other{{count} PRs}}",
+  "historyDetailStripXpPart": "+{xp} XP",
+  "historyDetailStripPrPart": "{prs, plural, =1{1 PR} other{{prs} PRs}}",
+  "historyWeekLabelCurrent": "Esta semana"
 }

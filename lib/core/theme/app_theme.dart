@@ -359,6 +359,31 @@ class AppTextStyles {
     height: 1.4,
   );
 
+  /// [numericSmall]'s typography (Rajdhani 600 11sp tabular,
+  /// letter-spacing 0.04 × 11, line-height 1.4) WITHOUT a baked-in
+  /// color. Use this token inside a [RewardAccent] (or any
+  /// `DefaultTextStyle.merge` wrapper) so the surrounding scope's
+  /// color flows through. Caught during PR #285 device verification —
+  /// `numericSmall`'s `color: textDim` overrides [RewardAccent]'s
+  /// `heroGold` via Flutter's `Text.style.merge` explicit-wins rule,
+  /// so the gold PR diamond rendered as dim grey-violet on real
+  /// hardware.
+  ///
+  /// **Use for:** numeric data rendered inside `RewardAccent` (PR
+  /// diamond, gold PR-row glyph on the workout detail screen, future
+  /// `RewardAccent`-scoped numeric badges).
+  ///
+  /// **Not for:** standalone numerals (use [numericSmall] — the
+  /// baked `textDim` is the right register at the bare-screen level).
+  static TextStyle get numericSmallInheriting => const TextStyle(
+    fontFamily: 'Rajdhani',
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    fontFeatures: [FontFeature.tabularFigures()],
+    letterSpacing: 0.04 * 11,
+    height: 1.4,
+  );
+
   /// Rajdhani 600 18sp — AppBar titles across all screens.
   ///
   /// Wired into [AppTheme.dark]'s `appBarTheme.titleTextStyle` so every

@@ -177,9 +177,11 @@ class WorkoutRepository extends BaseRepository {
 
   /// Get paginated workout history (finished workouts only).
   ///
-  /// Two-query merge: first pulls workouts + their `workout_exercises`
-  /// `(order, exercise_id)` rows, then batch-fetches localized exercise
-  /// names via [ExerciseRepository.getExercisesByIds] and rebuilds
+  /// Two-query merge: first calls the Phase 32 PR 32f
+  /// `get_workout_history_with_aggregates` RPC which returns workouts +
+  /// their `workout_exercises` `(order, exercise_id)` rows + `total_xp` +
+  /// `pr_count` aggregates, then batch-fetches localized exercise names
+  /// via [ExerciseRepository.getExercisesByIds] and rebuilds
   /// [Workout.exerciseSummary] (e.g. "Bench Press, Squat +2") in the
   /// requested [locale].
   ///
@@ -218,14 +220,31 @@ class WorkoutRepository extends BaseRepository {
 
     try {
       final fresh = await mapException(() async {
-        // Step 1: workout shape with exercise IDs only.
-        final data = await _workouts
-            .select('*, workout_exercises(order, exercise_id)')
-            .eq('user_id', userId)
-            .eq('is_active', false)
-            .not('finished_at', 'is', null)
-            .order('finished_at', ascending: false)
-            .range(offset, offset + limit - 1);
+        // Step 1: workout shape with exercise IDs + XP/PR aggregates via
+        // the Phase 32 PR 32f RPC. Single round-trip per page; LEFT JOIN
+        // with COALESCE on the SQL side guarantees `total_xp` /
+        // `pr_count` are non-null integers, and `workout_exercises` is
+        // always at least `[]` so the existing name-resolution loop below
+        // never sees a null payload.
+        final result = await _client.rpc(
+          'get_workout_history_with_aggregates',
+          params: {'p_user_id': userId, 'p_limit': limit, 'p_offset': offset},
+        );
+        // Defensive type guard (mirrors saveWorkout's BUG-004 pattern at
+        // L112-119): an RPC that hits an unhandled error path may return
+        // null or a non-list payload. A raw `as List<dynamic>` cast would
+        // surface as a native `_TypeError` and bypass `mapException`'s
+        // domain-error translation, leaving the cache-fallback branch in
+        // an inconsistent state. We translate to a typed
+        // `DatabaseException` here so the surrounding `mapException`
+        // wrapper keeps the layer contract intact. See PR #285 Important 6.
+        if (result is! List) {
+          throw const app.DatabaseException(
+            'get_workout_history_with_aggregates RPC returned unexpected type',
+            code: 'rpc_unexpected_type',
+          );
+        }
+        final data = result.cast<Map<String, dynamic>>();
 
         // Step 2: collect distinct exercise IDs across all workouts in
         // the page and batch-fetch their localized names. One RPC call,
@@ -363,7 +382,29 @@ class WorkoutRepository extends BaseRepository {
         userId: userId,
         ids: ids.toList(),
       );
-      return parseWorkoutDetail(data, exerciseMap);
+
+      // Phase 32 PR 32f: enrich the detail Workout with `totalXp` +
+      // `prCount` via the `get_workout_xp` helper RPC. Powers the new 48dp
+      // summary strip without forcing the detail fetch through the bulkier
+      // history-aggregate RPC. LEFT JOIN + COALESCE on the SQL side
+      // guarantees non-null integers; on an unexpected null we fall back
+      // to 0 so the strip renders the zero-state cleanly.
+      final xpResult = await _client.rpc(
+        'get_workout_xp',
+        params: {'p_workout_id': workoutId},
+      );
+      final xpRow = (xpResult is List && xpResult.isNotEmpty)
+          ? xpResult.first as Map<String, dynamic>
+          : const <String, dynamic>{};
+      final totalXp = (xpRow['total_xp'] as int?) ?? 0;
+      final prCount = (xpRow['pr_count'] as int?) ?? 0;
+
+      final detail = parseWorkoutDetail(data, exerciseMap);
+      return (
+        workout: detail.workout.copyWith(totalXp: totalXp, prCount: prCount),
+        exercises: detail.exercises,
+        setsByExercise: detail.setsByExercise,
+      );
     });
   }
 

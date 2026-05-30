@@ -20,19 +20,14 @@ import '../../../../fixtures/test_factories.dart';
 // Notifier stubs
 // ---------------------------------------------------------------------------
 
-class _WorkoutHistoryNotifier extends AsyncNotifier<List<Workout>>
+class _WorkoutHistoryNotifier extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   _WorkoutHistoryNotifier(this.workouts);
   final List<Workout> workouts;
 
   @override
-  Future<List<Workout>> build() async => workouts;
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
+  Future<WorkoutHistoryState> build() async =>
+      (workouts: workouts, isLoadingMore: false, hasMore: false);
 
   @override
   Future<void> loadMore() async {}
@@ -41,16 +36,11 @@ class _WorkoutHistoryNotifier extends AsyncNotifier<List<Workout>>
   Future<void> refresh() async {}
 }
 
-class _EmptyWorkoutHistoryNotifier extends AsyncNotifier<List<Workout>>
+class _EmptyWorkoutHistoryNotifier extends AsyncNotifier<WorkoutHistoryState>
     implements WorkoutHistoryNotifier {
   @override
-  Future<List<Workout>> build() async => [];
-
-  @override
-  bool get hasMore => false;
-
-  @override
-  bool get isLoadingMore => false;
+  Future<WorkoutHistoryState> build() async =>
+      (workouts: const <Workout>[], isLoadingMore: false, hasMore: false);
 
   @override
   Future<void> loadMore() async {}
