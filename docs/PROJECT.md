@@ -379,7 +379,7 @@ history screen redesign with sticky week headers + per-card XP.
 | 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
 | 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
 | 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache + Home/Saga RuneHalo substitution + private-bucket signed URLs + tappable halo + size bump + Exercises AppBar title | 4-5d | DONE (#283) |
-| 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip | 3-4d | NOT STARTED |
+| 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip + total-volume strip + tappable PR row diamond + AOM-merge locator fix + numericSmallInheriting token | 3-4d | DONE (#285) |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
 | 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | DONE (#281) |
 
@@ -534,32 +534,50 @@ contract). Physical-Android verified end-to-end on Galaxy S938B (Android 16 /
 API 36): Day-0 vs trained gradient distinction, halo-state machine integrity,
 upload flow with signed URLs, tappable navigation, Exercises title consistency.
 
-#### PR 32f — History screen redesign
+#### PR 32f — History screen redesign — DONE (#285)
 
-**Files to modify**
-- `lib/features/workouts/ui/workout_history_screen.dart` — switch from `ListView.builder` to `CustomScrollView` with `SliverList` + `SliverPersistentHeader` for sticky week headers
-- The history card widget (currently inline `_WorkoutHistoryCard` per Explore findings) — add eyebrow XP line + optional PR diamond
-- Workout detail screen (at `/home/history/<id>`) — add 48dp `surface2` header strip with `+N XP · N PRs` above the existing set-by-set log
+Shipped CustomScrollView migration with sticky `SliverPersistentHeader`
+per ISO week (Monday-start, locale-aware; current week renders `"This
+Week"` / `"Esta semana"`; 52dp `surface2` row, sectionHeader typography,
+`overlapsContent` shadow). Per-card `+N XP` eyebrow in `hotViolet`
+(daily-driver register — NOT heroGold; reward-scarcity rule the
+`scripts/check_reward_accent.sh` gate enforces) plus optional `◆ N PRs`
+diamond wrapped in `RewardAccent` (sanctioned heroGold scope, omitted
+entirely when prCount == 0, ICU-pluralized). Workout detail screen
+gains a 48dp `Text.rich` summary strip (hotViolet XP + heroGold PRs
+via WidgetSpan with baseline-alphabetic alignment fixing the
+device-only ascender mismatch; hidden when both aggregates are zero).
+Detail set-row PR glyph swapped from the generic Material "level up"
+SVG to the gold `◆` matching the card pattern. Bottom of detail gets
+a second 48dp `surface2` total-volume strip mirroring the top strip
+(Barlow label + Rajdhani numeric value, no icon). New
+`AppTextStyles.numericSmallInheriting` token solves the cluster
+`numericSmall`-bakes-color regression where `RewardAccent`'s heroGold
+was clobbered by the explicit `color: textDim` via `Text.style.merge`.
 
-**Files to create**
-- `lib/features/workouts/ui/widgets/history_week_header.dart` — sticky persistent header; renders week label + roll-up (sets total + XP total in `heroGold`)
-- `lib/features/workouts/domain/workout_history_grouping.dart` — pure function grouping `List<Workout>` by ISO week start (Monday in pt-BR locale)
+Backend: new SQL function `get_workout_history_with_aggregates` (RPC
+returning history rows + `total_xp` SUM + `pr_count` COUNT + `set_count`
+COUNT via explicit-column projection — guards against schema drift)
+plus a `get_workout_xp` mini-RPC for single-workout detail enrichment.
+`Workout.totalXp` / `prCount` / `setCount` Freezed fields added.
+`WorkoutHistoryNotifier` migrated from `AsyncNotifier<List<Workout>>`
+to `AsyncNotifier<WorkoutHistoryState>` so `isLoadingMore` + `hasMore`
+flow through `AsyncValue` reactively (fixes the pre-existing `ref.read`
+non-reactive load-more hole). `loadMore` swallows transient
+pagination errors with `debugPrint` instead of rethrowing into the
+fire-and-forget caller — refresh is the user's recovery path.
 
-**Data dependency**
-- `Workout` model must expose `totalXp` and PR count. Verify; if missing, extend the model + repository (Supabase view recommended for the aggregate read)
+E2E fix: `history-localization.spec.ts` D1 locator switched from
+`text=` to `getByRole('group', { name: regex })` after the
+XP-eyebrow `Semantics(identifier:)` sibling caused the card's title /
+summary / duration / date to merge into the inner group node's AOM
+label per `cluster_aom_label_text_merge`.
 
-**Test plan**
-- Unit: grouping function with workouts spanning multiple weeks → correct partitioning + ISO-week-start sort
-- Widget: pump 7 workouts across 2 weeks; assert 2 sticky headers render with correct roll-up
-- Widget: card eyebrow renders `+N XP` in heroGold `numericSmall` + `◆ N PR` in dominant-BP hue (omitted entirely when no PR — per UX-critic "no empty placeholders")
-- Golden: history with mixed XP/PR/no-PR cards across 2 weeks at 360dp
-- Visual verification per CLAUDE.md step 9 on physical Android
-
-**Acceptance**
-- Sticky week headers; per-card XP eyebrow visible
-- PR diamond appears only on sessions with ≥1 PR
-- Detail screen header strip renders above set-by-set log without breaking existing layout
-- E2E spec for History updated if selectors changed
+Migration 00070 applied to hosted Supabase mid-PR for device
+verification. Physical-Android verified end-to-end on Galaxy S938B
+(Android 16 / API 36) — gold PR diamond pops correctly against violet
+XP eyebrows, baseline-aligned WidgetSpan, sticky headers + shadow,
+total-volume strip mirrors the top strip.
 
 #### PR 32h — Retire user-created exercises (RPG thesis preservation) — DONE (#281)
 
