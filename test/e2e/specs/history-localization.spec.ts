@@ -61,14 +61,20 @@ test.describe('Workout history pt locale', () => {
 
     // Hard assertion (D1's primary contract): the most recent workout's
     // exerciseSummary line must render the pt-localized exercise name.
-    // The summary is the bodySmall Text below the workout title.
+    // Per `cluster_aom_label_text_merge`, the card's title + summary +
+    // duration + date all merge into the parent tappable button's
+    // accessible name once a new Semantics(identifier:) sibling (the
+    // XP eyebrow added in PR #285) was introduced inside the card.
+    // The pt-localized exercise name therefore lives on the button's
+    // accessible name, not as a discrete text node — assert on the
+    // button's name with a substring regex instead of `text=`.
     await expect(
-      page.locator(`text=${ptBenchName}`).first(),
+      page.getByRole('button', { name: new RegExp(ptBenchName) }).first(),
     ).toBeVisible({ timeout: 10_000 });
 
     // Hard assertion: the en name must NOT leak into the pt user's history.
     await expect(
-      page.locator(`text=${enBenchName}`),
+      page.getByRole('button', { name: new RegExp(enBenchName) }),
     ).not.toBeVisible({ timeout: 3_000 });
   });
 });
