@@ -192,13 +192,20 @@ class RpgRepository extends BaseRepository {
   /// the user has not trained that body part with weight in the window.
   ///
   /// Uses the `peak_load_per_body_part(p_user_id, p_days, p_end_date)` RPC
-  /// (migration 00064). Powers the post-Phase-27 "Carga pico" column on
-  /// the stats deep-dive screen, replacing the pre-Phase-27
-  /// EWMA-rendered-as-kg mislabel.
+  /// (migration 00064 introduced the function; migration 00071 replaced
+  /// its body with primary-only attribution semantics per PR 32j).
+  /// Powers the post-Phase-27 "Carga pico" column on the stats deep-dive
+  /// screen, replacing the pre-Phase-27 EWMA-rendered-as-kg mislabel.
   ///
-  /// **Attribution rule.** A set counts toward body part X iff the parent
-  /// exercise's `xp_attribution -> X` is strictly positive. This matches
-  /// the existing weekly-volume "any non-zero attribution counts" rule.
+  /// **Attribution rule (post-00071, primary-only).** A set counts toward
+  /// body part X iff X has the MAX `xp_attribution` share among that
+  /// exercise's body-part entries. Multi-BP exercises no longer bleed
+  /// their top weight into secondary BPs — e.g. a barbell shoulder press
+  /// with `xp_attribution = {shoulders: 0.7, arms: 0.3}` posts to
+  /// shoulders only, not both. Tied-primary (theoretical
+  /// `{chest: 0.5, back: 0.5}`) includes both. Diverges from the weekly-
+  /// volume RPC which still uses the "any non-zero attribution counts"
+  /// rule — the two columns have intentionally different semantics now.
   ///
   /// Returns an empty map for an unauthenticated client (mirrors the
   /// repository's other guards).

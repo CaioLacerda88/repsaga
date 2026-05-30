@@ -136,7 +136,7 @@ void main() {
     });
   }
 
-  group('peak_load_per_body_part — primary-only attribution (Phase 32 PR 32j)', () {
+  group('peak_load_per_body_part — primary-only attribution', () {
     test(
       'should attribute a multi-BP exercise top weight to the primary BP only — no bleed into secondaries',
       () async {
