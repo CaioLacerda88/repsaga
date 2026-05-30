@@ -61,20 +61,22 @@ test.describe('Workout history pt locale', () => {
 
     // Hard assertion (D1's primary contract): the most recent workout's
     // exerciseSummary line must render the pt-localized exercise name.
-    // Per `cluster_aom_label_text_merge`, the card's title + summary +
-    // duration + date all merge into the parent tappable button's
-    // accessible name once a new Semantics(identifier:) sibling (the
-    // XP eyebrow added in PR #285) was introduced inside the card.
-    // The pt-localized exercise name therefore lives on the button's
-    // accessible name, not as a discrete text node — assert on the
-    // button's name with a substring regex instead of `text=`.
+    // Per `cluster_aom_label_text_merge`, adding the XP-eyebrow
+    // `Semantics(identifier:)` sibling inside the card caused the card's
+    // title + summary + duration + date to merge into AOM labels rather
+    // than discrete text nodes. The merge stratifies: the outer button's
+    // accessible name is just `"<title>, <date>, <duration>"` (NO
+    // exercise summary); the inner `group` node carries the full
+    // `"<title> <summary> <duration> <date>"` label. Target the group
+    // role, not the button, so the pt-localized exercise name match
+    // resolves. Verified against the failing AOM snapshot.
     await expect(
-      page.getByRole('button', { name: new RegExp(ptBenchName) }).first(),
+      page.getByRole('group', { name: new RegExp(ptBenchName) }).first(),
     ).toBeVisible({ timeout: 10_000 });
 
     // Hard assertion: the en name must NOT leak into the pt user's history.
     await expect(
-      page.getByRole('button', { name: new RegExp(enBenchName) }),
+      page.getByRole('group', { name: new RegExp(enBenchName) }),
     ).not.toBeVisible({ timeout: 3_000 });
   });
 });
