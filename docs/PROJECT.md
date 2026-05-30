@@ -382,8 +382,9 @@ history screen redesign with sticky week headers + per-card XP.
 | 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip + total-volume strip + tappable PR row diamond + AOM-merge locator fix + numericSmallInheriting token | 3-4d | DONE (#285) |
 | 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
 | 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | DONE (#281) |
+| 32j | Peak-load attribution: primary-only semantics — replace `peak_load_per_body_part` RPC body (migration 00071) so multi-BP exercises post their top weight only to the MAX-share BP. Tied primary includes both. Pre-launch destructive replacement (no sibling RPC). Dart consumer unchanged. Fixes user-caught shoulders + arms = 240 kg bleed from PR 32f device verification. | <1d | DONE (#287) |
 
-Order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f.
+Order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f → 32j.
 
 Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05-27 3-agent investigation (code map, E2E coverage matrix, full test plan, code-reviewer findings).
 
