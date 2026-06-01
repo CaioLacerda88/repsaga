@@ -8,9 +8,14 @@
 //
 // Run with: deno test --allow-net --allow-env supabase/functions/
 
-import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   decodePubSubPayload,
+  handleRequest,
   handleRtdn,
   rtdnTypeToStatePatch,
 } from './index.ts';
@@ -276,3 +281,151 @@ Deno.test('state update error → 500', async () => {
   );
   assertEquals(res.status, 500);
 });
+
+// --- Phase 33 PR 33a: body + base64 size caps (findings 028 / 033) -------
+//
+// rtdn-webhook receives Pub/Sub push envelopes carrying base64-encoded
+// RTDN payloads. Two layers of defense:
+//   * 16KB request-body cap (finding-028) at the HTTP boundary
+//   * 16KB base64-decoded payload cap (finding-033) inside
+//     decodePubSubPayload
+// Real Pub/Sub envelopes are ≤ ~8KB; anything > 16KB is malicious.
+
+function makeRtdnRequest(opts: {
+  authorization?: string | null;
+  contentLength?: string | null;
+  body?: string;
+}): Request {
+  const headers = new Headers();
+  if (opts.authorization !== null && opts.authorization !== undefined) {
+    headers.set('Authorization', opts.authorization);
+  }
+  if (opts.contentLength !== null && opts.contentLength !== undefined) {
+    headers.set('Content-Length', opts.contentLength);
+  }
+  if (opts.body !== undefined) {
+    headers.set('content-type', 'application/json');
+  }
+  return new Request('https://example.local/rtdn-webhook', {
+    method: 'POST',
+    headers,
+    body: opts.body,
+  });
+}
+
+function clientSpyThatMustNotFire(): unknown {
+  return {
+    from(_table: string) {
+      throw new Error('client.from must NOT have fired during rejection');
+    },
+  };
+}
+
+Deno.test(
+  'rtdn-webhook: 413 on >16KB Content-Length, no JWT verify, no body parse',
+  async () => {
+    const req = makeRtdnRequest({
+      authorization: 'Bearer anything',
+      contentLength: '20000',
+      body: '{}',
+    });
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      client: clientSpyThatMustNotFire() as any,
+      verifyJwt: () => {
+        throw new Error('verifyJwt must NOT have fired on body-too-big');
+      },
+      expectedAudience: 'aud',
+    });
+    assertEquals(res.status, 413);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on 413 short-circuit',
+    );
+  },
+);
+
+Deno.test(
+  'rtdn-webhook: 400 on >16KB decoded base64 payload',
+  async () => {
+    // Build a JSON payload > 16KB. Padded with junk attributes the
+    // production code doesn't read — the size check fires on
+    // decoded-length BEFORE JSON.parse so the shape is irrelevant.
+    const filler = 'x'.repeat(20000);
+    const oversizedJson = JSON.stringify({
+      version: '1.0',
+      packageName: 'com.repsaga.app',
+      junk: filler,
+    });
+    // The base64-encoded envelope itself is ~27KB but we don't tag
+    // Content-Length on the envelope (handleRequest's body cap is
+    // independent of the inner-payload cap). The inner cap is what
+    // we're exercising here. The envelope JSON wraps the base64.
+    const envelope = {
+      message: { data: btoa(oversizedJson) },
+    };
+    const req = makeRtdnRequest({
+      authorization: 'Bearer fake',
+      body: JSON.stringify(envelope),
+      // Omit Content-Length deliberately. requireBodySize treats missing
+      // Content-Length as OK (platform-level ceiling still applies). This
+      // routes the request past the OUTER 16KB body cap so we exercise
+      // only the INNER decoded-base64 cap.
+    });
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      client: clientSpyThatMustNotFire() as any,
+      // Stub the JWT verify — we already covered that path elsewhere.
+      verifyJwt: () => Promise.resolve(),
+      expectedAudience: 'aud',
+    });
+    assertEquals(res.status, 400);
+    const body = await res.json();
+    assertStringIncludes(String(body.error), 'Malformed Pub/Sub payload');
+    assertStringIncludes(String(body.detail), 'payload too large');
+  },
+);
+
+Deno.test(
+  'decodePubSubPayload: throws on >16KB decoded base64',
+  () => {
+    // Direct unit test on decodePubSubPayload — the size guard lives
+    // there (not in handleRequest) so this is the canonical pin.
+    const oversizedJson = JSON.stringify({
+      version: '1.0',
+      junk: 'y'.repeat(20000),
+    });
+    const env = { message: { data: btoa(oversizedJson) } };
+    let threw: Error | null = null;
+    try {
+      decodePubSubPayload(env);
+    } catch (e) {
+      threw = e as Error;
+    }
+    assert(threw !== null, 'expected throw on oversized payload');
+    assertStringIncludes(String(threw!.message), 'payload too large');
+  },
+);
+
+Deno.test(
+  'decodePubSubPayload: ≤16KB decoded payload decodes normally',
+  () => {
+    // Sanity guard — the size cap must NOT reject realistically-sized
+    // RTDN payloads. Real Pub/Sub messages are ≤ ~2KB. Build a 1KB
+    // payload and confirm round-trip.
+    const payload = {
+      version: '1.0',
+      packageName: 'com.repsaga.app',
+      subscriptionNotification: {
+        notificationType: 4,
+        purchaseToken: FAKE_TOKEN,
+        subscriptionId: 'repsaga_premium',
+      },
+      padding: 'z'.repeat(800),
+    };
+    const env = { message: { data: btoa(JSON.stringify(payload)) } };
+    const decoded = decodePubSubPayload(env);
+    assertEquals(decoded.subscriptionNotification?.notificationType, 4);
+  },
+);

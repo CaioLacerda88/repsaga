@@ -15,7 +15,12 @@ import {
   assertEquals,
   assertStringIncludes,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { deriveEntitlement, isServiceRoleJwt, validatePurchase } from './index.ts';
+import {
+  deriveEntitlement,
+  handleRequest,
+  isServiceRoleJwt,
+  validatePurchase,
+} from './index.ts';
 import {
   _resetPlayTokenCacheForTests,
   type ServiceAccountJson,
@@ -677,3 +682,290 @@ Deno.test('isServiceRoleJwt: malformed input → false (no throw)', () => {
   assertEquals(isServiceRoleJwt('onlyonepart'), false);
   assertEquals(isServiceRoleJwt('a..c'), false);
 });
+
+// --- Phase 33 PR 33a: handleRequest defense-in-depth ----------------------
+//
+// These tests drive the HTTP boundary directly via the exported
+// `handleRequest()` so we can assert on the body-size cap, JWT exp
+// precheck, and input-validation rejections WITHOUT spinning up the
+// Edge Runtime. The pure validatePurchase() core remains the focus of
+// the tests above — these only cover the defensive layer in front of
+// it (findings 026 / 027 / 028).
+//
+// For each rejection path we also assert no Supabase / Play work was
+// triggered — that's the "behavior, not wiring" contract: a rejection
+// MUST short-circuit before the expensive code runs.
+
+function makeRequest(opts: {
+  authorization?: string | null;
+  contentLength?: string | null;
+  body?: string;
+}): Request {
+  const headers = new Headers();
+  if (opts.authorization !== null && opts.authorization !== undefined) {
+    headers.set('Authorization', opts.authorization);
+  }
+  if (opts.contentLength !== null && opts.contentLength !== undefined) {
+    headers.set('Content-Length', opts.contentLength);
+  }
+  if (opts.body !== undefined) {
+    headers.set('content-type', 'application/json');
+  }
+  return new Request('https://example.local/validate-purchase', {
+    method: 'POST',
+    headers,
+    body: opts.body,
+  });
+}
+
+/** Future-dated JWT exp (1h from now). */
+function freshJwt(extraPayload: Record<string, unknown> = {}): string {
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  return encodeJwtPayload({ exp, role: 'authenticated', ...extraPayload });
+}
+
+/** Expired JWT exp (1s ago). */
+function expiredJwt(): string {
+  const exp = Math.floor(Date.now() / 1000) - 1;
+  return encodeJwtPayload({ exp, role: 'authenticated', sub: 'u1' });
+}
+
+/** A fetch spy that throws if invoked. Used to assert the rejection
+ *  path didn't reach Play API. */
+function fetchSpyThatMustNotFire(): typeof fetch {
+  return (input) => {
+    const url = typeof input === 'string' ? input : (input as Request).url;
+    throw new Error(`fetch must NOT have fired during rejection: ${url}`);
+  };
+}
+
+/** A SupabaseClient stub that throws on any DB op — confirms the
+ *  rejection short-circuited before reaching the DB. */
+function clientSpyThatMustNotFire(): unknown {
+  return {
+    from(_table: string) {
+      throw new Error('client.from must NOT have fired during rejection');
+    },
+    auth: {
+      getUser(_jwt: string) {
+        throw new Error('auth.getUser must NOT have fired during rejection');
+      },
+    },
+  };
+}
+
+Deno.test('validate-purchase: 413 on >32KB Content-Length, no body parse', async () => {
+  const res = await handleRequest(
+    makeRequest({
+      authorization: `Bearer ${freshJwt()}`,
+      contentLength: '40000',
+      body: JSON.stringify({ product_id: 'x', purchase_token: 'y' }),
+    }),
+    {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    },
+  );
+  assertEquals(res.status, 413);
+  const body = await res.json();
+  assertStringIncludes(String(body.error), 'Payload too large');
+});
+
+Deno.test(
+  'validate-purchase: 401 on expired JWT BEFORE body parse',
+  async () => {
+    // Spy on the body: if the handler ever calls .json() / .text() on the
+    // request, this token would have to be read. We assert the body was
+    // NEVER consumed by checking req.bodyUsed after the call.
+    const req = makeRequest({
+      authorization: `Bearer ${expiredJwt()}`,
+      body: JSON.stringify({ product_id: 'x', purchase_token: 'y' }),
+    });
+
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    });
+    assertEquals(res.status, 401);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on expired-JWT short-circuit',
+    );
+  },
+);
+
+Deno.test(
+  'validate-purchase: 401 on malformed JWT (no exp claim) BEFORE body parse',
+  async () => {
+    // Pins the precheck at the HTTP boundary, not just the helper.
+    // If `precheckJwtExp` were ever skipped in `handleRequest`, the
+    // auth.test.ts unit tests would still pass — only this HTTP-boundary
+    // test catches that regression.
+    const noExpJwt = encodeJwtPayload({ role: 'authenticated', sub: 'u1' });
+    const req = makeRequest({
+      authorization: `Bearer ${noExpJwt}`,
+      body: JSON.stringify({ product_id: 'x', purchase_token: 'y' }),
+    });
+
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    });
+    assertEquals(res.status, 401);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on malformed-JWT short-circuit',
+    );
+  },
+);
+
+Deno.test('validate-purchase: 400 on product_id > 128 chars', async () => {
+  const longId = 'a'.repeat(129);
+  const res = await handleRequest(
+    makeRequest({
+      authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
+      body: JSON.stringify({
+        product_id: longId,
+        purchase_token: 'tok',
+        source: 'cron_reconcile',
+        user_id: FAKE_USER_ID,
+      }),
+    }),
+    {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    },
+  );
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertStringIncludes(String(body.error), 'product_id');
+});
+
+Deno.test('validate-purchase: 400 on purchase_token > 4096 chars', async () => {
+  const longToken = 'b'.repeat(4097);
+  const res = await handleRequest(
+    makeRequest({
+      authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
+      body: JSON.stringify({
+        product_id: 'p',
+        purchase_token: longToken,
+        source: 'cron_reconcile',
+        user_id: FAKE_USER_ID,
+      }),
+    }),
+    {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    },
+  );
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertStringIncludes(String(body.error), 'purchase_token');
+});
+
+Deno.test('validate-purchase: 400 on source not in allow-list', async () => {
+  const res = await handleRequest(
+    makeRequest({
+      authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
+      body: JSON.stringify({
+        product_id: 'p',
+        purchase_token: 'tok',
+        source: 'attacker',
+        user_id: FAKE_USER_ID,
+      }),
+    }),
+    {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    },
+  );
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertStringIncludes(String(body.error), 'source');
+});
+
+Deno.test(
+  'validate-purchase: 400 on malformed user_id (non-UUID)',
+  async () => {
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
+        body: JSON.stringify({
+          product_id: 'p',
+          purchase_token: 'tok',
+          source: 'cron_reconcile',
+          user_id: 'not-a-uuid',
+        }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        adminClient: clientSpyThatMustNotFire() as any,
+        // deno-lint-ignore no-explicit-any
+        userClient: clientSpyThatMustNotFire() as any,
+        fetchFn: fetchSpyThatMustNotFire(),
+      },
+    );
+    assertEquals(res.status, 400);
+    const body = await res.json();
+    assertStringIncludes(String(body.error), 'user_id');
+  },
+);
+
+Deno.test(
+  'validate-purchase: source defaults to "client" when omitted (valid path passes validation gate)',
+  async () => {
+    // Source is optional — when omitted the handler must NOT reject for
+    // "source not in allow-list". This pins that the default ('client')
+    // is allow-listed; it's a regression guard against accidentally
+    // tightening the allow-list to require an explicit value.
+    _resetPlayTokenCacheForTests();
+    const { client: adminClient } = makeClient();
+    const fetchFn = buildFetchMock([
+      OAUTH_TOKEN_OK,
+      { url: 'subscriptionsv2/tokens/tok_default_source', response: { body: playOk() } },
+      { url: ':acknowledge', response: { body: {} } },
+    ]);
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
+        body: JSON.stringify({
+          product_id: 'p',
+          purchase_token: 'tok_default_source',
+          // source intentionally omitted
+          user_id: FAKE_USER_ID,
+        }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        adminClient: adminClient as any,
+        // deno-lint-ignore no-explicit-any
+        userClient: clientSpyThatMustNotFire() as any,
+        fetchFn,
+        serviceAccount: await getFakeServiceAccount(),
+        packageName: 'com.repsaga.app',
+      },
+    );
+    // 200 — the validation gate passed through to the real flow.
+    assertEquals(res.status, 200);
+  },
+);

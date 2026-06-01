@@ -897,3 +897,348 @@ Stage 2 is user-facing, doesn't need its own implementation plan. Orchestrator o
 - **Parallel agent dispatch is safe here** because all 5 agents are read-only — no `git checkout`, no file writes. The cluster `parallel-agents-shared-working-tree-thrash` doesn't apply.
 - **Re-dispatch policy:** if an agent returns malformed content, ONLY re-dispatch that agent — don't re-run the whole batch. The other 4 returns are still valid.
 - **Token budget:** A1's `lib/` scan is the heaviest. If it returns a partial result citing context limits, accept partial coverage as long as severity counts are honest about it. The triage gate can choose to re-dispatch with narrower scope if needed.
+
+---
+
+# Phase 33 — PR 33a (Security) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
+
+**Goal:** Land 4 IMPORTANT + 3 folded NICE-TO-HAVE Edge Function defense-in-depth fixes per the Phase 33 audit. Pure backend hardening — zero changes in `lib/` or Dart `test/` (only `test/e2e/package-lock.json` for the ws CVE fix).
+
+**Architecture:** Extract a shared `_shared/auth.ts` helper that handles JWT exp precheck + body-size cap. Call the helper at every stateful Edge Function entry (validate-purchase, delete-user, rtdn-webhook, vitality-nightly). Add per-function input validation (length clamps, regex, allow-lists). Bump the transitive `ws` dep in test/e2e via `npm audit fix`.
+
+**Tech Stack:** Deno + std/http (Edge Functions), TypeScript, `@supabase/supabase-js@2`, npm (test/e2e deps).
+
+**Spec reference:** `docs/pre-launch-audit.md` Triage stamps section, findings 026, 027, 028, 029, 030, 031, 033. Each finding's "Current" + "Recommended" lines are the source-of-truth for fix specifics.
+
+**Branch:** `feature/phase-33a-security`
+
+---
+
+## Files
+
+- **Create:** `supabase/functions/_shared/auth.ts` — `precheckJwtExp(jwt)` + `requireBodySize(req, max)` helpers
+- **Create:** `supabase/functions/_shared/auth.test.ts` — Deno tests for the helper
+- **Create:** `supabase/functions/delete-user/test.ts` — currently has NO test file (gap)
+- **Modify:** `supabase/functions/validate-purchase/index.ts` (findings 026 / 027 / 028)
+- **Modify:** `supabase/functions/validate-purchase/test.ts` — add input-validation tests
+- **Modify:** `supabase/functions/delete-user/index.ts` (findings 028 / 030 / 031)
+- **Modify:** `supabase/functions/rtdn-webhook/index.ts` (findings 028 / 033)
+- **Modify:** `supabase/functions/rtdn-webhook/test.ts` — add size-cap + base64-cap tests
+- **Modify:** `supabase/functions/vitality-nightly/index.ts` (finding 028)
+- **Modify:** `supabase/functions/vitality-nightly/auth.test.ts` — extend or add new test file
+- **Modify:** `test/e2e/package-lock.json` (finding 029 via `npm audit fix`)
+- **Modify:** `docs/WIP.md` (this plan — checkmarks during implementation)
+
+---
+
+## Checklist
+
+- [ ] Task 1 — `_shared/auth.ts` helper + Deno tests
+- [ ] Task 2 — `validate-purchase` fixes (findings 026 / 027 / 028 partial)
+- [ ] Task 3 — `delete-user` fixes (findings 028 partial / 030 / 031) + new test file
+- [ ] Task 4 — `rtdn-webhook` fixes (findings 028 partial / 033)
+- [ ] Task 5 — `vitality-nightly` size cap (finding 028 partial)
+- [ ] Task 6 — `ws` CVE fix in test/e2e (finding 029)
+- [ ] Task 7 — Verification (deno test + reviewer + qa-engineer) + commit + PR + admin-merge
+
+---
+
+## Task 1 — `_shared/auth.ts` helper + Deno tests
+
+**Files:**
+- Create: `supabase/functions/_shared/auth.ts`
+- Create: `supabase/functions/_shared/auth.test.ts`
+
+- [ ] **Step 1: Write failing tests in `_shared/auth.test.ts`** covering:
+  - `requireBodySize`: returns null when Content-Length missing OR ≤ max; returns 413 Response when > max; correct status + JSON body
+  - `precheckJwtExp`: returns `{ valid: false, reason: 'malformed' }` for non-JWT; `{ valid: false, reason: 'expired' }` for exp < now; `{ valid: true }` for exp > now; `{ valid: false, reason: 'malformed' }` for missing exp claim
+  - Use the existing test pattern from `validate-purchase/test.ts` (std/assert + crypto.subtle.generateKey for JWT fixtures)
+
+- [ ] **Step 2: Run tests — verify they fail (file doesn't exist yet)**
+
+```bash
+deno test --allow-net --allow-env supabase/functions/_shared/auth.test.ts
+```
+
+Expected: module-not-found error.
+
+- [ ] **Step 3: Implement `_shared/auth.ts`** with this interface:
+
+```typescript
+// Body-size guard. Returns 413 Response if Content-Length > maxBytes;
+// returns null if OK to proceed (no Content-Length is treated as OK —
+// platform-level body ceiling still applies upstream).
+export function requireBodySize(req: Request, maxBytes: number): Response | null;
+
+// Cheap local JWT exp precheck. Does NOT verify signature (gateway already
+// did) — just decodes payload and checks `exp` is in the future. Use
+// before req.json() to short-circuit expired/malformed JWTs without
+// paying the body-parse cost. Caller still needs to do full validity
+// check via auth.getUser(jwt) for non-repudiation.
+export function precheckJwtExp(jwt: string): { valid: boolean; reason?: 'malformed' | 'expired' };
+```
+
+`requireBodySize` returns the 413 with `{ error: 'Payload too large', maxBytes }`. Use CORS headers from the calling Edge Function (pass as a param or import shared).
+
+`precheckJwtExp` splits on `.`, base64-url-decodes the payload, parses JSON, checks `typeof exp === 'number' && exp * 1000 > Date.now()`.
+
+- [ ] **Step 4: Run tests — verify they pass**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/functions/_shared/auth.ts supabase/functions/_shared/auth.test.ts
+git commit -m "feat(edge): shared auth helper — body-size cap + JWT exp precheck"
+```
+
+---
+
+## Task 2 — `validate-purchase` fixes (findings 026 / 027 / 028 partial)
+
+**Files:**
+- Modify: `supabase/functions/validate-purchase/index.ts` (the `serve()` handler around line 384)
+- Modify: `supabase/functions/validate-purchase/test.ts`
+
+Audit-doc findings:
+- **026** clamp `product_id` ≤ 128, `purchase_token` ≤ 4096, `source` ≤ 32 (+ allow-list `{'client','cron_reconcile'}`), UUID regex on `user_id`
+- **027** move `getUser(jwt)` (or `precheckJwtExp` from Task 1) ahead of `req.json()`
+- **028** call `requireBodySize(req, 32 * 1024)` at top of handler
+
+- [ ] **Step 1: Write failing tests** in `validate-purchase/test.ts`:
+  - `Deno.test('validate-purchase: 413 on >32KB body')` — synthesize a request with Content-Length: 40000, assert response.status === 413
+  - `Deno.test('validate-purchase: 401 on expired JWT (no body parse)')` — JWT with exp in the past, assert 401 and that `req.json()` is NOT called (use a spy that throws if invoked)
+  - `Deno.test('validate-purchase: 400 on product_id > 128 chars')` — assert 400 + error message references "product_id"
+  - `Deno.test('validate-purchase: 400 on malformed user_id (non-UUID)')` — assert 400 + error references "user_id"
+  - `Deno.test('validate-purchase: 400 on source not in allow-list')` — pass `source: 'attacker'`, assert 400
+
+- [ ] **Step 2: Run tests — verify failures**
+
+```bash
+deno test --allow-net --allow-env supabase/functions/validate-purchase/test.ts
+```
+
+Expected: 5 new tests fail with "validation not implemented".
+
+- [ ] **Step 3: Implement** at the top of the `serve()` handler:
+  1. Call `requireBodySize(req, 32 * 1024)`; return its Response if non-null
+  2. After Authorization-header check, call `precheckJwtExp(jwt)`; return 401 if invalid
+  3. After `req.json()`, validate each field:
+     - `if (typeof body.product_id !== 'string' || body.product_id.length > 128) return 400`
+     - `if (typeof body.purchase_token !== 'string' || body.purchase_token.length > 4096) return 400`
+     - `if (typeof body.source !== 'string' || body.source.length > 32 || !['client','cron_reconcile'].includes(body.source)) return 400`
+     - `if (body.user_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.user_id)) return 400`
+
+- [ ] **Step 4: Run tests — verify pass**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/functions/validate-purchase/
+git commit -m "feat(edge): validate-purchase input validation + JWT precheck + body cap (findings 026/027/028)"
+```
+
+---
+
+## Task 3 — `delete-user` fixes (findings 028 partial / 030 / 031) + new test file
+
+**Files:**
+- Create: `supabase/functions/delete-user/test.ts` — no test file exists yet
+- Modify: `supabase/functions/delete-user/index.ts`
+
+Audit-doc findings:
+- **028** size cap (4KB — body is tiny: 2 short strings)
+- **030** move `getUser`/`precheckJwtExp` ahead of `req.json()`
+- **031** validate `platform` against allow-list `{'android','ios','web'}` (coerce to `'unknown'` on mismatch); validate `app_version` regex `/^\d+\.\d+\.\d+(\+\d+)?$/` (silently strip on mismatch)
+
+- [ ] **Step 1: Write failing tests** in new file `supabase/functions/delete-user/test.ts`:
+  - `Deno.test('delete-user: 413 on >4KB body')`
+  - `Deno.test('delete-user: 401 on expired JWT before body parse')` — spy on `req.json()` to confirm it's not called
+  - `Deno.test('delete-user: platform not in allow-list coerces to "unknown" in audit row')`
+  - `Deno.test('delete-user: app_version not matching regex stripped to null')`
+  - `Deno.test('delete-user: valid platform/version pass through unchanged')`
+
+Follow the test fixture pattern from `validate-purchase/test.ts` (fake service account, mocked Supabase admin client).
+
+- [ ] **Step 2: Run tests — verify failures**
+
+- [ ] **Step 3: Implement** in `delete-user/index.ts`:
+  1. Call `requireBodySize(req, 4 * 1024)` at top of handler
+  2. After auth-header check, call `precheckJwtExp(jwt)`
+  3. Add `PLATFORM_ALLOW_LIST = ['android', 'ios', 'web']`; coerce out-of-list to `'unknown'`
+  4. Add `APP_VERSION_RE = /^\d+\.\d+\.\d+(\+\d+)?$/`; null out non-matching values
+
+- [ ] **Step 4: Run tests — verify pass**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/functions/delete-user/
+git commit -m "feat(edge): delete-user JWT precheck + body cap + platform/version allow-lists (findings 028/030/031)"
+```
+
+---
+
+## Task 4 — `rtdn-webhook` fixes (findings 028 partial / 033)
+
+**Files:**
+- Modify: `supabase/functions/rtdn-webhook/index.ts`
+- Modify: `supabase/functions/rtdn-webhook/test.ts`
+
+Audit-doc findings:
+- **028** body size cap (16KB — Pub/Sub envelopes ≤ ~8KB realistic)
+- **033** after `atob(envelope.message.data)`, check decoded `json.length > 16384` → throw `Error('payload too large')` → 400 response
+
+- [ ] **Step 1: Write failing tests** in `rtdn-webhook/test.ts`:
+  - `Deno.test('rtdn-webhook: 413 on >16KB request body')`
+  - `Deno.test('rtdn-webhook: 400 on >16KB decoded base64 payload')` — base64-encode a 20KB JSON blob, send under a small envelope, assert 400
+
+- [ ] **Step 2: Run tests — verify failures**
+
+- [ ] **Step 3: Implement**:
+  1. `requireBodySize(req, 16 * 1024)` at top of handler
+  2. In `decodePubSubPayload`: after `atob(...)`, if decoded JSON length > 16384, throw `Error('payload too large')`; surface as 400 response (note: the function already 200s on testNotification and unknown types — keep that behavior; only the payload-too-large case 400s)
+
+- [ ] **Step 4: Run tests — verify pass**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/functions/rtdn-webhook/
+git commit -m "feat(edge): rtdn-webhook body + base64 payload caps (findings 028/033)"
+```
+
+---
+
+## Task 5 — `vitality-nightly` size cap (finding 028 partial)
+
+**Files:**
+- Modify: `supabase/functions/vitality-nightly/index.ts`
+- Modify or create: `supabase/functions/vitality-nightly/auth.test.ts` (existing) — extend with size-cap test
+
+- [ ] **Step 1: Write failing test** — body > 1KB returns 413 (body is tiny: `{chunk: 0-9, source: string}`)
+
+- [ ] **Step 2: Run — verify failure**
+
+- [ ] **Step 3: Implement** — `requireBodySize(req, 1024)` at top of handler
+
+- [ ] **Step 4: Run — verify pass**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/functions/vitality-nightly/
+git commit -m "feat(edge): vitality-nightly body size cap (finding 028)"
+```
+
+---
+
+## Task 6 — `ws` CVE fix in test/e2e (finding 029)
+
+**Files:**
+- Modify: `test/e2e/package-lock.json` (via npm)
+
+- [ ] **Step 1: Run `npm audit` to confirm pre-fix state**
+
+```bash
+cd test/e2e && npm audit --omit=dev 2>&1 | grep -E "ws|GHSA-58qx"
+```
+
+Expected: at least one row mentioning `ws` 8.0.0–8.20.0 + `GHSA-58qx-3vcg-4xpx`.
+
+- [ ] **Step 2: Run `npm audit fix`**
+
+```bash
+cd test/e2e && npm audit fix
+```
+
+Expected: `ws` lifts to ≥ 8.20.1 transitively. `package-lock.json` updated.
+
+- [ ] **Step 3: Re-run `npm audit` to verify the CVE is cleared**
+
+Expected: no `GHSA-58qx-3vcg-4xpx` row. Other CVEs (if any) noted for future PARK.
+
+- [ ] **Step 4: Run a Playwright smoke locally to verify no regression**
+
+```bash
+cd test/e2e && FLUTTER_APP_URL= npx playwright test --grep @smoke --reporter=list
+```
+
+Expected: smoke suite green (or the same flake set as before — no new failures introduced by the ws bump). If new failures appear, investigate per CLAUDE.md systematic-debugging protocol before proceeding.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add test/e2e/package-lock.json
+git commit -m "chore(deps): bump transitive ws to clear GHSA-58qx-3vcg-4xpx (finding 029)"
+```
+
+---
+
+## Task 7 — Verification + commit + PR + admin-merge
+
+- [ ] **Step 1: Run full deno test suite**
+
+```bash
+deno test --allow-net --allow-env supabase/functions/
+```
+
+Expected: all tests pass — `_shared/`, `validate-purchase`, `delete-user`, `rtdn-webhook`, `vitality-nightly`.
+
+- [ ] **Step 2: Run `make ci` (Flutter side)**
+
+```bash
+make ci
+```
+
+Expected: green. Should be a no-op for Dart since no `lib/` changes — analyzer + tests + build still need to run to confirm no incidental breakage.
+
+- [ ] **Step 3: Dispatch reviewer agent** for diff review against the audit doc findings
+
+Use foreground dispatch. The reviewer checks: (a) each finding's `Recommended:` line is implemented, (b) cluster-ref comments added where applicable (`developer-log-invisible-logcat` not applicable here; this PR establishes a new pattern — consider adding to PROJECT.md §0 Cluster Ledger as a candidate if any reviewer finding repeats), (c) edge cases on Content-Length headers (chunked encoding, missing header), (d) JWT precheck doesn't change semantics for service-role JWTs.
+
+Loop: reviewer flags → tech-lead fixes → re-review → sign-off.
+
+- [ ] **Step 4: Dispatch qa-engineer agent**
+
+QA verifies: Deno test coverage is complete (negative cases for each new validation path), no missed wiring-trace patterns (per finding-014 (A) folded in 33b not here, but verify these tests assert behavior not just `verify(.called)`).
+
+- [ ] **Step 5: Check off all WIP tasks 1–7**
+
+- [ ] **Step 6: Commit any remaining changes** (WIP checkmarks; review-cycle fixes)
+
+- [ ] **Step 7: Push branch**
+
+```bash
+git push -u origin feature/phase-33a-security
+```
+
+- [ ] **Step 8: Open PR**
+
+Title: `feat(security): Phase 33 PR 33a — Edge Function defense-in-depth`
+
+Body includes: summary, findings table (021 IMPORTANT + 3 folded), files changed list, test plan, link to audit doc Triage stamps section.
+
+- [ ] **Step 9: Wait for CI green**
+
+Fast checks (analyze + deno-tests + coverage-checks) + e2e. E2E should still pass (no Flutter app changes). If e2e fails, root-cause via systematic-debugging — likely the `ws` bump triggered something.
+
+- [ ] **Step 10: Admin-merge**
+
+```bash
+gh pr merge <PR#> --squash --admin --delete-branch
+```
+
+Note: this PR is NOT docs-only (touches Edge Functions). The admin-merge is justified by green CI, not the `feedback_docs_only_pr_merge` exception. Wait for E2E to pass before merging.
+
+- [ ] **Step 11: Update PROJECT.md §3 sub-PR table** — flip 33a PENDING → DONE (#PR-number). This update lands in the next fix-PR's commit (not its own micro-PR).
+
+---
+
+## PR 33a Notes
+
+- **Token budget:** the tech-lead agent should keep the helper interface stable across tasks 2–5 (each function calls the same `requireBodySize` + `precheckJwtExp`). If the interface evolves mid-implementation, update Task 1 first then propagate.
+- **Service-role JWT semantics:** `validate-purchase` accepts both user JWTs (via `getUser`) and service-role JWTs (via `isServiceRoleJwt` local decode). The `precheckJwtExp` runs BEFORE the service-role branch check — service-role JWTs DO have an `exp` claim (Supabase issues them with one), so they'll still pass the precheck. Don't special-case.
+- **Cluster ledger candidate:** the "edge function input-validation pattern" (clamp + allow-list + body-size cap + JWT precheck) could become a cluster entry if this pattern recurs. Defer the ledger write to the actual cluster recurrence — single pattern occurrence doesn't warrant the entry yet.
+- **No new migrations:** all fixes are application-layer. Existing RLS + SECURITY INVOKER guarantees are unchanged.
