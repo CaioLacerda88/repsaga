@@ -174,8 +174,114 @@ Deno.test(
   },
 );
 
-// Sanity: assertEquals is imported but not yet used. Keep it referenced so
-// the linter's no-unused-imports rule stays happy if this file later adds
-// a stricter assertion.
+// --- Phase 33 PR 33a: body size cap (finding-028 partial) -----------------
+//
+// vitality-nightly's body is tiny — `{ chunk?: 0..9, source?: string }`.
+// Anything > 1KB is a malicious bomb. The cap fires AT the top of the
+// handler, before the service-role gate, before env-var reads, before
+// any DB work.
+
+import { handleRequest } from './index.ts';
+
+function makeRequest(opts: {
+  authorization?: string | null;
+  contentLength?: string | null;
+  body?: string;
+  method?: string;
+}): Request {
+  const headers = new Headers();
+  if (opts.authorization !== null && opts.authorization !== undefined) {
+    headers.set('Authorization', opts.authorization);
+  }
+  if (opts.contentLength !== null && opts.contentLength !== undefined) {
+    headers.set('Content-Length', opts.contentLength);
+  }
+  if (opts.body !== undefined) {
+    headers.set('content-type', 'application/json');
+  }
+  return new Request('https://example.local/vitality-nightly', {
+    method: opts.method ?? 'POST',
+    headers,
+    body: opts.body,
+  });
+}
+
+function clientSpyThatMustNotFire(): unknown {
+  return {
+    from(_table: string) {
+      throw new Error('client.from must NOT have fired during rejection');
+    },
+  };
+}
+
+Deno.test(
+  'vitality-nightly: 413 on >1KB Content-Length, no service-role check, no body parse',
+  async () => {
+    const jwt = makeJwt({ role: 'service_role', exp: 9999999999 });
+    const req = makeRequest({
+      authorization: `Bearer ${jwt}`,
+      contentLength: '2000',
+      body: JSON.stringify({ chunk: 0, source: 'cron_nightly' }),
+    });
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      client: clientSpyThatMustNotFire() as any,
+    });
+    assertEquals(res.status, 413);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on body-too-big rejection',
+    );
+  },
+);
+
+Deno.test(
+  'vitality-nightly: ≤1KB body passes the cap (still rejected by non-service-role JWT)',
+  async () => {
+    // Pin that the cap is sized to a realistic payload. The tiny body
+    // here passes the cap; we use a non-service-role JWT so the request
+    // 401s on the service-role gate — confirming the cap is NOT the
+    // gating rejection.
+    const jwt = makeJwt({ role: 'authenticated', exp: 9999999999 });
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${jwt}`,
+        body: JSON.stringify({ chunk: 0 }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        client: clientSpyThatMustNotFire() as any,
+      },
+    );
+    // 401 from the service-role gate, NOT 413 from the cap.
+    assertEquals(res.status, 401);
+  },
+);
+
+Deno.test(
+  'vitality-nightly: rejects non-POST methods after cap (cap fires before method check)',
+  async () => {
+    // The cap is unconditional — GET with a too-large Content-Length
+    // (impossible in practice but still defensive) gets 413, not 405.
+    // Test it the other way: tiny GET request → 405 (cap passes, method
+    // check fires).
+    const jwt = makeJwt({ role: 'service_role', exp: 9999999999 });
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${jwt}`,
+        method: 'GET',
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        client: clientSpyThatMustNotFire() as any,
+      },
+    );
+    assertEquals(res.status, 405);
+  },
+);
+
+// Sanity: assertEquals is imported but not yet used elsewhere. Keep it
+// referenced so the linter's no-unused-imports rule stays happy.
 const _keepImport = assertEquals;
 void _keepImport;

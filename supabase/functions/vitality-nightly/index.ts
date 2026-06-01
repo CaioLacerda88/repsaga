@@ -51,6 +51,13 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { requireBodySize } from '../_shared/auth.ts';
+
+// Phase 33 PR 33a defense-in-depth (finding-028 partial): the body is
+// `{ chunk?: 0..9, source?: string }` — a few dozen bytes in production.
+// 1KB is two orders of magnitude headroom; anything above is a malicious
+// payload bomb against the cron entrypoint.
+const MAX_BODY_BYTES = 1024;
 
 // Fail-loud on missing env at module load — a deployment without
 // SUPABASE_URL is broken and we want a boot error, not a silent
@@ -366,10 +373,32 @@ interface InvokeBody {
   source?: string;
 }
 
-serve(async (req) => {
+// --- HTTP boundary (extracted for unit testability) ----------------------
+//
+// `handleRequest()` is exported so unit tests can drive the body-size cap
+// + service-role gate + method check without spinning up the Edge
+// Runtime. The deps object injects the Supabase client so rejection
+// paths short-circuit before constructing a real client.
+
+export interface HandleRequestDeps {
+  client: SupabaseClient;
+  now?: () => Date;
+}
+
+export async function handleRequest(
+  req: Request,
+  deps: HandleRequestDeps,
+): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  // 0. App-level body-size cap (finding-028). Fires BEFORE the service-
+  //    role gate so an unauthenticated attacker can't even DDoS the
+  //    gateway's JWT verifier with a 9MB payload.
+  const tooBig = requireBodySize(req, MAX_BODY_BYTES, corsHeaders);
+  if (tooBig) return tooBig;
+
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
@@ -392,15 +421,7 @@ serve(async (req) => {
     }
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: 'Server misconfigured' }, 500);
-  }
-
-  const client = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const client = deps.client;
 
   // 3. Find candidate users for tonight's recompute. Two pools UNIONed:
   //
@@ -415,7 +436,8 @@ serve(async (req) => {
   //    keeps the §12.3 budget intact (the EWMA-only pool is bounded by
   //    "users who have ever trained at least one set" — the same lifetime
   //    cohort that owns body_part_progress rows).
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+  const now = deps.now ? deps.now() : new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
   const { data: activeRows, error: activeErr } = await client
     .from('xp_events')
     .select('user_id')
@@ -459,7 +481,7 @@ serve(async (req) => {
   const errors: { user_id: string; detail: string }[] = [];
   for (const uid of userIds) {
     try {
-      const r = await processUser(uid, { client });
+      const r = await processUser(uid, { client, now: deps.now });
       if (r.processed) processed++;
       else if (r.skipped) skipped++;
     } catch (e) {
@@ -485,6 +507,24 @@ serve(async (req) => {
     },
     200,
   );
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: 'Server misconfigured' }, 500);
+  }
+
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  return handleRequest(req, { client });
 });
 
 /**
