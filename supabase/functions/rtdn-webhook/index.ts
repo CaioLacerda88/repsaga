@@ -39,7 +39,17 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { requireBodySize } from '../_shared/auth.ts';
 import { verifyPubSubJwt } from '../_shared/google_play.ts';
+
+// Phase 33 PR 33a defense-in-depth (findings 028 / 033):
+//   * 16KB request-body cap at the HTTP boundary (requireBodySize)
+//   * 16KB decoded base64 payload cap inside decodePubSubPayload
+// Real Pub/Sub envelopes are ≤ ~8KB; anything above 16KB is a malicious
+// payload bomb. Both caps short-circuit BEFORE expensive work (JWT
+// verify / JSON.parse) so the attacker can't induce CPU burn.
+const MAX_BODY_BYTES = 16 * 1024;
+const MAX_DECODED_PAYLOAD_BYTES = 16 * 1024;
 
 // Pub/Sub push is server-to-server; no browser CORS needed for the real
 // production traffic. We still answer OPTIONS for the Supabase dashboard
@@ -144,6 +154,15 @@ export function decodePubSubPayload(envelope: PubSubEnvelope): RtdnPayload {
   // atob is available in Deno; base64 may contain `+` `/` so no URL-safe
   // transform is needed here (Pub/Sub uses standard base64, not URL-safe).
   const json = atob(b64);
+  // Defense-in-depth (finding-033): cap the DECODED payload before
+  // JSON.parse runs. A 10MB envelope decodes to ~7MB JSON; JSON.parse
+  // on 7MB of attacker-controlled string is cheap CPU but still avoidable.
+  // Real RTDNs are ≤ ~2KB, so 16KB is two orders of magnitude headroom.
+  if (json.length > MAX_DECODED_PAYLOAD_BYTES) {
+    throw new Error(
+      `payload too large: ${json.length} bytes > ${MAX_DECODED_PAYLOAD_BYTES}`,
+    );
+  }
   return JSON.parse(json) as RtdnPayload;
 }
 
@@ -244,31 +263,49 @@ function isUniqueViolation(err: { code?: string; message?: string }): boolean {
 }
 
 // --- HTTP boundary --------------------------------------------------------
+//
+// `handleRequest()` is exported so unit tests can drive the body-size cap +
+// decoded-payload cap without standing up the Edge Runtime or a real
+// Pub/Sub JWT. The deps object injects the Supabase client + JWT verifier
+// + audience so the rejection paths don't require a real OIDC roundtrip.
 
-serve(async (req) => {
+export interface HandleRequestDeps {
+  client: SupabaseClient;
+  /** JWT verifier — production uses verifyPubSubJwt; tests inject a stub.
+   * Return value is discarded by handleRequest (we only care whether it
+   * throws); typed as `unknown` so production's `PubSubClaims` return
+   * and test stubs returning `void` both satisfy the contract. */
+  verifyJwt: (args: { token: string; expectedAudience: string }) => Promise<unknown>;
+  expectedAudience: string;
+  now?: () => Date;
+}
+
+export async function handleRequest(
+  req: Request,
+  deps: HandleRequestDeps,
+): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  try {
-    const audience = Deno.env.get('RTDN_PUBSUB_AUDIENCE');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!audience || !supabaseUrl || !serviceRoleKey) {
-      return json({ error: 'Server misconfigured' }, 500);
-    }
+  // 1. App-level body-size cap (finding-028). Reject 16KB+ envelopes
+  //    BEFORE JWT verify — JWT verify is a JWKs fetch + RSA verify, so
+  //    short-circuiting on body size first saves the expensive crypto.
+  const tooBig = requireBodySize(req, MAX_BODY_BYTES, corsHeaders);
+  if (tooBig) return tooBig;
 
-    // 1. Verify Pub/Sub JWT.
+  try {
+    // 2. Verify Pub/Sub JWT.
     const authHeader = req.headers.get('Authorization') ?? '';
     const jwt = authHeader.replace(/^Bearer\s+/i, '');
     if (!jwt) return json({ error: 'Missing Pub/Sub JWT' }, 401);
     try {
-      await verifyPubSubJwt({ token: jwt, expectedAudience: audience });
+      await deps.verifyJwt({ token: jwt, expectedAudience: deps.expectedAudience });
     } catch (e) {
       return json({ error: 'Invalid Pub/Sub JWT', detail: String(e) }, 401);
     }
 
-    // 2. Parse envelope.
+    // 3. Parse envelope.
     let envelope: PubSubEnvelope;
     try {
       envelope = await req.json();
@@ -277,16 +314,16 @@ serve(async (req) => {
     }
     let payload: RtdnPayload;
     try {
+      // decodePubSubPayload enforces the inner 16KB decoded-base64 cap
+      // (finding-033). A payload-too-large throw bubbles up here and we
+      // surface it as 400 — same status code as a malformed envelope.
       payload = decodePubSubPayload(envelope);
     } catch (e) {
       return json({ error: 'Malformed Pub/Sub payload', detail: String(e) }, 400);
     }
 
-    // 3. Delegate to the pure handler.
-    const client = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const result = await handleRtdn(payload, { client });
+    // 4. Delegate to the pure handler.
+    const result = await handleRtdn(payload, { client: deps.client, now: deps.now });
     return json(result.body, result.status);
   } catch (e) {
     return json(
@@ -294,4 +331,26 @@ serve(async (req) => {
       500,
     );
   }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  const audience = Deno.env.get('RTDN_PUBSUB_AUDIENCE');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!audience || !supabaseUrl || !serviceRoleKey) {
+    return json({ error: 'Server misconfigured' }, 500);
+  }
+
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return handleRequest(req, {
+    client,
+    verifyJwt: verifyPubSubJwt,
+    expectedAudience: audience,
+  });
 });
