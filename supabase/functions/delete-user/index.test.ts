@@ -197,6 +197,33 @@ Deno.test(
   },
 );
 
+Deno.test(
+  'delete-user: 401 on malformed JWT (no exp claim) BEFORE body parse',
+  async () => {
+    // Symmetric with the expired-JWT test — pins precheckJwtExp at the
+    // HTTP boundary. If a future refactor drops the precheck call from
+    // handleRequest, this test catches it. auth.test.ts covers the
+    // helper in isolation; this test covers the wiring.
+    const noExpJwt = encodeJwtPayload({ role: 'authenticated', sub: 'u1' });
+    const req = makeRequest({
+      authorization: `Bearer ${noExpJwt}`,
+      body: JSON.stringify({ platform: 'android', app_version: '1.0.0' }),
+    });
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+    });
+    assertEquals(res.status, 401);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on malformed-JWT short-circuit',
+    );
+  },
+);
+
 Deno.test('delete-user: missing Authorization → 401', async () => {
   const res = await handleRequest(
     makeRequest({ authorization: null }),
