@@ -38,12 +38,14 @@ No `lib/` / `test/` / `supabase/` writes in this stage.
 
 ## Checklist
 
-- [ ] Task 1 — Branch + scaffold audit doc
-- [ ] Task 2 — Dispatch 5 audit agents in parallel (background)
-- [ ] Task 3 — Receive returns + validate finding-block format
-- [ ] Task 4 — Assemble `docs/pre-launch-audit.md` (concat + global renumber + severity-summary table)
-- [ ] Task 5 — Commit + push + open PR
+- [x] Task 1 — Branch + scaffold audit doc
+- [x] Task 2 — Dispatch 5 audit agents in parallel (background)
+- [x] Task 3 — Receive returns + validate finding-block format
+- [x] Task 4 — Assemble `docs/pre-launch-audit.md` (concat + global renumber + severity-summary table)
+- [x] Task 5 — Commit + push + open PR
 - [ ] Task 6 — Post severity-counts summary to user (handoff to Stage 2 triage)
+
+**Stage 1 outcome (2026-06-01):** 66 numbered entries across 5 sections (65 severity-counted + 1 verification-only). Severity totals: 0 CRITICAL / 25 IMPORTANT / 33 NICE-TO-HAVE / 7 PARK. `docs/pre-launch-audit.md` assembled and committed via 33-discovery PR. Stage 2 (Triage gate) starts on the next user turn.
 
 ---
 
