@@ -15,26 +15,47 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-05-27).** **Phase 32 IN FLIGHT** — Pre-launch polish, 7 PRs (32a–g). **PR 32a MERGED (#270)** — pt-BR grammar fix + 3 action_hero eyebrows + `workout_template_translations` (migration 00067). **PR 32c MERGED (#273)** — week-plan picker filter removed + extracted `WeekdayFormatter` (kills `.toLocal()` drift cluster structurally). **PR 32g MERGED (#275)** — workout-flow hotfix wave: surfaced `durationSeconds` on `FinishWorkoutResult` (duration was off by UTC offset every finish), swept `dart:developer.log` → `debugPrint` across 4 files (cluster `developer-log-invisible-logcat`) + new CI gate `check_no_developer_log.sh`, title-equip error snackbar, `weeklyPlanNeedsConfirmationProvider` Hive persistence. 3 of 5 audit-flagged E2E specs landed (server-error copy / class-change cinematic / tap-chip → routine sheet); 2 retired as platform-untestable on Flutter web (PopScope cluster + UI gate making the EmptySessionGuard unreachable from the standard finish path) — both contracts covered by existing widget tests. Plus 4 widget tests. Reviewer cycles: pass 1 approved with 2 Important + 5 Nits, pass 2 approved post-fixes, pass 3 confirmed E2E-failure cleanup justified. Next: PR 32d (analytics expansion). Subsequent 3-agent flow audit (code map + E2E coverage + code-review) surfaced 3 confident bugs + 2 likely bugs + 8 critical E2E gaps in the home → workout-completion flow; consolidated in `docs/home-to-workout-flow-audit.md`. Added PR 32g for the bug-fix wave + missing E2E coverage. Class-resolver verified working for caiolacerda88 (chest=18 dominates, others ≤12, back/core=7 → Bulwark per `class_resolver.dart`). Order: 32a → 32c → 32g → 32d → 32b → 32e → 32f. **Phase 31 COMPLETE (PR #266, `26d1e40`)** — Post-Phase-30 overlay + summary refinement. D3 Achievement Frame replaces the old Variant A/B + toggle as the single photo-overlay treatment (diagonal `ClipPath` collars + dominant-BP-hue left bar + hotViolet right bar; left swaps to `heroGold` on class-change). S2 Mission Debrief replaces the post-cinematic empty `Spacer()` with named lift rows (top 4 + "+N more" footer) + segmented XP-by-BP bar (16dp, labels-off per UX round-3) + per-BP rank delta rows (multi-rank-jump-correct via new `bpRankBefore` field) + next-target callout (hairline-divider separated). Architectural fix: visible preview tree drops the FittedBox+SizedBox(1080×1920) wrapper — renderer now accepts `cardWidthDp/cardHeightDp` and lays out at device-native dp via `LayoutBuilder`; offscreen export tree stays at 1080×1920 for the share JPEG. SHARE CTA gate widened to `totalXpEarned > 0` (was: `prResult.hasNewRecords || RankUpEvent || TitleUnlockEvent || ClassChangeEvent`). PopScope leave-confirm dialog on `/workout/finish/:workoutId` (Bug E). XP hero "+N XP EARNED · CLASS" block at 36sp Rajdhani above the debrief section (Bugs F/G + round-3 polish). Leave-dialog typography aligned to brand stack (round-3 follow-up). Process: 3 implementation passes + 3 device-verification rounds on Samsung S25 Ultra + 3 UX-critic reviews; 10 bugs found across rounds, all fixed in-cycle per `feedback_no_deferring_review_findings`. **Phase 30 COMPLETE** (29.5 / 30a / 30b / 30c). 6 cluster ledger entries from Phase 30 cycle (`safearea-system-overlay-overlap`, `spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`, `developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`, `permission-handler-web-silent-failure`) — Phase 31 reinforced `spec-caption-vs-implementation-drift` (the FittedBox preview→export scale-direction inversion in round-1 + the trapezoid-clip text overflow in round-2 both fit the cluster). Per-PR detail in §4. Next: **Launch Phase**. **Phase 29 COMPLETE** (#251 #252 #253). **Phase 27 COMPLETE.** Post-26f open-scope sweep landed across two PRs: PR #244 bundled the L1–L18 polish + the L13.4 Android back-press fix (cluster `nested-nav-back-gate`) + the five device-QA bug-burst (Week-plan persistence via `onConflict`, optimistic engagement update, Saga chart edge unclip + label halo, redundant vitality-table dot removal, Home cold-mount skeleton gate with `PendingSyncBadge` lifted outside it); PR #245 (L18.4) landed the typography sweep + a new `scripts/check_typography_call_sites.sh` CI gate to structurally prevent the recurring sweep cycle. New `AppTextStyles.titleDisplay` token (Rajdhani 600 16dp) — Routines cards as action surfaces, Exercises stay on Inter `title`. **Phase 26 COMPLETE.** All six
-sub-phases shipped: 26a (PR #232) color system foundation (`bodyPartChest`
-pink, `bodyPartBack` sky, `xpTrack`, vitality aliases); 26b (PR #234) Saga
-Option B v4; 26c (PR #236) Stats deep-dive revamp (HP-drain vitality,
-per-body-part ghost trends, `VolumePeakBlock`); 26d (PR #238) Titles
-screen + server-side awarding fix; 26e (PR #240) Plan editor + bucket
-model evolution (`isSpontaneous`, `save_workout` RPC owns bucket
-find-or-create); 26f (PR #242) Home redesign — tappable expanding
-CharacterCard, BucketChipRow replacing the 7-day timeline, ActionHero
-collapsed to 3 branches with per-branch `flt-semantics-identifier`s,
-EncouragementNudge rotating-priority line. **Phase 24 COMPLETE** earlier
-in cycle. **Phase 25 (RPE) dropped 2026-05-15** — PO + UX research found
-<10% adoption signal in the Brazilian recreational-lifter target market,
-set-row real estate is full on 360dp, and the XP formula already captures
-effort objectively via `intensity_mult × strength_mult` (RPE would only
-add subjective variance useful for autoregulation power-users, who aren't
-the v1 audience). RPE parked as v1.1 opt-in (see §2). Next: **Launch
-Phase** (un-numbered; subscription + Play Store + any pre-launch scope
-expansion, formerly Phase 16). XP difficulty framework permanent
-reference: `docs/xp-difficulty-framework.md`.
+**Current state (2026-06-01).** **Phase 33 STARTING** — Pre-Launch
+Quality Sweep. Cross-cutting correctness pass between Phase 32 (just
+completed) and the Launch Phase: parallel discovery audit (5 read-only
+specialist agents → consolidated findings doc) → user-triage gate →
+5–8 fix PRs targeting CRITICAL + IMPORTANT findings only. Polish + nits
+park to v1.1. Target 1.5–2 weeks. See §3 for the full spec.
+**Phase 32 COMPLETE** (9 PRs: #270 #273 #275 #277 #279 #281 #283 #285
+#287) — pre-launch polish spanning pt-BR i18n + `workout_template_translations`
+(32a), Google Sign-In E2E + Credential Manager autofill + targeted
+security audit (32b — 0 criticals across 21 RLS-scoped tables + 4 Edge
+Functions), week-plan picker repeat-fix + `WeekdayFormatter`
+consolidation (32c), analytics expansion (32d — 5 new RPG/share/churn
+events + `_NoOpAnalyticsRepository` fallback), profile avatar with
+private Supabase Storage + 1yr signed URLs (32e — LGPD/GDPR compliance,
+migration 00069 flipped public → private mid-PR), history redesign
+(32f — sticky week headers + per-card XP eyebrow + total-volume strip),
+workout-flow hotfix wave (32g — UTC duration bug + `developer.log` →
+`debugPrint` sweep + CI gate `check_no_developer_log.sh`), user-created
+exercise retirement (32h — RPG thesis preservation), peak-load
+primary-only attribution (32j). Full per-PR detail in §4.
+**Phase 31 COMPLETE** (PR #266) — D3 Achievement Frame photo overlay +
+S2 Mission Debrief summary panel + architectural fix (preview tree
+drops FittedBox wrapper, renders at device-native dp via
+`cardWidthDp/cardHeightDp` + `LayoutBuilder`). SHARE CTA gate widened
+to `totalXpEarned > 0`. **Phase 30 COMPLETE** (29.5 / 30a / 30b / 30c)
+— post-session cinematic + share card pipeline. 6 cluster ledger
+entries from Phase 30+ cycle (`safearea-system-overlay-overlap`,
+`spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`,
+`developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`,
+`permission-handler-web-silent-failure`). **Phase 29 COMPLETE** (#251
+#252 #253) — XP formula v2 + 29.6 Pokemon Gen 5 chain + piecewise rank
+curve + gender-aware tier tables. **Phase 26/27 COMPLETE** — pre-launch
+UI/UX revamp across 6 sub-phases + post-26f sweep + typography sweep +
+structural CI gate (`check_typography_call_sites.sh`). **Phase 24
+COMPLETE.** **Phase 25 (RPE) DROPPED** 2026-05-15 — <10% adoption signal
+in Brazilian recreational-lifter target; effort already captured via
+`intensity_mult × strength_mult` in the Phase 24 formula. Parked as
+v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
++ paywall + Play Store + signed AAB + Play App Signing, formerly Phase
+16). XP difficulty framework permanent reference:
+`docs/xp-difficulty-framework.md`.
 
 ### Progress snapshot — latest 7 phases (full history in §4)
 
@@ -64,7 +85,8 @@ reference: `docs/xp-difficulty-framework.md`.
 | 30b | Share card pipeline: `SharePayload` Freezed domain model + 3 variants (Minimal Strip / Full-Bleed Collars / Discreet) + `ShareCardRenderer` composer + `ShareController` 6-state machine + `ShareImageRenderer` (RepaintBoundary→PNG at 1080×1920) + `ShareService` IO wrapper (image_picker 1.x / share_plus 10.x / permission_handler 11.x) + `ShareSheet` modal + `SharePreviewScreen` (A↔B toggle + retake + tap-to-hide + drag-to-reframe) + wire `share_cta_button.dart` from placeholder snackbar to sheet opener. Shared `prScore` helper aligns hero-PR selection between share card and choreographer. `BodyPartHues` domain map relocated from `rpg/ui/utils/`. 2 new cluster ledger entries: `parallel-agents-shared-working-tree-thrash` (workflow) + `permission-handler-web-silent-failure` (tooling). 4 E2E smoke + 9 + 25 + 8 + 10 + 12 + 7 + 8 unit/widget tests added + 3 goldens at 1080×1920. Variant A/B physical-device verification deferred to PR 30c ship gate. | DONE | #263 |
 | 30c | Cleanup + retire `pr_celebration_screen.dart` + E2E migration + test-hygiene audit (3 specs at `--workers=4 --repeat-each=3` green) + Phase 30 §4 condensation | DONE | #265 |
 | 31 | Post-Phase-30 overlay + summary refinement — D3 Achievement Frame single photo overlay (replaces Variant A/B + toggle) + S2 Mission Debrief summary section (lift rows + segmented XP bar + per-BP rank deltas + next-target callout). Architectural fix: visible preview tree drops FittedBox wrapper, renders at device-native dp via LayoutBuilder + `cardWidthDp/cardHeightDp` params. SHARE CTA gate widened to `totalXpEarned > 0`. PopScope leave-confirm dialog on the post-session route. 3 device-verification rounds + 3 UX-critic passes (10 bugs found across rounds, all fixed in-cycle). | DONE | #266 |
-| 32 | Pre-launch polish — 7 PRs spanning pt-BR grammar + i18n leaks, Google Sign-In E2E + Credential Manager autofill + targeted security audit, week-plan picker repeat-fix + weekday `.toLocal()` bug, analytics expansion (first_rank_up / post_session_cinematic_shown / share_card_exported / title_unlocked / session_zero_xp), profile avatar default + upload, history screen redesign (sticky week headers + per-card XP eyebrow), workout-flow hotfix wave (duration UTC bug, developer.log sweep, title equip error handler, confirm-banner persistence) + critical E2E coverage (EmptySessionGuard / post-session PopScope / class-change cinematic / server-error copy). | IN FLIGHT | — |
+| 32 | Pre-launch polish — 8 PRs (32a–h + 32j) spanning pt-BR grammar + i18n leaks + `workout_template_translations`, Google Sign-In E2E + Credential Manager autofill + targeted security audit, week-plan picker repeat-fix + weekday `.toLocal()` consolidation, analytics expansion (first_rank_up / post_session_cinematic_shown / share_card_exported / title_unlocked / session_zero_xp), profile avatar default + upload (private bucket + signed URLs), history screen redesign (sticky week headers + per-card XP eyebrow + total-volume strip), workout-flow hotfix wave (duration UTC bug, `developer.log` → `debugPrint` sweep + CI grep gate, title equip error handler, confirm-banner persistence), user-created exercise retirement (RPG thesis preservation), peak-load primary-only attribution. | DONE | #270 #273 #275 #277 #279 #281 #283 #285 #287 |
+| 33 | Pre-Launch Quality Sweep — parallel discovery audit (code review, security widening, wiring-trace test grep, E2E coverage matrix, dead-code purge) → user-triage gate → 5–8 fix PRs targeting CRITICAL + IMPORTANT findings. Final correctness pass before Launch Phase. Polish + nits park to v1.1. | IN FLIGHT | — |
 
 ### Cluster Ledger — named bug patterns
 
@@ -356,256 +378,141 @@ one passes reliably in normal CI single-run mode.
 
 ## §3 In-flight
 
-> No phase has started implementation as of 2026-05-13. The three phases
-> below are the locked roadmap to public release. When a sub-phase opens,
-> its full implementation spec gets written here (acceptance criteria,
-> file plan, schema if relevant, UX details) and `docs/WIP.md` tracks the
-> running checklist. Post-merge, the spec collapses into §4 Completed
-> Phases.
+> Active phase(s) carry their full implementation spec here — acceptance
+> criteria, file plan, schema if relevant, UX details — while `docs/WIP.md`
+> tracks the running checklist. Post-merge, each phase spec collapses
+> into §4 Completed Phases (3–5 bullets per the lifecycle rule).
 
-### Phase 32 — Pre-Launch Polish
+### Phase 33 — Pre-Launch Quality Sweep
 
-Pre-launch correctness + UX gloss pass between Phase 31 and Launch
-Phase. Six PRs: pt-BR grammar + i18n leaks, Google Sign-In E2E +
-Credential Manager autofill + targeted security audit, week-plan
-picker repeat-fix + weekday `.toLocal()` bug, analytics expansion
-(RPG / share / churn events), profile avatar default + upload,
-history screen redesign with sticky week headers + per-card XP.
+Cross-cutting correctness pass between Phase 32 (complete) and Launch
+Phase. Two stages: a parallel-discovery audit producing a single
+findings doc (`docs/pre-launch-audit.md`), then a sequential fix wave
+of 5–8 PRs against the triaged findings. Target: 1.5–2 weeks.
+Success criterion: **zero CRITICAL or IMPORTANT findings open at
+Launch Phase kickoff.**
+
+Depth target: **ship-ready confidence** — catch what would embarrass
+us at launch (security crit, broken flow, dead code that misleads
+agents, tests asserting wiring not behavior, E2E gaps in golden
+paths). Polish + nits park to v1.1 via PROJECT.md §2.
 
 | Sub-PR | Scope | Size | Status |
 |---|---|---|---|
-| 32a | Locale leaks + meus-treinos + workout_template_translations + CI gate | 1-2d | DONE (#270) |
-| 32b | Google Sign-In E2E + duplicate-email test + Credential Manager autofill + targeted security audit | 3-4d | DONE (#279) |
-| 32c | Week-plan picker repeat-fix + `WeekdayFormatter` consolidation (lib/core/utils/) + behavior test | 1-2d | DONE (#273) |
-| 32d | Analytics: `first_rank_up`, `post_session_cinematic_shown`, `share_card_exported`, `title_unlocked`, `session_zero_xp` | 1d | DONE (#277) |
-| 32e | Profile avatar — monogram-over-BP-hue default + bottom-sheet upload + Supabase Storage + Hive cache + Home/Saga RuneHalo substitution + private-bucket signed URLs + tappable halo + size bump + Exercises AppBar title | 4-5d | DONE (#283) |
-| 32f | History redesign — sticky week headers + per-card XP eyebrow + detail-screen XP/PR header strip + total-volume strip + tappable PR row diamond + AOM-merge locator fix + numericSmallInheriting token | 3-4d | DONE (#285) |
-| 32g | Workout-flow hotfix wave + critical E2E coverage — duration UTC-offset fix, `dart:developer` → `debugPrint` sweep (4 files), title equip error handler, confirm-banner Hive persistence, 3 widget tests (Mission Debrief 6-BP / rest-timer countdown / duration fix), 3 critical E2E specs (server-error copy / class-change cinematic / tap-chip → routine sheet — 2 originally-planned specs deleted as platform-untestable + covered by widget tests, see PR description), CI grep gate `check_no_developer_log.sh` | 5-7d | DONE (#275) |
-| 32h | Retire user-created exercises — delete `CreateExerciseScreen` + `/create-exercise` route + Add CTA in `exercise_picker_sheet` + repository `createExercise` + offline-sync `PendingCreateExercise` variant. RPG thesis: catalog exercises carry calibrated `tier_diff_mult` / `xp_attribution`; user-created can't, so logging them would silently produce zero-XP work. Silent retirement (no live users yet — pre-launch). | 1-2d | DONE (#281) |
-| 32j | Peak-load attribution: primary-only semantics — replace `peak_load_per_body_part` RPC body (migration 00071) so multi-BP exercises post their top weight only to the MAX-share BP. Tied primary includes both. Pre-launch destructive replacement (no sibling RPC). Dart consumer unchanged. Fixes user-caught shoulders + arms = 240 kg bleed from PR 32f device verification. | <1d | DONE (#287) |
+| 33-discovery | Five read-only audit agents (parallel dispatch) → orchestrator assembles `docs/pre-launch-audit.md` → single PR commits the audit doc to `main` so all subsequent fix PRs reference one canonical source | 2d | PENDING |
+| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. | 0.5–1d | PENDING |
+| 33a | Security fixes — Edge Fn input validation tightening, signed-URL TTL audit, deeplink hijack defense, dep CVE bumps (`flutter pub outdated` + `npm audit` on test/e2e/), new-table RLS sweep (00067 / 00068 / 00069 / 00070 / 00071) | 1–2d | PENDING |
+| 33b | Retired-feature purge — dead code from PR 32h (`CreateExerciseScreen` residue), PR 30c (`pr_celebration_screen`), Phase 29.5 (5 retired overlays), Phase 25 RPE references, unused l10n keys, orphan files, dead branches in sealed unions | 1d | PENDING |
+| 33c | Workout-flow + finish-coordinator slice — code-review fixes + wiring-trace test rewrites + E2E gaps in workout golden flow | 2–3d | PENDING |
+| 33d | RPG / XP / share-pipeline slice — code-review fixes + test cleanup + E2E coverage gaps | 2d | PENDING |
+| 33e | Auth / profile / paywall-adjacent slice — code-review fixes + test cleanup + E2E coverage | 1–2d | PENDING |
+| 33f | Residual E2E coverage — cross-cutting flows, navigation, locale gaps that don't fit a domain slice | 1d | PENDING |
+| 33g / 33h | Reserve slots for triage overflow or newly-discovered cluster patterns warranting their own PR | Variable | RESERVED |
 
-Order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f → 32j.
+Order: 33-discovery → 33-triage → 33a → 33b → 33c → 33d → 33e → 33f → (33g/h if needed).
 
-Audit + test plan: `docs/home-to-workout-flow-audit.md` consolidates the 2026-05-27 3-agent investigation (code map, E2E coverage matrix, full test plan, code-reviewer findings).
+#### Stage 1 — Discovery (parallel read-only agents)
 
-#### Decisions locked (2026-05-27 planning session)
+Five specialist agents dispatched **in parallel** — safe because they're
+read-only investigation (no `lib/`/`test/`/`supabase/` writes, no `git
+checkout`, so cluster `parallel-agents-shared-working-tree-thrash`
+doesn't fire). Each agent returns its findings as a structured response
+keyed to its assigned audit-doc section; the orchestrator assembles the
+five returned sections into a single `docs/pre-launch-audit.md` and
+commits it via the 33-discovery PR. Agents may NOT write files
+directly — the assembly step is the orchestrator's so concurrency
+conflicts on the audit doc are structurally impossible.
 
-| Item | Decision | Rationale |
-|---|---|---|
-| Post-workout XP overlay | No new overlay — XP surfaces in History detail only | Phase 30/31 cinematic already ships the moment; History needs the persistence layer |
-| Routine i18n | `workout_template_translations` table | Mirrors `exercise_translations` from Phase 15f; scales to more locales |
-| Week-plan picker | Allow repeating routines across days | Users with simple splits do "Push Day" Mon/Wed/Fri; current filter blocks that |
-| Default avatar | Monogram over BP-hue → hotViolet gradient | UX-critic pick; no new icon assets; consistent with Phase 26 color tokens |
-| Remember password | Android Credential Manager autofill only | Industry standard, low-friction; biometric deferred to v1.1 |
-| Security audit depth | Targeted (RLS, Edge Fn, JWT, bundle secrets) | Full `/security-review` reserved as backstop if scope balloons |
-| Samsung Account | Dropped | Zero competitor parity; no user-asked; engineering cost ≠ value |
-| Paywall analytics | Deferred to Launch Phase 16b | Paywall code doesn't exist yet |
-| Saga XP | Out of scope | Already shows rank progression; History is the missing surface |
-| Class resolver bug check | Verified working — no bug | caiolacerda88 stats (chest=18, shoulders=arms=12, legs=10, back=core=7) → spread=0.611 > 0.30 → dominant=chest → Bulwark per `class_resolver.dart` |
+| Agent | Subagent type | Scope | Returns section |
+|---|---|---|---|
+| A1 code-audit | `reviewer` | All `lib/` (~50 feature files). Logic gaps, dead code, files too large, unused exports, deprecated imports, anti-patterns. Cross-checks against §0 Cluster Ledger. | §A — Code review |
+| A2 security | `general-purpose` w/ `/security-review` skill | Widens PR 32b: every Edge Fn input path, signed-URL TTL audit, deeplink hijack vectors, `flutter pub outdated` CVE scan, `npm audit` on test/e2e/, bundle secret re-sweep, RLS sweep for tables added since 32b (00067–00071) | §B — Security |
+| A3 test-grep | `Explore` | Mechanical grep across `test/unit/` + `test/widget/` for wiring-trace patterns (`verify(...).called`, `when(...).thenAnswer` w/ no downstream `expect(find...)`, tests passing w/ no `find...` assertion). Outputs candidate list + one-line context per match. | §C — Wiring-trace candidates |
+| A4 e2e-coverage | `qa-engineer` | Coverage matrix: every user-reachable screen × every primary action × every error path. Cross-reference vs existing 237 E2E tests in 23+ spec files. Output: gap list w/ concrete spec-file landing suggestions. | §D — E2E gap matrix |
+| A5 dead-code | `Explore` | Find: tests for retired features (`CreateExerciseScreen` post-32h, `pr_celebration_screen` post-30c, 5 retired overlays post-29.5, RPE refs post-Phase-25 drop), references to deleted widgets, unused l10n keys (grep `app_en.arb` keys vs `lib/`), orphan files, dead arms in sealed unions | §E — Deletion candidates |
 
-#### PR 32a — Locale leaks + meus-treinos + routine translations
+**Finding-block format** (each entry):
 
-**Files to modify**
-- `lib/l10n/app_pt.arb` — L199 + L313: `MINHAS TREINOS` → `MEUS TREINOS`
-- `lib/l10n/app_en.arb` + `app_pt.arb` — 3 new keys: `homeActionHeroStartEyebrow` / `homeActionHeroFreeEyebrow` / `homeActionHeroWelcomeEyebrow`
-- `lib/features/workouts/ui/widgets/action_hero.dart` — replace hardcoded `'INICIAR'` (L219) / `'TREINO LIVRE'` (L255) / `'BEM-VINDO'` (L283) with l10n reads
-- `lib/features/routines/data/repository/routine_repository.dart` (or wherever default-routine names are fetched) — join on `workout_template_translations` by `(template_slug, locale)` with `'en'` fallback
+```
+### finding-NN — <one-liner>
+- file:line
+- Current: <observed behavior>
+- Recommended: <change>
+- Severity: CRITICAL | IMPORTANT | NICE-TO-HAVE | PARK
+- Suggested home: PR 33x | PARK | adjacent
+```
 
-**Files to create**
-- `supabase/migrations/0006X_workout_template_translations.sql` — `CREATE TABLE workout_template_translations (template_slug TEXT, locale TEXT, name TEXT, PRIMARY KEY (template_slug, locale))` + RLS (read-all, write-service-role) + en seed for existing 5 templates ("Upper/Lower — Upper", "Upper/Lower — Lower", "5x5 Strength", "Full Body Beginner", "Arms & Abs") + pt seed
-- `scripts/check_workout_template_translation_coverage.sh` — CI gate mirroring `check_exercise_translation_coverage.sh`; fail if any default template lacks both en+pt rows
-- Wire the gate into `.github/workflows/ci.yml`
+**Severity criteria:**
 
-**Test plan**
-- Widget: `action_hero.dart` under en + pt locales; assert ARB-resolved eyebrow strings render (no hardcoded chars)
-- Unit: routine name resolver returns pt for pt locale, en for en, en fallback for unknown locales
-- E2E: Treinos screen in en shows "MY ROUTINES", in pt shows "MEUS TREINOS"; spawn a fresh user, assert default routine names render in pt-BR
-- CI: gate script returns non-zero when a seed row lacks pt
+- **CRITICAL** — security vuln, broken golden flow, data corruption risk, RPG thesis violation
+- **IMPORTANT** — logic gap, missing E2E for golden path, test asserts wrong thing, dead code that confuses agents
+- **NICE-TO-HAVE** — polish, refactor opportunity, file-too-large smell on stable code
+- **PARK** — opinion-shaped, no clear blast radius, v1.1 territory
 
-**Acceptance**
-- `make ci` green including the new coverage gate
-- `git grep -E 'TREINO LIVRE|INICIAR|BEM-VINDO|MINHAS TREINOS'` returns zero hits in `lib/` (ARB strings are now the localized values)
-- pt-BR Treinos screen header renders `MEUS TREINOS`
+#### Stage 2 — Triage gate (hard gate, user-facing)
 
-#### PR 32b — Auth correctness + Credential Manager + targeted security audit — DONE (#279)
+After all five agents complete:
 
-Shipped Android OS-level credential autofill via first-party Flutter
-APIs — NO new dependency. `AppTextField` gained optional
-`autofillHints` param (forwarded to the underlying `TextFormField` /
-`EditableText.autofillHints`); `LoginScreen`'s form wraps in an
-`AutofillGroup(onDisposeAction: AutofillContextAction.cancel)` so the
-OS save prompt only fires on success, never on mid-flow abandonment.
-Email field always advertises `AutofillHints.email`; password field
-switches between `AutofillHints.password` (login) and
-`AutofillHints.newPassword` (signup) so Android Credential Manager
-distinguishes the two flows. `_finishAutofillIfSucceeded()` calls
-`TextInput.finishAutofillContext(shouldSave: true)` after successful
-email/password auth — gated on `!ref.read(authNotifierProvider).hasError`.
-Dead try/catch in the signup branch removed (AuthNotifier uses
-`AsyncValue.guard`, never re-throws). `auth-send-reset` Semantics got
-`explicitChildNodes: true` per cluster
-`semantics-identifier-pair-rule`. 9 new tests across 3 files
-(duplicate-email banner contract incl. negative pin against
-`cluster_persist_eats_duration`, 5 autofill-hints contracts incl.
-`onDisposeAction: cancel` pin, 2 Google-Sign-In E2E smoke). Targeted
-security audit shipped 0 criticals — 21 user-data tables with
-`auth.uid()`-scoped RLS, 4 Edge Functions verifying JWT + CORS-restricted
-to `SUPABASE_URL` + idempotency via PK/UPSERT, `git grep` returned 0
-hits for service-role/sk_live/sk_test/raw-JWT prefixes in `lib/`.
-Physical-Android verification on Galaxy S938B (Android 16 / API 36)
-confirmed save-on-success + no-prompt-on-abandon. iOS scope deferred
-(Android-first launch). Paywall events analytics still owned by Launch
-Phase 16b.
+1. Orchestrator reads `docs/pre-launch-audit.md` end-to-end + posts severity-counts-per-section summary
+2. **Per-finding pass** for CRITICAL + IMPORTANT (8–12 findings per chunk): user signs off on severity (keep / escalate / downgrade), disposition (fix this phase / fold into adjacent PR / park), and suggested fix-PR home
+3. **Batch pass** for NICE-TO-HAVE: orchestrator proposes default PARK, user spot-checks; anything escalated rejoins fix scope
+4. Audit doc amended w/ each finding stamped `→ PR 33x` or `→ PARKED`
+5. PROJECT.md §2 gets a new sub-section `### Phase 33 audit deferrals` for PARKED items (severity, file:line, revisit-condition)
 
-#### PR 32c — Week-plan picker + weekday `.toLocal()`
+**Triage principles (locked):**
 
-**Files to modify**
-- `lib/features/weekly_plan/ui/week_plan_screen.dart` L692 — `format(date)` → `format(date.toLocal())` matching `bucket_chip_row.dart::_shortDayLabel` (L338-339)
-- The week-plan picker UI file (likely `lib/features/weekly_plan/ui/widgets/<picker>.dart`) — remove the filter that excludes already-picked routines so the same routine can be added to multiple days
+- **CRITICAL never parks.** If it's truly critical, the fix is in Phase 33; if it can park, it wasn't critical.
+- **IMPORTANT parks only with a concrete revisit-condition** (telemetry threshold, post-launch decision, dependency on another phase). Vague "later" is not allowed.
+- **NICE-TO-HAVE defaults to PARK** unless it folds into an adjacent fix PR at near-zero marginal cost.
+- `feedback_no_deferring_review_findings` still applies inside each fix PR cycle — triage decides phase scope, not per-PR scope.
+- Workstream overflow (e.g. 80 wiring-trace candidates surface) → user gets a budget question (fix N this phase, park the rest), not all-or-nothing.
 
-**Files to create**
-- `test/unit/features/weekly_plan/weekday_consistency_test.dart` — pumps a `BucketRoutine` with `completedAt: DateTime.parse('2026-05-27T02:00:00Z')` (UTC Wed = local Tue evening in BRT); asserts both `bucket_chip_row._shortDayLabel` and `week_plan_screen._shortDayLabel` return the same local-Tuesday label under `intl` BRT
-- `test/widget/features/weekly_plan/picker_repeat_test.dart` — pump picker with a routine already in this week's bucket; assert it still appears in the list
+#### Stage 3 — Fix wave
 
-**Acceptance**
-- Both bucket-chip-row + week-plan-screen render the same weekday for the same `completedAt` under BRT
-- Picker shows previously-picked routines; week plan can have the same routine on multiple days
-- Reference cluster `e2e-global-setup-seed-verify` if any test fixture is added
+Each fix PR through the standard CLAUDE.md pipeline verbatim:
 
-#### PR 32d — Analytics expansion (RPG + share + churn) — DONE (#277)
+1. Read PROJECT.md §3 Phase 33 + targeted findings in audit doc
+2. Boundary-trigger ripple check if a finding crosses a public API / provider state / RPC / route
+3. WIP.md checklist w/ audit-doc finding numbers as items
+4. tech-lead implements WITH unit/widget tests (TDD where applicable)
+5. ui-ux-critic if a UI surface is touched (most won't be)
+6. `superpowers:verification-before-completion` before PR open
+7. reviewer → fix → re-review until signed off
+8. qa-engineer final pass (writes E2E for audit-doc gaps; selector impact assessment)
+9. Visual verification **only** if a UI surface changed (rare this phase)
+10. `make ci` + E2E green
+11. Squash merge, apply any migrations to hosted Supabase
+12. Close WIP, mark progress table row DONE
 
-Shipped 5 sealed-union variants to `AnalyticsEvent` + emit sites at the
-finish coordinator (`first_rank_up` per body-part on first rank-up with
-Hive-cache idempotency), post-session screen (`post_session_cinematic_shown`
-on mount with `_analyticsFired` guard + `title_unlocked` per queued
-unlock), share controller (`share_card_exported` on `ShareResultStatus.success`
-only — discreet vs with_photo), and active-workout notifier
-(`session_zero_xp` from the empty-session guard branch). 33 new tests
-including positive + negative-branch DI contracts for the
-`_NoOpAnalyticsRepository` fallback added during code review to move
-the "analytics must never break user flow" guarantee from per-call-site
-try/catches to a single provider-construction catch. No migration —
-`analytics_events.name` is free-form text + `props jsonb` (see migration
-00015). Paywall events deferred to Launch Phase 16b.
+**Domain ordering rationale:**
 
-#### PR 32e — Profile avatar default + upload — DONE (#283)
+- 33a first — security can't park; blocking for launch
+- 33b second — mechanical deletes shrink the surface other PRs read
+- 33c–e in risk order — workout flow > RPG > auth/profile
+- 33f residual cross-cutting
+- 33g/h reserve
 
-Shipped a distinctive `ProfileAvatar` (RadialGradient Day-0 `primaryViolet → abyss`
-glow vs LinearGradient trained `dominantBodyPartHue → hotViolet` sweep; monogram
-Rajdhani 700 white; CachedNetworkImage on uploaded photos). Bottom-sheet
-`AvatarCropSheet` with circular mask + pinch-zoom + drag-to-reposition
-(48dp buttons, sealed `AvatarCropResult` discriminating cancel/success/error).
-`AvatarRepository` uploads to private bucket via 1-year **signed URLs** (LGPD/GDPR
-compliance — bucket flipped from public to private mid-PR per the
-`feedback_data_protection_compliance` rule; migration 00069 locked it down +
-own-prefix SELECT RLS). Hive `userPrefs` stores URL + companion
-`avatarUrlCacheExpiresAt` for expiry-aware fast-path; `regenerateSignedUrl`
-refreshes on cache miss. `Profile.avatarUrl` Freezed field added (DB column
-already existed at `profiles.avatar_url`). `upsertProfile` omit-on-null
-discipline.
+**Cluster ledger discipline** — if any audit finding maps to an existing cluster, the fix PR's inline comment references the cluster name (CLAUDE.md A3). If a new recurring pattern surfaces during the fix wave, add a `cluster_*.md` auto-memory entry + PROJECT.md §0 ledger row in the same PR.
 
-**RuneHalo substitution** — Home `CharacterCard` (48dp, up from 40dp) + Saga
-`SagaHeader` (44dp, up from 36dp) drop the abstract rune figure and embed
-`ProfileAvatar(compact: true)` inside the glow ring on all 4 state subtrees
-(dormant rotation now wraps only the glow shell so the avatar doesn't spin;
-radiant drops the gold tint argument since gold tinting a photo is wrong).
-Both surfaces become tappable via `GestureDetector(onTap: context.push('/profile/settings'))`
-per UX-critic memo — workout-context accidental-tap risk made direct picker
-the wrong call; the upload UI stays anchored to the IdentityCard. `_compactSizeThreshold`
-bumped 48→52 keeps the new sizes on the compact glow-pad.
+#### Non-goals (explicit)
 
-**IdentityCard polish** — `ProfileAvatar` (64dp) + `_CameraEditBadge` (22dp,
-hotViolet camera icon on surface2, surface border) for tappability affordance.
-Loading scrim during upload (`avatarUploadInProgressProvider`-driven). New
-`compact: bool` param suppresses badge + scrim + semantics + sub-30dp monogram
-when nested in RuneHalo. Camera-permission-denied snackbar copy distinct from
-upload-failed (with Open-Settings action on permanently denied). Semantics
-label localized (`avatarSemanticsLabel(name)` in EN + pt-BR).
+- **No new features.** Phase 33 is correctness + cleanup only. Feature requests surfaced during the audit get parked to v1.1 or Launch Phase scope-expansion.
+- **No UX redesigns.** Phase 26/27 locked the visual revamp. "This screen could be prettier" findings → NICE-TO-HAVE → PARK.
+- **No XP formula touches.** Phase 29.6 calibration locked. RPG findings requiring formula change escalate to a separate sub-phase, not folded into 33d.
+- **No migration churn for stable schema.** Migrations 00001–00071 stay. Only new RLS / new tables / index additions allowed if security audit surfaces an actual hole.
+- **No paywall / subscription work.** Launch Phase territory. Paywall-adjacent findings tagged `→ Launch Phase`, not `→ PR 33x`.
+- **No refactor-for-refactor's-sake.** A correct + tested file stays as-is even if oversized.
+- **No test re-architecture.** Wiring-trace rewrites stay surgical — replace `verify(...).called` w/ `expect(find...)` against the same setup; don't restructure groups, fixtures, or shared setup.
 
-**Exercises title consistency** — `ExerciseListScreen` swapped its 28sp inline
-`Padding+Text` outlier for the standard `Scaffold(appBar: AppBar(title: Text(l10n.exercises)))`
-pattern matching Saga/History/Profile (theme's `appBarTitle` = Rajdhani 600 18sp
-centered). Drops the hardcoded `fontSize: 28` token bypass.
+#### Closing state
 
-Two migrations (00068 + 00069) applied to hosted Supabase mid-PR for device
-verification. 56 → 64+ tests (15 unit + 22 widget for ProfileAvatar; 19 for
-RuneHalo substitution incl. dormant-rotation-doesn't-wrap-avatar pin; +5 for
-character_card/saga_header tap-navigation; 11 for AvatarRepository signed-URL
-contract). Physical-Android verified end-to-end on Galaxy S938B (Android 16 /
-API 36): Day-0 vs trained gradient distinction, halo-state machine integrity,
-upload flow with signed URLs, tappable navigation, Exercises title consistency.
-
-#### PR 32f — History screen redesign — DONE (#285)
-
-Shipped CustomScrollView migration with sticky `SliverPersistentHeader`
-per ISO week (Monday-start, locale-aware; current week renders `"This
-Week"` / `"Esta semana"`; 52dp `surface2` row, sectionHeader typography,
-`overlapsContent` shadow). Per-card `+N XP` eyebrow in `hotViolet`
-(daily-driver register — NOT heroGold; reward-scarcity rule the
-`scripts/check_reward_accent.sh` gate enforces) plus optional `◆ N PRs`
-diamond wrapped in `RewardAccent` (sanctioned heroGold scope, omitted
-entirely when prCount == 0, ICU-pluralized). Workout detail screen
-gains a 48dp `Text.rich` summary strip (hotViolet XP + heroGold PRs
-via WidgetSpan with baseline-alphabetic alignment fixing the
-device-only ascender mismatch; hidden when both aggregates are zero).
-Detail set-row PR glyph swapped from the generic Material "level up"
-SVG to the gold `◆` matching the card pattern. Bottom of detail gets
-a second 48dp `surface2` total-volume strip mirroring the top strip
-(Barlow label + Rajdhani numeric value, no icon). New
-`AppTextStyles.numericSmallInheriting` token solves the cluster
-`numericSmall`-bakes-color regression where `RewardAccent`'s heroGold
-was clobbered by the explicit `color: textDim` via `Text.style.merge`.
-
-Backend: new SQL function `get_workout_history_with_aggregates` (RPC
-returning history rows + `total_xp` SUM + `pr_count` COUNT + `set_count`
-COUNT via explicit-column projection — guards against schema drift)
-plus a `get_workout_xp` mini-RPC for single-workout detail enrichment.
-`Workout.totalXp` / `prCount` / `setCount` Freezed fields added.
-`WorkoutHistoryNotifier` migrated from `AsyncNotifier<List<Workout>>`
-to `AsyncNotifier<WorkoutHistoryState>` so `isLoadingMore` + `hasMore`
-flow through `AsyncValue` reactively (fixes the pre-existing `ref.read`
-non-reactive load-more hole). `loadMore` swallows transient
-pagination errors with `debugPrint` instead of rethrowing into the
-fire-and-forget caller — refresh is the user's recovery path.
-
-E2E fix: `history-localization.spec.ts` D1 locator switched from
-`text=` to `getByRole('group', { name: regex })` after the
-XP-eyebrow `Semantics(identifier:)` sibling caused the card's title /
-summary / duration / date to merge into the inner group node's AOM
-label per `cluster_aom_label_text_merge`.
-
-Migration 00070 applied to hosted Supabase mid-PR for device
-verification. Physical-Android verified end-to-end on Galaxy S938B
-(Android 16 / API 36) — gold PR diamond pops correctly against violet
-XP eyebrows, baseline-aligned WidgetSpan, sticky headers + shadow,
-total-volume strip mirrors the top strip.
-
-#### PR 32h — Retire user-created exercises (RPG thesis preservation) — DONE (#281)
-
-Shipped silent retirement of the user-create-exercise surface across UI,
-data, offline-queue, l10n, and test layers because user-created
-exercises (`is_default = false`) carry no calibrated `tier_diff_mult` /
-`xp_attribution` per the Phase 29 v2 XP formula — logging them would
-silently produce zero-XP work, breaking [[project_rpg_thesis]]. Deleted:
-`CreateExerciseScreen` + `/exercises/create` route, the FAB + empty-state
-TextButton in `exercise_list_screen`, the "create one" `FilledButton.icon`
-in `exercise_picker_sheet`, `ExerciseRepository.createExercise` (+ 4
-unit tests), `PendingCreateExercise` sealed-union variant (+ 5 switch arms
-across `pending_sync_provider` / `sync_service` / `pending_sync_sheet`),
-the BUG-003 dependsOn-scan in `active_workout_notifier`, 7 exclusive
-l10n keys, 9 create-flow E2E specs + 2 localization specs, and
-`EXERCISE_LIST.createFab` + `CREATE_EXERCISE` selector blocks. Added:
-`OfflineQueueService.purgeRetiredKinds()` defensive purge (async,
-awaited inside `_coldLaunchDrain` before any `getAll()` — race-safe by
-construction) + 5 unit tests pinning the contract, BUG-003 E2E tests
-rewired to Admin-API direct seed (with explicit Phase-15f slug) + Admin-
-API soft-delete to preserve the "starting a routine whose only exercise
-was deleted produces an error snackbar" coverage, and an E2E negative pin
-asserting Add CTA absence on the library. Also swept `dart:developer` →
-`debugPrint` across `offline_queue_service`, `sync_service`, and
-`sync_error_mapper` (cluster `developer-log-invisible-logcat`). 27 files,
--2461/+650 net. No schema migration — `exercises.user_id` + `is_default`
-columns + RLS policies untouched for schema flexibility.
+- Zero CRITICAL findings open
+- Zero IMPORTANT findings open without written park rationale + revisit-condition in PROJECT.md §2
+- `docs/pre-launch-audit.md` deleted in final cleanup PR (findings now in git history via fix PRs; parked items now in PROJECT.md §2)
+- PROJECT.md §3 Phase 33 row collapsed to §4 Completed Phases summary (3–5 bullets per lifecycle rule)
+- Any newly discovered bug clusters added to §0 Cluster Ledger + auto-memory
+- `make ci` green, full E2E suite green, smoke E2E green
+- Launch Phase kickoff unblocked
 
 ### Launch Phase
 
@@ -1277,6 +1184,22 @@ consumers atomically; PR 3 lands the documentation.
 - **Process retrospective.** 3 implementation passes (state plumbing → D3 overlay → S2 Mission Debrief) + 3 device-verification rounds on Samsung S25 Ultra + 3 UX-critic reviews. **Round 1** caught: D3 invisible (collar/bar heights collapsed by FittedBox scale-down), preview typography microscopic (4-15sp on screen), XP bar segments invisible (6dp vs 14dp spec). **Round 2** caught: bottom-collar text overflowing the trapezoid clip without ellipsis ("Caminhada do Fazendeird"), Android back-button exits app (no `PopScope` on the post-session screen), Mission Debrief missing the "+340 XP EARNED" hero block, cramped Próximo Passo spacing (no divider). **Round 3** caught: SHARE CTA gated too tightly on baseline sessions, XP bar labels-inside-segments read as noise (drop them, bump bar 14→16dp), XP hero size feels under-scaled (22sp → 36sp). **Round 3 follow-up:** leave-confirm dialog typography aligned to brand stack (was using Material's Roboto fallback). All 10 bugs fixed in-cycle per `feedback_no_deferring_review_findings`.
 - **Retired:** `ShareCardVariantA` + `ShareCardVariantB` widgets + their 3 goldens + 2 ARB keys (`sharePreviewMinimal` / `sharePreviewBold`) + the `share-variant-toggle` E2E selector + the `SegmentedButton` toggle UI on `SharePreviewScreen`. `XpSegmentedBar`'s `bodyPartLabels` constructor param + label-rendering logic dropped in round-3.
 - **Test deltas + ARB additions.** Pass 3 baseline: 3210 → 3231 unit+widget tests (+21 net). Round-3 final: 3229 (−5 label tests + 4 regression guards). 3 share-card goldens (re-baselined round-2 with 3% tolerance) + 4 summary-panel goldens. New ARB keys per locale: `postSessionDebriefEyebrow`, `postSessionPrFlag`, `postSessionMoreLifts` (plural-aware), `postSessionRankLabel`, `postSessionRankUpArrow`, `postSessionWeightUnit`, `postSessionXpEarnedLabel`, `postSessionLeaveTitle`/`Cancel`/`Confirm`. The round-1 + round-2 bugs both fit `cluster_spec_caption_vs_implementation_drift` — the FittedBox preview→export scale-direction was inverted from the working PR 30c Discreet contract; the trapezoid-clip text overflow drifted from the locked mockup HTML. Reinforces the cluster rather than adding a new entry.
+
+### Phase 32: Pre-Launch Polish (PRs #270 #273 #275 #277 #279 #281 #283 #285 #287)
+
+> Pre-launch correctness + UX gloss pass between Phase 31 and the Launch Phase. 9 sub-PRs (32a–h + 32j) closing pre-launch correctness gaps surfaced by the 2026-05-27 3-agent home → workout-completion flow audit + product-owner pass. Ship order: 32a → 32c → 32g → 32d → 32b → 32h → 32e → 32f → 32j.
+
+- **32a** — pt-BR grammar (`MINHAS TREINOS` → `MEUS TREINOS`) + 3 `action_hero` eyebrow keys (`homeActionHeroStartEyebrow` / `Free` / `Welcome`) + `workout_template_translations` table (migration 00067) mirroring Phase 15f's exercise-translation pattern + CI gate `check_workout_template_translation_coverage.sh`. Default routines resolve via `(template_slug, locale)` JOIN with `'en'` fallback.
+- **32b** — Google Sign-In E2E + Credential Manager autofill via first-party `AutofillGroup(onDisposeAction: cancel)` + `AutofillHints.email/password/newPassword` (no new dep). `_finishAutofillIfSucceeded()` calls `TextInput.finishAutofillContext(shouldSave: true)` gated on `!hasError`. Targeted security audit shipped **0 criticals** across 21 user-data tables with `auth.uid()`-scoped RLS, 4 Edge Functions with JWT verify + CORS-restricted to `SUPABASE_URL`, 0 service-role / sk_live / sk_test / raw-JWT-prefix hits in `lib/`. Physical-Android verified on Galaxy S938B (Android 16 / API 36).
+- **32c** — Week-plan picker filter removed (users with simple splits can do "Push Day" Mon/Wed/Fri) + extracted `WeekdayFormatter` to `lib/core/utils/` consolidating `bucket_chip_row._shortDayLabel` ↔ `week_plan_screen._shortDayLabel`. Kills the `.toLocal()` drift cluster structurally. Behavior test pins BRT UTC-Wed → local-Tuesday parity across both surfaces.
+- **32d** — 5 new sealed-union variants on `AnalyticsEvent` + emit sites: `first_rank_up` (per-BP, Hive-cache idempotency at finish coordinator), `post_session_cinematic_shown` (on mount with `_analyticsFired` guard), `share_card_exported` (on `ShareResultStatus.success` only — discreet vs with_photo), `title_unlocked` (per queued unlock), `session_zero_xp` (empty-session-guard branch). `_NoOpAnalyticsRepository` fallback at provider construction moves "analytics must never break user flow" from per-call-site try/catches to a single provider-construction catch. No migration — `analytics_events.name` free-form + `props jsonb`.
+- **32e** — Distinctive `ProfileAvatar` (RadialGradient Day-0 `primaryViolet → abyss` glow vs LinearGradient trained `dominantBodyPartHue → hotViolet` sweep; Rajdhani 700 monogram). Bottom-sheet `AvatarCropSheet` (circular mask + pinch-zoom + drag) upload to **private** Supabase Storage bucket via 1-year signed URLs (LGPD/GDPR compliance; migrations 00068 + 00069 — bucket flipped public → private mid-PR per `feedback_data_protection_compliance`; own-prefix SELECT RLS). RuneHalo substitution on Home `CharacterCard` (48dp, up from 40) + Saga `SagaHeader` (44dp, up from 36); both tappable → `/profile/settings`. `Profile.avatarUrl` Freezed field + `regenerateSignedUrl` Hive-cache-miss refresh. Exercises AppBar title swapped to standard `Scaffold(appBar:)` pattern dropping the 28sp outlier.
+- **32f** — History `CustomScrollView` with sticky `SliverPersistentHeader` per ISO week (Monday-start, locale-aware; current week renders "This Week" / "Esta semana"). Per-card `+N XP` eyebrow in `hotViolet` (daily-driver register — NOT heroGold per reward-scarcity rule the `scripts/check_reward_accent.sh` gate enforces) + optional `◆ N PRs` diamond wrapped in `RewardAccent` (sanctioned heroGold). Detail screen gains 48dp XP/PR `Text.rich` summary strip (baseline-alphabetic WidgetSpan fix for the device-only ascender mismatch) + bottom 48dp total-volume strip mirroring the top strip. New `AppTextStyles.numericSmallInheriting` token solves the heroGold-clobbered-by-`Text.style.merge` regression. RPC `get_workout_history_with_aggregates` (migration 00070) returns history + `total_xp` SUM + `pr_count` COUNT via explicit-column projection. `WorkoutHistoryNotifier` migrated from `AsyncNotifier<List<Workout>>` to `AsyncNotifier<WorkoutHistoryState>` fixing the pre-existing `ref.read` non-reactive load-more hole. E2E `history-localization.spec.ts` locator switched from `text=` to `getByRole('group', { name: regex })` after the XP-eyebrow `Semantics(identifier:)` sibling caused AOM label merge per `cluster_aom_label_text_merge`.
+- **32g** — Workout-flow hotfix wave. Surfaced `durationSeconds` on `FinishWorkoutResult` (duration was off by UTC offset every finish). `dart:developer.log` → `debugPrint` sweep across 4 files (cluster `developer-log-invisible-logcat`) + new CI gate `scripts/check_no_developer_log.sh`. Title-equip error snackbar. `weeklyPlanNeedsConfirmationProvider` Hive persistence. 3 critical E2E specs landed (server-error copy / class-change cinematic / tap-chip → routine sheet); 2 originally-planned specs retired as platform-untestable on Flutter web (PopScope cluster + UI gate making `EmptySessionGuard` unreachable from the standard finish path) — both contracts covered by existing widget tests. Plus 4 widget tests.
+- **32h** — Silent retirement of user-created exercises preserving the RPG thesis (uncalibrated exercises carry no `tier_diff_mult` / `xp_attribution`; logging them would silently produce zero-XP work, breaking [[project_rpg_thesis]]). Deleted: `CreateExerciseScreen` + `/exercises/create` route + FAB + Add CTA in `exercise_picker_sheet` + `ExerciseRepository.createExercise` + `PendingCreateExercise` sealed-union variant (+ 5 switch arms across `pending_sync_provider` / `sync_service` / `pending_sync_sheet`) + BUG-003 dependsOn-scan + 7 exclusive l10n keys + 9 create-flow E2E specs + 2 localization specs. Added `OfflineQueueService.purgeRetiredKinds()` defensive purge + 5 unit tests. BUG-003 E2E rewired to Admin-API direct seed (with explicit Phase-15f slug) + soft-delete. Also swept `dart:developer` → `debugPrint` across offline-sync trio. 27 files, −2461/+650 net. No schema migration.
+- **32j** — Peak-load attribution primary-only semantics (migration 00071, destructive RPC replacement — pre-launch). Multi-BP exercises now post top weight only to MAX-share BP; tied primaries include both. Dart consumer unchanged. Fixes user-caught shoulders + arms = 240 kg bleed from PR 32f device verification.
+- **Key decisions locked (2026-05-27 planning session):** no new post-workout XP overlay (Phase 30/31 cinematic already ships the moment; History detail is the persistence layer); routine i18n via `workout_template_translations` (mirrors Phase 15f); week-plan allows repeating routines across days; default avatar monogram-over-BP-hue → hotViolet gradient; Credential Manager autofill only (biometric deferred to v1.1); Samsung Account integration dropped (zero competitor parity, no user signal); paywall analytics + Saga XP surface deferred to Launch Phase 16b; class-resolver verified working — no bug (caiolacerda88 stats spread 0.611 > 0.30 → dominant=chest → Bulwark per `class_resolver.dart`).
+- **Cluster ledger additions across Phase 30+ cycles** — 6 new entries: `safearea-system-overlay-overlap`, `spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`, `developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`, `permission-handler-web-silent-failure`. Cluster `aom-label-text-merge` reinforced by 32f's E2E locator fix.
 
 ---
 
