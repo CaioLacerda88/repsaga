@@ -280,8 +280,3 @@ Deno.test(
     assertEquals(res.status, 405);
   },
 );
-
-// Sanity: assertEquals is imported but not yet used elsewhere. Keep it
-// referenced so the linter's no-unused-imports rule stays happy.
-const _keepImport = assertEquals;
-void _keepImport;

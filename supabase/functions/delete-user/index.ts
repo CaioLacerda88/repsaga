@@ -127,7 +127,7 @@ export async function handleRequest(
     if (!authHeader) {
       return json({ error: 'Missing Authorization header' }, 401);
     }
-    const jwt = authHeader.replace('Bearer ', '');
+    const jwt = authHeader.replace(/^Bearer\s+/i, '');
 
     // 2. JWT exp precheck (finding-030). Reject expired/malformed JWTs
     //    BEFORE paying the req.json() body-parse cost.

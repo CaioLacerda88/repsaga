@@ -368,9 +368,10 @@ Deno.test(
     const req = makeRtdnRequest({
       authorization: 'Bearer fake',
       body: JSON.stringify(envelope),
-      // Set Content-Length below the 16KB outer cap so we exercise the
-      // INNER (decoded base64) cap, not the outer body cap.
-      contentLength: '15000',
+      // Omit Content-Length deliberately. requireBodySize treats missing
+      // Content-Length as OK (platform-level ceiling still applies). This
+      // routes the request past the OUTER 16KB body cap so we exercise
+      // only the INNER decoded-base64 cap.
     });
     const res = await handleRequest(req, {
       // deno-lint-ignore no-explicit-any

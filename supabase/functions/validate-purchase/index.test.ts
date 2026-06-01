@@ -801,9 +801,37 @@ Deno.test(
   },
 );
 
+Deno.test(
+  'validate-purchase: 401 on malformed JWT (no exp claim) BEFORE body parse',
+  async () => {
+    // Pins the precheck at the HTTP boundary, not just the helper.
+    // If `precheckJwtExp` were ever skipped in `handleRequest`, the
+    // auth.test.ts unit tests would still pass — only this HTTP-boundary
+    // test catches that regression.
+    const noExpJwt = encodeJwtPayload({ role: 'authenticated', sub: 'u1' });
+    const req = makeRequest({
+      authorization: `Bearer ${noExpJwt}`,
+      body: JSON.stringify({ product_id: 'x', purchase_token: 'y' }),
+    });
+
+    const res = await handleRequest(req, {
+      // deno-lint-ignore no-explicit-any
+      adminClient: clientSpyThatMustNotFire() as any,
+      // deno-lint-ignore no-explicit-any
+      userClient: clientSpyThatMustNotFire() as any,
+      fetchFn: fetchSpyThatMustNotFire(),
+    });
+    assertEquals(res.status, 401);
+    assertEquals(
+      req.bodyUsed,
+      false,
+      'request body must NOT be consumed on malformed-JWT short-circuit',
+    );
+  },
+);
+
 Deno.test('validate-purchase: 400 on product_id > 128 chars', async () => {
   const longId = 'a'.repeat(129);
-  const { client: adminClient } = makeClient();
   const res = await handleRequest(
     makeRequest({
       authorization: `Bearer ${freshJwt({ role: 'service_role' })}`,
@@ -816,7 +844,7 @@ Deno.test('validate-purchase: 400 on product_id > 128 chars', async () => {
     }),
     {
       // deno-lint-ignore no-explicit-any
-      adminClient: adminClient as any,
+      adminClient: clientSpyThatMustNotFire() as any,
       // deno-lint-ignore no-explicit-any
       userClient: clientSpyThatMustNotFire() as any,
       fetchFn: fetchSpyThatMustNotFire(),

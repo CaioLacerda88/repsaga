@@ -51,6 +51,9 @@ export function requireBodySize(
   // malformed Content-Length the same as a missing one — the upstream
   // platform cap still applies. Pinned by an explicit test in auth.test.ts.
   const length = parseInt(raw, 10);
+  // Negative values are also treated as OK — pathological and not in our
+  // threat model. parseInt('-42', 10) === -42, which is finite and
+  // ≤ maxBytes, so the check passes and the platform-level cap applies.
   if (!Number.isFinite(length) || length <= maxBytes) return null;
   return new Response(
     JSON.stringify({ error: 'Payload too large', maxBytes }),

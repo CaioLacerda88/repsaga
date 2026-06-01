@@ -334,6 +334,44 @@ Deno.test(
 );
 
 Deno.test(
+  'delete-user: full round-trip — audit row written AND auth.admin.deleteUser called',
+  async () => {
+    // Sanity check that the `handleRequest` extraction preserves the
+    // production path end-to-end: a valid JWT + valid body must reach
+    // BOTH the audit insert AND the user-delete call. Catches regressions
+    // where a future refactor silently drops one of the two side effects.
+    const { client: adminClient, calls } = makeAdminClient();
+    const userClient = makeUserClient();
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${freshJwt()}`,
+        body: JSON.stringify({
+          platform: 'android',
+          app_version: '1.4.2',
+        }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        adminClient: adminClient as any,
+        // deno-lint-ignore no-explicit-any
+        userClient: userClient as any,
+      },
+    );
+    assertEquals(res.status, 200);
+
+    const auditInsert = calls.find(
+      (c) => c.table === 'account_deletion_events' && c.op === 'insert',
+    );
+    assert(auditInsert, 'audit row must be inserted');
+
+    const userDelete = calls.find(
+      (c) => c.table === 'auth.users' && c.op === 'delete',
+    );
+    assert(userDelete, 'auth.admin.deleteUser must be called on happy path');
+  },
+);
+
+Deno.test(
   'delete-user: omitted platform/app_version stay null (best-effort optional)',
   async () => {
     const { client: adminClient, calls } = makeAdminClient();
