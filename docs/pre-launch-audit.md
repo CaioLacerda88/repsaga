@@ -5,7 +5,7 @@
 > Triage gate (Stage 2) stamps each `→ PR 33x` or `→ PARKED`.
 > This doc is deleted in the final Phase 33 cleanup PR.
 
-**Status:** Stage 1 (Discovery) — pre-triage. Generated 2026-06-01.
+**Status:** Stage 2 (Triage) complete — 2026-06-01. 21 IMPORTANT findings stamped → fix wave; 11 NICE-TO-HAVE folded; 33 PARKED (revisit-conditions in PROJECT.md §2 → Phase 33 audit deferrals).
 
 ## Severity summary
 
@@ -21,6 +21,82 @@
 §E also contains one verification-only entry (`finding-065 (E)` — Phase 29.5 cleanup verified complete) that is not counted toward severity buckets.
 
 **Orchestrator note (cross-section gap):** A5 §E sweep underdelivered relative to scope bullet #6 (orphan files in `lib/`). It missed `lib/features/rpg/ui/saga_stub_screen.dart` (an orphan widget with no import path) which A1's `finding-004 (A)` captures at IMPORTANT severity. A1's `finding-003 (A)` also has the RPE l10n keys at IMPORTANT (not NICE-TO-HAVE as §E rates them) and at a different line count (6 keys vs §E's 4 keys) — triage should consult `finding-003 (A)` as the canonical entry for that cluster. §D's per-block severity for `finding-D-13` (now `finding-042 (D)` — Post-session B3 PR cut) is IMPORTANT per the block contents, contradicting the agent's own summary-table placement of it in NICE-TO-HAVE; orchestrator trusts the block-level severity. Re-dispatch of A5 not warranted because A1's overlap already surfaces the gaps.
+
+## Triage stamps (Stage 2 outcome — 2026-06-01)
+
+Per Phase 33 spec, each finding stamped → PR 33x (fix-wave home) or → PARKED (revisit-condition in PROJECT.md §2 Phase 33 audit deferrals). Triage walk-through: 3 chunks of CRITICAL+IMPORTANT (none CRITICAL, 25 IMPORTANT) + 1 batch of 33 NICE-TO-HAVE. 4 IMPORTANTs downgraded to PARK during walk-through (non-goals "no refactor-for-refactor's-sake" + 32g platform-untestable note). 11 NICE-TO-HAVEs folded into adjacent fix PRs at near-zero marginal cost.
+
+### Fix wave shape
+
+| Fix PR | IMPORTANT | Folded NICE-TO-HAVE | Total items |
+|---|---|---|---|
+| **PR 33a — Security** | 4 (finding-026, 027, 028, 029) | 3 (finding-030, 031, 033) | 7 |
+| **PR 33b — Dead-code + developer.log batch** | 4 (finding-001, 003, 004, 010) | 3 (finding-012, 014, 021) | 7 |
+| **PR 33c — Workout-flow** | 9 (finding-005, 009, 036, 037, 038, 039, 041, 044, 046) | 3 (finding-011, 013, 059) | 12 |
+| **PR 33d — RPG / share** | 3 (finding-042, 043, 045) | 1 (finding-055) | 4 |
+| **PR 33e — Auth / profile** | 1 (finding-002) | 1 (finding-056) | 2 |
+| **PR 33f — Residual** | **CLOSED** — both flagged findings (finding-006, 008) parked | — | 0 |
+| **Total** | 21 | 11 | 32 |
+
+### IMPORTANT dispositions (21)
+
+| Finding | Title (one-liner) | → Home |
+|---|---|---|
+| finding-001 (A) | `developer.log` in 5 core files | → PR 33b |
+| finding-002 (A) | `CodexNavRow` Semantics pair-rule miss | → PR 33e |
+| finding-003 (A) | RPE l10n keys (Phase 25 drop) | → PR 33b |
+| finding-004 (A) | `SagaStubScreen` orphan widget | → PR 33b |
+| finding-005 (A) | `bpProgressFractionPre` unused (TODO 30b) | → PR 33c |
+| finding-009 (A) | `_flushDebouncedSave` missing mounted/error handling | → PR 33c |
+| finding-010 (A) | `_syncToRemote` developer.log + .catchError | → PR 33b (moved from 33e — same cluster as -001) |
+| finding-026 (B) | `validate-purchase` body field length cap + UUID | → PR 33a |
+| finding-027 (B) | `validate-purchase` JWT verify ordering | → PR 33a |
+| finding-028 (B) | Edge Fn JSON body size cap (32KB) | → PR 33a |
+| finding-029 (B) | `ws` CVE in test/e2e | → PR 33a |
+| finding-036 (D) | Onboarding 4 tests skip (global-setup) | → PR 33c |
+| finding-037 (D) | Sign-up happy path E2E | → PR 33c |
+| finding-038 (D) | Active workout banner tap E2E | → PR 33c |
+| finding-039 (D) | Workout detail content E2E | → PR 33c |
+| finding-041 (D) | CONTINUAR CTA E2E | → PR 33c |
+| finding-042 (D) | Post-session B3 PR cut E2E | → PR 33d |
+| finding-043 (D) | Exercise retirement E2E | → PR 33d |
+| finding-044 (D) | `/records` in-app nav E2E | → PR 33c |
+| finding-045 (D) | Weight unit toggle E2E | → PR 33d |
+| finding-046 (D) | Week-complete review 4 tests skip (global-setup) | → PR 33c |
+
+### Folded NICE-TO-HAVE dispositions (11)
+
+| Finding | Parent IMPORTANT | → Home | Fold rationale |
+|---|---|---|---|
+| finding-011 (A) | finding-005 | → PR 33c | Inline `_emptyBpFractions()` cleanup during -005 fix |
+| finding-012 (A) | finding-004 | → PR 33b | `make gen` regen already needed after -004 delete |
+| finding-013 (A) | finding-005 | → PR 33c | Doc comment on `bpProgressFractionPre` |
+| finding-014 (A) | finding-001 | → PR 33b | Drop `dart:developer` import after migration |
+| finding-021 (A) | finding-001 | → PR 33b | Same file (`pending_sync_provider.dart`) already in batch |
+| finding-030 (B) | finding-027 | → PR 33a | `delete-user` same JWT-verify ordering shape |
+| finding-031 (B) | finding-027 (size-cap batch) | → PR 33a | `delete-user` platform/version allowlist (~10 lines) |
+| finding-033 (B) | finding-028 | → PR 33a | `rtdn-webhook` base64 cap fits size-cap pattern |
+| finding-055 (D) | (post-session surface) | → PR 33d | Unskip overflow-card tap; stale Path-A note |
+| finding-056 (D) | finding-002 | → PR 33e | Unskip 26-tap-routing-e2e; content-visibility assertion |
+| finding-059 (D) | finding-037 | → PR 33c | Extend `auth.spec.ts:276` full-journey w/ Records row |
+
+### Downgrades during triage (4 originally-IMPORTANT → PARKED)
+
+| Finding | One-liner | Park rationale (revisit-condition in PROJECT.md §2) |
+|---|---|---|
+| finding-006 (A) | `week_plan_screen.dart` 566-line build method | Non-goals "no refactor-for-refactor's-sake"; v1.1 polish |
+| finding-007 (A) | `set_row.dart` 4 build methods > 200 lines | Same |
+| finding-008 (A) | `progress_chart_section.dart` build methods | Same |
+| finding-040 (D) | Empty-session guard sheet E2E | 32g triaged as platform-untestable on Flutter web; widget test owns contract |
+
+### PARKED summary
+
+- **Downgraded IMPORTANTs:** 4 (see above)
+- **NICE-TO-HAVEs parked:** 22 (out of 33)
+- **Pre-existing PARK from agent severity:** 7 (finding-022, 023, 024, 025 (A) + 032, 034, 035 (B) + 061 (D))
+- **Verification-only (not in severity buckets):** 1 (finding-065 (E) — Phase 29.5 cleanup verified complete)
+
+Full park rationale + revisit-conditions live in **PROJECT.md §2 → Phase 33 audit deferrals**. Each parked finding has a concrete revisit-condition per Phase 33 triage principles (no vague "later").
 
 ## Finding-block reference
 
