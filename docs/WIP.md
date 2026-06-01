@@ -43,9 +43,19 @@ No `lib/` / `test/` / `supabase/` writes in this stage.
 - [x] Task 3 — Receive returns + validate finding-block format
 - [x] Task 4 — Assemble `docs/pre-launch-audit.md` (concat + global renumber + severity-summary table)
 - [x] Task 5 — Commit + push + open PR
-- [ ] Task 6 — Post severity-counts summary to user (handoff to Stage 2 triage)
+- [x] Task 6 — Post severity-counts summary to user (handoff to Stage 2 triage)
 
-**Stage 1 outcome (2026-06-01):** 66 numbered entries across 5 sections (65 severity-counted + 1 verification-only). Severity totals: 0 CRITICAL / 25 IMPORTANT / 33 NICE-TO-HAVE / 7 PARK. `docs/pre-launch-audit.md` assembled and committed via 33-discovery PR. Stage 2 (Triage gate) starts on the next user turn.
+**Stage 1 outcome (2026-06-01):** 66 numbered entries across 5 sections (65 severity-counted + 1 verification-only). Severity totals: 0 CRITICAL / 25 IMPORTANT / 33 NICE-TO-HAVE / 7 PARK. `docs/pre-launch-audit.md` assembled and committed via 33-discovery PR (#290).
+
+**Stage 2 outcome (2026-06-01):** Triage gate walked 25 IMPORTANT in 3 chunks (PR 33a/33b group → PR 33c → PR 33d/33e/33f group) + batch-reviewed 33 NICE-TO-HAVE. Dispositions:
+
+- **21 IMPORTANT → fix wave** across PR 33a (4) / 33b (4, incl. finding-010 moved from 33e) / 33c (9) / 33d (3) / 33e (1).
+- **4 IMPORTANT downgraded → PARKED** (finding-006 / 007 / 008 build-method refactors per non-goals rule; finding-040 empty-session guard E2E per 32g platform-untestable note).
+- **11 NICE-TO-HAVE folded** into adjacent fix PRs at near-zero marginal cost (3 → 33a, 3 → 33b, 3 → 33c, 1 → 33d, 1 → 33e).
+- **22 NICE-TO-HAVE → PARKED** to PROJECT.md §2 → Phase 33 audit deferrals with concrete revisit-conditions.
+- **PR 33f CLOSED** post-triage (both flagged findings parked).
+
+Audit doc stamped with triage dispositions table; park rationale + revisit-conditions written to PROJECT.md §2 → Phase 33 audit deferrals. 33-triage PR lands these artifacts; Stage 3 (Fix wave) starts after merge — first PR is **33a (Security)** per the locked order.
 
 ---
 

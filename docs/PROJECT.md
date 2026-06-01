@@ -374,6 +374,56 @@ one passes reliably in normal CI single-run mode.
   was 60 s test timeout too tight for the longest single-user flow. Fix:
   `test.setTimeout(120_000)`, `@flaky` removed. 20/20 consecutive passes.
 
+### Phase 33 audit deferrals
+
+Findings parked from the Phase 33 pre-launch audit (`docs/pre-launch-audit.md`, Stage 2 triage 2026-06-01). Each parked finding has a concrete revisit-condition per Phase 33 triage principles. The full audit doc lives on `main` until the final Phase 33 cleanup PR deletes it; this §2 entry persists in PROJECT.md as the long-lived backlog record.
+
+**Downgraded IMPORTANTs → PARKED (4):**
+
+- **finding-006 (A)** — `week_plan_screen.dart` 566-line build method. Refactor candidate. Revisit: v1.1 polish phase (post-launch, after user telemetry confirms / refutes refactor priority on this surface). Non-goals rule "no refactor-for-refactor's-sake" applies.
+- **finding-007 (A)** — `set_row.dart` 4 build methods > 200 lines. Same revisit-condition.
+- **finding-008 (A)** — `progress_chart_section.dart` build methods 100–180 lines. Same revisit-condition.
+- **finding-040 (D)** — Empty-session guard sheet E2E. Revisit: only if Flutter web AOM/PopScope diagnostic tooling improves OR the gate path changes. PR 32g already triaged this; widget test owns the contract.
+
+**NICE-TO-HAVE → PARKED (22):**
+
+- **finding-015 (A)** — `_workoutSource` `planned_bucket` analytics discriminator. Revisit: v1.1 telemetry, once we have post-launch funnel data and a product decision on whether to differentiate plan-bucket vs routine-card starts.
+- **finding-016 (A)** — `rank $rankThreshold.` hardcoded English. Revisit: product-owner triage in v1.1 — keep "rank" untranslated in Brazilian fitness vocab (twin: finding-024 (A) PARK) or add `l10n.rank` key.
+- **finding-017 (A)** — `_SetRowState.build` 212-line refactor. Same v1.1-polish revisit as -006/-007/-008.
+- **finding-018 (A)** — `_AxisChart.build` 181-line refactor. Same v1.1-polish revisit.
+- **finding-019 (A)** — `active_workout_notifier.dart` 2050-line file split (`ActiveWorkoutCelebrationBridge` mixin extraction). Same v1.1-polish revisit.
+- **finding-020 (A)** — `finish_workout_coordinator.dart` 776-line file + 500-line `finish()` extraction. Same v1.1-polish revisit.
+- **finding-032 (B)** — 12 pubspec direct deps a major version behind (no CVEs on pinned). Revisit: v1.1 dependency-refresh PR after launch, OR sooner if a CVE drops on a pinned version, OR when Dart SDK constraint changes.
+- **finding-047 (D)** — `/email-confirmation` E2E. Revisit: v1.1 coverage expansion, or fold into Launch Phase if email-confirmation churn metric shows regressions.
+- **finding-048 (D)** — Legal screens E2E (`/privacy-policy`, `/terms-of-service`). Revisit: v1.1 coverage expansion, or sooner if a compliance audit flags missing E2E for these public routes.
+- **finding-049 (D)** — History error retry button E2E. Revisit: v1.1 coverage expansion, or sooner if a Sentry-reported regression hits the history-load error path.
+- **finding-050 (D)** — History card PR-diamond E2E. Revisit: v1.1 coverage expansion.
+- **finding-051 (D)** — Exercise reorder toggle promoted spec (currently charter-only). Revisit: v1.1 coverage expansion, or sooner if a regression touches reorder mode.
+- **finding-052 (D)** — Workout notes field E2E. Revisit: v1.1 coverage expansion.
+- **finding-053 (D)** — Share preview export tap on web. Revisit: only if we ship Flutter web as a real distribution target (not v1; Android-first). Otherwise PARK indefinitely — Playwright on web is a test substrate, not a shipping surface.
+- **finding-054 (D)** — Routine reorder drag in `/routines/create`. Revisit: v1.1 if user signal indicates this is exercised; otherwise PARK indefinitely (no telemetry on routine-reorder usage).
+- **finding-057 (D)** — PR empty-state `test.skip` resolution. Revisit: when the underlying seed gap is diagnosed (either fix `save_workout` PR detection or restructure `smokePR` seeding). Owned by a future test-hygiene pass.
+- **finding-058 (D)** — Create-new-routine-from-AddRoutinesSheet E2E. Revisit: v1.1 coverage expansion.
+- **finding-060 (D)** — Crash-recovery double-tap DB-level dedup assertion (current test asserts "no crash"; add DB-level count via admin client). Revisit: v1.1 coverage hardening.
+- **finding-062 (E)** — Duplicate of finding-003 (A) (RPE l10n keys). Resolved when -003 lands in PR 33b; this entry is bookkeeping.
+- **finding-063 (E)** — Comment-only residue from PR 32h (`CreateExerciseScreen` retirement). KEEP as architectural documentation per CLAUDE.md "comments explain WHY code looks the way it does." No revisit — perpetual keep.
+- **finding-064 (E)** — Comment-only residue from PR 30c (`pr_celebration_screen` retirement). KEEP as documentation. No revisit.
+- **finding-066 (E)** — Comment-only residue from Phase 29.5 Path-A pivot. KEEP as documentation. No revisit.
+
+**Pre-existing PARK from audit (7, severity = PARK as flagged by the discovery agents):**
+
+- finding-022 (A) — `PostSessionController` uses `ChangeNotifier` over Riverpod. Revisit: if Riverpod 3 gains `@riverpod` family support for non-hashable params.
+- finding-023 (A) — `_routerProvider` redirect pattern. No action; idiomatic GoRouter+Riverpod.
+- finding-024 (A) — Twin of finding-016 (A) — same "rank" English copy product decision.
+- finding-025 (A) — `_WeightStepperCellState.build` 215-line refactor. Same v1.1-polish revisit as -006/-007/-008/-017.
+- finding-034 (B) — `AndroidManifest.xml` intent-filter host tightening. Revisit: if a second deeplink surface ships, or if a Play Console security scan flags it.
+- finding-035 (B) — `_shared/google_play.ts` JWK/token cache caps. Revisit: only if Google-upstream-compromise threat model becomes in-scope (post-launch incident, regulatory ask, or similar).
+- finding-061 (D) — ActionHero create-first-routine E2E. Revisit: when (and if) we ship a per-user-default-hide schema migration enabling zero-routines state for test users.
+
+**Verification-only (1):**
+
+- finding-065 (E) — Phase 29.5 mid-workout-overlay cleanup verification. DONE — no action item; record of clean-state verification.
+
 ---
 
 ## §3 In-flight
@@ -399,17 +449,17 @@ paths). Polish + nits park to v1.1 via PROJECT.md §2.
 
 | Sub-PR | Scope | Size | Status |
 |---|---|---|---|
-| 33-discovery | Five read-only audit agents (parallel dispatch) → orchestrator assembles `docs/pre-launch-audit.md` → single PR commits the audit doc to `main` so all subsequent fix PRs reference one canonical source | 2d | PENDING |
-| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. | 0.5–1d | PENDING |
-| 33a | Security fixes — Edge Fn input validation tightening, signed-URL TTL audit, deeplink hijack defense, dep CVE bumps (`flutter pub outdated` + `npm audit` on test/e2e/), new-table RLS sweep (00067 / 00068 / 00069 / 00070 / 00071) | 1–2d | PENDING |
-| 33b | Retired-feature purge — dead code from PR 32h (`CreateExerciseScreen` residue), PR 30c (`pr_celebration_screen`), Phase 29.5 (5 retired overlays), Phase 25 RPE references, unused l10n keys, orphan files, dead branches in sealed unions | 1d | PENDING |
-| 33c | Workout-flow + finish-coordinator slice — code-review fixes + wiring-trace test rewrites + E2E gaps in workout golden flow | 2–3d | PENDING |
-| 33d | RPG / XP / share-pipeline slice — code-review fixes + test cleanup + E2E coverage gaps | 2d | PENDING |
-| 33e | Auth / profile / paywall-adjacent slice — code-review fixes + test cleanup + E2E coverage | 1–2d | PENDING |
-| 33f | Residual E2E coverage — cross-cutting flows, navigation, locale gaps that don't fit a domain slice | 1d | PENDING |
-| 33g / 33h | Reserve slots for triage overflow or newly-discovered cluster patterns warranting their own PR | Variable | RESERVED |
+| 33-discovery | Five read-only audit agents (parallel dispatch) → orchestrator assembles `docs/pre-launch-audit.md` → single PR commits the audit doc to `main` so all subsequent fix PRs reference one canonical source | 2d | DONE (#290) |
+| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. **Outcome:** 21 IMPORTANT → fix wave; 11 NICE-TO-HAVE folded; 33 parked. | 0.5–1d | IN FLIGHT |
+| 33a | Security fixes — 4 IMPORTANT (finding-026 length cap+UUID, -027 JWT-verify ordering, -028 body size cap, -029 ws CVE) + 3 folded NICE-TO-HAVE (finding-030 delete-user same shape, -031 platform/version allowlist, -033 rtdn-webhook base64 cap). Edge Fn defense-in-depth batch. | 1–2d | PENDING |
+| 33b | Dead-code + `developer.log` batch — 4 IMPORTANT (finding-001 5-file `developer.log` sweep, -003 RPE l10n keys, -004 SagaStubScreen orphan, -010 locale_provider in cluster) + 3 folded NICE-TO-HAVE (finding-012 comingSoonStub regen, -014 drop `dart:developer` import alias, -021 pending_sync_provider same-file). Cluster `developer-log-invisible-logcat` continuation of PR 32g. | 1–1.5d | PENDING |
+| 33c | Workout-flow + global-setup-seed batch — 9 IMPORTANT (finding-005 bpProgressFractionPre TODO, -009 _flushDebouncedSave mounted+error, -036 onboarding skip, -037 sign-up happy path, -038 banner tap, -039 detail content, -041 CONTINUAR CTA, -044 /records in-app nav, -046 week-complete seed) + 3 folded NICE-TO-HAVE (finding-011 _emptyBpFractions, -013 doc comment, -059 full-journey extension). Largest slice; touches global-setup.ts seed data for 2 infra-gap unskips. | 3–4d | PENDING |
+| 33d | RPG / share-pipeline + post-session E2E batch — 3 IMPORTANT (finding-042 B3 PR cut, -043 exercise retirement, -045 weight unit toggle) + 1 folded (-055 unskip overflow-card tap). | 1.5–2d | PENDING |
+| 33e | Auth / profile Saga selector batch — 1 IMPORTANT (finding-002 CodexNavRow Semantics pair-rule) + 1 folded (-056 unskip 26-tap-routing-e2e using cluster fix template). Cluster `semantics-identifier-pair-rule` + `flutter-web-url-assertion`. | <1d | PENDING |
+| 33f | **CLOSED** — both originally-flagged findings (finding-006 week_plan_screen build refactor, -008 progress_chart_section refactor) downgraded to PARK during triage per non-goals "no refactor-for-refactor's-sake". No items in scope. | — | CLOSED |
+| 33g / 33h | Reserve slots for newly-discovered cluster patterns during fix wave (warranting their own PR). Triage overflow not used. | Variable | RESERVED |
 
-Order: 33-discovery → 33-triage → 33a → 33b → 33c → 33d → 33e → 33f → (33g/h if needed).
+Order: 33-discovery (DONE) → 33-triage (IN FLIGHT) → 33a → 33b → 33c → 33d → 33e → (33g/h reserved). PR 33f closed post-triage.
 
 #### Stage 1 — Discovery (parallel read-only agents)
 
