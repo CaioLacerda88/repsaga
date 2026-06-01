@@ -52,6 +52,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { precheckJwtExp, requireBodySize } from '../_shared/auth.ts';
 import {
   acknowledgePlaySubscription,
   baseProductIdFromPlay,
@@ -352,29 +353,79 @@ export function deriveEntitlement(
 }
 
 // --- HTTP boundary --------------------------------------------------------
+//
+// Phase 33 PR 33a (findings 026 / 027 / 028) hardened the boundary with:
+//   * 32KB body-size cap at the top (requireBodySize) — finding 028
+//   * JWT exp precheck BEFORE req.json() (precheckJwtExp) — finding 027
+//   * Length clamps, source allow-list, UUID regex on user_id — finding 026
+//
+// `handleRequest()` is exported so unit tests can drive these rejections
+// without spinning up the Edge Runtime. The deps object injects the
+// Supabase clients + Play fetch so the rejection paths don't construct
+// real clients (which would require network / env access).
 
-serve(async (req) => {
+/** Max payload sizes — finding 026. */
+const MAX_PRODUCT_ID_LEN = 128;
+const MAX_PURCHASE_TOKEN_LEN = 4096;
+const MAX_SOURCE_LEN = 32;
+const MAX_BODY_BYTES = 32 * 1024;
+
+/** Source allow-list — finding 026. `client` = end-user-driven call from
+ * Flutter; `cron_reconcile` = nightly reconciliation cron. Any other
+ * value is an audit-row-pollution attempt or a stale caller. */
+const SOURCE_ALLOW_LIST = ['client', 'cron_reconcile'] as const;
+
+/** RFC 4122 UUID v1-v5 pattern — used to validate body.user_id on
+ * service-role calls. The Postgres `uuid` column would also reject
+ * malformed strings, but a clean 400 here saves a round-trip and
+ * produces a clearer error than a Postgres cast 500. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface HandleRequestDeps {
+  /** Supabase admin client (service-role). Tests inject a stub. */
+  adminClient: SupabaseClient;
+  /** Supabase user-scoped client (anon key + JWT header). Tests inject a stub. */
+  userClient: SupabaseClient;
+  /** Play API fetch — mocked in tests. */
+  fetchFn?: typeof fetch;
+  /** Service account JSON. Pulled from env in serve(); injected in tests. */
+  serviceAccount?: ServiceAccountJson;
+  /** Play package name. Pulled from env in serve(); injected in tests. */
+  packageName?: string;
+  /** Clock — for `now`-dependent paths in validatePurchase. */
+  now?: () => Date;
+}
+
+export async function handleRequest(
+  req: Request,
+  deps: HandleRequestDeps,
+): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  // 1. App-level body-size cap (finding 028). Short-circuit BEFORE any
+  //    other work — even before reading env vars — so a malicious 9MB
+  //    payload never enters our handler logic.
+  const tooBig = requireBodySize(req, MAX_BODY_BYTES, corsHeaders);
+  if (tooBig) return tooBig;
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return json({ error: 'Missing Authorization header' }, 401);
     const jwt = authHeader.replace('Bearer ', '');
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const saJson = Deno.env.get('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON');
-    const packageName = Deno.env.get('GOOGLE_PLAY_PACKAGE_NAME');
-    if (!supabaseUrl || !anonKey || !serviceRoleKey || !saJson || !packageName) {
-      return json({ error: 'Server misconfigured' }, 500);
+    // 2. JWT exp precheck (finding 027). Reject expired/malformed JWTs
+    //    BEFORE paying the req.json() body-parse cost. Service-role JWTs
+    //    DO have an exp claim (Supabase issues them with one), so this
+    //    check is uniform — no special-casing.
+    const precheck = precheckJwtExp(jwt);
+    if (!precheck.valid) {
+      return json({ error: 'Invalid or expired token', reason: precheck.reason }, 401);
     }
 
-    // Parse body first so we can fall back on explicit user_id when the
-    // cron invokes us with a service-role JWT (which has no Supabase auth
-    // user attached to it).
+    // 3. Body parse (now that JWT is at least exp-valid).
     let body: {
       product_id?: unknown;
       purchase_token?: unknown;
@@ -387,15 +438,65 @@ serve(async (req) => {
       return json({ error: 'Invalid JSON body' }, 400);
     }
 
-    const productId = typeof body.product_id === 'string' ? body.product_id : '';
-    const purchaseToken =
-      typeof body.purchase_token === 'string' ? body.purchase_token : '';
-    const source = typeof body.source === 'string' ? body.source : 'client';
-    if (!productId || !purchaseToken) {
-      return json({ error: 'product_id and purchase_token required' }, 400);
+    // 4. Input validation (finding 026). Clamp lengths, allow-list source,
+    //    UUID-regex user_id. Each rejection cites the offending field by
+    //    name so a misbehaving client / cron can fix its payload.
+    if (typeof body.product_id !== 'string' || body.product_id.length === 0) {
+      return json({ error: 'product_id required' }, 400);
+    }
+    if (body.product_id.length > MAX_PRODUCT_ID_LEN) {
+      return json(
+        { error: `product_id exceeds ${MAX_PRODUCT_ID_LEN} chars` },
+        400,
+      );
+    }
+    if (
+      typeof body.purchase_token !== 'string'
+      || body.purchase_token.length === 0
+    ) {
+      return json({ error: 'purchase_token required' }, 400);
+    }
+    if (body.purchase_token.length > MAX_PURCHASE_TOKEN_LEN) {
+      return json(
+        { error: `purchase_token exceeds ${MAX_PURCHASE_TOKEN_LEN} chars` },
+        400,
+      );
+    }
+    // Source defaults to 'client' when omitted (legacy contract); only
+    // explicitly-passed non-string / oversized / off-list values reject.
+    let source: string;
+    if (body.source === undefined || body.source === null) {
+      source = 'client';
+    } else if (typeof body.source !== 'string') {
+      return json({ error: 'source must be a string' }, 400);
+    } else if (body.source.length > MAX_SOURCE_LEN) {
+      return json({ error: `source exceeds ${MAX_SOURCE_LEN} chars` }, 400);
+    } else if (
+      !(SOURCE_ALLOW_LIST as readonly string[]).includes(body.source)
+    ) {
+      return json(
+        {
+          error: `source must be one of: ${SOURCE_ALLOW_LIST.join(', ')}`,
+        },
+        400,
+      );
+    } else {
+      source = body.source;
+    }
+    // user_id is optional in the body — service-role callers MUST supply
+    // it, authenticated callers MAY. When present it must be a real UUID.
+    if (
+      body.user_id !== undefined
+      && body.user_id !== null
+      && (typeof body.user_id !== 'string' || !UUID_RE.test(body.user_id))
+    ) {
+      return json({ error: 'user_id must be a UUID' }, 400);
     }
 
-    // Resolve caller user_id. Service-role callers (cron) supply it
+    const productId = body.product_id;
+    const purchaseToken = body.purchase_token;
+
+    // 5. Resolve caller user_id. Service-role callers (cron) supply it
     // explicitly in the body. Authenticated users are identified from
     // their JWT and MUST match any user_id they pass (prevents a
     // user acting on another user's purchase via a forged body).
@@ -410,10 +511,7 @@ serve(async (req) => {
       }
       userId = body.user_id;
     } else {
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: `Bearer ${jwt}` } },
-      });
-      const { data: { user }, error: uerr } = await userClient.auth.getUser(jwt);
+      const { data: { user }, error: uerr } = await deps.userClient.auth.getUser(jwt);
       if (uerr || !user) return json({ error: 'Invalid or expired token' }, 401);
       if (
         typeof body.user_id === 'string'
@@ -425,25 +523,22 @@ serve(async (req) => {
       userId = user.id;
     }
 
-    let serviceAccount: ServiceAccountJson;
-    try {
-      serviceAccount = JSON.parse(saJson);
-    } catch (_) {
-      return json({ error: 'Invalid GOOGLE_PLAY_SERVICE_ACCOUNT_JSON' }, 500);
+    if (!deps.serviceAccount || !deps.packageName) {
+      return json({ error: 'Server misconfigured' }, 500);
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const result = await validatePurchase({
-      userId,
-      productId,
-      purchaseToken,
-      source,
-      serviceAccount,
-      packageName,
-      client: adminClient,
-    });
+    const result = await validatePurchase(
+      {
+        userId,
+        productId,
+        purchaseToken,
+        source,
+        serviceAccount: deps.serviceAccount,
+        packageName: deps.packageName,
+        client: deps.adminClient,
+      },
+      { fetchFn: deps.fetchFn, now: deps.now },
+    );
     return json(result.body, result.status);
   } catch (e) {
     return json(
@@ -451,4 +546,47 @@ serve(async (req) => {
       500,
     );
   }
+}
+
+serve(async (req) => {
+  // OPTIONS preflight is handled inside handleRequest, but answering it
+  // here too keeps the response identical even if the inner handler
+  // throws at construction time (e.g. env-var read failure).
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const saJson = Deno.env.get('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON');
+  const packageName = Deno.env.get('GOOGLE_PLAY_PACKAGE_NAME');
+  if (!supabaseUrl || !anonKey || !serviceRoleKey || !saJson || !packageName) {
+    return json({ error: 'Server misconfigured' }, 500);
+  }
+
+  let serviceAccount: ServiceAccountJson;
+  try {
+    serviceAccount = JSON.parse(saJson);
+  } catch (_) {
+    return json({ error: 'Invalid GOOGLE_PLAY_SERVICE_ACCOUNT_JSON' }, 500);
+  }
+
+  // Build the per-request user client (needs the caller's JWT in its
+  // Authorization header for auth.getUser). The Authorization header
+  // is forwarded by Supabase to the Edge Function before this code runs.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  return handleRequest(req, {
+    adminClient,
+    userClient,
+    serviceAccount,
+    packageName,
+  });
 });
