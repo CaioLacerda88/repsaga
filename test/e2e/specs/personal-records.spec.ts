@@ -545,12 +545,10 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
     // NOTE: The save_workout RPC may return 0 PRs for this test user depending
     // on whether the exercise exists in the PR tracking tables. If no PRs are
     // generated, skip rather than fail — this is a data dependency, not a bug.
-    // Wait longer for the Records screen to settle — the PR provider needs
-    // time to fetch and render after the workout completion flow.
-    await page.waitForTimeout(2_000);
-
+    // The isVisible({ timeout: 10_000 }) check below already gives the PR
+    // provider time to fetch and render; no synthetic wait needed.
     const emptyState = page.locator(PR_DISPLAY.emptyState);
-    const isEmpty = await emptyState.isVisible({ timeout: 8_000 }).catch(() => false);
+    const isEmpty = await emptyState.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (isEmpty) {
       // TODO: Seed PR-eligible exercise data or fix save_workout RPC PR detection.

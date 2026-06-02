@@ -14,7 +14,15 @@
 import { test, expect } from '@playwright/test';
 import { waitForAppReady, flutterFill } from '../helpers/app';
 import { login, logout } from '../helpers/auth';
-import { AUTH, NAV, PROFILE, PR_DISPLAY, SAGA } from '../helpers/selectors';
+import {
+  AUTH,
+  EXERCISE_LIST,
+  NAV,
+  PROFILE,
+  PR_DISPLAY,
+  ROUTINE,
+  SAGA,
+} from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
@@ -287,10 +295,10 @@ test.describe('Auth — edge cases', () => {
 
     // Navigate through each tab and verify the heading/content loads.
     await page.click(NAV.exercisesTab);
-    await expect(page.locator('text=Exercises')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({ timeout: 15_000 });
 
     await page.click(NAV.routinesTab);
-    await expect(page.locator('text=Routines').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({ timeout: 15_000 });
 
     // Phase 18b: /profile shows CharacterSheetScreen; Log Out is on /profile/settings.
     await page.click(NAV.profileTab);
@@ -329,8 +337,10 @@ test.describe('Auth — edge cases', () => {
 // Auth — sign-up happy path (finding-037)
 // ---------------------------------------------------------------------------
 // Uses a throwaway unique-per-run email to avoid conflicts with seeded users.
-// afterAll deletes the created user via the admin API so the Supabase auth
-// table doesn't accumulate stale test accounts across runs.
+// afterEach deletes the created user via the admin API so the Supabase auth
+// table doesn't accumulate stale test accounts across runs. Per-test cleanup
+// (not afterAll) so adding a second test to this describe block in the
+// future cannot silently leak earlier-test accounts via closure-capture.
 // ---------------------------------------------------------------------------
 test.describe('Auth — sign-up happy path', () => {
   let throwawayEmail: string;
@@ -341,9 +351,8 @@ test.describe('Auth — sign-up happy path', () => {
     await waitForAppReady(page);
   });
 
-  test.afterAll(async () => {
-    // Clean up the throwaway user so stale accounts don't accumulate on the
-    // local Supabase instance across repeated runs.
+  test.afterEach(async () => {
+    // Clean up the throwaway user immediately after the test that created it.
     const admin = getAdminClient();
     const userId = await getUserIdByEmail(admin, throwawayEmail);
     if (userId) {

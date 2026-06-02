@@ -605,13 +605,20 @@ test.describe('Workout logging', () => {
       .count();
 
     await page.click(WORKOUT.addSetButton);
-    await page.waitForTimeout(300);
+    // Wait for the new set row to appear in the AOM (replaces a 300ms
+    // synthetic sleep — see reviewer feedback on waitForTimeout vs
+    // element-visibility wait).
+    await expect(page.locator(WORKOUT.markSetDone).nth(initialSets)).toBeVisible({
+      timeout: 5_000,
+    });
 
     const setsAfterFirst = await page.locator(WORKOUT.markSetDone).count();
     expect(setsAfterFirst).toBeGreaterThan(initialSets);
 
     await page.click(WORKOUT.addSetButton);
-    await page.waitForTimeout(300);
+    await expect(page.locator(WORKOUT.markSetDone).nth(setsAfterFirst)).toBeVisible({
+      timeout: 5_000,
+    });
 
     const setsAfterSecond = await page.locator(WORKOUT.markSetDone).count();
     expect(setsAfterSecond).toBeGreaterThan(setsAfterFirst);
@@ -1044,8 +1051,6 @@ test.describe('Workout history', () => {
 // =============================================================================
 
 test.describe('Workout history — detail screen', () => {
-  test.describe.configure({ mode: 'serial' });
-
   test.beforeEach(async ({ page }) => {
     await login(
       page,
