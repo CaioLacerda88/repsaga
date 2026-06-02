@@ -73,16 +73,17 @@ class LocaleNotifier extends Notifier<Locale> {
   }
 
   void _syncToRemote(String languageCode) {
-    final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
-
-    final repo = ref.read(profileRepositoryProvider);
-
-    // Fire-and-forget with explicit try/catch in an async closure so the
-    // error path uses the same shape as the rest of the codebase
-    // (debugPrint with a tagged scope) and works on physical devices.
+    // Fire-and-forget with one explicit try/catch around the entire side
+    // effect — including the synchronous `ref.read` lookups, since
+    // currentUserIdProvider touches Supabase.instance which throws an
+    // AssertionError under any test harness that hasn't booted Supabase.
+    // Routing both sync and async failure paths through the same debugPrint
+    // keeps the error shape consistent on physical devices (PR 32g style).
     unawaited(() async {
       try {
+        final userId = ref.read(currentUserIdProvider);
+        if (userId == null) return;
+        final repo = ref.read(profileRepositoryProvider);
         await repo.updateLocale(userId, languageCode);
       } catch (e) {
         debugPrint('[LocaleNotifier] Failed to sync locale to remote: $e');
