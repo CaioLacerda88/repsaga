@@ -1,6 +1,4 @@
-import 'dart:developer' as developer;
-
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -150,7 +148,7 @@ class HiveService {
   /// Sentry is intentionally NOT notified here: this code runs before
   /// `main()` reads the user's `crash_reports_enabled` opt-in (the
   /// preference itself lives in one of the boxes we're trying to open).
-  /// The `developer.log` call ensures the event is in `adb logcat` for
+  /// The `debugPrint` call ensures the event is in `adb logcat` for
   /// dev diagnosis without violating opt-out for end users.
   Future<void> init() async {
     await Hive.initFlutter();
@@ -181,11 +179,10 @@ class HiveService {
     final persisted = prefs.get(_cacheSchemaVersionKey) as int?;
     if (persisted == currentCacheSchemaVersion) return;
 
-    developer.log(
-      'Cache schema version mismatch (persisted=$persisted, '
+    debugPrint(
+      '[HiveService] Cache schema version mismatch (persisted=$persisted, '
       'current=$currentCacheSchemaVersion) — clearing model-shape-dependent '
       'caches. Pending offline mutations and user preferences are preserved.',
-      name: 'HiveService',
     );
 
     for (final boxName in cacheSchemaBoxes) {
@@ -209,13 +206,10 @@ class HiveService {
       // `on Error` covers both `HiveError` (typeId mismatch / format
       // version) and `RangeError` (truncated file). See [init] doc for
       // the rationale on why we don't catch `Exception` instead.
-      developer.log(
-        'Hive box "$name" failed to open — deleting and re-opening empty. '
-        'This typically means stale data from a prior app version or a '
-        'truncated file. Error: $e',
-        name: 'HiveService',
-        error: e,
-        stackTrace: stack,
+      debugPrint(
+        '[HiveService] Hive box "$name" failed to open — deleting and '
+        're-opening empty. This typically means stale data from a prior app '
+        'version or a truncated file. Error: $e\n$stack',
       );
       // Best-effort: a failed open can leave the box partially registered.
       // Try to delete from disk regardless. A FileSystemException here
@@ -223,12 +217,9 @@ class HiveService {
       try {
         await Hive.deleteBoxFromDisk(name);
       } catch (deleteError, deleteStack) {
-        developer.log(
-          'deleteBoxFromDisk("$name") during recovery raised; proceeding '
-          'with openBox anyway. Error: $deleteError',
-          name: 'HiveService',
-          error: deleteError,
-          stackTrace: deleteStack,
+        debugPrint(
+          '[HiveService] deleteBoxFromDisk("$name") during recovery raised; '
+          'proceeding with openBox anyway. Error: $deleteError\n$deleteStack',
         );
       }
       await Hive.openBox<dynamic>(name);

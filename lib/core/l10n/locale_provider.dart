@@ -1,6 +1,7 @@
-import 'dart:developer' as developer;
+import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -72,26 +73,21 @@ class LocaleNotifier extends Notifier<Locale> {
   }
 
   void _syncToRemote(String languageCode) {
-    try {
-      final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
 
-      final repo = ref.read(profileRepositoryProvider);
+    final repo = ref.read(profileRepositoryProvider);
 
-      repo.updateLocale(userId, languageCode).catchError((Object e) {
-        developer.log(
-          'Failed to sync locale to remote (async)',
-          error: e,
-          name: 'LocaleNotifier',
-        );
-      });
-    } catch (e) {
-      developer.log(
-        'Failed to sync locale to remote (sync)',
-        error: e,
-        name: 'LocaleNotifier',
-      );
-    }
+    // Fire-and-forget with explicit try/catch in an async closure so the
+    // error path uses the same shape as the rest of the codebase
+    // (debugPrint with a tagged scope) and works on physical devices.
+    unawaited(() async {
+      try {
+        await repo.updateLocale(userId, languageCode);
+      } catch (e) {
+        debugPrint('[LocaleNotifier] Failed to sync locale to remote: $e');
+      }
+    }());
   }
 }
 

@@ -1,5 +1,4 @@
-import 'dart:developer';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/personal_records/models/personal_record.dart';
@@ -68,11 +67,7 @@ class PendingSyncNotifier extends Notifier<int> {
       await _queue.dequeue(id);
       state = _queue.pendingCount;
     } catch (e) {
-      log(
-        'Retry failed for action $id: $e',
-        name: 'PendingSyncNotifier',
-        level: 900,
-      );
+      debugPrint('[PendingSyncNotifier] Retry failed for action $id: $e');
       // BUG-008: classify the error so the pending-sync sheet can pick the
       // right CTA (retry vs dismiss) without re-classifying. Stored on the
       // action and persisted alongside `lastError`.
@@ -134,11 +129,10 @@ class PendingSyncNotifier extends Notifier<int> {
         // user's Hive box across an upgrade — without this case the
         // switch becomes non-exhaustive and the drain throws on the
         // legacy row, blocking the rest of the FIFO.
-        log(
-          '26e: PendingMarkRoutineComplete is a no-op — bucket update '
-          'now in 00063 RPC; legacy queue entry skipped (plan=$planId '
-          'routine=$routineId)',
-          name: 'PendingSyncNotifier',
+        debugPrint(
+          '[PendingSyncNotifier] 26e: PendingMarkRoutineComplete is a no-op — '
+          'bucket update now in 00063 RPC; legacy queue entry skipped '
+          '(plan=$planId routine=$routineId)',
         );
     }
   }

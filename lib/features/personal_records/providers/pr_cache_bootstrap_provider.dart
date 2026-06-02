@@ -1,5 +1,4 @@
-import 'dart:developer' as developer;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -112,15 +111,10 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
     // Best-effort warmup: a network failure here is recoverable. The
     // read-through cache in `PRRepository` still kicks in on subsequent
     // reads, and a successful drain → invalidation re-runs this provider.
-    // Logging at level 900 (warning) so a regression that breaks the
-    // warmup is visible in adb logcat / browser dev tools without crashing
-    // the shell.
-    developer.log(
-      'prCacheBootstrap warmup failed (best-effort): $e',
-      name: 'PRCacheBootstrap',
-      level: 900,
-      error: e,
-      stackTrace: stack,
+    // Logging via debugPrint so a regression that breaks the warmup is
+    // visible in adb logcat / browser dev tools without crashing the shell.
+    debugPrint(
+      '[PrCacheBootstrap] warmup failed (best-effort): $e\n$stack',
     );
   }
 });
@@ -138,9 +132,9 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
 /// not crash.
 Future<void> _runOneShotMigrationIfNeeded() async {
   if (!Hive.isBoxOpen(HiveService.userPrefs)) {
-    developer.log(
-      'userPrefs box is not open — skipping one-shot prCache migration',
-      name: 'PRCacheBootstrap',
+    debugPrint(
+      '[PrCacheBootstrap] userPrefs box is not open — skipping one-shot '
+      'prCache migration',
     );
     return;
   }
@@ -152,10 +146,9 @@ Future<void> _runOneShotMigrationIfNeeded() async {
     try {
       await Hive.box<dynamic>(HiveService.prCache).clear();
     } catch (e) {
-      developer.log(
-        'Failed to clear prCache during one-shot migration: $e',
-        name: 'PRCacheBootstrap',
-        level: 900,
+      debugPrint(
+        '[PrCacheBootstrap] Failed to clear prCache during one-shot '
+        'migration: $e',
       );
       // Even if clear failed, set the flag — we only ever want to attempt
       // this wipe once. Honest scope: a leftover stale entry for an
