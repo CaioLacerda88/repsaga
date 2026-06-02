@@ -1131,15 +1131,6 @@ export const SAGA = {
   gearIcon: '[flt-semantics-identifier="saga-settings-btn"]',
   /** ProfileSettingsScreen root — identified by PROFILE.heading ('profile-heading') */
   profileSettingsScreen: '[flt-semantics-identifier="profile-heading"]',
-  /** SagaStubScreen body — Semantics(identifier: 'saga-stub-screen').
-   *  Locale-independent (was previously `text=Coming soon.`, which broke
-   *  pt-BR because the localized copy is "Em breve.").
-   *
-   *  Phase 18d.2 retired this for /saga/stats — use `statsDeepDiveScreen`
-   *  instead. The selector is kept here for any future stub-screen route
-   *  (e.g. /saga/skills if added later).
-   */
-  sagaStubScreen: '[flt-semantics-identifier="saga-stub-screen"]',
   // -----------------------------------------------------------------------
   // Phase 18d.2 + 26c — /saga/stats deep-dive screen
   //
