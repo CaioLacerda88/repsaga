@@ -28,8 +28,8 @@ class CacheService {
       if (raw is! String) return null;
       final decoded = jsonDecode(raw);
       return fromJson(decoded);
-    } catch (e) {
-      debugPrint('[CacheService] Failed to read "$key" from "$boxName": $e');
+    } catch (e, st) {
+      debugPrint('[CacheService] Failed to read "$key" from "$boxName": $e\n$st');
       return null;
     }
   }
@@ -47,8 +47,8 @@ class CacheService {
       }
       final encoded = jsonEncode(value);
       await Hive.box<dynamic>(boxName).put(key, encoded);
-    } catch (e) {
-      debugPrint('[CacheService] Failed to write "$key" to "$boxName": $e');
+    } catch (e, st) {
+      debugPrint('[CacheService] Failed to write "$key" to "$boxName": $e\n$st');
     }
   }
 
@@ -64,8 +64,8 @@ class CacheService {
         return;
       }
       await Hive.box<dynamic>(boxName).delete(key);
-    } catch (e) {
-      debugPrint('[CacheService] Failed to delete "$key" from "$boxName": $e');
+    } catch (e, st) {
+      debugPrint('[CacheService] Failed to delete "$key" from "$boxName": $e\n$st');
     }
   }
 
@@ -81,8 +81,8 @@ class CacheService {
         return;
       }
       await Hive.box<dynamic>(boxName).clear();
-    } catch (e) {
-      debugPrint('[CacheService] Failed to clear box "$boxName": $e');
+    } catch (e, st) {
+      debugPrint('[CacheService] Failed to clear box "$boxName": $e\n$st');
     }
   }
 }
