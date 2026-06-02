@@ -113,9 +113,7 @@ final prCacheBootstrapProvider = FutureProvider<void>((ref) async {
     // reads, and a successful drain → invalidation re-runs this provider.
     // Logging via debugPrint so a regression that breaks the warmup is
     // visible in adb logcat / browser dev tools without crashing the shell.
-    debugPrint(
-      '[PrCacheBootstrap] warmup failed (best-effort): $e\n$stack',
-    );
+    debugPrint('[PrCacheBootstrap] warmup failed (best-effort): $e\n$stack');
   }
 });
 
