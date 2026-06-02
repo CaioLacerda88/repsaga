@@ -15,6 +15,7 @@ import '../../../auth/providers/auth_providers.dart';
 import '../../../personal_records/providers/pr_providers.dart';
 import '../../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../../rpg/domain/celebration_queue.dart';
+import '../../../rpg/domain/rank_curve.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
@@ -227,11 +228,28 @@ class FinishWorkoutCoordinator {
       // any test fixture / pass-through path) still construct a valid
       // PostSessionParams; the controller's `_buildInitial` re-derives a
       // sane default per BP when entries are missing.
+      // PR 33c finding-005 — capture the pre-finish per-BP progress
+      // fraction in the same loop. Same `ref`-lifetime contract as
+      // `bpRankBefore` above: reading `rpgProgressProvider` AFTER the
+      // `await notifier.finishWorkout()` would either throw (active-
+      // workout State disposed) or read post-save data (which is then
+      // also the *post*-finish value the B2 cut animates TO — losing
+      // the "watch your prior progress get added to" beat the mockup
+      // §3 Variant A storyboard intends). The fraction is projected via
+      // `RankCurve.progressFraction(row.totalXp, row.rank)` so the cut
+      // can interpolate cleanly between `pre` and the post-save
+      // fraction the controller derives from the refreshed snapshot.
+      // Cluster: `async-caller-broke-snackbar` / `async-caller-broke-nav`.
       final preFinishProgress = ref.read(rpgProgressProvider).value;
       final bpRankBefore = <BodyPart, int>{};
+      final bpProgressFractionPre = <BodyPart, double>{};
       if (preFinishProgress != null) {
         preFinishProgress.byBodyPart.forEach((bp, row) {
           bpRankBefore[bp] = row.rank;
+          bpProgressFractionPre[bp] = RankCurve.progressFraction(
+            row.totalXp,
+            row.rank,
+          );
         });
       }
 
@@ -465,14 +483,16 @@ class FinishWorkoutCoordinator {
           exerciseNames: exerciseNames,
           totalXpEarned: (totalXpDelta ?? 0).round(),
           bpXpDeltas: bpDeltas,
-          // TODO(30b): populate from the pre-finish snapshot so Beat 2 bars
-          // animate from the true pre-session rank progress instead of 0%.
-          // The empty default makes the Beat 2 tally cut visually consistent
-          // today (every bar starts empty + fills to the post-finish value)
-          // but loses the "watch your prior progress get added to" beat the
-          // mockup §3 Variant A storyboard intends. See WIP.md PR 30a
-          // "Known limitations carried forward" + PR 30b plan.
-          bpProgressFractionPre: _emptyBpFractions(),
+          // PR 33c finding-005 — Beat 2 tally cut now animates each per-BP
+          // bar from the user's prior rank-progress fraction (captured
+          // synchronously above from `rpgProgressProvider`) up to the
+          // post-finish fraction the controller derives from the
+          // post-save snapshot. Restores the mockup §3 Variant A
+          // storyboard's "watch your prior progress get added to" beat.
+          // Body parts with no pre-finish row (the user never trained
+          // them) are absent from the map — the controller falls back
+          // to the cut's default starting fraction for those.
+          bpProgressFractionPre: bpProgressFractionPre,
           // Phase 31 Blocker 1 — pre-finish per-BP rank snapshot captured
           // above. Plumbed to PostSessionState.bpRankBefore so the Mission
           // Debrief renders correct `Rank N → M` arrows on multi-rank-jump
@@ -594,10 +614,6 @@ class FinishWorkoutCoordinator {
   }
 
   // ─── Post-session helpers (Phase 30 PR 30a) ────────────────────────────
-
-  Map<BodyPart, double> _emptyBpFractions() {
-    return <BodyPart, double>{};
-  }
 
   int _computeSetsCount(ActiveWorkoutState? state) {
     if (state == null) return 0;
