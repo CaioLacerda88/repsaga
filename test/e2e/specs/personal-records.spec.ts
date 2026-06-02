@@ -14,7 +14,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { navigateToTab, dismissCelebrationIfPresent } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, PR, PR_DISPLAY, SET_ROW, WORKOUT } from '../helpers/selectors';
+import { NAV, PR, PR_DISPLAY, PROFILE, SAGA, SET_ROW, WORKOUT } from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -595,6 +595,46 @@ test.describe('Personal records', { tag: '@smoke' }, () => {
       await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
     },
   );
+
+  // finding-044: Records in-app nav — tapping the PRs stat card on the
+  // ProfileSettingsScreen navigates to /records.
+  //
+  // Navigation path:
+  //   1. Profile tab (CharacterSheetScreen)
+  //   2. Gear icon → ProfileSettingsScreen (context.push('/profile/settings'))
+  //   3. PRs stat card (StatsRow _StatCard with onTap: context.go('/records'))
+  //   4. Personal Records screen title visible
+  //
+  // PROFILE.recordsStatRow uses role=button[name*="PRs"] — locale-stable
+  // because both en and pt-BR expose "PRs" as the button's accessible name
+  // (the label text in _StatCard). Content-visibility assertion is used
+  // instead of URL assertion per cluster `flutter-web-url-assertion`.
+  test('should navigate to the personal records screen when tapping the PRs stat card in profile settings', async ({
+    page,
+  }) => {
+    // Navigate to the Character Sheet (Profile tab).
+    await page.click(NAV.profileTab);
+    await expect(page.locator(SAGA.gearIcon).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Open Profile Settings via the gear icon.
+    await page.locator(SAGA.gearIcon).first().click();
+    await expect(page.locator(SAGA.profileSettingsScreen).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Tap the PRs stat card — navigates to /records.
+    await expect(page.locator(PROFILE.recordsStatRow).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(PROFILE.recordsStatRow).first().click();
+
+    // Assert destination content is visible (not URL assertion — per cluster).
+    await expect(page.locator(PR_DISPLAY.screenTitle)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 });
 
 // =============================================================================

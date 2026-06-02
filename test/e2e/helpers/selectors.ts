@@ -52,6 +52,17 @@ export const AUTH = {
   welcomeBack: '[flt-semantics-identifier="auth-welcome-back"]',
   /** Inline error message — Semantics(liveRegion: true) sets aria-live */
   errorMessage: '[aria-live="polite"]',
+  /**
+   * EmailConfirmationScreen "BACK TO LOGIN" GradientButton — the most stable
+   * AOM anchor on the email-confirmation route. The button's `label` is the
+   * `backToLogin` l10n key ("BACK TO LOGIN" en / "VOLTAR PARA LOGIN" pt);
+   * the E2E suite runs in en. No `flt-semantics-identifier` exists on the
+   * EmailConfirmationScreen heading (CanvasKit renders it to canvas), so the
+   * role+name selector on the CTA is the test anchor used to assert the
+   * post-signup navigation landed on the right route (per cluster
+   * `flutter-web-url-assertion` — content-visibility, not toHaveURL).
+   */
+  emailConfirmationBackToLogin: 'role=button[name="BACK TO LOGIN"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -631,6 +642,52 @@ export const HISTORY = {
    * Semantics(identifier: 'history-detail-strip')
    */
   detailStrip: '[flt-semantics-identifier="history-detail-strip"]',
+  /**
+   * Tappable workout card on the History list. The card body is a Material
+   * InkWell whose Semantics container merges the per-card text into the
+   * accessible name; the workout title prefix "Workout" (en) is stable
+   * regardless of routine name or date (routine-driven workouts read
+   * "<Routine name> — <date>" while ad-hoc sessions read "Workout — <date>").
+   * Match prefix "Workout" via role+name to anchor on the legacy/ad-hoc card
+   * shape; tests that need a specific card should index via `.first()` or
+   * filter by routine name. Tap pushes /home/history/{workoutId}.
+   *
+   * No `flt-semantics-identifier` is emitted on the card — the SliverList
+   * builds plain `_WorkoutHistoryCard` widgets. Use this selector to find
+   * the tappable region; assert content via the detail-screen selectors
+   * after the navigation lands.
+   */
+  workoutCardButton: 'role=button[name*="Workout"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// WORKOUT_DETAIL — read-only workout detail screen (/home/history/{workoutId}).
+//
+// Distinct from EXERCISE_LIST.exerciseCard (role=button) — the detail screen's
+// exercise cards render as non-tappable Semantics groups whose merged
+// accessible name carries the "Exercise: <name>" prefix produced by the same
+// l10n key (exerciseItemSemantics) the list / active workout screens use.
+// ---------------------------------------------------------------------------
+export const WORKOUT_DETAIL = {
+  /**
+   * Exercise card on the workout detail screen. Each card is a Semantics
+   * group container whose accessible name starts with "Exercise: " (en) or
+   * "Exercício: " (pt) — same `exerciseItemSemantics` ARB key used by the
+   * exercise-list and active-workout surfaces.
+   *
+   * Use the unparameterised `detailExerciseCard` to assert "at least one
+   * exercise card rendered" (e.g., the detail screen is not blank below the
+   * summary strip). Use `detailExerciseCardByName(name)` when targeting a
+   * specific exercise.
+   *
+   * Selector is `role=group`, NOT `role=button` — the detail screen renders
+   * exercise sections as read-only groups (the active-workout list uses
+   * role=group too, but the exercise-LIST screen uses role=button on the
+   * tappable card; EXERCISE_LIST.exerciseCard is therefore not a substitute).
+   */
+  detailExerciseCard: 'role=group[name*="Exercise: "]',
+  detailExerciseCardByName: (name: string) =>
+    `role=group[name*="Exercise: ${name}"]`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -683,6 +740,16 @@ export const PROFILE = {
    * identityCardAvatar selector.
    */
   avatarPickerSheet: '[flt-semantics-identifier="avatar-picker-sheet"]',
+  /**
+   * PRs stat card in the StatsRow on ProfileSettingsScreen.
+   * _StatCard wraps the content in Material > InkWell with no Semantics
+   * identifier. Flutter AOM exposes the InkWell as role=button whose
+   * accessible name concatenates the child Text nodes (value + label).
+   * The label text is l10n key `prsLabel` = "PRs" in both en and pt-BR.
+   * Use role=button[name*="PRs"] to match regardless of count value.
+   * Tapping navigates to /records.
+   */
+  recordsStatRow: 'role=button[name*="PRs"]',
 } as const;
 
 // ---------------------------------------------------------------------------

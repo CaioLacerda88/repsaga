@@ -11,7 +11,16 @@
 import { test, expect } from '@playwright/test';
 import { dismissCelebrationIfPresent, flutterFill, waitForAppReady } from '../helpers/app';
 import { login } from '../helpers/auth';
-import { NAV, WORKOUT, HOME, HISTORY, EXERCISE_PICKER, SET_ROW } from '../helpers/selectors';
+import {
+  NAV,
+  WORKOUT,
+  HOME,
+  HISTORY,
+  EXERCISE_LIST,
+  EXERCISE_PICKER,
+  SET_ROW,
+  WORKOUT_DETAIL,
+} from '../helpers/selectors';
 import {
   startEmptyWorkout,
   addExercise,
@@ -459,6 +468,39 @@ test.describe('Workout restore', { tag: '@smoke' }, () => {
     await confirmDiscard.click();
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
+
+  // finding-038 — active banner tap navigates back to the active workout.
+  test('should return to active workout when tapping the active banner from a different tab', async ({
+    page,
+  }) => {
+    // Start a workout with an exercise so it persists as a real in-progress session.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({ timeout: 10_000 });
+
+    // Navigate away to the Exercises tab. Assert the tab CONTENT loaded (the
+    // ExerciseListScreen AppBar heading) rather than the tab button itself —
+    // proves the route push completed, not just that the bottom-nav rendered.
+    await page.click(NAV.exercisesTab);
+    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({ timeout: 15_000 });
+
+    // The active workout banner must appear in the shell bottom bar.
+    await expect(page.locator(HOME.activeBanner)).toBeVisible({ timeout: 10_000 });
+
+    // Tap the banner — must navigate back to the active workout screen.
+    await page.locator(HOME.activeBanner).click();
+
+    // Assert the active workout screen is visible again via the Finish button.
+    // Content-visibility assertion per cluster `flutter-web-url-assertion`.
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({ timeout: 15_000 });
+
+    // Clean up.
+    await page.locator(WORKOUT.discardButton).click();
+    const bannerConfirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(bannerConfirmDiscard).toBeVisible({ timeout: 5_000 });
+    await bannerConfirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 // =============================================================================
@@ -773,7 +815,7 @@ test.describe('Workout logging', () => {
     // to change to a /workout/ detail route before asserting text content.
     // This eliminates the race between the SPA route push and the Riverpod
     // provider rebuilding the set rows with the persisted weight data.
-    const firstHistoryCard = page.locator('role=button[name*="Workout"]').first();
+    const firstHistoryCard = page.locator(HISTORY.workoutCardButton).first();
     await expect(firstHistoryCard).toBeVisible({ timeout: 15_000 });
     await firstHistoryCard.click();
 
@@ -988,6 +1030,54 @@ test.describe('Workout history', () => {
     // The "Retry" error button must NOT be visible — this is an empty state,
     // not an error state.
     await expect(page.locator(HISTORY.retryButton)).not.toBeVisible();
+  });
+});
+
+// =============================================================================
+// FULL — Workout detail screen (finding-039, fullHistoryPt user)
+//
+// Pins the exercise-card content area of the detail screen, which WK-023
+// leaves uncovered. The detail-strip XP contract (history-detail-strip,
+// rendered only when totalXp > 0 OR prCount > 0) is covered by WK-023 via a
+// real save_workout round-trip; the `fullHistoryPt` seed bypasses save_workout
+// and writes rows directly, so totalXp = 0 → the strip would be hidden here.
+// =============================================================================
+
+test.describe('Workout history — detail screen', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('fullHistoryPt').email,
+      getUser('fullHistoryPt').password,
+    );
+  });
+
+  test('should show exercise cards on the workout detail screen', async ({
+    page,
+  }) => {
+    // Navigate to the history list via hash routing (avoids a full SPA reload).
+    await page.evaluate(() => {
+      window.location.hash = '#/home/history';
+    });
+
+    await expect(page.locator(HISTORY.heading)).toBeVisible({ timeout: 15_000 });
+
+    // The most recent workout card (E2E PT History Workout 1) has a bench press
+    // exercise seeded. Tap it to open the detail screen.
+    const firstCard = page.locator(HISTORY.workoutCardButton).first();
+    await expect(firstCard).toBeVisible({ timeout: 15_000 });
+    await firstCard.click();
+
+    // Wait for the SPA to navigate to the workout detail route.
+    await page.waitForURL(/\/home\/history\//, { timeout: 15_000 });
+
+    // The detail screen renders exercise cards as Semantics group nodes whose
+    // accessible name starts with "Exercise: ". At least one card must be
+    // visible — asserts that the detail screen is not blank below the strip.
+    const exerciseCard = page.locator(WORKOUT_DETAIL.detailExerciseCard).first();
+    await expect(exerciseCard).toBeVisible({ timeout: 15_000 });
   });
 });
 

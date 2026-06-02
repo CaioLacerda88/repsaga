@@ -22,7 +22,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, POST_SESSION } from '../helpers/selectors';
+import { WORKOUT, POST_SESSION, NAV } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -128,6 +128,20 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
     await expect(
       page.locator(POST_SESSION.missionDebriefXpBar),
     ).toBeVisible();
+  });
+
+  // finding-041: CONTINUAR CTA navigates back to the home shell.
+  test('should navigate to home screen when CONTINUAR is tapped on the summary panel', async ({
+    page,
+  }) => {
+    await expect(page.locator(POST_SESSION.continueCta)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(POST_SESSION.continueCta).click();
+    // Content-visibility assertion (not URL assertion) per cluster
+    // `flutter-web-url-assertion`. The home bottom-nav tab is locale-
+    // independent (flt-semantics-identifier, not aria-label text).
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 
   // PR 32g leave-confirm E2E removed — cluster
