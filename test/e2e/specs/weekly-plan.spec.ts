@@ -442,95 +442,21 @@ test.describe('Weekly Plan review', { tag: '@smoke' }, () => {
   });
 
   test('should render weekly plan section on home screen without error', async ({ page }) => {
-    // At least one of the three states must be visible.
+    // At least one of the two states must be visible.
     // Use .first() on each locator to avoid strict mode violations when
     // multiple "THIS WEEK" text nodes coexist (e.g., _EmptyBucketState
     // renders "THIS WEEK" header alongside "Plan your week" CTA).
+    //
+    // The legacy WEEK COMPLETE branch (WeekReviewSection) was deleted in
+    // Phase 33 PR 33c (finding-046) — completed-week state now flows through
+    // the bucket chip done-state path (covered by the dedicated PR 32c test
+    // below).
     const thisWeek = page.locator(WEEKLY_PLAN.thisWeekHeader).first();
-    const weekComplete = page.locator(WEEKLY_PLAN.weekCompleteHeader);
     const planYourWeek = page.locator(WEEKLY_PLAN.planYourWeekCta);
 
     await expect(
-      thisWeek.or(weekComplete).or(planYourWeek).first(),
+      thisWeek.or(planYourWeek).first(),
     ).toBeVisible({ timeout: 15_000 });
-  });
-
-  test('should show WEEK COMPLETE header when all bucket routines are done', async ({
-    page,
-  }) => {
-    const weekComplete = page.locator(WEEKLY_PLAN.weekCompleteHeader);
-    const isComplete = await weekComplete.isVisible({ timeout: 5_000 }).catch(() => false);
-
-    if (!isComplete) {
-      // TODO: Seed completed weekly plan in global-setup.ts.
-      // For now, skip the assertion — the test is a placeholder for when
-      // infrastructure supports seeding a complete week.
-      test.skip();
-      return;
-    }
-
-    // The WEEK COMPLETE header must be visible.
-    await expect(weekComplete).toBeVisible();
-  });
-
-  test('should show stats text with sessions count when week review is shown', async ({
-    page,
-  }) => {
-    const weekComplete = page.locator(WEEKLY_PLAN.weekCompleteHeader);
-    const isComplete = await weekComplete.isVisible({ timeout: 5_000 }).catch(() => false);
-
-    if (!isComplete) {
-      // TODO: Seed completed weekly plan in global-setup.ts.
-      test.skip();
-      return;
-    }
-
-    // The stats text always includes "sessions".
-    await expect(page.locator(WEEKLY_PLAN.sessionsStatsText)).toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
-  test('should navigate to Plan Management screen when tapping NEW WEEK button', async ({ page }) => {
-    const weekComplete = page.locator(WEEKLY_PLAN.weekCompleteHeader);
-    const isComplete = await weekComplete.isVisible({ timeout: 5_000 }).catch(() => false);
-
-    if (!isComplete) {
-      // TODO: Seed completed weekly plan in global-setup.ts.
-      test.skip();
-      return;
-    }
-
-    // Tap NEW WEEK.
-    await page.locator(WEEKLY_PLAN.newWeekButton).click();
-
-    // Should navigate to Plan Management screen.
-    await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
-      timeout: 15_000,
-    });
-  });
-
-  test('should display completed routine chips with done state in week review', async ({
-    page,
-  }) => {
-    const weekComplete = page.locator(WEEKLY_PLAN.weekCompleteHeader);
-    const isComplete = await weekComplete.isVisible({ timeout: 5_000 }).catch(() => false);
-
-    if (!isComplete) {
-      // TODO: Seed completed weekly plan in global-setup.ts.
-      test.skip();
-      return;
-    }
-
-    // In WEEK COMPLETE state, all chips should be in the "done" state.
-    // The WeekReviewSection renders chips with RoutineChipState.done when
-    // completedWorkoutId != null.
-    // Since chips render as non-interactive Containers (no Semantics label),
-    // we verify the header and stats are present as proof of correct rendering.
-    await expect(weekComplete).toBeVisible();
-    await expect(page.locator(WEEKLY_PLAN.sessionsStatsText)).toBeVisible({
-      timeout: 5_000,
-    });
   });
 
   test('should render bucket chip in done state for completed routine (PR 32c)', async ({

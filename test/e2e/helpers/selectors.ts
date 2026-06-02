@@ -787,19 +787,14 @@ export const MANAGE_DATA = {
 // ---------------------------------------------------------------------------
 export const WEEKLY_PLAN = {
   /**
-   * "THIS WEEK" header in WeekReviewSection (legacy week-complete surface).
-   * Phase 26f: WeekReviewSection is no longer mounted from the home tree;
-   * the bucket chip row (HOME.bucketChipRow) replaced it. Tests that probed
-   * this header against the home screen will never resolve. Kept here only
-   * so the (test.skip-guarded) week-complete weekly-plan specs that
-   * defensively wait on it continue to compile.
+   * "THIS WEEK" header semantics identifier — surfaced by the active weekly
+   * plan section on Home. Phase 26f replaced the legacy WeekReviewSection
+   * with the bucket chip row (HOME.bucketChipRow); this identifier is still
+   * emitted by the active-plan path and is used by the surviving "render
+   * weekly plan section on home screen without error" smoke test as one of
+   * the three states the home screen may show.
    */
   thisWeekHeader: '[flt-semantics-identifier="weekly-plan-this-week"]',
-  /**
-   * "WEEK COMPLETE" header in WeekReviewSection — same dead-surface caveat
-   * as `thisWeekHeader` above.
-   */
-  weekCompleteHeader: '[flt-semantics-identifier="weekly-plan-complete"]',
   /**
    * "Plan your week" affordance on the home tab.
    * Phase 26f: the legacy `home-plan-your-week` banner was deleted. The
@@ -825,23 +820,6 @@ export const WEEKLY_PLAN = {
   clearWeekOption: '[flt-semantics-identifier="weekly-plan-clear-week"]',
   /** "Clear" confirm button in dialog — Semantics(identifier: 'weekly-plan-clear-confirm') */
   clearConfirmButton: '[flt-semantics-identifier="weekly-plan-clear-confirm"]',
-  /**
-   * "Start new week" affordance.
-   * Phase 26f: the dedicated `home-start-new-week` banner is gone. In the
-   * week-complete state ActionHero now renders the free-workout banner with
-   * a "Semana completa" subline. The plan-management entry point is the
-   * Editar plano link on the bucket chip row. Pinned here so legacy
-   * WEEKLY_PLAN.newWeekButton callers keep resolving — every consumer of
-   * this selector lives inside a `test.skip()` branch that only fires when a
-   * fully-seeded week-complete user is configured, which is not the case
-   * today.
-   */
-  newWeekButton: '[flt-semantics-identifier="home-edit-plan-link"]',
-  /**
-   * Stats text in WeekReviewSection — contains "sessions" substring.
-   * _buildStatsText always starts with "{n} sessions". Dynamic content — keep text= selector.
-   */
-  sessionsStatsText: 'text=/sessions/',
   /**
    * Fix 1A — "Saved" confirmation SnackBar shown after a successful upsertPlan.
    * The snackbar content is the l10n key `savedConfirmation` ("Saved" / "Salvo").
