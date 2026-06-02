@@ -212,12 +212,6 @@ abstract class AppLocalizations {
   /// **'History'**
   String get historyLabel;
 
-  /// Placeholder copy for sub-screens whose full implementation lands in a later phase.
-  ///
-  /// In en, this message translates to:
-  /// **'Coming soon.'**
-  String get comingSoonStub;
-
   /// App bar title for the profile-settings sub-screen reachable via the gear icon on the character sheet.
   ///
   /// In en, this message translates to:
@@ -2658,12 +2652,6 @@ abstract class AppLocalizations {
   /// **'{name} added'**
   String addExerciseUndo(String name);
 
-  /// RPE tooltip
-  ///
-  /// In en, this message translates to:
-  /// **'Rate of perceived exertion'**
-  String get rpeTooltip;
-
   /// Chart time window: last 30 days
   ///
   /// In en, this message translates to:
@@ -2807,30 +2795,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mark set as done — predicted record'**
   String get markSetAsDonePredictedPr;
-
-  /// Accessibility: RPE indicator with value
-  ///
-  /// In en, this message translates to:
-  /// **'RPE {value}. Tap to change.'**
-  String rpeValue(int value);
-
-  /// Accessibility: RPE indicator without value
-  ///
-  /// In en, this message translates to:
-  /// **'Set RPE'**
-  String get setRpe;
-
-  /// RPE label displayed in indicator
-  ///
-  /// In en, this message translates to:
-  /// **'RPE'**
-  String get rpeLabel;
-
-  /// RPE popup menu item
-  ///
-  /// In en, this message translates to:
-  /// **'RPE {value}'**
-  String rpeMenuItem(int value);
 
   /// Tooltip: enter reorder mode
   ///

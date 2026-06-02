@@ -1,6 +1,7 @@
-import 'dart:developer' as developer;
+import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -72,26 +73,22 @@ class LocaleNotifier extends Notifier<Locale> {
   }
 
   void _syncToRemote(String languageCode) {
-    try {
-      final userId = ref.read(currentUserIdProvider);
-      if (userId == null) return;
-
-      final repo = ref.read(profileRepositoryProvider);
-
-      repo.updateLocale(userId, languageCode).catchError((Object e) {
-        developer.log(
-          'Failed to sync locale to remote (async)',
-          error: e,
-          name: 'LocaleNotifier',
-        );
-      });
-    } catch (e) {
-      developer.log(
-        'Failed to sync locale to remote (sync)',
-        error: e,
-        name: 'LocaleNotifier',
-      );
-    }
+    // Fire-and-forget with one explicit try/catch around the entire side
+    // effect — including the synchronous `ref.read` lookups, since
+    // currentUserIdProvider touches Supabase.instance which throws an
+    // AssertionError under any test harness that hasn't booted Supabase.
+    // Routing both sync and async failure paths through the same debugPrint
+    // keeps the error shape consistent on physical devices (PR 32g style).
+    unawaited(() async {
+      try {
+        final userId = ref.read(currentUserIdProvider);
+        if (userId == null) return;
+        final repo = ref.read(profileRepositoryProvider);
+        await repo.updateLocale(userId, languageCode);
+      } catch (e) {
+        debugPrint('[LocaleNotifier] Failed to sync locale to remote: $e');
+      }
+    }());
   }
 }
 

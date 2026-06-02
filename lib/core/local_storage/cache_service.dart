@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -18,9 +18,8 @@ class CacheService {
   T? read<T>(String boxName, String key, T Function(dynamic) fromJson) {
     try {
       if (!Hive.isBoxOpen(boxName)) {
-        log(
-          'Box "$boxName" is not open — returning null for key "$key"',
-          name: 'CacheService',
+        debugPrint(
+          '[CacheService] Box "$boxName" is not open — returning null for key "$key"',
         );
         return null;
       }
@@ -29,11 +28,9 @@ class CacheService {
       if (raw is! String) return null;
       final decoded = jsonDecode(raw);
       return fromJson(decoded);
-    } catch (e) {
-      log(
-        'Failed to read "$key" from "$boxName": $e',
-        name: 'CacheService',
-        level: 900,
+    } catch (e, st) {
+      debugPrint(
+        '[CacheService] Failed to read "$key" from "$boxName": $e\n$st',
       );
       return null;
     }
@@ -45,19 +42,16 @@ class CacheService {
   Future<void> write(String boxName, String key, dynamic value) async {
     try {
       if (!Hive.isBoxOpen(boxName)) {
-        log(
-          'Box "$boxName" is not open — skipping write for key "$key"',
-          name: 'CacheService',
+        debugPrint(
+          '[CacheService] Box "$boxName" is not open — skipping write for key "$key"',
         );
         return;
       }
       final encoded = jsonEncode(value);
       await Hive.box<dynamic>(boxName).put(key, encoded);
-    } catch (e) {
-      log(
-        'Failed to write "$key" to "$boxName": $e',
-        name: 'CacheService',
-        level: 900,
+    } catch (e, st) {
+      debugPrint(
+        '[CacheService] Failed to write "$key" to "$boxName": $e\n$st',
       );
     }
   }
@@ -68,18 +62,15 @@ class CacheService {
   Future<void> delete(String boxName, String key) async {
     try {
       if (!Hive.isBoxOpen(boxName)) {
-        log(
-          'Box "$boxName" is not open — skipping delete for key "$key"',
-          name: 'CacheService',
+        debugPrint(
+          '[CacheService] Box "$boxName" is not open — skipping delete for key "$key"',
         );
         return;
       }
       await Hive.box<dynamic>(boxName).delete(key);
-    } catch (e) {
-      log(
-        'Failed to delete "$key" from "$boxName": $e',
-        name: 'CacheService',
-        level: 900,
+    } catch (e, st) {
+      debugPrint(
+        '[CacheService] Failed to delete "$key" from "$boxName": $e\n$st',
       );
     }
   }
@@ -90,19 +81,14 @@ class CacheService {
   Future<void> clearBox(String boxName) async {
     try {
       if (!Hive.isBoxOpen(boxName)) {
-        log(
-          'Box "$boxName" is not open — skipping clearBox',
-          name: 'CacheService',
+        debugPrint(
+          '[CacheService] Box "$boxName" is not open — skipping clearBox',
         );
         return;
       }
       await Hive.box<dynamic>(boxName).clear();
-    } catch (e) {
-      log(
-        'Failed to clear box "$boxName": $e',
-        name: 'CacheService',
-        level: 900,
-      );
+    } catch (e, st) {
+      debugPrint('[CacheService] Failed to clear box "$boxName": $e\n$st');
     }
   }
 }

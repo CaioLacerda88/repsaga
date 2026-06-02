@@ -450,16 +450,16 @@ paths). Polish + nits park to v1.1 via PROJECT.md §2.
 | Sub-PR | Scope | Size | Status |
 |---|---|---|---|
 | 33-discovery | Five read-only audit agents (parallel dispatch) → orchestrator assembles `docs/pre-launch-audit.md` → single PR commits the audit doc to `main` so all subsequent fix PRs reference one canonical source | 2d | DONE (#290) |
-| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. **Outcome:** 21 IMPORTANT → fix wave; 11 NICE-TO-HAVE folded; 33 parked. | 0.5–1d | IN FLIGHT |
-| 33a | Security fixes — 4 IMPORTANT (finding-026 length cap+UUID, -027 JWT-verify ordering, -028 body size cap, -029 ws CVE) + 3 folded NICE-TO-HAVE (finding-030 delete-user same shape, -031 platform/version allowlist, -033 rtdn-webhook base64 cap). Edge Fn defense-in-depth batch. | 1–2d | PENDING |
-| 33b | Dead-code + `developer.log` batch — 4 IMPORTANT (finding-001 5-file `developer.log` sweep, -003 RPE l10n keys, -004 SagaStubScreen orphan, -010 locale_provider in cluster) + 3 folded NICE-TO-HAVE (finding-012 comingSoonStub regen, -014 drop `dart:developer` import alias, -021 pending_sync_provider same-file). Cluster `developer-log-invisible-logcat` continuation of PR 32g. | 1–1.5d | PENDING |
+| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. **Outcome:** 21 IMPORTANT → fix wave; 11 NICE-TO-HAVE folded; 33 parked. | 0.5–1d | DONE (#291) |
+| 33a | Security fixes — 4 IMPORTANT (finding-026 length cap+UUID, -027 JWT-verify ordering, -028 body size cap, -029 ws CVE) + 3 folded NICE-TO-HAVE (finding-030 delete-user same shape, -031 platform/version allowlist, -033 rtdn-webhook base64 cap). Edge Fn defense-in-depth batch. | 1–2d | DONE (#292) |
+| 33b | Dead-code + `developer.log` batch — 4 IMPORTANT (finding-001 5-file `developer.log` sweep, -003 RPE l10n keys, -004 SagaStubScreen orphan, -010 locale_provider in cluster) + 3 folded NICE-TO-HAVE (finding-012 comingSoonStub regen, -014 drop `dart:developer` import alias, -021 pending_sync_provider same-file). Cluster `developer-log-invisible-logcat` continuation of PR 32g. | 1–1.5d | IN FLIGHT |
 | 33c | Workout-flow + global-setup-seed batch — 9 IMPORTANT (finding-005 bpProgressFractionPre TODO, -009 _flushDebouncedSave mounted+error, -036 onboarding skip, -037 sign-up happy path, -038 banner tap, -039 detail content, -041 CONTINUAR CTA, -044 /records in-app nav, -046 week-complete seed) + 3 folded NICE-TO-HAVE (finding-011 _emptyBpFractions, -013 doc comment, -059 full-journey extension). Largest slice; touches global-setup.ts seed data for 2 infra-gap unskips. | 3–4d | PENDING |
 | 33d | RPG / share-pipeline + post-session E2E batch — 3 IMPORTANT (finding-042 B3 PR cut, -043 exercise retirement, -045 weight unit toggle) + 1 folded (-055 unskip overflow-card tap). | 1.5–2d | PENDING |
 | 33e | Auth / profile Saga selector batch — 1 IMPORTANT (finding-002 CodexNavRow Semantics pair-rule) + 1 folded (-056 unskip 26-tap-routing-e2e using cluster fix template). Cluster `semantics-identifier-pair-rule` + `flutter-web-url-assertion`. | <1d | PENDING |
 | 33f | **CLOSED** — both originally-flagged findings (finding-006 week_plan_screen build refactor, -008 progress_chart_section refactor) downgraded to PARK during triage per non-goals "no refactor-for-refactor's-sake". No items in scope. | — | CLOSED |
 | 33g / 33h | Reserve slots for newly-discovered cluster patterns during fix wave (warranting their own PR). Triage overflow not used. | Variable | RESERVED |
 
-Order: 33-discovery (DONE) → 33-triage (IN FLIGHT) → 33a → 33b → 33c → 33d → 33e → (33g/h reserved). PR 33f closed post-triage.
+Order: 33-discovery (DONE) → 33-triage (DONE) → 33a (DONE) → 33b (IN FLIGHT) → 33c → 33d → 33e → (33g/h reserved). PR 33f closed post-triage.
 
 #### Stage 1 — Discovery (parallel read-only agents)
 

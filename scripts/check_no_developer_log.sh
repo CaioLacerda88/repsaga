@@ -2,22 +2,22 @@
 # scripts/check_no_developer_log.sh
 #
 # CI gate enforcing the cluster `developer-log-invisible-logcat`: NO
-# `dart:developer.log` calls inside `lib/features/workouts/` or
-# `lib/features/rpg/`. Both paths constitute the hot save / celebration
-# code path that gets debugged on physical Android devices, and
-# `developer.log` is INVISIBLE to `adb logcat` — it writes to the Dart
-# VM developer stream (DevTools / `flutter run`) only.
+# `dart:developer.log` calls anywhere in `lib/`. `developer.log` is
+# INVISIBLE to `adb logcat` — it writes to the Dart VM developer
+# stream (DevTools / `flutter run`) only.
 #
-# When this gate fires, the offending file logged "save failed" /
-# "celebration didn't fire" / "PR not detected" with developer.log but
-# the message never reaches `adb logcat` — making a user-report of a
-# physical-device bug impossible to triage. Use `debugPrint` instead:
-# it routes to the platform print sink (stdout on Android → adb logcat).
+# When this gate fires, the offending file logged something with
+# developer.log but the message never reaches `adb logcat` — making a
+# user-report of a physical-device bug impossible to triage. Use
+# `debugPrint` instead: it routes to the platform print sink (stdout
+# on Android → adb logcat).
 #
-# Scope: `lib/features/workouts/` and `lib/features/rpg/`. The rest of
-# `lib/` is unaffected (HiveService and similar bootstrapping code can
-# legitimately use developer.log because their failures fire BEFORE the
-# user can observe a "save broken" or "celebration silent" symptom).
+# Scope: all of `lib/`. After PR 33b, the entire app uses
+# `debugPrint('[Scope] msg')` instead of `dart:developer.log`. Pre-33b
+# the gate scoped only `lib/features/workouts/` + `lib/features/rpg/`
+# (the active-workout / celebration hot paths); 33b migrated the
+# remaining 5 files in `lib/core/` + `lib/features/personal_records/`
+# and widened the gate to lock in zero-regression for the entire app.
 #
 # Gates (order matches the script body below):
 #   1. `import 'dart:developer'` (with optional `as <alias>`) inside
@@ -43,7 +43,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-SCOPE=(lib/features/workouts lib/features/rpg)
+SCOPE=(lib)
 FAILED=0
 
 # ─── Gate 1: `import 'dart:developer'` (with or without `as` alias) ──
@@ -56,7 +56,7 @@ HITS_IMPORT=$(
 
 if [ -n "$HITS_IMPORT" ]; then
   FAILED=1
-  echo "check_no_developer_log: 'dart:developer' import in workouts/rpg"
+  echo "check_no_developer_log: 'dart:developer' import in lib/"
   echo
   echo "Cluster: developer-log-invisible-logcat. \`dart:developer.log\`"
   echo "is INVISIBLE on \`adb logcat\` — it writes to the Dart VM developer"
@@ -137,4 +137,4 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 
-echo "check_no_developer_log: clean (0 'dart:developer' imports, 0 log(...) calls in lib/features/workouts/ + lib/features/rpg/)."
+echo "check_no_developer_log: clean (0 'dart:developer' imports, 0 log(...) calls in lib/)."

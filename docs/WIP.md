@@ -900,345 +900,271 @@ Stage 2 is user-facing, doesn't need its own implementation plan. Orchestrator o
 
 ---
 
-# Phase 33 — PR 33a (Security) Implementation Plan
+# Phase 33 — PR 33b (Dead-code + developer.log batch) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
+**Goal:** Land 4 IMPORTANT + 3 folded NICE-TO-HAVE cleanup fixes per the Phase 33 audit. Dart-only — zero changes in `supabase/functions/`, `lib/features/{workouts,rpg}/` (already PR 32g'd for developer.log), or e2e specs.
 
-**Goal:** Land 4 IMPORTANT + 3 folded NICE-TO-HAVE Edge Function defense-in-depth fixes per the Phase 33 audit. Pure backend hardening — zero changes in `lib/` or Dart `test/` (only `test/e2e/package-lock.json` for the ws CVE fix).
+**Architecture:** Mechanical migration of `developer.log()` / bare `log()` → `debugPrint('[Scope] msg')` across 5 `lib/core/` + `lib/features/personal_records/` files, drop their `dart:developer` imports, delete the orphan `SagaStubScreen` widget, delete 6 RPE l10n keys (Phase 25 dropped) + the `comingSoonStub` key from both ARBs, regenerate localizations, and widen the `check_no_developer_log.sh` CI gate from workouts+rpg scope to all of `lib/`.
 
-**Architecture:** Extract a shared `_shared/auth.ts` helper that handles JWT exp precheck + body-size cap. Call the helper at every stateful Edge Function entry (validate-purchase, delete-user, rtdn-webhook, vitality-nightly). Add per-function input validation (length clamps, regex, allow-lists). Bump the transitive `ws` dep in test/e2e via `npm audit fix`.
+**Tech Stack:** Dart (Flutter), Freezed/json_serializable codegen (l10n), bash (CI gate script).
 
-**Tech Stack:** Deno + std/http (Edge Functions), TypeScript, `@supabase/supabase-js@2`, npm (test/e2e deps).
+**Spec reference:** `docs/pre-launch-audit.md` lines 123–298 (finding-001, 003, 004, 010 + folded 012, 014, 021).
 
-**Spec reference:** `docs/pre-launch-audit.md` Triage stamps section, findings 026, 027, 028, 029, 030, 031, 033. Each finding's "Current" + "Recommended" lines are the source-of-truth for fix specifics.
-
-**Branch:** `feature/phase-33a-security`
+**Branch:** `feature/phase-33b-cleanup`
 
 ---
 
 ## Files
 
-- **Create:** `supabase/functions/_shared/auth.ts` — `precheckJwtExp(jwt)` + `requireBodySize(req, max)` helpers
-- **Create:** `supabase/functions/_shared/auth.test.ts` — Deno tests for the helper
-- **Create:** `supabase/functions/delete-user/test.ts` — currently has NO test file (gap)
-- **Modify:** `supabase/functions/validate-purchase/index.ts` (findings 026 / 027 / 028)
-- **Modify:** `supabase/functions/validate-purchase/test.ts` — add input-validation tests
-- **Modify:** `supabase/functions/delete-user/index.ts` (findings 028 / 030 / 031)
-- **Modify:** `supabase/functions/rtdn-webhook/index.ts` (findings 028 / 033)
-- **Modify:** `supabase/functions/rtdn-webhook/test.ts` — add size-cap + base64-cap tests
-- **Modify:** `supabase/functions/vitality-nightly/index.ts` (finding 028)
-- **Modify:** `supabase/functions/vitality-nightly/auth.test.ts` — extend or add new test file
-- **Modify:** `test/e2e/package-lock.json` (finding 029 via `npm audit fix`)
-- **Modify:** `docs/WIP.md` (this plan — checkmarks during implementation)
+### Migrate (5 files, ~12 call sites)
+- **Modify:** `lib/core/local_storage/cache_service.dart` — finding-001 (4 sites: 21, 33, 48, 57) + finding-014 (drop `dart:developer` import)
+- **Modify:** `lib/core/offline/pending_sync_provider.dart` — finding-001 + finding-021 (2 sites: 71, 137) + drop import
+- **Modify:** `lib/core/l10n/locale_provider.dart` — finding-001 + finding-010 (2 sites: 82, 89; also wrap `.catchError` in async try/catch) + drop import
+- **Modify:** `lib/core/local_storage/hive_service.dart` — finding-001 (3 sites: 184, 212, 226) + drop import
+- **Modify:** `lib/features/personal_records/providers/pr_cache_bootstrap_provider.dart` — finding-001 (3 sites: 118, 141, 155) + drop import
+
+### Delete (2 files + 7 ARB keys)
+- **Delete:** `lib/features/rpg/ui/saga_stub_screen.dart` (finding-004) — orphan widget, never imported
+- **Modify:** `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` — delete 6 RPE keys (`rpeTooltip`, `rpeValue`, `rpeLabel`, `rpeMenuItem`, `setRpe`, plus the `@rpeTooltip` etc. metadata) + `comingSoonStub` (and its metadata key)
+
+### Regenerate
+- **Modify (codegen):** `lib/l10n/app_localizations.dart`, `lib/l10n/app_localizations_en.dart`, `lib/l10n/app_localizations_pt.dart` — auto-regen via `flutter gen-l10n` after ARB deletions
+
+### CI gate widening
+- **Modify:** `scripts/check_no_developer_log.sh` — widen `SCOPE` from `(lib/features/workouts lib/features/rpg)` to `(lib)` and update preamble.
+
+### Closeout (in the same first commit)
+- **Modify:** `docs/WIP.md` — strip PR 33a section, append this PR 33b plan
+- **Modify:** `docs/PROJECT.md` §3 sub-PR table — flip 33a PENDING → DONE (#292)
 
 ---
 
 ## Checklist
 
-- [ ] Task 1 — `_shared/auth.ts` helper + Deno tests
-- [ ] Task 2 — `validate-purchase` fixes (findings 026 / 027 / 028 partial)
-- [ ] Task 3 — `delete-user` fixes (findings 028 partial / 030 / 031) + new test file
-- [ ] Task 4 — `rtdn-webhook` fixes (findings 028 partial / 033)
-- [ ] Task 5 — `vitality-nightly` size cap (finding 028 partial)
-- [ ] Task 6 — `ws` CVE fix in test/e2e (finding 029)
-- [ ] Task 7 — Verification (deno test + reviewer + qa-engineer) + commit + PR + admin-merge
+- [ ] Task 1 — PR 33a closeout + PR 33b plan commit
+- [ ] Task 2 — Verify `dart:developer` usage count baseline + check tests
+- [ ] Task 3 — Migrate `cache_service.dart` (finding-001 partial + finding-014)
+- [ ] Task 4 — Migrate `pending_sync_provider.dart` (finding-001 + finding-021)
+- [ ] Task 5 — Migrate `locale_provider.dart` (finding-001 + finding-010 async try/catch)
+- [ ] Task 6 — Migrate `hive_service.dart` (finding-001 partial)
+- [ ] Task 7 — Migrate `pr_cache_bootstrap_provider.dart` (finding-001 partial)
+- [ ] Task 8 — Delete `saga_stub_screen.dart` (finding-004)
+- [ ] Task 9 — Delete 6 RPE keys + `comingSoonStub` from both ARBs (finding-003 + finding-012)
+- [ ] Task 10 — `flutter gen-l10n` to regenerate l10n
+- [ ] Task 11 — Widen `check_no_developer_log.sh` scope to `lib/`
+- [ ] Task 12 — Verify (format + gen + analyze + test) + commit + PR + reviewer + QA + admin-merge
 
 ---
 
-## Task 1 — `_shared/auth.ts` helper + Deno tests
+## Task 1 — PR 33a closeout + PR 33b plan commit
+
+Done as the first commit on `feature/phase-33b-cleanup`. Includes:
+1. Strip PR 33a section from `docs/WIP.md`
+2. Append this plan to `docs/WIP.md`
+3. Flip 33a row in `docs/PROJECT.md` §3 sub-PR table: PENDING → DONE (#292)
+
+Commit message: `docs(phase-33b): close out PR 33a + plan for PR 33b cleanup batch`
+
+---
+
+## Task 2 — Baseline check
+
+- [ ] **Step 1: Confirm scope of `dart:developer` usage in `lib/`**
+
+Run a Grep for `import 'dart:developer'` under `lib/`. Expected: 5 imports matching the 5 files in this PR. If more, investigate before proceeding.
+
+- [ ] **Step 2: Confirm no test imports `dart:developer`**
+
+Grep `test/` for same pattern. Expected: empty.
+
+---
+
+## Task 3 — Migrate `cache_service.dart`
 
 **Files:**
-- Create: `supabase/functions/_shared/auth.ts`
-- Create: `supabase/functions/_shared/auth.test.ts`
+- Modify: `lib/core/local_storage/cache_service.dart`
 
-- [ ] **Step 1: Write failing tests in `_shared/auth.test.ts`** covering:
-  - `requireBodySize`: returns null when Content-Length missing OR ≤ max; returns 413 Response when > max; correct status + JSON body
-  - `precheckJwtExp`: returns `{ valid: false, reason: 'malformed' }` for non-JWT; `{ valid: false, reason: 'expired' }` for exp < now; `{ valid: true }` for exp > now; `{ valid: false, reason: 'malformed' }` for missing exp claim
-  - Use the existing test pattern from `validate-purchase/test.ts` (std/assert + crypto.subtle.generateKey for JWT fixtures)
+- [ ] **Step 1: Read the file end-to-end** — locate the 4 `log(` call sites at lines 21, 33, 48, 57. Each is inside an error handler.
 
-- [ ] **Step 2: Run tests — verify they fail (file doesn't exist yet)**
+- [ ] **Step 2: Replace pattern** — for each `log(...)`:
+  - Import `package:flutter/foundation.dart` (for `debugPrint`) if not already imported
+  - Replace `log('msg', name: 'foo', error: e, stackTrace: st)` with `debugPrint('[CacheService] msg: $e\n$st')`
+  - Tag prefix: `[CacheService]`
 
-```bash
-deno test --allow-net --allow-env supabase/functions/_shared/auth.test.ts
-```
+- [ ] **Step 3: Remove `import 'dart:developer';`** (finding-014)
 
-Expected: module-not-found error.
-
-- [ ] **Step 3: Implement `_shared/auth.ts`** with this interface:
-
-```typescript
-// Body-size guard. Returns 413 Response if Content-Length > maxBytes;
-// returns null if OK to proceed (no Content-Length is treated as OK —
-// platform-level body ceiling still applies upstream).
-export function requireBodySize(req: Request, maxBytes: number): Response | null;
-
-// Cheap local JWT exp precheck. Does NOT verify signature (gateway already
-// did) — just decodes payload and checks `exp` is in the future. Use
-// before req.json() to short-circuit expired/malformed JWTs without
-// paying the body-parse cost. Caller still needs to do full validity
-// check via auth.getUser(jwt) for non-repudiation.
-export function precheckJwtExp(jwt: string): { valid: boolean; reason?: 'malformed' | 'expired' };
-```
-
-`requireBodySize` returns the 413 with `{ error: 'Payload too large', maxBytes }`. Use CORS headers from the calling Edge Function (pass as a param or import shared).
-
-`precheckJwtExp` splits on `.`, base64-url-decodes the payload, parses JSON, checks `typeof exp === 'number' && exp * 1000 > Date.now()`.
-
-- [ ] **Step 4: Run tests — verify they pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/functions/_shared/auth.ts supabase/functions/_shared/auth.test.ts
-git commit -m "feat(edge): shared auth helper — body-size cap + JWT exp precheck"
-```
+- [ ] **Step 4: Run analyzer + existing tests for the file**
 
 ---
 
-## Task 2 — `validate-purchase` fixes (findings 026 / 027 / 028 partial)
+## Task 4 — Migrate `pending_sync_provider.dart`
 
 **Files:**
-- Modify: `supabase/functions/validate-purchase/index.ts` (the `serve()` handler around line 384)
-- Modify: `supabase/functions/validate-purchase/test.ts`
+- Modify: `lib/core/offline/pending_sync_provider.dart`
 
-Audit-doc findings:
-- **026** clamp `product_id` ≤ 128, `purchase_token` ≤ 4096, `source` ≤ 32 (+ allow-list `{'client','cron_reconcile'}`), UUID regex on `user_id`
-- **027** move `getUser(jwt)` (or `precheckJwtExp` from Task 1) ahead of `req.json()`
-- **028** call `requireBodySize(req, 32 * 1024)` at top of handler
+- [ ] **Step 1: Read the file**, locate sites at lines 71 and 137 (finding-021 is the line 137 legacy drain log).
 
-- [ ] **Step 1: Write failing tests** in `validate-purchase/test.ts`:
-  - `Deno.test('validate-purchase: 413 on >32KB body')` — synthesize a request with Content-Length: 40000, assert response.status === 413
-  - `Deno.test('validate-purchase: 401 on expired JWT (no body parse)')` — JWT with exp in the past, assert 401 and that `req.json()` is NOT called (use a spy that throws if invoked)
-  - `Deno.test('validate-purchase: 400 on product_id > 128 chars')` — assert 400 + error message references "product_id"
-  - `Deno.test('validate-purchase: 400 on malformed user_id (non-UUID)')` — assert 400 + error references "user_id"
-  - `Deno.test('validate-purchase: 400 on source not in allow-list')` — pass `source: 'attacker'`, assert 400
+- [ ] **Step 2: Replace pattern** — tag prefix `[PendingSyncNotifier]`. Site at 137 specifically per finding-021: `debugPrint('[PendingSyncNotifier] 26e: <message>')`.
 
-- [ ] **Step 2: Run tests — verify failures**
+- [ ] **Step 3: Remove `import 'dart:developer';`**
 
-```bash
-deno test --allow-net --allow-env supabase/functions/validate-purchase/test.ts
-```
-
-Expected: 5 new tests fail with "validation not implemented".
-
-- [ ] **Step 3: Implement** at the top of the `serve()` handler:
-  1. Call `requireBodySize(req, 32 * 1024)`; return its Response if non-null
-  2. After Authorization-header check, call `precheckJwtExp(jwt)`; return 401 if invalid
-  3. After `req.json()`, validate each field:
-     - `if (typeof body.product_id !== 'string' || body.product_id.length > 128) return 400`
-     - `if (typeof body.purchase_token !== 'string' || body.purchase_token.length > 4096) return 400`
-     - `if (typeof body.source !== 'string' || body.source.length > 32 || !['client','cron_reconcile'].includes(body.source)) return 400`
-     - `if (body.user_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.user_id)) return 400`
-
-- [ ] **Step 4: Run tests — verify pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/functions/validate-purchase/
-git commit -m "feat(edge): validate-purchase input validation + JWT precheck + body cap (findings 026/027/028)"
-```
+- [ ] **Step 4: Analyzer + tests**
 
 ---
 
-## Task 3 — `delete-user` fixes (findings 028 partial / 030 / 031) + new test file
+## Task 5 — Migrate `locale_provider.dart` (with async try/catch for finding-010)
 
 **Files:**
-- Create: `supabase/functions/delete-user/test.ts` — no test file exists yet
-- Modify: `supabase/functions/delete-user/index.ts`
+- Modify: `lib/core/l10n/locale_provider.dart`
 
-Audit-doc findings:
-- **028** size cap (4KB — body is tiny: 2 short strings)
-- **030** move `getUser`/`precheckJwtExp` ahead of `req.json()`
-- **031** validate `platform` against allow-list `{'android','ios','web'}` (coerce to `'unknown'` on mismatch); validate `app_version` regex `/^\d+\.\d+\.\d+(\+\d+)?$/` (silently strip on mismatch)
+- [ ] **Step 1: Read the file** — locate `_syncToRemote` and the two `developer.log` sites at lines 82, 89.
 
-- [ ] **Step 1: Write failing tests** in new file `supabase/functions/delete-user/test.ts`:
-  - `Deno.test('delete-user: 413 on >4KB body')`
-  - `Deno.test('delete-user: 401 on expired JWT before body parse')` — spy on `req.json()` to confirm it's not called
-  - `Deno.test('delete-user: platform not in allow-list coerces to "unknown" in audit row')`
-  - `Deno.test('delete-user: app_version not matching regex stripped to null')`
-  - `Deno.test('delete-user: valid platform/version pass through unchanged')`
+- [ ] **Step 2: Replace `developer.log` calls** with `debugPrint('[LocaleNotifier] Failed to sync locale: $e')`.
 
-Follow the test fixture pattern from `validate-purchase/test.ts` (fake service account, mocked Supabase admin client).
+- [ ] **Step 3: Refactor `.catchError` → async try/catch per finding-010**
 
-- [ ] **Step 2: Run tests — verify failures**
+If the current shape is `repo.updateLocale(...).catchError((e) { developer.log(...); });`, restructure to:
 
-- [ ] **Step 3: Implement** in `delete-user/index.ts`:
-  1. Call `requireBodySize(req, 4 * 1024)` at top of handler
-  2. After auth-header check, call `precheckJwtExp(jwt)`
-  3. Add `PLATFORM_ALLOW_LIST = ['android', 'ios', 'web']`; coerce out-of-list to `'unknown'`
-  4. Add `APP_VERSION_RE = /^\d+\.\d+\.\d+(\+\d+)?$/`; null out non-matching values
-
-- [ ] **Step 4: Run tests — verify pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/functions/delete-user/
-git commit -m "feat(edge): delete-user JWT precheck + body cap + platform/version allow-lists (findings 028/030/031)"
+```dart
+unawaited(() async {
+  try {
+    await repo.updateLocale(...);
+  } catch (e) {
+    debugPrint('[LocaleNotifier] Failed to sync locale: $e');
+  }
+}());
 ```
+
+Add `import 'dart:async';` if `unawaited` is not yet in scope.
+
+- [ ] **Step 4: Remove `import 'dart:developer';`**
+
+- [ ] **Step 5: Analyzer + tests**
 
 ---
 
-## Task 4 — `rtdn-webhook` fixes (findings 028 partial / 033)
+## Task 6 — Migrate `hive_service.dart`
 
 **Files:**
-- Modify: `supabase/functions/rtdn-webhook/index.ts`
-- Modify: `supabase/functions/rtdn-webhook/test.ts`
+- Modify: `lib/core/local_storage/hive_service.dart`
 
-Audit-doc findings:
-- **028** body size cap (16KB — Pub/Sub envelopes ≤ ~8KB realistic)
-- **033** after `atob(envelope.message.data)`, check decoded `json.length > 16384` → throw `Error('payload too large')` → 400 response
+- [ ] **Step 1: Read the file**, locate sites at lines 184, 212, 226 (Hive box recovery / bootstrap).
 
-- [ ] **Step 1: Write failing tests** in `rtdn-webhook/test.ts`:
-  - `Deno.test('rtdn-webhook: 413 on >16KB request body')`
-  - `Deno.test('rtdn-webhook: 400 on >16KB decoded base64 payload')` — base64-encode a 20KB JSON blob, send under a small envelope, assert 400
+- [ ] **Step 2: Replace pattern** — tag prefix `[HiveService]`
 
-- [ ] **Step 2: Run tests — verify failures**
+- [ ] **Step 3: Remove `import 'dart:developer';`**
 
-- [ ] **Step 3: Implement**:
-  1. `requireBodySize(req, 16 * 1024)` at top of handler
-  2. In `decodePubSubPayload`: after `atob(...)`, if decoded JSON length > 16384, throw `Error('payload too large')`; surface as 400 response (note: the function already 200s on testNotification and unknown types — keep that behavior; only the payload-too-large case 400s)
-
-- [ ] **Step 4: Run tests — verify pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/functions/rtdn-webhook/
-git commit -m "feat(edge): rtdn-webhook body + base64 payload caps (findings 028/033)"
-```
+- [ ] **Step 4: Analyzer + tests**
 
 ---
 
-## Task 5 — `vitality-nightly` size cap (finding 028 partial)
+## Task 7 — Migrate `pr_cache_bootstrap_provider.dart`
 
 **Files:**
-- Modify: `supabase/functions/vitality-nightly/index.ts`
-- Modify or create: `supabase/functions/vitality-nightly/auth.test.ts` (existing) — extend with size-cap test
+- Modify: `lib/features/personal_records/providers/pr_cache_bootstrap_provider.dart`
 
-- [ ] **Step 1: Write failing test** — body > 1KB returns 413 (body is tiny: `{chunk: 0-9, source: string}`)
+- [ ] **Step 1: Read the file**, locate sites at lines 118, 141, 155 (PR-cache migration).
 
-- [ ] **Step 2: Run — verify failure**
+- [ ] **Step 2: Replace pattern** — tag prefix `[PrCacheBootstrap]`
 
-- [ ] **Step 3: Implement** — `requireBodySize(req, 1024)` at top of handler
+- [ ] **Step 3: Remove `import 'dart:developer';`**
 
-- [ ] **Step 4: Run — verify pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/functions/vitality-nightly/
-git commit -m "feat(edge): vitality-nightly body size cap (finding 028)"
-```
+- [ ] **Step 4: Analyzer + tests**
 
 ---
 
-## Task 6 — `ws` CVE fix in test/e2e (finding 029)
+## Task 8 — Delete `saga_stub_screen.dart` (finding-004)
 
 **Files:**
-- Modify: `test/e2e/package-lock.json` (via npm)
+- Delete: `lib/features/rpg/ui/saga_stub_screen.dart`
 
-- [ ] **Step 1: Run `npm audit` to confirm pre-fix state**
+- [ ] **Step 1: Confirm no imports anywhere in `lib/` or `test/`** via grep on `saga_stub_screen` + `SagaStubScreen`. Expected: zero matches.
 
-```bash
-cd test/e2e && npm audit --omit=dev 2>&1 | grep -E "ws|GHSA-58qx"
-```
+- [ ] **Step 2: Delete via `git rm lib/features/rpg/ui/saga_stub_screen.dart`**
 
-Expected: at least one row mentioning `ws` 8.0.0–8.20.0 + `GHSA-58qx-3vcg-4xpx`.
-
-- [ ] **Step 2: Run `npm audit fix`**
-
-```bash
-cd test/e2e && npm audit fix
-```
-
-Expected: `ws` lifts to ≥ 8.20.1 transitively. `package-lock.json` updated.
-
-- [ ] **Step 3: Re-run `npm audit` to verify the CVE is cleared**
-
-Expected: no `GHSA-58qx-3vcg-4xpx` row. Other CVEs (if any) noted for future PARK.
-
-- [ ] **Step 4: Run a Playwright smoke locally to verify no regression**
-
-```bash
-cd test/e2e && FLUTTER_APP_URL= npx playwright test --grep @smoke --reporter=list
-```
-
-Expected: smoke suite green (or the same flake set as before — no new failures introduced by the ws bump). If new failures appear, investigate per CLAUDE.md systematic-debugging protocol before proceeding.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add test/e2e/package-lock.json
-git commit -m "chore(deps): bump transitive ws to clear GHSA-58qx-3vcg-4xpx (finding 029)"
-```
+- [ ] **Step 3: Re-grep to confirm clean.**
 
 ---
 
-## Task 7 — Verification + commit + PR + admin-merge
+## Task 9 — Delete RPE + comingSoonStub ARB keys (finding-003 + finding-012)
 
-- [ ] **Step 1: Run full deno test suite**
+**Files:**
+- Modify: `lib/l10n/app_en.arb`
+- Modify: `lib/l10n/app_pt.arb`
 
-```bash
-deno test --allow-net --allow-env supabase/functions/
-```
+- [ ] **Step 1: Confirm zero usage of the 6 RPE l10n getters anywhere in `lib/` + `test/`** via grep on `l10n.rpeTooltip`, `l10n.rpeValue`, `l10n.rpeLabel`, `l10n.rpeMenuItem`, `l10n.setRpe`, `l10n.comingSoonStub`.
 
-Expected: all tests pass — `_shared/`, `validate-purchase`, `delete-user`, `rtdn-webhook`, `vitality-nightly`.
+- [ ] **Step 2: Delete keys + their `@key` metadata from both ARB files**
 
-- [ ] **Step 2: Run `make ci` (Flutter side)**
+Keys to delete (in both `app_en.arb` and `app_pt.arb`):
+- `rpeTooltip` + `@rpeTooltip`
+- `rpeValue` + `@rpeValue`
+- `rpeMenuItem` + `@rpeMenuItem`
+- `rpeLabel` + `@rpeLabel`
+- `setRpe` + `@setRpe`
+- `comingSoonStub` + `@comingSoonStub`
 
-```bash
-make ci
-```
+- [ ] **Step 3: Verify ARB JSON is still valid**
 
-Expected: green. Should be a no-op for Dart since no `lib/` changes — analyzer + tests + build still need to run to confirm no incidental breakage.
+Use a JSON parser (python -m json.tool or jq) to confirm both files parse.
 
-- [ ] **Step 3: Dispatch reviewer agent** for diff review against the audit doc findings
+---
 
-Use foreground dispatch. The reviewer checks: (a) each finding's `Recommended:` line is implemented, (b) cluster-ref comments added where applicable (`developer-log-invisible-logcat` not applicable here; this PR establishes a new pattern — consider adding to PROJECT.md §0 Cluster Ledger as a candidate if any reviewer finding repeats), (c) edge cases on Content-Length headers (chunked encoding, missing header), (d) JWT precheck doesn't change semantics for service-role JWTs.
+## Task 10 — `flutter gen-l10n` to regenerate l10n
 
-Loop: reviewer flags → tech-lead fixes → re-review → sign-off.
+- [ ] **Step 1: Run `flutter gen-l10n`** (the standalone Make target; skip the full `make gen` since no Freezed/json_serializable source files changed).
+
+- [ ] **Step 2: Verify regenerated files are clean** — grep generated files for the 7 removed key names. Expected: zero matches.
+
+- [ ] **Step 3: Run analyzer on `lib/l10n/`** — 0 issues.
+
+---
+
+## Task 11 — Widen `check_no_developer_log.sh` scope
+
+**Files:**
+- Modify: `scripts/check_no_developer_log.sh`
+
+- [ ] **Step 1: Change `SCOPE` array** from `(lib/features/workouts lib/features/rpg)` to `(lib)`.
+
+- [ ] **Step 2: Update the preamble** to reflect the new contract — replace the workouts/rpg scope description with "Scope: all of `lib/`. After PR 33b, the entire app uses `debugPrint('[Scope] msg')` instead of `dart:developer.log`."
+
+- [ ] **Step 3: Run the script locally** — expected: `check_no_developer_log: clean ...`
+
+If any violation surfaces, that's a missed migration — fix it before proceeding.
+
+---
+
+## Task 12 — Verify + commit + PR + review cycle
+
+- [ ] **Step 1: Run full pipeline locally** — format + gen-l10n + all analyze scripts + flutter test (excluding integration + golden).
+
+- [ ] **Step 2: Stage + commit**
+
+Suggested commit decomposition:
+- `refactor(core): developer.log → debugPrint in 5 files (findings 001/010/014/021)`
+- `chore(rpg): delete orphan SagaStubScreen widget (finding-004)`
+- `chore(l10n): delete dropped RPE keys + comingSoonStub (findings 003/012)`
+- `ci(analyze): widen check_no_developer_log scope to entire lib/`
+
+- [ ] **Step 3: Dispatch reviewer agent**
 
 - [ ] **Step 4: Dispatch qa-engineer agent**
 
-QA verifies: Deno test coverage is complete (negative cases for each new validation path), no missed wiring-trace patterns (per finding-014 (A) folded in 33b not here, but verify these tests assert behavior not just `verify(.called)`).
+- [ ] **Step 5: Push + open PR** with title `refactor(cleanup): Phase 33 PR 33b — developer.log sweep + dead-code removal`
 
-- [ ] **Step 5: Check off all WIP tasks 1–7**
+- [ ] **Step 6: Wait for CI green** — specifically watch the `analyze` job for the widened gate.
 
-- [ ] **Step 6: Commit any remaining changes** (WIP checkmarks; review-cycle fixes)
+- [ ] **Step 7: Admin-merge** with `--squash --admin --delete-branch`.
 
-- [ ] **Step 7: Push branch**
-
-```bash
-git push -u origin feature/phase-33a-security
-```
-
-- [ ] **Step 8: Open PR**
-
-Title: `feat(security): Phase 33 PR 33a — Edge Function defense-in-depth`
-
-Body includes: summary, findings table (021 IMPORTANT + 3 folded), files changed list, test plan, link to audit doc Triage stamps section.
-
-- [ ] **Step 9: Wait for CI green**
-
-Fast checks (analyze + deno-tests + coverage-checks) + e2e. E2E should still pass (no Flutter app changes). If e2e fails, root-cause via systematic-debugging — likely the `ws` bump triggered something.
-
-- [ ] **Step 10: Admin-merge**
-
-```bash
-gh pr merge <PR#> --squash --admin --delete-branch
-```
-
-Note: this PR is NOT docs-only (touches Edge Functions). The admin-merge is justified by green CI, not the `feedback_docs_only_pr_merge` exception. Wait for E2E to pass before merging.
-
-- [ ] **Step 11: Update PROJECT.md §3 sub-PR table** — flip 33a PENDING → DONE (#PR-number). This update lands in the next fix-PR's commit (not its own micro-PR).
+- [ ] **Step 8: Update PROJECT.md §3 sub-PR table** — flip 33b PENDING → DONE in next fix-PR (PR 33c's first commit).
 
 ---
 
-## PR 33a Notes
+## PR 33b Notes
 
-- **Token budget:** the tech-lead agent should keep the helper interface stable across tasks 2–5 (each function calls the same `requireBodySize` + `precheckJwtExp`). If the interface evolves mid-implementation, update Task 1 first then propagate.
-- **Service-role JWT semantics:** `validate-purchase` accepts both user JWTs (via `getUser`) and service-role JWTs (via `isServiceRoleJwt` local decode). The `precheckJwtExp` runs BEFORE the service-role branch check — service-role JWTs DO have an `exp` claim (Supabase issues them with one), so they'll still pass the precheck. Don't special-case.
-- **Cluster ledger candidate:** the "edge function input-validation pattern" (clamp + allow-list + body-size cap + JWT precheck) could become a cluster entry if this pattern recurs. Defer the ledger write to the actual cluster recurrence — single pattern occurrence doesn't warrant the entry yet.
-- **No new migrations:** all fixes are application-layer. Existing RLS + SECURITY INVOKER guarantees are unchanged.
+- **Test files not migrated:** the audit's finding-001 scope is `lib/`. Test files that legitimately import `dart:developer` are out of scope. Task 2 confirms none exist today.
+- **Symmetry with PR 32g:** PR 32g migrated `active_workout_notifier.dart`. PR 33b is the rest-of-codebase finisher. After PR 33b merges, the codebase has zero `dart:developer` imports in `lib/`.
+- **`flutter/foundation.dart` vs `flutter/material.dart`:** prefer `package:flutter/foundation.dart` for non-UI files (notifiers, services, providers). For UI files already importing material, `debugPrint` comes along for free.
+- **No e2e impact:** the only user-visible text change is removing `comingSoonStub` (already unreachable post-Phase-26c/d). RPE keys never rendered. SagaStubScreen never routed to. Zero risk to selectors.
+- **CI gate widening is the keystone:** without Task 11, a future PR could reintroduce `developer.log` in `lib/core/` and CI wouldn't catch it. The gate is the contract.
