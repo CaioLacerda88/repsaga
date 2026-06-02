@@ -20,7 +20,6 @@
   "statsDeepDiveLabel": "Estatísticas",
   "titlesLabel": "Títulos",
   "historyLabel": "Histórico",
-  "comingSoonStub": "Em breve.",
   "settingsLabel": "Configurações",
   "vitalityCopyUntested": "Inexplorado — registre uma série para começar.",
   "vitalityCopyDormant": "Dormente. Treine este grupo para retomar o caminho.",
@@ -472,7 +471,6 @@
   "swapExerciseConfirmBody": "{count, plural, one{Sua {count} série registrada vai contar} other{Suas {count} séries registradas vão contar}} para os recordes de {newExercise} (não de {oldExercise}).",
   "swapExerciseConfirmAction": "Trocar",
   "addExerciseUndo": "{name} adicionado",
-  "rpeTooltip": "Percepção subjetiva de esforço",
 
   "last30Days": "30d",
   "last90Days": "90d",
@@ -500,10 +498,6 @@
   "setCompleted": "Série concluída",
   "markSetAsDone": "Marcar série como concluída",
   "markSetAsDonePredictedPr": "Marcar série como concluída — recorde previsto",
-  "rpeValue": "RPE {value}. Toque para alterar.",
-  "setRpe": "Definir RPE",
-  "rpeLabel": "RPE",
-  "rpeMenuItem": "RPE {value}",
 
   "reorderExercisesTooltip": "Reordenar exercícios",
   "exitReorderModeTooltip": "Sair do modo de reordenação",

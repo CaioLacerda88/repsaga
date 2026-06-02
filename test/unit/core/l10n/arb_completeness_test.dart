@@ -77,7 +77,6 @@ void main() {
       'appName', // RepSaga
       'prsLabel', // PRs
       'setTypeDropset', // Drop Set
-      'rpeLabel', // RPE
       'chartMetricE1rm', // e1RM
       'ok', // OK
       'email', // E-mail (PT uses E-mail too)

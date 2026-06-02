@@ -67,9 +67,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyLabel => 'Histórico';
 
   @override
-  String get comingSoonStub => 'Em breve.';
-
-  @override
   String get settingsLabel => 'Configurações';
 
   @override
@@ -1518,9 +1515,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get rpeTooltip => 'Percepção subjetiva de esforço';
-
-  @override
   String get last30Days => '30d';
 
   @override
@@ -1611,22 +1605,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get markSetAsDonePredictedPr =>
       'Marcar série como concluída — recorde previsto';
-
-  @override
-  String rpeValue(int value) {
-    return 'RPE $value. Toque para alterar.';
-  }
-
-  @override
-  String get setRpe => 'Definir RPE';
-
-  @override
-  String get rpeLabel => 'RPE';
-
-  @override
-  String rpeMenuItem(int value) {
-    return 'RPE $value';
-  }
 
   @override
   String get reorderExercisesTooltip => 'Reordenar exercícios';
