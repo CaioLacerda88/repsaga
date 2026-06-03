@@ -162,7 +162,7 @@ void main() {
           find.bySemanticsIdentifier('codex-nav-stats'),
         );
         expect(
-          node.hasFlag(SemanticsFlag.isButton),
+          node.flagsCollection.isButton,
           isTrue,
           reason:
               'CodexNavRow must emit button:true so Playwright clicks are '

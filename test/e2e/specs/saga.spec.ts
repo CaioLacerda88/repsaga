@@ -611,15 +611,19 @@ test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
     });
 
     // Pre-selection proof: the VitalityTable row for `back` must be marked
-    // selected. `vitalityTable.dart` sets `Semantics(selected: isSelected)`
-    // on the row whose body part equals `_selectedBodyPart`, which is
-    // initialised from `widget.initialBodyPart` — the value derived from
-    // the `body_part` query param in the route builder. If the query param
-    // did not reach the screen, chest (the default) would be selected
-    // instead and `[aria-selected="true"]` on `vitality-row-back` would
-    // never appear.
+    // selected. `vitalityTable.dart` sets `Semantics(button: true, selected:
+    // isSelected)` on the row whose body part equals `_selectedBodyPart`,
+    // which is initialised from `widget.initialBodyPart` — derived from the
+    // `body_part` query param. If the param did not reach the screen, chest
+    // (the default) would be selected instead.
+    //
+    // Flutter web's Selectable AOM bridge emits `aria-current` (NOT
+    // `aria-selected` / `aria-checked`) for `Semantics(selected:)` on a
+    // button-role node. Same lesson as PR 33d SegmentedButton (profile.spec.ts
+    // weight unit toggle). Use toHaveAttribute on the bare identifier
+    // selector so the attribute value is matched (not the locator).
     await expect(
-      page.locator(`${SAGA.vitalityRow('back')}[aria-selected="true"]`).first(),
-    ).toBeVisible({ timeout: 10_000 });
+      page.locator(SAGA.vitalityRow('back')).first(),
+    ).toHaveAttribute('aria-current', 'true', { timeout: 10_000 });
   });
 });
