@@ -257,8 +257,26 @@ test.describe('Profile — weight unit', { tag: '@smoke' }, () => {
     page,
   }) => {
     // Step 1: Verify the kg and lbs options are visible on ProfileSettingsScreen.
-    await expect(page.locator(PROFILE.kgOption).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(PROFILE.lbsOption).first()).toBeVisible({ timeout: 10_000 });
+    // Initial baseline: kg is selected. `aria-current="true"` on kg and
+    // `aria-current="false"` on lbs. Flutter's SegmentedButton wraps each
+    // segment in `MergeSemantics + Semantics(selected: segmentSelected,
+    // inMutuallyExclusiveGroup: true)`. The outer `selected:` flag merges
+    // INTO our identifier nodes via MergeSemantics. Because the segment role
+    // is `button` (not `row`/`tab`) and `checked:` is unset, Flutter web's
+    // Selectable behavior emits `aria-current` (not `aria-selected` /
+    // `aria-checked`). See `flutter_web_sdk/.../semantics/checkable.dart`
+    // (Selectable.update — line 168 for non-row/tab roles) and
+    // `material/segmented_button.dart:632-637` (the MergeSemantics wrapper).
+    await expect(page.locator(PROFILE.kgOption).first()).toHaveAttribute(
+      'aria-current',
+      'true',
+      { timeout: 10_000 },
+    );
+    await expect(page.locator(PROFILE.lbsOption).first()).toHaveAttribute(
+      'aria-current',
+      'false',
+      { timeout: 10_000 },
+    );
 
     // Step 2: Tap lbs to select it.
     await page.locator(PROFILE.lbsOption).first().click();
@@ -274,14 +292,21 @@ test.describe('Profile — weight unit', { tag: '@smoke' }, () => {
     // Step 5: Navigate back to profile settings.
     await navigateToProfileSettings(page);
 
-    // Step 6: Assert lbs is still the selected unit — the selector must be
-    // visible, confirming the persistence survived the navigation round-trip.
-    // Behavior contract: the user sees the lbs option as the active selection
-    // without any action — the unit was saved to the profile.
-    await expect(page.locator(PROFILE.lbsOption).first()).toBeVisible({ timeout: 10_000 });
-    // kg option must still exist (both options always render, selection is a
-    // visual state — not a conditional mount/unmount).
-    await expect(page.locator(PROFILE.kgOption).first()).toBeVisible({ timeout: 5_000 });
+    // Step 6: Assert lbs is the SELECTED unit (not merely mounted — both
+    // segments are always mounted in a SegmentedButton). Behavior contract:
+    // the user sees lbs as the active selection without any action, and kg
+    // as the inactive one — the unit was saved to the profile and survives
+    // unmount/remount.
+    await expect(page.locator(PROFILE.lbsOption).first()).toHaveAttribute(
+      'aria-current',
+      'true',
+      { timeout: 10_000 },
+    );
+    await expect(page.locator(PROFILE.kgOption).first()).toHaveAttribute(
+      'aria-current',
+      'false',
+      { timeout: 5_000 },
+    );
   });
 });
 

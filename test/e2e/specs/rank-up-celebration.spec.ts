@@ -679,7 +679,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     );
   });
 
-  test('should cap celebration queue at 3 overlays and show overflow card for remaining rank-ups', async ({
+  test('should record exact per-body-part XP totals after a 6-rank-up overflow finish', async ({
     page,
   }) => {
     // The 4-set workout below + queue drain + overflow-card mount comfortably

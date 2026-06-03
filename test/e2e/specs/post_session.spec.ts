@@ -25,7 +25,11 @@ import {
 import { WORKOUT, POST_SESSION, NAV } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
-import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
+import {
+  getAdminClient,
+  getUserIdByEmail,
+  seedPrForUser,
+} from '../helpers/test-data-reset';
 
 async function reseedDebriefUser(): Promise<void> {
   const admin = getAdminClient();
@@ -246,8 +250,70 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
 // sufficiently long timeout (45 s) to cover the full cinematic playthrough.
 // =============================================================================
 
+// Reseed the smokePR user back to the canonical baseline (matches
+// `reseedSmokePrUser` in personal-records.spec.ts):
+//   - cleanFreshStateUser equivalent: workouts + RPG state cleared
+//   - bench press 100 kg x 5 max_weight PR re-seeded via seedPrForUser
+//
+// Why this is required: on `--repeat-each > 1` the first run logs bench 1500 kg
+// which writes `exercise_peak_loads.peak_weight = 1500` for this user. The
+// second run logs the same 1500 kg → no new peak → no PR event → B3 PR cut
+// never fires → 45s timeout. Wiping workouts is insufficient because
+// `exercise_peak_loads`, `personal_records`, and the RPG XP chain
+// (`xp_events`, `body_part_progress`, etc.) all survive workout deletion and
+// gate PR detection in `record_session_xp_batch`. Mirrors the cascade-aware
+// wipe used by the personal-records spec.
+async function reseedSmokePrUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(admin, getUser('smokePR').email);
+  if (!userId) return;
+
+  // PRs first — `personal_records.set_id` is ON DELETE SET NULL, so rows
+  // survive workout deletion and would shadow the baseline if not cleared.
+  await admin.from('personal_records').delete().eq('user_id', userId);
+  // Workouts cascade-delete workout_exercises + sets (FK ON DELETE CASCADE in
+  // migration 00001), so no need to wipe them individually.
+  await admin.from('workouts').delete().eq('user_id', userId);
+  await admin.from('weekly_plans').delete().eq('user_id', userId);
+
+  // RPG state — must be wiped or accumulated XP/peak loads break PR detection
+  // on the next run.
+  await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('user_xp').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Mark backfill_progress completed so SagaIntroGate.runRetroBackfill is a
+  // no-op on next login (matches personal-records reseed pattern).
+  const nowIso = new Date().toISOString();
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: nowIso,
+      updated_at: nowIso,
+      completed_at: nowIso,
+    },
+    { onConflict: 'user_id' },
+  );
+
+  // Re-seed the canonical bench press 100 kg x 5 PR (matches global-setup's
+  // seedPRData). The 1500 kg set in the test below unconditionally beats this.
+  await seedPrForUser(admin, userId, 'barbell_bench_press', 100, 5);
+}
+
 test.describe('Post-session B3 PR cut', { tag: '@smoke' }, () => {
   test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async () => {
+    await reseedSmokePrUser();
+  });
 
   test('should render the B3 PR cut when the finished workout contains a new personal record', async ({
     page,

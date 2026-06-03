@@ -1161,8 +1161,9 @@ test.describe('Exercise retirement', { tag: '@smoke' }, () => {
     await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
       timeout: 10_000,
     });
-    await page.locator(EXERCISE_PICKER.searchInput).click();
-    // Use flutterFill for the picker search (CanvasKit hidden input requires real key events).
+    // Use flutterFill for the picker search (CanvasKit hidden input requires
+    // real key events). flutterFill clicks the selector before filling, so no
+    // explicit `.click()` is needed beforehand.
     await flutterFill(page, EXERCISE_PICKER.searchInput, RETIREMENT_EXERCISE_NAME);
     await page.waitForTimeout(800);
 

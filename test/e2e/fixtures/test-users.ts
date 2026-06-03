@@ -249,10 +249,14 @@ export const TEST_USERS = {
     password: 'TestPassword123!',
   },
 
-  // rpgOverflowQueue: 6 body-parts each pre-seeded 1 XP below their next
-  // rank threshold. One workout with 1 set per body part → 6 rank-ups in one
-  // finish → cap-at-3 fires + CelebrationOverflowCard shows "3 more rank-ups".
-  // (Queue: 3 shown, 3 overflow, overflow count = 3 displayed as "3 more rank-ups".)
+  // rpgOverflowQueue: all 6 body parts pre-seeded at rank 5 / 354 XP — the
+  // midpoint of the deterministic R6-crossing window. One 4-exercise workout
+  // (bench / squat / row / OHP) spreads XP across all 6 body parts via
+  // primary + secondary attribution, producing exactly 6 single-rank-up
+  // crossings (no skips, no class change). The fixture pins the EXACT
+  // post-state per-body-part XP totals (1e-4 absolute) that the SQL chain
+  // (`record_session_xp_batch`) writes — Dart calculator + Python sim +
+  // fixture oracle parity gate. Used by rank-up-celebration.spec.ts S4.
   rpgOverflowQueue: {
     email: 'e2e-rpg-overflow-queue@test.local',
     password: 'TestPassword123!',
