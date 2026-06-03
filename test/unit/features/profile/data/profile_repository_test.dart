@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart' as app;
+import 'package:repsaga/core/observability/sentry_report.dart';
 import 'package:repsaga/features/profile/data/profile_repository.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:sentry_flutter/sentry_flutter.dart' show Breadcrumb;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 // ---------------------------------------------------------------------------
@@ -16,20 +18,91 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 // ---------------------------------------------------------------------------
 
 class _FakeSupabaseClient extends Fake implements supabase.SupabaseClient {
-  _FakeSupabaseClient(this._builder);
+  _FakeSupabaseClient(this._builder, {_FakeGoTrueClient? auth})
+    : _auth = auth ?? _FakeGoTrueClient();
   final _FakeQueryBuilder _builder;
+  final _FakeGoTrueClient _auth;
 
   @override
   supabase.SupabaseQueryBuilder from(String table) => _builder;
+
+  @override
+  supabase.GoTrueClient get auth => _auth;
+}
+
+/// Minimal [supabase.GoTrueClient] stand-in. Tracks `refreshSession` calls
+/// and lets the test decide whether the next refresh succeeds or throws.
+/// The refresh-retry helper does not read the returned [supabase.AuthResponse]
+/// payload, so we can return an empty `AuthResponse` on success (the helper
+/// only awaits it for ordering).
+class _FakeGoTrueClient extends Fake implements supabase.GoTrueClient {
+  _FakeGoTrueClient({this.refreshError});
+
+  /// When non-null, [refreshSession] completes with this error. When null,
+  /// it resolves with a no-op `AuthResponse` (the production helper does
+  /// not consume the response).
+  Exception? refreshError;
+
+  int refreshSessionCallCount = 0;
+
+  @override
+  Future<supabase.AuthResponse> refreshSession([String? refreshToken]) async {
+    refreshSessionCallCount++;
+    if (refreshError != null) throw refreshError!;
+    return supabase.AuthResponse(session: null, user: null);
+  }
 }
 
 // ignore: must_be_immutable
 class _FakeQueryBuilder extends Fake implements supabase.SupabaseQueryBuilder {
-  _FakeQueryBuilder({required this.singleResult, this.error});
+  _FakeQueryBuilder({
+    required this.singleResult,
+    this.error,
+    List<Exception?>? terminalErrorSequence,
+    Map<String, dynamic>? secondSingleResult,
+  }) : _terminalErrorSequence = List<Exception?>.of(
+         terminalErrorSequence ?? const <Exception?>[],
+       ),
+       _secondSingleResult = secondSingleResult;
 
   /// Returned by `.maybeSingle()` and `.single()`.
   final Map<String, dynamic>? singleResult;
+
+  /// Static error applied to every terminal call (legacy path used by the
+  /// pre-existing tests). When set, [_terminalErrorSequence] is ignored.
   final Exception? error;
+
+  /// Per-terminal-call error sequence. Used by the refresh-retry tests so
+  /// the first terminal call can throw while the second succeeds. Pop one
+  /// per `then` invocation on the terminal builder.
+  final List<Exception?> _terminalErrorSequence;
+
+  /// Row returned by the second terminal call when the first one throws via
+  /// [_terminalErrorSequence]. Defaults to [singleResult] when not set.
+  final Map<String, dynamic>? _secondSingleResult;
+
+  /// Counter of how many terminal calls have resolved. Used to pick which
+  /// element of [_terminalErrorSequence] applies and to swap in
+  /// [_secondSingleResult] for the post-retry call.
+  int _terminalCallIndex = 0;
+
+  /// Returns the (error, row) pair that the next terminal call must
+  /// resolve with. Drains one slot of [_terminalErrorSequence]; once
+  /// drained, falls back to [error] (the legacy single-error mode) and
+  /// [singleResult].
+  ({Exception? err, Map<String, dynamic>? row}) _nextTerminal() {
+    final index = _terminalCallIndex++;
+    Exception? err;
+    if (index < _terminalErrorSequence.length) {
+      err = _terminalErrorSequence[index];
+    } else {
+      err = error;
+    }
+    final row = index == 0
+        ? singleResult
+        : (_secondSingleResult ?? singleResult);
+    return (err: err, row: row);
+  }
 
   final List<String> calledMethods = [];
   Map<String, dynamic>? capturedUpsert;
@@ -97,10 +170,14 @@ class _FakeFilterBuilder<T> extends Fake
 
   @override
   Future<S> then<S>(FutureOr<S> Function(T) onValue, {Function? onError}) {
-    if (_parent.error != null) {
-      return Future<T>.error(_parent.error!).then<S>(onValue, onError: onError);
+    // `update().eq(...)` awaits the filter builder directly with no
+    // terminal `.single()` / `.maybeSingle()`. Treat that await as a
+    // terminal call so the per-call error sequence applies symmetrically
+    // to update-style mutations (used by the 42501 retry tests below).
+    final next = _parent._nextTerminal();
+    if (next.err != null) {
+      return Future<T>.error(next.err!).then<S>(onValue, onError: onError);
     }
-    // For update() the caller awaits the builder itself (no terminal method).
     return Future.value(onValue(<Map<String, dynamic>>[] as T));
   }
 }
@@ -114,10 +191,11 @@ class _FakeSingleBuilder<T> extends Fake
 
   @override
   Future<S> then<S>(FutureOr<S> Function(T) onValue, {Function? onError}) {
-    if (_parent.error != null) {
-      return Future<T>.error(_parent.error!).then<S>(onValue, onError: onError);
+    final next = _parent._nextTerminal();
+    if (next.err != null) {
+      return Future<T>.error(next.err!).then<S>(onValue, onError: onError);
     }
-    final result = _parent.singleResult as T;
+    final result = next.row as T;
     return Future.value(onValue(result));
   }
 }
@@ -404,6 +482,330 @@ void main() {
           () => repo.updateWeightUnit('user-1', 'kg'),
           throwsA(isA<app.AppException>()),
         );
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // refresh-and-retry on stale token (PR 2 — fix(auth): refresh session
+    // before authenticated mutations on stale token)
+    //
+    // Spec: BaseRepository.refreshAndRetry intercepts a PostgrestException
+    // with code '42501' (RLS rejected anon JWT) or an AuthException with
+    // code '401' on a mutation, calls GoTrueClient.refreshSession() once,
+    // and retries the action once. Second failure rethrows the ORIGINAL
+    // error (no double-wrap). Non-42501 / non-401 errors do NOT retry.
+    // Successful retry emits an `auth.session_refreshed_inline` Sentry
+    // breadcrumb so the trail tells us "this user dodged a 42501".
+    //
+    // These tests use the `_FakeQueryBuilder.terminalErrorSequence` channel
+    // to control per-call failure shape, and a `_FakeGoTrueClient` to
+    // observe the refresh call. Test seam `SentryReport.debugSetBreadcrumbFn`
+    // intercepts the breadcrumb path (mirrors the existing
+    // `debugSetCaptureFn` seam — added in this PR alongside the helper).
+    // -------------------------------------------------------------------
+    group('refresh-and-retry on stale token', () {
+      late List<Breadcrumb> breadcrumbs;
+
+      setUp(() {
+        breadcrumbs = <Breadcrumb>[];
+        SentryReport.setEnabled(true);
+        SentryReport.debugSetBreadcrumbFn(breadcrumbs.add);
+      });
+
+      tearDown(() {
+        SentryReport.debugSetBreadcrumbFn(null);
+      });
+
+      test('upsertProfile retries once on 42501 and returns the row from the '
+          'second attempt; refreshSession called exactly once; '
+          '`auth.session_refreshed_inline` breadcrumb fires', () async {
+        final auth = _FakeGoTrueClient();
+        final secondRow = _profileRow(id: 'user-1', displayName: 'Alice');
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(message: 'rls', code: '42501'),
+            null,
+          ],
+          secondSingleResult: secondRow,
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        final result = await repo.upsertProfile(
+          userId: 'user-1',
+          displayName: 'Alice',
+        );
+
+        expect(result.id, 'user-1');
+        expect(result.displayName, 'Alice');
+        // EXACT counts — first throws 42501, refresh fires once, second
+        // call returns the row. No third attempt.
+        expect(auth.refreshSessionCallCount, 1);
+        expect(builder._terminalCallIndex, 2);
+        // Breadcrumb fired exactly once on the successful retry, with
+        // the contract-pinned category + message.
+        expect(breadcrumbs, hasLength(1));
+        expect(breadcrumbs.single.category, 'auth');
+        expect(breadcrumbs.single.message, 'session_refreshed_inline');
+      });
+
+      test('upsertProfile rethrows ORIGINAL 42501 (no double-wrap) when '
+          'refreshSession itself fails', () async {
+        final auth = _FakeGoTrueClient(
+          refreshError: supabase.AuthApiException(
+            'refresh token revoked',
+            statusCode: '401',
+          ),
+        );
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(
+              message: 'permission denied for table profiles',
+              code: '42501',
+            ),
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        await expectLater(
+          () => repo.upsertProfile(userId: 'user-1', displayName: 'Alice'),
+          throwsA(
+            isA<app.DatabaseException>()
+                .having((e) => e.code, 'code', '42501')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'permission denied for table profiles',
+                ),
+          ),
+        );
+
+        expect(auth.refreshSessionCallCount, 1);
+        // Original action was NOT retried — only the first attempt fired.
+        expect(builder._terminalCallIndex, 1);
+        // No success breadcrumb because the retry never completed.
+        expect(breadcrumbs, isEmpty);
+      });
+
+      test('upsertProfile does NOT retry on a non-42501 PostgrestException '
+          '(e.g. 23505 unique violation)', () async {
+        final auth = _FakeGoTrueClient();
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(
+              message: 'duplicate key',
+              code: '23505',
+            ),
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        await expectLater(
+          () => repo.upsertProfile(userId: 'user-1', displayName: 'Alice'),
+          throwsA(
+            isA<app.DatabaseException>().having((e) => e.code, 'code', '23505'),
+          ),
+        );
+
+        // The non-RLS path must not call refreshSession at all — pinning
+        // an EXACT zero count protects the contract against accidental
+        // broadening of the retry trigger.
+        expect(auth.refreshSessionCallCount, 0);
+        expect(builder._terminalCallIndex, 1);
+        expect(breadcrumbs, isEmpty);
+      });
+
+      test(
+        'upsertProfile rethrows ORIGINAL 42501 when the retried call ALSO '
+        'fails with 42501 (bounded — exactly one retry, no infinite loop)',
+        () async {
+          final auth = _FakeGoTrueClient();
+          final builder = _FakeQueryBuilder(
+            singleResult: null,
+            terminalErrorSequence: const [
+              supabase.PostgrestException(
+                message: 'permission denied (first)',
+                code: '42501',
+              ),
+              supabase.PostgrestException(
+                message: 'permission denied (second)',
+                code: '42501',
+              ),
+            ],
+          );
+          final repo = ProfileRepository(
+            _FakeSupabaseClient(builder, auth: auth),
+          );
+
+          await expectLater(
+            () => repo.upsertProfile(userId: 'user-1', displayName: 'Alice'),
+            throwsA(
+              isA<app.DatabaseException>()
+                  .having((e) => e.code, 'code', '42501')
+                  // Original error surfaces — NOT the retry's error.
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    'permission denied (first)',
+                  ),
+            ),
+          );
+
+          expect(auth.refreshSessionCallCount, 1);
+          // Exactly two terminal calls — no third attempt.
+          expect(builder._terminalCallIndex, 2);
+          expect(breadcrumbs, isEmpty);
+        },
+      );
+
+      test('upsertProfile retries once on AuthException 401 (mirrors the 42501 '
+          'path — same single-shot refresh + retry contract)', () async {
+        final auth = _FakeGoTrueClient();
+        final secondRow = _profileRow(id: 'user-1', displayName: 'Alice');
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: [
+            supabase.AuthApiException('JWT expired', statusCode: '401'),
+            null,
+          ],
+          secondSingleResult: secondRow,
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        final result = await repo.upsertProfile(
+          userId: 'user-1',
+          displayName: 'Alice',
+        );
+
+        expect(result.id, 'user-1');
+        expect(auth.refreshSessionCallCount, 1);
+        expect(builder._terminalCallIndex, 2);
+        expect(breadcrumbs.single.message, 'session_refreshed_inline');
+      });
+
+      test(
+        'upsertProfile happy path — no error, no retry, no refresh, no '
+        'breadcrumb (refresh path is strictly opt-in on RLS/401 failure)',
+        () async {
+          final auth = _FakeGoTrueClient();
+          final repo = ProfileRepository(
+            _FakeSupabaseClient(
+              _builderFor(
+                row: _profileRow(id: 'user-1', displayName: 'Alice'),
+              ),
+              auth: auth,
+            ),
+          );
+
+          final result = await repo.upsertProfile(
+            userId: 'user-1',
+            displayName: 'Alice',
+          );
+
+          expect(result.id, 'user-1');
+          expect(auth.refreshSessionCallCount, 0);
+          expect(breadcrumbs, isEmpty);
+        },
+      );
+
+      test('updateTrainingFrequency retries once on 42501 — same contract as '
+          'upsertProfile applies to every mutation method', () async {
+        final auth = _FakeGoTrueClient();
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(message: 'rls', code: '42501'),
+            null,
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        await repo.updateTrainingFrequency('user-1', 4);
+
+        expect(auth.refreshSessionCallCount, 1);
+        expect(builder._terminalCallIndex, 2);
+        expect(breadcrumbs.single.message, 'session_refreshed_inline');
+      });
+
+      test('updateWeightUnit retries once on 42501 — same contract as '
+          'upsertProfile applies to every mutation method', () async {
+        final auth = _FakeGoTrueClient();
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(message: 'rls', code: '42501'),
+            null,
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        await repo.updateWeightUnit('user-1', 'lbs');
+
+        expect(auth.refreshSessionCallCount, 1);
+        expect(builder._terminalCallIndex, 2);
+        expect(breadcrumbs.single.message, 'session_refreshed_inline');
+      });
+
+      test(
+        'updateLocale retries once on 42501 — same contract as upsertProfile '
+        'applies to every mutation method',
+        () async {
+          final auth = _FakeGoTrueClient();
+          final builder = _FakeQueryBuilder(
+            singleResult: null,
+            terminalErrorSequence: const [
+              supabase.PostgrestException(message: 'rls', code: '42501'),
+              null,
+            ],
+          );
+          final repo = ProfileRepository(
+            _FakeSupabaseClient(builder, auth: auth),
+          );
+
+          await repo.updateLocale('user-1', 'pt');
+
+          expect(auth.refreshSessionCallCount, 1);
+          expect(builder._terminalCallIndex, 2);
+          expect(breadcrumbs.single.message, 'session_refreshed_inline');
+        },
+      );
+
+      test('getProfile (read) is NOT wrapped — a 42501 surfaces immediately '
+          'with no refresh attempt (RLS on SELECT just returns no rows in '
+          'practice; refresh-retry only applies to mutations)', () async {
+        final auth = _FakeGoTrueClient();
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            supabase.PostgrestException(message: 'rls', code: '42501'),
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
+
+        await expectLater(
+          () => repo.getProfile('user-1'),
+          throwsA(isA<app.DatabaseException>()),
+        );
+
+        expect(auth.refreshSessionCallCount, 0);
+        expect(builder._terminalCallIndex, 1);
+        expect(breadcrumbs, isEmpty);
       });
     });
   });

@@ -8,6 +8,31 @@ class ProfileRepository extends BaseRepository {
 
   final supabase.SupabaseClient _client;
 
+  /// Shared refresh callback for every mutation method below. Hits the
+  /// repository's own client's auth instance (no `Supabase.instance`
+  /// singleton coupling — keeps the class testable with a fake
+  /// `SupabaseClient`).
+  Future<void> _refreshSession() async {
+    await _client.auth.refreshSession();
+  }
+
+  /// Wraps an authenticated mutation with [BaseRepository.refreshAndRetry]
+  /// AND the standard [BaseRepository.mapException] error-mapping +
+  /// connectivity-recorder side effects. The refresh-and-retry layer sits
+  /// INSIDE [mapException] so that:
+  ///   * The retry sees raw [supabase.PostgrestException] / `AuthException`
+  ///     codes (the `42501` / `401` shapes the helper triggers on).
+  ///   * If both attempts fail, the original raw error reaches [mapException]
+  ///     and gets the normal mapping / Sentry capture / recorder treatment.
+  ///   * Read methods (e.g. `getProfile`) deliberately skip this wrapper:
+  ///     RLS on a SELECT just returns no rows in practice, so the retry
+  ///     adds latency for no UX benefit.
+  Future<T> _withStaleTokenRetry<T>(Future<T> Function() action) {
+    return mapException(
+      () => refreshAndRetry<T>(action: action, refresh: _refreshSession),
+    );
+  }
+
   Future<Profile?> getProfile(String userId) {
     return mapException(() async {
       final data = await _client
@@ -31,7 +56,7 @@ class ProfileRepository extends BaseRepository {
     Gender? gender,
     String? avatarUrl,
   }) {
-    return mapException(() async {
+    return _withStaleTokenRetry(() async {
       final updates = <String, dynamic>{
         'id': userId,
         // ignore: use_null_aware_elements
@@ -75,7 +100,7 @@ class ProfileRepository extends BaseRepository {
   }
 
   Future<void> updateTrainingFrequency(String userId, int frequency) {
-    return mapException(() async {
+    return _withStaleTokenRetry(() async {
       await _client
           .from('profiles')
           .update({'training_frequency_per_week': frequency})
@@ -84,7 +109,7 @@ class ProfileRepository extends BaseRepository {
   }
 
   Future<void> updateWeightUnit(String userId, String unit) {
-    return mapException(() async {
+    return _withStaleTokenRetry(() async {
       await _client
           .from('profiles')
           .update({'weight_unit': unit})
@@ -93,7 +118,7 @@ class ProfileRepository extends BaseRepository {
   }
 
   Future<void> updateLocale(String userId, String locale) {
-    return mapException(() async {
+    return _withStaleTokenRetry(() async {
       await _client
           .from('profiles')
           .update({'locale': locale})
