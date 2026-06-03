@@ -70,15 +70,17 @@ class AuthRepository extends BaseRepository {
     required String password,
     String? locale,
   }) {
+    // Build the metadata payload explicitly: null when no locale was passed
+    // (so the underlying signUp gets its default `data: null` and we leave
+    // `user_metadata` untouched server-side — never overwrite OAuth/admin-
+    // set metadata), or a single-key map when locale is set. Typed
+    // `Map<String, dynamic>?` lines up with `GoTrueClient.signUp(data:)`.
+    final Map<String, dynamic>? localeData = locale == null
+        ? null
+        : {'locale': locale};
     return mapException(
       () => _auth
-          .signUp(
-            email: email,
-            password: password,
-            // Pass `data` only when we have a locale; omitting the named arg
-            // keeps `user_metadata` untouched on the server side.
-            data: locale == null ? null : {'locale': locale},
-          )
+          .signUp(email: email, password: password, data: localeData)
           .timeout(_authTimeout),
     );
   }

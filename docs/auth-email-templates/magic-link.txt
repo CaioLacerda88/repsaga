@@ -1,4 +1,4 @@
-{{ if eq .Data.locale "pt" }}
+{{- if eq .Data.locale "pt" -}}
 Seu link de acesso ao RepSaga
 
 Use o link abaixo para entrar no RepSaga. Ele expira em alguns minutos:
@@ -6,7 +6,7 @@ Use o link abaixo para entrar no RepSaga. Ele expira em alguns minutos:
 {{ .ConfirmationURL }}
 
 Se você não pediu este link, ignore este e-mail.
-{{ else }}
+{{- else -}}
 Your RepSaga sign-in link
 
 Use the link below to sign in to RepSaga. It expires in a few minutes:
@@ -14,4 +14,4 @@ Use the link below to sign in to RepSaga. It expires in a few minutes:
 {{ .ConfirmationURL }}
 
 If you didn't request this link, you can safely ignore this email.
-{{ end }}
+{{- end }}

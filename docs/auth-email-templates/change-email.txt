@@ -1,4 +1,4 @@
-{{ if eq .Data.locale "pt" }}
+{{- if eq .Data.locale "pt" -}}
 Confirme seu novo e-mail
 
 Você pediu para alterar o endereço de e-mail da sua conta RepSaga. Use o link abaixo para confirmar:
@@ -6,7 +6,7 @@ Você pediu para alterar o endereço de e-mail da sua conta RepSaga. Use o link 
 {{ .ConfirmationURL }}
 
 Se você não pediu esta alteração, ignore este e-mail — seu endereço atual continua o mesmo.
-{{ else }}
+{{- else -}}
 Confirm your new email address
 
 You requested a change to the email address on your RepSaga account. Use the link below to confirm:
@@ -14,4 +14,4 @@ You requested a change to the email address on your RepSaga account. Use the lin
 {{ .ConfirmationURL }}
 
 If you didn't request this change, you can safely ignore this email — your current address will remain unchanged.
-{{ end }}
+{{- end }}

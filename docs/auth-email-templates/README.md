@@ -58,7 +58,7 @@ consequences:
 
 ## Verification checklist
 
-When updating Supabase templates from this repo, verify all three branches
+When updating Supabase templates from this repo, verify all four cases
 land correctly before signing off the rollout:
 
 - [ ] **Default branch (no `.Data.locale`).** Trigger a flow against a user
@@ -75,6 +75,14 @@ land correctly before signing off the rollout:
       `signUp(..., data: {'locale': 'en'})` and confirm the **English** body
       and subject render. This proves the `else` branch covers both the
       explicit-en case and the no-metadata case identically.
+- [ ] **Pre-existing user (created before this PR).** Sign in as a user
+      created before this PR shipped (so their `auth.users` row has no
+      `user_metadata.locale`) and request a password reset. Confirm the
+      **English** body and subject render — regardless of what
+      `profiles.locale` says for that user. This pins the lower-bound
+      behavior the "Pre-existing users" edge case (below) documents:
+      legacy accounts permanently fall into the `else` branch until a
+      back-fill is applied.
 
 For a quick local check that doesn't require deploying to the hosted
 Supabase project, run the relevant Dart unit test:
@@ -90,16 +98,20 @@ passed) — so a green test run guarantees the Dart side will hand the
 correct payload to Supabase. The template-side rendering still needs an
 end-to-end send check the first time you push template changes.
 
-## Known edge case
+## Known edge cases
 
-**Google OAuth signups have no `user_metadata.locale`.** Supabase's OAuth
-provider flow does not let the client write arbitrary `user_metadata` at
-authorization time — the metadata Google returns (name, picture, email_verified)
-is merged in, but `locale` from the RepSaga app is not. Consequently, the
-first auth email a Google-OAuth user might receive (e.g. magic link, password
-reset after they add a password) will fall into the `{{ else }}` branch and
-render in English, even if their `profiles.locale` row in the database is
-`pt`.
+Two distinct populations land in the `{{ else }}` (English) branch despite
+the routing being correctly wired:
+
+### Google OAuth signups
+
+**OAuth signups have no `user_metadata.locale`.** Supabase's OAuth provider
+flow does not let the client write arbitrary `user_metadata` at authorization
+time — the metadata Google returns (name, picture, email_verified) is merged
+in, but `locale` from the RepSaga app is not. Consequently, the first auth
+email a Google-OAuth user might receive (e.g. magic link, password reset
+after they add a password) will fall into the `{{ else }}` branch and render
+in English, even if their `profiles.locale` row in the database is `pt`.
 
 This is acceptable for v1 because:
 
@@ -108,10 +120,39 @@ This is acceptable for v1 because:
 - The fallback language is English, which is the universally safe default for
   any auth flow.
 
-If we want Portuguese auth emails for OAuth users, the fix is a post-signup
-Edge Function that copies `profiles.locale` → `auth.users.user_metadata.locale`
-once the profile row is created (or updated). This is flagged as a **Launch
-Phase scope-expansion candidate**. Do not build it in this PR.
+### Pre-existing users (created before this PR)
+
+**Anyone who signed up before this PR ships has no
+`user_metadata.locale` on their `auth.users` row.** This PR writes locale
+into `user_metadata` only at signup time via the new
+`AuthRepository.signUpWithEmail(locale:)` parameter — it does NOT
+retroactively populate metadata for accounts that already exist. The
+practical consequence: every legacy user will permanently fall into the
+`{{ else }}` branch on password reset, email change, or any other auth
+flow triggered against their account — receiving English emails regardless
+of what `profiles.locale` currently says for them — until a back-fill is
+applied. Net-new signups created after this PR merges are unaffected.
+
+### Shared fix for both edge cases
+
+Both edge cases collapse to the same root cause —
+`auth.users.raw_user_meta_data` doesn't contain a `locale` key — and
+therefore share a single fix: a post-signup / one-time back-fill Edge
+Function that copies `profiles.locale` →
+`auth.users.raw_user_meta_data.locale` for every user whose
+`profiles.locale` is set and whose `auth.users.raw_user_meta_data->>'locale'`
+is `NULL`. Running it once back-fills the legacy population; wiring it as a
+post-signup hook covers future OAuth signups.
+
+A DB trigger on `auth.users` is **not viable** here — the `profiles` row
+does not exist yet at `auth.users` insert time (our `handle_new_user`
+trigger creates it on the same transaction, but the order is `auth.users
+INSERT` → trigger fires → `profiles INSERT`), so a `BEFORE INSERT` trigger
+cannot read `profiles.locale`. The Edge Function approach is the only
+viable path.
+
+Both edge cases are flagged as **Launch Phase scope-expansion candidates**.
+Do not build the back-fill / hook in this PR.
 
 ## Updating templates in Supabase
 
@@ -121,5 +162,7 @@ migration. After editing a file here:
 1. Open Supabase Dashboard → Authentication → Email templates.
 2. For each updated flow, paste the new subject heading (from the table
    above) and the new body (full file contents).
-3. Run the three verification cases above on a staging or scratch user.
+3. Run the four verification cases above on a staging or scratch user
+   (including the pre-existing-user case — that one needs a user whose
+   `auth.users` row predates this PR's merge).
 4. Squash-merge the PR once template behavior is confirmed in the Dashboard.

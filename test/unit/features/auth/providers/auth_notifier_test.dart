@@ -9,6 +9,7 @@ import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/auth/providers/notifiers/auth_notifier.dart';
+import 'package:repsaga/features/auth/providers/signup_state_provider.dart';
 import 'package:repsaga/features/auth/utils/auth_error_messages.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
@@ -83,11 +84,26 @@ void main() {
 
   group('AuthNotifier.signUpWithEmail', () {
     // Round 4.5 — locale-routed email templates.
-    // The notifier reads `localeProvider` synchronously at call time and
-    // forwards `localeProvider.state.languageCode` to the repository as
-    // `locale:` so Supabase stores it on `user_metadata.locale`. The Go
-    // template in `docs/auth-email-templates/*.html` then routes between
-    // en and pt-BR based on that value.
+    //
+    // Two assertions per test, both required to pin the contract:
+    //
+    //  1. **Wiring trace** (`verify(... locale: 'pt')`): the notifier MUST
+    //     forward the app locale through the repo. Without this, a future
+    //     refactor that drops the forwarding line would still pass the
+    //     user-visible assertion below (because `signupPendingEmailProvider`
+    //     transitions whether locale is forwarded or not), but the email
+    //     templates would silently fall back to English for Brazilian users.
+    //
+    //  2. **User-visible state** (`signupPendingEmailProvider == 'a@b.com'`):
+    //     the notifier MUST reach the post-await branch that sets the
+    //     pending-email state — the surface the "check your email" screen
+    //     reads. Without this, a future refactor that throws inside the
+    //     locale read or short-circuits the AsyncValue.guard could leave
+    //     `signupPendingEmailProvider == null` while still recording a call
+    //     to the mock — the verify alone wouldn't catch it.
+    //
+    // Behavior-not-wiring per CLAUDE.md → Testing: the verify guards the
+    // forwarding hook, the state-pin guards the surfaced UX. Both must hold.
     test('forwards the app locale to the repository as locale:', () async {
       when(
         () => mockRepo.signUpWithEmail(
@@ -122,6 +138,12 @@ void main() {
           locale: 'pt',
         ),
       ).called(1);
+
+      // User-visible outcome: the notifier reached the post-signup branch
+      // that lifts the pending email into the surface the "check your
+      // inbox" screen watches. A null here would mean the notifier
+      // short-circuited (e.g. swallowed an exception in AsyncValue.guard).
+      expect(container.read(signupPendingEmailProvider), 'a@b.com');
     });
 
     test('forwards "en" when the app locale is English', () async {
@@ -158,6 +180,11 @@ void main() {
           locale: 'en',
         ),
       ).called(1);
+
+      // User-visible outcome — same contract as the 'pt' path: the post-
+      // signup state-lift to `signupPendingEmailProvider` must fire so the
+      // "check your inbox" screen has an email to display.
+      expect(container.read(signupPendingEmailProvider), 'a@b.com');
     });
   });
 
