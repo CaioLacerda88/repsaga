@@ -22,6 +22,7 @@ import {
   EXERCISE_LIST,
   EXERCISE_DETAIL,
   EXERCISE_PICKER,
+  HOME,
   NAV,
   WORKOUT,
 } from '../helpers/selectors';
@@ -1147,7 +1148,7 @@ test.describe('Exercise retirement', { tag: '@smoke' }, () => {
 
     // The home free-workout hero should be visible (lapsed state).
     // Open the exercise picker by starting the workout flow.
-    const homeHero = page.locator('[flt-semantics-identifier="home-action-hero-free-workout"]');
+    const homeHero = page.locator(HOME.actionHeroFreeWorkout);
     await expect(homeHero).toBeVisible({ timeout: 15_000 });
     await homeHero.click();
 
