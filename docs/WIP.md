@@ -900,139 +900,93 @@ Stage 2 is user-facing, doesn't need its own implementation plan. Orchestrator o
 
 ---
 
-# Phase 33 — PR 33d (RPG / share + post-session E2E) Implementation Plan
+# Phase 33 — PR 33e (Auth/profile Saga selector) Implementation Plan
 
-**Goal:** Land 3 IMPORTANT + 1 folded NICE-TO-HAVE per the Phase 33 audit. Pure E2E batch — no production-code changes.
+**Goal:** Land 1 IMPORTANT + 1 folded NICE-TO-HAVE per the Phase 33 audit. Smallest fix-PR of the wave.
 
-**Architecture:** 3 new tests + 1 unskip across `post_session.spec.ts`, `exercises.spec.ts`, `profile.spec.ts`, `rank-up-celebration.spec.ts`. One new test user with seeded user-created exercise for retirement coverage (finding-043). Selectors go in `helpers/selectors.ts` per convention.
+**Architecture:** Apply `semantics-identifier-pair-rule` cluster fix to `CodexNavRow` (the 3 Stats/Titles/History codex rows on `CharacterSheetScreen`). Unskip `saga.spec.ts:591` test using `flutter-web-url-assertion` cluster template (content-visibility instead of URL assertion).
 
 **Spec reference:** `docs/pre-launch-audit.md`
-- finding-042 (line 724) — B3 PR cut in `post_session.spec.ts`
-- finding-043 (735) — Exercise retirement in `exercises.spec.ts` (new user fixture)
-- finding-045 (757) — Weight unit toggle in `profile.spec.ts`
-- finding-055 (871) — Unskip `rank-up-celebration.spec.ts:897` (overflow card → /profile; PR 30a is shipped)
+- finding-002 (line 132) — `CodexNavRow` Semantics pair-rule
+- finding-056 (882) — Unskip 26-tap-routing-e2e
 
-**Branch:** `feature/phase-33d-rpg-share`
+**Branch:** `feature/phase-33e-saga-selector`
 
 ---
 
 ## Files
 
-### E2E specs
-- **Modify:** `test/e2e/specs/post_session.spec.ts` — finding-042 B3 PR cut test
-- **Modify:** `test/e2e/specs/exercises.spec.ts` — finding-043 retirement describe block
-- **Modify:** `test/e2e/specs/profile.spec.ts` — finding-045 weight unit toggle test
-- **Modify:** `test/e2e/specs/rank-up-celebration.spec.ts` — finding-055 unskip (`:897`)
-
-### Fixtures + seed (finding-043 only)
-- **Modify:** `test/e2e/fixtures/test-users.ts` — add new user (e.g., `smokeExerciseRetirement`)
-- **Modify:** `test/e2e/global-setup.ts` — seed the new user + insert a user-created exercise row
-
-### Selectors (verify exist; add if missing)
-- **Modify:** `test/e2e/helpers/selectors.ts` — `POST_SESSION.b3Pr` likely exists per finding text; retirement/toggle/overflow may need additions
-
-### Closeout (first commit)
-- **Modify:** `docs/WIP.md` — strip PR 33c plan, append this plan
-- **Modify:** `docs/PROJECT.md` §3 — flip 33c PENDING → DONE (#294)
+- **Modify:** `lib/features/rpg/ui/widgets/codex_nav_row.dart` (line ~40) — add `container: true` + `explicitChildNodes: true` to the conditional `Semantics` wrap
+- **Modify:** `test/e2e/specs/saga.spec.ts` (line ~591) — unskip + replace URL assertion with content-visibility (`SAGA.statsDeepDiveScreen` visible)
+- **Closeout:** `docs/WIP.md` strip PR 33d plan + append this plan; `docs/PROJECT.md` §3 flip 33d PENDING → DONE (#295)
 
 ---
 
 ## Checklist
 
-- [ ] Task 1 — PR 33c closeout + PR 33d plan commit
-- [ ] Task 2 — finding-042 B3 PR cut test (post_session.spec.ts)
-- [ ] Task 3 — finding-043 exercise retirement test + new user fixture + seed (exercises.spec.ts)
-- [ ] Task 4 — finding-045 weight unit toggle test (profile.spec.ts)
-- [ ] Task 5 — finding-055 unskip overflow-card-tap test (rank-up-celebration.spec.ts:897)
-- [ ] Task 6 — Verify (analyze + tests + parse) + commit + reviewer + qa + push + CI + admin-merge
+- [ ] Task 1 — PR 33d closeout + PR 33e plan commit
+- [ ] Task 2 — finding-002 `CodexNavRow` Semantics pair-rule fix
+- [ ] Task 3 — finding-056 unskip `saga.spec.ts:591`
+- [ ] Task 4 — Verify + commit + reviewer + QA + push + CI + admin-merge
 
 ---
 
-## Task 2 — finding-042 B3 PR cut
+## Task 2 — finding-002 Semantics pair-rule
 
-**Files:**
-- Modify: `test/e2e/specs/post_session.spec.ts`
+**File:** `lib/features/rpg/ui/widgets/codex_nav_row.dart`
 
-Audit recommendation: assert B3 PR cut renders for a PR-only workout. Need a user seeded with prior PR (baseline lower weight) where the next workout's set IS a PR.
+Audit recommendation:
 
-- [ ] **Step 1: Identify the right user fixture.** Read `global-setup.ts` for users with prior PR baseline. Likely `smokePR` or `fullPR` — verify by inspecting seed data shape (a `personal_records` row for an exercise at lower weight than what the test will log).
+```dart
+Semantics(
+  container: true,
+  explicitChildNodes: true,
+  identifier: semanticIdentifier!,
+  child: inner,
+)
+```
 
-- [ ] **Step 2: Selector check** — `POST_SESSION.b3Pr` likely exists. Grep selectors.ts; add if missing.
+Cluster: `semantics-identifier-pair-rule`. The cluster states: "every `Semantics(identifier:)` exposed for E2E must carry `container:true + explicitChildNodes:true` AND be placed on the actual tap target."
 
-- [ ] **Step 3: Test body** — login as seeded user, start workout, log a set above baseline weight, finish workout, wait for cinematic to advance through B1/B2/B3, assert `POST_SESSION.b3Pr` visible. Reuse the existing post-session helpers (`finishWorkout` from `helpers/workout.ts`).
+Verify:
+- The `Semantics` wrap is on the tap target (the InkWell or button widget), not a passive container
+- `explicitChildNodes: true` prevents inner `Text` from merging up into the same AOM node
+- Add inline cluster ref comment per CLAUDE.md Code Style A3
 
-- [ ] **Step 4: Behavior-not-wiring** — assert the B3 PR cut element specifically, not just "some post-session element rendered."
+**Tests to update/add:**
+- Widget test: pump `CharacterSheetScreen`, assert each `CodexNavRow` mounts with a stable `Semantics(identifier:)` node across rebuilds (the original failure mode was identifier elision on rebuild — pump twice, assert identifier persists).
+- Location: `test/widget/features/rpg/widgets/codex_nav_row_test.dart` (extend or create).
 
----
+## Task 3 — finding-056 unskip saga test
 
-## Task 3 — finding-043 exercise retirement
+**File:** `test/e2e/specs/saga.spec.ts` line ~591
 
-**Files:**
-- Modify: `test/e2e/specs/exercises.spec.ts`
-- Modify: `test/e2e/fixtures/test-users.ts`
-- Modify: `test/e2e/global-setup.ts`
+Audit recommendation: unskip; replace `expect(page).toHaveURL(...)` with content-visibility assertion (`SAGA.statsDeepDiveScreen` visible). Cluster `flutter-web-url-assertion`.
 
-PR 32h introduced user-created exercise retirement. Retired exercises should be hidden from workout pickers.
+User fixture: `rpgFoundationUser` (existing — verify).
 
-- [ ] **Step 1: Add new user fixture** — `smokeExerciseRetirement` in `test-users.ts`. Read existing user definitions for the pattern.
+Test name (audit suggestion): `should open stats deep-dive when a body-part row is tapped`.
 
-- [ ] **Step 2: Seed function in `global-setup.ts`** — insert a user-created exercise (`exercises` row with `created_by = userId`, not `is_default`) for this user.
+After unskipping, run the test. If it FAILS for a real reason (e.g., the row isn't tappable, or the deep-dive doesn't open), that's PROD-CODE bug — surface as blocker per `feedback_visual_verification_must_not_defer_bugs`.
 
-- [ ] **Step 3: Selector check** — verify selectors exist for: exercise detail screen retirement action, workout exercise picker, search input. Read `exercises.spec.ts` for existing patterns. Add if missing.
+## Task 4 — Verify + ship
 
-- [ ] **Step 4: Test body** — login, navigate to /exercises, find the user-created exercise, navigate to its detail screen, tap retire, return to workout exercise picker, search for the exercise, assert it does NOT appear.
+```bash
+export PATH="/c/flutter/bin:$PATH"
+dart format .
+dart analyze --fatal-infos lib/ test/
+flutter test --exclude-tags integration --exclude-tags golden --reporter=compact 2>&1 | tail -5
+cd test/e2e && npx playwright test --list 2>&1 | tail -5
+bash scripts/check_no_developer_log.sh
+bash scripts/check_reward_accent.sh
+bash scripts/check_hardcoded_colors.sh
+bash scripts/check_typography_call_sites.sh
+```
 
-- [ ] **Step 5: Cleanup** — the retire action persists to DB. If we want this test idempotent, may need a teardown to un-retire. OR use a per-test user. Pattern: read other test-isolation strategies in `exercises.spec.ts`.
+Commit, push, reviewer, QA, PR, CI, admin-merge.
 
----
+## PR 33e Notes
 
-## Task 4 — finding-045 weight unit toggle
-
-**Files:**
-- Modify: `test/e2e/specs/profile.spec.ts`
-
-`PROFILE.kgOption` / `PROFILE.lbsOption` selectors already exist per finding-045 text.
-
-- [ ] **Step 1: User fixture** — audit suggests `smokeProfileWeeklyGoal` (existing). Verify it's available.
-
-- [ ] **Step 2: Test body** — login, navigate to profile settings, tap weight unit row, tap lbs option, navigate away (e.g., to active workout or exercises), then back to profile settings, assert lbs is still selected. Cross-screen persistence is the key contract.
-
-- [ ] **Step 3: Restore default** — if the test mutates persisted state, may need to toggle back to kg as cleanup. OR per-test user.
-
----
-
-## Task 5 — finding-055 unskip overflow card
-
-**Files:**
-- Modify: `test/e2e/specs/rank-up-celebration.spec.ts` (line ~897)
-
-The test is `test.skip()`'d with stale comment "PR 30a will reintroduce..." — PR 30a shipped May 2026. User: `rpgOverflowTapCard` (existing).
-
-- [ ] **Step 1: Read the skipped test** to understand its intended assertion (overflow card tap → /profile navigation).
-
-- [ ] **Step 2: Unskip + adapt** — replace any obsolete selectors with current ones. Use content-visibility assertions per `flutter-web-url-assertion` cluster.
-
-- [ ] **Step 3: Verify the `rpgOverflowTapCard` user is still seeded correctly** in `global-setup.ts`.
-
----
-
-## Task 6 — Verify + ship
-
-- [ ] **Step 1: Run analyze + dart test (changes are E2E-only so Dart suite is no-op, but run to confirm no incidental breakage)**
-- [ ] **Step 2: E2E parse check** — `npx playwright test --list` clean
-- [ ] **Step 3: Local E2E run (if Docker available)** — focus on the changed specs
-- [ ] **Step 4: Reviewer cycle**
-- [ ] **Step 5: QA cycle**
-- [ ] **Step 6: Push + open PR with title `test(e2e): Phase 33 PR 33d — RPG / share + post-session E2E (findings 042/043/045/055)`**
-- [ ] **Step 7: CI green + admin-merge**
-
----
-
-## PR 33d Notes
-
-- **No Dart changes.** All findings are E2E test additions or unskips.
-- **finding-043 schema research:** the user-created-exercise seed needs the same schema knowledge as workout fixtures. Read the `exercises` table columns + existing seed patterns. If `is_default` defaults to `false` and `created_by` is required, the insert is straightforward.
-- **finding-055 unskip:** if the test reveals a real bug uncovered by the Path-A pivot (e.g., overflow card no longer renders or no longer navigates), STOP and escalate — don't trial-and-error.
-- **Selectors:** ALL in `selectors.ts`. No inline magic strings. Use Playwright `role=...` patterns when AOM is the right surface.
-- **Test naming:** all tests start with `should` per `feedback_e2e_naming`.
-- **Behavior-not-wiring:** assertions on rendered content / persisted state, not call counts.
+- **finding-002:** Production-code Semantics change. Cluster fix template — should be small and well-understood.
+- **finding-056:** Test unskip + selector swap. If the test reveals a regression (e.g., body-part row tap doesn't actually navigate anymore), STOP — don't trial-and-error.
+- After PR 33e merges, only the PR 33-closeout (delete audit doc + Phase 33 condensation in PROJECT.md) remains.
