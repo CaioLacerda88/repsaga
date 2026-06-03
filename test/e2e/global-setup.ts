@@ -1440,6 +1440,75 @@ async function seedFullHistoryPtData(
 }
 
 /**
+ * Seed a single user-created exercise for the smokeExerciseRetirement user.
+ *
+ * Inserts one exercise row (is_default = false) with both en and pt
+ * translations so the app renders the exercise name in any locale.
+ *
+ * The exercise name is deterministic per userId — uses the user's email
+ * (trimmed, first 8 chars) as a suffix so global-setup is idempotent across
+ * repeated runs without requiring a slug-uniqueness collision check.
+ *
+ * Translation coverage rule: every non-default exercise insert must be
+ * accompanied by exercise_translations rows for both 'en' and 'pt'
+ * (CLAUDE.md exercise content translation coverage rule).
+ */
+async function seedUserCreatedExercise(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const exerciseName = 'E2E Retirement Test Exercise';
+  const slug = `e2e-retirement-test-exercise-${userId.slice(0, 8)}`;
+
+  // Idempotent: skip if already seeded (slug is userId-scoped, so no
+  // cross-user collision risk even when --repeat-each re-runs setup).
+  const { data: existing } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (existing) {
+    console.log('[global-setup] Exercise retirement seed already exists, skipping.');
+    return;
+  }
+
+  const { data: exercise, error: exErr } = await supabase
+    .from('exercises')
+    .insert({
+      slug,
+      muscle_group: 'chest',
+      equipment_type: 'barbell',
+      is_default: false,
+      user_id: userId,
+    })
+    .select('id')
+    .single();
+
+  if (exErr || !exercise) {
+    console.log(
+      `[global-setup] Warning: could not insert user-created exercise: ${exErr?.message ?? 'no row'}`,
+    );
+    return;
+  }
+
+  const { error: trErr } = await supabase.from('exercise_translations').insert([
+    { exercise_id: exercise.id, locale: 'en', name: exerciseName },
+    { exercise_id: exercise.id, locale: 'pt', name: exerciseName },
+  ]);
+
+  if (trErr) {
+    console.log(
+      `[global-setup] Warning: could not insert exercise translations: ${trErr.message}`,
+    );
+    return;
+  }
+
+  console.log(
+    `[global-setup] Seeded user-created exercise for smokeExerciseRetirement (id: ${exercise.id})`,
+  );
+}
+
+/**
  * Per-role seed orchestration. Maps a TestUserKey to a function that
  * applies the role's fixture data given a freshly-created auth user.
  *
@@ -1461,6 +1530,16 @@ function buildRoleSeedRunners(): Record<
     },
     smokeProfileWeeklyGoal: async (supabase, userId) => {
       await ensureProfile(supabase, userId);
+    },
+
+    // ── Phase 33 PR 33d — finding-043 exercise retirement ────────────────
+    // Seed a user-created (is_default = false) exercise so the retirement
+    // test can find it in the exercise library and soft-delete it.
+    smokeExerciseRetirement: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, { display_name: 'Retirement Tester' });
+      await seedMinimalWorkout(supabase, userId);
+      await seedUserCreatedExercise(supabase, userId);
     },
 
     // ── Onboarding (fresh state, no profile) ─────────────────────────────

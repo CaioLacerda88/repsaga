@@ -429,4 +429,20 @@ export const TEST_USERS = {
     email: 'e2e-smoke-weekly-plan-remove-undo@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // Phase 33 PR 33d — finding-043 exercise retirement E2E coverage
+  // -------------------------------------------------------------------------
+  // smokeExerciseRetirement: dedicated user for the "delete user-created
+  // exercise → hidden from workout picker" test. Seeded with one user-created
+  // exercise (is_default = false) in global-setup. The test soft-deletes the
+  // exercise via the detail screen and asserts it no longer appears in the
+  // exercise picker during an active workout.
+  //
+  // Isolated from smokeExercise so the delete does not affect the library
+  // smoke tests which assert on the full default exercise list.
+  smokeExerciseRetirement: {
+    email: 'e2e-smoke-exercise-retirement@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

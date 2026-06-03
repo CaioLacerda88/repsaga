@@ -227,3 +227,57 @@ test.describe('Post-session summary', { tag: '@smoke' }, () => {
   // by the widget-test coverage; this stays an Android-only
   // contract on the E2E side.
 });
+
+// =============================================================================
+// finding-042 — B3 PR cut renders when the finished workout contains a new PR.
+//
+// The post-session cinematic has three beats. Beat 3 (B3) is gated on whether
+// the workout produced at least one personal record. This describe pins the
+// B3 PR cut (`POST_SESSION.b3Pr`) for a PR-only workout (no rank-up event
+// in the same session so the B3 PR surface is the sole Beat 3 variant).
+//
+// User: `smokePR` — seeded with a bench press PR at 100 kg. Logging 1500 kg
+// unconditionally beats any prior PR regardless of cross-spec pollution from
+// other smokePR tests (ceiling is 999 kg in `personal-records.spec.ts`).
+//
+// Strategy: do NOT skip the cinematic. Wait for B3 to appear directly.
+// Beat 2 is the body-part tally cut (POST_SESSION.b2Tally); Beat 3 follows
+// it automatically after the choreographer advances. The test uses a
+// sufficiently long timeout (45 s) to cover the full cinematic playthrough.
+// =============================================================================
+
+test.describe('Post-session B3 PR cut', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test('should render the B3 PR cut when the finished workout contains a new personal record', async ({
+    page,
+  }) => {
+    // smokePR has a bench PR at 100 kg. 1500 kg unconditionally beats it.
+    await login(
+      page,
+      getUser('smokePR').email,
+      getUser('smokePR').password,
+    );
+
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 15_000,
+    });
+    await setWeight(page, '1500');
+    await setReps(page, '5');
+    await completeSet(page, 0);
+    await finishWorkout(page);
+
+    await page.waitForURL(/\/workout\/finish\//, { timeout: 10_000 });
+
+    // The cinematic plays B1 → B2 → B3. B3 PR cut is the assertion target.
+    // Allow up to 45 s for the full choreography to reach Beat 3.
+    // Behavior contract: the user sees the PR cut (not just "some post-session
+    // element") — this distinguishes a PR-producing workout from a rank-up-only
+    // workout where B3 would show the class-change or title cut instead.
+    await expect(page.locator(POST_SESSION.b3Pr)).toBeVisible({
+      timeout: 45_000,
+    });
+  });
+});
