@@ -900,337 +900,139 @@ Stage 2 is user-facing, doesn't need its own implementation plan. Orchestrator o
 
 ---
 
-# Phase 33 — PR 33c (Workout-flow + global-setup-seed) Implementation Plan
+# Phase 33 — PR 33d (RPG / share + post-session E2E) Implementation Plan
 
-**Goal:** Land 9 IMPORTANT + 3 folded NICE-TO-HAVE fixes per the Phase 33 audit. Mixed Dart + E2E batch — the largest fix-PR by item count.
+**Goal:** Land 3 IMPORTANT + 1 folded NICE-TO-HAVE per the Phase 33 audit. Pure E2E batch — no production-code changes.
 
-**Architecture:** Workout-flow code fixes go into `lib/features/workouts/` (3 files). E2E batch adds 7 new specs + extends 1 + fixes `global-setup.ts` seed data for 2 infra-gap unskips. Audit doc Triage stamps section lines 32–66 + finding bodies for source-of-truth.
-
-**Tech Stack:** Dart (Flutter), TypeScript (Playwright + Node global-setup), Supabase admin SDK (seed RPC calls).
+**Architecture:** 3 new tests + 1 unskip across `post_session.spec.ts`, `exercises.spec.ts`, `profile.spec.ts`, `rank-up-celebration.spec.ts`. One new test user with seeded user-created exercise for retirement coverage (finding-043). Selectors go in `helpers/selectors.ts` per convention.
 
 **Spec reference:** `docs/pre-launch-audit.md`
-- Workout-flow Dart: finding-005 (line 157), 009 (189), 011 (211), 013 (227)
-- E2E: finding-036 (657), 037 (668), 038 (679), 039 (690), 041 (713), 044 (746), 046 (768), 059 (915)
+- finding-042 (line 724) — B3 PR cut in `post_session.spec.ts`
+- finding-043 (735) — Exercise retirement in `exercises.spec.ts` (new user fixture)
+- finding-045 (757) — Weight unit toggle in `profile.spec.ts`
+- finding-055 (871) — Unskip `rank-up-celebration.spec.ts:897` (overflow card → /profile; PR 30a is shipped)
 
-**Branch:** `feature/phase-33c-workout-flow`
+**Branch:** `feature/phase-33d-rpg-share`
 
 ---
 
 ## Files
 
-### Workout-flow Dart fixes
+### E2E specs
+- **Modify:** `test/e2e/specs/post_session.spec.ts` — finding-042 B3 PR cut test
+- **Modify:** `test/e2e/specs/exercises.spec.ts` — finding-043 retirement describe block
+- **Modify:** `test/e2e/specs/profile.spec.ts` — finding-045 weight unit toggle test
+- **Modify:** `test/e2e/specs/rank-up-celebration.spec.ts` — finding-055 unskip (`:897`)
 
-- **Modify:** `lib/features/workouts/ui/coordinators/finish_workout_coordinator.dart` (finding-005 option a, finding-011)
-  - Capture `RankCurve.progressFraction(preXp, preRank)` per BodyPart BEFORE `await notifier.finishWorkout()`. Same capture pattern as `bpRankBefore`. Pass through to `PostSessionParams.bpProgressFractionPre`.
-  - Delete the `_emptyBpFractions()` helper at line 598 — no longer used.
-- **Modify:** `lib/features/workouts/ui/post_session/post_session_controller.dart` (finding-005 verification, finding-013 doc comment)
-  - Confirm `_buildInitial()` actually reads `params.bpProgressFractionPre` once it's non-empty. If still ignored, wire it into the pre-state computation.
-  - Add doc comment on `PostSessionParams.bpProgressFractionPre` describing its actual purpose post-fix.
-- **Modify:** `lib/features/weekly_plan/ui/week_plan_screen.dart` (finding-009)
-  - Refactor `_flushDebouncedSave` from `.then()/.catchError()` chain to async/await + mounted guard + structured error log.
-  - Cluster ref: `async-caller-broke-snackbar`
+### Fixtures + seed (finding-043 only)
+- **Modify:** `test/e2e/fixtures/test-users.ts` — add new user (e.g., `smokeExerciseRetirement`)
+- **Modify:** `test/e2e/global-setup.ts` — seed the new user + insert a user-created exercise row
 
-### E2E test additions / fixes
+### Selectors (verify exist; add if missing)
+- **Modify:** `test/e2e/helpers/selectors.ts` — `POST_SESSION.b3Pr` likely exists per finding text; retirement/toggle/overflow may need additions
 
-- **Modify:** `test/e2e/global-setup.ts`
-  - finding-036: DELETE the profile row for `smokeOnboarding` user after creation (or never insert — depends on existing flow)
-  - finding-046: Seed `smokeWeeklyPlanReview` with a `weekly_plans` row with all workouts marked done for the current ISO week → unlocks the 4 skipped tests in `weekly-plan.spec.ts:458–521`
-- **Modify:** `test/e2e/specs/auth.spec.ts`
-  - finding-037: New describe block `Auth — sign-up happy path` with `should create a new account and reach email confirmation screen`
-  - finding-059: Extend the `auth.spec.ts:276` "full journey" test to include navigation to `/records` via profile settings (Records row)
-- **Modify:** `test/e2e/specs/workouts.spec.ts`
-  - finding-038: New test in `Workout restore` describe: `should return to active workout when tapping the active banner from a different tab`
-  - finding-039: Extend `Workout history` describe with `should render the detail strip with XP on the workout detail screen` + `should show exercise cards on the workout detail screen`
-- **Modify:** `test/e2e/specs/post_session.spec.ts`
-  - finding-041: New test in `Post-session summary`: `should navigate to home screen when CONTINUAR is tapped on the summary panel`
-- **Modify:** `test/e2e/specs/personal-records.spec.ts` (or new spec)
-  - finding-044: New test: `should navigate to the personal records screen when tapping the Records row in profile settings`
-- **Modify (unskip):** `test/e2e/specs/weekly-plan.spec.ts:458–521`
-  - finding-046: Remove 4 `.skip()` calls after seed lands
-
-### Selectors (verify exist, add if missing)
-- **Modify:** `test/e2e/helpers/selectors.ts` — only if a new test surfaces a missing selector. Per Code Style rule "All in `helpers/selectors.ts`", no inlining.
-
-### Closeout (in first commit)
-- **Modify:** `docs/WIP.md` — strip PR 33b section, append this plan
-- **Modify:** `docs/PROJECT.md` §3 — flip 33b PENDING → DONE (#293)
+### Closeout (first commit)
+- **Modify:** `docs/WIP.md` — strip PR 33c plan, append this plan
+- **Modify:** `docs/PROJECT.md` §3 — flip 33c PENDING → DONE (#294)
 
 ---
 
 ## Checklist
 
-- [ ] Task 1 — PR 33b closeout + PR 33c plan commit
-- [ ] Task 2 — Dart workout-flow fixes (finding-005/009/011/013)
-- [ ] Task 3 — `global-setup.ts` seed changes (finding-036 + finding-046)
-- [ ] Task 4 — `auth.spec.ts` additions (finding-037 + finding-059)
-- [ ] Task 5 — `workouts.spec.ts` additions (finding-038 + finding-039)
-- [ ] Task 6 — `post_session.spec.ts` addition (finding-041)
-- [ ] Task 7 — `personal-records.spec.ts` addition (finding-044)
-- [ ] Task 8 — Unskip 4 tests in `weekly-plan.spec.ts:458–521` (finding-046 follow-through)
-- [ ] Task 9 — Verify analyze + flutter test green; run new + unskipped E2E specs locally
-- [ ] Task 10 — Commit + push + reviewer + qa-engineer cycle + PR + admin-merge
+- [ ] Task 1 — PR 33c closeout + PR 33d plan commit
+- [ ] Task 2 — finding-042 B3 PR cut test (post_session.spec.ts)
+- [ ] Task 3 — finding-043 exercise retirement test + new user fixture + seed (exercises.spec.ts)
+- [ ] Task 4 — finding-045 weight unit toggle test (profile.spec.ts)
+- [ ] Task 5 — finding-055 unskip overflow-card-tap test (rank-up-celebration.spec.ts:897)
+- [ ] Task 6 — Verify (analyze + tests + parse) + commit + reviewer + qa + push + CI + admin-merge
 
 ---
 
-## Task 1 — PR 33b closeout + PR 33c plan commit
-
-Already executing as the first commit on `feature/phase-33c-workout-flow`. Includes:
-1. Strip PR 33b plan from `docs/WIP.md` (lines 903–1170 on pre-strip)
-2. Append this PR 33c plan to `docs/WIP.md`
-3. Flip 33b row in PROJECT.md §3: PENDING/IN FLIGHT → DONE (#293)
-4. Update sub-PR order line: 33b DONE → 33c IN FLIGHT
-
-Commit message: `docs(phase-33c): close out PR 33b + plan for PR 33c workout-flow batch`
-
----
-
-## Task 2 — Workout-flow Dart fixes
-
-**Files:**
-- Modify: `lib/features/workouts/ui/coordinators/finish_workout_coordinator.dart`
-- Modify: `lib/features/workouts/ui/post_session/post_session_controller.dart`
-- Modify: `lib/features/weekly_plan/ui/week_plan_screen.dart`
-
-### finding-005 (option a) — implement the TODO
-
-- [ ] **Step 1: Read `finish_workout_coordinator.dart`**, locate the `_emptyBpFractions()` helper at line 598 and the `bpProgressFractionPre:` argument to `PostSessionParams`.
-
-- [ ] **Step 2: Capture pre-state per BodyPart BEFORE `await notifier.finishWorkout()`**
-
-The capture pattern follows `bpRankBefore` (verify by reading the existing capture). For each BodyPart with non-null `preXp` + `preRank` from `state.bpXpDeltas`:
-```dart
-final bpProgressFractionPre = <BodyPart, double>{};
-for (final bp in state.bpXpDeltas.keys) {
-  final preXp = ...; // read from state
-  final preRank = ...; // read from state (matches bpRankBefore source)
-  bpProgressFractionPre[bp] = RankCurve.progressFraction(preXp, preRank);
-}
-```
-
-If the state shape doesn't expose `preXp`/`preRank` directly, follow the existing `bpRankBefore` capture's exact source. If THAT capture is also empty/TODO, surface this as a blocker — the architectural decision should not be made unilaterally by an agent.
-
-- [ ] **Step 3: Replace `_emptyBpFractions()` call site** with the new `bpProgressFractionPre` map. Delete the helper.
-
-- [ ] **Step 4: Write/update unit test** asserting the captured fractions match `RankCurve.progressFraction(preXp, preRank)` for at least one BP. Tests for `finish_workout_coordinator` live under `test/unit/features/workouts/ui/coordinators/` — extend the existing file.
-
-### finding-009 — `_flushDebouncedSave` async refactor
-
-- [ ] **Step 5: Read `week_plan_screen.dart`** around line 634, locate `_flushDebouncedSave`.
-
-- [ ] **Step 6: Refactor to async/await + mounted guard**
-
-```dart
-Future<void> _flushDebouncedSave() async {
-  try {
-    await ref.read(weeklyPlanNotifierProvider.notifier).upsertPlan(_bucketRoutines);
-    if (mounted) _maybeShowSavedSnackbar();
-  } catch (e) {
-    debugPrint('[WeekPlanScreen] flush save failed: $e');
-  }
-}
-```
-
-Update any synchronous caller (likely a debouncer Timer callback) to handle the now-async return — wrap in `unawaited(...)` if fire-and-forget is the desired semantic.
-
-- [ ] **Step 7: Write widget test** for the disposed-state path: pump `WeekPlanScreen`, trigger debounced save, dispose widget, complete the future — assert NO `ScaffoldMessenger.of(disposedContext)` throw + assert NO snackbar appears. Cluster `async-caller-broke-snackbar` test template.
-
-### finding-013 — doc comment on `bpProgressFractionPre`
-
-- [ ] **Step 8: Read `post_session_controller.dart` line 50** and the `PostSessionParams` declaration. After finding-005 fix, the field IS populated — update the doc comment to describe its actual purpose (pre-finish rank-progress fraction per BP, used to animate the B2 tally-cut bars from a non-trivial starting position).
-
-### Verification
-
-- [ ] **Step 9: Run analyzer + workouts test suite**
-
-```bash
-dart analyze --fatal-infos lib/features/workouts/ lib/features/weekly_plan/
-flutter test test/unit/features/workouts/ test/widget/features/workouts/ test/unit/features/weekly_plan/ test/widget/features/weekly_plan/
-```
-
-Expected: all green.
-
-- [ ] **Step 10: Commit**
-
-```
-refactor(workouts): finish_workout_coordinator populates bpProgressFractionPre + week_plan async-save mounted guard (findings 005/009/011/013)
-```
-
----
-
-## Task 3 — `global-setup.ts` seed changes
-
-**Files:**
-- Modify: `test/e2e/global-setup.ts`
-
-### finding-036 — `smokeOnboarding` profile-row deletion
-
-- [ ] **Step 1: Read `global-setup.ts`** end-to-end. Locate the `smokeOnboarding` user provisioning block. Understand whether it currently INSERTS a profile row (which then causes the onboarding tests to skip — onboarding only runs when no profile row exists).
-
-- [ ] **Step 2: After auth-user creation for `smokeOnboarding`, ensure NO profile row exists.**
-
-If the current flow inserts one: add a `DELETE FROM profiles WHERE id = $smokeOnboardingUserId` after creation.
-If a downstream block (e.g., default profile setup) inserts: skip it for this specific user.
-
-- [ ] **Step 3: Run `onboarding.spec.ts`** locally to verify the 4 self-skipping tests now execute. If they fail on actual UI bugs uncovered by finally running, FIX or surface as a follow-up.
-
-### finding-046 — `smokeWeeklyPlanReview` seeded with completed weekly plan
-
-- [ ] **Step 4: Determine the schema for `weekly_plans` rows** marked "done for ISO week". Read existing migrations under `supabase/migrations/` + the `weekly_plan_notifier.dart` to understand what state constitutes "week complete":
-  - Likely: a `weekly_plans` row for the current ISO week with all 3-7 bucket workout slots filled with `workouts.id` references, AND each workout is `completed_at IS NOT NULL`.
-  - Check whether a domain RPC like `complete_weekly_plan_for_user` exists; preferred over raw INSERT.
-
-- [ ] **Step 5: Add seed block for `smokeWeeklyPlanReview` user**
-
-After auth-user creation, seed:
-1. A routine + a few workouts for that user
-2. A `weekly_plans` row for the current ISO week
-3. Mark all workout slots as `completed_at = now()`
-
-Use admin client (service role) for the seed. Follow the existing `smokeWeeklyPlan` seed pattern as the template — it likely seeds the "in-progress" state.
-
-- [ ] **Step 6: Verify** `weekly-plan.spec.ts:458–521` tests no longer self-skip.
-
----
-
-## Task 4 — `auth.spec.ts` additions
-
-**Files:**
-- Modify: `test/e2e/specs/auth.spec.ts`
-
-### finding-037 — sign-up happy path
-
-- [ ] **Step 1: Add new describe block** `Auth — sign-up happy path` (or extend an existing one if logical) with test `should create a new account and reach email confirmation screen`.
-
-- [ ] **Step 2: Test body**
-
-```ts
-test('should create a new account and reach email confirmation screen', async ({ page }) => {
-  const uniqueEmail = `signup-${Date.now()}@test.local`;
-  await page.goto('/');
-  // Navigate to sign-up tab if needed
-  await page.locator(AUTH.signUpToggle).click();
-  await flutterFill(page, AUTH.emailInput, uniqueEmail);
-  await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
-  await page.locator(AUTH.signUpButton).click();
-  // Assert email confirmation screen renders
-  await expect(page.locator(AUTH.emailConfirmationHeading).first()).toBeVisible();
-});
-```
-
-- [ ] **Step 3: Cleanup** — `afterAll` deletes the throwaway user via Supabase admin client. Add to a per-test or per-block cleanup helper if not present.
-
-### finding-059 — extend full-journey with Records
-
-- [ ] **Step 4: Locate `auth.spec.ts:276`** — the existing "full journey" test that navigates Home/Exercises/Routines/Profile.
-
-- [ ] **Step 5: Add a step** that taps the Records row in profile settings + asserts `PR_LIST.screen` is visible. Don't change the existing flow steps; just append.
-
----
-
-## Task 5 — `workouts.spec.ts` additions
-
-**Files:**
-- Modify: `test/e2e/specs/workouts.spec.ts`
-
-### finding-038 — banner tap E2E
-
-- [ ] **Step 1: New test in `Workout restore` describe**: `should return to active workout when tapping the active banner from a different tab`.
-
-Body: start a workout (use existing helper if any), navigate to /home/exercises or another tab, locate `WORKOUT.activeBanner` selector, tap it, assert URL or content shows `/workout/active` (use content-visibility per `flutter-web-url-assertion` cluster).
-
-### finding-039 — detail screen content
-
-- [ ] **Step 2: Extend `Workout history` describe** with two new tests:
-  - `should render the detail strip with XP on the workout detail screen`
-  - `should show exercise cards on the workout detail screen`
-
-Use `fullHistory` user. Navigate to history list, tap first completed workout card, assert `WORKOUT_DETAIL.detailStrip` visible with non-empty XP text + `WORKOUT_DETAIL.exerciseCard` count ≥ 1.
-
----
-
-## Task 6 — `post_session.spec.ts` addition
+## Task 2 — finding-042 B3 PR cut
 
 **Files:**
 - Modify: `test/e2e/specs/post_session.spec.ts`
 
-### finding-041 — CONTINUAR CTA → /home
+Audit recommendation: assert B3 PR cut renders for a PR-only workout. Need a user seeded with prior PR (baseline lower weight) where the next workout's set IS a PR.
 
-- [ ] **Step 1: New test in `Post-session summary`** describe: `should navigate to home screen when CONTINUAR is tapped on the summary panel`.
+- [ ] **Step 1: Identify the right user fixture.** Read `global-setup.ts` for users with prior PR baseline. Likely `smokePR` or `fullPR` — verify by inspecting seed data shape (a `personal_records` row for an exercise at lower weight than what the test will log).
 
-Use `rpgRankUpThreshold` user. Trigger post-session screen, wait for summary panel, locate `POST_SESSION.continueCta` selector, tap, assert `HOME.shellRoot` visible (or URL hash includes `/home` — content assertion preferred per cluster).
+- [ ] **Step 2: Selector check** — `POST_SESSION.b3Pr` likely exists. Grep selectors.ts; add if missing.
+
+- [ ] **Step 3: Test body** — login as seeded user, start workout, log a set above baseline weight, finish workout, wait for cinematic to advance through B1/B2/B3, assert `POST_SESSION.b3Pr` visible. Reuse the existing post-session helpers (`finishWorkout` from `helpers/workout.ts`).
+
+- [ ] **Step 4: Behavior-not-wiring** — assert the B3 PR cut element specifically, not just "some post-session element rendered."
 
 ---
 
-## Task 7 — `personal-records.spec.ts` addition
+## Task 3 — finding-043 exercise retirement
 
 **Files:**
-- Modify: `test/e2e/specs/personal-records.spec.ts`
+- Modify: `test/e2e/specs/exercises.spec.ts`
+- Modify: `test/e2e/fixtures/test-users.ts`
+- Modify: `test/e2e/global-setup.ts`
 
-### finding-044 — /records via in-app nav
+PR 32h introduced user-created exercise retirement. Retired exercises should be hidden from workout pickers.
 
-- [ ] **Step 1: New test**: `should navigate to the personal records screen when tapping the Records row in profile settings`.
+- [ ] **Step 1: Add new user fixture** — `smokeExerciseRetirement` in `test-users.ts`. Read existing user definitions for the pattern.
 
-Use `smokePR` user. From `/home`, tap profile gear icon → `/profile/settings` opens → tap `PROFILE.recordsStatRow` → assert `PR_LIST.screen` visible.
+- [ ] **Step 2: Seed function in `global-setup.ts`** — insert a user-created exercise (`exercises` row with `created_by = userId`, not `is_default`) for this user.
+
+- [ ] **Step 3: Selector check** — verify selectors exist for: exercise detail screen retirement action, workout exercise picker, search input. Read `exercises.spec.ts` for existing patterns. Add if missing.
+
+- [ ] **Step 4: Test body** — login, navigate to /exercises, find the user-created exercise, navigate to its detail screen, tap retire, return to workout exercise picker, search for the exercise, assert it does NOT appear.
+
+- [ ] **Step 5: Cleanup** — the retire action persists to DB. If we want this test idempotent, may need a teardown to un-retire. OR use a per-test user. Pattern: read other test-isolation strategies in `exercises.spec.ts`.
 
 ---
 
-## Task 8 — Unskip 4 tests in `weekly-plan.spec.ts:458–521`
+## Task 4 — finding-045 weight unit toggle
 
 **Files:**
-- Modify: `test/e2e/specs/weekly-plan.spec.ts`
+- Modify: `test/e2e/specs/profile.spec.ts`
 
-- [ ] **Step 1: Remove `.skip` from 4 tests** at lines 458–521. Verify they pass with the new global-setup seed from Task 3.
+`PROFILE.kgOption` / `PROFILE.lbsOption` selectors already exist per finding-045 text.
 
-- [ ] **Step 2: If any fail on a real bug** uncovered by the seed: root-cause via `systematic-debugging` skill; fix the underlying issue + commit separately.
+- [ ] **Step 1: User fixture** — audit suggests `smokeProfileWeeklyGoal` (existing). Verify it's available.
 
----
+- [ ] **Step 2: Test body** — login, navigate to profile settings, tap weight unit row, tap lbs option, navigate away (e.g., to active workout or exercises), then back to profile settings, assert lbs is still selected. Cross-screen persistence is the key contract.
 
-## Task 9 — Verify
-
-- [ ] **Step 1: Full local verification**
-
-```bash
-export PATH="/c/flutter/bin:$PATH"
-dart format .
-dart analyze --fatal-infos
-flutter test --exclude-tags integration --exclude-tags golden
-```
-
-Expected: all green.
-
-- [ ] **Step 2: Local E2E run for changed/new specs**
-
-```bash
-cd test/e2e && FLUTTER_APP_URL= npx playwright test specs/onboarding.spec.ts specs/auth.spec.ts specs/workouts.spec.ts specs/post_session.spec.ts specs/personal-records.spec.ts specs/weekly-plan.spec.ts --reporter=list
-```
-
-Expected: all new tests + previously-skipped tests pass. Surface any unexpected failure loudly.
+- [ ] **Step 3: Restore default** — if the test mutates persisted state, may need to toggle back to kg as cleanup. OR per-test user.
 
 ---
 
-## Task 10 — Commit + PR + ship
+## Task 5 — finding-055 unskip overflow card
 
-- [ ] **Step 1: Decompose into 2–3 commits**
-  - `refactor(workouts): Phase 33 PR 33c — workout-flow fixes (findings 005/009/011/013)`
-  - `test(e2e): Phase 33 PR 33c — 7 new/extended specs + 2 global-setup seeds (findings 036–046, 059)`
+**Files:**
+- Modify: `test/e2e/specs/rank-up-celebration.spec.ts` (line ~897)
 
-- [ ] **Step 2: Reviewer cycle**
+The test is `test.skip()`'d with stale comment "PR 30a will reintroduce..." — PR 30a shipped May 2026. User: `rpgOverflowTapCard` (existing).
 
-- [ ] **Step 3: qa-engineer cycle** — full E2E run on the branch
+- [ ] **Step 1: Read the skipped test** to understand its intended assertion (overflow card tap → /profile navigation).
 
-- [ ] **Step 4: Push + open PR** with title `feat(workouts,e2e): Phase 33 PR 33c — workout-flow bug fixes + E2E coverage expansion`
+- [ ] **Step 2: Unskip + adapt** — replace any obsolete selectors with current ones. Use content-visibility assertions per `flutter-web-url-assertion` cluster.
 
-- [ ] **Step 5: Wait for CI green** (e2e job is the long pole — expect 35–40 min)
-
-- [ ] **Step 6: Admin-merge** with `--squash --admin --delete-branch`
+- [ ] **Step 3: Verify the `rpgOverflowTapCard` user is still seeded correctly** in `global-setup.ts`.
 
 ---
 
-## PR 33c Notes
+## Task 6 — Verify + ship
 
-- **finding-005 architecture decision:** the audit explicitly recommends option (a). If the `preXp`/`preRank` capture turns out to require state that the coordinator doesn't have access to at the right time, escalate as a BLOCKER — do not silently fall back to option (b).
-- **finding-046 schema research:** depends on the actual `weekly_plans` table shape. If the schema requires server-side computation (RPC) that an admin client can't bypass, the seed approach may need rethinking — surface this if found.
-- **No new migrations:** all fixes are application-layer.
-- **E2E selectors:** all in `helpers/selectors.ts`. Use existing selectors where available. Per `feedback_no_inline_selectors` (CLAUDE.md), never inline magic strings.
+- [ ] **Step 1: Run analyze + dart test (changes are E2E-only so Dart suite is no-op, but run to confirm no incidental breakage)**
+- [ ] **Step 2: E2E parse check** — `npx playwright test --list` clean
+- [ ] **Step 3: Local E2E run (if Docker available)** — focus on the changed specs
+- [ ] **Step 4: Reviewer cycle**
+- [ ] **Step 5: QA cycle**
+- [ ] **Step 6: Push + open PR with title `test(e2e): Phase 33 PR 33d — RPG / share + post-session E2E (findings 042/043/045/055)`**
+- [ ] **Step 7: CI green + admin-merge**
+
+---
+
+## PR 33d Notes
+
+- **No Dart changes.** All findings are E2E test additions or unskips.
+- **finding-043 schema research:** the user-created-exercise seed needs the same schema knowledge as workout fixtures. Read the `exercises` table columns + existing seed patterns. If `is_default` defaults to `false` and `created_by` is required, the insert is straightforward.
+- **finding-055 unskip:** if the test reveals a real bug uncovered by the Path-A pivot (e.g., overflow card no longer renders or no longer navigates), STOP and escalate — don't trial-and-error.
+- **Selectors:** ALL in `selectors.ts`. No inline magic strings. Use Playwright `role=...` patterns when AOM is the right surface.
 - **Test naming:** all tests start with `should` per `feedback_e2e_naming`.
-- **Behavior-not-wiring:** assertions on rendered content, not call counts.
+- **Behavior-not-wiring:** assertions on rendered content / persisted state, not call counts.
