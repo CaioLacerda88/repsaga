@@ -18,6 +18,7 @@ import {
   AUTH,
   EXERCISE_LIST,
   NAV,
+  ONBOARDING,
   PROFILE,
   PR_DISPLAY,
   ROUTINE,
@@ -360,7 +361,7 @@ test.describe('Auth — sign-up happy path', () => {
     }
   });
 
-  test('should create a new account and reach email confirmation screen', async ({
+  test('should create a new account and land on the onboarding screen', async ({
     page,
   }) => {
     // Toggle to sign-up mode.
@@ -372,14 +373,24 @@ test.describe('Auth — sign-up happy path', () => {
     await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
     await page.locator(AUTH.signUpButton).click();
 
-    // After a successful sign-up, Supabase requires email confirmation.
-    // The app navigates to /email-confirmation and shows the EmailConfirmationScreen.
-    // Assert via the "BACK TO LOGIN" GradientButton which is the most stable
-    // AOM target on that screen (no flt-semantics-identifier on the heading
-    // Text widget — CanvasKit renders it to canvas). Content-visibility assertion
-    // per cluster `flutter-web-url-assertion`.
+    // Local Supabase runs with `enable_confirmations = false`
+    // (supabase/config.toml [auth.email]), so a successful sign-up returns
+    // a session immediately. AuthNotifier.signUpWithEmail() leaves the
+    // `signupPendingEmailProvider` null in that branch, so LoginScreen does
+    // NOT navigate to `/email-confirmation`. The router redirect chain then
+    // routes the now-authenticated user to `/onboarding` (the LoginScreen
+    // flips `needsOnboardingProvider` to true earlier in the submit flow).
+    //
+    // Production uses the hosted Supabase project which has email
+    // confirmations enabled, so production users DO land on
+    // `/email-confirmation`. This test pins the local-environment
+    // contract — the happy-path landing surface for fresh accounts in
+    // E2E. The `/email-confirmation` route + EmailConfirmationScreen
+    // remain covered by the unit/widget tier.
+    //
+    // Content-visibility assertion per cluster `flutter-web-url-assertion`.
     await expect(
-      page.locator(AUTH.emailConfirmationBackToLogin),
+      page.locator(ONBOARDING.getStartedButton),
     ).toBeVisible({ timeout: 15_000 });
   });
 });

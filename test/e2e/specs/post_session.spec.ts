@@ -35,15 +35,86 @@ async function reseedDebriefUser(): Promise<void> {
   );
   if (!userId) return;
 
+  // Full RPG-state wipe + restore to the chest-rank-3 / 157-XP threshold
+  // window. Mirrors `reseedRankUpThresholdUser` in
+  // `rank-up-celebration.spec.ts` — the post_session describe runs ≥4
+  // tests serially through the same user, and a workouts-only reseed left
+  // body_part_progress / peak_loads / earned_titles mutated across tests
+  // (test N's finished workout pushed chest past the rank-up threshold,
+  // breaking test N+1's cinematic state). The serial-mode flake on
+  // `:100` in PR 33c CI was the visible symptom; expanding the reseed
+  // matches the proven isolation contract used by rank-up-celebration.
   await admin.from('workouts').delete().eq('user_id', userId);
   await admin.from('xp_events').delete().eq('user_id', userId);
+  await admin.from('body_part_progress').delete().eq('user_id', userId);
+  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await admin
+    .from('exercise_peak_loads_by_rep_range')
+    .delete()
+    .eq('user_id', userId);
+  await admin.from('earned_titles').delete().eq('user_id', userId);
+  await admin.from('backfill_progress').delete().eq('user_id', userId);
+
+  // Suppress the SagaIntroGate retro backfill — without this row, the
+  // first post-login navigation triggers a backfill spinner that races
+  // with the workout flow's first frame and amplifies cinematic timing
+  // noise.
+  await admin.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
+
+  // Phase 29 v2 deterministic single-rank-up window: chest at rank 3 /
+  // 157 XP, all other body parts at rank 1 / 0 XP. The single-rank-up
+  // window for one bench 80x5 set at rank-3 dominance is
+  // (117.28, 197.14) XP — midpoint 157 leaves ~40 XP margin on either
+  // side so the post-state is unambiguously chest rank 4 (no skip to
+  // rank 5).
+  const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+  for (const bp of bodyParts) {
+    const xp = bp === 'chest' ? 157 : 0;
+    const rank = bp === 'chest' ? 3 : 1;
+    await admin.from('body_part_progress').upsert(
+      { user_id: userId, body_part: bp, total_xp: xp, rank },
+      { onConflict: 'user_id,body_part' },
+    );
+  }
+
+  // Peak load for bench (matches the rank-up describe's seed): keeps the
+  // post-session overload_mult stable across test iterations.
+  const { data: benchRows } = await admin
+    .from('exercises')
+    .select('id')
+    .eq('slug', 'barbell_bench_press')
+    .eq('is_default', true)
+    .limit(1);
+  const benchId = benchRows?.[0]?.id;
+  if (benchId) {
+    await admin.from('exercise_peak_loads').upsert(
+      {
+        user_id: userId,
+        exercise_id: benchId,
+        peak_weight: 80,
+        peak_reps: 5,
+        peak_date: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,exercise_id' },
+    );
+  }
 
   // Re-seed a minimal past workout so workoutCount > 0 after the delete.
   // Without this the ActionHero lands on _CreateFirstRoutineHero (0-workout
   // state) and startEmptyWorkout can't find home-action-hero-free-workout.
-  // The warmup workout is intentionally finished 90 min ago and not part of
-  // a weekly plan, so ActionHero resolves to _FreeWorkoutHero (no suggested
-  // next — the rpgRankUpThreshold user has no user-built routines).
+  // The warmup workout is intentionally finished 90 min ago and not part
+  // of a weekly plan, so ActionHero resolves to _FreeWorkoutHero (no
+  // suggested next — the rpgRankUpThreshold user has no user-built
+  // routines).
   const now = new Date();
   const startedAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
   const finishedAt = new Date(now.getTime() - 90 * 60 * 1000);

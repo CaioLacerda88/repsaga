@@ -663,31 +663,47 @@ export const HISTORY = {
 // ---------------------------------------------------------------------------
 // WORKOUT_DETAIL — read-only workout detail screen (/home/history/{workoutId}).
 //
-// Distinct from EXERCISE_LIST.exerciseCard (role=button) — the detail screen's
-// exercise cards render as non-tappable Semantics groups whose merged
-// accessible name carries the "Exercise: <name>" prefix produced by the same
-// l10n key (exerciseItemSemantics) the list / active workout screens use.
+// `_ReadOnlyExerciseCard` (workout_detail_screen.dart:265) is a plain Material
+// `Card` whose heading is `Text(exercise.exercise?.name)` with NO outer
+// `Semantics(label: ...)` wrapper — so `role=group[name*="Exercise: "]` does
+// NOT match here (unlike the EXERCISE_LIST / active-workout cards which use
+// the `exerciseItemSemantics` l10n key for their AOM label). Two stable
+// selectors below:
+//   - `totalVolumeStrip` — locale-independent identifier on the 48dp strip
+//     below all exercise cards; reliable "screen is alive" sentinel.
+//   - `detailExerciseCardByName(name)` — text= match on the rendered display
+//     name (caller passes the localized name).
 // ---------------------------------------------------------------------------
 export const WORKOUT_DETAIL = {
   /**
-   * Exercise card on the workout detail screen. Each card is a Semantics
-   * group container whose accessible name starts with "Exercise: " (en) or
-   * "Exercício: " (pt) — same `exerciseItemSemantics` ARB key used by the
-   * exercise-list and active-workout surfaces.
+   * 48dp surface2 total-volume strip rendered BELOW the exercise cards on the
+   * workout detail screen (`_WorkoutDetailBody`, ~line 224 of
+   * `workout_detail_screen.dart`). Semantics(identifier:
+   * 'workout-detail-total-volume-strip').
    *
-   * Use the unparameterised `detailExerciseCard` to assert "at least one
-   * exercise card rendered" (e.g., the detail screen is not blank below the
-   * summary strip). Use `detailExerciseCardByName(name)` when targeting a
-   * specific exercise.
-   *
-   * Selector is `role=group`, NOT `role=button` — the detail screen renders
-   * exercise sections as read-only groups (the active-workout list uses
-   * role=group too, but the exercise-LIST screen uses role=button on the
-   * tappable card; EXERCISE_LIST.exerciseCard is therefore not a substitute).
+   * Locale-independent. Use as the proof that "the detail screen mounted and
+   * rendered its body" rather than the per-card name text (which is locale +
+   * seed-data dependent).
    */
-  detailExerciseCard: 'role=group[name*="Exercise: "]',
-  detailExerciseCardByName: (name: string) =>
-    `role=group[name*="Exercise: ${name}"]`,
+  totalVolumeStrip:
+    '[flt-semantics-identifier="workout-detail-total-volume-strip"]',
+  /**
+   * Per-exercise card on the detail screen — targets the rendered exercise
+   * NAME text. Pass the localized display name. For pt locale
+   * `barbell_bench_press` renders as "Supino Reto com Barra"; for en it's
+   * "Barbell Bench Press". See `seedFullHistoryPtData` in `global-setup.ts`
+   * + `00033_seed_exercise_translations_pt.sql` for the pt mapping.
+   *
+   * Note: Flutter CanvasKit draws Text widgets to canvas — a `text=` selector
+   * may not match if the name is rendered into the canvas without DOM text.
+   * For the workout-detail screen specifically, the `Text(exercise.name)`
+   * widget sits inside a Material `Card` which Flutter surfaces with a
+   * matching AOM text node, so `text=` resolves in practice. If a future
+   * regression breaks this, add a `Semantics(identifier:
+   * 'workout-detail-exercise-card')` wrapper on `_ReadOnlyExerciseCard` and
+   * switch this selector to identifier-based.
+   */
+  detailExerciseCardByName: (name: string) => `text=${name}`,
 } as const;
 
 // ---------------------------------------------------------------------------
