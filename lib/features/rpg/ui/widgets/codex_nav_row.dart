@@ -25,28 +25,36 @@ class CodexNavRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inner = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: AppTextStyles.title)),
-          const Icon(Icons.chevron_right, color: AppColors.textDim),
-        ],
-      ),
-    );
-
-    final wrapped = semanticIdentifier == null
-        ? inner
-        : Semantics(identifier: semanticIdentifier, child: inner);
-
-    return Material(
+    final tapTarget = Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(kRadiusMd),
       child: InkWell(
         borderRadius: BorderRadius.circular(kRadiusMd),
         onTap: onTap,
-        child: wrapped,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(child: Text(label, style: AppTextStyles.title)),
+              const Icon(Icons.chevron_right, color: AppColors.textDim),
+            ],
+          ),
+        ),
       ),
+    );
+
+    if (semanticIdentifier == null) return tapTarget;
+
+    // Cluster: semantics-identifier-pair-rule — container:true +
+    // explicitChildNodes:true wrap the actual tap target (Material →
+    // InkWell). Without them the AOM silently drops the
+    // flt-semantics-identifier attribute on rebuild, and the inner Text
+    // would merge up into the same node (cluster: aom-label-text-merge).
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: semanticIdentifier!,
+      child: tapTarget,
     );
   }
 }
