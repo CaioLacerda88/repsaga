@@ -1639,14 +1639,6 @@
   "crossBuildHintSatisfied": "All conditions met — predicate satisfied.",
   "@crossBuildHintSatisfied": { "description": "BUG-014 fallback for cross-build hints when the predicate evaluates true but the title hasn't been awarded yet (rare race window between award and UI refresh)." },
 
-  "rankUpOverflowFlipbookLabel": "+{count} ranks",
-  "@rankUpOverflowFlipbookLabel": {
-    "description": "BUG-013 mini-flipbook label rendered alongside the three cycling muscle sigils when more than 3 rank-ups fire in one workout. Plural 'ranks' is grammatically correct here — overflow always means count >= 1 additional rank-up.",
-    "placeholders": {
-      "count": { "type": "int", "example": "5" }
-    }
-  },
-
   "title_chest_r5_initiate_of_the_forge_name": "Initiate of the Forge",
   "@title_chest_r5_initiate_of_the_forge_name": { "description": "Phase 18c chest R5 title display name." },
   "title_chest_r5_initiate_of_the_forge_flavor": "First sparks struck against iron.",

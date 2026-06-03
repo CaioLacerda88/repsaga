@@ -1,16 +1,15 @@
-/// Widget tests for [CelebrationPlayer.play] post-Path-A pivot (PR 29.5).
+/// Widget tests for [CelebrationPlayer.play] pass-through contract.
 ///
-/// **Path A contract (this PR):** the player no longer renders UI
-/// mid-workout. It is a pass-through that returns
+/// The mid-workout player is a pass-through that returns
 /// [CelebrationPlayResult.notTapped] synchronously for every input. The
-/// full celebration migrates to the post-session screen in PR 30a.
+/// full celebration lives on the post-session screen.
 ///
-/// These tests pin the new contract:
+/// These tests pin the contract:
 ///   * Every [CelebrationEvent] variant resolves to `notTapped` without
 ///     mounting any overlay / dialog / OverlayEntry.
 ///   * Empty queue → `notTapped`.
-///   * Queue WITH overflow payload → still `notTapped` (no overflow
-///     card mounts — PR 30a's post-session screen owns that surface).
+///   * Queue WITH overflow payload → still `notTapped` (no UI mounts —
+///     the post-session screen owns the overflow surface).
 ///   * The deprecated `onEquipTitle` callback is never invoked.
 library;
 
@@ -22,7 +21,6 @@ import 'package:repsaga/features/rpg/models/celebration_event.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/ui/celebration_player.dart';
-import 'package:repsaga/features/rpg/ui/overlays/celebration_overflow_card.dart';
 
 import '../../../helpers/test_material_app.dart';
 
@@ -64,15 +62,11 @@ void main() {
     });
 
     testWidgets('returns notTapped when the queue carries an overflow payload '
-        '(post-session screen owns the overflow surface in PR 30a)', (
-      tester,
-    ) async {
-      // Path A pivot: the overflow card no longer mounts mid-workout.
-      // PR 30a's post-session screen consumes [CelebrationQueueResult]
+        '(post-session screen owns the overflow surface)', (tester) async {
+      // The post-session screen consumes [CelebrationQueueResult]
       // directly and renders the overflow surface as part of the
       // ceremony. This test pins that the mid-workout player NEVER
-      // mounts CelebrationOverflowCard, even when overflow data is
-      // present.
+      // mounts any UI, even when overflow data is present.
       late CelebrationPlayResult result;
       await tester.pumpWidget(
         TestMaterialApp(
@@ -98,25 +92,26 @@ void main() {
 
       await tester.tap(find.text('go'));
       await tester.pump();
-      // No overflow card is mounted (Path A: no mid-workout UI).
-      expect(find.byType(CelebrationOverflowCard), findsNothing);
+      // No dialog is mounted (mid-workout pass-through).
+      expect(find.byType(Dialog), findsNothing);
       // Pump for a full second to make sure no late mount races us.
       await tester.pump(const Duration(seconds: 1));
-      expect(find.byType(CelebrationOverflowCard), findsNothing);
+      expect(find.byType(Dialog), findsNothing);
 
       expect(result.userTappedOverflow, isFalse);
     });
   });
 
-  group('CelebrationPlayer — variant pass-through contract (Path A)', () {
+  group('CelebrationPlayer — variant pass-through contract', () {
     testWidgets(
       'every event variant resolves to notTapped without mounting UI',
       (tester) async {
-        // Pin the Path A contract: the player accepts every variant the
-        // sealed union exposes today and returns `notTapped` without
-        // mounting any overlay / dialog / OverlayEntry. A future
-        // refactor that re-introduced mid-workout playback would fail
-        // this test (no widgets should mount during the play() call).
+        // Pin the pass-through contract: the player accepts every
+        // variant the sealed union exposes today and returns `notTapped`
+        // without mounting any overlay / dialog / OverlayEntry. A
+        // future refactor that re-introduced mid-workout playback would
+        // fail this test (no widgets should mount during the play()
+        // call).
         final variants = <CelebrationEvent>[
           const CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 5),
           const CelebrationEvent.levelUp(newLevel: 3),
@@ -165,19 +160,12 @@ void main() {
           // Allow any late-mounted widget a frame to surface.
           await tester.pump(const Duration(milliseconds: 50));
 
-          expect(
-            find.byType(CelebrationOverflowCard),
-            findsNothing,
-            reason:
-                '${event.runtimeType}: Path A pass-through must NOT mount '
-                'CelebrationOverflowCard mid-workout',
-          );
           // Dialog routes have a Material barrier; pin none is present.
           expect(
             find.byType(Dialog),
             findsNothing,
             reason:
-                '${event.runtimeType}: Path A pass-through must NOT mount '
+                '${event.runtimeType}: pass-through must NOT mount '
                 'any Dialog mid-workout',
           );
           expect(
@@ -194,10 +182,10 @@ void main() {
     testWidgets('deprecated onEquipTitle callback is never invoked', (
       tester,
     ) async {
-      // PR 29.5 retired the title half-sheet's EQUIP CTA. PR 30a
-      // moves the affordance to the post-session summary panel. Pin
-      // that the mid-workout player NEVER invokes the deprecated
-      // callback even when a title-unlock event is in the queue.
+      // The title half-sheet's EQUIP CTA is retired; the affordance
+      // now lives on the post-session summary panel. Pin that the
+      // mid-workout player NEVER invokes the deprecated callback even
+      // when a title-unlock event is in the queue.
       var equipCalls = 0;
 
       await tester.pumpWidget(

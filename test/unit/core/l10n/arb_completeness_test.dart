@@ -86,25 +86,21 @@ void main() {
       'setTypeAbbrDropset', // D
       'setTypeAbbrFailure', // F
       'or', // OU (different but short)
-      // Cluster 3 — gym-vernacular loanwords. pt-BR Brazilian gym slang
-      // uses "ranks" verbatim; "+5 ranks" reads natively in both locales.
-      'rankUpOverflowFlipbookLabel',
-      // Phase 30 PR 30a — format-only template strings. Punctuation +
-      // placeholders only, no localizable prose.
+      // Format-only template strings — punctuation + placeholders only,
+      // no localizable prose.
       'b3PrPillTemplate', // "{exercise} · {weight}kg × {reps}"
       'b2RankCopy', // "{bodyPart} · RANK {n}"
-      // Phase 31 Pass 3 — Mission Debrief rank-up arrow grammar. "Rank"
-      // is the gym-vernacular loanword used identically in pt-BR + en
-      // (same precedent as `rankUpOverflowFlipbookLabel`); the rest is
-      // pure format (placeholders + arrow glyph). 22 chars trips the
-      // placeholderOnly length floor, so allow-list it explicitly.
+      // Mission Debrief rank-up arrow grammar. "Rank" is the
+      // gym-vernacular loanword used identically in pt-BR + en; the
+      // rest is pure format (placeholders + arrow glyph). 22 chars
+      // trips the placeholderOnly length floor, so allow-list it
+      // explicitly.
       'postSessionRankUpArrow', // "Rank {fromRank} → {toRank}"
-      // Phase 32 PR 32f — History feed format strings. "XP" + "PR" are
-      // gym-vernacular loanwords used identically in pt-BR + en
-      // (same precedent as `postSessionXpLabel` /
-      // `rankUpOverflowFlipbookLabel`); the rest is pure format
-      // (placeholders + diamond glyph + middle dot). These exceed the
-      // 20-char placeholderOnly floor, so allow-list them explicitly.
+      // History feed format strings. "XP" + "PR" are gym-vernacular
+      // loanwords used identically in pt-BR + en (same precedent as
+      // `postSessionXpLabel`); the rest is pure format (placeholders +
+      // diamond glyph + middle dot). These exceed the 20-char
+      // placeholderOnly floor, so allow-list them explicitly.
       'historyCardXpEyebrow', // "+{xp} XP"
       'historyCardPrCount', // "◆ {count} PR"
       // PR #285 — detail strip split into two spans so XP (hotViolet) and

@@ -1210,83 +1210,6 @@ async function seedRpgOverflowQueueUser(
   console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 5, 354 XP — Phase 29 v2 R6 deterministic window, Ascendant class)');
 }
 
-/**
- * Seed rpgOverflowTapCard user — identical seeding contract to rpgOverflowQueue
- * but on a dedicated user. This prevents cross-worker XP state races when
- * --repeat-each=2 runs the auto-dismiss test (S4) and the tap-card test (S4b)
- * on parallel workers: each test now operates on its own user.
- */
-async function seedRpgOverflowTapCardUser(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<void> {
-
-  await supabase.from('workouts').delete().eq('user_id', userId);
-  await supabase.from('xp_events').delete().eq('user_id', userId);
-  await supabase.from('body_part_progress').delete().eq('user_id', userId);
-  await supabase.from('exercise_peak_loads').delete().eq('user_id', userId);
-  await supabase.from('personal_records').delete().eq('user_id', userId);
-  await supabase.from('backfill_progress').delete().eq('user_id', userId);
-  await supabase.from('earned_titles').delete().eq('user_id', userId);
-
-  await supabase.from('backfill_progress').upsert(
-    {
-      user_id: userId,
-      sets_processed: 0,
-      started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  );
-
-  await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Overflow Tap User', fitness_level: 'intermediate' },
-    { onConflict: 'id' },
-  );
-
-  // All 6 body parts at rank 5, total_xp = 354 (mirror
-  // seedRpgOverflowQueueUser; see that function's dartdoc for the
-  // deterministic-window derivation + exact post-state XP values).
-  const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-  for (const bp of bodyParts) {
-    const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 354, rank: 5 },
-      { onConflict: 'user_id,body_part' },
-    );
-    if (error) {
-      console.log(`[global-setup] Warning: body_part_progress seed error (${bp}) for rpgOverflowTapCard: ${error.message}`);
-    }
-  }
-
-  const exerciseSlugs: Record<string, { slug: string; peak: number }> = {
-    chest:     { slug: 'barbell_bench_press',   peak: 80 },
-    legs:      { slug: 'barbell_squat',          peak: 80 },
-    back:      { slug: 'barbell_bent_over_row',  peak: 70 },
-    shoulders: { slug: 'overhead_press',         peak: 50 },
-  };
-  for (const { slug, peak } of Object.values(exerciseSlugs)) {
-    const { data: exRows } = await supabase
-      .from('exercises').select('id').eq('slug', slug).eq('is_default', true).limit(1);
-    const exId = exRows?.[0]?.id;
-    if (exId) {
-      await supabase.from('exercise_peak_loads').upsert(
-        { user_id: userId, exercise_id: exId, peak_weight: peak, peak_reps: 5, peak_date: new Date().toISOString() },
-        { onConflict: 'user_id,exercise_id' },
-      );
-      const achievedAt = new Date(Date.now() - 86_400_000).toISOString();
-      await supabase.from('personal_records').insert([
-        { user_id: userId, exercise_id: exId, record_type: 'max_weight', value: peak, reps: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_reps', value: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_volume', value: peak * 5, achieved_at: achievedAt },
-      ]);
-    }
-  }
-
-  await seedMinimalWorkout(supabase, userId);
-
-  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 5, 354 XP — Phase 29 v2 R6 deterministic window, Ascendant class)');
-}
 
 // ---------------------------------------------------------------------------
 // Per-role seed helpers extracted for the per-worker orchestration loop.
@@ -1440,6 +1363,75 @@ async function seedFullHistoryPtData(
 }
 
 /**
+ * Seed a single user-created exercise for the smokeExerciseRetirement user.
+ *
+ * Inserts one exercise row (is_default = false) with both en and pt
+ * translations so the app renders the exercise name in any locale.
+ *
+ * The exercise name is deterministic per userId — uses the user's email
+ * (trimmed, first 8 chars) as a suffix so global-setup is idempotent across
+ * repeated runs without requiring a slug-uniqueness collision check.
+ *
+ * Translation coverage rule: every non-default exercise insert must be
+ * accompanied by exercise_translations rows for both 'en' and 'pt'
+ * (CLAUDE.md exercise content translation coverage rule).
+ */
+async function seedUserCreatedExercise(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const exerciseName = 'E2E Retirement Test Exercise';
+  const slug = `e2e-retirement-test-exercise-${userId.slice(0, 8)}`;
+
+  // Idempotent: skip if already seeded (slug is userId-scoped, so no
+  // cross-user collision risk even when --repeat-each re-runs setup).
+  const { data: existing } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (existing) {
+    console.log('[global-setup] Exercise retirement seed already exists, skipping.');
+    return;
+  }
+
+  const { data: exercise, error: exErr } = await supabase
+    .from('exercises')
+    .insert({
+      slug,
+      muscle_group: 'chest',
+      equipment_type: 'barbell',
+      is_default: false,
+      user_id: userId,
+    })
+    .select('id')
+    .single();
+
+  if (exErr || !exercise) {
+    console.log(
+      `[global-setup] Warning: could not insert user-created exercise: ${exErr?.message ?? 'no row'}`,
+    );
+    return;
+  }
+
+  const { error: trErr } = await supabase.from('exercise_translations').insert([
+    { exercise_id: exercise.id, locale: 'en', name: exerciseName },
+    { exercise_id: exercise.id, locale: 'pt', name: exerciseName },
+  ]);
+
+  if (trErr) {
+    console.log(
+      `[global-setup] Warning: could not insert exercise translations: ${trErr.message}`,
+    );
+    return;
+  }
+
+  console.log(
+    `[global-setup] Seeded user-created exercise for smokeExerciseRetirement (id: ${exercise.id})`,
+  );
+}
+
+/**
  * Per-role seed orchestration. Maps a TestUserKey to a function that
  * applies the role's fixture data given a freshly-created auth user.
  *
@@ -1461,6 +1453,16 @@ function buildRoleSeedRunners(): Record<
     },
     smokeProfileWeeklyGoal: async (supabase, userId) => {
       await ensureProfile(supabase, userId);
+    },
+
+    // ── Phase 33 PR 33d — finding-043 exercise retirement ────────────────
+    // Seed a user-created (is_default = false) exercise so the retirement
+    // test can find it in the exercise library and soft-delete it.
+    smokeExerciseRetirement: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, { display_name: 'Retirement Tester' });
+      await seedMinimalWorkout(supabase, userId);
+      await seedUserCreatedExercise(supabase, userId);
     },
 
     // ── Onboarding (fresh state, no profile) ─────────────────────────────
@@ -1791,10 +1793,6 @@ function buildRoleSeedRunners(): Record<
     rpgOverflowQueue: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await seedRpgOverflowQueueUser(supabase, userId);
-    },
-    rpgOverflowTapCard: async (supabase, userId) => {
-      await cleanFreshStateUser(supabase, userId);
-      await seedRpgOverflowTapCardUser(supabase, userId);
     },
 
     // ── Phase 18e class-cross + title-equip ──────────────────────────────

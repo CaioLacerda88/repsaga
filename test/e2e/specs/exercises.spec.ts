@@ -21,6 +21,8 @@ import { login } from '../helpers/auth';
 import {
   EXERCISE_LIST,
   EXERCISE_DETAIL,
+  EXERCISE_PICKER,
+  HOME,
   NAV,
   WORKOUT,
 } from '../helpers/selectors';
@@ -1038,5 +1040,146 @@ test.describe('Exercise detail sheet', () => {
     // Dismiss.
     await page.keyboard.press('Escape');
     await expect(page.locator(WORKOUT.finishButton)).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// =============================================================================
+// finding-043 — Exercise retirement (soft-delete) hides the exercise from
+//               the workout exercise picker.
+//
+// PR 32h introduced soft-delete for user-created exercises. A deleted exercise
+// must not appear in the exercise picker when starting an active workout.
+//
+// User: `smokeExerciseRetirement` — seeded in global-setup with one
+// user-created exercise ("E2E Retirement Test Exercise"). The test deletes
+// it via the detail screen and asserts it no longer appears in the picker.
+//
+// Cleanup: the delete is persisted. The describe uses serial mode + the
+// dedicated isolated user so repeated runs are safe (the user-created
+// exercise row is re-seeded by global-setup on each full run).
+// =============================================================================
+
+const RETIREMENT_EXERCISE_NAME = 'E2E Retirement Test Exercise';
+
+test.describe('Exercise retirement', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeExerciseRetirement').email,
+      getUser('smokeExerciseRetirement').password,
+    );
+    await navigateToTab(page, 'Exercises');
+  });
+
+  test('should hide a retired user-created exercise from the workout exercise picker', async ({
+    page,
+  }) => {
+    // Step 1: Verify the user-created exercise is visible in the library.
+    // The exercise has a "Custom exercise" badge, so it appears with the
+    // exerciseCard selector just like any default exercise.
+    await flutterFillByInput(page, 'Search exercises', RETIREMENT_EXERCISE_NAME);
+    await page.waitForTimeout(800);
+
+    const card = page
+      .locator(EXERCISE_LIST.exerciseCard(RETIREMENT_EXERCISE_NAME))
+      .first();
+    await expect(card).toBeVisible({ timeout: 10_000 });
+
+    // Step 2: Open the detail screen.
+    await card.click();
+    await expect(page.locator(EXERCISE_DETAIL.appBarTitle)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The custom badge confirms this is a user-created exercise (not a
+    // default exercise, which has no delete button).
+    await expect(page.locator(EXERCISE_DETAIL.customBadge)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Step 3: Tap the delete button and confirm in the dialog.
+    await page.locator(EXERCISE_DETAIL.deleteButton).click();
+    await expect(page.locator(EXERCISE_DETAIL.deleteDialogContent)).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator(EXERCISE_DETAIL.deleteConfirmButton).click();
+
+    // Step 4: After deletion the app navigates back to the exercise list
+    // (exercise_detail_screen.dart calls router.go('/exercises') before
+    // invalidating caches). Wait for the list heading to confirm we landed.
+    await expect(page.locator(EXERCISE_LIST.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Step 5: The deleted exercise must no longer appear in the list.
+    // Re-search to make the absence deterministic (avoid relying on
+    // viewport visibility in the full alphabetical list).
+    await flutterFillByInput(page, 'Search exercises', RETIREMENT_EXERCISE_NAME);
+    await page.waitForTimeout(800);
+
+    // Either the search returns zero results (empty state) OR no card with
+    // the exercise name is visible. Both indicate the retirement succeeded.
+    const retiredCard = page.locator(
+      EXERCISE_LIST.exerciseCard(RETIREMENT_EXERCISE_NAME),
+    );
+    const emptyState = page.locator(EXERCISE_LIST.emptyStateFiltered);
+
+    const cardGone = await retiredCard.count().then((c) => c === 0);
+    const emptyVisible = await emptyState.isVisible({ timeout: 3_000 }).catch(() => false);
+
+    expect(
+      cardGone || emptyVisible,
+      'Retired exercise still visible in the exercise list after soft-delete',
+    ).toBe(true);
+
+    // Step 6: Navigate to an active workout and assert the exercise is absent
+    // from the exercise picker (the RPG-thesis-critical downstream check).
+    // Use the NAV home tab to leave the exercise screen, then start a workout.
+    await page.locator(NAV.homeTab).click();
+    await expect(page.locator(EXERCISE_LIST.heading).first()).not.toBeVisible({
+      timeout: 5_000,
+    });
+
+    // startEmptyWorkout expects the user to be on the Home screen in lapsed
+    // state (one prior workout is seeded by global-setup for this user).
+    await page.locator(WORKOUT.addExerciseFab).waitFor({ state: 'detached', timeout: 3_000 }).catch(() => {});
+
+    // The home free-workout hero should be visible (lapsed state).
+    // Open the exercise picker by starting the workout flow.
+    const homeHero = page.locator(HOME.actionHeroFreeWorkout);
+    await expect(homeHero).toBeVisible({ timeout: 15_000 });
+    await homeHero.click();
+
+    // Confirm the active workout screen mounted.
+    await expect(page.locator(WORKOUT.addExerciseFab)).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.locator(WORKOUT.addExerciseFab).click();
+
+    // The exercise picker is open. Search for the retired exercise.
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    // Use flutterFill for the picker search (CanvasKit hidden input requires
+    // real key events). flutterFill clicks the selector before filling, so no
+    // explicit `.click()` is needed beforehand.
+    await flutterFill(page, EXERCISE_PICKER.searchInput, RETIREMENT_EXERCISE_NAME);
+    await page.waitForTimeout(800);
+
+    // The retired exercise must NOT appear in the picker.
+    const pickerCard = page.locator(
+      EXERCISE_PICKER.addExerciseButton(RETIREMENT_EXERCISE_NAME),
+    );
+    await expect(pickerCard).not.toBeVisible({ timeout: 5_000 });
+
+    // Discard the workout to clean up.
+    await page.keyboard.press('Escape');
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 });

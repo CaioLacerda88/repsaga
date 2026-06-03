@@ -249,20 +249,16 @@ export const TEST_USERS = {
     password: 'TestPassword123!',
   },
 
-  // rpgOverflowQueue: 6 body-parts each pre-seeded 1 XP below their next
-  // rank threshold. One workout with 1 set per body part → 6 rank-ups in one
-  // finish → cap-at-3 fires + CelebrationOverflowCard shows "3 more rank-ups".
-  // (Queue: 3 shown, 3 overflow, overflow count = 3 displayed as "3 more rank-ups".)
+  // rpgOverflowQueue: all 6 body parts pre-seeded at rank 5 / 354 XP — the
+  // midpoint of the deterministic R6-crossing window. One 4-exercise workout
+  // (bench / squat / row / OHP) spreads XP across all 6 body parts via
+  // primary + secondary attribution, producing exactly 6 single-rank-up
+  // crossings (no skips, no class change). The fixture pins the EXACT
+  // post-state per-body-part XP totals (1e-4 absolute) that the SQL chain
+  // (`record_session_xp_batch`) writes — Dart calculator + Python sim +
+  // fixture oracle parity gate. Used by rank-up-celebration.spec.ts S4.
   rpgOverflowQueue: {
     email: 'e2e-rpg-overflow-queue@test.local',
-    password: 'TestPassword123!',
-  },
-
-  // rpgOverflowTapCard: dedicated user for the "tap overflow card → /profile"
-  // test case. Isolated from rpgOverflowQueue so that --repeat-each=2 with 2
-  // workers never races on XP state between the auto-dismiss and tap-card tests.
-  rpgOverflowTapCard: {
-    email: 'e2e-rpg-overflow-tap@test.local',
     password: 'TestPassword123!',
   },
 
@@ -427,6 +423,22 @@ export const TEST_USERS = {
   // manipulate the weekly plan under workers > 1.
   smokeWeeklyPlanRoutineRemoveUndo: {
     email: 'e2e-smoke-weekly-plan-remove-undo@test.local',
+    password: 'TestPassword123!',
+  },
+
+  // -------------------------------------------------------------------------
+  // Phase 33 PR 33d — finding-043 exercise retirement E2E coverage
+  // -------------------------------------------------------------------------
+  // smokeExerciseRetirement: dedicated user for the "delete user-created
+  // exercise → hidden from workout picker" test. Seeded with one user-created
+  // exercise (is_default = false) in global-setup. The test soft-deletes the
+  // exercise via the detail screen and asserts it no longer appears in the
+  // exercise picker during an active workout.
+  //
+  // Isolated from smokeExercise so the delete does not affect the library
+  // smoke tests which assert on the full default exercise list.
+  smokeExerciseRetirement: {
+    email: 'e2e-smoke-exercise-retirement@test.local',
     password: 'TestPassword123!',
   },
 } as const;

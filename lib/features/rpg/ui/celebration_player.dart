@@ -34,21 +34,17 @@ import '../models/title.dart' as rpg;
 ///     change. The orchestrator's other responsibilities (saga-intro
 ///     wait, rank-up pulse-write side effect) are unchanged.
 ///
-/// **What survives for PR 30a's consumption:**
-///   * [CelebrationEvent.personalRecord] variant — Beat 4 will consume.
+/// **What survives for the post-session screen's consumption:**
+///   * [CelebrationEvent.personalRecord] variant — post-session Beat 4
+///     consumes it for the PR pill row.
 ///   * [SlotPolicy] enum + `slotPolicyFor` — drives post-session event
 ///     ordering / coalescing.
-///   * [`CelebrationOverflowCard`] / [`RankUpOverflowFlipbook`] — the
-///     overflow surface lives in the file system but no longer mounts
-///     mid-workout. PR 30a integrates it into Beat 4 or removes it
-///     entirely depending on the design call.
 ///
 /// **Why a pass-through and not a removed file:** keeping the type +
 /// public method shape stable means [CelebrationOrchestrator] does not
-/// need a structural rewrite for PR 29.5. The orchestrator's other
-/// responsibilities (saga-intro wait, rank-up pulse-write) are
-/// unchanged. PR 30a will replace this pass-through with the
-/// post-session screen mount.
+/// need a structural rewrite. The orchestrator's other responsibilities
+/// (saga-intro wait, rank-up pulse-write) are unchanged. The
+/// post-session screen owns the full celebration surface.
 
 /// Result value for [CelebrationPlayer.play].
 ///

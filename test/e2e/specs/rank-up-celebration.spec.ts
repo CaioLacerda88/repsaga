@@ -333,74 +333,6 @@ async function reseedOverflowQueueUser(): Promise<void> {
   });
 }
 
-// Reseed rpgOverflowTapCard: same seeding contract as rpgOverflowQueue
-// (Phase 29 v2 calibration — all 6 BPs at rank 5 / 354 XP) but on a
-// dedicated user so the auto-dismiss and tap-card tests don't race on
-// shared XP state under --repeat-each=2.
-async function reseedOverflowTapCardUser(): Promise<void> {
-  const admin = getAdminClient();
-  const userId = await getUserIdByEmail(admin, getUser('rpgOverflowTapCard').email);
-  if (!userId) return;
-
-  await admin.from('workouts').delete().eq('user_id', userId);
-  await admin.from('xp_events').delete().eq('user_id', userId);
-  await admin.from('body_part_progress').delete().eq('user_id', userId);
-  await admin.from('exercise_peak_loads').delete().eq('user_id', userId);
-  // Phase 29 v2: see reseedRankUpThresholdUser for rationale.
-  await admin.from('exercise_peak_loads_by_rep_range').delete().eq('user_id', userId);
-  await admin.from('personal_records').delete().eq('user_id', userId);
-  await admin.from('earned_titles').delete().eq('user_id', userId);
-  await admin.from('backfill_progress').delete().eq('user_id', userId);
-
-  await admin.from('backfill_progress').upsert(
-    { user_id: userId, sets_processed: 0, started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(), completed_at: new Date().toISOString() },
-    { onConflict: 'user_id' },
-  );
-
-  const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-  for (const bp of bodyParts) {
-    await admin.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 354, rank: 5 },
-      { onConflict: 'user_id,body_part' },
-    );
-  }
-
-  const exerciseSlugs: Record<string, { slug: string; peak: number }> = {
-    chest:     { slug: 'barbell_bench_press',   peak: 80 },
-    legs:      { slug: 'barbell_squat',          peak: 80 },
-    back:      { slug: 'barbell_bent_over_row',  peak: 70 },
-    shoulders: { slug: 'overhead_press',         peak: 50 },
-  };
-  for (const { slug, peak } of Object.values(exerciseSlugs)) {
-    const { data: exRows } = await admin.from('exercises').select('id')
-      .eq('slug', slug).eq('is_default', true).limit(1);
-    const exId = exRows?.[0]?.id;
-    if (exId) {
-      await admin.from('exercise_peak_loads').upsert(
-        { user_id: userId, exercise_id: exId, peak_weight: peak, peak_reps: 5,
-          peak_date: new Date().toISOString() },
-        { onConflict: 'user_id,exercise_id' },
-      );
-      const achievedAt = new Date(Date.now() - 86_400_000).toISOString();
-      await admin.from('personal_records').insert([
-        { user_id: userId, exercise_id: exId, record_type: 'max_weight', value: peak, reps: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_reps', value: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_volume', value: peak * 5, achieved_at: achievedAt },
-      ]);
-    }
-  }
-
-  const now = new Date();
-  await admin.from('workouts').insert({
-    user_id: userId,
-    name: 'E2E Warmup Workout',
-    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
-    duration_seconds: 1800,
-  });
-}
-
 // =============================================================================
 // S1 — Single rank-up overlay auto-advances (no tap required)
 // =============================================================================
@@ -723,7 +655,9 @@ test.describe('First awakening server-state gate', { tag: '@smoke' }, () => {
 });
 
 // =============================================================================
-// S4 — Overflow queue cap: 3 overlays shown + CelebrationOverflowCard
+// S4 — Overflow queue cap: cap-at-3 XP parity gate (rank-up surface lives on
+//      the post-session screen; this test pins the per-bp XP/rank ledger
+//      after a workout that triggers the overflow path).
 // =============================================================================
 
 test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
@@ -745,7 +679,7 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     );
   });
 
-  test('should cap celebration queue at 3 overlays and show overflow card for remaining rank-ups', async ({
+  test('should record exact per-body-part XP totals after a 6-rank-up overflow finish', async ({
     page,
   }) => {
     // The 4-set workout below + queue drain + overflow-card mount comfortably
@@ -864,134 +798,6 @@ test.describe('Celebration overflow cap', { tag: '@smoke' }, () => {
     }
   });
 
-});
-
-// =============================================================================
-// S4b — Overflow card tap routes to /profile (dedicated user for isolation)
-//
-// Separate describe block with a DEDICATED user (rpgOverflowTapCard) so that
-// when --repeat-each=2 runs with 2 workers, the auto-dismiss test (S4) and the
-// tap-card test (S4b) operate on separate users and cannot collide on XP state.
-// Previously both tests shared rpgOverflowQueue; under --repeat-each the second
-// worker's beforeEach would race against the first worker's workout, causing the
-// XP state to be inconsistent and the overflow card to not appear.
-// =============================================================================
-
-test.describe('Celebration overflow card tap navigation', { tag: '@smoke' }, () => {
-  test.describe.configure({ mode: 'serial' });
-
-  test.beforeEach(async ({ page }) => {
-    // Reseed all 6 body parts back to rank 5 / 354 XP (Phase 29 v2 — same
-    // contract as rpgOverflowQueue). Uses dedicated rpgOverflowTapCard user
-    // (isolated from rpgOverflowQueue) so this describe block never races
-    // with S4 on --repeat-each runs.
-    await reseedOverflowTapCardUser();
-    await login(
-      page,
-      getUser('rpgOverflowTapCard').email,
-      getUser('rpgOverflowTapCard').password,
-    );
-  });
-
-  // eslint-disable-next-line playwright/no-skipped-test
-  test.skip('should route to /profile when the user taps the overflow card', async ({
-    page,
-  }) => {
-    // PR 29.5 Path A pivot (2026-05-22): the mid-workout overflow card
-    // is gone — the post-session screen (PR 30a) will surface the
-    // cap-at-3 affordance + the "tap to see all rank-ups" navigation
-    // as part of the ceremony. The "tap card → /profile" contract is
-    // not testable mid-workout anymore; PR 30a will re-introduce this
-    // assertion against the post-session screen's overflow surface.
-    // Test left as `.skip` (not deleted) so the PR-30a author has the
-    // body as a starting template for the post-session variant.
-    test.slow();
-
-    await startEmptyWorkout(page);
-    // BUG-020: Finish button only appears after first exercise is added.
-    await addExercise(page, SEED_EXERCISES.benchPress);
-    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
-      timeout: 15_000,
-    });
-    await setWeight(page, '80');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-
-    await addExercise(page, SEED_EXERCISES.squat);
-    await setWeight(page, '80');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-
-    await addExercise(page, EXERCISE_NAMES.barbell_bent_over_row.en);
-    await setWeight(page, '70');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-
-    await addExercise(page, SEED_EXERCISES.overheadPress);
-    await setWeight(page, '50');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-
-    await finishWorkout(page);
-
-    // Capture the locator handle ONCE up-front. Re-resolving (i.e., calling
-    // `page.locator(...)` again) on the click line opens a race window: the
-    // 4 s auto-dismiss timer can fire between `toBeVisible` returning and
-    // the click resolution, and the second locator finds nothing. Holding
-    // a single Locator instance keeps Playwright's actionability poll
-    // pointed at the same element through the click.
-    const overflowCard = page.locator(CELEBRATION.celebrationOverflowCard).first();
-    await expect(overflowCard).toBeVisible({ timeout: 45_000 });
-
-    // Tap the card. The completer resolves to true and the post-finish
-    // navigation routes to /profile (Saga) instead of /home.
-    //
-    // `{ force: true }` is required for two independent reasons:
-    //   1. Flutter CanvasKit's flutter-view element intercepts all DOM
-    //      pointer events; Playwright's normal click would fail the
-    //      actionability check (same pattern as manage-data.spec.ts line
-    //      597/605 for GradientButton clicks).
-    //   2. force-mode skips Playwright's pre-click visibility re-check, so
-    //      we don't open ANOTHER race window between toBeVisible above and
-    //      the click dispatch below — the AOM event fires immediately.
-    await overflowCard.click({ force: true });
-
-    await page.waitForURL(/\/profile/, { timeout: 10_000 });
-
-    // Parity gate — same Phase 29 v2 XP chain as S4 (rpgOverflowQueue uses
-    // identical seeding contract). Asserting per-bp XP + rank here guards
-    // against a SQL drift that would silently corrupt the tap-card scenario
-    // even when the overflow card still renders. Values mirror the S4 block
-    // above (1e-4 absolute parity with Dart calculator + Python sim +
-    // fixture oracle).
-    const admin = getAdminClient();
-    const userId = await getUserIdByEmail(admin, getUser('rpgOverflowTapCard').email);
-    expect(userId).toBeTruthy();
-    const { data: bpRows } = await admin
-      .from('body_part_progress')
-      .select('body_part, total_xp, rank')
-      .eq('user_id', userId!)
-      .order('body_part');
-    const bpMap: Record<string, { total_xp: number; rank: number }> = {};
-    for (const row of (bpRows ?? []) as Array<{ body_part: string; total_xp: number; rank: number }>) {
-      bpMap[row.body_part] = { total_xp: Number(row.total_xp), rank: row.rank };
-    }
-    const expected: Record<string, { total_xp: number; rank: number }> = {
-      chest:     { total_xp: 422.4366, rank: 6 },
-      back:      { total_xp: 433.1780, rank: 6 },
-      legs:      { total_xp: 439.3888, rank: 6 },
-      shoulders: { total_xp: 421.2183, rank: 6 },
-      arms:      { total_xp: 399.1321, rank: 6 },
-      core:      { total_xp: 390.3483, rank: 6 },
-    };
-    for (const bp of Object.keys(expected)) {
-      expect(bpMap[bp], `${bp} body_part_progress row missing`).toBeDefined();
-      expect(bpMap[bp].rank, `${bp} rank`).toBe(expected[bp].rank);
-      const delta = Math.abs(bpMap[bp].total_xp - expected[bp].total_xp);
-      expect(delta, `${bp} XP drift > 1e-4 (got ${bpMap[bp].total_xp}, expected ${expected[bp].total_xp})`)
-        .toBeLessThanOrEqual(1e-4);
-    }
-  });
 });
 
 // =============================================================================

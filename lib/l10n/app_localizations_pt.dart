@@ -1980,11 +1980,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Todas as condições atendidas — predicado satisfeito.';
 
   @override
-  String rankUpOverflowFlipbookLabel(int count) {
-    return '+$count ranks';
-  }
-
-  @override
   String get title_chest_r5_initiate_of_the_forge_name => 'Iniciado da Forja';
 
   @override
