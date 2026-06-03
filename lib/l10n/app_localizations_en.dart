@@ -1967,11 +1967,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'All conditions met — predicate satisfied.';
 
   @override
-  String rankUpOverflowFlipbookLabel(int count) {
-    return '+$count ranks';
-  }
-
-  @override
   String get title_chest_r5_initiate_of_the_forge_name =>
       'Initiate of the Forge';
 

@@ -1260,23 +1260,6 @@ export const SAGA = {
 // ---------------------------------------------------------------------------
 export const CELEBRATION = {
   /**
-   * CelebrationOverflowCard root — the widget is still in the codebase
-   * but, post-Path-A pivot, it no longer mounts mid-workout. The
-   * post-session screen (PR 30a) consumes the overflow payload and
-   * renders the affordance as part of the ceremony. Selector retained
-   * for the widget test under `test/widget/.../celebration_overflow_card_test.dart`
-   * and for any future PR-30a E2E that may reuse the semantics
-   * identifier.
-   */
-  celebrationOverflowCard: '[flt-semantics-identifier="celebration-overflow-card"]',
-  /**
-   * BUG-013 (Cluster 3) — RankUpOverflowFlipbook nested inside the
-   * overflow card. Same status as `celebrationOverflowCard` above —
-   * no mid-workout mount post-Path-A; selector retained for the widget
-   * test and any future PR-30a E2E.
-   */
-  rankUpOverflowFlipbook: '[flt-semantics-identifier="rank-up-overflow-flipbook"]',
-  /**
    * BUG-014 (Cluster 3) — structured stat chip on locked cross-build
    * title rows. Identifier pattern: 'cross-build-stat-chip-{slug}' where
    * slug is the CrossBuildTriggerId dbValue (iron_bound, broad_shouldered,

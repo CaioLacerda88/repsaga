@@ -622,8 +622,6 @@
   "crossBuildHintSagaForged": "O fim da jornada começa aqui — todo atributo acima de rank 60. Falta {gap} de rank em {muscleName}.",
   "crossBuildHintSatisfied": "Todas as condições atendidas — predicado satisfeito.",
 
-  "rankUpOverflowFlipbookLabel": "+{count} ranks",
-
   "title_chest_r5_initiate_of_the_forge_name": "Iniciado da Forja",
   "title_chest_r5_initiate_of_the_forge_flavor": "Primeira fagulha bateu no ferro.",
   "title_chest_r10_plate_bearer_name": "Carregador de Anilha",

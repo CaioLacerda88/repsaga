@@ -258,14 +258,6 @@ export const TEST_USERS = {
     password: 'TestPassword123!',
   },
 
-  // rpgOverflowTapCard: dedicated user for the "tap overflow card → /profile"
-  // test case. Isolated from rpgOverflowQueue so that --repeat-each=2 with 2
-  // workers never races on XP state between the auto-dismiss and tap-card tests.
-  rpgOverflowTapCard: {
-    email: 'e2e-rpg-overflow-tap@test.local',
-    password: 'TestPassword123!',
-  },
-
   // -------------------------------------------------------------------------
   // PR-1 audit fixes — cancel-during-start (C4/Q1) regression
   // -------------------------------------------------------------------------

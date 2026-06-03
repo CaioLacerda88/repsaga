@@ -1210,83 +1210,6 @@ async function seedRpgOverflowQueueUser(
   console.log('[global-setup] Seeded rpgOverflowQueueUser (all 6 body parts at rank 5, 354 XP — Phase 29 v2 R6 deterministic window, Ascendant class)');
 }
 
-/**
- * Seed rpgOverflowTapCard user — identical seeding contract to rpgOverflowQueue
- * but on a dedicated user. This prevents cross-worker XP state races when
- * --repeat-each=2 runs the auto-dismiss test (S4) and the tap-card test (S4b)
- * on parallel workers: each test now operates on its own user.
- */
-async function seedRpgOverflowTapCardUser(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<void> {
-
-  await supabase.from('workouts').delete().eq('user_id', userId);
-  await supabase.from('xp_events').delete().eq('user_id', userId);
-  await supabase.from('body_part_progress').delete().eq('user_id', userId);
-  await supabase.from('exercise_peak_loads').delete().eq('user_id', userId);
-  await supabase.from('personal_records').delete().eq('user_id', userId);
-  await supabase.from('backfill_progress').delete().eq('user_id', userId);
-  await supabase.from('earned_titles').delete().eq('user_id', userId);
-
-  await supabase.from('backfill_progress').upsert(
-    {
-      user_id: userId,
-      sets_processed: 0,
-      started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  );
-
-  await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Overflow Tap User', fitness_level: 'intermediate' },
-    { onConflict: 'id' },
-  );
-
-  // All 6 body parts at rank 5, total_xp = 354 (mirror
-  // seedRpgOverflowQueueUser; see that function's dartdoc for the
-  // deterministic-window derivation + exact post-state XP values).
-  const bodyParts = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-  for (const bp of bodyParts) {
-    const { error } = await supabase.from('body_part_progress').upsert(
-      { user_id: userId, body_part: bp, total_xp: 354, rank: 5 },
-      { onConflict: 'user_id,body_part' },
-    );
-    if (error) {
-      console.log(`[global-setup] Warning: body_part_progress seed error (${bp}) for rpgOverflowTapCard: ${error.message}`);
-    }
-  }
-
-  const exerciseSlugs: Record<string, { slug: string; peak: number }> = {
-    chest:     { slug: 'barbell_bench_press',   peak: 80 },
-    legs:      { slug: 'barbell_squat',          peak: 80 },
-    back:      { slug: 'barbell_bent_over_row',  peak: 70 },
-    shoulders: { slug: 'overhead_press',         peak: 50 },
-  };
-  for (const { slug, peak } of Object.values(exerciseSlugs)) {
-    const { data: exRows } = await supabase
-      .from('exercises').select('id').eq('slug', slug).eq('is_default', true).limit(1);
-    const exId = exRows?.[0]?.id;
-    if (exId) {
-      await supabase.from('exercise_peak_loads').upsert(
-        { user_id: userId, exercise_id: exId, peak_weight: peak, peak_reps: 5, peak_date: new Date().toISOString() },
-        { onConflict: 'user_id,exercise_id' },
-      );
-      const achievedAt = new Date(Date.now() - 86_400_000).toISOString();
-      await supabase.from('personal_records').insert([
-        { user_id: userId, exercise_id: exId, record_type: 'max_weight', value: peak, reps: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_reps', value: 5, achieved_at: achievedAt },
-        { user_id: userId, exercise_id: exId, record_type: 'max_volume', value: peak * 5, achieved_at: achievedAt },
-      ]);
-    }
-  }
-
-  await seedMinimalWorkout(supabase, userId);
-
-  console.log('[global-setup] Seeded rpgOverflowTapCardUser (all 6 body parts at rank 5, 354 XP — Phase 29 v2 R6 deterministic window, Ascendant class)');
-}
 
 // ---------------------------------------------------------------------------
 // Per-role seed helpers extracted for the per-worker orchestration loop.
@@ -1870,10 +1793,6 @@ function buildRoleSeedRunners(): Record<
     rpgOverflowQueue: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await seedRpgOverflowQueueUser(supabase, userId);
-    },
-    rpgOverflowTapCard: async (supabase, userId) => {
-      await cleanFreshStateUser(supabase, userId);
-      await seedRpgOverflowTapCardUser(supabase, userId);
     },
 
     // ── Phase 18e class-cross + title-equip ──────────────────────────────

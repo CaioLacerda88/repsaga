@@ -3402,12 +3402,6 @@ abstract class AppLocalizations {
   /// **'All conditions met — predicate satisfied.'**
   String get crossBuildHintSatisfied;
 
-  /// BUG-013 mini-flipbook label rendered alongside the three cycling muscle sigils when more than 3 rank-ups fire in one workout. Plural 'ranks' is grammatically correct here — overflow always means count >= 1 additional rank-up.
-  ///
-  /// In en, this message translates to:
-  /// **'+{count} ranks'**
-  String rankUpOverflowFlipbookLabel(int count);
-
   /// Phase 18c chest R5 title display name.
   ///
   /// In en, this message translates to:
