@@ -484,9 +484,12 @@ test.describe('Workout restore', { tag: '@smoke' }, () => {
     // would time out (the nav-exercises Semantics node doesn't exist on this
     // route). Use the simulated "force-quit + relaunch" pattern from
     // `charter-b-exploratory.spec.ts:317` instead — `page.goto('/')` triggers
-    // the router redirect chain, which lands on /home with the workout
-    // restored from Hive. The active banner then renders in the shell.
+    // a full reload; the router then redirects to /home with the workout
+    // restored from Hive. `waitForAppReady` blocks until CanvasKit + Riverpod
+    // bootstrap completes (without it, Playwright races the async Hive
+    // restore + auth-session rehydrate and asserts on NAV.homeTab too early).
     await page.goto('/');
+    await waitForAppReady(page);
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
 
     // The active workout banner must appear in the shell bottom bar.
