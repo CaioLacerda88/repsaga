@@ -151,6 +151,23 @@ void main() {
       expect(needsOnboarding, isTrue);
     });
 
+    // PR 1 review finding 5 — the fresh-from-`handle_new_user`-trigger row
+    // has both `display_name` and `onboarded_at` null. The pre-fix tests
+    // covered every other combination but not this one. Pinning the
+    // fully-null state here is the regression guard against a future change
+    // that accidentally short-circuits on a null displayName.
+    test('returns true when session present, displayName is null AND '
+        'onboardedAt is null (fresh handle_new_user-trigger row)', () async {
+      final (:container, :needsOnboarding) = await _buildAndRead(
+        authEvent: _ValidSessionAuth(_FakeSession()),
+        profileNotifierBuilder: () =>
+            _StubProfileNotifier(const Profile(id: 'u1')),
+      );
+      addTearDown(container.dispose);
+
+      expect(needsOnboarding, isTrue);
+    });
+
     test(
       'returns false when session present and onboardedAt is non-null',
       () async {

@@ -18,10 +18,18 @@ import 'auth_providers.dart';
 ///   * `true`  when the profile row is null OR `onboardedAt == null` — both
 ///     signal a user who has not completed the flow.
 ///
-/// Cluster: `provider-init-timing`. Watching `profileProvider` directly inside
-/// a derived `Provider<bool>` keeps the redirect callback aware of profile
-/// arrival — the router's `_RouterRefreshListenable` also listens to
-/// `profileProvider` so the redirect re-evaluates when the profile resolves.
+/// Cluster: `provider-init-timing`. Watching `profileProvider` directly
+/// inside a derived `Provider<bool>` keeps any consumer aware of profile
+/// arrival.
+///
+/// **The router does NOT read this provider.** The redirect callback in
+/// `app_router.dart` computes onboarding-needed inline because it has to
+/// share the loading-window gate with the `/splash` park (this provider
+/// collapses both "loading" and "onboarded" into `false`, which is the
+/// right reading for a UI consumer but the wrong reading for a redirect
+/// that needs to distinguish "wait" from "go to home"). This provider is
+/// kept as the public read API for any future widget / consumer that wants
+/// "is this user mid-onboarding right now" without re-deriving the rule.
 final needsOnboardingProvider = Provider<bool>((ref) {
   final session = ref.watch(authStateProvider).value?.session;
   if (session == null) return false;

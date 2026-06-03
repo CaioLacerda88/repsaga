@@ -226,5 +226,36 @@ void main() {
 
       expect(dest, '/splash');
     });
+
+    // PR 1 review finding 4 — the most common route gate (no session) had
+    // no widget-test coverage. Every unauthenticated visit hits it, so a
+    // regression here would surface as "users land on /splash or /home
+    // without ever seeing the login screen."
+    testWidgets('no session (signed-out) lands on /login', (tester) async {
+      final authController = StreamController<supabase.AuthState>();
+      final container = ProviderContainer(
+        overrides: _baseOverrides(
+          authController: authController,
+          // Profile builder is irrelevant — the redirect never reaches the
+          // profile-loading branch for an unauthenticated session. Use a
+          // resolved stub anyway so the test is robust against future
+          // re-ordering of the redirect's reads.
+          profileNotifierBuilder: () => _StubProfileNotifier(null),
+        ),
+      );
+      addTearDown(container.dispose);
+
+      final dest = await _destination(
+        tester,
+        container: container,
+        authController: authController,
+        authEvent: const supabase.AuthState(
+          supabase.AuthChangeEvent.signedOut,
+          null,
+        ),
+      );
+
+      expect(dest, '/login');
+    });
   });
 }
