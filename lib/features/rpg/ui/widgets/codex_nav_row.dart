@@ -50,9 +50,14 @@ class CodexNavRow extends StatelessWidget {
     // InkWell). Without them the AOM silently drops the
     // flt-semantics-identifier attribute on rebuild, and the inner Text
     // would merge up into the same node (cluster: aom-label-text-merge).
+    // Cluster: semantics-button-missing — button:true promotes the
+    // outside-in wrap from role="group" to role="button" so Playwright
+    // clicks are forwarded to the nested InkWell (matches the precedent
+    // in vitality_table, body_part_rank_row, next_title_row).
     return Semantics(
       container: true,
       explicitChildNodes: true,
+      button: true,
       identifier: semanticIdentifier!,
       child: tapTarget,
     );

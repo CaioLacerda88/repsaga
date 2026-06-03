@@ -6,16 +6,19 @@
 ///   * Renders the label and a trailing chevron.
 ///   * Tapping invokes the supplied callback.
 ///   * When `semanticIdentifier` is supplied the row exposes a stable
-///     `Semantics(container: true, explicitChildNodes: true,
+///     `Semantics(container: true, explicitChildNodes: true, button: true,
 ///     identifier: ...)` node — the pair-rule that prevents Flutter web's
 ///     AOM from eliding the `flt-semantics-identifier` on rebuild
-///     (cluster: semantics-identifier-pair-rule).
+///     (cluster: semantics-identifier-pair-rule), with `button: true`
+///     promoting role="group" → role="button" so Playwright clicks are
+///     forwarded to the nested InkWell (cluster: semantics-button-missing).
 ///   * The identifier survives a rebuild — pumping twice does not drop the
 ///     SemanticsNode (the original failure mode the cluster guards against).
 ///   * When `semanticIdentifier` is null, no Semantics wrapper is mounted.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/ui/widgets/codex_nav_row.dart';
 
@@ -129,6 +132,42 @@ void main() {
         );
 
         expect(find.bySemanticsIdentifier('codex-nav-stats'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'should expose role=button on the Semantics wrapper for AOM click forwarding',
+      (tester) async {
+        // Cluster: semantics-button-missing. The outside-in Semantics
+        // wrap (container:true + explicitChildNodes:true around the
+        // InkWell) renders as role="group" in Flutter web's AOM unless
+        // button:true is set. role="group" silently swallows Playwright
+        // clicks (they hit the wrapper, never reach the inner InkWell).
+        // Pinning the SemanticsFlag.isButton bit here is the canonical
+        // regression guard — if a future refactor drops button:true,
+        // E2E selectors for these rows would silently stop working.
+        await tester.pumpWidget(
+          TestMaterialApp(
+            home: Scaffold(
+              body: CodexNavRow(
+                label: 'Stats',
+                semanticIdentifier: 'codex-nav-stats',
+                onTap: () {},
+              ),
+            ),
+          ),
+        );
+
+        final SemanticsNode node = tester.getSemantics(
+          find.bySemanticsIdentifier('codex-nav-stats'),
+        );
+        expect(
+          node.hasFlag(SemanticsFlag.isButton),
+          isTrue,
+          reason:
+              'CodexNavRow must emit button:true so Playwright clicks are '
+              'forwarded to the inner InkWell (cluster: semantics-button-missing).',
+        );
       },
     );
   });
