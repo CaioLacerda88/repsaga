@@ -900,271 +900,337 @@ Stage 2 is user-facing, doesn't need its own implementation plan. Orchestrator o
 
 ---
 
-# Phase 33 — PR 33b (Dead-code + developer.log batch) Implementation Plan
+# Phase 33 — PR 33c (Workout-flow + global-setup-seed) Implementation Plan
 
-**Goal:** Land 4 IMPORTANT + 3 folded NICE-TO-HAVE cleanup fixes per the Phase 33 audit. Dart-only — zero changes in `supabase/functions/`, `lib/features/{workouts,rpg}/` (already PR 32g'd for developer.log), or e2e specs.
+**Goal:** Land 9 IMPORTANT + 3 folded NICE-TO-HAVE fixes per the Phase 33 audit. Mixed Dart + E2E batch — the largest fix-PR by item count.
 
-**Architecture:** Mechanical migration of `developer.log()` / bare `log()` → `debugPrint('[Scope] msg')` across 5 `lib/core/` + `lib/features/personal_records/` files, drop their `dart:developer` imports, delete the orphan `SagaStubScreen` widget, delete 6 RPE l10n keys (Phase 25 dropped) + the `comingSoonStub` key from both ARBs, regenerate localizations, and widen the `check_no_developer_log.sh` CI gate from workouts+rpg scope to all of `lib/`.
+**Architecture:** Workout-flow code fixes go into `lib/features/workouts/` (3 files). E2E batch adds 7 new specs + extends 1 + fixes `global-setup.ts` seed data for 2 infra-gap unskips. Audit doc Triage stamps section lines 32–66 + finding bodies for source-of-truth.
 
-**Tech Stack:** Dart (Flutter), Freezed/json_serializable codegen (l10n), bash (CI gate script).
+**Tech Stack:** Dart (Flutter), TypeScript (Playwright + Node global-setup), Supabase admin SDK (seed RPC calls).
 
-**Spec reference:** `docs/pre-launch-audit.md` lines 123–298 (finding-001, 003, 004, 010 + folded 012, 014, 021).
+**Spec reference:** `docs/pre-launch-audit.md`
+- Workout-flow Dart: finding-005 (line 157), 009 (189), 011 (211), 013 (227)
+- E2E: finding-036 (657), 037 (668), 038 (679), 039 (690), 041 (713), 044 (746), 046 (768), 059 (915)
 
-**Branch:** `feature/phase-33b-cleanup`
+**Branch:** `feature/phase-33c-workout-flow`
 
 ---
 
 ## Files
 
-### Migrate (5 files, ~12 call sites)
-- **Modify:** `lib/core/local_storage/cache_service.dart` — finding-001 (4 sites: 21, 33, 48, 57) + finding-014 (drop `dart:developer` import)
-- **Modify:** `lib/core/offline/pending_sync_provider.dart` — finding-001 + finding-021 (2 sites: 71, 137) + drop import
-- **Modify:** `lib/core/l10n/locale_provider.dart` — finding-001 + finding-010 (2 sites: 82, 89; also wrap `.catchError` in async try/catch) + drop import
-- **Modify:** `lib/core/local_storage/hive_service.dart` — finding-001 (3 sites: 184, 212, 226) + drop import
-- **Modify:** `lib/features/personal_records/providers/pr_cache_bootstrap_provider.dart` — finding-001 (3 sites: 118, 141, 155) + drop import
+### Workout-flow Dart fixes
 
-### Delete (2 files + 7 ARB keys)
-- **Delete:** `lib/features/rpg/ui/saga_stub_screen.dart` (finding-004) — orphan widget, never imported
-- **Modify:** `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` — delete 6 RPE keys (`rpeTooltip`, `rpeValue`, `rpeLabel`, `rpeMenuItem`, `setRpe`, plus the `@rpeTooltip` etc. metadata) + `comingSoonStub` (and its metadata key)
+- **Modify:** `lib/features/workouts/ui/coordinators/finish_workout_coordinator.dart` (finding-005 option a, finding-011)
+  - Capture `RankCurve.progressFraction(preXp, preRank)` per BodyPart BEFORE `await notifier.finishWorkout()`. Same capture pattern as `bpRankBefore`. Pass through to `PostSessionParams.bpProgressFractionPre`.
+  - Delete the `_emptyBpFractions()` helper at line 598 — no longer used.
+- **Modify:** `lib/features/workouts/ui/post_session/post_session_controller.dart` (finding-005 verification, finding-013 doc comment)
+  - Confirm `_buildInitial()` actually reads `params.bpProgressFractionPre` once it's non-empty. If still ignored, wire it into the pre-state computation.
+  - Add doc comment on `PostSessionParams.bpProgressFractionPre` describing its actual purpose post-fix.
+- **Modify:** `lib/features/weekly_plan/ui/week_plan_screen.dart` (finding-009)
+  - Refactor `_flushDebouncedSave` from `.then()/.catchError()` chain to async/await + mounted guard + structured error log.
+  - Cluster ref: `async-caller-broke-snackbar`
 
-### Regenerate
-- **Modify (codegen):** `lib/l10n/app_localizations.dart`, `lib/l10n/app_localizations_en.dart`, `lib/l10n/app_localizations_pt.dart` — auto-regen via `flutter gen-l10n` after ARB deletions
+### E2E test additions / fixes
 
-### CI gate widening
-- **Modify:** `scripts/check_no_developer_log.sh` — widen `SCOPE` from `(lib/features/workouts lib/features/rpg)` to `(lib)` and update preamble.
+- **Modify:** `test/e2e/global-setup.ts`
+  - finding-036: DELETE the profile row for `smokeOnboarding` user after creation (or never insert — depends on existing flow)
+  - finding-046: Seed `smokeWeeklyPlanReview` with a `weekly_plans` row with all workouts marked done for the current ISO week → unlocks the 4 skipped tests in `weekly-plan.spec.ts:458–521`
+- **Modify:** `test/e2e/specs/auth.spec.ts`
+  - finding-037: New describe block `Auth — sign-up happy path` with `should create a new account and reach email confirmation screen`
+  - finding-059: Extend the `auth.spec.ts:276` "full journey" test to include navigation to `/records` via profile settings (Records row)
+- **Modify:** `test/e2e/specs/workouts.spec.ts`
+  - finding-038: New test in `Workout restore` describe: `should return to active workout when tapping the active banner from a different tab`
+  - finding-039: Extend `Workout history` describe with `should render the detail strip with XP on the workout detail screen` + `should show exercise cards on the workout detail screen`
+- **Modify:** `test/e2e/specs/post_session.spec.ts`
+  - finding-041: New test in `Post-session summary`: `should navigate to home screen when CONTINUAR is tapped on the summary panel`
+- **Modify:** `test/e2e/specs/personal-records.spec.ts` (or new spec)
+  - finding-044: New test: `should navigate to the personal records screen when tapping the Records row in profile settings`
+- **Modify (unskip):** `test/e2e/specs/weekly-plan.spec.ts:458–521`
+  - finding-046: Remove 4 `.skip()` calls after seed lands
 
-### Closeout (in the same first commit)
-- **Modify:** `docs/WIP.md` — strip PR 33a section, append this PR 33b plan
-- **Modify:** `docs/PROJECT.md` §3 sub-PR table — flip 33a PENDING → DONE (#292)
+### Selectors (verify exist, add if missing)
+- **Modify:** `test/e2e/helpers/selectors.ts` — only if a new test surfaces a missing selector. Per Code Style rule "All in `helpers/selectors.ts`", no inlining.
+
+### Closeout (in first commit)
+- **Modify:** `docs/WIP.md` — strip PR 33b section, append this plan
+- **Modify:** `docs/PROJECT.md` §3 — flip 33b PENDING → DONE (#293)
 
 ---
 
 ## Checklist
 
-- [ ] Task 1 — PR 33a closeout + PR 33b plan commit
-- [ ] Task 2 — Verify `dart:developer` usage count baseline + check tests
-- [ ] Task 3 — Migrate `cache_service.dart` (finding-001 partial + finding-014)
-- [ ] Task 4 — Migrate `pending_sync_provider.dart` (finding-001 + finding-021)
-- [ ] Task 5 — Migrate `locale_provider.dart` (finding-001 + finding-010 async try/catch)
-- [ ] Task 6 — Migrate `hive_service.dart` (finding-001 partial)
-- [ ] Task 7 — Migrate `pr_cache_bootstrap_provider.dart` (finding-001 partial)
-- [ ] Task 8 — Delete `saga_stub_screen.dart` (finding-004)
-- [ ] Task 9 — Delete 6 RPE keys + `comingSoonStub` from both ARBs (finding-003 + finding-012)
-- [ ] Task 10 — `flutter gen-l10n` to regenerate l10n
-- [ ] Task 11 — Widen `check_no_developer_log.sh` scope to `lib/`
-- [ ] Task 12 — Verify (format + gen + analyze + test) + commit + PR + reviewer + QA + admin-merge
+- [ ] Task 1 — PR 33b closeout + PR 33c plan commit
+- [ ] Task 2 — Dart workout-flow fixes (finding-005/009/011/013)
+- [ ] Task 3 — `global-setup.ts` seed changes (finding-036 + finding-046)
+- [ ] Task 4 — `auth.spec.ts` additions (finding-037 + finding-059)
+- [ ] Task 5 — `workouts.spec.ts` additions (finding-038 + finding-039)
+- [ ] Task 6 — `post_session.spec.ts` addition (finding-041)
+- [ ] Task 7 — `personal-records.spec.ts` addition (finding-044)
+- [ ] Task 8 — Unskip 4 tests in `weekly-plan.spec.ts:458–521` (finding-046 follow-through)
+- [ ] Task 9 — Verify analyze + flutter test green; run new + unskipped E2E specs locally
+- [ ] Task 10 — Commit + push + reviewer + qa-engineer cycle + PR + admin-merge
 
 ---
 
-## Task 1 — PR 33a closeout + PR 33b plan commit
+## Task 1 — PR 33b closeout + PR 33c plan commit
 
-Done as the first commit on `feature/phase-33b-cleanup`. Includes:
-1. Strip PR 33a section from `docs/WIP.md`
-2. Append this plan to `docs/WIP.md`
-3. Flip 33a row in `docs/PROJECT.md` §3 sub-PR table: PENDING → DONE (#292)
+Already executing as the first commit on `feature/phase-33c-workout-flow`. Includes:
+1. Strip PR 33b plan from `docs/WIP.md` (lines 903–1170 on pre-strip)
+2. Append this PR 33c plan to `docs/WIP.md`
+3. Flip 33b row in PROJECT.md §3: PENDING/IN FLIGHT → DONE (#293)
+4. Update sub-PR order line: 33b DONE → 33c IN FLIGHT
 
-Commit message: `docs(phase-33b): close out PR 33a + plan for PR 33b cleanup batch`
-
----
-
-## Task 2 — Baseline check
-
-- [ ] **Step 1: Confirm scope of `dart:developer` usage in `lib/`**
-
-Run a Grep for `import 'dart:developer'` under `lib/`. Expected: 5 imports matching the 5 files in this PR. If more, investigate before proceeding.
-
-- [ ] **Step 2: Confirm no test imports `dart:developer`**
-
-Grep `test/` for same pattern. Expected: empty.
+Commit message: `docs(phase-33c): close out PR 33b + plan for PR 33c workout-flow batch`
 
 ---
 
-## Task 3 — Migrate `cache_service.dart`
+## Task 2 — Workout-flow Dart fixes
 
 **Files:**
-- Modify: `lib/core/local_storage/cache_service.dart`
+- Modify: `lib/features/workouts/ui/coordinators/finish_workout_coordinator.dart`
+- Modify: `lib/features/workouts/ui/post_session/post_session_controller.dart`
+- Modify: `lib/features/weekly_plan/ui/week_plan_screen.dart`
 
-- [ ] **Step 1: Read the file end-to-end** — locate the 4 `log(` call sites at lines 21, 33, 48, 57. Each is inside an error handler.
+### finding-005 (option a) — implement the TODO
 
-- [ ] **Step 2: Replace pattern** — for each `log(...)`:
-  - Import `package:flutter/foundation.dart` (for `debugPrint`) if not already imported
-  - Replace `log('msg', name: 'foo', error: e, stackTrace: st)` with `debugPrint('[CacheService] msg: $e\n$st')`
-  - Tag prefix: `[CacheService]`
+- [ ] **Step 1: Read `finish_workout_coordinator.dart`**, locate the `_emptyBpFractions()` helper at line 598 and the `bpProgressFractionPre:` argument to `PostSessionParams`.
 
-- [ ] **Step 3: Remove `import 'dart:developer';`** (finding-014)
+- [ ] **Step 2: Capture pre-state per BodyPart BEFORE `await notifier.finishWorkout()`**
 
-- [ ] **Step 4: Run analyzer + existing tests for the file**
-
----
-
-## Task 4 — Migrate `pending_sync_provider.dart`
-
-**Files:**
-- Modify: `lib/core/offline/pending_sync_provider.dart`
-
-- [ ] **Step 1: Read the file**, locate sites at lines 71 and 137 (finding-021 is the line 137 legacy drain log).
-
-- [ ] **Step 2: Replace pattern** — tag prefix `[PendingSyncNotifier]`. Site at 137 specifically per finding-021: `debugPrint('[PendingSyncNotifier] 26e: <message>')`.
-
-- [ ] **Step 3: Remove `import 'dart:developer';`**
-
-- [ ] **Step 4: Analyzer + tests**
-
----
-
-## Task 5 — Migrate `locale_provider.dart` (with async try/catch for finding-010)
-
-**Files:**
-- Modify: `lib/core/l10n/locale_provider.dart`
-
-- [ ] **Step 1: Read the file** — locate `_syncToRemote` and the two `developer.log` sites at lines 82, 89.
-
-- [ ] **Step 2: Replace `developer.log` calls** with `debugPrint('[LocaleNotifier] Failed to sync locale: $e')`.
-
-- [ ] **Step 3: Refactor `.catchError` → async try/catch per finding-010**
-
-If the current shape is `repo.updateLocale(...).catchError((e) { developer.log(...); });`, restructure to:
-
+The capture pattern follows `bpRankBefore` (verify by reading the existing capture). For each BodyPart with non-null `preXp` + `preRank` from `state.bpXpDeltas`:
 ```dart
-unawaited(() async {
-  try {
-    await repo.updateLocale(...);
-  } catch (e) {
-    debugPrint('[LocaleNotifier] Failed to sync locale: $e');
-  }
-}());
+final bpProgressFractionPre = <BodyPart, double>{};
+for (final bp in state.bpXpDeltas.keys) {
+  final preXp = ...; // read from state
+  final preRank = ...; // read from state (matches bpRankBefore source)
+  bpProgressFractionPre[bp] = RankCurve.progressFraction(preXp, preRank);
+}
 ```
 
-Add `import 'dart:async';` if `unawaited` is not yet in scope.
+If the state shape doesn't expose `preXp`/`preRank` directly, follow the existing `bpRankBefore` capture's exact source. If THAT capture is also empty/TODO, surface this as a blocker — the architectural decision should not be made unilaterally by an agent.
 
-- [ ] **Step 4: Remove `import 'dart:developer';`**
+- [ ] **Step 3: Replace `_emptyBpFractions()` call site** with the new `bpProgressFractionPre` map. Delete the helper.
 
-- [ ] **Step 5: Analyzer + tests**
+- [ ] **Step 4: Write/update unit test** asserting the captured fractions match `RankCurve.progressFraction(preXp, preRank)` for at least one BP. Tests for `finish_workout_coordinator` live under `test/unit/features/workouts/ui/coordinators/` — extend the existing file.
+
+### finding-009 — `_flushDebouncedSave` async refactor
+
+- [ ] **Step 5: Read `week_plan_screen.dart`** around line 634, locate `_flushDebouncedSave`.
+
+- [ ] **Step 6: Refactor to async/await + mounted guard**
+
+```dart
+Future<void> _flushDebouncedSave() async {
+  try {
+    await ref.read(weeklyPlanNotifierProvider.notifier).upsertPlan(_bucketRoutines);
+    if (mounted) _maybeShowSavedSnackbar();
+  } catch (e) {
+    debugPrint('[WeekPlanScreen] flush save failed: $e');
+  }
+}
+```
+
+Update any synchronous caller (likely a debouncer Timer callback) to handle the now-async return — wrap in `unawaited(...)` if fire-and-forget is the desired semantic.
+
+- [ ] **Step 7: Write widget test** for the disposed-state path: pump `WeekPlanScreen`, trigger debounced save, dispose widget, complete the future — assert NO `ScaffoldMessenger.of(disposedContext)` throw + assert NO snackbar appears. Cluster `async-caller-broke-snackbar` test template.
+
+### finding-013 — doc comment on `bpProgressFractionPre`
+
+- [ ] **Step 8: Read `post_session_controller.dart` line 50** and the `PostSessionParams` declaration. After finding-005 fix, the field IS populated — update the doc comment to describe its actual purpose (pre-finish rank-progress fraction per BP, used to animate the B2 tally-cut bars from a non-trivial starting position).
+
+### Verification
+
+- [ ] **Step 9: Run analyzer + workouts test suite**
+
+```bash
+dart analyze --fatal-infos lib/features/workouts/ lib/features/weekly_plan/
+flutter test test/unit/features/workouts/ test/widget/features/workouts/ test/unit/features/weekly_plan/ test/widget/features/weekly_plan/
+```
+
+Expected: all green.
+
+- [ ] **Step 10: Commit**
+
+```
+refactor(workouts): finish_workout_coordinator populates bpProgressFractionPre + week_plan async-save mounted guard (findings 005/009/011/013)
+```
 
 ---
 
-## Task 6 — Migrate `hive_service.dart`
+## Task 3 — `global-setup.ts` seed changes
 
 **Files:**
-- Modify: `lib/core/local_storage/hive_service.dart`
+- Modify: `test/e2e/global-setup.ts`
 
-- [ ] **Step 1: Read the file**, locate sites at lines 184, 212, 226 (Hive box recovery / bootstrap).
+### finding-036 — `smokeOnboarding` profile-row deletion
 
-- [ ] **Step 2: Replace pattern** — tag prefix `[HiveService]`
+- [ ] **Step 1: Read `global-setup.ts`** end-to-end. Locate the `smokeOnboarding` user provisioning block. Understand whether it currently INSERTS a profile row (which then causes the onboarding tests to skip — onboarding only runs when no profile row exists).
 
-- [ ] **Step 3: Remove `import 'dart:developer';`**
+- [ ] **Step 2: After auth-user creation for `smokeOnboarding`, ensure NO profile row exists.**
 
-- [ ] **Step 4: Analyzer + tests**
+If the current flow inserts one: add a `DELETE FROM profiles WHERE id = $smokeOnboardingUserId` after creation.
+If a downstream block (e.g., default profile setup) inserts: skip it for this specific user.
+
+- [ ] **Step 3: Run `onboarding.spec.ts`** locally to verify the 4 self-skipping tests now execute. If they fail on actual UI bugs uncovered by finally running, FIX or surface as a follow-up.
+
+### finding-046 — `smokeWeeklyPlanReview` seeded with completed weekly plan
+
+- [ ] **Step 4: Determine the schema for `weekly_plans` rows** marked "done for ISO week". Read existing migrations under `supabase/migrations/` + the `weekly_plan_notifier.dart` to understand what state constitutes "week complete":
+  - Likely: a `weekly_plans` row for the current ISO week with all 3-7 bucket workout slots filled with `workouts.id` references, AND each workout is `completed_at IS NOT NULL`.
+  - Check whether a domain RPC like `complete_weekly_plan_for_user` exists; preferred over raw INSERT.
+
+- [ ] **Step 5: Add seed block for `smokeWeeklyPlanReview` user**
+
+After auth-user creation, seed:
+1. A routine + a few workouts for that user
+2. A `weekly_plans` row for the current ISO week
+3. Mark all workout slots as `completed_at = now()`
+
+Use admin client (service role) for the seed. Follow the existing `smokeWeeklyPlan` seed pattern as the template — it likely seeds the "in-progress" state.
+
+- [ ] **Step 6: Verify** `weekly-plan.spec.ts:458–521` tests no longer self-skip.
 
 ---
 
-## Task 7 — Migrate `pr_cache_bootstrap_provider.dart`
+## Task 4 — `auth.spec.ts` additions
 
 **Files:**
-- Modify: `lib/features/personal_records/providers/pr_cache_bootstrap_provider.dart`
+- Modify: `test/e2e/specs/auth.spec.ts`
 
-- [ ] **Step 1: Read the file**, locate sites at lines 118, 141, 155 (PR-cache migration).
+### finding-037 — sign-up happy path
 
-- [ ] **Step 2: Replace pattern** — tag prefix `[PrCacheBootstrap]`
+- [ ] **Step 1: Add new describe block** `Auth — sign-up happy path` (or extend an existing one if logical) with test `should create a new account and reach email confirmation screen`.
 
-- [ ] **Step 3: Remove `import 'dart:developer';`**
+- [ ] **Step 2: Test body**
 
-- [ ] **Step 4: Analyzer + tests**
+```ts
+test('should create a new account and reach email confirmation screen', async ({ page }) => {
+  const uniqueEmail = `signup-${Date.now()}@test.local`;
+  await page.goto('/');
+  // Navigate to sign-up tab if needed
+  await page.locator(AUTH.signUpToggle).click();
+  await flutterFill(page, AUTH.emailInput, uniqueEmail);
+  await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+  await page.locator(AUTH.signUpButton).click();
+  // Assert email confirmation screen renders
+  await expect(page.locator(AUTH.emailConfirmationHeading).first()).toBeVisible();
+});
+```
+
+- [ ] **Step 3: Cleanup** — `afterAll` deletes the throwaway user via Supabase admin client. Add to a per-test or per-block cleanup helper if not present.
+
+### finding-059 — extend full-journey with Records
+
+- [ ] **Step 4: Locate `auth.spec.ts:276`** — the existing "full journey" test that navigates Home/Exercises/Routines/Profile.
+
+- [ ] **Step 5: Add a step** that taps the Records row in profile settings + asserts `PR_LIST.screen` is visible. Don't change the existing flow steps; just append.
 
 ---
 
-## Task 8 — Delete `saga_stub_screen.dart` (finding-004)
+## Task 5 — `workouts.spec.ts` additions
 
 **Files:**
-- Delete: `lib/features/rpg/ui/saga_stub_screen.dart`
+- Modify: `test/e2e/specs/workouts.spec.ts`
 
-- [ ] **Step 1: Confirm no imports anywhere in `lib/` or `test/`** via grep on `saga_stub_screen` + `SagaStubScreen`. Expected: zero matches.
+### finding-038 — banner tap E2E
 
-- [ ] **Step 2: Delete via `git rm lib/features/rpg/ui/saga_stub_screen.dart`**
+- [ ] **Step 1: New test in `Workout restore` describe**: `should return to active workout when tapping the active banner from a different tab`.
 
-- [ ] **Step 3: Re-grep to confirm clean.**
+Body: start a workout (use existing helper if any), navigate to /home/exercises or another tab, locate `WORKOUT.activeBanner` selector, tap it, assert URL or content shows `/workout/active` (use content-visibility per `flutter-web-url-assertion` cluster).
+
+### finding-039 — detail screen content
+
+- [ ] **Step 2: Extend `Workout history` describe** with two new tests:
+  - `should render the detail strip with XP on the workout detail screen`
+  - `should show exercise cards on the workout detail screen`
+
+Use `fullHistory` user. Navigate to history list, tap first completed workout card, assert `WORKOUT_DETAIL.detailStrip` visible with non-empty XP text + `WORKOUT_DETAIL.exerciseCard` count ≥ 1.
 
 ---
 
-## Task 9 — Delete RPE + comingSoonStub ARB keys (finding-003 + finding-012)
+## Task 6 — `post_session.spec.ts` addition
 
 **Files:**
-- Modify: `lib/l10n/app_en.arb`
-- Modify: `lib/l10n/app_pt.arb`
+- Modify: `test/e2e/specs/post_session.spec.ts`
 
-- [ ] **Step 1: Confirm zero usage of the 6 RPE l10n getters anywhere in `lib/` + `test/`** via grep on `l10n.rpeTooltip`, `l10n.rpeValue`, `l10n.rpeLabel`, `l10n.rpeMenuItem`, `l10n.setRpe`, `l10n.comingSoonStub`.
+### finding-041 — CONTINUAR CTA → /home
 
-- [ ] **Step 2: Delete keys + their `@key` metadata from both ARB files**
+- [ ] **Step 1: New test in `Post-session summary`** describe: `should navigate to home screen when CONTINUAR is tapped on the summary panel`.
 
-Keys to delete (in both `app_en.arb` and `app_pt.arb`):
-- `rpeTooltip` + `@rpeTooltip`
-- `rpeValue` + `@rpeValue`
-- `rpeMenuItem` + `@rpeMenuItem`
-- `rpeLabel` + `@rpeLabel`
-- `setRpe` + `@setRpe`
-- `comingSoonStub` + `@comingSoonStub`
-
-- [ ] **Step 3: Verify ARB JSON is still valid**
-
-Use a JSON parser (python -m json.tool or jq) to confirm both files parse.
+Use `rpgRankUpThreshold` user. Trigger post-session screen, wait for summary panel, locate `POST_SESSION.continueCta` selector, tap, assert `HOME.shellRoot` visible (or URL hash includes `/home` — content assertion preferred per cluster).
 
 ---
 
-## Task 10 — `flutter gen-l10n` to regenerate l10n
-
-- [ ] **Step 1: Run `flutter gen-l10n`** (the standalone Make target; skip the full `make gen` since no Freezed/json_serializable source files changed).
-
-- [ ] **Step 2: Verify regenerated files are clean** — grep generated files for the 7 removed key names. Expected: zero matches.
-
-- [ ] **Step 3: Run analyzer on `lib/l10n/`** — 0 issues.
-
----
-
-## Task 11 — Widen `check_no_developer_log.sh` scope
+## Task 7 — `personal-records.spec.ts` addition
 
 **Files:**
-- Modify: `scripts/check_no_developer_log.sh`
+- Modify: `test/e2e/specs/personal-records.spec.ts`
 
-- [ ] **Step 1: Change `SCOPE` array** from `(lib/features/workouts lib/features/rpg)` to `(lib)`.
+### finding-044 — /records via in-app nav
 
-- [ ] **Step 2: Update the preamble** to reflect the new contract — replace the workouts/rpg scope description with "Scope: all of `lib/`. After PR 33b, the entire app uses `debugPrint('[Scope] msg')` instead of `dart:developer.log`."
+- [ ] **Step 1: New test**: `should navigate to the personal records screen when tapping the Records row in profile settings`.
 
-- [ ] **Step 3: Run the script locally** — expected: `check_no_developer_log: clean ...`
-
-If any violation surfaces, that's a missed migration — fix it before proceeding.
+Use `smokePR` user. From `/home`, tap profile gear icon → `/profile/settings` opens → tap `PROFILE.recordsStatRow` → assert `PR_LIST.screen` visible.
 
 ---
 
-## Task 12 — Verify + commit + PR + review cycle
+## Task 8 — Unskip 4 tests in `weekly-plan.spec.ts:458–521`
 
-- [ ] **Step 1: Run full pipeline locally** — format + gen-l10n + all analyze scripts + flutter test (excluding integration + golden).
+**Files:**
+- Modify: `test/e2e/specs/weekly-plan.spec.ts`
 
-- [ ] **Step 2: Stage + commit**
+- [ ] **Step 1: Remove `.skip` from 4 tests** at lines 458–521. Verify they pass with the new global-setup seed from Task 3.
 
-Suggested commit decomposition:
-- `refactor(core): developer.log → debugPrint in 5 files (findings 001/010/014/021)`
-- `chore(rpg): delete orphan SagaStubScreen widget (finding-004)`
-- `chore(l10n): delete dropped RPE keys + comingSoonStub (findings 003/012)`
-- `ci(analyze): widen check_no_developer_log scope to entire lib/`
-
-- [ ] **Step 3: Dispatch reviewer agent**
-
-- [ ] **Step 4: Dispatch qa-engineer agent**
-
-- [ ] **Step 5: Push + open PR** with title `refactor(cleanup): Phase 33 PR 33b — developer.log sweep + dead-code removal`
-
-- [ ] **Step 6: Wait for CI green** — specifically watch the `analyze` job for the widened gate.
-
-- [ ] **Step 7: Admin-merge** with `--squash --admin --delete-branch`.
-
-- [ ] **Step 8: Update PROJECT.md §3 sub-PR table** — flip 33b PENDING → DONE in next fix-PR (PR 33c's first commit).
+- [ ] **Step 2: If any fail on a real bug** uncovered by the seed: root-cause via `systematic-debugging` skill; fix the underlying issue + commit separately.
 
 ---
 
-## PR 33b Notes
+## Task 9 — Verify
 
-- **Test files not migrated:** the audit's finding-001 scope is `lib/`. Test files that legitimately import `dart:developer` are out of scope. Task 2 confirms none exist today.
-- **Symmetry with PR 32g:** PR 32g migrated `active_workout_notifier.dart`. PR 33b is the rest-of-codebase finisher. After PR 33b merges, the codebase has zero `dart:developer` imports in `lib/`.
-- **`flutter/foundation.dart` vs `flutter/material.dart`:** prefer `package:flutter/foundation.dart` for non-UI files (notifiers, services, providers). For UI files already importing material, `debugPrint` comes along for free.
-- **No e2e impact:** the only user-visible text change is removing `comingSoonStub` (already unreachable post-Phase-26c/d). RPE keys never rendered. SagaStubScreen never routed to. Zero risk to selectors.
-- **CI gate widening is the keystone:** without Task 11, a future PR could reintroduce `developer.log` in `lib/core/` and CI wouldn't catch it. The gate is the contract.
+- [ ] **Step 1: Full local verification**
+
+```bash
+export PATH="/c/flutter/bin:$PATH"
+dart format .
+dart analyze --fatal-infos
+flutter test --exclude-tags integration --exclude-tags golden
+```
+
+Expected: all green.
+
+- [ ] **Step 2: Local E2E run for changed/new specs**
+
+```bash
+cd test/e2e && FLUTTER_APP_URL= npx playwright test specs/onboarding.spec.ts specs/auth.spec.ts specs/workouts.spec.ts specs/post_session.spec.ts specs/personal-records.spec.ts specs/weekly-plan.spec.ts --reporter=list
+```
+
+Expected: all new tests + previously-skipped tests pass. Surface any unexpected failure loudly.
+
+---
+
+## Task 10 — Commit + PR + ship
+
+- [ ] **Step 1: Decompose into 2–3 commits**
+  - `refactor(workouts): Phase 33 PR 33c — workout-flow fixes (findings 005/009/011/013)`
+  - `test(e2e): Phase 33 PR 33c — 7 new/extended specs + 2 global-setup seeds (findings 036–046, 059)`
+
+- [ ] **Step 2: Reviewer cycle**
+
+- [ ] **Step 3: qa-engineer cycle** — full E2E run on the branch
+
+- [ ] **Step 4: Push + open PR** with title `feat(workouts,e2e): Phase 33 PR 33c — workout-flow bug fixes + E2E coverage expansion`
+
+- [ ] **Step 5: Wait for CI green** (e2e job is the long pole — expect 35–40 min)
+
+- [ ] **Step 6: Admin-merge** with `--squash --admin --delete-branch`
+
+---
+
+## PR 33c Notes
+
+- **finding-005 architecture decision:** the audit explicitly recommends option (a). If the `preXp`/`preRank` capture turns out to require state that the coordinator doesn't have access to at the right time, escalate as a BLOCKER — do not silently fall back to option (b).
+- **finding-046 schema research:** depends on the actual `weekly_plans` table shape. If the schema requires server-side computation (RPC) that an admin client can't bypass, the seed approach may need rethinking — surface this if found.
+- **No new migrations:** all fixes are application-layer.
+- **E2E selectors:** all in `helpers/selectors.ts`. Use existing selectors where available. Per `feedback_no_inline_selectors` (CLAUDE.md), never inline magic strings.
+- **Test naming:** all tests start with `should` per `feedback_e2e_naming`.
+- **Behavior-not-wiring:** assertions on rendered content, not call counts.

@@ -14,8 +14,18 @@
 import { test, expect } from '@playwright/test';
 import { waitForAppReady, flutterFill } from '../helpers/app';
 import { login, logout } from '../helpers/auth';
-import { AUTH, NAV, SAGA } from '../helpers/selectors';
+import {
+  AUTH,
+  EXERCISE_LIST,
+  NAV,
+  ONBOARDING,
+  PROFILE,
+  PR_DISPLAY,
+  ROUTINE,
+  SAGA,
+} from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // Smoke — critical login/logout journey
@@ -286,16 +296,27 @@ test.describe('Auth — edge cases', () => {
 
     // Navigate through each tab and verify the heading/content loads.
     await page.click(NAV.exercisesTab);
-    await expect(page.locator('text=Exercises')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(EXERCISE_LIST.heading)).toBeVisible({ timeout: 15_000 });
 
     await page.click(NAV.routinesTab);
-    await expect(page.locator('text=Routines').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({ timeout: 15_000 });
 
     // Phase 18b: /profile shows CharacterSheetScreen; Log Out is on /profile/settings.
     await page.click(NAV.profileTab);
     await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 15_000 });
     await page.locator(SAGA.gearIcon).first().click();
     await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
+
+    // finding-059: verify /records is reachable via in-app navigation (Records stat row).
+    // The StatsRow exposes a "PRs" stat card as role=button that navigates to /records.
+    await expect(page.locator(PROFILE.recordsStatRow).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(PROFILE.recordsStatRow).first().click();
+    // Assert the Records screen rendered (PR_DISPLAY.screenTitle is
+    // Semantics(identifier: 'pr-display-title')). Content-visibility assertion per
+    // cluster `flutter-web-url-assertion` — URL hash routing is unreliable.
+    await expect(page.locator(PR_DISPLAY.screenTitle)).toBeVisible({ timeout: 15_000 });
 
     await page.click(NAV.homeTab);
     // Home screen in W8 no longer has a "Start Empty Workout" button.
@@ -310,5 +331,66 @@ test.describe('Auth — edge cases', () => {
 
     // Bottom nav must not be visible after logout.
     await expect(page.locator(NAV.homeTab)).not.toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Auth — sign-up happy path (finding-037)
+// ---------------------------------------------------------------------------
+// Uses a throwaway unique-per-run email to avoid conflicts with seeded users.
+// afterEach deletes the created user via the admin API so the Supabase auth
+// table doesn't accumulate stale test accounts across runs. Per-test cleanup
+// (not afterAll) so adding a second test to this describe block in the
+// future cannot silently leak earlier-test accounts via closure-capture.
+// ---------------------------------------------------------------------------
+test.describe('Auth — sign-up happy path', () => {
+  let throwawayEmail: string;
+
+  test.beforeEach(async ({ page }) => {
+    throwawayEmail = `signup-${Date.now()}-${Math.floor(Math.random() * 9999)}@test.local`;
+    await page.goto('/');
+    await waitForAppReady(page);
+  });
+
+  test.afterEach(async () => {
+    // Clean up the throwaway user immediately after the test that created it.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, throwawayEmail);
+    if (userId) {
+      await admin.auth.admin.deleteUser(userId);
+    }
+  });
+
+  test('should create a new account and land on the onboarding screen', async ({
+    page,
+  }) => {
+    // Toggle to sign-up mode.
+    await page.click(AUTH.toggleToSignUp);
+    await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+
+    // Enter credentials for a brand-new email address (unique per run).
+    await flutterFill(page, AUTH.emailInput, throwawayEmail);
+    await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+    await page.locator(AUTH.signUpButton).click();
+
+    // Local Supabase runs with `enable_confirmations = false`
+    // (supabase/config.toml [auth.email]), so a successful sign-up returns
+    // a session immediately. AuthNotifier.signUpWithEmail() leaves the
+    // `signupPendingEmailProvider` null in that branch, so LoginScreen does
+    // NOT navigate to `/email-confirmation`. The router redirect chain then
+    // routes the now-authenticated user to `/onboarding` (the LoginScreen
+    // flips `needsOnboardingProvider` to true earlier in the submit flow).
+    //
+    // Production uses the hosted Supabase project which has email
+    // confirmations enabled, so production users DO land on
+    // `/email-confirmation`. This test pins the local-environment
+    // contract — the happy-path landing surface for fresh accounts in
+    // E2E. The `/email-confirmation` route + EmailConfirmationScreen
+    // remain covered by the unit/widget tier.
+    //
+    // Content-visibility assertion per cluster `flutter-web-url-assertion`.
+    await expect(
+      page.locator(ONBOARDING.getStartedButton),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });

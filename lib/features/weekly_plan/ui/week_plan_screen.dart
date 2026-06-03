@@ -96,7 +96,11 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
     // Flush any pending debounced save before tearing down.
     if (_saveDebounce?.isActive ?? false) {
       _saveDebounce!.cancel();
-      _flushDebouncedSave();
+      // Fire-and-forget — dispose can't await (sync method), and the
+      // user already navigated away. The flush logs its own errors via
+      // debugPrint, and the `if (mounted)` guard inside short-circuits
+      // the Saved-snackbar branch on the now-disposed State.
+      unawaited(_flushDebouncedSave());
     }
     // Fire a single analytics event for the entire edit session, capturing
     // the most-recent flags (usedAutofill / replacedExisting).
@@ -603,7 +607,9 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
     // `cluster_optimistic_ui_vs_async_provider` — patterns 1 + 2 together.
     notifier.setOptimistic(_bucketRoutines);
     _saveDebounce = Timer(const Duration(milliseconds: 300), () {
-      _flushDebouncedSave();
+      // Fire-and-forget — Timer callback is synchronous; the flush
+      // handles its own errors via debugPrint.
+      unawaited(_flushDebouncedSave());
     });
     // Whole-family invalidate so every variant (`includePlanned: true`
     // from the editor + `false` from any future Stats surface) is dirtied
@@ -627,18 +633,32 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
   }
 
   /// Immediately flush the pending debounced upsert call.
-  void _flushDebouncedSave() {
+  ///
+  /// PR 33c finding-009 — async/await + explicit `try/catch` so the
+  /// failure path surfaces in `adb logcat` via `debugPrint` instead of
+  /// being swallowed silently. The pre-fix `.then().catchError((_) {})`
+  /// chain logged nothing, leaving production debugging blind to user
+  /// reports of "I edited my plan and nothing saved". The Saved-snackbar
+  /// branch retains its own `if (mounted)` guard inside
+  /// [_maybeShowSavedSnackbar]; the explicit guard here is belt-and-
+  /// braces in case the helper is ever inlined.
+  ///
+  /// Cluster: `async-caller-broke-snackbar`. Fire-and-forget at every
+  /// caller — `dispose()` and the debounce timer both kick this off
+  /// without awaiting; the explicit `Future<void>` return type makes
+  /// the async-ness visible at the call site for future readers.
+  Future<void> _flushDebouncedSave() async {
     final notifier = _debouncedPlanNotifier;
     if (notifier == null) return;
-    final future = notifier.upsertPlan(_bucketRoutines);
-    future
-        .then((_) {
-          _maybeShowSavedSnackbar();
-        })
-        .catchError((_) {
-          // Swallow: the offline banner already covers persistence
-          // failures, and the analytics layer logs them.
-        });
+    try {
+      await notifier.upsertPlan(_bucketRoutines);
+      if (mounted) _maybeShowSavedSnackbar();
+    } catch (e) {
+      // The offline banner already covers persistence failures from the
+      // user's point of view; the log line is so the team can correlate
+      // a support report with the underlying Supabase error.
+      debugPrint('[WeekPlanScreen] flush save failed: $e');
+    }
   }
 
   /// Shows the "Saved" confirmation snackbar IF still mounted AND no undo

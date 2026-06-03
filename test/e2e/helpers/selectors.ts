@@ -52,6 +52,17 @@ export const AUTH = {
   welcomeBack: '[flt-semantics-identifier="auth-welcome-back"]',
   /** Inline error message — Semantics(liveRegion: true) sets aria-live */
   errorMessage: '[aria-live="polite"]',
+  /**
+   * EmailConfirmationScreen "BACK TO LOGIN" GradientButton — the most stable
+   * AOM anchor on the email-confirmation route. The button's `label` is the
+   * `backToLogin` l10n key ("BACK TO LOGIN" en / "VOLTAR PARA LOGIN" pt);
+   * the E2E suite runs in en. No `flt-semantics-identifier` exists on the
+   * EmailConfirmationScreen heading (CanvasKit renders it to canvas), so the
+   * role+name selector on the CTA is the test anchor used to assert the
+   * post-signup navigation landed on the right route (per cluster
+   * `flutter-web-url-assertion` — content-visibility, not toHaveURL).
+   */
+  emailConfirmationBackToLogin: 'role=button[name="BACK TO LOGIN"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -631,6 +642,68 @@ export const HISTORY = {
    * Semantics(identifier: 'history-detail-strip')
    */
   detailStrip: '[flt-semantics-identifier="history-detail-strip"]',
+  /**
+   * Tappable workout card on the History list. The card body is a Material
+   * InkWell whose Semantics container merges the per-card text into the
+   * accessible name; the workout title prefix "Workout" (en) is stable
+   * regardless of routine name or date (routine-driven workouts read
+   * "<Routine name> — <date>" while ad-hoc sessions read "Workout — <date>").
+   * Match prefix "Workout" via role+name to anchor on the legacy/ad-hoc card
+   * shape; tests that need a specific card should index via `.first()` or
+   * filter by routine name. Tap pushes /home/history/{workoutId}.
+   *
+   * No `flt-semantics-identifier` is emitted on the card — the SliverList
+   * builds plain `_WorkoutHistoryCard` widgets. Use this selector to find
+   * the tappable region; assert content via the detail-screen selectors
+   * after the navigation lands.
+   */
+  workoutCardButton: 'role=button[name*="Workout"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// WORKOUT_DETAIL — read-only workout detail screen (/home/history/{workoutId}).
+//
+// `_ReadOnlyExerciseCard` (workout_detail_screen.dart:265) is a plain Material
+// `Card` whose heading is `Text(exercise.exercise?.name)` with NO outer
+// `Semantics(label: ...)` wrapper — so `role=group[name*="Exercise: "]` does
+// NOT match here (unlike the EXERCISE_LIST / active-workout cards which use
+// the `exerciseItemSemantics` l10n key for their AOM label). Two stable
+// selectors below:
+//   - `totalVolumeStrip` — locale-independent identifier on the 48dp strip
+//     below all exercise cards; reliable "screen is alive" sentinel.
+//   - `detailExerciseCardByName(name)` — text= match on the rendered display
+//     name (caller passes the localized name).
+// ---------------------------------------------------------------------------
+export const WORKOUT_DETAIL = {
+  /**
+   * 48dp surface2 total-volume strip rendered BELOW the exercise cards on the
+   * workout detail screen (`_WorkoutDetailBody`, ~line 224 of
+   * `workout_detail_screen.dart`). Semantics(identifier:
+   * 'workout-detail-total-volume-strip').
+   *
+   * Locale-independent. Use as the proof that "the detail screen mounted and
+   * rendered its body" rather than the per-card name text (which is locale +
+   * seed-data dependent).
+   */
+  totalVolumeStrip:
+    '[flt-semantics-identifier="workout-detail-total-volume-strip"]',
+  /**
+   * Per-exercise card on the detail screen — targets the rendered exercise
+   * NAME text. Pass the localized display name. For pt locale
+   * `barbell_bench_press` renders as "Supino Reto com Barra"; for en it's
+   * "Barbell Bench Press". See `seedFullHistoryPtData` in `global-setup.ts`
+   * + `00033_seed_exercise_translations_pt.sql` for the pt mapping.
+   *
+   * Note: Flutter CanvasKit draws Text widgets to canvas — a `text=` selector
+   * may not match if the name is rendered into the canvas without DOM text.
+   * For the workout-detail screen specifically, the `Text(exercise.name)`
+   * widget sits inside a Material `Card` which Flutter surfaces with a
+   * matching AOM text node, so `text=` resolves in practice. If a future
+   * regression breaks this, add a `Semantics(identifier:
+   * 'workout-detail-exercise-card')` wrapper on `_ReadOnlyExerciseCard` and
+   * switch this selector to identifier-based.
+   */
+  detailExerciseCardByName: (name: string) => `text=${name}`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -683,6 +756,16 @@ export const PROFILE = {
    * identityCardAvatar selector.
    */
   avatarPickerSheet: '[flt-semantics-identifier="avatar-picker-sheet"]',
+  /**
+   * PRs stat card in the StatsRow on ProfileSettingsScreen.
+   * _StatCard wraps the content in Material > InkWell with no Semantics
+   * identifier. Flutter AOM exposes the InkWell as role=button whose
+   * accessible name concatenates the child Text nodes (value + label).
+   * The label text is l10n key `prsLabel` = "PRs" in both en and pt-BR.
+   * Use role=button[name*="PRs"] to match regardless of count value.
+   * Tapping navigates to /records.
+   */
+  recordsStatRow: 'role=button[name*="PRs"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -720,19 +803,14 @@ export const MANAGE_DATA = {
 // ---------------------------------------------------------------------------
 export const WEEKLY_PLAN = {
   /**
-   * "THIS WEEK" header in WeekReviewSection (legacy week-complete surface).
-   * Phase 26f: WeekReviewSection is no longer mounted from the home tree;
-   * the bucket chip row (HOME.bucketChipRow) replaced it. Tests that probed
-   * this header against the home screen will never resolve. Kept here only
-   * so the (test.skip-guarded) week-complete weekly-plan specs that
-   * defensively wait on it continue to compile.
+   * "THIS WEEK" header semantics identifier — surfaced by the active weekly
+   * plan section on Home. Phase 26f replaced the legacy WeekReviewSection
+   * with the bucket chip row (HOME.bucketChipRow); this identifier is still
+   * emitted by the active-plan path and is used by the surviving "render
+   * weekly plan section on home screen without error" smoke test as one of
+   * the three states the home screen may show.
    */
   thisWeekHeader: '[flt-semantics-identifier="weekly-plan-this-week"]',
-  /**
-   * "WEEK COMPLETE" header in WeekReviewSection — same dead-surface caveat
-   * as `thisWeekHeader` above.
-   */
-  weekCompleteHeader: '[flt-semantics-identifier="weekly-plan-complete"]',
   /**
    * "Plan your week" affordance on the home tab.
    * Phase 26f: the legacy `home-plan-your-week` banner was deleted. The
@@ -758,23 +836,6 @@ export const WEEKLY_PLAN = {
   clearWeekOption: '[flt-semantics-identifier="weekly-plan-clear-week"]',
   /** "Clear" confirm button in dialog — Semantics(identifier: 'weekly-plan-clear-confirm') */
   clearConfirmButton: '[flt-semantics-identifier="weekly-plan-clear-confirm"]',
-  /**
-   * "Start new week" affordance.
-   * Phase 26f: the dedicated `home-start-new-week` banner is gone. In the
-   * week-complete state ActionHero now renders the free-workout banner with
-   * a "Semana completa" subline. The plan-management entry point is the
-   * Editar plano link on the bucket chip row. Pinned here so legacy
-   * WEEKLY_PLAN.newWeekButton callers keep resolving — every consumer of
-   * this selector lives inside a `test.skip()` branch that only fires when a
-   * fully-seeded week-complete user is configured, which is not the case
-   * today.
-   */
-  newWeekButton: '[flt-semantics-identifier="home-edit-plan-link"]',
-  /**
-   * Stats text in WeekReviewSection — contains "sessions" substring.
-   * _buildStatsText always starts with "{n} sessions". Dynamic content — keep text= selector.
-   */
-  sessionsStatsText: 'text=/sessions/',
   /**
    * Fix 1A — "Saved" confirmation SnackBar shown after a successful upsertPlan.
    * The snackbar content is the l10n key `savedConfirmation` ("Saved" / "Salvo").

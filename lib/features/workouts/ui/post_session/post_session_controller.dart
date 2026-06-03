@@ -47,6 +47,24 @@ class PostSessionParams {
   final Map<String, String> exerciseNames;
   final int totalXpEarned;
   final Map<BodyPart, int> bpXpDeltas;
+
+  /// Pre-finish per-body-part rank-progress fraction (`xpInRank /
+  /// xpToNext`, clamped to [0, 1]). Captured by
+  /// [FinishWorkoutCoordinator] from `rpgProgressProvider` BEFORE
+  /// awaiting `notifier.finishWorkout()` — same `ref`-lifetime contract
+  /// as [bpRankBefore] (post-await reads would either throw or see the
+  /// post-save snapshot, both of which break the B2 tally-cut beat).
+  ///
+  /// Drives the B2 tally-cut bars' starting position: each per-BP bar
+  /// animates from the user's prior rank-progress fraction up to the
+  /// post-finish fraction the controller derives from the refreshed
+  /// snapshot. Restores the mockup §3 Variant A storyboard's "watch
+  /// your prior progress get added to" beat.
+  ///
+  /// Body parts the user has never trained server-side have no row in
+  /// the snapshot and so are absent from this map; the controller
+  /// falls back to a sane default (typically 0.0) for those when
+  /// projecting the B2 cuts. PR 33c finding-005.
   final Map<BodyPart, double> bpProgressFractionPre;
 
   /// Pre-finish per-body-part rank snapshot. Captured by

@@ -69,9 +69,13 @@ import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/personal_records/domain/pr_detection_service.dart';
 import 'package:repsaga/features/personal_records/models/personal_record.dart';
 import 'package:repsaga/features/personal_records/models/record_type.dart';
+import 'package:repsaga/features/rpg/data/rpg_repository.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
+import 'package:repsaga/features/rpg/domain/rank_curve.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/rpg/models/body_part_progress.dart';
 import 'package:repsaga/features/rpg/models/celebration_event.dart';
+import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
@@ -353,6 +357,50 @@ class _BaselineNotifier extends AsyncNotifier<ActiveWorkoutState?>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// Stub [RpgProgressNotifier] that serves a pre-finish snapshot from the
+/// harness. Used by the `bpProgressFractionPre` capture contract test
+/// (PR 33c finding-005): the coordinator reads `rpgProgressProvider.value`
+/// synchronously BEFORE awaiting `notifier.finishWorkout()` so the
+/// projected per-BP `progressFraction(totalXp, rank)` reflects the user's
+/// state at the moment they tapped "Finish" — not the post-save state
+/// (which the active-workout `ref` couldn't see anyway, see the
+/// `priorWorkoutCount` cluster).
+class _RpgProgressStub extends AsyncNotifier<RpgProgressSnapshot>
+    implements RpgProgressNotifier {
+  _RpgProgressStub(this.snapshot);
+  final RpgProgressSnapshot snapshot;
+
+  @override
+  Future<RpgProgressSnapshot> build() async => snapshot;
+
+  @override
+  Future<RpgProgressSnapshot> refreshAfterSave() async => snapshot;
+
+  @override
+  Future<void> runBackfill() async {}
+}
+
+/// Factory for a [BodyPartProgress] row at arbitrary `(totalXp, rank)`.
+/// Lets the test seed a snapshot whose `progressFraction(totalXp, rank)`
+/// is a known non-zero value, so the captured params can be compared
+/// against the same call.
+BodyPartProgress _bpProgress({
+  required BodyPart bodyPart,
+  required double totalXp,
+  required int rank,
+}) {
+  return BodyPartProgress(
+    userId: 'user-001',
+    bodyPart: bodyPart,
+    totalXp: totalXp,
+    rank: rank,
+    vitalityEwma: 0,
+    vitalityPeak: 0,
+    lastEventAt: null,
+    updatedAt: DateTime(2026),
+  );
+}
+
 /// No-op CelebrationOrchestrator that returns immediately.
 ///
 /// The production [CelebrationOrchestrator] reads several global providers
@@ -398,6 +446,7 @@ Widget _buildHarness({
   required List<String> navigatedLocations,
   required List<PostSessionParams> capturedParams,
   int initialWorkoutCount = 1,
+  RpgProgressSnapshot? preFinishProgress,
 }) {
   final router = GoRouter(
     initialLocation: '/active',
@@ -451,6 +500,17 @@ Widget _buildHarness({
       // contract this test pins. The analytics repo provider is
       // fault-tolerant by construction (no-op fallback).
       currentUserIdProvider.overrideWithValue('user-nav-test'),
+      // PR 33c finding-005 — the coordinator captures the pre-finish
+      // RPG snapshot synchronously (BEFORE `await notifier.finishWorkout()`)
+      // and projects per-BP `progressFraction(totalXp, rank)` into
+      // PostSessionParams.bpProgressFractionPre. The B2 tally-cut bars
+      // animate from that starting fraction → the post-finish fraction.
+      // Tests that don't exercise this contract default to the empty
+      // snapshot (no body-part rows) so the captured map is `{}`; tests
+      // that pin the contract pass a populated snapshot.
+      rpgProgressProvider.overrideWith(
+        () => _RpgProgressStub(preFinishProgress ?? RpgProgressSnapshot.empty),
+      ),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -786,6 +846,160 @@ void main() {
           reason:
               'priorFinishedWorkoutCount must come from the synchronous '
               'pre-await capture of workoutCountProvider.',
+        );
+      },
+    );
+
+    // PR 33c finding-005 — `bpProgressFractionPre` was the audit's
+    // option-(a) fix. Pre-fix the coordinator passed `_emptyBpFractions()`
+    // (always `{}`) and the B2 tally-cut bars animated from 0% on every
+    // session, losing the "watch your prior progress get added to" beat
+    // the mockup §3 Variant A storyboard intends. Post-fix the coordinator
+    // captures `rpgProgressProvider.value` synchronously BEFORE awaiting
+    // `notifier.finishWorkout()` (same `ref`-lifetime contract as
+    // `priorWorkoutCount` and `bpRankBefore`) and projects per-BP
+    // `RankCurve.progressFraction(row.totalXp, row.rank)` into the
+    // PostSessionParams.
+    //
+    // This test pins the captured map carries non-zero fractions for the
+    // body parts present in the pre-finish snapshot. A regression that
+    // reverts to `_emptyBpFractions()` or that captures AFTER the await
+    // (where the snapshot would be empty / disposed) fails this assertion
+    // with `Map<BodyPart, double>` empty or all-zero.
+    testWidgets(
+      'captures bpProgressFractionPre from the pre-finish rpgProgressProvider '
+      'snapshot (finding-005)',
+      (tester) async {
+        // Seed a snapshot with two BP rows at non-trivial XP positions.
+        // Within the geometric band, `xpToNext(rank) = 60 × 1.10^(rank-1)`:
+        //   rank 4 → 79.86 XP to next; seed 40 XP in-rank → fraction ≈ 0.501.
+        //   rank 2 → 66.0 XP to next;  seed 50 XP in-rank → fraction ≈ 0.758.
+        // Both fractions are strictly in (0, 1) so the test pins a
+        // non-trivial value (not the empty-map regression, not a clamp
+        // to 1.0 from an overshoot).
+        final preChest = _bpProgress(
+          bodyPart: BodyPart.chest,
+          totalXp: RankCurve.cumulativeXpForRank(4) + 40,
+          rank: 4,
+        );
+        final preBack = _bpProgress(
+          bodyPart: BodyPart.back,
+          totalXp: RankCurve.cumulativeXpForRank(2) + 50,
+          rank: 2,
+        );
+        final expectedChestFraction = RankCurve.progressFraction(
+          preChest.totalXp,
+          preChest.rank,
+        );
+        final expectedBackFraction = RankCurve.progressFraction(
+          preBack.totalXp,
+          preBack.rank,
+        );
+        // Sanity guards — if the math collapses to 0 / 1 the test stops
+        // pinning a non-trivial contract. Fail loudly here so the seed
+        // input gets re-tuned, not silently weakened.
+        expect(
+          expectedChestFraction,
+          greaterThan(0),
+          reason: 'Seed chosen so the chest pre-fraction is non-zero.',
+        );
+        expect(
+          expectedChestFraction,
+          lessThan(1),
+          reason: 'Seed chosen so the chest pre-fraction is below full.',
+        );
+        expect(
+          expectedBackFraction,
+          greaterThan(0),
+          reason: 'Seed chosen so the back pre-fraction is non-zero.',
+        );
+
+        final preFinishSnapshot = RpgProgressSnapshot(
+          byBodyPart: <BodyPart, BodyPartProgress>{
+            BodyPart.chest: preChest,
+            BodyPart.back: preBack,
+          },
+          characterState: CharacterState.empty,
+        );
+
+        final navigated = <String>[];
+        final captured = <PostSessionParams>[];
+        final notifier = _BaselineNotifier(_makeNonEmptyState());
+
+        await tester.pumpWidget(
+          _buildHarness(
+            notifier: notifier,
+            navigatedLocations: navigated,
+            capturedParams: captured,
+            initialWorkoutCount: 1,
+            preFinishProgress: preFinishSnapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byKey(const ValueKey('finish-btn'))),
+        );
+        // Resolve the FutureProvider + AsyncNotifier overrides so the
+        // synchronous `ref.read(rpgProgressProvider).value` inside the
+        // coordinator returns the seeded snapshot (not null).
+        await container.read(workoutCountProvider.future);
+        await container.read(rpgProgressProvider.future);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('finish-btn')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(FilledButton));
+        await tester.pumpAndSettle(const Duration(seconds: 10));
+
+        expect(
+          captured,
+          hasLength(1),
+          reason:
+              'Post-session params must reach the route builder so the '
+              'bpProgressFractionPre contract can be asserted.',
+        );
+        final fractions = captured.single.bpProgressFractionPre;
+
+        // Pin: chest fraction is the value `RankCurve.progressFraction`
+        // returns for the seeded `(totalXp, rank)`. Reverting to
+        // `_emptyBpFractions()` makes this fail with `Expected: <0.x...>
+        // Actual: <null>`.
+        expect(
+          fractions[BodyPart.chest],
+          closeTo(expectedChestFraction, 1e-9),
+          reason:
+              'bpProgressFractionPre[chest] MUST equal '
+              'RankCurve.progressFraction(preXp, preRank) computed from '
+              'the pre-finish rpgProgressProvider snapshot. Empty map '
+              'or wrong value indicates the coordinator reverted to the '
+              '_emptyBpFractions helper (finding-005) or read the '
+              'snapshot AFTER `await notifier.finishWorkout()` (the '
+              'ref-lifetime cluster), where the snapshot is either '
+              'disposed or empty.',
+        );
+        expect(
+          fractions[BodyPart.back],
+          closeTo(expectedBackFraction, 1e-9),
+          reason:
+              'bpProgressFractionPre[back] MUST equal the seeded '
+              'progressFraction for back. Same regression surface as '
+              'the chest assertion.',
+        );
+
+        // Defense in depth — body parts the user has never trained
+        // produce no row server-side, so they MUST NOT appear in the
+        // captured map (the controller falls back to a sane default via
+        // `progressFor` when reading the snapshot for cuts, but the
+        // captured pre-fraction map must mirror what the snapshot
+        // exposed at capture time — no synthesis).
+        expect(
+          fractions.containsKey(BodyPart.legs),
+          isFalse,
+          reason:
+              'Body parts absent from the pre-finish snapshot must NOT '
+              'be synthesized into bpProgressFractionPre — the captured '
+              'map mirrors the snapshot exactly.',
         );
       },
     );
