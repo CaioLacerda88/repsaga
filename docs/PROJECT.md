@@ -15,12 +15,7 @@ iOS deferred. Dark bold theme, gym-floor UX (one-handed, glanceable,
 sweat-proof). Brazilian fitness market focus (pt-BR shipped). Monetization:
 trial-to-paywall subscription via Google Play Billing.
 
-**Current state (2026-06-01).** **Phase 33 STARTING** — Pre-Launch
-Quality Sweep. Cross-cutting correctness pass between Phase 32 (just
-completed) and the Launch Phase: parallel discovery audit (5 read-only
-specialist agents → consolidated findings doc) → user-triage gate →
-5–8 fix PRs targeting CRITICAL + IMPORTANT findings only. Polish + nits
-park to v1.1. Target 1.5–2 weeks. See §3 for the full spec.
+**Current state (2026-06-03).** **Phase 33 COMPLETE** (8 PRs: #289 #290 #291 #292 #293 #294 #295 #296) — Pre-Launch Quality Sweep. Parallel-discovery audit (5 read-only specialist agents → 66 numbered findings in `docs/pre-launch-audit.md`) → user-triage gate → 5 fix PRs landing 21 IMPORTANT + 11 folded NICE-TO-HAVE. Zero CRITICAL or IMPORTANT open at completion. 33 NICE-TO-HAVE parked to §2 with concrete revisit-conditions. PR 33f closed during triage (both flagged findings parked per `no-refactor-for-refactor's-sake`). Next: **Launch Phase** (subscription + paywall + Play Store + signed AAB).
 **Phase 32 COMPLETE** (9 PRs: #270 #273 #275 #277 #279 #281 #283 #285
 #287) — pre-launch polish spanning pt-BR i18n + `workout_template_translations`
 (32a), Google Sign-In E2E + Credential Manager autofill + targeted
@@ -86,7 +81,7 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | 30c | Cleanup + retire `pr_celebration_screen.dart` + E2E migration + test-hygiene audit (3 specs at `--workers=4 --repeat-each=3` green) + Phase 30 §4 condensation | DONE | #265 |
 | 31 | Post-Phase-30 overlay + summary refinement — D3 Achievement Frame single photo overlay (replaces Variant A/B + toggle) + S2 Mission Debrief summary section (lift rows + segmented XP bar + per-BP rank deltas + next-target callout). Architectural fix: visible preview tree drops FittedBox wrapper, renders at device-native dp via LayoutBuilder + `cardWidthDp/cardHeightDp` params. SHARE CTA gate widened to `totalXpEarned > 0`. PopScope leave-confirm dialog on the post-session route. 3 device-verification rounds + 3 UX-critic passes (10 bugs found across rounds, all fixed in-cycle). | DONE | #266 |
 | 32 | Pre-launch polish — 8 PRs (32a–h + 32j) spanning pt-BR grammar + i18n leaks + `workout_template_translations`, Google Sign-In E2E + Credential Manager autofill + targeted security audit, week-plan picker repeat-fix + weekday `.toLocal()` consolidation, analytics expansion (first_rank_up / post_session_cinematic_shown / share_card_exported / title_unlocked / session_zero_xp), profile avatar default + upload (private bucket + signed URLs), history screen redesign (sticky week headers + per-card XP eyebrow + total-volume strip), workout-flow hotfix wave (duration UTC bug, `developer.log` → `debugPrint` sweep + CI grep gate, title equip error handler, confirm-banner persistence), user-created exercise retirement (RPG thesis preservation), peak-load primary-only attribution. | DONE | #270 #273 #275 #277 #279 #281 #283 #285 #287 |
-| 33 | Pre-Launch Quality Sweep — parallel discovery audit (code review, security widening, wiring-trace test grep, E2E coverage matrix, dead-code purge) → user-triage gate → 5–8 fix PRs targeting CRITICAL + IMPORTANT findings. Final correctness pass before Launch Phase. Polish + nits park to v1.1. | IN FLIGHT | — |
+| 33 | Pre-Launch Quality Sweep — parallel discovery audit + user-triage gate + 5 fix PRs landing 21 IMPORTANT + 11 folded NICE-TO-HAVE; 3 orphan-widget cascade deletions (SagaStubScreen + WeekReviewSection + CelebrationOverflowCard); CI gate `check_no_developer_log.sh` scope widened to entire `lib/`; cluster `flutter-web-aom-selectable-attribute` added. | DONE | #289 #290 #291 #292 #293 #294 #295 #296 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -110,6 +105,7 @@ auto-memory entry of the same slug.
 | `aom-label-text-merge` | Semantics | Multiple sibling Texts inside a `Semantics(identifier:)` concat into `child1\nchild2` as the AOM label; set explicit `label:` |
 | `semantics-button-missing` | Semantics | `Semantics(container:true)` without `button:true` makes the AOM element passive — Playwright clicks don't forward to the inner InkWell |
 | `flutter-web-url-assertion` | E2E | `expect(page).toHaveURL(...)` after `context.push` is unreliable in Flutter web hash routing; assert on destination-content visibility instead |
+| `flutter-web-aom-selectable-attribute` | E2E | `Semantics(selected:)` on button-role emits `aria-current` (NOT `aria-selected` / `aria-checked`) via Flutter web's Selectable AOM bridge; assert with `toHaveAttribute('aria-current', 'true')` |
 | `e2e-selector-full-audit` | E2E | Grep ALL spec files before deleting a widget; charters touch broad surface |
 | `e2e-global-setup-seed-verify` | E2E | New tests read `global-setup.ts` for seeded values, not convention |
 | `e2e-spec-state-leak-across-tests` | E2E | A spec whose tests share one logged-in user without per-test DB reseed accumulates state between tests (PRs, peak loads, earned titles, weekly plan, Hive boxes). Passes at `--workers=4` single-pass; flakes at `--workers=4 --repeat-each=3` once the second iteration sees state from the first. Detection: spec runs N reseeds < N logins. Fix template: per-spec `reseed<UserName>User()` admin helper that DELETEs (cascade where possible) workouts + xp_events + body_part_progress + exercise_peak_loads + exercise_peak_loads_by_rep_range + personal_records + earned_titles + backfill_progress (Hive offline-sync also `localStorage.clear()`); call in `beforeEach` before login; pair with `test.describe.configure({ mode: 'serial' })` so intra-worker repeat-each can't interleave. Surface examples: PR 30c migrations of `workouts.spec.ts` (17 logins → 17 reseeds), `personal-records.spec.ts` (2 → 2), `offline-sync.spec.ts` (3 → 3). |
@@ -432,137 +428,6 @@ Findings parked from the Phase 33 pre-launch audit (`docs/pre-launch-audit.md`, 
 > criteria, file plan, schema if relevant, UX details — while `docs/WIP.md`
 > tracks the running checklist. Post-merge, each phase spec collapses
 > into §4 Completed Phases (3–5 bullets per the lifecycle rule).
-
-### Phase 33 — Pre-Launch Quality Sweep
-
-Cross-cutting correctness pass between Phase 32 (complete) and Launch
-Phase. Two stages: a parallel-discovery audit producing a single
-findings doc (`docs/pre-launch-audit.md`), then a sequential fix wave
-of 5–8 PRs against the triaged findings. Target: 1.5–2 weeks.
-Success criterion: **zero CRITICAL or IMPORTANT findings open at
-Launch Phase kickoff.**
-
-Depth target: **ship-ready confidence** — catch what would embarrass
-us at launch (security crit, broken flow, dead code that misleads
-agents, tests asserting wiring not behavior, E2E gaps in golden
-paths). Polish + nits park to v1.1 via PROJECT.md §2.
-
-| Sub-PR | Scope | Size | Status |
-|---|---|---|---|
-| 33-discovery | Five read-only audit agents (parallel dispatch) → orchestrator assembles `docs/pre-launch-audit.md` → single PR commits the audit doc to `main` so all subsequent fix PRs reference one canonical source | 2d | DONE (#290) |
-| 33-triage | User-facing per-finding sign-off pass amends the audit doc with `→ PR 33x` / `→ PARKED` stamps + writes parked items to PROJECT.md §2. No code change. Lands on `main` as a docs-only commit. **Outcome:** 21 IMPORTANT → fix wave; 11 NICE-TO-HAVE folded; 33 parked. | 0.5–1d | DONE (#291) |
-| 33a | Security fixes — 4 IMPORTANT (finding-026 length cap+UUID, -027 JWT-verify ordering, -028 body size cap, -029 ws CVE) + 3 folded NICE-TO-HAVE (finding-030 delete-user same shape, -031 platform/version allowlist, -033 rtdn-webhook base64 cap). Edge Fn defense-in-depth batch. | 1–2d | DONE (#292) |
-| 33b | Dead-code + `developer.log` batch — 4 IMPORTANT (finding-001 5-file `developer.log` sweep, -003 RPE l10n keys, -004 SagaStubScreen orphan, -010 locale_provider in cluster) + 3 folded NICE-TO-HAVE (finding-012 comingSoonStub regen, -014 drop `dart:developer` import alias, -021 pending_sync_provider same-file). Cluster `developer-log-invisible-logcat` continuation of PR 32g. | 1–1.5d | DONE (#293) |
-| 33c | Workout-flow + global-setup-seed batch — 9 IMPORTANT (finding-005 bpProgressFractionPre TODO, -009 _flushDebouncedSave mounted+error, -036 onboarding skip, -037 sign-up happy path, -038 banner tap, -039 detail content, -041 CONTINUAR CTA, -044 /records in-app nav, -046 week-complete seed) + 3 folded NICE-TO-HAVE (finding-011 _emptyBpFractions, -013 doc comment, -059 full-journey extension). Largest slice; touches global-setup.ts seed data for 2 infra-gap unskips. | 3–4d | DONE (#294) |
-| 33d | RPG / share-pipeline + post-session E2E batch — 3 IMPORTANT (finding-042 B3 PR cut, -043 exercise retirement, -045 weight unit toggle) + 1 folded (-055 unskip overflow-card tap). | 1.5–2d | DONE (#295) |
-| 33e | Auth / profile Saga selector batch — 1 IMPORTANT (finding-002 CodexNavRow Semantics pair-rule) + 1 folded (-056 unskip 26-tap-routing-e2e using cluster fix template). Cluster `semantics-identifier-pair-rule` + `flutter-web-url-assertion`. | <1d | IN FLIGHT |
-| 33f | **CLOSED** — both originally-flagged findings (finding-006 week_plan_screen build refactor, -008 progress_chart_section refactor) downgraded to PARK during triage per non-goals "no refactor-for-refactor's-sake". No items in scope. | — | CLOSED |
-| 33g / 33h | Reserve slots for newly-discovered cluster patterns during fix wave (warranting their own PR). Triage overflow not used. | Variable | RESERVED |
-
-Order: 33-discovery (DONE) → 33-triage (DONE) → 33a (DONE) → 33b (DONE) → 33c (DONE) → 33d (DONE) → 33e (IN FLIGHT) → (33g/h reserved). PR 33f closed post-triage.
-
-#### Stage 1 — Discovery (parallel read-only agents)
-
-Five specialist agents dispatched **in parallel** — safe because they're
-read-only investigation (no `lib/`/`test/`/`supabase/` writes, no `git
-checkout`, so cluster `parallel-agents-shared-working-tree-thrash`
-doesn't fire). Each agent returns its findings as a structured response
-keyed to its assigned audit-doc section; the orchestrator assembles the
-five returned sections into a single `docs/pre-launch-audit.md` and
-commits it via the 33-discovery PR. Agents may NOT write files
-directly — the assembly step is the orchestrator's so concurrency
-conflicts on the audit doc are structurally impossible.
-
-| Agent | Subagent type | Scope | Returns section |
-|---|---|---|---|
-| A1 code-audit | `reviewer` | All `lib/` (~50 feature files). Logic gaps, dead code, files too large, unused exports, deprecated imports, anti-patterns. Cross-checks against §0 Cluster Ledger. | §A — Code review |
-| A2 security | `general-purpose` w/ `/security-review` skill | Widens PR 32b: every Edge Fn input path, signed-URL TTL audit, deeplink hijack vectors, `flutter pub outdated` CVE scan, `npm audit` on test/e2e/, bundle secret re-sweep, RLS sweep for tables added since 32b (00067–00071) | §B — Security |
-| A3 test-grep | `Explore` | Mechanical grep across `test/unit/` + `test/widget/` for wiring-trace patterns (`verify(...).called`, `when(...).thenAnswer` w/ no downstream `expect(find...)`, tests passing w/ no `find...` assertion). Outputs candidate list + one-line context per match. | §C — Wiring-trace candidates |
-| A4 e2e-coverage | `qa-engineer` | Coverage matrix: every user-reachable screen × every primary action × every error path. Cross-reference vs existing 237 E2E tests in 23+ spec files. Output: gap list w/ concrete spec-file landing suggestions. | §D — E2E gap matrix |
-| A5 dead-code | `Explore` | Find: tests for retired features (`CreateExerciseScreen` post-32h, `pr_celebration_screen` post-30c, 5 retired overlays post-29.5, RPE refs post-Phase-25 drop), references to deleted widgets, unused l10n keys (grep `app_en.arb` keys vs `lib/`), orphan files, dead arms in sealed unions | §E — Deletion candidates |
-
-**Finding-block format** (each entry):
-
-```
-### finding-NN — <one-liner>
-- file:line
-- Current: <observed behavior>
-- Recommended: <change>
-- Severity: CRITICAL | IMPORTANT | NICE-TO-HAVE | PARK
-- Suggested home: PR 33x | PARK | adjacent
-```
-
-**Severity criteria:**
-
-- **CRITICAL** — security vuln, broken golden flow, data corruption risk, RPG thesis violation
-- **IMPORTANT** — logic gap, missing E2E for golden path, test asserts wrong thing, dead code that confuses agents
-- **NICE-TO-HAVE** — polish, refactor opportunity, file-too-large smell on stable code
-- **PARK** — opinion-shaped, no clear blast radius, v1.1 territory
-
-#### Stage 2 — Triage gate (hard gate, user-facing)
-
-After all five agents complete:
-
-1. Orchestrator reads `docs/pre-launch-audit.md` end-to-end + posts severity-counts-per-section summary
-2. **Per-finding pass** for CRITICAL + IMPORTANT (8–12 findings per chunk): user signs off on severity (keep / escalate / downgrade), disposition (fix this phase / fold into adjacent PR / park), and suggested fix-PR home
-3. **Batch pass** for NICE-TO-HAVE: orchestrator proposes default PARK, user spot-checks; anything escalated rejoins fix scope
-4. Audit doc amended w/ each finding stamped `→ PR 33x` or `→ PARKED`
-5. PROJECT.md §2 gets a new sub-section `### Phase 33 audit deferrals` for PARKED items (severity, file:line, revisit-condition)
-
-**Triage principles (locked):**
-
-- **CRITICAL never parks.** If it's truly critical, the fix is in Phase 33; if it can park, it wasn't critical.
-- **IMPORTANT parks only with a concrete revisit-condition** (telemetry threshold, post-launch decision, dependency on another phase). Vague "later" is not allowed.
-- **NICE-TO-HAVE defaults to PARK** unless it folds into an adjacent fix PR at near-zero marginal cost.
-- `feedback_no_deferring_review_findings` still applies inside each fix PR cycle — triage decides phase scope, not per-PR scope.
-- Workstream overflow (e.g. 80 wiring-trace candidates surface) → user gets a budget question (fix N this phase, park the rest), not all-or-nothing.
-
-#### Stage 3 — Fix wave
-
-Each fix PR through the standard CLAUDE.md pipeline verbatim:
-
-1. Read PROJECT.md §3 Phase 33 + targeted findings in audit doc
-2. Boundary-trigger ripple check if a finding crosses a public API / provider state / RPC / route
-3. WIP.md checklist w/ audit-doc finding numbers as items
-4. tech-lead implements WITH unit/widget tests (TDD where applicable)
-5. ui-ux-critic if a UI surface is touched (most won't be)
-6. `superpowers:verification-before-completion` before PR open
-7. reviewer → fix → re-review until signed off
-8. qa-engineer final pass (writes E2E for audit-doc gaps; selector impact assessment)
-9. Visual verification **only** if a UI surface changed (rare this phase)
-10. `make ci` + E2E green
-11. Squash merge, apply any migrations to hosted Supabase
-12. Close WIP, mark progress table row DONE
-
-**Domain ordering rationale:**
-
-- 33a first — security can't park; blocking for launch
-- 33b second — mechanical deletes shrink the surface other PRs read
-- 33c–e in risk order — workout flow > RPG > auth/profile
-- 33f residual cross-cutting
-- 33g/h reserve
-
-**Cluster ledger discipline** — if any audit finding maps to an existing cluster, the fix PR's inline comment references the cluster name (CLAUDE.md A3). If a new recurring pattern surfaces during the fix wave, add a `cluster_*.md` auto-memory entry + PROJECT.md §0 ledger row in the same PR.
-
-#### Non-goals (explicit)
-
-- **No new features.** Phase 33 is correctness + cleanup only. Feature requests surfaced during the audit get parked to v1.1 or Launch Phase scope-expansion.
-- **No UX redesigns.** Phase 26/27 locked the visual revamp. "This screen could be prettier" findings → NICE-TO-HAVE → PARK.
-- **No XP formula touches.** Phase 29.6 calibration locked. RPG findings requiring formula change escalate to a separate sub-phase, not folded into 33d.
-- **No migration churn for stable schema.** Migrations 00001–00071 stay. Only new RLS / new tables / index additions allowed if security audit surfaces an actual hole.
-- **No paywall / subscription work.** Launch Phase territory. Paywall-adjacent findings tagged `→ Launch Phase`, not `→ PR 33x`.
-- **No refactor-for-refactor's-sake.** A correct + tested file stays as-is even if oversized.
-- **No test re-architecture.** Wiring-trace rewrites stay surgical — replace `verify(...).called` w/ `expect(find...)` against the same setup; don't restructure groups, fixtures, or shared setup.
-
-#### Closing state
-
-- Zero CRITICAL findings open
-- Zero IMPORTANT findings open without written park rationale + revisit-condition in PROJECT.md §2
-- `docs/pre-launch-audit.md` deleted in final cleanup PR (findings now in git history via fix PRs; parked items now in PROJECT.md §2)
-- PROJECT.md §3 Phase 33 row collapsed to §4 Completed Phases summary (3–5 bullets per lifecycle rule)
-- Any newly discovered bug clusters added to §0 Cluster Ledger + auto-memory
-- `make ci` green, full E2E suite green, smoke E2E green
-- Launch Phase kickoff unblocked
 
 ### Launch Phase
 
@@ -1250,6 +1115,21 @@ consumers atomically; PR 3 lands the documentation.
 - **32j** — Peak-load attribution primary-only semantics (migration 00071, destructive RPC replacement — pre-launch). Multi-BP exercises now post top weight only to MAX-share BP; tied primaries include both. Dart consumer unchanged. Fixes user-caught shoulders + arms = 240 kg bleed from PR 32f device verification.
 - **Key decisions locked (2026-05-27 planning session):** no new post-workout XP overlay (Phase 30/31 cinematic already ships the moment; History detail is the persistence layer); routine i18n via `workout_template_translations` (mirrors Phase 15f); week-plan allows repeating routines across days; default avatar monogram-over-BP-hue → hotViolet gradient; Credential Manager autofill only (biometric deferred to v1.1); Samsung Account integration dropped (zero competitor parity, no user signal); paywall analytics + Saga XP surface deferred to Launch Phase 16b; class-resolver verified working — no bug (caiolacerda88 stats spread 0.611 > 0.30 → dominant=chest → Bulwark per `class_resolver.dart`).
 - **Cluster ledger additions across Phase 30+ cycles** — 6 new entries: `safearea-system-overlay-overlap`, `spec-caption-vs-implementation-drift`, `jsonb-payload-vs-typed-dart`, `developer-log-invisible-logcat`, `parallel-agents-shared-working-tree-thrash`, `permission-handler-web-silent-failure`. Cluster `aom-label-text-merge` reinforced by 32f's E2E locator fix.
+
+### Phase 33: Pre-Launch Quality Sweep (PRs #289 #290 #291 #292 #293 #294 #295 #296)
+
+> Cross-cutting correctness pass between Phase 32 and the Launch Phase. Two stages: parallel-discovery audit (5 read-only specialist agents) → user-triage gate → 5 fix PRs (33a–e). Success criterion **zero CRITICAL or IMPORTANT open at Launch Phase kickoff** — met. PR 33f closed during triage (both flagged findings parked per `no-refactor-for-refactor's-sake`).
+
+- **33-discovery (#290)** — 5 parallel read-only audit agents (`reviewer` code-audit / `general-purpose` security widening / `Explore` wiring-trace test grep / `qa-engineer` E2E coverage matrix / `Explore` dead-code purge) → assembled `docs/pre-launch-audit.md`. 66 numbered findings: 0 CRITICAL / 25 IMPORTANT / 33 NICE-TO-HAVE / 7 PARK across §A–§E. Read-only parallel dispatch safe per cluster `parallel-agents-shared-working-tree-thrash` (no `git checkout`, no file writes).
+- **33-triage (#291)** — User-facing per-finding sign-off pass: 21 IMPORTANT → fix wave, 4 IMPORTANT downgraded to PARK (build-method refactors per non-goals + 32g-platform-untestable note), 11 NICE-TO-HAVE folded into adjacent fix PRs, 22 NICE-TO-HAVE parked, PR 33f closed. All park rationale + revisit-conditions live in §2 Phase 33 audit deferrals.
+- **33a — Security (#292)** — Edge Function defense-in-depth. Shared `supabase/functions/_shared/auth.ts` helper (`requireBodySize` + `precheckJwtExp`). `validate-purchase` length clamps (product_id ≤128, purchase_token ≤4096, source ≤32 + allow-list `{client, cron_reconcile}`) + UUID regex on `user_id` + JWT exp precheck before body parse. `delete-user` platform allow-list `{android, ios, web}` (coerce → `'unknown'`) + app_version regex (null on mismatch) + precheck. `rtdn-webhook` outer 16KB body cap + inner 16KB decoded-base64 cap. `vitality-nightly` 1KB body cap. `ws` 8.20.0→8.21.0 in test/e2e (clears GHSA-58qx-3vcg-4xpx). Three `test.ts` files renamed to `index.test.ts` so the CI `**/*.test.ts` glob picks them up (62 previously-uncovered tests now run in CI).
+- **33b — Dead-code + `developer.log` batch (#293)** — Cluster `developer-log-invisible-logcat` continuation of PR 32g. 5-file `developer.log → debugPrint` migration (`cache_service` / `pending_sync_provider` / `locale_provider` / `hive_service` / `pr_cache_bootstrap_provider`) with `dart:developer` imports dropped. `locale_provider._syncToRemote` `.catchError` chain → `unawaited(() async { try { ... } catch })` async pattern. Delete orphan `SagaStubScreen` widget (post-Phase-26c/d). Delete 6 dropped RPE l10n keys (Phase 25 dropped) + `comingSoonStub`. **Keystone:** widen `scripts/check_no_developer_log.sh` `SCOPE` from `(lib/features/workouts lib/features/rpg)` to `(lib)` — future PRs can't reintroduce undetected.
+- **33c — Workout-flow + global-setup-seed (#294, largest)** — Implement TODO: `bpProgressFractionPre` captured per BodyPart via `RankCurve.progressFraction(preXp, preRank)` BEFORE `await finishWorkout()` in `finish_workout_coordinator`. `week_plan_screen._flushDebouncedSave` refactored from `.then()/.catchError()` chain to async/await + mounted guard + structured log (cluster `async-caller-broke-snackbar`). 6 new/extended E2E specs: sign-up happy path (lands on `/onboarding` since local Supabase auto-confirms emails), active-banner tap → resume workout, workout detail screen content, CONTINUAR CTA → `/home`, /records via in-app nav (profile gear → settings → PRs stat row), full-journey extension to navigate to /records. Delete orphan `WeekReviewSection` widget (Phase 26f replaced with `BucketChipRow + ActionHero` but never plumbed week-complete affordance) + 4 dead skipped tests + 3 dead selectors. Strengthened `reseedDebriefUser` (test-isolation gap surfaced under the new B3-PR-cut test).
+- **33d — RPG / share + post-session E2E (#295)** — B3 PR cut test (`smokePR` reseed beforeEach wipes `exercise_peak_loads` + `personal_records` + workouts so `--repeat-each` runs are deterministic). New `smokeExerciseRetirement` user with seeded user-created exercise (en+pt translations per CLAUDE.md `exercise_translations` coverage rule); test asserts retired exercise hidden from workout picker. Weight unit toggle persistence test using `aria-current` (Flutter web Selectable AOM bridge emits `aria-current`, NOT `aria-checked` — discovered by reading engine source `checkable.dart` + `segmented_button.dart`; reviewer's `aria-checked` suggestion would have been placebo). Delete orphan `CelebrationOverflowCard` + `RankUpOverflowFlipbook` widgets (PR 29.5 Path A pivot retired without replacement) + `rpgOverflowTapCard` user fixture + `seedRpgOverflowTapCardUser` seed + skipped test + selector + `rankUpOverflowFlipbookLabel` l10n key (cascade caught dead l10n + dead widget test).
+- **33e — Auth/profile Saga selector (#296, smallest)** — `CodexNavRow` Semantics rewrap from inside-out to outside-in on the InkWell tap target with `container:true + explicitChildNodes:true + button:true + identifier:...` (cluster `semantics-identifier-pair-rule` + `semantics-button-missing`). Without `button:true` the wrap renders as `role="group"` in AOM and Playwright clicks land on the wrapper without forwarding to InkWell. 6 widget tests pinning the locked behaviors including `SemanticsFlag.isButton` regression guard via `tester.getSemantics(...).flagsCollection.isButton` (CI caught the `hasFlag` deprecation post-Flutter-3.32). Unskip `saga.spec.ts:591` test (body-part row tap → `/saga/stats` deep-link) with content-visibility on `SAGA.statsDeepDiveScreen` + `aria-current` on `vitality-row-back` per cluster `flutter-web-url-assertion`.
+- **Three orphan-widget cascade deletions in one phase** — `SagaStubScreen` (33b), `WeekReviewSection` (33c), `CelebrationOverflowCard + RankUpOverflowFlipbook` (33d). Each was a widget retired by a prior phase without test/selector/seed cleanup. Same shape, same default-delete decision per consistent user-approved precedent. Pattern surfaced cascading orphans (l10n keys, doc-comment references, test users, fixture seeders) that the audit's grep-only sweep missed — Phase 33's cluster-fix discipline caught them.
+- **Cluster ledger additions** — `flutter-web-aom-selectable-attribute` (Flutter web's Selectable AOM bridge emits `aria-current`, NOT `aria-selected` / `aria-checked`, for `Semantics(selected:)` on button-role nodes; discovered in PR 33d SegmentedButton work, re-confirmed in PR 33e VitalityTable row, locked the right test-side primitive across both surfaces).
+- **CI / hygiene improvements** — `scripts/check_no_developer_log.sh` scope widened from workouts+rpg to entire `lib/`. `**/*.test.ts` glob now catches 3 previously-invisible Deno test files (62 tests). Reviewer + QA discipline `feedback_no_deferring_review_findings` + `_suggestions` held across all 5 fix PRs — zero deferred findings. `feedback_systematic_debugging_first` invoked twice (PR 33c E2E CI failures; PR 33e analyze + e2e); each session traced to root cause before any code change.
 
 ---
 
