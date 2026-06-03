@@ -57,13 +57,29 @@ class AuthRepository extends BaseRepository {
   User? get currentUser => _auth.currentUser;
 
   /// Sign up with email and password.
+  ///
+  /// [locale] — when non-null, forwarded to Supabase as
+  /// `data: {'locale': locale}` so the new auth.users row carries
+  /// `user_metadata.locale`. The hosted email templates read this via the Go
+  /// conditional `{{ if eq .Data.locale "pt" }}` to render either pt-BR or
+  /// English (the `{{ else }}` branch) — see
+  /// `docs/auth-email-templates/README.md`. Null/omitted means "do not write
+  /// user_metadata" so we never clobber metadata set by other flows.
   Future<AuthResponse> signUpWithEmail({
     required String email,
     required String password,
+    String? locale,
   }) {
     return mapException(
-      () =>
-          _auth.signUp(email: email, password: password).timeout(_authTimeout),
+      () => _auth
+          .signUp(
+            email: email,
+            password: password,
+            // Pass `data` only when we have a locale; omitting the named arg
+            // keeps `user_metadata` untouched on the server side.
+            data: locale == null ? null : {'locale': locale},
+          )
+          .timeout(_authTimeout),
     );
   }
 

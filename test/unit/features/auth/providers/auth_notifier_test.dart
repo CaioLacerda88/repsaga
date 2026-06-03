@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart';
+import 'package:repsaga/core/l10n/locale_provider.dart';
 import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
@@ -12,6 +13,8 @@ import 'package:repsaga/features/auth/utils/auth_error_messages.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+
+import '../../../../helpers/stub_locale_notifier.dart';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -24,6 +27,13 @@ class MockHiveService extends Mock implements HiveService {}
 class MockGoTrueClient extends Mock implements supabase.GoTrueClient {}
 
 class MockFunctionsClient extends Mock implements supabase.FunctionsClient {}
+
+/// Stand-in for an `AuthResponse` whose `.session` is null — matches the
+/// "confirmation email required" path the notifier takes after signUp.
+class _FakeAuthResponseNoSession extends Fake implements supabase.AuthResponse {
+  @override
+  supabase.Session? get session => null;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,6 +79,86 @@ void main() {
   setUp(() {
     mockRepo = MockAuthRepository();
     mockHive = MockHiveService();
+  });
+
+  group('AuthNotifier.signUpWithEmail', () {
+    // Round 4.5 — locale-routed email templates.
+    // The notifier reads `localeProvider` synchronously at call time and
+    // forwards `localeProvider.state.languageCode` to the repository as
+    // `locale:` so Supabase stores it on `user_metadata.locale`. The Go
+    // template in `docs/auth-email-templates/*.html` then routes between
+    // en and pt-BR based on that value.
+    test('forwards the app locale to the repository as locale:', () async {
+      when(
+        () => mockRepo.signUpWithEmail(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          locale: any(named: 'locale'),
+        ),
+      ).thenAnswer((_) async => _FakeAuthResponseNoSession());
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(mockRepo),
+          hiveServiceProvider.overrideWithValue(mockHive),
+          localeProvider.overrideWith(
+            () => StubLocaleNotifier(const Locale('pt')),
+          ),
+        ],
+      );
+      when(() => mockRepo.currentSession).thenReturn(null);
+      container.read(authNotifierProvider);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authNotifierProvider.notifier)
+          .signUpWithEmail(email: 'a@b.com', password: 'pw');
+      await _waitForSettled(container);
+
+      verify(
+        () => mockRepo.signUpWithEmail(
+          email: 'a@b.com',
+          password: 'pw',
+          locale: 'pt',
+        ),
+      ).called(1);
+    });
+
+    test('forwards "en" when the app locale is English', () async {
+      when(
+        () => mockRepo.signUpWithEmail(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          locale: any(named: 'locale'),
+        ),
+      ).thenAnswer((_) async => _FakeAuthResponseNoSession());
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(mockRepo),
+          hiveServiceProvider.overrideWithValue(mockHive),
+          localeProvider.overrideWith(
+            () => StubLocaleNotifier(const Locale('en')),
+          ),
+        ],
+      );
+      when(() => mockRepo.currentSession).thenReturn(null);
+      container.read(authNotifierProvider);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authNotifierProvider.notifier)
+          .signUpWithEmail(email: 'a@b.com', password: 'pw');
+      await _waitForSettled(container);
+
+      verify(
+        () => mockRepo.signUpWithEmail(
+          email: 'a@b.com',
+          password: 'pw',
+          locale: 'en',
+        ),
+      ).called(1);
+    });
   });
 
   group('AuthNotifier.signOut', () {
@@ -258,6 +348,16 @@ void main() {
         overrides: [
           authRepositoryProvider.overrideWithValue(realRepo),
           hiveServiceProvider.overrideWithValue(mockHive),
+          // `signUpWithEmail` now reads `localeProvider` to forward the
+          // locale into Supabase user_metadata (Round 4.5 — locale-routed
+          // email templates). The production `LocaleNotifier.build()`
+          // touches Hive, which the test harness has not booted — so we
+          // override with a Hive-free stub locale. The actual locale value
+          // is irrelevant here; the tests assert TimeoutException, not
+          // metadata shape.
+          localeProvider.overrideWith(
+            () => StubLocaleNotifier(const Locale('en')),
+          ),
         ],
       );
       // Force the notifier to build.
@@ -313,12 +413,15 @@ void main() {
 
     test('signUpWithEmail — never-completing call resolves to AsyncError('
         'TimeoutException)', () async {
+      registerFallbackValue(<String, dynamic>{});
       final pieces = buildContainerWithRealRepo();
       addTearDown(pieces.container.dispose);
       when(
         () => pieces.mockGoTrue.signUp(
           email: any(named: 'email'),
           password: any(named: 'password'),
+          // Match regardless of the `data:` locale payload — see Round 4.5.
+          data: any(named: 'data'),
         ),
       ).thenAnswer((_) => Completer<supabase.AuthResponse>().future);
 

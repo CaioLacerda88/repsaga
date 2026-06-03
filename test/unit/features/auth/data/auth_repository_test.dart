@@ -73,6 +73,87 @@ void main() {
           ),
         );
       });
+
+      // Locale forwarding — Round 4.5: signUpWithEmail must pass the app's
+      // current locale as `data: {'locale': ...}` so Supabase stores it on
+      // `user_metadata.locale`, which the email-template Go conditional reads
+      // (`{{ if eq .Data.locale "pt" }}`) to route between en and pt-BR.
+      test(
+        'forwards locale "pt" as data: {locale: pt} on the underlying signUp',
+        () async {
+          when(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'pt'},
+            ),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(
+            email: 'a@b.com',
+            password: '123456',
+            locale: 'pt',
+          );
+
+          verify(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'pt'},
+            ),
+          ).called(1);
+        },
+      );
+
+      test(
+        'forwards locale "en" as data: {locale: en} on the underlying signUp',
+        () async {
+          when(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'en'},
+            ),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(
+            email: 'a@b.com',
+            password: '123456',
+            locale: 'en',
+          );
+
+          verify(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'en'},
+            ),
+          ).called(1);
+        },
+      );
+
+      test(
+        'omits data entirely when no locale is provided (null pass-through)',
+        () async {
+          when(
+            () => mockAuth.signUp(email: 'a@b.com', password: '123456'),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(email: 'a@b.com', password: '123456');
+
+          // Pins the null-pass-through: when no locale is supplied to the
+          // repository, the underlying signUp must receive `data` at its
+          // default (`null`), NOT `{'locale': null}` or an empty map. A
+          // `{'locale': null}` payload would overwrite `user_metadata` on
+          // the auth.users row with a null-valued key and break OAuth flows
+          // that wrote metadata earlier. The verify below omits the `data:`
+          // named arg, which mocktail matches only against recorded calls
+          // whose `data` argument equals the parameter default (null).
+          verify(
+            () => mockAuth.signUp(email: 'a@b.com', password: '123456'),
+          ).called(1);
+        },
+      );
     });
 
     group('signInWithEmail', () {
