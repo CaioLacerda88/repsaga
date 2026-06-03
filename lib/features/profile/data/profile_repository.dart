@@ -8,12 +8,29 @@ class ProfileRepository extends BaseRepository {
 
   final supabase.SupabaseClient _client;
 
+  /// Tighter budget for the inline refresh attempt than
+  /// [AuthRepository]'s top-level 30 s budget. On degraded networks
+  /// (captive portal, airplane mode mid-mutation, OEM background-data
+  /// throttling) Android's TCP stack holds the coroutine up to ~75 s
+  /// before failing the underlying socket. Hanging the user's "Save
+  /// profile" tap for >5 s is worse UX than failing fast — the user
+  /// can retry, and [refreshAndRetry] surfaces the ORIGINAL 42501 on
+  /// the refresh-timeout path so the caller sees the right error
+  /// category. 8 s undercuts [AuthRepository]'s top-level
+  /// `_defaultAuthTimeout = 30 s` so this fast-path never out-waits
+  /// the slow-path.
+  static const Duration _refreshTimeout = Duration(seconds: 8);
+
   /// Shared refresh callback for every mutation method below. Hits the
   /// repository's own client's auth instance (no `Supabase.instance`
   /// singleton coupling — keeps the class testable with a fake
-  /// `SupabaseClient`).
+  /// `SupabaseClient`). The `.timeout` budget is intentionally tight
+  /// (see [_refreshTimeout]); a `TimeoutException` here is caught by
+  /// [BaseRepository.refreshAndRetry]'s refresh-failure branch and
+  /// surfaces as the ORIGINAL 42501 — exactly the behavior the helper
+  /// tests pin (`refresh() throws → original error rethrows`).
   Future<void> _refreshSession() async {
-    await _client.auth.refreshSession();
+    await _client.auth.refreshSession().timeout(_refreshTimeout);
   }
 
   /// Wraps an authenticated mutation with [BaseRepository.refreshAndRetry]

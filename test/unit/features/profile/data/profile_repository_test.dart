@@ -178,6 +178,17 @@ class _FakeFilterBuilder<T> extends Fake
     if (next.err != null) {
       return Future<T>.error(next.err!).then<S>(onValue, onError: onError);
     }
+    // void coercion: the production `update().eq(...)` chain returns
+    // PostgrestFilterBuilder<void>, so `T == void` for every update-style
+    // call site in ProfileRepository. Dart's runtime treats `void` as
+    // accept-any-value (any expression is assignable to `void`), so the
+    // `List<Map<...>> as void` cast succeeds — `onValue` receives the
+    // empty list, ignores it (its body is `Future<void>`), and the
+    // outer await resolves cleanly. This intentionally only works for
+    // the `T = void` (update) and `T = List<Map<...>>` shapes the tests
+    // actually exercise; a future caller awaiting a typed scalar
+    // directly off the filter builder would surface as `_CastError`
+    // and need a richer `_nextTerminal` payload.
     return Future.value(onValue(<Map<String, dynamic>>[] as T));
   }
 }

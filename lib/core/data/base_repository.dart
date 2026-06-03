@@ -92,15 +92,22 @@ abstract class BaseRepository {
   /// throws, the original error rethrows likewise (refresh failure is
   /// strictly internal to the helper).
   ///
-  /// **Cluster reference.** This helper closes a close analog of the
-  /// `async-caller-broke-snackbar` cluster (PROJECT.md §0 Cluster Ledger):
-  /// an auth-state mutation (token expiry) that lands between caller-await
-  /// and side-effect read. The retry is a structural guarantee — no
-  /// `_hasRetried` boolean flag — because [refreshAndRetry] only invokes
-  /// the inner refresh+retry path once per call to itself, and never
-  /// recurses. A successor cluster `stale-token-silent-anon-fallback` may
-  /// emerge if the broken-deep-link scenario recurs across other flows;
-  /// the auto-memory entry would document the pattern + grep handle.
+  /// **Cluster reference.**
+  // cluster: stale-token-silent-anon-fallback (candidate)
+  /// The bug pattern this guards against: a clock-valid access token
+  /// whose claims no longer resolve to the right PostgREST role (refresh
+  /// token rotated server-side, broken email-confirmation deep-link
+  /// chain, JWT-secret-rotation lag). The Supabase client silently
+  /// falls back to the anon key, RLS rejects with `42501`, and the
+  /// surface is indistinguishable from a real permission failure.
+  /// `(candidate)` flags this as a not-yet-formalized cluster — if it
+  /// surfaces a second time across another authenticated surface, write
+  /// the full `cluster_stale_token_silent_anon_fallback.md` auto-memory
+  /// entry and add the row to PROJECT.md §0 Cluster Ledger.
+  ///
+  /// The retry is a structural guarantee — no `_hasRetried` boolean
+  /// flag — because [refreshAndRetry] only invokes the inner
+  /// refresh+retry path once per call to itself, and never recurses.
   ///
   /// Trigger is intentionally narrow:
   ///   * [supabase.PostgrestException] with `code == '42501'`
