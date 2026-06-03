@@ -30,6 +30,7 @@ class ProfileRepository extends BaseRepository {
     double? bodyweightKg,
     Gender? gender,
     String? avatarUrl,
+    DateTime? onboardedAt,
   }) {
     return mapException(() async {
       final updates = <String, dynamic>{
@@ -64,6 +65,12 @@ class ProfileRepository extends BaseRepository {
         // stale CDN cache.
         // ignore: use_null_aware_elements
         if (avatarUrl != null) 'avatar_url': avatarUrl,
+        // PR 1 — onboarding completion anchor. Same omit-on-null discipline:
+        // forwarding null would clobber a previously-set timestamp on every
+        // unrelated profile update (settings tweak, weekly-frequency change,
+        // avatar upload). `ProfileNotifier.saveOnboardingProfile` stamps
+        // `DateTime.now()` exactly once at the end of the onboarding flow.
+        if (onboardedAt != null) 'onboarded_at': onboardedAt.toIso8601String(),
       };
       final data = await _client
           .from('profiles')

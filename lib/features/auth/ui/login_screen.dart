@@ -9,7 +9,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/gradient_button.dart';
 import '../providers/notifiers/auth_notifier.dart';
-import '../providers/onboarding_provider.dart';
 import '../providers/signup_state_provider.dart';
 import '../utils/auth_error_messages.dart';
 
@@ -60,12 +59,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // `signUpWithEmail` wraps its work in `AsyncValue.guard`, so it
       // catches all exceptions internally and never re-throws — a
       // try/catch here would be unreachable. We gate every post-call
-      // side-effect on `!hasError` instead so a failed signup leaves
-      // the onboarding flag, autofill commit, and navigation untouched.
+      // side-effect on `!hasError` so a failed signup leaves the
+      // autofill commit + navigation untouched. PR 1 — the explicit
+      // `needsOnboardingProvider.state = true` write that used to live
+      // here is gone; onboarding-state is derived from the profile row's
+      // `onboarded_at` column instead (a fresh signup has no profile row
+      // until `handle_new_user` trigger fires, so the derived provider
+      // returns `true` deterministically — no flag write needed).
       await notifier.signUpWithEmail(email: email, password: password);
-      if (mounted && !ref.read(authNotifierProvider).hasError) {
-        ref.read(needsOnboardingProvider.notifier).state = true;
-      }
       _finishAutofillIfSucceeded();
       // If signup succeeded and email confirmation is pending, navigate.
       if (mounted &&

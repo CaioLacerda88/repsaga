@@ -73,6 +73,11 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
         displayName: displayName,
         fitnessLevel: fitnessLevel,
         trainingFrequencyPerWeek: trainingFrequencyPerWeek,
+        // PR 1 — stamp the onboarding-completion anchor here, exactly
+        // once. The router gate reads `profile.onboardedAt` to decide
+        // /home vs /onboarding (the derived `needsOnboardingProvider`);
+        // `DateTime.now()` survives process restart via the SQL column.
+        onboardedAt: DateTime.now(),
       ),
     );
   }

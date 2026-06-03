@@ -365,6 +365,7 @@ async function seedWeeklyPlanReviewData(
         display_name: 'Weekly Plan Reviewer',
         fitness_level: 'intermediate',
         training_frequency_per_week: 2,
+        onboarded_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
     );
@@ -644,6 +645,7 @@ async function seedRpgFoundationUser(
       id: userId,
       display_name: 'RPG Foundation User',
       fitness_level: 'intermediate',
+      onboarded_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
   );
@@ -820,6 +822,7 @@ async function seedRpgFreshUser(
       id: userId,
       display_name: 'RPG Fresh User',
       fitness_level: 'beginner',
+      onboarded_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
   );
@@ -934,7 +937,7 @@ async function seedRpgRankUpThresholdUser(
 
   // Upsert profile so router lands on /home.
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Rank Up Threshold User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Rank Up Threshold User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1034,7 +1037,7 @@ async function seedRpgMultiCelebrationUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Multi Celebration User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Multi Celebration User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1156,7 +1159,7 @@ async function seedRpgOverflowQueueUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Overflow Queue User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Overflow Queue User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1266,12 +1269,21 @@ async function ensureProfile(
     fitness_level?: string;
     locale?: string;
     training_frequency_per_week?: number;
+    onboarded_at?: string | null;
   } = {},
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     id: userId,
     display_name: fields.display_name ?? 'Gym User',
     fitness_level: fields.fitness_level ?? 'intermediate',
+    // PR 1 — default to a fully-onboarded user so every spec that calls
+    // `ensureProfile` lands on /home, NOT /onboarding. Specs that test the
+    // half-onboarded path (e.g. onboarding-resume.spec.ts) override by
+    // passing `onboarded_at: null` explicitly.
+    onboarded_at:
+      fields.onboarded_at !== undefined
+        ? fields.onboarded_at
+        : new Date().toISOString(),
   };
   if (fields.locale !== undefined) payload['locale'] = fields.locale;
   if (fields.training_frequency_per_week !== undefined) {
@@ -1468,6 +1480,17 @@ function buildRoleSeedRunners(): Record<
     // ── Onboarding (fresh state, no profile) ─────────────────────────────
     smokeOnboarding: async (supabase, userId) => {
       await deleteProfile(supabase, userId);
+    },
+
+    // PR 1 — half-onboarded user (profile row exists but `onboarded_at = NULL`).
+    // Seeds a `display_name` so the route gate proves it's the timestamp column
+    // — not the display name — driving the decision. Closes the D1 regression
+    // gap: process restart MUST route the user back to /onboarding.
+    onboardingResume: async (supabase, userId) => {
+      await ensureProfile(supabase, userId, {
+        display_name: 'Resume Tester',
+        onboarded_at: null,
+      });
     },
 
     // ── PR seed user (smoke) ─────────────────────────────────────────────
@@ -1992,7 +2015,7 @@ async function seedRpgClassCrossUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Class Cross User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Class Cross User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -2071,7 +2094,7 @@ async function seedRpgTitleEquipUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Title Equip User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Title Equip User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 

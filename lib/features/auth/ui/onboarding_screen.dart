@@ -14,7 +14,6 @@ import '../../analytics/data/models/analytics_event.dart';
 import '../../analytics/providers/analytics_providers.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../providers/auth_providers.dart';
-import '../providers/onboarding_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -76,7 +75,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             fitnessLevel: _fitnessLevel,
             trainingFrequencyPerWeek: _trainingFrequency,
           );
-      ref.read(needsOnboardingProvider.notifier).state = false;
 
       // Fire analytics — best-effort, not awaited so it can't block navigation.
       final userId = ref.read(authRepositoryProvider).currentUser?.id;

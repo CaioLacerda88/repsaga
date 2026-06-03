@@ -58,6 +58,14 @@ export const TEST_USERS = {
     email: 'e2e-smoke-onboarding@test.local',
     password: 'TestPassword123!',
   },
+  // PR 1 — half-onboarded user (profile row exists with display_name set but
+  // `onboarded_at = NULL`). Pins the D1 regression: a user who started but
+  // didn't finish onboarding must land on /onboarding after sign-in, not on
+  // /home (the OLD `StateProvider<bool>` would default to false and misroute).
+  onboardingResume: {
+    email: 'e2e-onboarding-resume@test.local',
+    password: 'TestPassword123!',
+  },
   // Routine management smoke — CRUD for routine-management.smoke.spec.ts
   smokeRoutineManagement: {
     email: 'e2e-smoke-routine-mgmt@test.local',

@@ -15,6 +15,7 @@ import '../observability/sentry_init.dart' show sanitizeRouteName;
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/providers/onboarding_provider.dart';
 import '../../features/auth/providers/signup_state_provider.dart';
+import '../../features/profile/providers/profile_providers.dart';
 import '../../features/auth/ui/email_confirmation_screen.dart';
 import '../../features/auth/ui/login_screen.dart';
 import '../../features/auth/ui/onboarding_screen.dart';
@@ -60,14 +61,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      // Read authState inside the redirect callback (not at routerProvider
-      // construction time) so GoRouter is never recreated on auth events.
-      // _RouterRefreshListenable already watches authStateProvider and calls
-      // notifyListeners() to trigger redirect re-evaluation when auth changes.
+      // Read authState + profileProvider inside the redirect callback so
+      // GoRouter is never recreated on auth/profile events. Cluster:
+      // `provider-init-timing` — subscribing to async providers from
+      // routerProvider construction caches pre-login state forever; the
+      // _RouterRefreshListenable below `listen`s to the auth + profile
+      // streams and calls notifyListeners() so the redirect re-runs on
+      // every transition (sign-in, sign-out, profile arrival).
       final authState = ref.read(authStateProvider);
+      final profile = ref.read(profileProvider);
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.value?.session != null;
-      final needsOnboarding = ref.read(needsOnboardingProvider);
       final location = state.matchedLocation;
 
       // While auth is resolving, stay on splash.
@@ -86,10 +90,36 @@ final routerProvider = Provider<GoRouter>((ref) {
         return location == '/login' ? null : '/login';
       }
 
+      // Logged in but profile is still loading → park on splash. This is the
+      // new gate per audit Q2 (PR 1): we wait until the profile arrives so
+      // the next branch can decide /home vs /onboarding deterministically
+      // from `profile.value?.onboardedAt`. Without this gate the redirect
+      // would race the profile fetch and momentarily route to /home (default
+      // for `needsOnboarding == false` while loading) before snapping to
+      // /onboarding on profile arrival — visible flash.
+      if (profile.isLoading) {
+        return location == '/splash' ? null : '/splash';
+      }
+
       // Logged in → clear any pending signup state.
       ref.read(signupPendingEmailProvider.notifier).state = null;
 
-      // Logged in but needs onboarding → go to onboarding.
+      // Logged in + profile loaded → decide /onboarding vs /home from
+      // the profile row's `onboarded_at` column. We compute the flag
+      // INLINE here rather than reading `needsOnboardingProvider` because
+      // Riverpod's `ref.read` on a `Provider<bool>` can return a stale
+      // cached value when the redirect runs synchronously from
+      // _RouterRefreshListenable.notifyListeners() — the listen on auth/
+      // profile has been delivered but the derived Provider's recompute
+      // is queued to the next read on a watcher, which the redirect
+      // callback is NOT (it's a one-shot `ref.read`). The derived
+      // provider is kept for downstream consumers (e.g. UI gating).
+      // PR 1 audit defects D1/D2/D11 — the structural guarantee here is
+      // that the boolean is derived from the SQL row, not an in-memory
+      // StateProvider that drifts on process restart.
+      final profileValue = profile.value;
+      final needsOnboarding =
+          profileValue == null || profileValue.onboardedAt == null;
       if (needsOnboarding && location != '/onboarding') {
         return '/onboarding';
       }
@@ -262,11 +292,19 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Notifies GoRouter when auth state changes so it re-evaluates redirects.
+/// Notifies GoRouter when auth state, the profile row, or the derived
+/// onboarding flag changes so it re-evaluates redirects.
+///
+/// PR 1 — added the `profileProvider` listen so the redirect parks on
+/// /splash while the profile is loading and snaps to /onboarding vs /home
+/// the moment the profile resolves. Cluster: `provider-init-timing` — the
+/// listen subscribes to the async value stream rather than reading at
+/// router-construction time (which would cache pre-login state forever).
 class _RouterRefreshListenable extends ChangeNotifier {
   _RouterRefreshListenable(this._ref) {
     _ref.listen(authStateProvider, (prev, next) => notifyListeners());
     _ref.listen(needsOnboardingProvider, (prev, next) => notifyListeners());
+    _ref.listen(profileProvider, (prev, next) => notifyListeners());
   }
 
   final Ref _ref;
