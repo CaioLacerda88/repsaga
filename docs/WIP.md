@@ -11,40 +11,83 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-### Round 4.5 — locale-routed email templates
+### PR A2 — locale metadata backfill + client hydration
 
-Branch: `feat/auth-locale-routed-email-templates`
+Branch: `feat/auth-locale-metadata-backfill-and-client-hydration`
 
-Replace the bilingual single-template approach with locale-routed Go-template
-conditionals so Brazilian users see only Portuguese, English users see only
-English. Closes the locale-routing question flagged in Round 4 README.
+Closes the two `user_metadata.locale = NULL` populations documented in PR
+#300's `docs/auth-email-templates/README.md` → "Known edge cases" and
+explicitly deferred:
 
-**Dart wiring (signup → user_metadata.locale):**
+1. **Legacy users** — anyone who signed up before PR #300 merged. Their
+   `auth.users.raw_user_meta_data` has no `locale` key, so password reset,
+   magic link, and email change emails fall into the template's
+   `{{ else }}` English branch regardless of `profiles.locale`.
+2. **Google OAuth signups** — Supabase's OAuth flow cannot set
+   `user_metadata` at authorization time, so OAuth users land in the same
+   `{{ else }}` English branch even if their `profiles.locale = 'pt'`.
 
-- [x] `lib/features/auth/data/auth_repository.dart` — add optional `String? locale` to `signUpWithEmail`; forward as `data: {'locale': locale}` only when non-null. Keep `.timeout(_authTimeout)`.
-- [x] `lib/features/auth/providers/notifiers/auth_notifier.dart` — read `ref.read(localeProvider).languageCode`, forward to repo. Inline comment explains WHY + flags Google OAuth edge case.
+Two-layer fix:
 
-**Email templates (HTML + plain-text, four flows):**
+**SQL migration (bounded, one-shot — covers legacy users):**
 
-- [x] `docs/auth-email-templates/confirm-signup.html` + `.txt`
-- [x] `docs/auth-email-templates/reset-password.html` + `.txt`
-- [x] `docs/auth-email-templates/magic-link.html` + `.txt`
-- [x] `docs/auth-email-templates/change-email.html` + `.txt`
+- [x] `supabase/migrations/00073_backfill_user_metadata_locale.sql` —
+      idempotent UPDATE merging `profiles.locale` into
+      `auth.users.raw_user_meta_data` for every user whose metadata locale
+      is currently NULL and whose `profiles.locale IN ('en','pt')`.
+      `COALESCE(raw_user_meta_data, '{}'::jsonb)` defends against legacy
+      rows with NULL metadata.
 
-Each renders ONE language via `{{ if eq .Data.locale "pt" }} … {{ else }} … {{ end }}`.
-No hairline divider, no `ENGLISH` / `PORTUGUÊS` eyebrow labels.
+**Dart client hydration (unbounded, ongoing — covers OAuth + any future
+gap):**
 
-**README:**
+- [x] `lib/core/constants/supported_locales.dart` — new const
+      `kSupportedLocales = ['en','pt']` shared by `MaterialApp.supportedLocales`,
+      the SQL backfill allowlist (comment cross-reference), and the
+      hydration helper's allowlist guard.
+- [x] `lib/app.dart` — `MaterialApp.supportedLocales` consumes
+      `kSupportedLocales.map(Locale.new).toList()` instead of the
+      gen-l10n-produced `AppLocalizations.supportedLocales`. A unit test
+      pins the two stay in sync.
+- [x] `lib/features/auth/data/auth_repository.dart` — new
+      `updateUserMetadata(Map<String, Object?> data)` wraps
+      `_auth.updateUser(UserAttributes(data:))` with `mapException` +
+      `_authTimeout`. Keeps Supabase access inside the repository layer.
+- [x] `lib/features/profile/providers/profile_providers.dart` —
+      `ProfileNotifier.build()` fires `unawaited(_hydrateLocaleMetadataIfMissing(profile))`
+      after `getProfile(...)` resolves. The helper short-circuits when
+      `user_metadata.locale` is already populated, when `profile.locale`
+      is not in `kSupportedLocales`, or on any caught error (Sentry
+      breadcrumb only — never an `AsyncError` on the profile). Placement
+      rides on the existing `provider-init-timing` cluster fix so the
+      check re-runs on every signedIn / tokenRefreshed event.
 
-- [x] `docs/auth-email-templates/README.md` — conditional subject lines table, updated verification checklist (en default + pt + explicit en), new "Known edge case" section for Google OAuth missing `user_metadata.locale`. Drop bilingual rationale.
+**Tests:**
 
-**Tests (TDD — failing first, then production):**
-
-- [x] `test/unit/features/auth/data/auth_repository_test.dart` — three cases pinning `data: {'locale': 'pt'}` / `'en'` / omitted-data when no locale param.
-- [x] `test/unit/features/auth/providers/notifiers/auth_notifier_test.dart` — `localeProvider` override → repo invoked with `locale: 'pt'` exactly.
-- [x] `test/widget/features/auth/ui/duplicate_email_snackbar_test.dart` — added `locale:` matcher + `localeProvider` Hive-free stub so existing widget test continues to pass after the signature change.
+- [x] `test/unit/features/profile/providers/profile_notifier_locale_hydration_test.dart` —
+      6 hydration cases + 1 contract test:
+  - writes locale = 'pt' when metadata locale is null + profile.locale is 'pt'
+  - no-op when user_metadata.locale is already populated
+  - no-op when getProfile returns null (no profile row yet)
+  - no-op when profile.locale not in `kSupportedLocales` (e.g. 'fr')
+  - `updateUserMetadata` failure does not promote profile to AsyncError
+  - fires for 'en' too (proves it is not pt-specific)
+  - `kSupportedLocales` matches `AppLocalizations.supportedLocales`
 
 **Verification:**
 
-- [x] `dart format .` clean, `dart analyze --fatal-infos` clean, 3370 unit + widget tests pass (1 skipped, 0 failures). Integration tests in `test/integration/` were already failing on `main` for environment reasons (no live local Supabase) — not regressions.
-- [ ] Open PR with `**QA pass pending — final coverage + E2E run after code review.**`
+- [x] `dart format .` clean
+- [x] `dart analyze --fatal-infos` clean (0 issues)
+- [x] 3408 unit + widget tests pass, 1 skipped, 0 failures. 25 integration
+      tests fail for environment reasons (no live local Supabase) — same
+      baseline as `main`, not regressions.
+- [ ] `make ci` end-to-end green (format + gen + analyze + test + android
+      debug build)
+- [ ] PR body includes
+      `**QA pass pending — final coverage + E2E run after code review.**`
+
+**Post-merge:** apply migration 00073 to hosted Supabase via
+`npx supabase db push` so the legacy-user backfill lands in production.
+Verify the email-template "Pre-existing user" verification case from
+`docs/auth-email-templates/README.md` flips from `{{ else }}` to `pt` for
+a sample legacy `profiles.locale = 'pt'` user.
