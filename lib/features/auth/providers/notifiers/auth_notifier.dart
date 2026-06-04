@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/device/platform_info.dart';
+import '../../../../core/l10n/locale_provider.dart';
 import '../../../../core/local_storage/hive_service.dart';
 import '../../../../core/observability/sentry_report.dart';
 import '../../data/auth_repository.dart';
@@ -28,9 +29,17 @@ class AuthNotifier extends AsyncNotifier<Session?> {
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
+      // Forward the app locale to Supabase user_metadata so the email
+      // templates can route on `.Data.locale` — Brazilian users get pt-BR
+      // confirmation emails, English users get English. Google OAuth users
+      // currently default to English because the OAuth flow writes no
+      // user_metadata; see `docs/auth-email-templates/README.md` →
+      // "Known edge case".
+      final locale = ref.read(localeProvider).languageCode;
       final response = await _repo.signUpWithEmail(
         email: email,
         password: password,
+        locale: locale,
       );
       // If no session returned, email confirmation is required.
       if (response.session == null) {
