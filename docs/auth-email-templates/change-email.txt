@@ -6,6 +6,7 @@ Você pediu para alterar o endereço de e-mail da sua conta RepSaga. Use o link 
 {{ .ConfirmationURL }}
 
 Se você não pediu esta alteração, ignore este e-mail — seu endereço atual continua o mesmo.
+{{/* Add new locale branches HERE — e.g. {{ else if eq .Data.locale "es" }}<es body> */}}
 {{- else -}}
 Confirm your new email address
 

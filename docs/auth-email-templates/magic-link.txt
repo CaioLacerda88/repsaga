@@ -6,6 +6,7 @@ Use o link abaixo para entrar no RepSaga. Ele expira em alguns minutos:
 {{ .ConfirmationURL }}
 
 Se você não pediu este link, ignore este e-mail.
+{{/* Add new locale branches HERE — e.g. {{ else if eq .Data.locale "es" }}<es body> */}}
 {{- else -}}
 Your RepSaga sign-in link
 
