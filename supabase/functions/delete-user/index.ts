@@ -214,9 +214,39 @@ export async function handleRequest(
       // the user's explicit erasure request.
     }
 
-    // --- 2. Delete the user ---
+    // --- 2. Remove avatar storage object (cluster: data-protection-compliance) ---
     //
-    // All user data in public.* tables cascades via FK constraints.
+    // Supabase Storage objects do NOT cascade on auth.users delete — the FK
+    // cascade chain covers public.* tables only. The avatar binary at
+    // `avatars/{user_id}/avatar.jpg` (per migration 00068 layout, private
+    // since 00069) must be explicitly removed BEFORE the auth delete fires,
+    // so the path's `{user_id}` segment still maps to a live identifier.
+    //
+    // Idempotency: `storage.remove` returns success with an empty data array
+    // when the object doesn't exist (users who never uploaded an avatar, or
+    // a retry of a previous successful delete). It throws only on transient
+    // network / storage-side failures. We swallow + log either way — a
+    // storage glitch must NEVER block the user's explicit erasure request.
+    try {
+      await deps.adminClient.storage
+        .from('avatars')
+        .remove([`${user.id}/avatar.jpg`]);
+    } catch (storageError) {
+      // Best-effort: log + continue. The avatar object will be orphaned
+      // (rare edge case) but the account erasure proceeds. Production
+      // ops can sweep orphaned objects via a periodic job if needed.
+      console.warn('delete-user: avatar storage removal failed', {
+        userId: user.id,
+        error: storageError instanceof Error
+          ? storageError.message
+          : String(storageError),
+      });
+    }
+
+    // --- 3. Delete the user ---
+    //
+    // All user data in public.* tables cascades via FK constraints
+    // (migration 00074 closes the last gap: `exercises.user_id`).
     const { error: deleteError } = await deps.adminClient.auth.admin.deleteUser(
       user.id,
     );

@@ -30,13 +30,23 @@ const FAKE_USER_ID = '44444444-4444-4444-4444-444444444444';
 
 interface DbCall {
   table: string;
-  op: 'insert' | 'select' | 'count' | 'delete';
+  op: 'insert' | 'select' | 'count' | 'delete' | 'storage_remove';
   payload?: unknown;
 }
 
+/** Options for the admin-client stub. */
+interface AdminClientOpts {
+  /** When set, the avatars storage remove call throws this error
+   *  (covers the idempotency / transient-failure path: cluster
+   *  data-protection-compliance). */
+  storageRemoveError?: Error;
+}
+
 /** Admin client stub that captures inserts (for audit row assertions) and
- *  succeeds on user delete. */
-function makeAdminClient(): { client: unknown; calls: DbCall[] } {
+ *  succeeds on user delete. The `calls` array preserves chronological
+ *  order — tests that verify the storage delete fires BEFORE
+ *  auth.admin.deleteUser rely on that ordering. */
+function makeAdminClient(opts: AdminClientOpts = {}): { client: unknown; calls: DbCall[] } {
   const calls: DbCall[] = [];
   const client = {
     from(table: string) {
@@ -59,6 +69,23 @@ function makeAdminClient(): { client: unknown; calls: DbCall[] } {
           return Promise.resolve({ data: row, error: null });
         },
       };
+    },
+    storage: {
+      from(bucket: string) {
+        return {
+          remove(paths: string[]) {
+            calls.push({
+              table: `storage:${bucket}`,
+              op: 'storage_remove',
+              payload: paths,
+            });
+            if (opts.storageRemoveError) {
+              return Promise.reject(opts.storageRemoveError);
+            }
+            return Promise.resolve({ data: [], error: null });
+          },
+        };
+      },
     },
     auth: {
       admin: {
@@ -423,5 +450,130 @@ Deno.test(
     const payload = auditInsert!.payload as { platform: unknown; app_version: unknown };
     assertEquals(payload.platform, null);
     assertEquals(payload.app_version, null);
+  },
+);
+
+// =============================================================================
+// Avatar storage removal (cluster: data-protection-compliance)
+//
+// Supabase Storage objects do NOT cascade on `auth.users` delete — the FK
+// cascade chain covers `public.*` only. The avatar binary at
+// `avatars/{user_id}/avatar.jpg` (migration 00068 layout) must be
+// explicitly removed BEFORE the auth delete so the path's `{user_id}`
+// segment still maps to a live identifier.
+//
+// These tests pin two contracts:
+//   1. The storage remove fires on the avatars bucket with the canonical
+//      `{user_id}/avatar.jpg` path AND BEFORE auth.admin.deleteUser
+//      (ordering matters: after the user is gone, the path is anchored
+//      to a tombstoned identifier).
+//   2. A storage failure (transient network, "object not found" on a
+//      user who never uploaded) does NOT block the account delete —
+//      idempotency guard per Important 1.
+// =============================================================================
+
+Deno.test(
+  'delete-user: removes avatar storage object on canonical path before auth delete',
+  async () => {
+    const { client: adminClient, calls } = makeAdminClient();
+    const userClient = makeUserClient();
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${freshJwt()}`,
+        body: JSON.stringify({
+          platform: 'android',
+          app_version: '1.0.0',
+        }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        adminClient: adminClient as any,
+        // deno-lint-ignore no-explicit-any
+        userClient: userClient as any,
+      },
+    );
+    assertEquals(res.status, 200);
+
+    // (1) Storage remove fires on the avatars bucket with the canonical
+    //     `{user_id}/avatar.jpg` path. The path layout is locked by the
+    //     RLS policy on migration 00068 — diverging would silently fail
+    //     the RLS check in production while the test stub stays green,
+    //     so the literal path comparison is the contract.
+    const storageRemove = calls.find(
+      (c) => c.table === 'storage:avatars' && c.op === 'storage_remove',
+    );
+    assert(storageRemove, 'avatar storage remove must fire');
+    const paths = storageRemove!.payload as string[];
+    assertEquals(paths, [`${FAKE_USER_ID}/avatar.jpg`]);
+
+    // (2) Ordering: storage remove must precede auth.admin.deleteUser
+    //     in the calls log. Pinning the ordering protects against future
+    //     refactors that move the storage block below the auth delete —
+    //     once the user is deleted, the path's user_id segment maps to
+    //     a tombstoned identifier and the object would orphan.
+    const storageIdx = calls.findIndex(
+      (c) => c.table === 'storage:avatars' && c.op === 'storage_remove',
+    );
+    const deleteIdx = calls.findIndex(
+      (c) => c.table === 'auth.users' && c.op === 'delete',
+    );
+    assert(storageIdx >= 0, 'storage remove must appear in calls log');
+    assert(deleteIdx >= 0, 'auth.users delete must appear in calls log');
+    assert(
+      storageIdx < deleteIdx,
+      `storage remove (idx ${storageIdx}) must precede auth.users delete (idx ${deleteIdx})`,
+    );
+  },
+);
+
+Deno.test(
+  'delete-user: storage removal failure does not block account delete (idempotency)',
+  async () => {
+    // The avatar might never have been uploaded (user never set one) — in
+    // that case `storage.remove` either returns success-with-empty-data
+    // (handled by the happy path) OR a transient storage error. Either
+    // way, the account delete MUST proceed: the user's explicit erasure
+    // request is non-negotiable, and a storage glitch must never gate it.
+    const { client: adminClient, calls } = makeAdminClient({
+      storageRemoveError: new Error('storage backend transient failure'),
+    });
+    const userClient = makeUserClient();
+    const res = await handleRequest(
+      makeRequest({
+        authorization: `Bearer ${freshJwt()}`,
+        body: JSON.stringify({
+          platform: 'android',
+          app_version: '1.0.0',
+        }),
+      }),
+      {
+        // deno-lint-ignore no-explicit-any
+        adminClient: adminClient as any,
+        // deno-lint-ignore no-explicit-any
+        userClient: userClient as any,
+      },
+    );
+
+    // Despite the storage failure, the response is 200 and the auth
+    // delete fired. This is the contract: an avatar leak is recoverable
+    // (sweep orphans later); a refused erasure is not.
+    assertEquals(res.status, 200);
+    const userDelete = calls.find(
+      (c) => c.table === 'auth.users' && c.op === 'delete',
+    );
+    assert(
+      userDelete,
+      'auth.admin.deleteUser must fire even when storage remove throws',
+    );
+
+    // And the audit row still gets written (best-effort audit, like the
+    // existing failure-tolerant paths).
+    const auditInsert = calls.find(
+      (c) => c.table === 'account_deletion_events' && c.op === 'insert',
+    );
+    assert(
+      auditInsert,
+      'audit row must still be written when storage remove throws',
+    );
   },
 );

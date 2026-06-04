@@ -11,244 +11,93 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-### Legal PR 1 — Privacy Policy + ToS copy updates (LGPD + GDPR + medical)
+### Fix — manage-data compliance: avatar storage leak + exercises FK + reset-all active workouts
 
-Branch: `docs/legal-pr1-policy-tos-copy-lgpd-gdpr-medical`
+Branch: `fix/manage-data-avatar-storage-leak-and-cascade`
 
-First of three PRs closing the read-only legal audit. PR 1 is **copy-only**
-to `assets/legal/privacy_policy.md` + `assets/legal/terms_of_service.md` and
-their byte-identical `docs/` mirrors (Jekyll front-matter aside). No UI
-surfaces, no Dart code, no schema. The `LegalDocScreen` rendering pipeline
-(`flutter_markdown_plus`) handles the longer document unchanged.
+Read-only compliance audit on the delete-account / reset-all flow surfaced 2
+Blockers + 2 Important findings. All four land in this PR per
+`feedback_no_deferring_review_findings`.
 
-PR 2 (UI consent flows: age-gate signup checkbox, sensitive-data opt-in
-toggle for bodyweight + gender, withdrawal toggle parity, consent-state
-Hive box) and PR 3 (in-app workout-history export → JSON over signed URL)
-ship the runtime surfaces this PR only declares.
+**Findings (audit excerpt):**
 
-**Blockers addressed (Privacy Policy):**
+1. **Blocker — `exercises.user_id` FK lacks `ON DELETE CASCADE`**
+   (`supabase/migrations/00001_initial_schema.sql:63`). Legacy user-created
+   rows from before the Phase 32h retirement (PR #281) still depend on this
+   FK; account-delete would orphan or block them.
+2. **Blocker — avatar binary leaks on account delete**
+   (`supabase/functions/delete-user/index.ts`). FK cascade covers
+   `public.*`; Supabase Storage objects do NOT cascade off
+   `auth.users` deletion. `avatars/{user_id}/avatar.jpg` survives — LGPD/GDPR
+   miss.
+3. **Important — idempotency guard on storage removal.** The storage delete
+   must tolerate "object not found" (re-runs, users who never uploaded an
+   avatar) without aborting the account delete.
+4. **Important — "Reset all" leaves active workouts behind**
+   (`lib/features/profile/providers/manage_data_providers.dart:30`).
+   `workoutRepo.clearHistory(userId)` filters `is_active = false AND
+   finished_at IS NOT NULL`, so an in-progress / draft workout survives the
+   reset. The label says "ALL account data" — implementation must match.
 
-- [x] L1 — lawful basis enumerated per data category (LGPD Art. 6,
-      GDPR Art. 6 §1(b/f), Art. 9 §2(a))
-- [x] L2 — body weight + gender classified as sensitive personal data
-      (LGPD Art. 11 / GDPR Art. 9), opt-in declared, fallback to
-      reduced bodyweight-XP accuracy stated
-- [x] L3 — gender disclosed in §2 with purpose (XP-calc accuracy via
-      gender-aware tier tables) + `'other'`/NULL → male table fallback
-- [x] L4 — Art. 18 / Art. 15-21 rights with declared in-app surfaces
-      and email-fallback SLA (15 business days)
-- [x] L5 — DPO / Encarregado named: Caio Lacerda, `dpo@repsaga.app`
-      (LGPD Art. 41 reference)
-- [x] L6 — minimum age raised to 18 (16 in EEA per GDPR Art. 8 §1
-      conservative floor); parental-consent infra absent
-- [x] G3 — consent withdrawal as easy as giving it (Art. 7 §3)
-- [x] G4 — granular erasure: body weight + avatar deletable
-      individually without account closure (Art. 17)
-- [x] G6 — retention period stated: active account + 30 days purge,
-      hedged by Supabase backup window
-- [x] G7 — cross-border transfers covered by Supabase DPA + SCCs
-      (`https://supabase.com/dpa`, GDPR Art. 46)
-- [x] G8 — right to lodge complaint with national DPA stated
-- [x] L7 — subscription/purchase data shape pre-declared (Launch Phase
-      paywall): `product_id`, `purchase_token`, state, billing window;
-      Google Play handles payment, RepSaga sees no card data
-- [x] L8 — analytics enumeration expanded with actual event taxonomy
-      from `lib/features/analytics/data/models/analytics_event.dart`
-      and identifier purge on account delete
-- [x] L9 — avatar storage explicitly named: private bucket + signed
-      URLs (1-year TTL)
-- [x] L10 — §9 reworded from "by using you consent" to Supabase DPA +
-      SCCs (LGPD Art. 33 / GDPR Chapter V mechanism)
-- [x] L11 — derived RPG data (XP totals, body-part progress, class,
-      earned titles) disclosed as processed data and included in
-      deletion scope
-- [x] L13 — breach notification commitment (ANPD-required timeframe)
-- [x] L12 (nit) — 30-day deletion hedged with Supabase backup schedule
-- [x] last-updated date bumped to 2026-06-04
+**Cluster references:** `data-protection-compliance` (named in MEMORY
+index `feedback_data_protection_compliance.md`; this PR also lands the row
+in PROJECT.md §0 Cluster Ledger — the audit lockdown migration #69 cited
+it but never indexed the handle).
 
-**Blockers addressed (Terms of Service):**
+**Implementation checklist:**
 
-- [x] M1 — RPG-specific overtraining disclaimer (title/rank never a
-      reason to train injured or skip recovery)
-- [x] M2 — RED-S / disordered-eating language; bodyweight optionality
-      reaffirmed
-- [x] M3 — youth lifter growth-plate disclaimer (belt-and-braces even
-      with 18+ floor)
-- [x] M4 — cardiovascular condition explicit callout
-- [x] M5 — pregnant / postpartum explicit callout
-- [x] M6 — share-card camera/photo disclosure: local processing only,
-      never uploaded
-- [x] M7 — "stop if you feel pain" copy moved to top of §1, bolded
-      as a dedicated warning paragraph
-- [x] §3 minimum age aligned with Privacy Policy §8 (18+ globally,
-      16+ EEA)
-- [x] last-updated date bumped to 2026-06-04
-
-**Mirroring:**
-
-- [x] `docs/privacy_policy.md` body byte-identical to
-      `assets/legal/privacy_policy.md` (Jekyll front-matter preserved)
-- [x] `docs/terms_of_service.md` body byte-identical to
-      `assets/legal/terms_of_service.md`
-
-**Verification:**
-
-- [x] `dart format .` clean (no Dart changes; format leg passes)
-- [x] `dart analyze --fatal-infos` clean (0 issues — markdown-only)
-- [x] `flutter test` — `LegalDocScreen` rendering tests pass against
-      the expanded markdown (test bundle is synthetic, decoupled
-      from policy text)
-- [x] `make ci` end-to-end green
-
-**Out of scope (PR 2 / PR 3):**
-
-- Age-confirmation checkbox at signup → PR 2
-- Sensitive-data opt-in surface for bodyweight + gender → PR 2
-- Consent withdrawal toggle parity → PR 2
-- In-app JSON export of workout history → PR 3
-- Separate `dpo@repsaga.app` alias provisioning → Caio (outside repo)
-
-**Round 2 — reviewer findings (4 Blockers + 5 Important + 4 Nits, all
-same-cycle per `feedback_no_deferring_review_findings`):**
-
-- [x] B1 — overpromise on UI surfaces hedged at 3 sites: §2a sensitive-
-      data toggles (opt-in + withdrawal both routed through `dpo@`
-      until the in-app toggles ship), §6 withdrawal-of-consent row,
-      ToS §3 age-confirmation checkbox
-- [x] B2 — malformed `Art. 11 §I(a)` LGPD citation fixed at 2
-      occurrences in §4a (body weight + gender rows) → `Art. 11, I`
-- [x] B3 — §6 granular-erasure internal contradiction resolved: row
-      now matches the export-row hedging pattern (forthcoming UI;
-      `dpo@` + 15 business days in the meantime)
-- [x] B4 — Sentry toggle verified live in `lib/`: `CrashReportsToggle`
-      mounted at `profile_settings_screen.dart:197`, backed by
-      `crashReportsEnabledProvider` (Hive `user_prefs` +
-      `SentryReport.setEnabled`). §5 path tightened to
-      `Profile → Settings → Privacy → Send crash reports` with an
-      explicit "wired to live SDK" note; present-tense retained
-- [x] I1 — §8 EEA age floor simplified to a single global 18+
-      threshold that exceeds the GDPR Art. 8 §1 floor of 16; ToS §3
-      mirrored
-- [x] I2 — §6 Access vs Portability rows split: Access (Art. 18 II /
-      GDPR Art. 15) → human-readable email summary; Portability
-      (Art. 18 V / GDPR Art. 20) → forthcoming in-app machine-readable
-      JSON. Cross-references inline so future portability launch
-      doesn't muddle Access
-- [x] I3 — kept the "balancing test documented and available on
-      request" phrase in §4a (good practice). **TODO for Caio,
-      outside this PR:** write a short one-page internal LGPD-Art. 7
-      IX legitimate-interest balancing memo (purposes vs. data-subject
-      rights, mitigations applied: no advertising, no third-party
-      enrichment, no PII in event payloads, deletion cascade on
-      account close) before any LGPD/ANPD inquiry lands. Stash under
-      `docs/` (or wherever Caio prefers internal compliance docs)
-- [x] I4 — §4 cross-border vagueness fixed with explicit "see §9"
-      cross-reference naming LGPD Art. 33 + GDPR Chapter V safeguards
-- [x] I5 — ToS §9 liability cap reworded from "greater of US $0 or…"
-      to "greater of (a) the amount you paid in the 12 months
-      preceding the claim, or (b) R$0 if you are a free-tier user,
-      except where prohibited by mandatory consumer-protection law
-      including the CDC" — switches to BRL and softens framing
-- [x] N1 — avatar TTL infra-specifics removed: "short-lived signed
-      URLs that expire and are automatically regenerated"
-- [x] N2 — withdrawal "takes effect immediately" → "takes effect
-      promptly (CDN-cached signed URLs may have brief propagation
-      delay)"
-- [x] N3 / N4 — every `PR 2` / `PR 3` / `legal compliance series`
-      reference replaced with "a forthcoming app update" across both
-      `assets/legal/` files and both `docs/` mirrors. Grep verified
-      zero remaining occurrences in user-facing markdown
-
-**Round 2 verification:**
-
-- [x] `dart format .` clean (markdown-only diff)
-- [x] `dart analyze --fatal-infos` clean (only pre-existing `.env`
-      asset warning, identical to main)
-- [x] `flutter test test/widget/shared/widgets/legal_doc_screen_test.dart`
-      — 4/4 pass against the round-2 markdown
-- [x] `make ci` end-to-end green; android debug build exit 0
-- [x] `diff <(tail -n +6 docs/...md) assets/legal/...md` — body
-      byte-parity preserved for both files
-
----
-
-### PR A2 — locale metadata backfill + client hydration
-
-Branch: `feat/auth-locale-metadata-backfill-and-client-hydration`
-
-Closes the two `user_metadata.locale = NULL` populations documented in PR
-#300's `docs/auth-email-templates/README.md` → "Known edge cases" and
-explicitly deferred:
-
-1. **Legacy users** — anyone who signed up before PR #300 merged. Their
-   `auth.users.raw_user_meta_data` has no `locale` key, so password reset,
-   magic link, and email change emails fall into the template's
-   `{{ else }}` English branch regardless of `profiles.locale`.
-2. **Google OAuth signups** — Supabase's OAuth flow cannot set
-   `user_metadata` at authorization time, so OAuth users land in the same
-   `{{ else }}` English branch even if their `profiles.locale = 'pt'`.
-
-Two-layer fix:
-
-**SQL migration (bounded, one-shot — covers legacy users):**
-
-- [x] `supabase/migrations/00073_backfill_user_metadata_locale.sql` —
-      idempotent UPDATE merging `profiles.locale` into
-      `auth.users.raw_user_meta_data` for every user whose metadata locale
-      is currently NULL and whose `profiles.locale IN ('en','pt')`.
-      `COALESCE(raw_user_meta_data, '{}'::jsonb)` defends against legacy
-      rows with NULL metadata.
-
-**Dart client hydration (unbounded, ongoing — covers OAuth + any future
-gap):**
-
-- [x] `lib/core/constants/supported_locales.dart` — new const
-      `kSupportedLocales = ['en','pt']` shared by `MaterialApp.supportedLocales`,
-      the SQL backfill allowlist (comment cross-reference), and the
-      hydration helper's allowlist guard.
-- [x] `lib/app.dart` — `MaterialApp.supportedLocales` consumes
-      `kSupportedLocales.map(Locale.new).toList()` instead of the
-      gen-l10n-produced `AppLocalizations.supportedLocales`. A unit test
-      pins the two stay in sync.
-- [x] `lib/features/auth/data/auth_repository.dart` — new
-      `updateUserMetadata(Map<String, Object?> data)` wraps
-      `_auth.updateUser(UserAttributes(data:))` with `mapException` +
-      `_authTimeout`. Keeps Supabase access inside the repository layer.
-- [x] `lib/features/profile/providers/profile_providers.dart` —
-      `ProfileNotifier.build()` fires `unawaited(_hydrateLocaleMetadataIfMissing(profile))`
-      after `getProfile(...)` resolves. The helper short-circuits when
-      `user_metadata.locale` is already populated, when `profile.locale`
-      is not in `kSupportedLocales`, or on any caught error (Sentry
-      breadcrumb only — never an `AsyncError` on the profile). Placement
-      rides on the existing `provider-init-timing` cluster fix so the
-      check re-runs on every signedIn / tokenRefreshed event.
-
-**Tests:**
-
-- [x] `test/unit/features/profile/providers/profile_notifier_locale_hydration_test.dart` —
-      6 hydration cases + 1 contract test:
-  - writes locale = 'pt' when metadata locale is null + profile.locale is 'pt'
-  - no-op when user_metadata.locale is already populated
-  - no-op when getProfile returns null (no profile row yet)
-  - no-op when profile.locale not in `kSupportedLocales` (e.g. 'fr')
-  - `updateUserMetadata` failure does not promote profile to AsyncError
-  - fires for 'en' too (proves it is not pt-specific)
-  - `kSupportedLocales` matches `AppLocalizations.supportedLocales`
+- [x] `supabase/migrations/00074_exercises_user_id_cascade.sql` — drop the
+      existing auto-named FK on `exercises.user_id`, re-add as
+      `exercises_user_id_fkey` with `ON DELETE CASCADE`. Pattern mirrors
+      `00047_personal_records_exercise_id_on_delete.sql` (information_schema
+      lookup + canonical-name existence guard for idempotency).
+- [x] `supabase/functions/delete-user/index.ts` — add storage removal block
+      BEFORE `auth.admin.deleteUser` fires. Idempotent try/catch swallows
+      "not found" + transient storage failures so the account delete is
+      never blocked.
+- [x] `lib/features/workouts/data/workout_repository.dart` —
+      `clearHistory(userId, {bool includeActive = false})`. Default keeps
+      the existing finished-only behavior; `true` drops the `is_active` +
+      `finished_at` filters so the wipe is total.
+- [x] `lib/features/profile/providers/manage_data_providers.dart` —
+      `resetAllAccountData` passes `includeActive: true` to capture
+      draft/in-progress workouts.
+- [x] `supabase/functions/delete-user/index.test.ts` — add storage removal
+      coverage: (a) happy path calls `storage.from('avatars').remove([uid+'/avatar.jpg'])`
+      BEFORE `auth.admin.deleteUser`, (b) storage error doesn't block the
+      delete.
+- [x] `test/unit/features/workouts/data/workout_clear_history_test.dart` —
+      extend with `includeActive: true` case asserting the `is_active` +
+      `finished_at` filters are NOT applied + regression guard pinning
+      the default still preserves the finished-only contract.
+- [x] `test/widget/features/profile/ui/manage_data_screen_test.dart` —
+      pin `resetAllAccountData` forwards `includeActive: true` to the
+      repo via a literal-true `verify` matcher (catches accidental flips
+      to `false` or the named arg being dropped).
+- [x] PROJECT.md §0 Cluster Ledger — new row
+      `data-protection-compliance` indexed.
 
 **Verification:**
 
 - [x] `dart format .` clean
-- [x] `dart analyze --fatal-infos` clean (0 issues)
-- [x] 3408 unit + widget tests pass, 1 skipped, 0 failures. 25 integration
-      tests fail for environment reasons (no live local Supabase) — same
-      baseline as `main`, not regressions.
-- [x] `make ci` end-to-end green (format + gen + analyze + test + android
-      debug build) — opened PR #303
+- [x] `dart analyze --fatal-infos` clean (0 issues — `.env` warning is a
+      pre-existing local-env artifact; CI runs against a real `.env`)
+- [x] Affected unit/widget tests green: 29/29 in
+      `workout_clear_history_test.dart` + `manage_data_screen_test.dart`
+- [x] Full suite: 3447 tests, 1 skipped, 25 failures — all 25 in
+      `test/integration/*` requiring a live local Supabase. **Identical
+      baseline to `main` HEAD c9b95ebf** (mirrors PR A2's documented
+      baseline). Not regressions.
+- [x] Android debug APK built clean via
+      `flutter build apk --debug --no-shrink`
 - [x] PR body includes
       `**QA pass pending — final coverage + E2E run after code review.**`
 
-**Post-merge:** apply migration 00073 to hosted Supabase via
-`npx supabase db push` so the legacy-user backfill lands in production.
-Verify the email-template "Pre-existing user" verification case from
-`docs/auth-email-templates/README.md` flips from `{{ else }}` to `pt` for
-a sample legacy `profiles.locale = 'pt'` user.
+**Post-merge:**
+
+- Apply migration 00074 to hosted Supabase via `npx supabase db push`. The
+  Postgres CLI runs each migration in its own transaction by default;
+  cluster `postgres-alter-type-transaction` does NOT apply (this is FK
+  constraint mutation, not enum mutation).
+- Deploy Edge Function delta via `supabase functions deploy delete-user`.
+

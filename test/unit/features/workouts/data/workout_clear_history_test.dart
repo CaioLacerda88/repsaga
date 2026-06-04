@@ -120,5 +120,63 @@ void main() {
 
       expect(() => repo.clearHistory('user-001'), throwsA(isA<Exception>()));
     });
+
+    // Cluster: data-protection-compliance. The Reset All affordance must
+    // drop the `is_active = false` + `finished_at IS NOT NULL` filters so
+    // an in-progress / draft workout cannot survive the reset and be
+    // resurrected by a subsequent sign-in. Default callers (Delete
+    // Workout History affordance) MUST still preserve the filters.
+    group('includeActive: true (Reset All path)', () {
+      test('drops is_active filter so draft workouts are deleted', () async {
+        final fakeBuilder = FakeQueryBuilder();
+        final repo = WorkoutRepository(
+          FakeSupabaseClient(fakeBuilder),
+          const CacheService(),
+          _MockExerciseRepository(),
+        );
+
+        await repo.clearHistory('user-001', includeActive: true);
+
+        expect(fakeBuilder.queriedTable, 'workouts');
+        expect(fakeBuilder.calledMethods, contains('delete'));
+        expect(fakeBuilder.calledMethods, contains('eq:user_id=user-001'));
+        // The active-workout filter MUST NOT be applied — that's the bug
+        // this PR closes.
+        expect(
+          fakeBuilder.calledMethods,
+          isNot(contains('eq:is_active=false')),
+        );
+        // And the finished_at filter MUST NOT be applied either — drafts
+        // (finished_at IS NULL) are part of the "all" set.
+        expect(
+          fakeBuilder.calledMethods,
+          isNot(contains('not:finished_at.is=null')),
+        );
+      });
+
+      test(
+        'default (no includeActive) still preserves the finished-only contract',
+        () async {
+          // Regression guard for the Delete Workout History affordance.
+          // That flow's user-facing copy ("Your active workout is not
+          // affected") depends on this filter staying on the default
+          // call path.
+          final fakeBuilder = FakeQueryBuilder();
+          final repo = WorkoutRepository(
+            FakeSupabaseClient(fakeBuilder),
+            const CacheService(),
+            _MockExerciseRepository(),
+          );
+
+          await repo.clearHistory('user-001');
+
+          expect(fakeBuilder.calledMethods, contains('eq:is_active=false'));
+          expect(
+            fakeBuilder.calledMethods,
+            contains('not:finished_at.is=null'),
+          );
+        },
+      );
+    });
   });
 }

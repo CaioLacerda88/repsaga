@@ -602,17 +602,28 @@ class WorkoutRepository extends BaseRepository {
     });
   }
 
-  /// Delete all finished, non-active workouts for a user.
+  /// Delete workouts for a user.
   ///
-  /// Active workouts (in-progress) are never deleted.
+  /// Default behaviour ([includeActive] = `false`) deletes only finished,
+  /// non-active workouts — the contract the "Delete Workout History"
+  /// affordance pins (active in-progress workouts must survive).
+  ///
+  /// When [includeActive] is `true`, the `is_active` + `finished_at`
+  /// filters are dropped so EVERY workout owned by the user is removed,
+  /// including draft / in-progress sessions. Used by
+  /// `resetAllAccountData` to honour the "Reset ALL account data" label
+  /// — cluster: data-protection-compliance. The Hive `active_workout`
+  /// box is cleared separately on the auth-state-change path, so this
+  /// repo-layer wipe pairs with that to leave no resurrectable session.
+  ///
   /// Cascade-deletes workout_exercises and sets via FK constraints.
-  Future<void> clearHistory(String userId) {
+  Future<void> clearHistory(String userId, {bool includeActive = false}) {
     return mapException(() async {
-      await _workouts
-          .delete()
-          .eq('user_id', userId)
-          .eq('is_active', false)
-          .not('finished_at', 'is', null);
+      var query = _workouts.delete().eq('user_id', userId);
+      if (!includeActive) {
+        query = query.eq('is_active', false).not('finished_at', 'is', null);
+      }
+      await query;
       // History keys are now `'<userId>:<locale>'`; clear the entire box to
       // evict every locale entry for the user.
       _cache.clearBox(HiveService.workoutHistoryCache);

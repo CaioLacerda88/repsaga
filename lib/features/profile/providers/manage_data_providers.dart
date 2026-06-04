@@ -27,6 +27,16 @@ Future<void> clearWorkoutHistory(WidgetRef ref) async {
 /// **Order matters**: personal records must be deleted first because
 /// `personal_records.set_id` has a foreign key reference to `sets`.
 /// Deleting workouts first would cascade-delete sets, violating that FK.
+///
+/// **`includeActive: true` on `clearHistory`** — cluster:
+/// data-protection-compliance. The Reset All affordance promises total
+/// workout-data erasure; a draft / in-progress active workout would
+/// otherwise survive the reset and the next sign-in could resurrect it
+/// (Supabase has the active row, Hive has been cleared on the auth
+/// path, so the desktop client would reload the orphaned active row).
+/// Dropping the `is_active` + `finished_at` filters here matches the
+/// user-facing "ALL account data" label and recovers from stuck-active
+/// edge cases.
 Future<void> resetAllAccountData(WidgetRef ref) async {
   final userId = ref.read(authRepositoryProvider).currentUser?.id;
   if (userId == null) return;
@@ -35,7 +45,7 @@ Future<void> resetAllAccountData(WidgetRef ref) async {
 
   // Delete PRs first to clear set_id FK references before cascade-deleting sets.
   await prRepo.clearAllRecords(userId);
-  await workoutRepo.clearHistory(userId);
+  await workoutRepo.clearHistory(userId, includeActive: true);
 
   ref.invalidate(workoutHistoryProvider);
   ref.invalidate(workoutCountProvider);
