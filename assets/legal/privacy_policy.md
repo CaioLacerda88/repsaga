@@ -24,7 +24,7 @@ We collect only the information you provide directly and a small number of in-ap
 - Training goals (e.g. weekly workout frequency)
 - **Body weight (`bodyweight_kg`)** — *sensitive personal data* under LGPD Art. 11 / GDPR Art. 9 (data concerning health). Collection is **opt-in**: the field is omittable and can be deleted at any time. See Section 2a below.
 - **Gender (`male`, `female`, or `other`)** — *sensitive personal data* under LGPD Art. 11 / GDPR Art. 9. Collection is **opt-in**. Used solely to select the per-lift strength-tier reference table that calibrates XP for resistance exercises (male-tier tables are sourced from Symmetric Strength reference data; female-tier tables from strengthlevel.com). If you leave gender unset or choose `'other'`, the App falls back to the male-tier table for now — this is a documented, conservative default and has no other effect on your account. See Section 2a below.
-- **Avatar photo (`avatar_url`)** — optional. If you upload one, it is stored in a **private Supabase Storage bucket** and served to the App via short-lived signed URLs (refreshed by the App; typical link lifetime up to 1 year, regenerated on demand). The photo is never publicly accessible.
+- **Avatar photo (`avatar_url`)** — optional. If you upload one, it is stored in a **private Supabase Storage bucket** and served to the App via short-lived signed URLs that expire and are automatically regenerated. The photo is never publicly accessible.
 
 ### Fitness Data
 - Workout history: exercises, sets, reps, weight, dates, notes, and workout duration
@@ -65,12 +65,12 @@ A separate `account_deletion_events` row is written when you delete your account
 
 ### 2a. Sensitive Personal Data — Heightened Consent
 
-Body weight and gender are classified as **sensitive personal data** ("data concerning health") under LGPD Art. 11 and GDPR Art. 9. They are collected only with your **explicit, granular opt-in** through in-app toggles. You can withdraw consent for either field at any time, which removes the value from your profile and the App reverts to the documented fallback behavior:
+Body weight and gender are classified as **sensitive personal data** ("data concerning health") under LGPD Art. 11 and GDPR Art. 9. They are collected only with your **explicit, granular opt-in**, delivered by in-app toggles available in a forthcoming app update. Until that update ships, you can opt in by emailing `dpo@repsaga.app` and we will record the consent on your profile.
+
+You can withdraw consent for either field at any time, which removes the value from your profile and the App reverts to the documented fallback behavior. Until the in-app toggles ship, withdrawal is requested by emailing `dpo@repsaga.app` and is honored within 15 business days. The fallback behaviors are:
 
 - **Body weight withdrawn:** XP accuracy is reduced for bodyweight exercises (push-ups, pull-ups, dips, etc.), because the App can no longer include your own mass in the load calculation. This is the **only** consequence. All other features continue to work.
 - **Gender withdrawn:** the App reverts to the male-tier reference table for strength-tier calibration — the same fallback used when `gender = 'other'`.
-
-The in-app opt-in surface is delivered by a separate update (PR 2 of the legal compliance series).
 
 ## 3. How We Collect Information
 
@@ -85,7 +85,7 @@ Your data is stored on Supabase infrastructure:
 - **In transit:** encrypted via TLS.
 - **At rest:** encrypted by Supabase at the storage layer.
 
-Supabase may process data in the regions where it operates. International transfers are addressed in Section 9. See [supabase.com/privacy](https://supabase.com/privacy) for Supabase's own policies and [supabase.com/dpa](https://supabase.com/dpa) for the Data Processing Addendum.
+Supabase may process data in the regions where it operates (see §9 for cross-border transfer mechanics, including the LGPD Art. 33 and GDPR Chapter V safeguards). See [supabase.com/privacy](https://supabase.com/privacy) for Supabase's own policies and [supabase.com/dpa](https://supabase.com/dpa) for the Data Processing Addendum.
 
 ## 4a. Lawful Bases for Processing
 
@@ -97,14 +97,14 @@ Under LGPD Art. 6 (and the parallel GDPR Art. 6 §1 and Art. 9 §2 where applica
 | Display name, locale, weight-unit preference | Art. 6 V (contract performance) | Art. 6 §1(b) | Render the App in your language and units |
 | Workout history, exercise customizations, personal records | Art. 6 V (contract performance) | Art. 6 §1(b) | Provide the core tracking service you signed up for |
 | Derived RPG data (XP, ranks, peak loads, classes, titles) | Art. 6 V (contract performance) | Art. 6 §1(b) | Provide the progression features you signed up for |
-| **Body weight** | **Art. 11 §I(a) (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Improve XP accuracy for bodyweight exercises |
-| **Gender** | **Art. 11 §I(a) (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Select the strength-tier reference table for XP calibration |
+| **Body weight** | **Art. 11, I (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Improve XP accuracy for bodyweight exercises |
+| **Gender** | **Art. 11, I (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Select the strength-tier reference table for XP calibration |
 | Avatar photo | Art. 7 I (consent) | Art. 6 §1(a) (consent) | Personalize your profile |
 | Usage events (Section 2 list) | Art. 7 IX (legitimate interest) | Art. 6 §1(f) (legitimate interest) | Diagnose bugs, prioritize features, measure reliability. Balancing test documented and available on request. |
 | Crash reports (Sentry) | Art. 7 IX (legitimate interest) | Art. 6 §1(f) (legitimate interest) | Diagnose and fix App crashes |
 | Subscription data (Launch Phase) | Art. 6 V (contract performance) | Art. 6 §1(b) | Verify and provision your paid subscription |
 
-For data processed on the basis of consent (body weight, gender, avatar), withdrawing consent is as easy as giving it: see Sections 2a, 6, and the in-app toggles delivered by PR 2.
+For data processed on the basis of consent (body weight, gender, avatar), withdrawing consent is as easy as giving it: see Sections 2a, 6, and the in-app toggles delivered by a forthcoming app update.
 
 ## 5. Third Parties
 
@@ -113,7 +113,7 @@ RepSaga uses the following third-party services (data sub-processors):
 - **Supabase** — hosting, authentication, database, and private object storage. Supabase is contractually bound by its Data Processing Addendum at [supabase.com/dpa](https://supabase.com/dpa), which includes Standard Contractual Clauses for international transfers.
 - **Google (Google Sign-In)** — OAuth authentication only, if you choose to sign in with Google.
 - **Google Play Billing** — payment processing for premium subscriptions (Launch Phase only). Google receives all payment-instrument data directly; RepSaga receives only the fields enumerated in Section 2.
-- **Sentry** — crash reporting only. When the App encounters an unhandled error, a stack trace, the environment (OS, app version), and your account ID (no email, no name, no IP address) are sent to sentry.io so we can diagnose and fix the bug. You can disable this at any time in **Profile → Privacy → Send crash reports**. For Sentry's own policies, see [sentry.io/privacy](https://sentry.io/privacy/).
+- **Sentry** — crash reporting only. When the App encounters an unhandled error, a stack trace, the environment (OS, app version), and your account ID (no email, no name, no IP address) are sent to sentry.io so we can diagnose and fix the bug. You can disable this at any time via **Profile → Settings → Privacy → Send crash reports** (the toggle is wired to the live Sentry SDK and the change takes effect immediately for all subsequent captures). For Sentry's own policies, see [sentry.io/privacy](https://sentry.io/privacy/).
 
 We do **not** use advertising networks. We do **not** sell your data. We do **not** share your fitness data with insurers, employers, or anyone else.
 
@@ -124,15 +124,15 @@ Under LGPD Art. 18 (and the parallel GDPR Articles 15–22 where applicable), yo
 | Right | LGPD | GDPR | How to exercise |
 | --- | --- | --- | --- |
 | **Confirmation of processing** | Art. 18 I | Art. 15 | Email `dpo@repsaga.app` (15 business days) |
-| **Access** — receive a copy of your data | Art. 18 II | Art. 15 | Profile → Manage Data → Export. The in-app JSON export is delivered by a separate update (PR 3); until then, email `dpo@repsaga.app` and we will deliver the export within 15 business days |
+| **Access** — receive a human-readable copy of the data we hold about you | Art. 18 II | Art. 15 | Email `dpo@repsaga.app` and we will deliver a human-readable summary within 15 business days. (Distinct from "Data portability" below, which delivers a structured machine-readable export.) |
 | **Correction / rectification** | Art. 18 III | Art. 16 | Edit directly in Profile, or email `dpo@repsaga.app` |
 | **Anonymization, blocking, or deletion of unnecessary or excessive data** | Art. 18 IV | Art. 17 | Email `dpo@repsaga.app` |
 | **Erasure** — delete your account and all data | Art. 18 VI | Art. 17 | Profile → Manage Data → Delete Account (instant). See Section 7 |
-| **Granular erasure** — delete individual sensitive fields without closing the account | Art. 18 IV | Art. 17 | **Body weight** and **avatar photo** can be deleted individually via Profile → Edit Profile. Gender can be cleared via Profile → Edit Profile. The full UI surface ships in PR 2 |
-| **Data portability** — receive your workout history in a structured, machine-readable format | Art. 18 V | Art. 20 | Profile → Manage Data → Export. The in-app JSON export ships in PR 3; until then, email `dpo@repsaga.app` (15 business days) |
+| **Granular erasure** — delete individual sensitive fields without closing the account | Art. 18 IV | Art. 17 | Body weight, gender, and avatar photo can each be deleted individually without closing your account. The self-service UI ships in a forthcoming app update; until then, email `dpo@repsaga.app` and we will complete the deletion within 15 business days |
+| **Data portability** — receive your workout history in a structured, machine-readable format | Art. 18 V | Art. 20 | An in-app JSON export at Profile → Manage Data → Export ships in a forthcoming app update; until then, email `dpo@repsaga.app` (15 business days). Once the in-app export ships, it satisfies portability (machine-readable). The "Access" right above remains served by email (human-readable). |
 | **Information about data sharing** with public and private entities | Art. 18 VII | — | See Section 5 and Section 9; for additional detail email `dpo@repsaga.app` |
 | **Information about the consequences of refusing consent** | Art. 18 VIII | — | See Sections 2a and 6 |
-| **Withdrawal of consent** | Art. 18 IX | Art. 7 §3 | In-app toggles for body weight, gender, avatar, and crash reports. Withdrawal is as easy as giving consent and takes effect immediately |
+| **Withdrawal of consent** | Art. 18 IX | Art. 7 §3 | In-app toggles for body weight, gender, avatar, and crash reports ship in a forthcoming app update; until then, withdrawal is requested at `dpo@repsaga.app` and honored within 15 business days. Withdrawal is as easy as giving consent and takes effect promptly (CDN-cached signed URLs may have brief propagation delay). |
 | **Restriction of processing** | — | Art. 18 | Email `dpo@repsaga.app` |
 | **Objection** to processing on legitimate-interest grounds (Section 4a) | — | Art. 21 | Email `dpo@repsaga.app` |
 | **Lodge a complaint** with a supervisory authority | Art. 18 (via ANPD jurisdiction) | Art. 77 | Brazil: ANPD (Autoridade Nacional de Proteção de Dados), [gov.br/anpd](https://www.gov.br/anpd). EEA / UK: your national data protection authority |
@@ -145,11 +145,11 @@ All deletions complete within **30 days** of your request. This window is subjec
 
 ## 8. Children and Minimum Age
 
-**RepSaga requires users to be at least 18 years old.** This threshold is set in alignment with LGPD Art. 14 (which requires verifiable parental or guardian consent for users under 18, infrastructure that RepSaga has not built). Users in the European Economic Area must additionally meet the GDPR Art. 8 §1 digital-services age, which we apply at 16 as a conservative floor.
+**Users must be at least 18 years old globally.** This single global threshold exceeds the GDPR Art. 8 §1 digital-services age threshold of 16 in the EEA, and is set in alignment with LGPD Art. 14 (which requires verifiable parental or guardian consent for users under 18, infrastructure that RepSaga has not built).
 
-If a user under 18 (or under 16 in the EEA) creates an account, the account will be terminated and all associated data deleted upon discovery or notification. If you believe a minor has provided us with personal information, contact `dpo@repsaga.app` and we will delete it.
+If a user under 18 creates an account, the account will be terminated and all associated data deleted upon discovery or notification. If you believe a minor has provided us with personal information, contact `dpo@repsaga.app` and we will delete it.
 
-Age confirmation at signup is enforced through an explicit checkbox in the signup flow (delivered by PR 2 of the legal compliance series).
+Users must confirm they are 18 or older to use the App. The in-app age-confirmation checkbox at signup is delivered by a forthcoming app update; in the meantime, by creating an account you affirm that you are at least 18 years old.
 
 ## 9. International Users and Cross-Border Transfers
 

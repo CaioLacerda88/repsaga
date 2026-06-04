@@ -39,8 +39,8 @@ Features may change, be added, or be removed at any time.
 
 ## 3. Account Requirements
 
-- **You must be at least 18 years old to use the App.** Users in the European Economic Area must additionally meet the GDPR Art. 8 §1 digital-services age, which we apply at 16 as a conservative floor. We do not knowingly accept accounts from users below these thresholds. See Privacy Policy Section 8 for the underlying rationale.
-- Age confirmation is enforced through an explicit checkbox at signup (delivered by PR 2 of the legal compliance series).
+- **You must be at least 18 years old to use the App.** This single global threshold exceeds the GDPR Art. 8 §1 digital-services age threshold of 16 in the EEA. We do not knowingly accept accounts from users below 18. See Privacy Policy Section 8 for the underlying rationale.
+- Users must confirm they are 18 or older. The in-app age-confirmation checkbox at signup is delivered by a forthcoming app update; in the meantime, by creating an account you affirm that you are at least 18 years old.
 - You are responsible for keeping your login credentials secure. Do not share your password.
 - You are responsible for all activity on your account.
 - One person per account. Do not create multiple accounts to evade limits or violations.
@@ -79,7 +79,7 @@ The App is provided **"as is"** and **"as available"**, without warranties of an
 
 ## 9. Limitation of Liability
 
-To the maximum extent permitted by law, RepSaga and its creators will not be liable for any indirect, incidental, consequential, or punitive damages arising from your use of the App, including but not limited to loss of data, loss of profits, personal injury, or service interruption. Our total liability for any claim will not exceed the greater of US $0 or the amount you paid us in the 12 months preceding the claim.
+To the maximum extent permitted by law, RepSaga and its creators will not be liable for any indirect, incidental, consequential, or punitive damages arising from your use of the App, including but not limited to loss of data, loss of profits, personal injury, or service interruption. Our total liability for any claim will not exceed the greater of (a) the amount you paid us in the 12 months preceding the claim, or (b) R$0 if you are a free-tier user, except where prohibited by mandatory consumer-protection law including the Código de Defesa do Consumidor.
 
 Nothing in these Terms limits or excludes any liability that cannot be limited or excluded under applicable law, including statutory consumer rights under the Código de Defesa do Consumidor (Brazil) and equivalent consumer-protection regimes in other jurisdictions.
 

@@ -108,6 +108,68 @@ ship the runtime surfaces this PR only declares.
 - In-app JSON export of workout history → PR 3
 - Separate `dpo@repsaga.app` alias provisioning → Caio (outside repo)
 
+**Round 2 — reviewer findings (4 Blockers + 5 Important + 4 Nits, all
+same-cycle per `feedback_no_deferring_review_findings`):**
+
+- [x] B1 — overpromise on UI surfaces hedged at 3 sites: §2a sensitive-
+      data toggles (opt-in + withdrawal both routed through `dpo@`
+      until the in-app toggles ship), §6 withdrawal-of-consent row,
+      ToS §3 age-confirmation checkbox
+- [x] B2 — malformed `Art. 11 §I(a)` LGPD citation fixed at 2
+      occurrences in §4a (body weight + gender rows) → `Art. 11, I`
+- [x] B3 — §6 granular-erasure internal contradiction resolved: row
+      now matches the export-row hedging pattern (forthcoming UI;
+      `dpo@` + 15 business days in the meantime)
+- [x] B4 — Sentry toggle verified live in `lib/`: `CrashReportsToggle`
+      mounted at `profile_settings_screen.dart:197`, backed by
+      `crashReportsEnabledProvider` (Hive `user_prefs` +
+      `SentryReport.setEnabled`). §5 path tightened to
+      `Profile → Settings → Privacy → Send crash reports` with an
+      explicit "wired to live SDK" note; present-tense retained
+- [x] I1 — §8 EEA age floor simplified to a single global 18+
+      threshold that exceeds the GDPR Art. 8 §1 floor of 16; ToS §3
+      mirrored
+- [x] I2 — §6 Access vs Portability rows split: Access (Art. 18 II /
+      GDPR Art. 15) → human-readable email summary; Portability
+      (Art. 18 V / GDPR Art. 20) → forthcoming in-app machine-readable
+      JSON. Cross-references inline so future portability launch
+      doesn't muddle Access
+- [x] I3 — kept the "balancing test documented and available on
+      request" phrase in §4a (good practice). **TODO for Caio,
+      outside this PR:** write a short one-page internal LGPD-Art. 7
+      IX legitimate-interest balancing memo (purposes vs. data-subject
+      rights, mitigations applied: no advertising, no third-party
+      enrichment, no PII in event payloads, deletion cascade on
+      account close) before any LGPD/ANPD inquiry lands. Stash under
+      `docs/` (or wherever Caio prefers internal compliance docs)
+- [x] I4 — §4 cross-border vagueness fixed with explicit "see §9"
+      cross-reference naming LGPD Art. 33 + GDPR Chapter V safeguards
+- [x] I5 — ToS §9 liability cap reworded from "greater of US $0 or…"
+      to "greater of (a) the amount you paid in the 12 months
+      preceding the claim, or (b) R$0 if you are a free-tier user,
+      except where prohibited by mandatory consumer-protection law
+      including the CDC" — switches to BRL and softens framing
+- [x] N1 — avatar TTL infra-specifics removed: "short-lived signed
+      URLs that expire and are automatically regenerated"
+- [x] N2 — withdrawal "takes effect immediately" → "takes effect
+      promptly (CDN-cached signed URLs may have brief propagation
+      delay)"
+- [x] N3 / N4 — every `PR 2` / `PR 3` / `legal compliance series`
+      reference replaced with "a forthcoming app update" across both
+      `assets/legal/` files and both `docs/` mirrors. Grep verified
+      zero remaining occurrences in user-facing markdown
+
+**Round 2 verification:**
+
+- [x] `dart format .` clean (markdown-only diff)
+- [x] `dart analyze --fatal-infos` clean (only pre-existing `.env`
+      asset warning, identical to main)
+- [x] `flutter test test/widget/shared/widgets/legal_doc_screen_test.dart`
+      — 4/4 pass against the round-2 markdown
+- [x] `make ci` end-to-end green; android debug build exit 0
+- [x] `diff <(tail -n +6 docs/...md) assets/legal/...md` — body
+      byte-parity preserved for both files
+
 ---
 
 ### PR A2 — locale metadata backfill + client hydration
