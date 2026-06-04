@@ -11,6 +11,105 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+### Legal PR 1 — Privacy Policy + ToS copy updates (LGPD + GDPR + medical)
+
+Branch: `docs/legal-pr1-policy-tos-copy-lgpd-gdpr-medical`
+
+First of three PRs closing the read-only legal audit. PR 1 is **copy-only**
+to `assets/legal/privacy_policy.md` + `assets/legal/terms_of_service.md` and
+their byte-identical `docs/` mirrors (Jekyll front-matter aside). No UI
+surfaces, no Dart code, no schema. The `LegalDocScreen` rendering pipeline
+(`flutter_markdown_plus`) handles the longer document unchanged.
+
+PR 2 (UI consent flows: age-gate signup checkbox, sensitive-data opt-in
+toggle for bodyweight + gender, withdrawal toggle parity, consent-state
+Hive box) and PR 3 (in-app workout-history export → JSON over signed URL)
+ship the runtime surfaces this PR only declares.
+
+**Blockers addressed (Privacy Policy):**
+
+- [x] L1 — lawful basis enumerated per data category (LGPD Art. 6,
+      GDPR Art. 6 §1(b/f), Art. 9 §2(a))
+- [x] L2 — body weight + gender classified as sensitive personal data
+      (LGPD Art. 11 / GDPR Art. 9), opt-in declared, fallback to
+      reduced bodyweight-XP accuracy stated
+- [x] L3 — gender disclosed in §2 with purpose (XP-calc accuracy via
+      gender-aware tier tables) + `'other'`/NULL → male table fallback
+- [x] L4 — Art. 18 / Art. 15-21 rights with declared in-app surfaces
+      and email-fallback SLA (15 business days)
+- [x] L5 — DPO / Encarregado named: Caio Lacerda, `dpo@repsaga.app`
+      (LGPD Art. 41 reference)
+- [x] L6 — minimum age raised to 18 (16 in EEA per GDPR Art. 8 §1
+      conservative floor); parental-consent infra absent
+- [x] G3 — consent withdrawal as easy as giving it (Art. 7 §3)
+- [x] G4 — granular erasure: body weight + avatar deletable
+      individually without account closure (Art. 17)
+- [x] G6 — retention period stated: active account + 30 days purge,
+      hedged by Supabase backup window
+- [x] G7 — cross-border transfers covered by Supabase DPA + SCCs
+      (`https://supabase.com/dpa`, GDPR Art. 46)
+- [x] G8 — right to lodge complaint with national DPA stated
+- [x] L7 — subscription/purchase data shape pre-declared (Launch Phase
+      paywall): `product_id`, `purchase_token`, state, billing window;
+      Google Play handles payment, RepSaga sees no card data
+- [x] L8 — analytics enumeration expanded with actual event taxonomy
+      from `lib/features/analytics/data/models/analytics_event.dart`
+      and identifier purge on account delete
+- [x] L9 — avatar storage explicitly named: private bucket + signed
+      URLs (1-year TTL)
+- [x] L10 — §9 reworded from "by using you consent" to Supabase DPA +
+      SCCs (LGPD Art. 33 / GDPR Chapter V mechanism)
+- [x] L11 — derived RPG data (XP totals, body-part progress, class,
+      earned titles) disclosed as processed data and included in
+      deletion scope
+- [x] L13 — breach notification commitment (ANPD-required timeframe)
+- [x] L12 (nit) — 30-day deletion hedged with Supabase backup schedule
+- [x] last-updated date bumped to 2026-06-04
+
+**Blockers addressed (Terms of Service):**
+
+- [x] M1 — RPG-specific overtraining disclaimer (title/rank never a
+      reason to train injured or skip recovery)
+- [x] M2 — RED-S / disordered-eating language; bodyweight optionality
+      reaffirmed
+- [x] M3 — youth lifter growth-plate disclaimer (belt-and-braces even
+      with 18+ floor)
+- [x] M4 — cardiovascular condition explicit callout
+- [x] M5 — pregnant / postpartum explicit callout
+- [x] M6 — share-card camera/photo disclosure: local processing only,
+      never uploaded
+- [x] M7 — "stop if you feel pain" copy moved to top of §1, bolded
+      as a dedicated warning paragraph
+- [x] §3 minimum age aligned with Privacy Policy §8 (18+ globally,
+      16+ EEA)
+- [x] last-updated date bumped to 2026-06-04
+
+**Mirroring:**
+
+- [x] `docs/privacy_policy.md` body byte-identical to
+      `assets/legal/privacy_policy.md` (Jekyll front-matter preserved)
+- [x] `docs/terms_of_service.md` body byte-identical to
+      `assets/legal/terms_of_service.md`
+
+**Verification:**
+
+- [x] `dart format .` clean (no Dart changes; format leg passes)
+- [x] `dart analyze --fatal-infos` clean (0 issues — markdown-only)
+- [x] `flutter test` — `LegalDocScreen` rendering tests pass against
+      the expanded markdown (test bundle is synthetic, decoupled
+      from policy text)
+- [x] `make ci` end-to-end green
+
+**Out of scope (PR 2 / PR 3):**
+
+- Age-confirmation checkbox at signup → PR 2
+- Sensitive-data opt-in surface for bodyweight + gender → PR 2
+- Consent withdrawal toggle parity → PR 2
+- In-app JSON export of workout history → PR 3
+- Separate `dpo@repsaga.app` alias provisioning → Caio (outside repo)
+
+---
+
 ### PR A2 — locale metadata backfill + client hydration
 
 Branch: `feat/auth-locale-metadata-backfill-and-client-hydration`
