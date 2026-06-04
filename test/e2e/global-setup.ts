@@ -2012,35 +2012,6 @@ async function globalSetup(): Promise<void> {
     }
   }
   if (userIdsToBackfill.length > 0) {
-    // ── DEBUG PROBE (to be reverted after diagnosis) ─────────────────────
-    // PR #299 follow-up: the 15681431 CI run still failed with NAV.homeTab
-    // timeouts after the backfill landed. Three hypotheses to discriminate:
-    //   H1 — ensureProfile() upsert silently drops onboarded_at, so users
-    //        like smokeBodyweightPrompt land with NULL and rely on backfill.
-    //   H2 — the backfill .update().in(...).is(...) chain "succeeds" with
-    //        0 rows actually updated (kong/PostgREST filter quirk).
-    //   H3 — a later seed step clears onboarded_at after the backfill runs.
-    // Probe A: pre-backfill SELECT on a known-seeded user (smokeBodyweightPrompt
-    // worker 0) — ensureProfile should have set onboarded_at, so this MUST
-    // be non-null. NULL here = H1 confirmed.
-    {
-      const probeRole: TestUserKey = 'smokeBodyweightPrompt';
-      const probeId = userIdsByWorker[0]?.[probeRole];
-      if (probeId) {
-        const { data: probe, error: probeErr } = await supabase
-          .from('profiles')
-          .select('id, display_name, onboarded_at')
-          .eq('id', probeId)
-          .maybeSingle();
-        console.log(
-          `[global-setup] PROBE A (pre-backfill, smokeBodyweightPrompt_w0): ${JSON.stringify({ probe, err: probeErr?.message })}`,
-        );
-      } else {
-        console.log(
-          `[global-setup] PROBE A skipped: no userId for smokeBodyweightPrompt at worker 0`,
-        );
-      }
-    }
     // `.is('onboarded_at', null)` (not `.eq('onboarded_at', null)`) — PostgREST
     // treats SQL `NULL` only via `IS NULL`. Using `.eq(null)` would skip every
     // row (NULL `=` NULL is unknown in SQL three-valued logic).
@@ -2085,58 +2056,6 @@ async function globalSetup(): Promise<void> {
       console.log(
         `[global-setup] Backfilled onboarded_at for trigger-only profile rows (${userIdsToBackfill.length} candidate users across ${Math.ceil(userIdsToBackfill.length / CHUNK_SIZE)} chunks; only NULL rows updated).`,
       );
-    }
-    // ── DEBUG PROBE B — post-backfill verification count ─────────────────
-    // Counts how many of the candidate userIds actually have onboarded_at
-    // set NOW. If actuallySet < candidates → backfill didn't take (H2).
-    // If actuallySet === candidates → backfill structurally worked → bug
-    // is downstream (Dart JSON parse, Hive cache, or H3 later-clearing seed).
-    {
-      // Chunk the count query too — same 8KB URL limit applies.
-      const COUNT_CHUNK = 50;
-      let actuallySet = 0;
-      let actuallyNull = 0;
-      let countErr: string | undefined;
-      for (let i = 0; i < userIdsToBackfill.length; i += COUNT_CHUNK) {
-        const chunk = userIdsToBackfill.slice(i, i + COUNT_CHUNK);
-        const { count: setCount, error: e1 } = await supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .in('id', chunk)
-          .not('onboarded_at', 'is', null);
-        const { count: nullCount, error: e2 } = await supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .in('id', chunk)
-          .is('onboarded_at', null);
-        if (e1 || e2) {
-          countErr = e1?.message ?? e2?.message;
-          break;
-        }
-        actuallySet += setCount ?? 0;
-        actuallyNull += nullCount ?? 0;
-      }
-      console.log(
-        `[global-setup] PROBE B (post-backfill counts across ${userIdsToBackfill.length} candidates): set=${actuallySet} null=${actuallyNull} err=${countErr ?? 'none'}`,
-      );
-    }
-    // ── DEBUG PROBE C — re-read smokeBodyweightPrompt_w0 post-backfill ──
-    // Same row as Probe A. If onboarded_at is still NULL here → H2 or H3.
-    // If it's set here but specs still time out → Dart-side bug (Profile
-    // JSON parse, Hive cache, or router redirect path).
-    {
-      const probeRole: TestUserKey = 'smokeBodyweightPrompt';
-      const probeId = userIdsByWorker[0]?.[probeRole];
-      if (probeId) {
-        const { data: probe, error: probeErr } = await supabase
-          .from('profiles')
-          .select('id, display_name, onboarded_at, bodyweight_kg')
-          .eq('id', probeId)
-          .maybeSingle();
-        console.log(
-          `[global-setup] PROBE C (post-backfill, smokeBodyweightPrompt_w0): ${JSON.stringify({ probe, err: probeErr?.message })}`,
-        );
-      }
     }
   }
 
