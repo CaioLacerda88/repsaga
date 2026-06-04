@@ -59,7 +59,12 @@ Widget buildTestWidget({
 
   final mockWorkoutRepo = workoutRepo ?? MockWorkoutRepository();
   if (workoutRepo == null) {
-    when(() => mockWorkoutRepo.clearHistory(any())).thenAnswer((_) async {});
+    when(
+      () => mockWorkoutRepo.clearHistory(
+        any(),
+        includeActive: any(named: 'includeActive'),
+      ),
+    ).thenAnswer((_) async {});
   }
 
   final mockPRRepo = prRepo ?? MockPRRepository();
@@ -288,7 +293,10 @@ void main() {
       testWidgets('cancel closes dialog without deleting', (tester) async {
         final mockWorkoutRepo = MockWorkoutRepository();
         when(
-          () => mockWorkoutRepo.clearHistory(any()),
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
         ).thenAnswer((_) async {});
         final mockPRRepo = MockPRRepository();
         when(() => mockPRRepo.clearAllRecords(any())).thenAnswer((_) async {});
@@ -305,14 +313,22 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
 
-        verifyNever(() => mockWorkoutRepo.clearHistory(any()));
+        verifyNever(
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
+        );
         verifyNever(() => mockPRRepo.clearAllRecords(any()));
       });
 
       testWidgets('confirm triggers reset and shows snackbar', (tester) async {
         final mockWorkoutRepo = MockWorkoutRepository();
         when(
-          () => mockWorkoutRepo.clearHistory(any()),
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
         ).thenAnswer((_) async {});
         final mockPRRepo = MockPRRepository();
         when(() => mockPRRepo.clearAllRecords(any())).thenAnswer((_) async {});
@@ -334,7 +350,16 @@ void main() {
         await tester.tap(find.text('Reset Account'));
         await tester.pumpAndSettle();
 
-        verify(() => mockWorkoutRepo.clearHistory('user-001')).called(1);
+        // Cluster: data-protection-compliance. Reset All MUST pass
+        // `includeActive: true` so draft / in-progress workouts are
+        // wiped alongside finished history — the user-facing "ALL
+        // account data" label demands it. A literal-true matcher here
+        // (not `any(named: ...)`) pins the contract: if a future
+        // refactor accidentally drops the named arg or flips it to
+        // false, the verify fails.
+        verify(
+          () => mockWorkoutRepo.clearHistory('user-001', includeActive: true),
+        ).called(1);
         verify(() => mockPRRepo.clearAllRecords('user-001')).called(1);
         expect(find.text('Account data reset'), findsOneWidget);
       });
@@ -344,7 +369,12 @@ void main() {
       ) async {
         final callOrder = <String>[];
         final mockWorkoutRepo = MockWorkoutRepository();
-        when(() => mockWorkoutRepo.clearHistory(any())).thenAnswer((_) async {
+        when(
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
+        ).thenAnswer((_) async {
           callOrder.add('clearHistory');
         });
         final mockPRRepo = MockPRRepository();
