@@ -24,6 +24,9 @@ void main() {
     // Required so `any(named: 'body')` / `captureAny(named: 'body')` can
     // match the `Map<String, dynamic>` passed to `FunctionsClient.invoke`.
     registerFallbackValue(<String, dynamic>{});
+    // Required for `any()` matching on the first positional arg of
+    // `signInWithOAuth` (an enum value — mocktail needs a fallback instance).
+    registerFallbackValue(supabase.OAuthProvider.google);
   });
 
   setUp(() {
@@ -152,6 +155,91 @@ void main() {
           verify(
             () => mockAuth.signUp(email: 'a@b.com', password: '123456'),
           ).called(1);
+        },
+      );
+
+      test(
+        'forwards unsupported locale "fr" verbatim as data: {locale: fr} '
+        '(production code is transparent to unrecognised locales; '
+        'the Go template else-branch renders English — the safe fallback)',
+        () async {
+          // Boundary-value: the Dart side must pass through whatever
+          // languageCode arrives from localeProvider — it must not silently
+          // discard or rewrite 'fr', 'es', or any other code that is neither
+          // 'pt' nor 'en'. The email template handles unknown codes via the
+          // {{ else }} branch (English). This test pins the pass-through
+          // contract so a future guard like `locale != 'pt' ? null : locale`
+          // would be caught before it ships.
+          when(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'fr'},
+            ),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(
+            email: 'a@b.com',
+            password: '123456',
+            locale: 'fr',
+          );
+
+          verify(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'fr'},
+            ),
+          ).called(1);
+        },
+      );
+    });
+
+    group('signInWithGoogle', () {
+      test(
+        'does NOT call signUp — OAuth path has no locale metadata leak',
+        () async {
+          // Guards: signInWithGoogle() calls signInWithOAuth (an extension on
+          // GoTrueClient defined in supabase_flutter), which internally calls
+          // GoTrueClient.getOAuthSignInUrl. We stub getOAuthSignInUrl to return
+          // a minimal OAuthResponse so the extension method can proceed past the
+          // URL-lookup step. signInWithGoogle() is expected to throw after that
+          // because launchUrl is not available in the test harness — we only
+          // care that signUp was never called at any point.
+          //
+          // The critical contract: the production code path for Google OAuth
+          // never passes `data: {'locale': ...}` to signUp. This test pins that
+          // no signUp invocation occurs during signInWithGoogle(), regardless of
+          // how the extension's internal flow resolves.
+          when(
+            () => mockAuth.getOAuthSignInUrl(
+              provider: supabase.OAuthProvider.google,
+              redirectTo: any(named: 'redirectTo'),
+            ),
+          ).thenAnswer(
+            (_) async => const supabase.OAuthResponse(
+              provider: supabase.OAuthProvider.google,
+              url: 'https://example.com/oauth',
+            ),
+          );
+
+          // signInWithGoogle may throw because launchUrl is absent in tests;
+          // we only assert on signUp never being called.
+          try {
+            await repo.signInWithGoogle();
+          } catch (_) {
+            // Expected: launchUrl throws MissingPluginException in test harness.
+          }
+
+          // The invariant: signUp must never be invoked during an OAuth flow —
+          // locale metadata is email-signup-only.
+          verifyNever(
+            () => mockAuth.signUp(
+              email: any(named: 'email'),
+              password: any(named: 'password'),
+              data: any(named: 'data'),
+            ),
+          );
         },
       );
     });
