@@ -449,6 +449,34 @@ renumbering.
     when Google Sign-In is enabled.
   - Brand assets — register `repsaga.com` / `.app` / `.com.br`; lock
     `@repsaga` on Instagram, X/Twitter, TikTok.
+  - **Email-confirmation deep link end-to-end.** Today's hosted-project
+    `Site URL` still defaults to `http://localhost:3000` — clicking
+    `{{ .ConfirmationURL }}` in any auth email (signup confirm, password
+    reset, magic link, email change) verifies the token server-side but
+    redirects the browser to a dead localhost address. Fix scope:
+    1. **Supabase Dashboard → Auth → URL Configuration.** Set `Site URL`
+       to the production HTTPS domain (depends on `repsaga.app`
+       registration above). Add the mobile deep-link target to the
+       **Redirect URLs allowlist**.
+    2. **AndroidManifest.xml intent-filter** on the launch activity for
+       the chosen scheme. Two options: (a) custom URL scheme like
+       `io.repsaga.app://confirm` — simplest, no domain verification;
+       (b) Android App Link (HTTPS scheme) with `android:autoVerify="true"`
+       — no "Open with" dialog, requires assetlinks.json hosting.
+    3. **`assetlinks.json` hosting** (option b only) — publish at
+       `https://repsaga.app/.well-known/assetlinks.json` with the Play
+       Console signing fingerprint (App Signing → SHA-256). Verify with
+       `adb shell pm get-app-links io.repsaga.app` returning `verified`.
+    4. **Dart deep-link handler** — intercept the verify callback,
+       resolve the auth state via `supabase.auth.exchangeCodeForSession`
+       if PKCE-flow, route to `/onboarding` (no profile) or `/home`
+       (per the PR #299 derived gate). The existing
+       `/email-confirmation` screen is the natural landing.
+    5. **E2E coverage** — covers PR #33 audit's finding-047
+       (`/email-confirmation` E2E was parked pending this work).
+    Until shipped, the workaround is setting `Site URL` to any HTTPS
+    domain so the post-confirm landing reads as "you're done, close
+    this tab" rather than "localhost: connection refused".
 
 **Scope expansion candidates** (decide closer to launch):
 - App icon redesign — direction decision was deferred from v1.1.
