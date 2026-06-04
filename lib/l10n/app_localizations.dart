@@ -1052,11 +1052,41 @@ abstract class AppLocalizations {
   /// **'Please enter your name.'**
   String get pleaseEnterName;
 
-  /// Snackbar: profile save failed
+  /// Snackbar: profile save failed — safety-net copy for unmapped AppException subtypes on the onboarding save path
   ///
   /// In en, this message translates to:
   /// **'Failed to save profile. Please try again.'**
   String get failedToSaveProfile;
+
+  /// Onboarding save snackbar shown when a NetworkException or TimeoutException reaches the catch block — recovery is retry-after-reconnect
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re offline. Check your connection and try again.'**
+  String get onboardingErrorOffline;
+
+  /// Onboarding save snackbar shown when an AuthException reaches the catch block after the BaseRepository stale-token refresh-retry already failed
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Sign in again.'**
+  String get onboardingErrorSessionExpired;
+
+  /// Action label on the session-expired snackbar — tapping it routes the user back to /login
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get onboardingErrorSessionExpiredCta;
+
+  /// Onboarding save snackbar shown when a ValidationException reaches the catch block with no recognised field token — falls back to a non-leaky hint
+  ///
+  /// In en, this message translates to:
+  /// **'Please check your inputs.'**
+  String get onboardingErrorValidationGeneric;
+
+  /// Onboarding save snackbar shown when a ValidationException carries a recognised field token — '<localized field name>: <message>'
+  ///
+  /// In en, this message translates to:
+  /// **'{field}: {message}'**
+  String onboardingErrorValidationField(String field, String message);
 
   /// Fitness level: beginner
   ///
