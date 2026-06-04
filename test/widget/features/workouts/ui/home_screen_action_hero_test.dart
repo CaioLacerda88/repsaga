@@ -559,17 +559,17 @@ void main() {
     // not on `routines.isEmpty`. Default routines ship seeded for every
     // user in production, so the empty-routines gate never fires.
     testWidgets(
-      'shows when workoutCount is 0 AND no custom routines (day-0 user)',
+      'shows when workoutCount is 0 AND no custom routines AND empty bucket',
       (tester) async {
-        // Phase 27 L3 gate: hero fires when day-0 user has not created any
-        // custom routines yet. Seed a DEFAULT routine plus a bucket
-        // referencing it — the default doesn't count as a user-owned routine
-        // (same `!r.isDefault` filter as `_HomeRoutinesList`), so the
-        // create-first-routine CTA still wins even with a populated bucket.
+        // Phase 27 L3 gate + post-onboarding bucket fix (2026-06-04): hero
+        // fires for the day-0 user who has not created custom routines AND
+        // has not put anything in the week plan yet. Seed only the default
+        // routines (representing the steady-state post-onboarding library)
+        // and an empty plan.
         await tester.pumpWidget(
           _buildWithRouter(
             workoutCount: 0,
-            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+            plan: null,
             routines: [
               _routine(
                 id: 'r-1',
@@ -589,7 +589,7 @@ void main() {
         );
         expect(find.text('Criar primeira rotina'), findsOneWidget);
         expect(find.text('BEM-VINDO'), findsOneWidget);
-        // Other branches not in the tree — day-0 gate wins over the bucket.
+        // Other branches not in the tree.
         expect(
           _findByIdentifier('home-action-hero-start-routine'),
           findsNothing,
@@ -598,6 +598,53 @@ void main() {
           _findByIdentifier('home-action-hero-free-workout'),
           findsNothing,
         );
+      },
+    );
+
+    testWidgets(
+      'yields to _StartNextRoutineHero when day-0 user has put default '
+      'routines into the week plan',
+      (tester) async {
+        // Post-onboarding regression (2026-06-04). Day-0 user with only
+        // default routines goes through `/plan/week`, picks one of them
+        // into the bucket. The previous gate
+        // (`workoutCount == 0 && userRoutines.isEmpty`) ignored the bucket
+        // and kept the "Criar primeira rotina" CTA visible, trapping the
+        // user. The corrected gate yields to the start-next-routine branch
+        // whenever the weekly plan has an uncompleted entry, regardless of
+        // whether the user has built a custom routine yet — the user
+        // already TOLD us what they want to do this week. Cluster:
+        // `optimistic-ui-vs-async-provider` (state-machine integrity —
+        // gate must read the SAME source of truth that downstream branches
+        // do, not a stale subset).
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 0,
+            plan: _plan(routines: [_bucket(routineId: 'r-1', order: 1)]),
+            routines: [
+              _routine(
+                id: 'r-1',
+                name: 'Push Day',
+                isDefault: true,
+                userId: null,
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Hero is now "Iniciar Push Day", not "Criar primeira rotina".
+        expect(
+          _findByIdentifier('home-action-hero-start-routine'),
+          findsOneWidget,
+        );
+        expect(find.text('Iniciar Push Day'), findsOneWidget);
+        expect(
+          _findByIdentifier('home-action-hero-create-first-routine'),
+          findsNothing,
+        );
+        expect(find.text('Criar primeira rotina'), findsNothing);
       },
     );
 
@@ -707,6 +754,81 @@ void main() {
 
         expect(
           _findByIdentifier('home-action-hero-create-first-routine'),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
+  group('ActionHero — reactive transition (post-onboarding bucket edit)', () {
+    // This is the bug-reproduction harness. Day-0 user lands on home with
+    // only default routines and no plan → "Criar primeira rotina". After
+    // the user picks routines in `/plan/week`, the editor calls
+    // `weeklyPlanProvider.notifier.setOptimistic(...)` (see
+    // `WeekPlanScreen._savePlan`) which synchronously mutates state. The
+    // hero must re-render to "Iniciar {routine name}" on the very next
+    // frame — NOT wait for a tab tap or app restart.
+    //
+    // Before the fix this test failed at the post-transition assertion
+    // because the `workoutCount == 0 && userRoutines.isEmpty` gate
+    // ignored the bucket and locked us in branch 1.
+
+    testWidgets(
+      'swaps from create-first-routine to start-next-routine when the '
+      'weekly plan transitions from empty to populated',
+      (tester) async {
+        // Start: day-0 user, only default routines, and a real plan
+        // shell with an empty bucket. We seed an empty-bucket plan
+        // (rather than `plan: null`) so the in-test `setOptimistic` call
+        // below takes the `current != null` branch and skips the
+        // ref.read(authRepositoryProvider) used for the synthetic-
+        // plan branch — that auth provider is intentionally not wired
+        // in the widget-test harness. An empty-bucket plan satisfies
+        // `next == null` from `suggestedNextProvider`, so the day-0
+        // gate still fires before the optimistic emit drops a routine
+        // in — the pre-transition assertion below depends on this.
+        await tester.pumpWidget(
+          _buildWithRouter(
+            workoutCount: 0,
+            plan: _plan(routines: const []),
+            routines: [
+              _routine(
+                id: 'r-1',
+                name: 'Push Day',
+                isDefault: true,
+                userId: null,
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        // Pre-transition: hero is the day-0 create-first-routine CTA.
+        expect(find.text('Criar primeira rotina'), findsOneWidget);
+        expect(find.text('Iniciar Push Day'), findsNothing);
+
+        // Simulate the `/plan/week` save: the editor calls
+        // `setOptimistic` on `weeklyPlanProvider.notifier`, pushing a
+        // bucket entry into the same source of truth the hero reads.
+        // We pull the notifier from the bound ProviderContainer and call
+        // `setOptimistic` directly — that's exactly what
+        // `WeekPlanScreen._savePlan` does.
+        final BuildContext ctx = tester.element(
+          find.text('Criar primeira rotina'),
+        );
+        final container = ProviderScope.containerOf(ctx);
+        container.read(weeklyPlanProvider.notifier).setOptimistic([
+          const BucketRoutine(routineId: 'r-1', order: 1),
+        ]);
+        await tester.pump();
+
+        // Post-transition: hero must now read "Iniciar Push Day". The
+        // user is back on the same tab; no remount, no force-refresh.
+        expect(find.text('Iniciar Push Day'), findsOneWidget);
+        expect(find.text('Criar primeira rotina'), findsNothing);
+        expect(
+          _findByIdentifier('home-action-hero-start-routine'),
           findsOneWidget,
         );
       },
