@@ -11,92 +11,164 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-### Fix — home ActionHero stale state after week-plan edit
+### Legal PR 1 — Privacy Policy + ToS copy updates (LGPD + GDPR + medical)
 
-Branch: `fix/home-action-hero-stale-weekly-plan`
+Branch: `docs/legal-pr1-policy-tos-copy-lgpd-gdpr-medical`
 
-**User-visible symptom:** After onboarding, user opens `/plan/week`, adds
-default routines to the bucket, returns to `/home`. The big ActionHero
-widget keeps reading "Criar primeira rotina" instead of switching to
-"Iniciar <routine name>".
+First of three PRs closing the read-only legal audit. PR 1 is **copy-only**
+to `assets/legal/privacy_policy.md` + `assets/legal/terms_of_service.md` and
+their byte-identical `docs/` mirrors (Jekyll front-matter aside). No UI
+surfaces, no Dart code, no schema. The `LegalDocScreen` rendering pipeline
+(`flutter_markdown_plus`) handles the longer document unchanged.
 
-**Phase 1 — Root cause (systematic-debugging).** The branch gate in
-`lib/features/workouts/ui/widgets/action_hero.dart` is:
+PR 2 (UI consent flows: age-gate signup checkbox, sensitive-data opt-in
+toggle for bodyweight + gender, withdrawal toggle parity, consent-state
+Hive box) and PR 3 (in-app workout-history export → JSON over signed URL)
+ship the runtime surfaces this PR only declares.
 
-```dart
-if (workoutCount == 0 && userRoutines.isEmpty) {
-  branch = const _CreateFirstRoutineHero();
-}
-```
+**Blockers addressed (Privacy Policy):**
 
-`userRoutines` filters out `isDefault: true` routines. New user post-
-onboarding has zero custom routines and only seeded defaults — so the
-filter resolves to empty even after the user puts default routines into
-the weekly plan. `routineListProvider` does not change when the weekly
-plan changes; the gate stays satisfied; the hero stays on day-0 copy.
+- [x] L1 — lawful basis enumerated per data category (LGPD Art. 6,
+      GDPR Art. 6 §1(b/f), Art. 9 §2(a))
+- [x] L2 — body weight + gender classified as sensitive personal data
+      (LGPD Art. 11 / GDPR Art. 9), opt-in declared, fallback to
+      reduced bodyweight-XP accuracy stated
+- [x] L3 — gender disclosed in §2 with purpose (XP-calc accuracy via
+      gender-aware tier tables) + `'other'`/NULL → male table fallback
+- [x] L4 — Art. 18 / Art. 15-21 rights with declared in-app surfaces
+      and email-fallback SLA (15 business days)
+- [x] L5 — DPO / Encarregado named: Caio Lacerda, `dpo@repsaga.app`
+      (LGPD Art. 41 reference)
+- [x] L6 — minimum age raised to 18 (16 in EEA per GDPR Art. 8 §1
+      conservative floor); parental-consent infra absent
+- [x] G3 — consent withdrawal as easy as giving it (Art. 7 §3)
+- [x] G4 — granular erasure: body weight + avatar deletable
+      individually without account closure (Art. 17)
+- [x] G6 — retention period stated: active account + 30 days purge,
+      hedged by Supabase backup window
+- [x] G7 — cross-border transfers covered by Supabase DPA + SCCs
+      (`https://supabase.com/dpa`, GDPR Art. 46)
+- [x] G8 — right to lodge complaint with national DPA stated
+- [x] L7 — subscription/purchase data shape pre-declared (Launch Phase
+      paywall): `product_id`, `purchase_token`, state, billing window;
+      Google Play handles payment, RepSaga sees no card data
+- [x] L8 — analytics enumeration expanded with actual event taxonomy
+      from `lib/features/analytics/data/models/analytics_event.dart`
+      and identifier purge on account delete
+- [x] L9 — avatar storage explicitly named: private bucket + signed
+      URLs (1-year TTL)
+- [x] L10 — §9 reworded from "by using you consent" to Supabase DPA +
+      SCCs (LGPD Art. 33 / GDPR Chapter V mechanism)
+- [x] L11 — derived RPG data (XP totals, body-part progress, class,
+      earned titles) disclosed as processed data and included in
+      deletion scope
+- [x] L13 — breach notification commitment (ANPD-required timeframe)
+- [x] L12 (nit) — 30-day deletion hedged with Supabase backup schedule
+- [x] last-updated date bumped to 2026-06-04
 
-The Phase 27 L3 widget test at
-`test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
-line 561 explicitly pinned this behavior ("create-first-routine still
-wins even with a populated bucket"). Intent at the time was to dedupe
-the day-0 CTA against the routines-list empty state. But it traps users
-who actually picked routines for the week — the hero blocks the obvious
-next action.
+**Blockers addressed (Terms of Service):**
 
-**Phase 2 — Pattern match.** `_HomeRoutinesList` already gates on
-`hasActivePlanProvider` (yields when plan has entries). `BucketChipRow`
-reactively reads `weeklyPlanProvider`. Both update on `/plan/week` save
-because `WeekPlanScreen._savePlan` calls
-`weeklyPlanProvider.notifier.setOptimistic(_bucketRoutines)` (line 608)
-— same synchronous-state-push pattern. ActionHero's branch logic
-doesn't read the plan in branch-1's gate, so the same reactivity is
-unused there.
+- [x] M1 — RPG-specific overtraining disclaimer (title/rank never a
+      reason to train injured or skip recovery)
+- [x] M2 — RED-S / disordered-eating language; bodyweight optionality
+      reaffirmed
+- [x] M3 — youth lifter growth-plate disclaimer (belt-and-braces even
+      with 18+ floor)
+- [x] M4 — cardiovascular condition explicit callout
+- [x] M5 — pregnant / postpartum explicit callout
+- [x] M6 — share-card camera/photo disclosure: local processing only,
+      never uploaded
+- [x] M7 — "stop if you feel pain" copy moved to top of §1, bolded
+      as a dedicated warning paragraph
+- [x] §3 minimum age aligned with Privacy Policy §8 (18+ globally,
+      16+ EEA)
+- [x] last-updated date bumped to 2026-06-04
 
-**Phase 3 — Hypothesis (ONE theory).** The L3 gate should ALSO require
-"no uncompleted bucket entry" before falling into branch 1. If
-`suggestedNextProvider != null`, that's a stronger signal than "user
-has no custom routines" — the user has explicitly planned routines for
-this week, the start-next-routine branch must win. The widget already
-watches `suggestedNextProvider` further down (branch 2 decision); we
-just need to hoist that read above the L3 gate.
+**Mirroring:**
 
-**Phase 4 — Fix location.**
-`lib/features/workouts/ui/widgets/action_hero.dart` —
-`ActionHero.build()`. Add the `suggestedNextProvider == null` precondition
-to the L3 gate.
+- [x] `docs/privacy_policy.md` body byte-identical to
+      `assets/legal/privacy_policy.md` (Jekyll front-matter preserved)
+- [x] `docs/terms_of_service.md` body byte-identical to
+      `assets/legal/terms_of_service.md`
 
-Files:
+**Verification:**
 
-- [x] `lib/features/workouts/ui/widgets/action_hero.dart` — hoist
-      `suggestedNextProvider` read, tighten L3 gate to also require
-      `next == null` before falling into `_CreateFirstRoutineHero`.
-      Class docstring updated to reflect the empty-bucket precondition.
-- [x] `test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
-      — replaced the obsolete "create-first-routine still wins with
-      populated bucket" assertion (it was pinning the bug) with two new
-      tests: (1) `_CreateFirstRoutineHero` still fires for day-0 user
-      with default-only routines AND empty bucket, (2) `_CreateFirstRoutineHero`
-      yields to `_StartNextRoutineHero` when the bucket has any entry.
-      Added a reactive-transition test that calls `setOptimistic` on the
-      bound `weeklyPlanProvider.notifier` and pumps — mirrors the exact
-      path `WeekPlanScreen._savePlan` takes on every edit.
+- [x] `dart format .` clean (no Dart changes; format leg passes)
+- [x] `dart analyze --fatal-infos` clean (0 issues — markdown-only)
+- [x] `flutter test` — `LegalDocScreen` rendering tests pass against
+      the expanded markdown (test bundle is synthetic, decoupled
+      from policy text)
+- [x] `make ci` end-to-end green
 
-Verification:
+**Out of scope (PR 2 / PR 3):**
 
-- [x] `dart format .` — 0 changes after the fix
-- [x] `dart analyze --fatal-infos` — 0 issues
-- [x] All four custom analyze scripts (`check_reward_accent`,
-      `check_hardcoded_colors`, `check_typography_call_sites`,
-      `check_no_developer_log`) — clean
-- [x] `flutter test test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
-      — 17/17 pass (added 2, modified 1 — all green)
-- [x] `flutter test test/widget/features/workouts test/widget/features/weekly_plan`
-      — 482/482 pass (verifies no Home / WeekPlan regression elsewhere)
-- [x] `flutter test test/widget test/unit` — 3416/3416 pass. The full
-      `flutter test` run's 25 failures are integration tests under
-      `test/integration/` that require a live local Supabase
-      (`npx supabase start`) — not impacted by this fix, not part of
-      `make ci` (Makefile excludes them via `--exclude-tags integration`).
+- Age-confirmation checkbox at signup → PR 2
+- Sensitive-data opt-in surface for bodyweight + gender → PR 2
+- Consent withdrawal toggle parity → PR 2
+- In-app JSON export of workout history → PR 3
+- Separate `dpo@repsaga.app` alias provisioning → Caio (outside repo)
+
+**Round 2 — reviewer findings (4 Blockers + 5 Important + 4 Nits, all
+same-cycle per `feedback_no_deferring_review_findings`):**
+
+- [x] B1 — overpromise on UI surfaces hedged at 3 sites: §2a sensitive-
+      data toggles (opt-in + withdrawal both routed through `dpo@`
+      until the in-app toggles ship), §6 withdrawal-of-consent row,
+      ToS §3 age-confirmation checkbox
+- [x] B2 — malformed `Art. 11 §I(a)` LGPD citation fixed at 2
+      occurrences in §4a (body weight + gender rows) → `Art. 11, I`
+- [x] B3 — §6 granular-erasure internal contradiction resolved: row
+      now matches the export-row hedging pattern (forthcoming UI;
+      `dpo@` + 15 business days in the meantime)
+- [x] B4 — Sentry toggle verified live in `lib/`: `CrashReportsToggle`
+      mounted at `profile_settings_screen.dart:197`, backed by
+      `crashReportsEnabledProvider` (Hive `user_prefs` +
+      `SentryReport.setEnabled`). §5 path tightened to
+      `Profile → Settings → Privacy → Send crash reports` with an
+      explicit "wired to live SDK" note; present-tense retained
+- [x] I1 — §8 EEA age floor simplified to a single global 18+
+      threshold that exceeds the GDPR Art. 8 §1 floor of 16; ToS §3
+      mirrored
+- [x] I2 — §6 Access vs Portability rows split: Access (Art. 18 II /
+      GDPR Art. 15) → human-readable email summary; Portability
+      (Art. 18 V / GDPR Art. 20) → forthcoming in-app machine-readable
+      JSON. Cross-references inline so future portability launch
+      doesn't muddle Access
+- [x] I3 — kept the "balancing test documented and available on
+      request" phrase in §4a (good practice). **TODO for Caio,
+      outside this PR:** write a short one-page internal LGPD-Art. 7
+      IX legitimate-interest balancing memo (purposes vs. data-subject
+      rights, mitigations applied: no advertising, no third-party
+      enrichment, no PII in event payloads, deletion cascade on
+      account close) before any LGPD/ANPD inquiry lands. Stash under
+      `docs/` (or wherever Caio prefers internal compliance docs)
+- [x] I4 — §4 cross-border vagueness fixed with explicit "see §9"
+      cross-reference naming LGPD Art. 33 + GDPR Chapter V safeguards
+- [x] I5 — ToS §9 liability cap reworded from "greater of US $0 or…"
+      to "greater of (a) the amount you paid in the 12 months
+      preceding the claim, or (b) R$0 if you are a free-tier user,
+      except where prohibited by mandatory consumer-protection law
+      including the CDC" — switches to BRL and softens framing
+- [x] N1 — avatar TTL infra-specifics removed: "short-lived signed
+      URLs that expire and are automatically regenerated"
+- [x] N2 — withdrawal "takes effect immediately" → "takes effect
+      promptly (CDN-cached signed URLs may have brief propagation
+      delay)"
+- [x] N3 / N4 — every `PR 2` / `PR 3` / `legal compliance series`
+      reference replaced with "a forthcoming app update" across both
+      `assets/legal/` files and both `docs/` mirrors. Grep verified
+      zero remaining occurrences in user-facing markdown
+
+**Round 2 verification:**
+
+- [x] `dart format .` clean (markdown-only diff)
+- [x] `dart analyze --fatal-infos` clean (only pre-existing `.env`
+      asset warning, identical to main)
+- [x] `flutter test test/widget/shared/widgets/legal_doc_screen_test.dart`
+      — 4/4 pass against the round-2 markdown
+- [x] `make ci` end-to-end green; android debug build exit 0
+- [x] `diff <(tail -n +6 docs/...md) assets/legal/...md` — body
+      byte-parity preserved for both files
 
 ---
 
