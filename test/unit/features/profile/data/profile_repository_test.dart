@@ -795,40 +795,34 @@ void main() {
         },
       );
 
-      test(
-        'upsertProfile does NOT retry on a non-401 AuthException '
-        '(e.g. AuthSessionMissingException with statusCode 400) — '
-        'only statusCode=="401" triggers the refresh path',
-        () async {
-          final auth = _FakeGoTrueClient();
-          final builder = _FakeQueryBuilder(
-            singleResult: null,
-            terminalErrorSequence: const [
-              // AuthSessionMissingException has statusCode '400'. This must
-              // NOT trigger the refresh path — the gate is strictly '401'.
-              supabase.AuthException(
-                'Auth session missing!',
-                statusCode: '400',
-              ),
-            ],
-          );
-          final repo = ProfileRepository(
-            _FakeSupabaseClient(builder, auth: auth),
-          );
+      test('upsertProfile does NOT retry on a non-401 AuthException '
+          '(e.g. AuthSessionMissingException with statusCode 400) — '
+          'only statusCode=="401" triggers the refresh path', () async {
+        final auth = _FakeGoTrueClient();
+        final builder = _FakeQueryBuilder(
+          singleResult: null,
+          terminalErrorSequence: const [
+            // AuthSessionMissingException has statusCode '400'. This must
+            // NOT trigger the refresh path — the gate is strictly '401'.
+            supabase.AuthException('Auth session missing!', statusCode: '400'),
+          ],
+        );
+        final repo = ProfileRepository(
+          _FakeSupabaseClient(builder, auth: auth),
+        );
 
-          await expectLater(
-            () => repo.upsertProfile(userId: 'user-1', displayName: 'Alice'),
-            throwsA(isA<app.AppException>()),
-          );
+        await expectLater(
+          () => repo.upsertProfile(userId: 'user-1', displayName: 'Alice'),
+          throwsA(isA<app.AppException>()),
+        );
 
-          // Non-401 AuthException must NOT call refreshSession at all — pinning
-          // an EXACT zero count guards the boundary value adjacent to '401'.
-          expect(auth.refreshSessionCallCount, 0);
-          // Exactly one terminal call — no retry attempted.
-          expect(builder._terminalCallIndex, 1);
-          expect(breadcrumbs, isEmpty);
-        },
-      );
+        // Non-401 AuthException must NOT call refreshSession at all — pinning
+        // an EXACT zero count guards the boundary value adjacent to '401'.
+        expect(auth.refreshSessionCallCount, 0);
+        // Exactly one terminal call — no retry attempted.
+        expect(builder._terminalCallIndex, 1);
+        expect(breadcrumbs, isEmpty);
+      });
 
       test('getProfile (read) is NOT wrapped — a 42501 surfaces immediately '
           'with no refresh attempt (RLS on SELECT just returns no rows in '
