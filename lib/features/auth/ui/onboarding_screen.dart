@@ -124,8 +124,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     if (error is app.NetworkException || error is app.TimeoutException) {
+      // Cluster: persist-eats-duration — explicit `persist: false` on every
+      // branch for symmetry with the AuthException branch below, so future
+      // editors who attach a `SnackBarAction` to any branch can't trip the
+      // silent "action sets persist:true" default that froze prior snacks.
       messenger.showSnackBar(
-        SnackBar(content: Text(l10n.onboardingErrorOffline)),
+        SnackBar(content: Text(l10n.onboardingErrorOffline), persist: false),
       );
       return;
     }
@@ -166,13 +170,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final copy = fieldLabel == null
           ? l10n.onboardingErrorValidationGeneric
           : l10n.onboardingErrorValidationField(fieldLabel, error.message);
-      messenger.showSnackBar(SnackBar(content: Text(copy)));
+      // Cluster: persist-eats-duration — explicit `persist: false` for
+      // symmetry with the AuthException branch (see comment above).
+      messenger.showSnackBar(SnackBar(content: Text(copy), persist: false));
       return;
     }
 
     // Safety net — unmapped runtime types (including [app.DatabaseException]
     // and raw runtime errors that ErrorMapper passed through unchanged).
-    messenger.showSnackBar(SnackBar(content: Text(l10n.failedToSaveProfile)));
+    // Cluster: persist-eats-duration — explicit `persist: false` for symmetry.
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.failedToSaveProfile), persist: false),
+    );
   }
 
   /// Resolves a `ValidationException.field` token to the localized label

@@ -72,7 +72,9 @@ Widget _buildTree({required Object toThrow}) {
 
 void main() {
   group('OnboardingScreen typed save-error snackbars', () {
-    testWidgets('NetworkException → offline copy, no CTA', (tester) async {
+    testWidgets('should show offline copy with no CTA for NetworkException', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildTree(toThrow: const app.NetworkException('offline')),
       );
@@ -92,7 +94,9 @@ void main() {
       expect(find.byType(SnackBarAction), findsNothing);
     });
 
-    testWidgets('TimeoutException → offline copy, no CTA', (tester) async {
+    testWidgets('should show offline copy with no CTA for TimeoutException', (
+      tester,
+    ) async {
       // TimeoutException is a sibling of NetworkException — both surface as
       // "you're offline" because the practical recovery (retry-on-network)
       // is identical from the user's perspective inside the onboarding form.
@@ -108,25 +112,45 @@ void main() {
       );
     });
 
-    testWidgets('AuthException → session-expired copy with Sign in CTA', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _buildTree(
-          toThrow: const app.AuthException('JWT expired', code: '401'),
-        ),
-      );
+    testWidgets(
+      'should show session-expired copy with Sign in CTA for AuthException',
+      (tester) async {
+        await tester.pumpWidget(
+          _buildTree(
+            toThrow: const app.AuthException('JWT expired', code: '401'),
+          ),
+        );
 
-      await _completeOnboardingTap(tester);
+        await _completeOnboardingTap(tester);
 
-      expect(find.text('Your session expired. Sign in again.'), findsOneWidget);
-      // The CTA is a Material SnackBarAction — locating it via its label
-      // keeps the test resilient to internal Material refactors.
-      expect(find.widgetWithText(SnackBarAction, 'Sign in'), findsOneWidget);
-    });
+        expect(
+          find.text('Your session expired. Sign in again.'),
+          findsOneWidget,
+        );
+        // The CTA is a Material SnackBarAction — locating it via its label
+        // keeps the test resilient to internal Material refactors.
+        expect(find.widgetWithText(SnackBarAction, 'Sign in'), findsOneWidget);
+
+        // Behavior contract on CTA tap: Material's SnackBarAction auto-hides
+        // the bar before invoking onPressed. The router isn't mounted in this
+        // widget test so the onPressed swallow-path runs (production redirect
+        // is covered by E2E) — the bar dismissal is what the user perceives,
+        // so we pin that. Per CLAUDE.md Testing → "behavior, not wiring".
+        //
+        // `pumpAndSettle` once before the tap so the SnackBar's enter
+        // animation (kSnackBarTransitionDuration = 250 ms) finishes — without
+        // it the action lives at an off-stage offset and `tap()` misses.
+        // `pumpAndSettle` again after the tap so the hide animation
+        // completes before the `findsNothing` assertion.
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(SnackBarAction, 'Sign in'));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
 
     testWidgets(
-      'ValidationException with field → field-prefixed copy, no CTA',
+      'should show field-prefixed copy with no CTA for ValidationException with known field',
       (tester) async {
         await tester.pumpWidget(
           _buildTree(
@@ -152,7 +176,7 @@ void main() {
     );
 
     testWidgets(
-      'ValidationException with unknown field → generic validation copy',
+      'should show generic validation copy for ValidationException with unknown field',
       (tester) async {
         await tester.pumpWidget(
           _buildTree(
@@ -171,25 +195,26 @@ void main() {
       },
     );
 
-    testWidgets('DatabaseException → generic save-failed copy (safety net)', (
-      tester,
-    ) async {
-      // DatabaseException isn't in the spec table directly — it falls
-      // through the typed branches into the catch-all `failedToSaveProfile`
-      // copy. Pinning this keeps the safety net honest: a future subtype
-      // that slips past the dispatch must hit the existing string.
-      await tester.pumpWidget(
-        _buildTree(
-          toThrow: const app.DatabaseException('500 internal', code: '500'),
-        ),
-      );
+    testWidgets(
+      'should show generic save-failed copy for DatabaseException as safety net',
+      (tester) async {
+        // DatabaseException isn't in the spec table directly — it falls
+        // through the typed branches into the catch-all `failedToSaveProfile`
+        // copy. Pinning this keeps the safety net honest: a future subtype
+        // that slips past the dispatch must hit the existing string.
+        await tester.pumpWidget(
+          _buildTree(
+            toThrow: const app.DatabaseException('500 internal', code: '500'),
+          ),
+        );
 
-      await _completeOnboardingTap(tester);
+        await _completeOnboardingTap(tester);
 
-      expect(
-        find.text('Failed to save profile. Please try again.'),
-        findsOneWidget,
-      );
-    });
+        expect(
+          find.text('Failed to save profile. Please try again.'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
