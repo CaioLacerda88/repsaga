@@ -453,3 +453,119 @@ test.describe('Home ActionHero create-first-routine branch', () => {
     },
   );
 });
+
+// =============================================================================
+// REGRESSION — Post-onboarding plan-edit hero transition (fix/home-action-hero-stale-weekly-plan)
+//
+// Bug: day-0 user (workoutCount == 0, only default routines) visits /plan/week,
+// adds a default routine to the bucket, then returns home — the ActionHero was
+// stuck on "Criar primeira rotina" because the old gate
+// (`workoutCount == 0 && userRoutines.isEmpty`) ignored the bucket entirely.
+//
+// Fix: gate now requires `next == null` as a third precondition, so a non-empty
+// bucket routes to _StartNextRoutineHero regardless of whether the user has
+// built a custom routine. Cluster: optimistic-ui-vs-async-provider.
+//
+// The smokeFirstWorkout user is a pure day-0 fixture: profile row + zero
+// workouts + zero weekly_plan rows. Default routines (Push Day, Full Body, …)
+// are visible via RLS to every authenticated user, so the gate conditions
+// `workoutCount == 0` and `userRoutines.isEmpty` are both satisfied after login.
+//
+// NOTE: global-setup seeds smokeFirstWorkout with `cleanFreshStateUser` + no
+// seedMinimalWorkout, so workoutCount == 0 is guaranteed at beforeEach time.
+// The test MUST NOT call ensurePushDayInPlan from the shared helper above
+// (which uses `smokeWeeklyPlan`) — it inlines the plan-edit flow so the user
+// identity stays isolated.
+// =============================================================================
+test.describe('Home ActionHero post-onboarding plan-edit transition', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeFirstWorkout').email,
+      getUser('smokeFirstWorkout').password,
+    );
+    await navigateToTab(page, 'Home');
+    await expect(page.locator(HOME.characterCard)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test(
+    'should advance from create-first-routine to start-routine hero after adding a default routine to the weekly plan',
+    async ({ page }) => {
+      // Pre-condition: day-0 user with only default routines and no plan.
+      // The gate (`workoutCount == 0 && userRoutines.isEmpty && next == null`)
+      // should be satisfied → create-first-routine branch OR, because default
+      // routines can't be fully excluded via RLS, the hero may already be
+      // free-workout. Either way, assert it is NOT the start-routine branch.
+      await expect(page.locator(HOME.actionHero).first()).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(
+        page.locator(HOME.actionHeroStartRoutine).first(),
+      ).not.toBeVisible({ timeout: 5_000 });
+
+      // Navigate to /plan/week and add Push Day to the bucket.
+      await page.evaluate(() => {
+        window.location.hash = '#/plan/week';
+      });
+      await page.waitForURL('**/plan/week**', { timeout: 10_000 });
+      await expect(page.locator(WEEKLY_PLAN.planManagementTitle)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      const addBtn = page
+        .locator(WEEKLY_PLAN.addRoutinesButton)
+        .or(page.locator(WEEKLY_PLAN.addRoutineRow))
+        .or(page.locator(WEEKLY_PLAN_26E.addWorkoutCta));
+      await expect(addBtn.first()).toBeVisible({ timeout: 10_000 });
+      await addBtn.first().click();
+
+      await expect(page.locator(WEEKLY_PLAN.addRoutinesSheetTitle)).toBeVisible({
+        timeout: 10_000,
+      });
+
+      const pushDayTile = page
+        .locator(`role=button[name*="${PUSH_DAY}"]`)
+        .first();
+      const visibleAlready = await pushDayTile
+        .waitFor({ state: 'visible', timeout: 3_000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (!visibleAlready) {
+        const vp = page.viewportSize();
+        const cx = vp ? vp.width / 2 : 400;
+        const cy = vp ? vp.height * 0.7 : 500;
+        await page.mouse.move(cx, cy);
+        for (let i = 0; i < 8; i++) {
+          await page.mouse.wheel(0, 200);
+          await page.waitForTimeout(300);
+          const ok = await pushDayTile
+            .waitFor({ state: 'visible', timeout: 1_500 })
+            .then(() => true)
+            .catch(() => false);
+          if (ok) break;
+        }
+      }
+
+      await pushDayTile.click();
+      await page.locator(WEEKLY_PLAN.addConfirmButton).click();
+      await expect(page.locator(`text=${PUSH_DAY}`).first()).toBeVisible({
+        timeout: 10_000,
+      });
+
+      // Return home — the fix ensures the hero reactively transitions.
+      await navigateToTab(page, 'Home');
+
+      // Post-condition: ActionHero must now show start-routine, NOT
+      // create-first-routine. This was the exact failure mode of the bug.
+      await expect(
+        page.locator(HOME.actionHeroStartRoutine).first(),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        page.locator(HOME.actionHeroCreateFirstRoutine).first(),
+      ).not.toBeVisible({ timeout: 5_000 });
+    },
+  );
+});
