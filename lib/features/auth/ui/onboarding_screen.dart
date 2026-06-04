@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+// `app.TimeoutException` collides with `dart:async`'s `TimeoutException` —
+// prefix the import so the typed-dispatch switch below can refer to both
+// unambiguously even though only the AppException family is matched.
+import '../../../core/exceptions/app_exception.dart' as app;
 import '../../../core/device/platform_info.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
@@ -96,13 +100,104 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       if (mounted) context.go('/home');
     } catch (e) {
-      if (mounted) {
-        final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.failedToSaveProfile)));
-      }
+      if (!mounted) return;
+      _showSaveErrorSnack(e);
     }
+  }
+
+  /// Maps the [AppException] subtype thrown by the profile save path to the
+  /// localized snackbar copy + optional CTA that gives the user the right
+  /// recovery affordance:
+  ///
+  ///   * [app.NetworkException] / [app.TimeoutException] → "you're offline"
+  ///     (retry-after-reconnect is the recovery — no CTA needed).
+  ///   * [app.AuthException] → "session expired" + "Sign in" CTA back to
+  ///     `/login`. By the time this fires, [BaseRepository.refreshAndRetry]
+  ///     has already tried one inline refresh, so re-login is the next
+  ///     escalation.
+  ///   * [app.ValidationException] → field-prefixed hint when the field
+  ///     token is recognized, otherwise the generic "check your inputs"
+  ///     copy (we deliberately do not leak unmapped field tokens to the UI).
+  ///   * Any other shape → the existing `failedToSaveProfile` safety net.
+  void _showSaveErrorSnack(Object error) {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (error is app.NetworkException || error is app.TimeoutException) {
+      // Cluster: persist-eats-duration — explicit `persist: false` on every
+      // branch for symmetry with the AuthException branch below, so future
+      // editors who attach a `SnackBarAction` to any branch can't trip the
+      // silent "action sets persist:true" default that froze prior snacks.
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.onboardingErrorOffline), persist: false),
+      );
+      return;
+    }
+
+    if (error is app.AuthException) {
+      // Cluster: persist-eats-duration — the SnackBar defaults `persist` to
+      // true whenever an `action` is set, which would freeze the bar on the
+      // screen until manual dismissal. Explicit `persist: false` keeps the
+      // default 4 s `SnackBarBehavior` duration so the bar self-dismisses
+      // when the user taps the CTA (Material auto-hides on action press) or
+      // walks away from the form.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.onboardingErrorSessionExpired),
+          persist: false,
+          action: SnackBarAction(
+            label: l10n.onboardingErrorSessionExpiredCta,
+            onPressed: () {
+              // GoRouter.of throws FlutterError when no GoRouter is in
+              // context (widget tests). The auth-state listener handles
+              // the redirect on the production path; swallowing the error
+              // here keeps the action a no-op rather than crashing in
+              // test contexts where the router isn't mounted.
+              try {
+                context.go('/login');
+              } on FlutterError catch (_) {
+                // Mirror of the `manage_data_screen.dart` pattern.
+              }
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (error is app.ValidationException) {
+      final fieldLabel = _localizedFieldLabel(error.field, l10n);
+      final copy = fieldLabel == null
+          ? l10n.onboardingErrorValidationGeneric
+          : l10n.onboardingErrorValidationField(fieldLabel, error.message);
+      // Cluster: persist-eats-duration — explicit `persist: false` for
+      // symmetry with the AuthException branch (see comment above).
+      messenger.showSnackBar(SnackBar(content: Text(copy), persist: false));
+      return;
+    }
+
+    // Safety net — unmapped runtime types (including [app.DatabaseException]
+    // and raw runtime errors that ErrorMapper passed through unchanged).
+    // Cluster: persist-eats-duration — explicit `persist: false` for symmetry.
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.failedToSaveProfile), persist: false),
+    );
+  }
+
+  /// Resolves a `ValidationException.field` token to the localized label
+  /// already in use elsewhere on this form. Returning `null` signals "fall
+  /// back to the generic validation copy" — we deliberately do not leak
+  /// unrecognised raw tokens to the user.
+  ///
+  /// Today the only field the profile save path can realistically reject is
+  /// the display name. New tokens land here when the data layer starts
+  /// emitting them; future code reviewers should expand this switch in the
+  /// same PR that introduces them.
+  String? _localizedFieldLabel(String field, AppLocalizations l10n) {
+    return switch (field) {
+      'displayName' => l10n.displayName,
+      _ => null,
+    };
   }
 
   @override
