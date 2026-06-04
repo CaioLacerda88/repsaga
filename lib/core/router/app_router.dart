@@ -92,14 +92,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         return location == '/login' ? null : '/login';
       }
 
-      // Logged in but profile is still loading → park on splash. This is the
-      // new gate per audit Q2 (PR 1): we wait until the profile arrives so
-      // the next branch can decide /home vs /onboarding deterministically
-      // from `profile.value?.onboardedAt`. Without this gate the redirect
-      // would race the profile fetch and momentarily route to /home (default
-      // for `needsOnboarding == false` while loading) before snapping to
+      // Logged in but profile is still loading AND we have NO prior value →
+      // park on splash. This is the new gate per audit Q2 (PR 1): we wait
+      // until the profile arrives so the next branch can decide /home vs
+      // /onboarding deterministically. Without this gate the redirect would
+      // race the profile fetch and momentarily route to /home (default for
+      // `needsOnboarding == false` while loading) before snapping to
       // /onboarding on profile arrival — visible flash.
-      if (profile.isLoading) {
+      //
+      // CRITICAL — only fire on FIRST-load (profile.value == null). Any
+      // subsequent reload (token refresh, explicit `ref.invalidate` from
+      // e.g. the bodyweight save path) goes through AsyncLoading too; if we
+      // parked on /splash for those reloads we'd dismount every in-flight
+      // screen (active workout, post-session cinematic, share preview)
+      // every time profileProvider re-builds. Using `profile.value` lets us
+      // distinguish "first load" (null) from "reload" (has previous data).
+      // Cluster: provider-init-timing.
+      if (profile.value == null && profile.isLoading) {
         return location == '/splash' ? null : '/splash';
       }
 
