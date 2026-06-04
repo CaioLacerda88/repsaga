@@ -529,6 +529,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get failedToSaveProfile => 'Falha ao salvar perfil. Tente novamente.';
 
   @override
+  String get onboardingErrorOffline =>
+      'Você está offline. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get onboardingErrorSessionExpired =>
+      'Sua sessão expirou. Faça login novamente.';
+
+  @override
+  String get onboardingErrorSessionExpiredCta => 'Entrar';
+
+  @override
+  String get onboardingErrorValidationGeneric =>
+      'Verifique os campos preenchidos.';
+
+  @override
+  String onboardingErrorValidationField(String field, String message) {
+    return '$field: $message';
+  }
+
+  @override
   String get fitnessLevelBeginner => 'Iniciante';
 
   @override
