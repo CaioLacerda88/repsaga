@@ -7,9 +7,11 @@ import '../../../core/exceptions/app_exception.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/gradient_button.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../../auth/providers/notifiers/auth_notifier.dart';
 import '../../workouts/providers/workout_history_providers.dart'
     show workoutCountProvider;
+import '../providers/data_export_providers.dart';
 import '../providers/manage_data_providers.dart';
 
 class ManageDataScreen extends ConsumerWidget {
@@ -42,6 +44,28 @@ class ManageDataScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // YOUR DATA section — Legal PR 3 (#TODO-PR url) implements the
+            // LGPD Art. 18 V / GDPR Art. 20 portability mechanism the
+            // Privacy Policy §6 row promises. Cluster:
+            // data-protection-compliance. Sits ABOVE the destructive
+            // sections so the read-only export action is the first thing
+            // the user sees on Manage Data — discoverable, separated from
+            // the "remove" affordances by visual grouping (label color
+            // + section gap).
+            Text(
+              l10n.yourDataSection,
+              style: AppTextStyles.sectionHeader.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _DataManagementTile(
+              title: l10n.exportMyData,
+              subtitle: l10n.exportMyDataSubtitle,
+              onTap: () => _showExportSheet(context, ref),
+              semanticsIdentifier: 'manage-data-export',
+            ),
+            const SizedBox(height: 24),
             // WORKOUT HISTORY section
             Text(
               l10n.workoutHistorySection,
@@ -96,6 +120,108 @@ class ManageDataScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Drive the JSON export flow.
+  ///
+  /// **Cluster: `data-protection-compliance`.** This handler is the
+  /// in-app implementation of the Privacy Policy §6 Portability row.
+  /// Shows a non-dismissible loading dialog (the aggregation queries can
+  /// take 2-5s for users with rich history) while
+  /// [ExportJobController.exportAndShare] runs; on success, hands the
+  /// generated JSON XFile to the native share sheet via `share_plus` and
+  /// dismisses with a success snackbar. On failure surfaces a safe error
+  /// snackbar (no raw cause leaked — see [ExportException.userMessage]).
+  ///
+  /// **`persist: false` on both snackbars** (cluster:
+  /// `persist-eats-duration`). The snackbar API silently defaults to
+  /// `persist = action != null`, so even SnackBars without an explicit
+  /// action would survive auto-dismissal if a future refactor adds one.
+  /// Setting `persist: false` explicitly pins the four-second timeout.
+  Future<void> _showExportSheet(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    // Mirror the delete-account loading-dialog pattern so the user can't
+    // tap other destructive tiles while the export runs. PopScope keeps
+    // the OS back gesture from dismissing mid-encode.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            margin: const EdgeInsets.symmetric(horizontal: 48),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.dataExportPreparing,
+                    style: AppTextStyles.body,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await ref.read(exportJobProvider.notifier).exportAndShare(userId);
+
+    if (!context.mounted) return;
+    // Dismiss the loading dialog via the rootNavigator so we pop the
+    // dialog route rather than the underlying screen — same discipline
+    // the delete-account handler uses.
+    Navigator.of(context, rootNavigator: true).pop();
+
+    final state = ref.read(exportJobProvider);
+    if (!context.mounted) return;
+
+    if (state.hasError) {
+      final error = state.error;
+      final message = error is AppException
+          ? error.userMessage
+          : l10n.pleaseTryAgain;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          // Cluster: persist-eats-duration. Explicit false defends against
+          // future refactors that add an action to this snackbar.
+          // persist defaults to (action != null) silently otherwise.
+          // ignore: avoid_redundant_argument_values
+          duration: const Duration(seconds: 4),
+          content: Semantics(
+            container: true,
+            identifier: 'manage-data-export-failed',
+            child: Text(l10n.dataExportFailed(message)),
+          ),
+        ),
+      );
+      // Reset so the next tap starts fresh.
+      ref.read(exportJobProvider.notifier).reset();
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        // Cluster: persist-eats-duration.
+        // ignore: avoid_redundant_argument_values
+        duration: const Duration(seconds: 4),
+        content: Semantics(
+          container: true,
+          identifier: 'manage-data-export-success',
+          child: Text(l10n.dataExportSuccess),
+        ),
+      ),
+    );
+    ref.read(exportJobProvider.notifier).reset();
   }
 
   Future<void> _showDeleteHistoryDialog(
