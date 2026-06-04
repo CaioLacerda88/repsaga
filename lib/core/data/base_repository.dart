@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show protected;
 import 'package:repsaga/core/exceptions/app_exception.dart';
 import 'package:repsaga/core/exceptions/error_mapper.dart';
 import 'package:repsaga/core/observability/sentry_report.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 /// Riverpod-agnostic interface that [BaseRepository] uses to feed signals
 /// into the connectivity recovery state machine. The production
@@ -74,5 +76,93 @@ abstract class BaseRepository {
       unawaited(SentryReport.captureException(e, stackTrace: st));
       throw ErrorMapper.mapException(e);
     }
+  }
+
+  /// Runs [action] and, on a SINGLE failure shape (PostgREST `42501` /
+  /// `AuthException` `401`), calls [refresh] once and retries [action] one
+  /// time. Bounded — exactly one retry, no exponential backoff, no queue.
+  ///
+  /// On the retry-success branch, emits a Sentry breadcrumb
+  /// `auth.session_refreshed_inline` so the trail records that this user
+  /// dodged an RLS rejection without surfacing the failure to the UI.
+  ///
+  /// **Original-error semantics.** If the retried action ALSO fails, the
+  /// ORIGINAL error (not the retry's error) is rethrown — callers want to
+  /// see the first failure shape, not a derivative one. If [refresh] itself
+  /// throws, the original error rethrows likewise (refresh failure is
+  /// strictly internal to the helper).
+  ///
+  /// **Cluster reference.**
+  // cluster: stale-token-silent-anon-fallback (candidate)
+  /// The bug pattern this guards against: a clock-valid access token
+  /// whose claims no longer resolve to the right PostgREST role (refresh
+  /// token rotated server-side, broken email-confirmation deep-link
+  /// chain, JWT-secret-rotation lag). The Supabase client silently
+  /// falls back to the anon key, RLS rejects with `42501`, and the
+  /// surface is indistinguishable from a real permission failure.
+  /// `(candidate)` flags this as a not-yet-formalized cluster — if it
+  /// surfaces a second time across another authenticated surface, write
+  /// the full `cluster_stale_token_silent_anon_fallback.md` auto-memory
+  /// entry and add the row to PROJECT.md §0 Cluster Ledger.
+  ///
+  /// The retry is a structural guarantee — no `_hasRetried` boolean
+  /// flag — because [refreshAndRetry] only invokes the inner
+  /// refresh+retry path once per call to itself, and never recurses.
+  ///
+  /// Trigger is intentionally narrow:
+  ///   * [supabase.PostgrestException] with `code == '42501'`
+  ///     (RLS row rejected — the row-level security policy didn't see
+  ///     the user's JWT, usually because the bearer was stale / anon).
+  ///   * [supabase.AuthException] with `statusCode == '401'`
+  ///     (gotrue rejected the bearer outright — JWT expired or revoked).
+  /// Every other shape (e.g. PostgREST `23505` unique violation) is
+  /// rethrown immediately with no retry and no refresh attempt.
+  @protected
+  Future<T> refreshAndRetry<T>({
+    required Future<T> Function() action,
+    required Future<void> Function() refresh,
+  }) async {
+    try {
+      return await action();
+    } catch (originalError, originalStack) {
+      if (!_isStaleTokenFailure(originalError)) {
+        Error.throwWithStackTrace(originalError, originalStack);
+      }
+      try {
+        await refresh();
+      } catch (_) {
+        // refresh failed → surface ORIGINAL error, not the refresh error.
+        // The caller is interested in the action's failure shape, not the
+        // refresh helper's internals.
+        Error.throwWithStackTrace(originalError, originalStack);
+      }
+      try {
+        final retried = await action();
+        SentryReport.addBreadcrumb(
+          category: 'auth',
+          message: 'session_refreshed_inline',
+        );
+        return retried;
+      } catch (_) {
+        // Retry attempt failed too → surface the ORIGINAL error so the
+        // caller sees the first failure shape (no double-wrap, no
+        // derivative-error confusion).
+        Error.throwWithStackTrace(originalError, originalStack);
+      }
+    }
+  }
+
+  /// Whether [error] matches the stale-token shape that warrants a single
+  /// refresh-and-retry attempt. Pinned narrowly — PostgREST `42501` (RLS
+  /// rejection) and gotrue `401` (JWT outright rejected) — to keep the
+  /// retry trigger structurally bounded.
+  bool _isStaleTokenFailure(Object error) {
+    if (error is supabase.PostgrestException && error.code == '42501') {
+      return true;
+    }
+    if (error is supabase.AuthException && error.statusCode == '401') {
+      return true;
+    }
+    return false;
   }
 }

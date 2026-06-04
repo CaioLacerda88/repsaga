@@ -16,17 +16,28 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 typedef SentryCaptureFn =
     Future<SentryId> Function(Object error, {StackTrace? stackTrace});
 
+/// Signature for the function used to forward an in-memory breadcrumb to
+/// the Sentry SDK. Production code uses [Sentry.addBreadcrumb]; tests can
+/// swap this out via [SentryReport.debugSetBreadcrumbFn] to assert that
+/// the enabled path actually forwards (mirrors [SentryCaptureFn]).
+typedef SentryBreadcrumbFn = void Function(Breadcrumb crumb);
+
 class SentryReport {
   SentryReport._();
 
   static bool _enabled = true;
   static SentryCaptureFn _captureFn = _defaultCaptureFn;
+  static SentryBreadcrumbFn _breadcrumbFn = _defaultBreadcrumbFn;
 
   static Future<SentryId> _defaultCaptureFn(
     Object error, {
     StackTrace? stackTrace,
   }) {
     return Sentry.captureException(error, stackTrace: stackTrace);
+  }
+
+  static void _defaultBreadcrumbFn(Breadcrumb crumb) {
+    Sentry.addBreadcrumb(crumb);
   }
 
   /// Whether Sentry sends are currently enabled.
@@ -37,6 +48,16 @@ class SentryReport {
   @visibleForTesting
   static void debugSetCaptureFn(SentryCaptureFn? fn) {
     _captureFn = fn ?? _defaultCaptureFn;
+  }
+
+  /// Injects an alternate breadcrumb-forwarding function for tests. Pass
+  /// `null` to reset to the production Sentry forwarding path. Used to
+  /// assert that an `addBreadcrumb` call site actually fires (callers care
+  /// about the user-visible Sentry trail, not just that the static method
+  /// was hit).
+  @visibleForTesting
+  static void debugSetBreadcrumbFn(SentryBreadcrumbFn? fn) {
+    _breadcrumbFn = fn ?? _defaultBreadcrumbFn;
   }
 
   /// Enable or disable Sentry sends at runtime.
@@ -114,7 +135,7 @@ class SentryReport {
       return true;
     }());
     try {
-      Sentry.addBreadcrumb(
+      _breadcrumbFn(
         Breadcrumb(
           category: category,
           message: message,
