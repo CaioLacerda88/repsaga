@@ -11,6 +11,95 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+### Fix — home ActionHero stale state after week-plan edit
+
+Branch: `fix/home-action-hero-stale-weekly-plan`
+
+**User-visible symptom:** After onboarding, user opens `/plan/week`, adds
+default routines to the bucket, returns to `/home`. The big ActionHero
+widget keeps reading "Criar primeira rotina" instead of switching to
+"Iniciar <routine name>".
+
+**Phase 1 — Root cause (systematic-debugging).** The branch gate in
+`lib/features/workouts/ui/widgets/action_hero.dart` is:
+
+```dart
+if (workoutCount == 0 && userRoutines.isEmpty) {
+  branch = const _CreateFirstRoutineHero();
+}
+```
+
+`userRoutines` filters out `isDefault: true` routines. New user post-
+onboarding has zero custom routines and only seeded defaults — so the
+filter resolves to empty even after the user puts default routines into
+the weekly plan. `routineListProvider` does not change when the weekly
+plan changes; the gate stays satisfied; the hero stays on day-0 copy.
+
+The Phase 27 L3 widget test at
+`test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
+line 561 explicitly pinned this behavior ("create-first-routine still
+wins even with a populated bucket"). Intent at the time was to dedupe
+the day-0 CTA against the routines-list empty state. But it traps users
+who actually picked routines for the week — the hero blocks the obvious
+next action.
+
+**Phase 2 — Pattern match.** `_HomeRoutinesList` already gates on
+`hasActivePlanProvider` (yields when plan has entries). `BucketChipRow`
+reactively reads `weeklyPlanProvider`. Both update on `/plan/week` save
+because `WeekPlanScreen._savePlan` calls
+`weeklyPlanProvider.notifier.setOptimistic(_bucketRoutines)` (line 608)
+— same synchronous-state-push pattern. ActionHero's branch logic
+doesn't read the plan in branch-1's gate, so the same reactivity is
+unused there.
+
+**Phase 3 — Hypothesis (ONE theory).** The L3 gate should ALSO require
+"no uncompleted bucket entry" before falling into branch 1. If
+`suggestedNextProvider != null`, that's a stronger signal than "user
+has no custom routines" — the user has explicitly planned routines for
+this week, the start-next-routine branch must win. The widget already
+watches `suggestedNextProvider` further down (branch 2 decision); we
+just need to hoist that read above the L3 gate.
+
+**Phase 4 — Fix location.**
+`lib/features/workouts/ui/widgets/action_hero.dart` —
+`ActionHero.build()`. Add the `suggestedNextProvider == null` precondition
+to the L3 gate.
+
+Files:
+
+- [x] `lib/features/workouts/ui/widgets/action_hero.dart` — hoist
+      `suggestedNextProvider` read, tighten L3 gate to also require
+      `next == null` before falling into `_CreateFirstRoutineHero`.
+      Class docstring updated to reflect the empty-bucket precondition.
+- [x] `test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
+      — replaced the obsolete "create-first-routine still wins with
+      populated bucket" assertion (it was pinning the bug) with two new
+      tests: (1) `_CreateFirstRoutineHero` still fires for day-0 user
+      with default-only routines AND empty bucket, (2) `_CreateFirstRoutineHero`
+      yields to `_StartNextRoutineHero` when the bucket has any entry.
+      Added a reactive-transition test that calls `setOptimistic` on the
+      bound `weeklyPlanProvider.notifier` and pumps — mirrors the exact
+      path `WeekPlanScreen._savePlan` takes on every edit.
+
+Verification:
+
+- [x] `dart format .` — 0 changes after the fix
+- [x] `dart analyze --fatal-infos` — 0 issues
+- [x] All four custom analyze scripts (`check_reward_accent`,
+      `check_hardcoded_colors`, `check_typography_call_sites`,
+      `check_no_developer_log`) — clean
+- [x] `flutter test test/widget/features/workouts/ui/home_screen_action_hero_test.dart`
+      — 17/17 pass (added 2, modified 1 — all green)
+- [x] `flutter test test/widget/features/workouts test/widget/features/weekly_plan`
+      — 482/482 pass (verifies no Home / WeekPlan regression elsewhere)
+- [x] `flutter test test/widget test/unit` — 3416/3416 pass. The full
+      `flutter test` run's 25 failures are integration tests under
+      `test/integration/` that require a live local Supabase
+      (`npx supabase start`) — not impacted by this fix, not part of
+      `make ci` (Makefile excludes them via `--exclude-tags integration`).
+
+---
+
 ### PR A2 — locale metadata backfill + client hydration
 
 Branch: `feat/auth-locale-metadata-backfill-and-client-hydration`
