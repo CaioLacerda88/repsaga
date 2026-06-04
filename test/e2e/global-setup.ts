@@ -365,6 +365,7 @@ async function seedWeeklyPlanReviewData(
         display_name: 'Weekly Plan Reviewer',
         fitness_level: 'intermediate',
         training_frequency_per_week: 2,
+        onboarded_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
     );
@@ -644,6 +645,7 @@ async function seedRpgFoundationUser(
       id: userId,
       display_name: 'RPG Foundation User',
       fitness_level: 'intermediate',
+      onboarded_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
   );
@@ -820,6 +822,7 @@ async function seedRpgFreshUser(
       id: userId,
       display_name: 'RPG Fresh User',
       fitness_level: 'beginner',
+      onboarded_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
   );
@@ -934,7 +937,7 @@ async function seedRpgRankUpThresholdUser(
 
   // Upsert profile so router lands on /home.
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Rank Up Threshold User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Rank Up Threshold User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1034,7 +1037,7 @@ async function seedRpgMultiCelebrationUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Multi Celebration User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Multi Celebration User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1156,7 +1159,7 @@ async function seedRpgOverflowQueueUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Overflow Queue User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Overflow Queue User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -1266,12 +1269,21 @@ async function ensureProfile(
     fitness_level?: string;
     locale?: string;
     training_frequency_per_week?: number;
+    onboarded_at?: string | null;
   } = {},
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     id: userId,
     display_name: fields.display_name ?? 'Gym User',
     fitness_level: fields.fitness_level ?? 'intermediate',
+    // PR 1 — default to a fully-onboarded user so every spec that calls
+    // `ensureProfile` lands on /home, NOT /onboarding. Specs that test the
+    // half-onboarded path (e.g. onboarding-resume.spec.ts) override by
+    // passing `onboarded_at: null` explicitly.
+    onboarded_at:
+      fields.onboarded_at !== undefined
+        ? fields.onboarded_at
+        : new Date().toISOString(),
   };
   if (fields.locale !== undefined) payload['locale'] = fields.locale;
   if (fields.training_frequency_per_week !== undefined) {
@@ -1468,6 +1480,17 @@ function buildRoleSeedRunners(): Record<
     // ── Onboarding (fresh state, no profile) ─────────────────────────────
     smokeOnboarding: async (supabase, userId) => {
       await deleteProfile(supabase, userId);
+    },
+
+    // PR 1 — half-onboarded user (profile row exists but `onboarded_at = NULL`).
+    // Seeds a `display_name` so the route gate proves it's the timestamp column
+    // — not the display name — driving the decision. Closes the D1 regression
+    // gap: process restart MUST route the user back to /onboarding.
+    onboardingResume: async (supabase, userId) => {
+      await ensureProfile(supabase, userId, {
+        display_name: 'Resume Tester',
+        onboarded_at: null,
+      });
     },
 
     // ── PR seed user (smoke) ─────────────────────────────────────────────
@@ -1952,6 +1975,90 @@ async function globalSetup(): Promise<void> {
     console.log(`[global-setup]   …seeded worker ${workerIndex}`);
   }
 
+  // ── Onboarded-at backfill for trigger-only profile rows ──────────────
+  //
+  // PR #299 follow-up: ~30 roles in `test-users.ts` have NO entry in
+  // `buildRoleSeedRunners()` — they're auth-only users whose profile row is
+  // produced by the `handle_new_user` Postgres trigger. The trigger inserts
+  // `(id, created_at)` only; `onboarded_at` is left NULL. Post-PR-1 the
+  // router reads `profile.onboardedAt == null` as "needs onboarding" and
+  // redirects to `/onboarding` — which makes every spec that asserts
+  // `NAV.homeTab` post-login time out (routines / saga / weekly-plan /
+  // workouts and most `full/*` specs were dying after 45 m of CI retries).
+  //
+  // The seeder-by-seeder fix (every per-role runner setting onboarded_at)
+  // doesn't scale — it would mean editing every existing seeder plus every
+  // future one. A single bulk UPDATE at the end of global-setup catches
+  // trigger-only rows AND is idempotent against runners that did set
+  // onboarded_at via `ensureProfile` (the `.is('onboarded_at', null)`
+  // predicate short-circuits).
+  //
+  // Exempt roles: users that deliberately exercise the half-onboarded path.
+  //   * `smokeOnboarding`   — fully fresh, `deleteProfile()` seeder runs
+  //     so there is no row to update (the `.in('id', ...)` predicate also
+  //     misses by id, defence in depth).
+  //   * `onboardingResume`  — explicit-NULL via `ensureProfile({ onboarded_at: null })`.
+  //     The exempt list keeps that NULL through the backfill.
+  const HALF_ONBOARDED_USERS: TestUserKey[] = [
+    'smokeOnboarding',
+    'onboardingResume',
+  ];
+  const userIdsToBackfill: string[] = [];
+  for (const userIds of userIdsByWorker) {
+    for (const role of roleKeys) {
+      if (HALF_ONBOARDED_USERS.includes(role)) continue;
+      const userId = userIds[role];
+      if (userId) userIdsToBackfill.push(userId);
+    }
+  }
+  if (userIdsToBackfill.length > 0) {
+    // `.is('onboarded_at', null)` (not `.eq('onboarded_at', null)`) — PostgREST
+    // treats SQL `NULL` only via `IS NULL`. Using `.eq(null)` would skip every
+    // row (NULL `=` NULL is unknown in SQL three-valued logic).
+    //
+    // `display_name` is also set so the home greeting doesn't fall back to
+    // the email prefix on auth-only users; mirrors `ensureProfile()`'s default.
+    //
+    // **Chunked update.** A single `.in('id', <200+ uuids>)` call serializes
+    // the full UUID list into the PostgREST URL query string, which trips
+    // the kong proxy's ~8KB URL limit and returns `URI too long`. We chunk
+    // into 50-id batches (≈ 2KB URL each) to stay well under the cap and
+    // still finish in a handful of round-trips. The first version of this
+    // backfill returned a 414 from kong but supabase-js dropped the error
+    // silently on the success branch — every spec that asserted
+    // `NAV.homeTab` post-login then timed out because the profile row
+    // still had `onboarded_at = NULL`. The chunk loop closes that gap.
+    const CHUNK_SIZE = 50;
+    let updatedTotal = 0;
+    let failed = false;
+    for (let i = 0; i < userIdsToBackfill.length; i += CHUNK_SIZE) {
+      const chunk = userIdsToBackfill.slice(i, i + CHUNK_SIZE);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          onboarded_at: new Date().toISOString(),
+          display_name: 'Gym User',
+        })
+        .in('id', chunk)
+        .is('onboarded_at', null);
+      if (error) {
+        failed = true;
+        console.log(
+          `[global-setup] Warning: bulk onboarded_at backfill failed on chunk ${
+            i / CHUNK_SIZE
+          }: ${error.message}`,
+        );
+        break;
+      }
+      updatedTotal += chunk.length;
+    }
+    if (!failed) {
+      console.log(
+        `[global-setup] Backfilled onboarded_at for trigger-only profile rows (${userIdsToBackfill.length} candidate users across ${Math.ceil(userIdsToBackfill.length / CHUNK_SIZE)} chunks; only NULL rows updated).`,
+      );
+    }
+  }
+
   console.log('[global-setup] Done.');
 }
 
@@ -1992,7 +2099,7 @@ async function seedRpgClassCrossUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Class Cross User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Class Cross User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 
@@ -2071,7 +2178,7 @@ async function seedRpgTitleEquipUser(
   );
 
   await supabase.from('profiles').upsert(
-    { id: userId, display_name: 'Title Equip User', fitness_level: 'intermediate' },
+    { id: userId, display_name: 'Title Equip User', fitness_level: 'intermediate', onboarded_at: new Date().toISOString() },
     { onConflict: 'id' },
   );
 

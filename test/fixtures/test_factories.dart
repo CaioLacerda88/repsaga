@@ -79,6 +79,7 @@ class TestProfileFactory {
     String? fitnessLevel,
     String? createdAt,
     double? bodyweightKg,
+    String? onboardedAt,
   }) {
     return {
       'id': id ?? 'user-001',
@@ -92,6 +93,11 @@ class TestProfileFactory {
       // care leave it null so the schema reflects the "user has not entered
       // a bodyweight yet" baseline.
       'bodyweight_kg': bodyweightKg,
+      // PR 1 — by default, the fixture represents a fully-onboarded
+      // user (most widget/unit tests want the router to land on /home).
+      // Tests that exercise the half-onboarded path pass `onboardedAt: null`
+      // explicitly.
+      'onboarded_at': onboardedAt ?? '2026-01-01T00:00:00Z',
     };
   }
 }

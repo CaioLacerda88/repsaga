@@ -407,6 +407,45 @@ void main() {
         );
       });
 
+      // ---------------------------------------------------------------
+      // PR 1 — onboarded_at parameter
+      //
+      // Same omit-on-null discipline as bodyweightKg / gender / avatarUrl.
+      // The router gate reads `profile.onboardedAt` to decide /home vs
+      // /onboarding; forwarding null on an unrelated profile update
+      // (training_frequency tweak, locale flip, avatar upload) would
+      // wipe the stamp and bounce the user back into /onboarding on the
+      // next router re-evaluation.
+      // ---------------------------------------------------------------
+      test('includes onboarded_at in upsert payload when provided', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+        final ts = DateTime.utc(2026, 6, 3, 12, 30);
+
+        await repo.upsertProfile(userId: 'user-1', onboardedAt: ts);
+
+        expect(builder.capturedUpsert, isNotNull);
+        // The value is serialized as ISO-8601 (`toIso8601String`) so the
+        // SQL `timestamptz` column gets a parsable string.
+        expect(builder.capturedUpsert!['onboarded_at'], ts.toIso8601String());
+      });
+
+      test('omits onboarded_at from payload when null', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(userId: 'user-1', displayName: 'Bob');
+
+        expect(
+          builder.capturedUpsert!.containsKey('onboarded_at'),
+          isFalse,
+          reason:
+              'Forwarding null would clobber the existing onboarded_at on '
+              'every unrelated profile update; the key must be omitted '
+              'entirely.',
+        );
+      });
+
       test('maps Supabase exception to AppException', () async {
         final repo = _makeRepo(
           error: const supabase.PostgrestException(message: 'unique violation'),

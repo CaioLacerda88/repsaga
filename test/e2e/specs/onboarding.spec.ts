@@ -25,15 +25,35 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth';
+import { loginExpectingOnboarding } from '../helpers/auth';
 import { waitForAppReady, flutterFill } from '../helpers/app';
 import { NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
+import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
 // ---------------------------------------------------------------------------
 // Smoke — onboarding flow
 // ---------------------------------------------------------------------------
 test.describe('Onboarding', { tag: '@smoke' }, () => {
+  // Cluster: e2e-spec-state-leak-across-tests. Test 3 below COMPLETES
+  // onboarding (writes onboarded_at via the production save path), leaving
+  // the worker's smokeOnboarding profile in a fully-onboarded state. Without
+  // this reseed, Test 4 (and any future test sharing this user) finds the
+  // user routes to /home, so `loginExpectingOnboarding` times out on the
+  // GET STARTED locator. Deleting the row restores the fresh-signup state
+  // (no profile, the trigger will create one on next login with NULL
+  // onboarded_at => router goes /onboarding).
+  test.beforeEach(async () => {
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('smokeOnboarding').email,
+    );
+    if (userId) {
+      await admin.from('profiles').delete().eq('id', userId);
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Test 1: Onboarding Page 1 renders correctly.
   //
@@ -44,7 +64,11 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   test('should show welcome content and GET STARTED button on page 1', async ({
     page,
   }) => {
-    await login(page, getUser('smokeOnboarding').email, getUser('smokeOnboarding').password);
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
 
     // Navigate directly to onboarding. The guard may redirect authenticated
     // users with a profile to /home, in which case this test asserts the
@@ -83,7 +107,11 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // ---------------------------------------------------------------------------
   test('should advance to profile setup page after tapping GET STARTED', async ({ page }) => {
-    await login(page, getUser('smokeOnboarding').email, getUser('smokeOnboarding').password);
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
     // Navigate via hash to avoid a full CanvasKit reload.
     await page.evaluate(() => { window.location.hash = '#/onboarding'; });
     await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
@@ -122,7 +150,11 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   test('should redirect to /home after completing onboarding with name and frequency', async ({
     page,
   }) => {
-    await login(page, getUser('smokeOnboarding').email, getUser('smokeOnboarding').password);
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
     // Navigate via hash to avoid a full CanvasKit reload.
     await page.evaluate(() => { window.location.hash = '#/onboarding'; });
     await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
@@ -162,7 +194,11 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   test('should return to welcome page when tapping Back on profile setup page', async ({
     page,
   }) => {
-    await login(page, getUser('smokeOnboarding').email, getUser('smokeOnboarding').password);
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
     // Navigate via hash to avoid a full CanvasKit reload.
     await page.evaluate(() => { window.location.hash = '#/onboarding'; });
     await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });

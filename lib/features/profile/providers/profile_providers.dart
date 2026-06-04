@@ -53,10 +53,26 @@ final avatarUploadInProgressProvider = StateProvider<bool>((ref) => false);
 class ProfileNotifier extends AsyncNotifier<Profile?> {
   @override
   Future<Profile?> build() async {
-    final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return null;
+    // Cluster: provider-init-timing — watch authStateProvider, not the
+    // synchronous currentUserIdProvider. The latter is documented as
+    // non-reactive (auth_providers.dart): it reads `auth.currentUser?.id`
+    // ONCE at first watch and caches forever. At app start that read
+    // returns null (Supabase auth hasn't restored its session yet), so
+    // build() returned `null` and never re-fired on sign-in — leaving
+    // profileProvider stuck on `AsyncData(null)` forever. PR 1's router
+    // gate (`profileValue == null || onboardedAt == null`) then treated
+    // every logged-in user as needs-onboarding, routing them to
+    // `/onboarding` instead of `/home`. Surfaced by CI E2E retry loop
+    // on `NAV.homeTab` post-login (45-minute timeout cascade across
+    // every spec that asserts the home tab is reachable).
+    //
+    // Watching authStateProvider here makes build re-run on every
+    // signedIn / signedOut / tokenRefreshed event — the profile reloads
+    // automatically when the user changes.
+    final session = ref.watch(authStateProvider).value?.session;
+    if (session == null) return null;
     final repo = ref.read(profileRepositoryProvider);
-    return repo.getProfile(userId);
+    return repo.getProfile(session.user.id);
   }
 
   Future<void> saveOnboardingProfile({
@@ -73,6 +89,11 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
         displayName: displayName,
         fitnessLevel: fitnessLevel,
         trainingFrequencyPerWeek: trainingFrequencyPerWeek,
+        // PR 1 — stamp the onboarding-completion anchor here, exactly
+        // once. The router gate reads `profile.onboardedAt` to decide
+        // /home vs /onboarding (the derived `needsOnboardingProvider`);
+        // `DateTime.now()` survives process restart via the SQL column.
+        onboardedAt: DateTime.now(),
       ),
     );
   }

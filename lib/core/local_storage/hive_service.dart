@@ -58,13 +58,24 @@ class HiveService {
   ///   invariant. One forced refresh per install repopulates with the
   ///   authoritative server attribution maps.
   ///
+  /// - 4: PR 1 onboarded_at (2026-06-03) — adds `Profile.onboardedAt`
+  ///   (`DateTime?`) backing the router's derived `needsOnboardingProvider`.
+  ///   `activeWorkout` is the only cacheSchemaBoxes entry that serializes
+  ///   Profile transitively, but bump regardless: any cached Profile JSON
+  ///   from version 3 lacks the `onboarded_at` key. Freezed's `@Default`
+  ///   handling would deserialize as `null` (safe — matches the
+  ///   "user-needs-onboarding" branch), but a stale-null cached row for a
+  ///   user who actually finished onboarding would falsely flip them back
+  ///   into `/onboarding` on cold start until the next profile fetch.
+  ///   Wiping forces a fresh read against the authoritative column.
+  ///
   /// Adding `usesBodyweightLoad` with `@Default(false)` is technically
   /// backward-compatible at the Freezed level (legacy rows deserialize as
   /// `false`), but we still wipe so the next read repopulates from the
   /// authoritative server flags — leaving stale `false`s in cache would let
   /// the 20 curated bodyweight exercises miss their effective-load math
   /// until the cache TTL fires.
-  static const int currentCacheSchemaVersion = 3;
+  static const int currentCacheSchemaVersion = 4;
 
   /// Hive boxes whose contents are model-serialized payloads from Supabase
   /// reads. These are wiped on cache schema version mismatch — the cost is

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../l10n/app_localizations.dart';
 import '../connectivity/connectivity_provider.dart';
@@ -15,6 +16,8 @@ import '../observability/sentry_init.dart' show sanitizeRouteName;
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/providers/onboarding_provider.dart';
 import '../../features/auth/providers/signup_state_provider.dart';
+import '../../features/profile/models/profile.dart';
+import '../../features/profile/providers/profile_providers.dart';
 import '../../features/auth/ui/email_confirmation_screen.dart';
 import '../../features/auth/ui/login_screen.dart';
 import '../../features/auth/ui/onboarding_screen.dart';
@@ -51,7 +54,7 @@ import '../theme/app_theme.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
-    refreshListenable: _RouterRefreshListenable(ref),
+    refreshListenable: RouterRefreshListenable(ref),
     observers: [
       SentryNavigatorObserver(
         enableAutoTransactions: false,
@@ -60,14 +63,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      // Read authState inside the redirect callback (not at routerProvider
-      // construction time) so GoRouter is never recreated on auth events.
-      // _RouterRefreshListenable already watches authStateProvider and calls
-      // notifyListeners() to trigger redirect re-evaluation when auth changes.
+      // Read authState + profileProvider inside the redirect callback so
+      // GoRouter is never recreated on auth/profile events. Cluster:
+      // `provider-init-timing` — subscribing to async providers from
+      // routerProvider construction caches pre-login state forever; the
+      // [RouterRefreshListenable] below `listen`s to the auth + profile
+      // streams and calls notifyListeners() so the redirect re-runs on
+      // every transition (sign-in, sign-out, profile arrival).
       final authState = ref.read(authStateProvider);
+      final profile = ref.read(profileProvider);
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.value?.session != null;
-      final needsOnboarding = ref.read(needsOnboardingProvider);
       final location = state.matchedLocation;
 
       // While auth is resolving, stay on splash.
@@ -86,10 +92,51 @@ final routerProvider = Provider<GoRouter>((ref) {
         return location == '/login' ? null : '/login';
       }
 
+      // Logged in but profile is still loading AND we have NO prior value →
+      // park on splash. This is the new gate per audit Q2 (PR 1): we wait
+      // until the profile arrives so the next branch can decide /home vs
+      // /onboarding deterministically. Without this gate the redirect would
+      // race the profile fetch and momentarily route to /home (default for
+      // `needsOnboarding == false` while loading) before snapping to
+      // /onboarding on profile arrival — visible flash.
+      //
+      // CRITICAL — only fire on FIRST-load (profile.value == null). Any
+      // subsequent reload (token refresh, explicit `ref.invalidate` from
+      // e.g. the bodyweight save path) goes through AsyncLoading too; if we
+      // parked on /splash for those reloads we'd dismount every in-flight
+      // screen (active workout, post-session cinematic, share preview)
+      // every time profileProvider re-builds. Using `profile.value` lets us
+      // distinguish "first load" (null) from "reload" (has previous data).
+      // Cluster: provider-init-timing.
+      if (profile.value == null && profile.isLoading) {
+        return location == '/splash' ? null : '/splash';
+      }
+
       // Logged in → clear any pending signup state.
       ref.read(signupPendingEmailProvider.notifier).state = null;
 
-      // Logged in but needs onboarding → go to onboarding.
+      // Logged in + profile loaded → decide /onboarding vs /home from the
+      // profile row's `onboarded_at` column. We compute the flag INLINE here
+      // rather than reading [needsOnboardingProvider] because the derived
+      // provider's loading-window semantics differ from what the redirect
+      // gate needs:
+      //
+      //   When `authStateProvider` emits a logged-in session BEFORE
+      //   `profileProvider` has resolved, the derived provider returns its
+      //   default (false — "no onboarding needed"). But routing should park
+      //   on `/splash` during that window, not fall through to `/home`. The
+      //   `profile.isLoading` gate above explicitly handles that split: it
+      //   returns `/splash` before this branch runs, so by the time we
+      //   compute `needsOnboarding` here, the profile is guaranteed loaded.
+      //   Reading the derived provider would force us to also re-handle the
+      //   loading branch inside it, duplicating the gate.
+      //
+      // PR 1 audit defects D1/D2/D11 — the structural guarantee here is
+      // that the boolean is derived from the SQL row, not an in-memory
+      // StateProvider that drifts on process restart.
+      final profileValue = profile.value;
+      final needsOnboarding =
+          profileValue == null || profileValue.onboardedAt == null;
       if (needsOnboarding && location != '/onboarding') {
         return '/onboarding';
       }
@@ -262,14 +309,60 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Notifies GoRouter when auth state changes so it re-evaluates redirects.
-class _RouterRefreshListenable extends ChangeNotifier {
-  _RouterRefreshListenable(this._ref) {
-    _ref.listen(authStateProvider, (prev, next) => notifyListeners());
-    _ref.listen(needsOnboardingProvider, (prev, next) => notifyListeners());
+/// Notifies GoRouter when auth state or the profile row changes so it
+/// re-evaluates redirects.
+///
+/// PR 1 — added the [profileProvider] listen so the redirect parks on
+/// `/splash` while the profile is loading and snaps to `/onboarding` vs
+/// `/home` the moment the profile resolves. Cluster: `provider-init-timing`
+/// — the listen subscribes to the async value stream rather than reading at
+/// router-construction time (which would cache pre-login state forever).
+///
+/// Subscription lifetime: each `ref.listen` returns a
+/// [ProviderSubscription] that must be `close()`d in [dispose]. Without
+/// that, the listeners outlive this [ChangeNotifier] after sign-out / hot
+/// restart and fire `notifyListeners()` on a disposed instance.
+///
+/// We deliberately do NOT listen to [needsOnboardingProvider]: the redirect
+/// callback does not read that provider (it computes onboarding-needed
+/// inline from `profile.value?.onboardedAt` to share the loading-window
+/// gate with the `/splash` park, see the redirect comment). Listening to a
+/// provider whose value the redirect never reads would just double the
+/// `notifyListeners()` frequency for every profile arrival.
+///
+/// Public ([visibleForTesting]) so the dispose contract can be pinned
+/// without spinning up the full router widget — mirrors the same exposure
+/// pattern as [ShellScaffold] below.
+@visibleForTesting
+class RouterRefreshListenable extends ChangeNotifier {
+  RouterRefreshListenable(Ref ref) {
+    _subAuth = ref.listen(authStateProvider, (_, _) => notifyListeners());
+    _subProfile = ref.listen(profileProvider, (_, _) => notifyListeners());
   }
 
-  final Ref _ref;
+  late final ProviderSubscription<AsyncValue<supabase.AuthState>> _subAuth;
+  late final ProviderSubscription<AsyncValue<Profile?>> _subProfile;
+
+  /// Test seam — pin the dispose-closes-subscriptions contract. Counts
+  /// `notifyListeners()` invocations so the test can assert that
+  /// post-`dispose` provider emissions DO NOT propagate. Production code
+  /// never reads this; it stays at 0 in release builds and zero-cost
+  /// (no callsite outside the test).
+  @visibleForTesting
+  int debugNotifyCount = 0;
+
+  @override
+  void notifyListeners() {
+    debugNotifyCount++;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _subAuth.close();
+    _subProfile.close();
+    super.dispose();
+  }
 }
 
 /// Height in logical pixels of the OfflineBanner CONTENT (the rendered Row

@@ -59,6 +59,18 @@ abstract class Profile with _$Profile {
     // `AvatarRepository.uploadAvatar` which stamps a `?v=<timestamp>`
     // cache-bust suffix into the URL before persisting it here.
     String? avatarUrl,
+    // PR 1 — canonical onboarding-completion anchor. Stamped to
+    // `DateTime.now()` when [ProfileNotifier.saveOnboardingProfile] writes
+    // the user's first profile row; remains NULL until then. The router
+    // gate derives `needsOnboarding := session != null && profile?.onboardedAt
+    // == null`, so this column is the structural guarantee that survives
+    // process restart (the old `needsOnboardingProvider` StateProvider was
+    // an in-memory flag that drifted on relaunch — audit defects D1/D2/D11).
+    //
+    // Per `cluster_jsonb_payload_vs_typed_dart`: the SQL column
+    // `profiles.onboarded_at timestamptz` is nullable, so the Dart field
+    // mirrors that with `DateTime?`.
+    DateTime? onboardedAt,
   }) = _Profile;
 
   factory Profile.fromJson(Map<String, dynamic> json) =>

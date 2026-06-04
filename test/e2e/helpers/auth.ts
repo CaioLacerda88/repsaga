@@ -10,7 +10,7 @@
  */
 
 import { Page, expect } from '@playwright/test';
-import { AUTH, GAMIFICATION, NAV, SAGA } from './selectors';
+import { AUTH, GAMIFICATION, NAV, ONBOARDING, SAGA } from './selectors';
 import { dismissSagaIntroOverlay, waitForAppReady, flutterFill } from './app';
 import { getUser } from '../fixtures/worker-users';
 
@@ -64,6 +64,42 @@ export async function login(
     }
     await dismissSagaIntroOverlay(page);
   }
+}
+
+/**
+ * Log in as a user that has no completed profile (smokeOnboarding etc.) and
+ * expects to land on `/onboarding` instead of `/home`. Mirrors [login] but
+ * asserts the onboarding welcome page's GET STARTED button is visible rather
+ * than the home tab. PR 1 (PR #299) moved the half-onboarded gate from an
+ * in-memory `needsOnboardingProvider` to a derived check on
+ * `profile.onboardedAt == null` — users without a profile row are now routed
+ * to `/onboarding` post-login, so any test that signs them in needs this
+ * variant of the helper to avoid timing out on `NAV.homeTab`.
+ *
+ * No `dismissSagaIntro` parameter — the SagaIntroGate only paints AFTER the
+ * user reaches `/home`, so it's not relevant on the onboarding path.
+ */
+export async function loginExpectingOnboarding(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  await page.goto('/');
+  await waitForAppReady(page);
+
+  // Confirm we are on the login screen.
+  await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 10_000 });
+
+  await flutterFill(page, AUTH.emailInput, email);
+  await flutterFill(page, AUTH.passwordInput, password);
+  await page.click(AUTH.loginButton);
+
+  // After login the router redirects to /onboarding (no profile row =>
+  // needsOnboarding=true). Wait for page 1's GET STARTED button as the
+  // confirmation that the welcome screen rendered.
+  await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 /**
