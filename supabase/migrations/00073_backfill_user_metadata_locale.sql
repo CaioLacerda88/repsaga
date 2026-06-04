@@ -48,10 +48,24 @@
 -- short-circuits to NULL and the whole row's metadata gets clobbered.
 -- COALESCE pins us to `'{}'::jsonb` as the safe identity element.
 
-UPDATE auth.users u
-SET raw_user_meta_data = COALESCE(u.raw_user_meta_data, '{}'::jsonb)
-                       || jsonb_build_object('locale', p.locale)
-FROM public.profiles p
-WHERE u.id = p.id
-  AND (u.raw_user_meta_data->>'locale') IS NULL
-  AND p.locale IN ('en', 'pt');
+-- RAISE NOTICE with row count mirrors the precedent in
+-- 00048_cross_build_backfill_derived_timestamps.sql — backfill migrations
+-- that silently UPDATE auth-adjacent tables give zero observability
+-- during `npx supabase db push`. The engineer applying this needs to
+-- know whether 0 rows landed (already backfilled / nothing to fix) or
+-- N rows landed (legitimate legacy-user backfill).
+DO $$
+DECLARE
+  _n integer;
+BEGIN
+  UPDATE auth.users u
+  SET raw_user_meta_data = COALESCE(u.raw_user_meta_data, '{}'::jsonb)
+                         || jsonb_build_object('locale', p.locale)
+  FROM public.profiles p
+  WHERE u.id = p.id
+    AND (u.raw_user_meta_data->>'locale') IS NULL
+    AND p.locale IN ('en', 'pt');
+
+  GET DIAGNOSTICS _n = ROW_COUNT;
+  RAISE NOTICE 'PR A2 backfill: updated % auth.users rows with locale from profiles', _n;
+END $$;

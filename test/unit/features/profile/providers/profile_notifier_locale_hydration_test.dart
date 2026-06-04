@@ -120,7 +120,12 @@ Future<Profile?> _readProfile(ProviderContainer container) async {
     fireImmediately: true,
   );
   // Yield several microtasks so Stream.value's onListen callback runs
-  // and the event reaches the StreamProvider's AsyncValue state.
+  // and the event reaches the StreamProvider's AsyncValue state. Five
+  // iterations is the empirical floor: 1 for Stream.value's onListen,
+  // 1 for the StreamProvider to map the event to AsyncData, 1 for the
+  // ProviderContainer to schedule the rebuild, and 2 of slop for
+  // tester scheduler quirks. Anything below 3 produces an AsyncLoading
+  // read; 5 is the minimum reliable count.
   for (var i = 0; i < 5; i++) {
     await Future<void>.delayed(Duration.zero);
   }
@@ -332,6 +337,12 @@ void main() {
 /// fire-and-forget hydration helper, the `await` inside it, the
 /// mocktail completer for `updateUserMetadata`) all settle before the
 /// test asserts on the verify trail.
+///
+/// Five iterations is the empirical floor for the same reason
+/// [_readProfile] needs five (above). Each `await` inside the
+/// hydration helper costs one tick: ref.read(authRepoProvider), the
+/// `authRepo.updateUserMetadata` future, the mocktail completer's
+/// scheduled value, and a slop margin so a fast machine doesn't flake.
 Future<void> _flush() async {
   for (var i = 0; i < 5; i++) {
     await Future<void>.delayed(Duration.zero);

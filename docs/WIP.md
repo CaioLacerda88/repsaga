@@ -81,9 +81,9 @@ gap):**
 - [x] 3408 unit + widget tests pass, 1 skipped, 0 failures. 25 integration
       tests fail for environment reasons (no live local Supabase) — same
       baseline as `main`, not regressions.
-- [ ] `make ci` end-to-end green (format + gen + analyze + test + android
-      debug build)
-- [ ] PR body includes
+- [x] `make ci` end-to-end green (format + gen + analyze + test + android
+      debug build) — opened PR #303
+- [x] PR body includes
       `**QA pass pending — final coverage + E2E run after code review.**`
 
 **Post-merge:** apply migration 00073 to hosted Supabase via

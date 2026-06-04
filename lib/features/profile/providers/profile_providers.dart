@@ -92,6 +92,16 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
     // populated, subsequent runs short-circuit at the metadata-present
     // branch.
     //
+    // Re-entry note. `updateUser` itself fires an `AuthChangeEvent.userUpdated`
+    // event which `authStateProvider` forwards without filtering, so
+    // build() re-runs after a successful hydration write. GoTrue
+    // updates its `_currentSession` BEFORE firing `userUpdated`, so
+    // `authRepo.currentUser.userMetadata['locale']` is already populated
+    // on that second run and the helper exits at the `metadataLocale !=
+    // null` guard. The guard is the load-bearing anti-loop primitive —
+    // do not "optimize" it as dead code just because the happy path on
+    // first sign-in skips it.
+    //
     // Non-blocking: `unawaited` so profile load latency is unaffected.
     // The helper swallows its own errors and only emits a Sentry
     // breadcrumb — a failed metadata write must NOT promote the

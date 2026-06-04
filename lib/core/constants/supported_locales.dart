@@ -20,4 +20,10 @@
 /// "Adding a new locale" for the full checklist (template bodies,
 /// subject lines, this const, the migration backfill if any users
 /// already have `profiles.locale = '<new>'`).
+///
+/// Grep handle: `sync-locales`. The const + the SQL allowlist + the
+/// MaterialApp registration all carry this tag in their comments so
+/// `grep -r sync-locales lib/ supabase/ docs/` finds every drift-risk
+/// site in one shot.
+// grep-handle: sync-locales
 const kSupportedLocales = <String>['en', 'pt'];

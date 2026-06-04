@@ -152,8 +152,9 @@ class AuthRepository extends BaseRepository {
   /// OAuth flow cannot set `user_metadata` at authorization time).
   ///
   /// `data` is forwarded verbatim as `UserAttributes(data: data)` —
-  /// Supabase merges the keys into `auth.users.raw_user_meta_data`
-  /// (existing keys are overwritten, unrelated keys are preserved). Pass
+  /// Supabase merges the keys into `auth.users.raw_user_meta_data`:
+  /// keys present in `data` overwrite their counterparts in
+  /// `raw_user_meta_data`; keys absent from `data` are untouched. Pass
   /// the smallest map possible (e.g. `{'locale': 'pt'}`) so we never
   /// accidentally clobber metadata owned by another subsystem (OAuth
   /// provider data, admin-set keys, etc.).
