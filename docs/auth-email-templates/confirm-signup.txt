@@ -6,6 +6,7 @@ Toque no link abaixo para confirmar seu e-mail e ativar sua conta:
 {{ .ConfirmationURL }}
 
 Se você não criou esta conta, ignore este e-mail.
+{{/* Add new locale branches HERE — e.g. {{ else if eq .Data.locale "es" }}<es body> */}}
 {{- else -}}
 Welcome to RepSaga
 

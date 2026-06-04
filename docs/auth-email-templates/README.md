@@ -26,35 +26,71 @@ in bodies:
 
 | Template         | Subject heading                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------- |
-| `confirm-signup` | `{{ if eq .Data.locale "pt" }}Confirme sua conta no RepSaga{{ else }}Confirm your RepSaga account{{ end }}` |
-| `reset-password` | `{{ if eq .Data.locale "pt" }}Redefina sua senha no RepSaga{{ else }}Reset your RepSaga password{{ end }}` |
-| `magic-link`     | `{{ if eq .Data.locale "pt" }}Seu link de acesso ao RepSaga{{ else }}Your RepSaga sign-in link{{ end }}` |
-| `change-email`   | `{{ if eq .Data.locale "pt" }}Confirme seu novo e-mail{{ else }}Confirm your new email address{{ end }}` |
+| `confirm-signup` | `{{ if eq .Data.locale "pt" }}Confirme sua conta no RepSaga{{/* add more locales here */}}{{ else }}Confirm your RepSaga account{{ end }}` |
+| `reset-password` | `{{ if eq .Data.locale "pt" }}Redefina sua senha no RepSaga{{/* add more locales here */}}{{ else }}Reset your RepSaga password{{ end }}` |
+| `magic-link`     | `{{ if eq .Data.locale "pt" }}Seu link de acesso ao RepSaga{{/* add more locales here */}}{{ else }}Your RepSaga sign-in link{{ end }}` |
+| `change-email`   | `{{ if eq .Data.locale "pt" }}Confirme seu novo e-mail{{/* add more locales here */}}{{ else }}Confirm your new email address{{ end }}` |
 
 ## How the locale routing works
 
-Every template body wraps its content in:
+Every template body wraps its content in a Go-template switch with an
+explicit extension point for future locales:
 
 ```go
 {{ if eq .Data.locale "pt" }}
   <!-- Portuguese body -->
+{{/* Add new locale branches HERE — e.g. {{ else if eq .Data.locale "es" }}<es body> */}}
 {{ else }}
   <!-- English body — also serves as the default for any locale != "pt"
        and for emails where .Data.locale is missing entirely. -->
 {{ end }}
 ```
 
+The `{{/* ... */}}` line is a Go-template comment — it strips at render
+time and never appears in the delivered email (unlike HTML `<!-- ... -->`,
+which would ship visibly in the message source). It marks the canonical
+spot to add new `{{ else if eq .Data.locale "<X>" }}` branches when v1.1
+adds Spanish, French, etc.
+
 `.Data` is the user's `user_metadata` map. When Supabase processes a template,
 it interpolates the metadata it has on the user record. Two important
 consequences:
 
-1. **English is the default branch.** Any locale value other than `"pt"` —
-   including `"en"`, `"es"`, `null`, or a missing key — falls into the `else`
-   branch. This is deliberate: English is the safest fallback for an
-   unrecognized or absent locale.
+1. **English is the default branch.** Any locale value other than an
+   explicitly handled one (today: `"pt"`) — including `"en"`, `"es"`,
+   `null`, or a missing key — falls into the `else` branch. This is
+   deliberate: English is the safest fallback for an unrecognized or
+   absent locale.
 2. **Only one language renders.** Each delivered email contains a single
    localized body. No "ENGLISH / PORTUGUÊS" eyebrow labels, no hairline
    divider, no bilingual stack — those artifacts from Rounds 1-4 are gone.
+
+## Adding a new locale
+
+When v1.1 (or later) adds support for a new email locale, follow these
+steps. Use `"es"` (Spanish) as the running example.
+
+1. **Template bodies.** In each of the 8 template files (4 HTML + 4 txt),
+   add an explicit `{{ else if eq .Data.locale "es" }}<body for es>`
+   branch in the position currently held by the
+   `{{/* Add new locale branches HERE ... */}}` comment. Leave the comment
+   in place above the new branch so the extension point is still visible
+   for the locale after that.
+2. **Subject lines.** In the **Subject lines (Supabase Dashboard)** table
+   above, add the matching `{{ else if eq .Data.locale "es" }}<subject for es>`
+   segment for each of the four flows. Paste the updated string back into
+   the Supabase Dashboard subject heading field.
+3. **Dart side is already future-proof.** `localeProvider.languageCode`
+   (read in `lib/features/auth/providers/notifiers/auth_notifier.dart`)
+   auto-forwards whatever locale slug the app exposes — no code change
+   needed when adding a new locale; the new slug starts flowing through
+   `user_metadata.locale` as soon as the locale is registered in the
+   Flutter `MaterialApp` supported-locales list.
+4. **Verification.** Run all four verification cases below (default
+   branch, Portuguese branch, explicit English, pre-existing user) plus
+   the new locale's explicit-branch case (signup with
+   `data: {'locale': 'es'}` and confirm the Spanish body and subject
+   render).
 
 ## Verification checklist
 
