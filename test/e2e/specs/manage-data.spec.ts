@@ -283,11 +283,16 @@ test.describe('Account deletion', { tag: '@smoke' }, () => {
     await seedWorkout(supabase, userId);
 
     // Upsert profile so the app routes to Home, not onboarding.
+    // PR 1 (PR #299) derives needsOnboarding from `onboarded_at IS NULL`,
+    // so we must stamp the timestamp here — otherwise login() times out
+    // waiting for NAV.homeTab while the router parks the throwaway user
+    // on /onboarding.
     await supabase.from('profiles').upsert(
       {
         id: userId,
         display_name: 'Delete Test User',
         fitness_level: 'beginner',
+        onboarded_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
     );
