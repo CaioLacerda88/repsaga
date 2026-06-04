@@ -11,40 +11,83 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-### PR B — typed error UX on onboarding form
+### PR A2 — locale metadata backfill + client hydration
 
-Branch: `fix/auth-onboarding-typed-error-snackbars`
+Branch: `feat/auth-locale-metadata-backfill-and-client-hydration`
 
-Replace the generic `failedToSaveProfile` snack with one bar per `AppException`
-subtype reaching the onboarding catch block so users see "you're offline" vs.
-"session expired (sign in)" vs. "validation hint" instead of the same opaque
-copy for every failure. Continues the May 2026 auth-remediation audit after
-#298 / #299 / #300.
+Closes the two `user_metadata.locale = NULL` populations documented in PR
+#300's `docs/auth-email-templates/README.md` → "Known edge cases" and
+explicitly deferred:
 
-**Discovery (AppException hierarchy):**
+1. **Legacy users** — anyone who signed up before PR #300 merged. Their
+   `auth.users.raw_user_meta_data` has no `locale` key, so password reset,
+   magic link, and email change emails fall into the template's
+   `{{ else }}` English branch regardless of `profiles.locale`.
+2. **Google OAuth signups** — Supabase's OAuth flow cannot set
+   `user_metadata` at authorization time, so OAuth users land in the same
+   `{{ else }}` English branch even if their `profiles.locale = 'pt'`.
 
-- [x] `lib/core/exceptions/app_exception.dart` — `AuthException`, `DatabaseException`, `NetworkException`, `TimeoutException` (`dart:async` collision documented), `ValidationException(message, field)`. No new types introduced.
-- [x] `lib/core/exceptions/error_mapper.dart` — confirmed unmapped errors fall through to `NetworkException`; in-flight `AppException` subtypes pass through unchanged.
+Two-layer fix:
 
-**l10n (en + pt parity):**
+**SQL migration (bounded, one-shot — covers legacy users):**
 
-- [x] `lib/l10n/app_en.arb` + `app_pt.arb` — five new keys (`onboardingErrorOffline`, `onboardingErrorSessionExpired`, `onboardingErrorSessionExpiredCta`, `onboardingErrorValidationGeneric`, `onboardingErrorValidationField(field, message)`). `flutter gen-l10n` ran; generated `app_localizations*.dart` regenerated cleanly.
+- [x] `supabase/migrations/00073_backfill_user_metadata_locale.sql` —
+      idempotent UPDATE merging `profiles.locale` into
+      `auth.users.raw_user_meta_data` for every user whose metadata locale
+      is currently NULL and whose `profiles.locale IN ('en','pt')`.
+      `COALESCE(raw_user_meta_data, '{}'::jsonb)` defends against legacy
+      rows with NULL metadata.
 
-**UI dispatch:**
+**Dart client hydration (unbounded, ongoing — covers OAuth + any future
+gap):**
 
-- [x] `lib/features/auth/ui/onboarding_screen.dart` — `_showSaveErrorSnack(Object error)` switch on AppException subtypes:
-  - `NetworkException` / `TimeoutException` → offline copy, no CTA.
-  - `AuthException` → session-expired copy + `SnackBarAction` "Sign in" → `context.go('/login')` (FlutterError swallowed for routerless test contexts). `persist: false` set explicitly per `persist-eats-duration` cluster.
-  - `ValidationException` → field-prefixed copy when `field == 'displayName'` resolves to the localized label, otherwise generic catch-all (unknown field tokens never leak to UI).
-  - Fall-through → existing `failedToSaveProfile` safety-net copy.
+- [x] `lib/core/constants/supported_locales.dart` — new const
+      `kSupportedLocales = ['en','pt']` shared by `MaterialApp.supportedLocales`,
+      the SQL backfill allowlist (comment cross-reference), and the
+      hydration helper's allowlist guard.
+- [x] `lib/app.dart` — `MaterialApp.supportedLocales` consumes
+      `kSupportedLocales.map(Locale.new).toList()` instead of the
+      gen-l10n-produced `AppLocalizations.supportedLocales`. A unit test
+      pins the two stay in sync.
+- [x] `lib/features/auth/data/auth_repository.dart` — new
+      `updateUserMetadata(Map<String, Object?> data)` wraps
+      `_auth.updateUser(UserAttributes(data:))` with `mapException` +
+      `_authTimeout`. Keeps Supabase access inside the repository layer.
+- [x] `lib/features/profile/providers/profile_providers.dart` —
+      `ProfileNotifier.build()` fires `unawaited(_hydrateLocaleMetadataIfMissing(profile))`
+      after `getProfile(...)` resolves. The helper short-circuits when
+      `user_metadata.locale` is already populated, when `profile.locale`
+      is not in `kSupportedLocales`, or on any caught error (Sentry
+      breadcrumb only — never an `AsyncError` on the profile). Placement
+      rides on the existing `provider-init-timing` cluster fix so the
+      check re-runs on every signedIn / tokenRefreshed event.
 
-**Tests (behavior-not-wiring — assert rendered snack text via `find.text`):**
+**Tests:**
 
-- [x] `test/widget/features/auth/ui/onboarding_save_error_test.dart` — 6 cases: NetworkException, TimeoutException, AuthException (asserts both copy AND `widgetWithText(SnackBarAction, 'Sign in')`), ValidationException with known field, ValidationException with unknown field, DatabaseException (safety-net pin).
+- [x] `test/unit/features/profile/providers/profile_notifier_locale_hydration_test.dart` —
+      6 hydration cases + 1 contract test:
+  - writes locale = 'pt' when metadata locale is null + profile.locale is 'pt'
+  - no-op when user_metadata.locale is already populated
+  - no-op when getProfile returns null (no profile row yet)
+  - no-op when profile.locale not in `kSupportedLocales` (e.g. 'fr')
+  - `updateUserMetadata` failure does not promote profile to AsyncError
+  - fires for 'en' too (proves it is not pt-specific)
+  - `kSupportedLocales` matches `AppLocalizations.supportedLocales`
 
 **Verification:**
 
-- [x] `dart format .` clean.
-- [x] `dart analyze --fatal-infos` clean. `check_reward_accent`, `check_hardcoded_colors`, `check_typography_call_sites`, `check_no_developer_log` all clean.
-- [x] `flutter test --exclude-tags integration --exclude-tags golden test/unit test/widget` — 3403 pass, 1 skipped, 0 failures. Integration tests in `test/integration/` already fail on main for env reasons (no live local Supabase) — not regressions.
-- [x] Open PR with `**QA pass pending — final coverage + E2E run after code review.**` — PR #302
+- [x] `dart format .` clean
+- [x] `dart analyze --fatal-infos` clean (0 issues)
+- [x] 3408 unit + widget tests pass, 1 skipped, 0 failures. 25 integration
+      tests fail for environment reasons (no live local Supabase) — same
+      baseline as `main`, not regressions.
+- [x] `make ci` end-to-end green (format + gen + analyze + test + android
+      debug build) — opened PR #303
+- [x] PR body includes
+      `**QA pass pending — final coverage + E2E run after code review.**`
+
+**Post-merge:** apply migration 00073 to hosted Supabase via
+`npx supabase db push` so the legacy-user backfill lands in production.
+Verify the email-template "Pre-existing user" verification case from
+`docs/auth-email-templates/README.md` flips from `{{ else }}` to `pt` for
+a sample legacy `profiles.locale = 'pt'` user.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 
+import 'core/constants/supported_locales.dart';
 import 'core/l10n/locale_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -50,7 +51,14 @@ class App extends ConsumerWidget {
       routerConfig: router,
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
+      // PR A2 — locale list lifted to `kSupportedLocales` so the Dart
+      // hydration helper (`ProfileNotifier`) and the SQL migration
+      // `00073_backfill_user_metadata_locale` share a single source of
+      // truth with the MaterialApp registration. A unit test pins that
+      // `kSupportedLocales` matches `AppLocalizations.supportedLocales`,
+      // so the gen-l10n-produced list and the const can't drift even
+      // though we no longer pass the gen list directly.
+      supportedLocales: kSupportedLocales.map(Locale.new).toList(),
       debugShowCheckedModeBanner: false,
     );
   }
