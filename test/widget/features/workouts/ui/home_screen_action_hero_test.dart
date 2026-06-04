@@ -783,7 +783,10 @@ void main() {
         // below takes the `current != null` branch and skips the
         // ref.read(authRepositoryProvider) used for the synthetic-
         // plan branch — that auth provider is intentionally not wired
-        // in the widget-test harness.
+        // in the widget-test harness. An empty-bucket plan satisfies
+        // `next == null` from `suggestedNextProvider`, so the day-0
+        // gate still fires before the optimistic emit drops a routine
+        // in — the pre-transition assertion below depends on this.
         await tester.pumpWidget(
           _buildWithRouter(
             workoutCount: 0,

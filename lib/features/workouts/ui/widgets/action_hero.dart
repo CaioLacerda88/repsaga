@@ -22,24 +22,33 @@ import 'resume_workout_dialog.dart';
 /// brand-new / lapsed / week-complete) into 3 deterministic branches keyed
 /// off the user's workout history + bucket state:
 ///
-/// 1. **Day-0 user with no custom routines AND no plan** (`workoutCountProvider == 0`
-///    AND no user-owned routine exists AND the week bucket is empty)
-///    → `_CreateFirstRoutineHero` points the user at `/routines/create`.
-///    Preserves the legacy `_BrandNewHero` semantics — default routines
-///    ship seeded for every user, so the gate explicitly filters them
-///    out with the same `!r.isDefault` filter `_HomeRoutinesList` uses.
-///    "Has the user ever lifted?" is the real onboarding signal, AND
-///    "has the user already built a routine?" is the de-duplication
-///    guard so the day-0 CTA doesn't redundantly tell a routine-having
-///    user to go create one (Phase 27 L3 fix — `_DefaultRoutinesPreview`
-///    shows the seeded starter kit on the routines surface; this hero
-///    owns the create-routine call-to-action only when the user
-///    genuinely has no routine yet). L1 fix (visual verification,
-///    2026-05-18) introduced the workout-count gate; L3 (2026-05-19)
-///    tightened it with the user-routine check; the 2026-06-04 post-
-///    onboarding fix tightened it again with the empty-bucket check
-///    so a populated weekly plan takes precedence regardless of whether
-///    the user has built a custom routine yet.
+/// 1. **Day-0 user with no custom routines AND no plan** —
+///    `_CreateFirstRoutineHero` points the user at `/routines/create`.
+///    The gate is a three-signal conjunction; future readers should
+///    understand the priority order:
+///
+///    a. `workoutCount == 0` — **history signal**: the user has never
+///       recorded a workout. Introduced by L1 (visual verification,
+///       2026-05-18) so that returning users with no plan don't
+///       see the onboarding CTA. "Has the user ever lifted?" is the
+///       real onboarding signal.
+///    b. `userRoutines.isEmpty` — **custom-routine signal**: no
+///       user-owned, non-default routine exists. Same `!r.isDefault`
+///       filter `_HomeRoutinesList` uses, so seeded defaults don't
+///       count as user-built. Added by L3 (2026-05-19) as a
+///       de-duplication guard so the day-0 CTA doesn't redundantly
+///       tell a routine-having user to go create one (paired with
+///       `_DefaultRoutinesPreview`, which now owns the starter-kit
+///       surface).
+///    c. `next == null` — **plan signal** (new tiebreaker added
+///       2026-06-04): the bucket has no uncompleted entry, so even
+///       the seeded defaults aren't planned for the week. Fixes the
+///       home/plan reactivity gap that left day-0 users stuck on
+///       "Criar primeira rotina" after they put default routines
+///       into `/plan/week`. Without this clause the gate ignored a
+///       perfectly valid user-intent signal: the user already TOLD
+///       us what they want to do this week. Cluster:
+///       `optimistic-ui-vs-async-provider`.
 /// 2. **Bucket has an uncompleted entry** (`suggestedNextProvider != null`)
 ///    → `_StartNextRoutineHero` shows `Iniciar {routineName}` and starts
 ///    the routine on tap (resume-vs-start guard preserved via
@@ -59,14 +68,18 @@ import 'resume_workout_dialog.dart';
 /// the variant without locale-dependent text. Decision locked 2026-05-18.
 ///
 /// **Why scoped per-branch widgets.** Each ConsumerWidget owns the
-/// providers it actually needs. The outer ActionHero watches the three
-/// signals that drive branch selection — [workoutCountProvider],
-/// [routineListProvider] (filtered to user-owned), and
-/// [suggestedNextProvider] (the active-bucket-entry signal that lets the
-/// day-0 gate yield to a populated weekly plan). Per-branch
-/// subscriptions (e.g. resolving the routine name for "Iniciar X" via
-/// [routineListProvider]) stay inside the relevant branch so we don't
-/// rebuild the whole hero when the non-active branch's data churns.
+/// providers it actually needs. Gate-driving providers
+/// ([workoutCountProvider], [routineListProvider] filtered to
+/// user-owned, and [suggestedNextProvider]) are watched at the
+/// ActionHero level so the gate re-evaluates atomically on any plan or
+/// history change — this is a deliberate exception to the per-branch
+/// scoping rule, accepted because branch selection must respond
+/// reactively to all three signals on the next frame regardless of
+/// which branch is currently active. Per-branch scoping still applies
+/// to branch-INTERNAL state: [isWeekCompleteProvider] inside
+/// `_FreeWorkoutHero`, the routine-name lookup inside
+/// `_StartNextRoutineHero`, etc. — so non-gate churn stays local and
+/// doesn't rebuild siblings.
 class ActionHero extends ConsumerWidget {
   const ActionHero({super.key});
 
@@ -113,6 +126,19 @@ class ActionHero extends ConsumerWidget {
     // from the same `weeklyPlanProvider`-derived signal the other
     // branches use, so a `setOptimistic(...)` write from the editor
     // propagates to every branch on the next frame.
+    //
+    // Tradeoff (reviewer round 1): `suggestedNextProvider` is now
+    // eagerly watched at the gate level (rather than inside the
+    // `else if` where it used to live). `_FreeWorkoutHero`-branch
+    // users now pay one extra synchronous derived-provider evaluation
+    // per plan mutation. Accepted because `suggestedNextProvider` is
+    // derived (not async / not network) — it reads
+    // `ref.watch(weeklyPlanProvider).value` plus a list-walk; the
+    // alternative (re-nest the watch after the gate) would require
+    // hoisting + re-resolving the gate condition twice or pushing the
+    // day-0 branch decision into a downstream consumer. See the
+    // class-level "Why scoped per-branch widgets" doc for the matching
+    // gate-vs-branch reactivity boundary.
     final next = ref.watch(suggestedNextProvider);
 
     final Widget branch;
