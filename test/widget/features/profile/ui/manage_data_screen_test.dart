@@ -145,8 +145,15 @@ void main() {
 
       testWidgets('cancel at first step aborts', (tester) async {
         final mockWorkoutRepo = MockWorkoutRepository();
+        // I1 (PR #307 review): match positional + any named includeActive
+        // so a future cleanup that passes `includeActive: false`
+        // explicitly at the call site still hits this stub instead of
+        // throwing MissingStubError at runtime.
         when(
-          () => mockWorkoutRepo.clearHistory(any()),
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
         ).thenAnswer((_) async {});
 
         await tester.pumpWidget(buildTestWidget(workoutRepo: mockWorkoutRepo));
@@ -159,7 +166,12 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
 
-        verifyNever(() => mockWorkoutRepo.clearHistory(any()));
+        verifyNever(
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
+        );
       });
 
       testWidgets('second dialog asks for confirmation', (tester) async {
@@ -184,8 +196,14 @@ void main() {
 
       testWidgets('cancel at second step aborts', (tester) async {
         final mockWorkoutRepo = MockWorkoutRepository();
+        // I1 (PR #307 review): match positional + any named includeActive
+        // so future cleanups that pass `includeActive: false` explicitly
+        // still hit this stub.
         when(
-          () => mockWorkoutRepo.clearHistory(any()),
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
         ).thenAnswer((_) async {});
 
         await tester.pumpWidget(buildTestWidget(workoutRepo: mockWorkoutRepo));
@@ -200,15 +218,26 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
 
-        verifyNever(() => mockWorkoutRepo.clearHistory(any()));
+        verifyNever(
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
+        );
       });
 
       testWidgets('confirm at second step triggers delete and shows snackbar', (
         tester,
       ) async {
         final mockWorkoutRepo = MockWorkoutRepository();
+        // I1 (PR #307 review): match positional + any named includeActive
+        // so future cleanups that pass `includeActive: false` explicitly
+        // still hit this stub.
         when(
-          () => mockWorkoutRepo.clearHistory(any()),
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
         ).thenAnswer((_) async {});
 
         await tester.pumpWidget(buildTestWidget(workoutRepo: mockWorkoutRepo));
@@ -222,7 +251,15 @@ void main() {
         await tester.tap(find.text('Yes, Delete'));
         await tester.pumpAndSettle();
 
+        // The Delete History contract: positional call only — active
+        // workouts MUST be preserved. The positive verify pins the
+        // call shape (no `includeActive: true`); the explicit
+        // verifyNever below makes the negative half of the contract
+        // visible at the assertion site (N2, PR #307 review).
         verify(() => mockWorkoutRepo.clearHistory('user-001')).called(1);
+        verifyNever(
+          () => mockWorkoutRepo.clearHistory(any(), includeActive: true),
+        );
         expect(find.text('Workout history cleared'), findsOneWidget);
       });
     });
@@ -677,7 +714,16 @@ void main() {
         tester,
       ) async {
         final mockWorkoutRepo = MockWorkoutRepository();
-        when(() => mockWorkoutRepo.clearHistory(any())).thenThrow(
+        // I1 (PR #307 review): match positional + any named includeActive
+        // so future cleanups that pass `includeActive: false` explicitly
+        // still hit this stub (otherwise we'd silently get
+        // MissingStubError instead of the intended thrown DatabaseException).
+        when(
+          () => mockWorkoutRepo.clearHistory(
+            any(),
+            includeActive: any(named: 'includeActive'),
+          ),
+        ).thenThrow(
           const DatabaseException(
             'update or delete on table "sets" violates foreign key '
             'constraint "personal_records_set_id_fkey" on table '

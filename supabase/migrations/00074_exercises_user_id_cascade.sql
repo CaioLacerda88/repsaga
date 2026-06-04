@@ -64,6 +64,13 @@ BEGIN
   WHERE tc.table_schema = 'public'
     AND tc.table_name = 'exercises'
     AND tc.constraint_type = 'FOREIGN KEY'
+    -- Defence-in-depth + parity with 00047 (N3, PR #307 review):
+    -- without `kcu.table_name`, a future migration adding a second
+    -- FK column on `exercises` targeting `auth.users` would make this
+    -- SELECT non-deterministic across the joined kcu rows. Today's
+    -- schema only carries `user_id`, so the filter is currently a
+    -- no-op — but it documents the intent and survives schema growth.
+    AND kcu.table_name = 'exercises'
     AND kcu.column_name = 'user_id';
 
   IF _constraint_name IS NOT NULL THEN

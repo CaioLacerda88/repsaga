@@ -462,13 +462,12 @@ Deno.test(
 // explicitly removed BEFORE the auth delete so the path's `{user_id}`
 // segment still maps to a live identifier.
 //
-// These tests pin three contracts:
-//   1. The storage remove fires with the canonical `{user_id}/avatar.jpg`
-//      path AND the avatars bucket.
-//   2. The storage remove fires BEFORE auth.admin.deleteUser (ordering
-//      matters: after the user is gone, the path is anchored to a
-//      tombstoned identifier).
-//   3. A storage failure (transient network, "object not found" on a
+// These tests pin two contracts:
+//   1. The storage remove fires on the avatars bucket with the canonical
+//      `{user_id}/avatar.jpg` path AND BEFORE auth.admin.deleteUser
+//      (ordering matters: after the user is gone, the path is anchored
+//      to a tombstoned identifier).
+//   2. A storage failure (transient network, "object not found" on a
 //      user who never uploaded) does NOT block the account delete —
 //      idempotency guard per Important 1.
 // =============================================================================
