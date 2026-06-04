@@ -16,12 +16,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:repsaga/core/l10n/locale_provider.dart';
 import 'package:repsaga/core/local_storage/hive_service.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/auth/ui/login_screen.dart';
 
+import '../../../../helpers/stub_locale_notifier.dart';
 import '../../../../helpers/test_material_app.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
@@ -49,6 +51,13 @@ void main() {
       overrides: [
         authRepositoryProvider.overrideWithValue(mockRepo),
         hiveServiceProvider.overrideWithValue(mockHive),
+        // AuthNotifier.signUpWithEmail now reads `localeProvider` to
+        // forward the app locale into Supabase user_metadata (Round 4.5).
+        // The production LocaleNotifier touches Hive at build time, which
+        // is not booted in widget tests — override with a Hive-free stub.
+        localeProvider.overrideWith(
+          () => StubLocaleNotifier(const Locale('en')),
+        ),
       ],
       child: TestMaterialApp(theme: AppTheme.dark, home: const LoginScreen()),
     );
@@ -74,6 +83,8 @@ void main() {
           () => mockRepo.signUpWithEmail(
             email: any(named: 'email'),
             password: any(named: 'password'),
+            // Match the new locale: forwarding from AuthNotifier (Round 4.5).
+            locale: any(named: 'locale'),
           ),
         ).thenThrow(Exception('User already registered'));
 
@@ -117,6 +128,8 @@ void main() {
         () => mockRepo.signUpWithEmail(
           email: any(named: 'email'),
           password: any(named: 'password'),
+          // Match the new locale: forwarding from AuthNotifier (Round 4.5).
+          locale: any(named: 'locale'),
         ),
       ).thenThrow(Exception('User already registered'));
 

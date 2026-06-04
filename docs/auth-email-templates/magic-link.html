@@ -1,0 +1,75 @@
+{{ if eq .Data.locale "pt" }}
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seu link de acesso ao RepSaga</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0E0B14;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#E8E5F0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0B14;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#1A1424;border:1px solid #2A2138;border-radius:12px;padding:32px;">
+            <tr>
+              <td>
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#F5F2FA;">Seu link de acesso</h1>
+                <p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#C9C3D6;">
+                  Toque no botão abaixo para entrar no RepSaga. Este link expira em alguns minutos.
+                </p>
+                <p style="margin:24px 0;text-align:center;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#7C5BFF;color:#FFFFFF;text-decoration:none;padding:14px 24px;border-radius:8px;font-weight:600;font-size:16px;">Entrar no RepSaga</a>
+                </p>
+                <p style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#9890A6;">
+                  Se o botão não funcionar, copie e cole este link no navegador:
+                  <br /><a href="{{ .ConfirmationURL }}" style="color:#A88FFF;word-break:break-all;">{{ .ConfirmationURL }}</a>
+                </p>
+                <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#6E6878;">
+                  Se você não pediu este link, ignore este e-mail.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+{{ else }}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your RepSaga sign-in link</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0E0B14;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#E8E5F0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0B14;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#1A1424;border:1px solid #2A2138;border-radius:12px;padding:32px;">
+            <tr>
+              <td>
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#F5F2FA;">Your sign-in link</h1>
+                <p style="margin:0 0 16px;font-size:16px;line-height:1.5;color:#C9C3D6;">
+                  Tap the button below to sign in to RepSaga. This link expires in a few minutes.
+                </p>
+                <p style="margin:24px 0;text-align:center;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#7C5BFF;color:#FFFFFF;text-decoration:none;padding:14px 24px;border-radius:8px;font-weight:600;font-size:16px;">Sign in to RepSaga</a>
+                </p>
+                <p style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#9890A6;">
+                  If the button doesn't work, copy and paste this link into your browser:
+                  <br /><a href="{{ .ConfirmationURL }}" style="color:#A88FFF;word-break:break-all;">{{ .ConfirmationURL }}</a>
+                </p>
+                <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#6E6878;">
+                  If you didn't request this link, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+{{ end }}

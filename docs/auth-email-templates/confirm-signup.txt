@@ -1,0 +1,17 @@
+{{- if eq .Data.locale "pt" -}}
+Bem-vindo ao RepSaga
+
+Toque no link abaixo para confirmar seu e-mail e ativar sua conta:
+
+{{ .ConfirmationURL }}
+
+Se você não criou esta conta, ignore este e-mail.
+{{- else -}}
+Welcome to RepSaga
+
+Tap the link below to confirm your email and activate your account:
+
+{{ .ConfirmationURL }}
+
+If you didn't create this account, you can safely ignore this email.
+{{- end }}
