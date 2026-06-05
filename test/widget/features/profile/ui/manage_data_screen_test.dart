@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/exceptions/app_exception.dart';
@@ -37,11 +38,29 @@ class MockDataExportService extends Mock implements DataExportService {}
 
 /// Records every share-sink invocation so widget tests can assert filename
 /// + invocation count without staging the share_plus plugin channel.
+///
+/// Set [throwOnShare] before invocation to simulate a `share_plus` platform
+/// failure (user cancel, OS-level denial, plugin-channel error). When set,
+/// the sink throws that error instead of recording the call — exercising
+/// `ExportJobController`'s catch-all that wraps both `ExportException`
+/// (service-layer) AND any platform exception bubbling out of the share
+/// hand-off into `AsyncValue.error`.
 class RecordingShareSink {
   final List<({List<XFile> files, String? text})> calls = [];
   ShareResult result = const ShareResult('ok', ShareResultStatus.success);
 
+  /// When non-null, [call] throws this object instead of recording the
+  /// share. The error path in the export controller is identical to the
+  /// `ExportException` path (both land on `AsyncValue.error`) — the test
+  /// using this confirms that structural equivalence without staging the
+  /// share_plus MethodChannel.
+  Object? throwOnShare;
+
   Future<ShareResult> call(List<XFile> files, {String? text}) async {
+    final pendingThrow = throwOnShare;
+    if (pendingThrow != null) {
+      throw pendingThrow;
+    }
     calls.add((files: files, text: text));
     return result;
   }
@@ -960,6 +979,53 @@ void main() {
           find.textContaining('personal_records fetch failed'),
           findsNothing,
         );
+      });
+
+      testWidgets('export shows error snackbar when share sink throws '
+          'PlatformException', (tester) async {
+        // QA gap coverage. The service-layer JSON build completes
+        // cleanly (no `ExportException`) but the platform share
+        // hand-off blows up — covers the share_plus PlatformException
+        // / OS-level denial path that `ExportJobController.exportAndShare`
+        // funnels through the SAME catch-all that wraps
+        // `ExportException`. The user-visible contract: the error
+        // snackbar fires, success snackbar does NOT, and the raw
+        // PlatformException string is never surfaced.
+        final service = MockDataExportService();
+        when(
+          () => service.buildJsonExport(any()),
+        ).thenAnswer((_) async => '{"schemaVersion":1}');
+        final sink = RecordingShareSink()
+          ..throwOnShare = PlatformException(
+            code: 'CANCELLED',
+            message: 'User cancelled',
+          );
+
+        await tester.pumpWidget(
+          buildTestWidget(exportService: service, shareSink: sink),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.text('Export my data'));
+        await tester.pumpAndSettle();
+
+        // Error snackbar visible (localized prefix + the catch-all
+        // fallback message via `AppException.userMessage` does NOT
+        // apply here — PlatformException isn't an AppException — so
+        // the UI falls back to `pleaseTryAgain` per the handler
+        // contract).
+        expect(find.textContaining('Failed to export data'), findsOneWidget);
+
+        // Success snackbar must NOT have fired.
+        expect(find.text('Data export ready'), findsNothing);
+
+        // Raw PlatformException detail must NEVER reach the UI — the
+        // serialize-failure test pattern, applied to the platform-
+        // error path.
+        expect(find.textContaining('PlatformException'), findsNothing);
+        expect(find.textContaining('CANCELLED'), findsNothing);
+        expect(find.textContaining('User cancelled'), findsNothing);
       });
 
       testWidgets('tapping export twice in rapid succession only invokes the '
