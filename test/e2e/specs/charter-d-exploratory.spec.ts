@@ -44,7 +44,7 @@
  */
 
 import { test, expect, Page } from '@playwright/test';
-import { WORKOUT, HOME, NAV, PR } from '../helpers/selectors';
+import { WORKOUT, HOME, NAV, PR, AUTH } from '../helpers/selectors';
 import { waitForAppReady, flutterFill, scrollToVisible } from '../helpers/app';
 import { startEmptyWorkout, addExercise, setWeight, setReps, completeSet } from '../helpers/workout';
 
@@ -95,6 +95,11 @@ async function signupFreshUser(page: Page, email: string, pass: string): Promise
   await toggleSignUp.click();
   await flutterFill(page, '[flt-semantics-identifier="auth-email-input"]', email);
   await flutterFill(page, '[flt-semantics-identifier="auth-password-input"]', pass);
+  // Legal PR 2 — age gate: Sign Up CTA disabled until checkbox ticked.
+  await expect(
+    page.locator(AUTH.ageConfirmationCheckbox),
+  ).toBeVisible({ timeout: 5_000 });
+  await page.locator(AUTH.ageConfirmationCheckbox).click();
   await page.click('[flt-semantics-identifier="auth-signup-btn"]');
   await page.waitForURL(/onboarding/, { timeout: 30_000 });
 }

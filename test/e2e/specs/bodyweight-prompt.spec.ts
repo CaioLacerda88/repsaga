@@ -27,7 +27,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { NAV } from '../helpers/selectors';
+import { NAV, BODYWEIGHT_CONSENT } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -116,10 +116,26 @@ test.describe('Bodyweight prompt', { tag: '@smoke' }, () => {
       await page.keyboard.press('Delete');
       await page.keyboard.type('70', { delay: 10 });
 
-      // 8. Tap Save — the sheet pops with the saved kg, profileProvider
-      //    invalidates, and the prompt's session-shot flag short-circuits
-      //    any future qualifying-set checks.
+      // 8. Tap Save.
+      //    Legal PR 2 — the smokeBodyweightPrompt user has a fresh browser
+      //    session on every test run, so the Hive `bodyweight_consent_enabled`
+      //    flag starts at the default (false). The first save attempt surfaces
+      //    a barrierDismissible:false consent dialog. Tap "Save with consent"
+      //    to flip the flag to true AND complete the save in a single action.
+      //    On subsequent saves (flag already true) the dialog is skipped and
+      //    the sheet closes immediately — the `waitFor` on the save button
+      //    covers both paths.
       await saveButton.click();
+
+      // Check for the consent dialog and dismiss if present.
+      const consentButton = page.locator(BODYWEIGHT_CONSENT.saveWithConsentButton).first();
+      const consentVisible = await consentButton
+        .isVisible({ timeout: 3_000 })
+        .catch(() => false);
+      if (consentVisible) {
+        await consentButton.click();
+      }
+
       await expect(saveButton).not.toBeVisible({ timeout: 10_000 });
 
       // 9. Finish the workout. This commits the pull-up set + xp_event

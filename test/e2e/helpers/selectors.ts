@@ -53,6 +53,23 @@ export const AUTH = {
   /** Inline error message — Semantics(liveRegion: true) sets aria-live */
   errorMessage: '[aria-live="polite"]',
   /**
+   * Legal PR 2 — Age-confirmation checkbox.
+   * Semantics(identifier: 'auth-age-confirmation') wraps the CheckboxListTile.
+   * Only rendered in sign-up mode; hidden in login mode.
+   * Must be ticked before AUTH.signUpButton becomes tappable (onPressed != null).
+   */
+  ageConfirmationCheckbox: '[flt-semantics-identifier="auth-age-confirmation"]',
+  /**
+   * Legal PR 2 — Privacy Policy link in the age-gate disclosure row.
+   * Semantics(identifier: 'auth-age-link-privacy').
+   */
+  ageLinkPrivacy: '[flt-semantics-identifier="auth-age-link-privacy"]',
+  /**
+   * Legal PR 2 — Terms of Service link in the age-gate disclosure row.
+   * Semantics(identifier: 'auth-age-link-terms').
+   */
+  ageLinkTerms: '[flt-semantics-identifier="auth-age-link-terms"]',
+  /**
    * EmailConfirmationScreen "BACK TO LOGIN" GradientButton — the most stable
    * AOM anchor on the email-confirmation route. The button's `label` is the
    * `backToLogin` l10n key ("BACK TO LOGIN" en / "VOLTAR PARA LOGIN" pt);
@@ -796,6 +813,97 @@ export const MANAGE_DATA = {
   historyCleared: '[flt-semantics-identifier="manage-data-history-cleared"]',
   /** SnackBar after successful reset — Semantics(identifier: 'manage-data-account-reset') */
   accountReset: '[flt-semantics-identifier="manage-data-account-reset"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Body-weight consent dialog selectors
+//
+// The consent dialog is a barrierDismissible:false AlertDialog surfaced by
+// BodyweightEditorSheet._showConsentDialog() when bodyweightConsentProvider
+// is false (the default). The dialog title / body / actions have no
+// Semantics identifiers — use role=button selectors on the actions.
+//
+// "Save with consent" → FilledButton (role=button, name matches l10n key
+//   `bodyweightConsentAccept` = "Save with consent" in en).
+// "Cancel"            → TextButton (role=button, name "Cancel").
+// ---------------------------------------------------------------------------
+export const BODYWEIGHT_CONSENT = {
+  /**
+   * "Save with consent" FilledButton in the body-weight consent dialog.
+   * Tapping this flips bodyweightConsentProvider to true and proceeds with
+   * the upsert. Use .first() if multiple button nodes exist (CanvasKit can
+   * emit two AOM nodes per button in some frame states).
+   */
+  saveWithConsentButton: 'role=button[name="Save with consent"]',
+  /**
+   * "Cancel" TextButton in the body-weight consent dialog.
+   * Tapping dismisses the dialog without saving or flipping the provider.
+   * barrierDismissible:false — the dialog cannot be closed by tapping the scrim.
+   */
+  cancelButton: 'role=button[name="Cancel"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Profile settings Privacy section (new toggles in PR #309)
+//
+// ProfileSettingsScreen PRIVACY section now contains three toggles in order:
+//   1. CrashReportsToggle  (pre-existing)
+//   2. AnalyticsToggle     (new — Legal PR 2)
+//   3. BodyweightConsentToggle (new — Legal PR 2)
+//
+// Neither AnalyticsToggle nor BodyweightConsentToggle has a Semantics
+// identifier wrapper. Target via SwitchListTile title text (role=switch).
+// Flutter web exposes SwitchListTile as role=switch in the AOM.
+// ---------------------------------------------------------------------------
+export const PRIVACY_TOGGLES = {
+  /**
+   * Analytics opt-out toggle. SwitchListTile title: `sendUsageAnalytics`
+   * = "Send usage analytics" (en). AOM role=switch with computed name
+   * derived from the title text.
+   */
+  analyticsToggle: 'role=switch[name*="Send usage analytics"]',
+  /**
+   * Body-weight consent toggle (withdrawal mechanism). SwitchListTile
+   * title: `bodyweightConsentToggleTitle` = "Body weight tracking" (en).
+   */
+  bodyweightConsentToggle: 'role=switch[name*="Body weight tracking"]',
+  /**
+   * Crash-reports toggle (pre-existing). SwitchListTile title:
+   * `sendCrashReports` = "Send crash reports" (en).
+   */
+  crashReportsToggle: 'role=switch[name*="Send crash reports"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Gender editor sheet selectors
+//
+// GenderEditorSheet surfaces a one-time disclosure banner the first time it's
+// opened when gender == null AND genderConsentProvider == false.
+// ---------------------------------------------------------------------------
+export const GENDER_EDITOR = {
+  /**
+   * GenderEditorSheet root — Semantics(identifier: 'profile-gender-sheet').
+   */
+  sheet: '[flt-semantics-identifier="profile-gender-sheet"]',
+  /**
+   * GenderRow tappable row on ProfileSettingsScreen.
+   * Semantics(identifier: 'profile-gender-row').
+   */
+  row: '[flt-semantics-identifier="profile-gender-row"]',
+  /**
+   * One-time consent banner inside the sheet.
+   * Semantics(identifier: 'profile-gender-consent-banner').
+   * Only rendered when genderConsentProvider == false AND gender == null.
+   */
+  consentBanner: '[flt-semantics-identifier="profile-gender-consent-banner"]',
+  /** "Male" option tile — Semantics(identifier: 'profile-gender-male', button: true) */
+  maleTile: '[flt-semantics-identifier="profile-gender-male"]',
+  /** "Female" option tile — Semantics(identifier: 'profile-gender-female', button: true) */
+  femaleTile: '[flt-semantics-identifier="profile-gender-female"]',
+  /** "Other" option tile — Semantics(identifier: 'profile-gender-other', button: true) */
+  otherTile: '[flt-semantics-identifier="profile-gender-other"]',
+  /** "Not set" option tile — Semantics(identifier: 'profile-gender-not-set', button: true) */
+  notSetTile: '[flt-semantics-identifier="profile-gender-not-set"]',
 } as const;
 
 // ---------------------------------------------------------------------------
