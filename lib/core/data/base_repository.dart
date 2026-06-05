@@ -105,6 +105,32 @@ abstract class BaseRepository {
   /// the full `cluster_stale_token_silent_anon_fallback.md` auto-memory
   /// entry and add the row to PROJECT.md §0 Cluster Ledger.
   ///
+  /// **SDK source-dive note (post-PR-310, fresh-signup 42501 surface).**
+  /// On the fresh-signup onboarding path this retry has been observed to
+  /// SUCCEED at the refresh step but the SECOND `upsertProfile` STILL
+  /// fails with `42501`. Targeted read of `gotrue-2.19.0` +
+  /// `supabase-2.10.4` rules OUT a client-side bearer-propagation race:
+  ///   * `AuthHttpClient.send()` calls `await _getAccessToken()` on every
+  ///     request (`supabase-2.10.4/lib/src/auth_http_client.dart:12`) —
+  ///     no per-client cached bearer.
+  ///   * `_getAccessToken()` returns `authInstance.currentSession?.accessToken`
+  ///     fresh (`supabase-2.10.4/lib/src/supabase_client.dart:270`).
+  ///   * `_callRefreshToken` writes `_saveSession(session)` BEFORE
+  ///     returning (`gotrue-2.19.0/lib/src/gotrue_client.dart:1294-1295`),
+  ///     so `currentSession.accessToken` IS the new bearer when the
+  ///     retried `upsert` fires.
+  /// So a second-attempt `42501` indicates a SERVER-side condition
+  /// (PostgREST resolved `auth.uid()` to NULL despite a structurally-fresh
+  /// bearer). Candidate causes: refresh token rotated server-side mid-flow,
+  /// JWT-secret rotation lag, or the new bearer's claims actually being
+  /// anon-shaped for a reason this client cannot inspect. **Diagnosis is
+  /// deferred** — needs instrumented server logs from a live reproducer.
+  /// The defensive UX (typed-dispatch `DatabaseException(42501)` branch in
+  /// `onboarding_screen.dart::_showSaveErrorSnack`) routes the user through
+  /// the Sign-in CTA so re-login mints a fresh JWT and onboarding completes
+  /// on the second attempt — which makes the path user-recoverable even
+  /// while the underlying server-side question stays open.
+  ///
   /// The retry is a structural guarantee — no `_hasRetried` boolean
   /// flag — because [refreshAndRetry] only invokes the inner
   /// refresh+retry path once per call to itself, and never recurses.

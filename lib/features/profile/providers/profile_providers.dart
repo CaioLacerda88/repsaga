@@ -159,12 +159,34 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
     }
   }
 
+  /// Reads the signed-in user's id from [authStateProvider] — the SAME
+  /// source of truth [build] watches. Returns `null` when no session is
+  /// available, so callers can early-return with a silent no-op (the
+  /// existing contract on the mutation methods below).
+  ///
+  /// **Why not `currentUserIdProvider`.** Cluster: `provider-init-timing`.
+  /// `currentUserIdProvider` is a `Provider<String?>` documented as
+  /// "not reactive" — but Riverpod still caches its first-read value
+  /// until the provider is invalidated. At app start, the first read
+  /// happens before Supabase restores its session, so the cached value
+  /// is `null` forever in that container. Mutation methods reading from
+  /// it would silently no-op for the rest of the session, leaving the
+  /// user with a UI that looks like a save loop (`saveOnboardingProfile`
+  /// returns without firing the upsert, the notifier stays on
+  /// `AsyncData(null)`, the router keeps the user on `/onboarding`,
+  /// the user re-taps and nothing happens). Reading from
+  /// `authStateProvider` — the same stream [build] watches — guarantees
+  /// the id reflects the live session, not a stale snapshot.
+  String? _currentSessionUserId() {
+    return ref.read(authStateProvider).value?.session?.user.id;
+  }
+
   Future<void> saveOnboardingProfile({
     required String displayName,
     required String fitnessLevel,
     int trainingFrequencyPerWeek = 3,
   }) async {
-    final userId = ref.read(currentUserIdProvider);
+    final userId = _currentSessionUserId();
     if (userId == null) return;
     final repo = ref.read(profileRepositoryProvider);
     state = AsyncData(
@@ -185,7 +207,7 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
   Future<void> updateTrainingFrequency(int frequency) async {
     final current = state.value;
     if (current == null) return;
-    final userId = ref.read(currentUserIdProvider);
+    final userId = _currentSessionUserId();
     if (userId == null) return;
     final repo = ref.read(profileRepositoryProvider);
     state = await AsyncValue.guard(() async {
@@ -197,7 +219,7 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
   Future<void> toggleWeightUnit() async {
     final current = state.value;
     if (current == null) return;
-    final userId = ref.read(currentUserIdProvider);
+    final userId = _currentSessionUserId();
     if (userId == null) return;
     final newUnit = current.weightUnit == 'kg' ? 'lbs' : 'kg';
     final repo = ref.read(profileRepositoryProvider);

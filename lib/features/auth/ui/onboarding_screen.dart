@@ -115,6 +115,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   ///     `/login`. By the time this fires, [BaseRepository.refreshAndRetry]
   ///     has already tried one inline refresh, so re-login is the next
   ///     escalation.
+  ///   * [app.DatabaseException] with code `'42501'` → "session expired" +
+  ///     "Sign in" CTA back to `/login`. Same recovery shape as the
+  ///     [app.AuthException] branch: when the repository's `refreshAndRetry`
+  ///     succeeds at the refresh step but the second mutation ALSO surfaces
+  ///     `42501`, the bearer-claim resolution is broken in a way the client
+  ///     can't fix inline — re-login mints a fresh JWT. See
+  ///     `base_repository.dart::refreshAndRetry` for the source-dive note
+  ///     on why the second-attempt `42501` is server-side. Other
+  ///     [app.DatabaseException] codes (e.g. `23xxx` CHECK violations) fall
+  ///     through to the safety net deliberately — they aren't user-fixable
+  ///     via re-auth.
   ///   * [app.ValidationException] → field-prefixed hint when the field
   ///     token is recognized, otherwise the generic "check your inputs"
   ///     copy (we deliberately do not leak unmapped field tokens to the UI).
@@ -135,33 +146,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
 
     if (error is app.AuthException) {
-      // Cluster: persist-eats-duration — the SnackBar defaults `persist` to
-      // true whenever an `action` is set, which would freeze the bar on the
-      // screen until manual dismissal. Explicit `persist: false` keeps the
-      // default 4 s `SnackBarBehavior` duration so the bar self-dismisses
-      // when the user taps the CTA (Material auto-hides on action press) or
-      // walks away from the form.
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(l10n.onboardingErrorSessionExpired),
-          persist: false,
-          action: SnackBarAction(
-            label: l10n.onboardingErrorSessionExpiredCta,
-            onPressed: () {
-              // GoRouter.of throws FlutterError when no GoRouter is in
-              // context (widget tests). The auth-state listener handles
-              // the redirect on the production path; swallowing the error
-              // here keeps the action a no-op rather than crashing in
-              // test contexts where the router isn't mounted.
-              try {
-                context.go('/login');
-              } on FlutterError catch (_) {
-                // Mirror of the `manage_data_screen.dart` pattern.
-              }
-            },
-          ),
-        ),
-      );
+      _showSessionExpiredSnack(messenger, l10n);
+      return;
+    }
+
+    // Cluster: stale-token-silent-anon-fallback (candidate). When
+    // `BaseRepository.refreshAndRetry`'s second attempt also fails with
+    // PostgREST `42501` (RLS rejected the bearer's `auth.uid()` claim
+    // even after a successful inline refresh), recovery is the same as
+    // the [app.AuthException] branch: re-login mints a fresh JWT and
+    // onboarding completes on the second attempt. SDK source-dive in
+    // `base_repository.dart::refreshAndRetry` rules out a client-side
+    // bearer-propagation race, so the bar surfaces the same "session
+    // expired" copy + Sign in CTA — the user-recoverable affordance
+    // works regardless of whether the underlying server-side cause is
+    // ever diagnosed.
+    //
+    // Other [app.DatabaseException] codes (e.g. `23xxx` CHECK
+    // violations) fall through to the safety net deliberately — those
+    // aren't fixable by re-auth.
+    if (error is app.DatabaseException && error.code == '42501') {
+      _showSessionExpiredSnack(messenger, l10n);
       return;
     }
 
@@ -181,6 +186,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // Cluster: persist-eats-duration — explicit `persist: false` for symmetry.
     messenger.showSnackBar(
       SnackBar(content: Text(l10n.failedToSaveProfile), persist: false),
+    );
+  }
+
+  /// Shared "session expired + Sign in CTA" SnackBar shown for both
+  /// [app.AuthException] (the gotrue-401 path) and
+  /// [app.DatabaseException] with code `'42501'` (the post-retry PostgREST
+  /// RLS-rejection path). The two branches have identical recovery
+  /// affordance — re-login mints a fresh JWT — so the SnackBar copy +
+  /// CTA + dismissal contract is consolidated here. Keeping this as a
+  /// single source of truth means a future change to the CTA's behavior
+  /// (e.g. swapping `/login` for a soft re-auth modal) lands in one
+  /// place, not two.
+  ///
+  /// Cluster: persist-eats-duration — explicit `persist: false` because
+  /// the SnackBar defaults `persist` to true whenever an `action` is
+  /// set, which would freeze the bar until manual dismissal. Explicit
+  /// `false` keeps the default 4 s duration so the bar self-dismisses
+  /// either on CTA press (Material auto-hides on `SnackBarAction.onPressed`)
+  /// or after the timeout.
+  ///
+  /// Cluster: action-not-snackbaraction — uses [SnackBarAction] (not a
+  /// bare `TextButton`) so Material's auto-dismiss-on-press behavior is
+  /// preserved.
+  void _showSessionExpiredSnack(
+    ScaffoldMessengerState messenger,
+    AppLocalizations l10n,
+  ) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.onboardingErrorSessionExpired),
+        persist: false,
+        action: SnackBarAction(
+          label: l10n.onboardingErrorSessionExpiredCta,
+          onPressed: () {
+            // GoRouter.of throws FlutterError when no GoRouter is in
+            // context (widget tests). The auth-state listener handles
+            // the redirect on the production path; swallowing the error
+            // here keeps the action a no-op rather than crashing in
+            // test contexts where the router isn't mounted.
+            try {
+              context.go('/login');
+            } on FlutterError catch (_) {
+              // Mirror of the `manage_data_screen.dart` pattern.
+            }
+          },
+        ),
+      ),
     );
   }
 

@@ -25,7 +25,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginExpectingOnboarding } from '../helpers/auth';
+import { login, loginExpectingOnboarding, logout } from '../helpers/auth';
 import { waitForAppReady, flutterFill } from '../helpers/app';
 import { NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
@@ -192,12 +192,105 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     // Submit.
     await page.locator(ONBOARDING.letsGoButton).click();
 
+    // No error snackbar appears in the success path. Pins the regression
+    // window for the PR-302 / PR-310 / PR (this PR) fix-wave: if the
+    // `DatabaseException(42501)` or `failedToSaveProfile` snack ever
+    // surfaces here, the typed-dispatch branch in
+    // `_showSaveErrorSnack` has regressed (or the underlying
+    // server-side 42501 condition is back). Test fails BEFORE the
+    // home-nav timeout would, surfacing the right failure category.
+    //
+    // Bounded 2 s window matches Material's default SnackBar duration
+    // (4 s) minus the post-save->navigation lag — any error snack would
+    // be visible inside this window. Both en and pt copy strings are
+    // checked because the user-facing locale is profile-driven and the
+    // smokeOnboarding user's locale is not seeded explicitly.
+    await expect(
+      page
+        .locator('text=Failed to save profile')
+        .or(page.locator('text=Não foi possível salvar')),
+    ).not.toBeVisible({ timeout: 2_000 });
+
     // Should navigate to /home. Cluster:
     // flutter-web-url-assertion — assert on destination-content
     // visibility (NAV.homeTab) before the URL string assertion, since
     // Flutter web hash routing can lag the AOM mount.
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
     expect(page.url()).toContain('/home');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 5: After completing onboarding, the user must land on /home
+  //         (NOT /onboarding) on the NEXT sign-in. Pins the
+  //         `profile.onboarded_at` persistence contract end-to-end —
+  //         today no other test asserts that a SECOND sign-in routes the
+  //         already-onboarded user past the onboarding gate.
+  //
+  //         Regression window: PR 1 (PR #299) moved the half-onboarded
+  //         decision from an in-memory `StateProvider<bool>` to a
+  //         derived check on `profile.onboarded_at == null`. The save
+  //         path (`ProfileRepository.upsertProfile`) stamps that column
+  //         from `saveOnboardingProfile`. If either the stamp or the
+  //         router gate regresses, this test fails the next time it
+  //         runs — making the bug visible BEFORE production users hit
+  //         the "onboarded twice" loop.
+  // ---------------------------------------------------------------------------
+  test('should reach /home on second sign-in after completing onboarding', async ({
+    page,
+  }) => {
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+
+    // Drive the onboarding flow to completion — same shape as Test 3.
+    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
+    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
+
+    const isOnOnboarding = page.url().includes('/onboarding');
+    if (!isOnOnboarding) {
+      test.skip();
+      return;
+    }
+
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupHeadline),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Returning User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    // First sign-in: landed on /home post-onboarding.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
+
+    // Now log out and back in. The contract: the user must land on /home
+    // DIRECTLY, NOT be routed back to /onboarding. The `onboarded_at`
+    // column survives the SQL round-trip and `ProfileNotifier.build()`
+    // re-emits the same profile post-login, so the router gate's
+    // `profile.onboardedAt != null` check passes.
+    await logout(page);
+    await login(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+
+    // The login helper already waits for `NAV.homeTab` to be visible, so
+    // reaching this line proves the second sign-in did NOT bounce back
+    // to /onboarding. Pin the URL too for explicitness — if the router
+    // gate regresses and routes to /onboarding, both assertions fail
+    // with a clear category.
+    expect(page.url()).toContain('/home');
+    await expect(page.locator(ONBOARDING.getStartedButton)).not.toBeVisible({
+      timeout: 2_000,
+    });
   });
 
   // ---------------------------------------------------------------------------
