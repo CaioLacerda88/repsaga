@@ -64,3 +64,33 @@ class ValidationException extends AppException {
   @override
   String get userMessage => message;
 }
+
+/// Raised when the user-data JSON export pipeline fails at one of its
+/// per-table fetch stages or the final serialization. Carries [stage] so
+/// the dev log pinpoints which table broke, while [userMessage] stays
+/// generic so the snackbar never leaks the underlying Postgres / network
+/// error to the UI.
+///
+/// **Cluster reference:** `data-protection-compliance` — the in-app
+/// portability mechanism the Privacy Policy §6 row promises is built on
+/// top of [DataExportService], and every fetch path that contributes to
+/// the export translates its failure into this exception so the surface
+/// only ever shows one user-safe error category.
+class ExportException extends AppException {
+  const ExportException(super.message, {required this.stage, this.cause});
+
+  /// Logical label for the failing step — typically the table name (e.g.
+  /// `'workouts'`, `'xp_events'`) or `'serialize'` for the final
+  /// `jsonEncode` step. Used for dev logging and Sentry breadcrumbs only;
+  /// never displayed to the user.
+  final String stage;
+
+  /// Original error (PostgrestException, NetworkException, etc.) preserved
+  /// for the dev log so the underlying cause is not lost. Never shown to
+  /// the user — [userMessage] is the safe surface.
+  final Object? cause;
+
+  @override
+  String get userMessage =>
+      "We couldn't prepare your data export. Please try again.";
+}

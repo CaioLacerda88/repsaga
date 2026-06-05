@@ -1203,6 +1203,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get workoutHistorySection => 'HISTÓRICO DE SESSÕES';
 
   @override
+  String get yourDataSection => 'SEUS DADOS';
+
+  @override
+  String get exportMyData => 'Exportar meus dados';
+
+  @override
+  String get exportMyDataSubtitle =>
+      'Baixe um arquivo JSON com os dados da sua conta.';
+
+  @override
+  String get dataExportPreparing => 'Preparando sua exportação de dados…';
+
+  @override
+  String get dataExportSuccess => 'Exportação pronta';
+
+  @override
+  String dataExportFailed(String message) {
+    return 'Falha ao exportar dados: $message';
+  }
+
+  @override
   String get dangerSection => 'PERIGO';
 
   @override
