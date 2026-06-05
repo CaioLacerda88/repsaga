@@ -18,7 +18,7 @@
 import { test, expect } from '@playwright/test';
 import { login, loginExpectingOnboarding, logout } from '../helpers/auth';
 import { flutterFill } from '../helpers/app';
-import { NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
+import { AUTH, NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
@@ -235,6 +235,97 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await expect(page.locator(ONBOARDING.getStartedButton)).not.toBeVisible({
       timeout: 2_000,
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 6: Session-expired recovery loop — navigate-to-login then re-auth
+  //         routes back to /onboarding (not /home), and completing onboarding
+  //         after re-auth reaches /home.
+  //
+  // What this pins:
+  //   (a) After the 42501 Sign in CTA fires `context.go('/login')`, the user
+  //       lands on the login screen (navigation contract — widget test swallows
+  //       the FlutterError, so this E2E is the only test exercising the real
+  //       router path).
+  //   (b) Re-auth for a user whose `onboarded_at` is still NULL (the profile
+  //       row was deleted by `beforeEach`, not yet stamped) routes to
+  //       /onboarding — not /home. The router gate checks `onboardedAt != null`
+  //       AFTER the profile provider resolves post-login; if the gate regresses
+  //       to a stale cached null or always-true, this test fails.
+  //   (c) Completing onboarding after the re-auth stamps `onboarded_at` and
+  //       routes to /home — the full save path works end-to-end.
+  //
+  // Regression window: the root cause of the 42501 fix-wave (five PRs over
+  // 48 hours, PR #299–#312) was that users hit the 42501 error on fresh
+  // signup, had NO recovery affordance, and were stuck. This test closes
+  // the final loop: "the Sign in CTA's navigation target (`/login`) is
+  // reachable from `/onboarding` mid-session, and re-auth from that state
+  // correctly resumes the onboarding flow rather than dropping the user on
+  // /home with an incomplete profile."
+  //
+  // The test uses `page.goto('/')` to simulate the post-CTA navigation
+  // rather than clicking the actual CTA, because injecting a real 42501
+  // from the E2E layer would require modifying RLS policies (out of scope).
+  // The navigation target is identical: `context.go('/login')` in production
+  // maps to `page.goto('/')` here (the Flutter app's router redirects any
+  // unauthenticated request to the login screen, and `page.goto('/')` is
+  // what `loginExpectingOnboarding` uses internally). This makes the test
+  // deterministic without a mock server layer.
+  // ---------------------------------------------------------------------------
+  test('should route back to /onboarding after re-auth when onboarded_at is still null, then reach /home after completing onboarding', async ({
+    page,
+  }) => {
+    // Step 1: Sign in — user lands on /onboarding (fresh-signup state per
+    // beforeEach, no profile row → trigger creates one with NULL onboarded_at).
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Step 2: Simulate the Sign in CTA navigation — navigate to the login
+    // screen as if `context.go('/login')` fired from the SnackBarAction.
+    // The profile row still has `onboarded_at = NULL` (onboarding was never
+    // completed), so after re-auth the router must route back to /onboarding.
+    await page.goto('/');
+    await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 10_000 });
+
+    // Step 3: Re-auth. The router checks profileProvider → profile.onboardedAt
+    // == null → needsOnboarding = true → routes to /onboarding.
+    // Using loginExpectingOnboarding (not login) because the profile row's
+    // `onboarded_at` is still NULL — the re-authed user must NOT land on /home.
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+    // Pin (b): re-auth after the CTA redirects back to /onboarding, not /home.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    // Belt-and-suspenders: the home tab must NOT be visible yet.
+    await expect(page.locator(NAV.homeTab)).not.toBeVisible({ timeout: 2_000 });
+
+    // Step 4: Complete onboarding after re-auth. This is the full recovery
+    // loop: the user fills in their profile and taps LET'S GO.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    // Pin (c): after completing onboarding post-re-auth, the user reaches
+    // /home. The `onboarded_at` stamp written by `saveOnboardingProfile` is
+    // the same code path validated in Test 3; this test pins that the code
+    // path is still reachable after a mid-session logout/re-auth cycle.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
   });
 
   // ---------------------------------------------------------------------------
