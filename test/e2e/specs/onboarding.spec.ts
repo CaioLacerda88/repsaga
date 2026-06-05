@@ -1,32 +1,23 @@
 /**
- * Onboarding spec — merged from smoke suite.
+ * Onboarding spec — smoke suite for the post-signup onboarding flow.
  *
  * Tests the 2-page onboarding flow that appears for new users after sign-up:
  *   Page 1: Welcome ("Track every rep, every time") -> GET STARTED
  *   Page 2: Profile setup (display name + fitness level + frequency) -> LET'S GO
  *
- * NOTE: This test requires a fresh account that has never completed onboarding.
- * The `smokeOnboarding` user is provisioned by global-setup with no profile row,
- * which causes the router to redirect to /onboarding after login.
- *
- * TODO (infrastructure): The global-setup creates auth users but does NOT
- * automatically delete the user's profile row between runs. If the smokeOnboarding
- * user has already completed onboarding (profile row exists), the router will
- * redirect to /home instead of /onboarding, and these tests will fail.
- *
- * To make these tests repeatable:
- *   Option A: Delete the profile row for smokeOnboarding in global-setup via
- *             the Supabase Admin API (DELETE from profiles WHERE id = <user_id>).
- *   Option B: Use a freshly created user per test run (unique email per run).
- *   Option C: Add a Supabase edge function or SQL to reset onboarding state.
- *
- * Until infrastructure supports this, the test navigates directly to /onboarding
- * to verify the UI renders, acknowledging this bypasses the auth redirect guard.
+ * **State contract.** The describe-level `beforeEach` below resets the
+ * `smokeOnboarding` user to fresh-signup state (no profile row → trigger
+ * recreates one with NULL onboarded_at → router routes to /onboarding)
+ * before every test. The reset is the seed contract — individual tests
+ * MUST NOT defensively guard for "what if we landed on /home"; that
+ * branch is impossible under this beforeEach, and the dead conditional
+ * was actively misleading (a future test author would see it and assume
+ * the seed contract is fragile).
  */
 
 import { test, expect } from '@playwright/test';
 import { login, loginExpectingOnboarding, logout } from '../helpers/auth';
-import { waitForAppReady, flutterFill } from '../helpers/app';
+import { flutterFill } from '../helpers/app';
 import { NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -35,14 +26,15 @@ import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 // Smoke — onboarding flow
 // ---------------------------------------------------------------------------
 test.describe('Onboarding', { tag: '@smoke' }, () => {
-  // Cluster: e2e-spec-state-leak-across-tests. Test 3 below COMPLETES
-  // onboarding (writes onboarded_at via the production save path), leaving
-  // the worker's smokeOnboarding profile in a fully-onboarded state. Without
-  // this reseed, Test 4 (and any future test sharing this user) finds the
-  // user routes to /home, so `loginExpectingOnboarding` times out on the
-  // GET STARTED locator. Deleting the row restores the fresh-signup state
-  // (no profile, the trigger will create one on next login with NULL
-  // onboarded_at => router goes /onboarding).
+  // Cluster: e2e-spec-state-leak-across-tests. Test 3 / Test 5 below
+  // COMPLETE onboarding (writes onboarded_at via the production save
+  // path), leaving the worker's smokeOnboarding profile in a
+  // fully-onboarded state. Without this reseed, Test 4 (and any future
+  // test sharing this user) finds the user routes to /home, so
+  // `loginExpectingOnboarding` times out on the GET STARTED locator.
+  // Deleting the row restores the fresh-signup state (no profile, the
+  // trigger will create one on next login with NULL onboarded_at =>
+  // router goes /onboarding).
   test.beforeEach(async () => {
     const admin = getAdminClient();
     const userId = await getUserIdByEmail(
@@ -57,9 +49,9 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // ---------------------------------------------------------------------------
   // Test 1: Onboarding Page 1 renders correctly.
   //
-  // Navigate directly to /onboarding and verify the welcome page content.
-  // This confirms the widget tree is correct even if the auth redirect guard
-  // would normally skip onboarding for an already-onboarded user.
+  // The describe-level beforeEach guarantees fresh-signup state, so
+  // login routes to /onboarding deterministically — no branch on
+  // page.url() needed.
   // ---------------------------------------------------------------------------
   test('should show welcome content and GET STARTED button on page 1', async ({
     page,
@@ -69,23 +61,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-
-    // Navigate directly to onboarding. The guard may redirect authenticated
-    // users with a profile to /home, in which case this test asserts the
-    // onboarding route is reachable (useful for visual regression).
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    // Either we land on onboarding or are redirected to home.
-    const isOnOnboarding = page.url().includes('/onboarding');
-
-    if (!isOnOnboarding) {
-      // TODO: Delete profile row in global-setup to allow testing fresh flow.
-      // For now we skip the onboarding-specific assertions.
-      test.skip();
-      return;
-    }
 
     // Page 1: Welcome content.
     await expect(page.locator(ONBOARDING_FLOW.welcomeHeadline)).toBeVisible({
@@ -103,8 +78,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
 
   // ---------------------------------------------------------------------------
   // Test 2: Tapping GET STARTED advances to page 2.
-  //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // ---------------------------------------------------------------------------
   test('should advance to profile setup page after tapping GET STARTED', async ({ page }) => {
     await loginExpectingOnboarding(
@@ -112,24 +85,15 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      // TODO: Reset profile row in global-setup.
-      test.skip();
-      return;
-    }
 
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 10_000,
     });
     await page.locator(ONBOARDING.getStartedButton).click();
 
-    // Page 2: Profile setup.
-    await expect(page.locator(ONBOARDING_FLOW.profileSetupHeadline)).toBeVisible({
+    // Page 2: Profile setup. profileSetupIndicator targets the
+    // "Beginner" pill — the first stable identifier on page 2.
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.locator(ONBOARDING_FLOW.displayNameInput)).toBeVisible({
@@ -143,7 +107,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // ---------------------------------------------------------------------------
   // Test 3: Complete onboarding — fill name, select frequency, tap LET'S GO.
   //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // Full flow: Page 1 -> GET STARTED -> fill name -> choose frequency -> LET'S GO
   // -> assert redirect to /home.
   // ---------------------------------------------------------------------------
@@ -155,22 +118,12 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
 
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      // TODO: Reset profile row in global-setup.
-      test.skip();
-      return;
-    }
-
-    // Page 1 -> Page 2. Mirror the wait-then-click discipline of test 109
-    // (line 126) — under CanvasKit + GitHub Actions resource contention,
-    // the button can be visually painted before its AOM hit-target is
+    // Page 1 -> Page 2. Mirror the wait-then-click discipline of test 2
+    // — under CanvasKit + GitHub Actions resource contention, the
+    // button can be visually painted before its AOM hit-target is
     // wired, so a bare `.click()` lands on a not-yet-clickable node and
-    // the next `expect(profileSetupHeadline).toBeVisible` fails because
+    // the next `expect(profileSetupIndicator).toBeVisible` fails because
     // the navigation never fired. The Manage Data export test (MD-013)
     // exposed the same Flutter-web-timing class on this CI run.
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
@@ -178,7 +131,7 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     });
     await page.locator(ONBOARDING.getStartedButton).click();
     await expect(
-      page.locator(ONBOARDING_FLOW.profileSetupHeadline),
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({
       timeout: 10_000,
     });
@@ -193,7 +146,7 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await page.locator(ONBOARDING.letsGoButton).click();
 
     // No error snackbar appears in the success path. Pins the regression
-    // window for the PR-302 / PR-310 / PR (this PR) fix-wave: if the
+    // window for the PR-302 / PR-310 / PR-312 fix-wave: if the
     // `DatabaseException(42501)` or `failedToSaveProfile` snack ever
     // surfaces here, the typed-dispatch branch in
     // `_showSaveErrorSnack` has regressed (or the underlying
@@ -245,21 +198,12 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     );
 
     // Drive the onboarding flow to completion — same shape as Test 3.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      test.skip();
-      return;
-    }
-
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 10_000,
     });
     await page.locator(ONBOARDING.getStartedButton).click();
     await expect(
-      page.locator(ONBOARDING_FLOW.profileSetupHeadline),
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({ timeout: 10_000 });
 
     await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Returning User');
@@ -295,8 +239,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
 
   // ---------------------------------------------------------------------------
   // Test 4: Back button on page 2 returns to page 1.
-  //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // ---------------------------------------------------------------------------
   test('should return to welcome page when tapping Back on profile setup page', async ({
     page,
@@ -306,18 +248,9 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      test.skip();
-      return;
-    }
 
     await page.locator(ONBOARDING.getStartedButton).click();
-    await expect(page.locator(ONBOARDING_FLOW.profileSetupHeadline)).toBeVisible({
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
       timeout: 10_000,
     });
 

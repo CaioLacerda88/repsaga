@@ -1138,8 +1138,15 @@ export const ONBOARDING_FLOW = {
    * Page 2 indicator: the "Beginner" pill (formerly ChoiceChip, now
    * _BrandedPillChoice). Semantics(identifier: 'onboarding-beginner') wraps
    * the pill — identifier is stable across the widget swap.
+   *
+   * Named `profileSetupIndicator` because page 2 has no actual headline
+   * semantics — the Beginner pill is the first stable identifier the
+   * spec can wait on as proof that page 2 mounted. The earlier name
+   * `profileSetupHeadline` actively misled future maintainers since
+   * "Setup profile" / "Tell us about yourself" Text widgets do NOT
+   * carry semantics identifiers.
    */
-  profileSetupHeadline: '[flt-semantics-identifier="onboarding-beginner"]',
+  profileSetupIndicator: '[flt-semantics-identifier="onboarding-beginner"]',
   /**
    * Display name AppTextField on page 2.
    * Semantics(identifier: 'onboarding-display-name') wraps the AppTextField.

@@ -370,5 +370,32 @@ void main() {
 
       verifyNever(() => profileRepo.updateTrainingFrequency(any(), any()));
     });
+
+    test('toggleWeightUnit is a silent no-op when authStateProvider has no '
+        'session — closes the third leg of the file-header contract '
+        '("no session → silent no-op for ALL three methods")', () async {
+      // Symmetric coverage with the updateTrainingFrequency no-session
+      // test above. Without this, a future refactor that reorders the
+      // `if (current == null) return` and userId guards in
+      // toggleWeightUnit (but not in the other two methods) would
+      // silently regress the contract — the file header claims
+      // no-session→no-op for ALL three methods, this test pins it for
+      // the third.
+      final container = _container(
+        profileRepo: profileRepo,
+        authRepo: authRepo,
+        signedIn: false,
+      );
+      addTearDown(container.dispose);
+
+      await _readProfile(container);
+
+      await expectLater(
+        () => container.read(profileProvider.notifier).toggleWeightUnit(),
+        returnsNormally,
+      );
+
+      verifyNever(() => profileRepo.updateWeightUnit(any(), any()));
+    });
   });
 }

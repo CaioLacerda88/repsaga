@@ -231,6 +231,28 @@ void main() {
           find.text('Failed to save profile. Please try again.'),
           findsNothing,
         );
+
+        // Cluster: persist-eats-duration. Behavior-not-wiring: the
+        // SnackBar must dismiss when the user taps the Sign in action.
+        // The 42501 branch is a separate entry point from the
+        // AuthException branch — its own dismissal assertion guards
+        // against a regression where the shared
+        // `_showSessionExpiredSnack` helper accidentally sets
+        // `persist: true` for this branch only (e.g. via a
+        // code-path-specific override added in a later refactor).
+        // Without this, the AuthException-branch test would catch the
+        // regression only if it ran first, which is not a contract —
+        // Dart test ordering is unspecified.
+        //
+        // `pumpAndSettle` once before the tap so the SnackBar's enter
+        // animation (kSnackBarTransitionDuration = 250 ms) finishes —
+        // without it the action lives at an off-stage offset and
+        // `tap()` misses. `pumpAndSettle` again after the tap so the
+        // hide animation completes before the `findsNothing` assertion.
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(SnackBarAction, 'Sign in'));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
       },
     );
 
