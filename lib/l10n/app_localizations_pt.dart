@@ -3041,9 +3041,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signupAgeConfirmation => 'Confirmo que tenho 18 anos ou mais.';
 
   @override
-  String get signupAgeConfirmationLink => 'Leia a política de idade mínima.';
-
-  @override
   String get bodyweightConsentTitle => 'Peso corporal é dado sensível.';
 
   @override

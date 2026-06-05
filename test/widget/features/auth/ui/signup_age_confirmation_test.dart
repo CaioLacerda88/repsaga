@@ -37,7 +37,28 @@ void main() {
         find.text('I confirm I am 18 years of age or older.'),
         findsOneWidget,
       );
-      expect(find.text('Read the minimum-age policy.'), findsOneWidget);
+      // PR #309 review N1 — the single ToS-only "Read the minimum-age
+      // policy" link was split into two side-by-side chips so the user
+      // has direct access to BOTH the Privacy Policy (LGPD Art. 14
+      // disclosure) and the Terms of Service (§3 minimum-age clause).
+      // Locate the chips by their Semantics identifiers so the test is
+      // robust against copy tweaks.
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.identifier == 'auth-age-link-privacy',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.identifier == 'auth-age-link-terms',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('checkbox is hidden in login mode', (tester) async {

@@ -205,4 +205,60 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'picking "Not set" after seeing the banner self-extinguishes it on reopen (PR #309 review I1)',
+    (tester) async {
+      // Repro of PR #309 review I1: user opens the editor with gender ==
+      // null + consent == false → banner visible. They make the
+      // affirmative decision to decline by tapping "Not set". On
+      // reopening the editor with the SAME state (gender still null,
+      // since "Not set" doesn't write a value), the banner must NOT
+      // re-appear — the user already saw the disclosure and made a
+      // disclosed choice. Without the fix, the banner re-fires forever.
+      final mockRepo = _MockProfileRepository();
+      when(
+        () => mockRepo.upsertProfile(
+          userId: any(named: 'userId'),
+          gender: any(named: 'gender'),
+        ),
+      ).thenAnswer((_) async => const Profile(id: 'user-1'));
+
+      const profile = Profile(id: 'user-1');
+
+      await tester.pumpWidget(buildHost(profile: profile, repo: mockRepo));
+      await tester.pump();
+
+      // First open — banner visible.
+      await tester.tap(find.text('Gender'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Gender helps RepSaga match XP calculations'),
+        findsOneWidget,
+      );
+
+      // Tap "Not set" inside the sheet — affirmative skip-decision.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GenderEditorSheet),
+          matching: find.text('Not set'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(GenderEditorSheet), findsNothing);
+
+      // Re-open the editor — banner must NOT re-appear.
+      await tester.tap(find.text('Gender'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GenderEditorSheet), findsOneWidget);
+      expect(
+        find.textContaining('Gender helps RepSaga match XP calculations'),
+        findsNothing,
+        reason:
+            'Banner must self-extinguish after the user affirmatively '
+            'picks "Not set" — re-firing it indefinitely defeats the '
+            'one-time-disclosure contract.',
+      );
+    },
+  );
 }

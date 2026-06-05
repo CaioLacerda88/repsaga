@@ -126,10 +126,18 @@ class _GenderEditorSheetState extends ConsumerState<GenderEditorSheet> {
     }
     setState(() => _saving = true);
     try {
-      // Picking any explicit value records consent. The flip happens BEFORE
-      // the network write so a transient failure still marks the disclosure
-      // as seen — re-showing it after a retry would be noise.
-      if (value != null && !ref.read(genderConsentProvider)) {
+      // Any explicit tap on a tile — INCLUDING "Not set" — counts as an
+      // affirmative, disclosed choice once the user has seen the banner.
+      // Picking "Not set" after the disclosure is the user's deliberate
+      // decline; flipping consent records that they made the choice so
+      // the banner self-extinguishes on subsequent opens (PR #309 review
+      // finding I1: without this flip, a user who deliberately declines
+      // sees the disclosure banner forever).
+      //
+      // The flip happens BEFORE the network write so a transient failure
+      // still marks the disclosure as seen — re-showing it after a retry
+      // would be noise.
+      if (!ref.read(genderConsentProvider)) {
         await ref.read(genderConsentProvider.notifier).setEnabled(true);
         if (!mounted) return;
       }

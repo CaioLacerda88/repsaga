@@ -382,31 +382,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
+                      // PR #309 review N1 — the age-gate disclosure references
+                      // BOTH ToS §3 (minimum-age clause) and Privacy Policy §8
+                      // (LGPD Art. 14 disclosure). Render two side-by-side
+                      // chips so the user has direct access to either,
+                      // matching the `@signupAgeConfirmationLink` ARB
+                      // description. Reuses the existing `privacyPolicy` +
+                      // `termsOfService` link-label strings for parity with
+                      // the legal footer at the bottom of the screen.
                       Padding(
                         padding: const EdgeInsets.only(left: 12, bottom: 8),
-                        child: Semantics(
-                          container: true,
-                          identifier: 'auth-age-confirmation-link',
-                          child: TextButton(
-                            onPressed: isLoading
-                                ? null
-                                : () => context.push('/terms-of-service'),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              minimumSize: const Size(0, 0),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              alignment: Alignment.centerLeft,
-                            ),
-                            child: Text(
-                              l10n.signupAgeConfirmationLink,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: theme.colorScheme.primary.withValues(
-                                  alpha: 0.85,
+                        child: Row(
+                          children: [
+                            Semantics(
+                              container: true,
+                              identifier: 'auth-age-link-privacy',
+                              child: TextButton(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => context.push('/privacy-policy'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                    horizontal: 4,
+                                  ),
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                fontWeight: FontWeight.w600,
+                                child: Text(
+                                  l10n.privacyPolicy,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            Text(
+                              l10n.andSeparator,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                            ),
+                            Semantics(
+                              container: true,
+                              identifier: 'auth-age-link-terms',
+                              child: TextButton(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => context.push('/terms-of-service'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                    horizontal: 4,
+                                  ),
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  l10n.termsOfService,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

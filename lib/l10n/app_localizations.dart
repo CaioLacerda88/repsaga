@@ -5166,17 +5166,11 @@ abstract class AppLocalizations {
   /// **'Helps RepSaga improve. You can disable any time.'**
   String get usageAnalyticsSubtitle;
 
-  /// Legal PR 2 — Age-gate checkbox label shown at signup. Required ticked before the Sign Up CTA is enabled (LGPD Art. 14 minimum-age compliance, mirrored by ToS §3 + Privacy Policy §8).
+  /// Legal PR 2 — Age-gate checkbox label shown at signup. Required ticked before the Sign Up CTA is enabled (LGPD Art. 14 minimum-age compliance, mirrored by ToS §3 + Privacy Policy §8). The Privacy Policy and Terms of Service references render as two inline tap-links below the checkbox row (PR #309 review N1 — replaces the prior single ToS-only link).
   ///
   /// In en, this message translates to:
   /// **'I confirm I am 18 years of age or older.'**
   String get signupAgeConfirmation;
-
-  /// Legal PR 2 — Inline link below the age-gate checkbox routing to the ToS §3 + Privacy Policy §8 minimum-age clauses. Tapping opens the in-app Terms of Service screen.
-  ///
-  /// In en, this message translates to:
-  /// **'Read the minimum-age policy.'**
-  String get signupAgeConfirmationLink;
 
   /// Legal PR 2 — Title of the consent dialog shown when the user tries to save a body-weight value before opting in. Reuses the LGPD Art. 11 / Privacy Policy §7 language that classifies body weight as health data.
   ///

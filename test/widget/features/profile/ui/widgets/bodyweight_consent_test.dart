@@ -161,6 +161,17 @@ void main() {
           bodyweightKg: any(named: 'bodyweightKg'),
         ),
       );
+
+      // PR #309 review N2 — pin that cancel truly leaves consent
+      // unchanged. Tapping Save AGAIN must re-surface the consent
+      // dialog. If cancel silently flipped consent we'd never see
+      // the dialog a second time, and the user would have lost the
+      // opportunity to make the affirmative-consent choice.
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Body weight is sensitive data.'), findsOneWidget);
+      expect(find.text('Save with consent'), findsOneWidget);
     });
 
     testWidgets(
