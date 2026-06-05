@@ -435,11 +435,13 @@ test.describe('Profile — bodyweight consent dialog', { tag: '@smoke' }, () => 
     page,
   }) => {
     // 1. Tap the bodyweight row to open the editor sheet.
-    //    Use BODYWEIGHT_CONSENT.row (role=button selector) — the Semantics
-    //    identifier is inside the InkWell, not wrapping it, so the CSS
-    //    attribute selector targets a passive node (cluster: semantics-identifier-pair-rule).
+    //    The identifier node sits inside the InkWell (explicitChildNodes:true
+    //    blocks name merging so role=button[name*=...] matches 0 elements).
+    //    scrollIntoViewIfNeeded works on the identifier node (it IS in the DOM).
+    //    force:true bypasses actionability checks and dispatches pointer events
+    //    at the node's coordinates; Flutter hit-testing routes them to the InkWell.
     await page.locator(BODYWEIGHT_CONSENT.row).first().scrollIntoViewIfNeeded();
-    await page.locator(BODYWEIGHT_CONSENT.row).first().click();
+    await page.locator(BODYWEIGHT_CONSENT.row).first().click({ force: true });
 
     // 2. Sheet is open — assert the input is visible.
     await expect(
@@ -498,8 +500,10 @@ test.describe('Profile — gender consent banner', { tag: '@smoke' }, () => {
     page,
   }) => {
     // 1. Tap the gender row to open the editor sheet.
+    //    force:true — identifier node is inside InkWell with explicitChildNodes:true;
+    //    pointer events at the node's coordinates reach the InkWell via Flutter hit-test.
     await page.locator(GENDER_EDITOR.row).first().scrollIntoViewIfNeeded();
-    await page.locator(GENDER_EDITOR.row).first().click();
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
 
     // 2. Sheet is open.
     await expect(
@@ -522,20 +526,22 @@ test.describe('Profile — gender consent banner', { tag: '@smoke' }, () => {
     page,
   }) => {
     // 1. Open the gender editor — banner visible.
+    //    force:true — same explicitChildNodes barrier as the first-open test.
     await page.locator(GENDER_EDITOR.row).first().scrollIntoViewIfNeeded();
-    await page.locator(GENDER_EDITOR.row).first().click();
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
     await expect(page.locator(GENDER_EDITOR.sheet).first()).toBeVisible({ timeout: 8_000 });
     await expect(page.locator(GENDER_EDITOR.consentBanner).first()).toBeVisible({ timeout: 5_000 });
 
     // 2. Tap "Not set" — affirmative decline per PR #309 review I1.
     //    Flips genderConsentProvider to true and closes the sheet.
+    //    notSetTile has button:true on its Semantics wrapper so no force needed.
     await page.locator(GENDER_EDITOR.notSetTile).first().click();
 
     // 3. Sheet closes.
     await expect(page.locator(GENDER_EDITOR.sheet)).not.toBeVisible({ timeout: 8_000 });
 
     // 4. Re-open the sheet — banner must be gone (consent now true).
-    await page.locator(GENDER_EDITOR.row).first().click();
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
     await expect(page.locator(GENDER_EDITOR.sheet).first()).toBeVisible({ timeout: 8_000 });
     await expect(page.locator(GENDER_EDITOR.consentBanner)).not.toBeVisible({ timeout: 5_000 });
 
