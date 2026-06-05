@@ -7,6 +7,7 @@ import 'package:repsaga/features/auth/data/auth_repository.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/data/profile_repository.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:repsaga/features/profile/providers/bodyweight_consent_provider.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/profile/ui/widgets/bodyweight_row.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
@@ -27,6 +28,26 @@ class _StubProfileNotifier extends AsyncNotifier<Profile?>
 
   @override
   Future<Profile?> build() async => _profile;
+}
+
+/// In-memory stub for the bodyweight-consent notifier. Legal PR 2 added
+/// a consent gate to `BodyweightEditorSheet._onSave`; these legacy tests
+/// pre-date that gate and assert the underlying save mechanics. Pre-grant
+/// consent so the consent dialog never appears in these tests — the gate
+/// itself is covered by `bodyweight_consent_test.dart`.
+class _StubConsent extends Notifier<bool>
+    with Mock
+    implements BodyweightConsentNotifier {
+  _StubConsent(this._initial);
+  final bool _initial;
+
+  @override
+  bool build() => _initial;
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    state = value;
+  }
 }
 
 void main() {
@@ -51,6 +72,10 @@ void main() {
         profileProvider.overrideWith(() => _StubProfileNotifier(profile)),
         profileRepositoryProvider.overrideWithValue(mockRepo),
         authRepositoryProvider.overrideWithValue(mockAuth),
+        // Legal PR 2 — pre-grant consent so the save-mechanic tests below
+        // don't have to drive the consent dialog. The dialog itself is
+        // exercised in `bodyweight_consent_test.dart`.
+        bodyweightConsentProvider.overrideWith(() => _StubConsent(true)),
       ],
       child: TestMaterialApp(
         theme: AppTheme.dark,

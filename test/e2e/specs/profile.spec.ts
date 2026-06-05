@@ -19,7 +19,15 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth';
 import { navigateToTab } from '../helpers/app';
-import { EXERCISE_LIST, PROFILE, PROFILE_WEEKLY_GOAL, SAGA } from '../helpers/selectors';
+import {
+  EXERCISE_LIST,
+  PROFILE,
+  PROFILE_WEEKLY_GOAL,
+  SAGA,
+  BODYWEIGHT_CONSENT,
+  GENDER_EDITOR,
+  PRIVACY_TOGGLES,
+} from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 
 // ---------------------------------------------------------------------------
@@ -344,5 +352,201 @@ test.describe('Profile — avatar', { tag: '@smoke' }, () => {
     await expect(
       page.locator(PROFILE.identityCardAvatar).first(),
     ).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Analytics opt-out toggle (Flow 4)
+//
+// AnalyticsToggle is mounted directly below CrashReportsToggle in the PRIVACY
+// section of ProfileSettingsScreen. This smoke test asserts the toggle is
+// present and responds to interaction.
+//
+// Uses the existing `smokeProfileWeeklyGoal` user — no dedicated user needed
+// as the toggle is a SwitchListTile backed by Hive (fresh session = default
+// true). The test asserts visibility only; full Hive persistence is covered
+// by the unit tests in analytics_enabled_provider_test.dart.
+// ---------------------------------------------------------------------------
+test.describe('Profile — analytics opt-out toggle', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeProfileWeeklyGoal').email,
+      getUser('smokeProfileWeeklyGoal').password,
+    );
+    await navigateToTab(page, 'Profile');
+    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator(SAGA.gearIcon).first().click();
+    await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
+  });
+
+  test('should show the analytics opt-out toggle in the PRIVACY section', async ({ page }) => {
+    // Scroll to the bottom of the settings screen where the PRIVACY section lives.
+    await page.locator(PRIVACY_TOGGLES.analyticsToggle).first().scrollIntoViewIfNeeded();
+    await expect(page.locator(PRIVACY_TOGGLES.analyticsToggle).first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test('should show crash-reports, analytics, and body-weight-consent toggles in order', async ({
+    page,
+  }) => {
+    // All three PRIVACY-section toggles must be present. The widget tests
+    // cover the full section structure; here we assert the E2E surface is
+    // intact after the PR merge.
+    await page.locator(PRIVACY_TOGGLES.crashReportsToggle).first().scrollIntoViewIfNeeded();
+    await expect(page.locator(PRIVACY_TOGGLES.crashReportsToggle).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator(PRIVACY_TOGGLES.analyticsToggle).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(PRIVACY_TOGGLES.bodyweightConsentToggle).first()).toBeVisible({
+      timeout: 5_000,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Bodyweight consent dialog (Flow 2)
+//
+// The first bodyweight save attempt triggers a barrierDismissible:false
+// consent dialog when bodyweightConsentProvider == false (default). This
+// smoke test drives the Cancel path (no save) and verifies the dialog
+// reappears on the next save attempt.
+//
+// Uses `smokeProfileWeeklyGoal` — fresh Hive session → default consent = false.
+// The test is read-only with respect to the profile DB row (Cancel path).
+// ---------------------------------------------------------------------------
+test.describe('Profile — bodyweight consent dialog', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeProfileWeeklyGoal').email,
+      getUser('smokeProfileWeeklyGoal').password,
+    );
+    await navigateToTab(page, 'Profile');
+    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator(SAGA.gearIcon).first().click();
+    await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
+  });
+
+  test('should show consent dialog on first bodyweight save attempt and cancel leaves no save', async ({
+    page,
+  }) => {
+    // 1. Tap the bodyweight row to open the editor sheet.
+    //    The identifier node sits inside the InkWell (explicitChildNodes:true
+    //    blocks name merging so role=button[name*=...] matches 0 elements).
+    //    scrollIntoViewIfNeeded works on the identifier node (it IS in the DOM).
+    //    force:true bypasses actionability checks and dispatches pointer events
+    //    at the node's coordinates; Flutter hit-testing routes them to the InkWell.
+    await page.locator(BODYWEIGHT_CONSENT.row).first().scrollIntoViewIfNeeded();
+    await page.locator(BODYWEIGHT_CONSENT.row).first().click({ force: true });
+
+    // 2. Sheet is open — assert the input is visible.
+    await expect(
+      page.locator('[flt-semantics-identifier="profile-bodyweight-sheet"]').first(),
+    ).toBeVisible({ timeout: 8_000 });
+
+    // 3. Enter a value and tap Save.
+    const input = page.locator('input').last();
+    await input.click({ timeout: 5_000 });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('75', { delay: 10 });
+    await page.locator('role=button[name="Save"]').first().click();
+
+    // 4. Consent dialog must appear (barrierDismissible:false).
+    await expect(
+      page.locator(BODYWEIGHT_CONSENT.saveWithConsentButton).first(),
+    ).toBeVisible({ timeout: 8_000 });
+
+    // 5. Cancel — no save, dialog dismisses.
+    await page.locator(BODYWEIGHT_CONSENT.cancelButton).first().click();
+
+    // 6. Dialog gone — sheet still visible (save was blocked, sheet stays open).
+    await expect(
+      page.locator(BODYWEIGHT_CONSENT.saveWithConsentButton),
+    ).not.toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.locator('[flt-semantics-identifier="profile-bodyweight-sheet"]').first(),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legal PR 2 — Gender consent banner (Flow 3)
+//
+// The GenderEditorSheet shows a one-time disclosure banner the first time it
+// is opened when gender == null AND genderConsentProvider == false (the
+// defaults for a fresh session). After picking any value (including "Not set"),
+// genderConsentProvider flips to true and the banner self-extinguishes.
+//
+// Uses `smokeProfileWeeklyGoal` — gender = null in DB, fresh Hive → consent false.
+// ---------------------------------------------------------------------------
+test.describe('Profile — gender consent banner', { tag: '@smoke' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await login(
+      page,
+      getUser('smokeProfileWeeklyGoal').email,
+      getUser('smokeProfileWeeklyGoal').password,
+    );
+    await navigateToTab(page, 'Profile');
+    await page.locator(SAGA.characterSheet).first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator(SAGA.gearIcon).first().click();
+    await page.locator(SAGA.profileSettingsScreen).first().waitFor({ state: 'visible', timeout: 10_000 });
+  });
+
+  test('should show consent banner on first open when gender is not set', async ({
+    page,
+  }) => {
+    // 1. Tap the gender row to open the editor sheet.
+    //    force:true — identifier node is inside InkWell with explicitChildNodes:true;
+    //    pointer events at the node's coordinates reach the InkWell via Flutter hit-test.
+    await page.locator(GENDER_EDITOR.row).first().scrollIntoViewIfNeeded();
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
+
+    // 2. Sheet is open.
+    await expect(
+      page.locator(GENDER_EDITOR.sheet).first(),
+    ).toBeVisible({ timeout: 8_000 });
+
+    // 3. Consent banner must be visible (first open, gender null, consent false).
+    await expect(
+      page.locator(GENDER_EDITOR.consentBanner).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 4. All four option tiles must be present.
+    await expect(page.locator(GENDER_EDITOR.maleTile).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(GENDER_EDITOR.femaleTile).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(GENDER_EDITOR.otherTile).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(GENDER_EDITOR.notSetTile).first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should self-extinguish consent banner after picking Not set (affirmative skip)', async ({
+    page,
+  }) => {
+    // 1. Open the gender editor — banner visible.
+    //    force:true — same explicitChildNodes barrier as the first-open test.
+    await page.locator(GENDER_EDITOR.row).first().scrollIntoViewIfNeeded();
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
+    await expect(page.locator(GENDER_EDITOR.sheet).first()).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(GENDER_EDITOR.consentBanner).first()).toBeVisible({ timeout: 5_000 });
+
+    // 2. Tap "Not set" — affirmative decline per PR #309 review I1.
+    //    Flips genderConsentProvider to true and closes the sheet.
+    //    notSetTile has button:true on its Semantics wrapper so no force needed.
+    await page.locator(GENDER_EDITOR.notSetTile).first().click();
+
+    // 3. Sheet closes.
+    await expect(page.locator(GENDER_EDITOR.sheet)).not.toBeVisible({ timeout: 8_000 });
+
+    // 4. Re-open the sheet — banner must be gone (consent now true).
+    await page.locator(GENDER_EDITOR.row).first().click({ force: true });
+    await expect(page.locator(GENDER_EDITOR.sheet).first()).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(GENDER_EDITOR.consentBanner)).not.toBeVisible({ timeout: 5_000 });
+
+    // 5. Close the sheet (Cancel).
+    await page.locator('role=button[name="Cancel"]').last().click();
+    await expect(page.locator(GENDER_EDITOR.sheet)).not.toBeVisible({ timeout: 5_000 });
   });
 });

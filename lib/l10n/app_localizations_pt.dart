@@ -3050,4 +3050,50 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get historyWeekLabelCurrent => 'Esta semana';
+
+  @override
+  String get sendUsageAnalytics => 'Enviar dados de uso';
+
+  @override
+  String get usageAnalyticsSubtitle =>
+      'Ajuda o RepSaga a melhorar. Você pode desativar a qualquer momento.';
+
+  @override
+  String get signupAgeConfirmation => 'Confirmo que tenho 18 anos ou mais.';
+
+  @override
+  String get bodyweightConsentTitle => 'Peso corporal é dado sensível.';
+
+  @override
+  String get bodyweightConsentBody =>
+      'Conforme a Política de Privacidade, peso corporal é dado de saúde e requer seu consentimento explícito. É usado apenas para melhorar o cálculo de XP em exercícios de peso corporal. Você pode revogar este consentimento a qualquer momento em Perfil → Configurações → Privacidade.';
+
+  @override
+  String get bodyweightConsentAccept => 'Salvar com consentimento';
+
+  @override
+  String get bodyweightConsentToggleTitle => 'Registro de peso corporal';
+
+  @override
+  String get bodyweightConsentToggleSubtitle =>
+      'Necessário para registrar peso corporal. Desativar não apaga registros anteriores.';
+
+  @override
+  String get genderLabel => 'Gênero';
+
+  @override
+  String get genderConsentBanner =>
+      'O gênero ajuda o RepSaga a usar tabelas de tier de força específicas. Este é um dado sensível — você pode escolher \"Outro\" ou deixar em branco para pular.';
+
+  @override
+  String get genderMale => 'Masculino';
+
+  @override
+  String get genderFemale => 'Feminino';
+
+  @override
+  String get genderOther => 'Outro';
+
+  @override
+  String get genderNotSet => 'Não definido';
 }

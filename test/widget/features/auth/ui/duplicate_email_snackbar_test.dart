@@ -72,6 +72,21 @@ void main() {
     (w) => w is Semantics && w.properties.identifier == 'auth-signup-btn',
   );
 
+  // Legal PR 2 — the Sign Up CTA is gated on age confirmation. Tick the
+  // checkbox so the submit path is reachable in these duplicate-email
+  // regression tests (the age gate itself is exercised in
+  // `signup_age_confirmation_test.dart`).
+  Future<void> tickAgeConfirmation(WidgetTester tester) async {
+    final checkbox = find.byWidgetPredicate(
+      (w) =>
+          w is Semantics && w.properties.identifier == 'auth-age-confirmation',
+    );
+    await tester.ensureVisible(checkbox);
+    await tester.pump();
+    await tester.tap(checkbox);
+    await tester.pump();
+  }
+
   group('LoginScreen — duplicate email', () {
     testWidgets(
       'shows authErrorAlreadyRegistered banner when signup hits an existing email',
@@ -105,6 +120,9 @@ void main() {
           find.byType(TextFormField).last,
           'TestPassword123!',
         );
+
+        // Legal PR 2 — Sign Up CTA disabled until age confirmation ticked.
+        await tickAgeConfirmation(tester);
 
         // Trigger signup.
         await tester.tap(signupSubmit());
@@ -148,6 +166,9 @@ void main() {
         find.byType(TextFormField).last,
         'TestPassword123!',
       );
+
+      // Legal PR 2 — Sign Up CTA disabled until age confirmation ticked.
+      await tickAgeConfirmation(tester);
 
       await tester.tap(signupSubmit());
       await tester.pump();

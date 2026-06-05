@@ -3037,4 +3037,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyWeekLabelCurrent => 'This Week';
+
+  @override
+  String get sendUsageAnalytics => 'Send usage analytics';
+
+  @override
+  String get usageAnalyticsSubtitle =>
+      'Helps RepSaga improve. You can disable any time.';
+
+  @override
+  String get signupAgeConfirmation =>
+      'I confirm I am 18 years of age or older.';
+
+  @override
+  String get bodyweightConsentTitle => 'Body weight is sensitive data.';
+
+  @override
+  String get bodyweightConsentBody =>
+      'Per the Privacy Policy, body weight is health data and requires your explicit consent. It\'s used solely to improve XP calculation for bodyweight exercises. You can revoke this consent any time in Profile → Settings → Privacy.';
+
+  @override
+  String get bodyweightConsentAccept => 'Save with consent';
+
+  @override
+  String get bodyweightConsentToggleTitle => 'Body weight tracking';
+
+  @override
+  String get bodyweightConsentToggleSubtitle =>
+      'Required to log body weight. Disabling does not delete past entries.';
+
+  @override
+  String get genderLabel => 'Gender';
+
+  @override
+  String get genderConsentBanner =>
+      'Gender helps RepSaga match XP calculations to gender-aware strength tier tables. This is sensitive data — you can pick \"Other\" or leave it blank to skip.';
+
+  @override
+  String get genderMale => 'Male';
+
+  @override
+  String get genderFemale => 'Female';
+
+  @override
+  String get genderOther => 'Other';
+
+  @override
+  String get genderNotSet => 'Not set';
 }

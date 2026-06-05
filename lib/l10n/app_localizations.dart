@@ -5189,6 +5189,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This Week'**
   String get historyWeekLabelCurrent;
+
+  /// Legal PR 2 — Analytics opt-out toggle title in Profile → Settings → Privacy. Mirrors `sendCrashReports`.
+  ///
+  /// In en, this message translates to:
+  /// **'Send usage analytics'**
+  String get sendUsageAnalytics;
+
+  /// Legal PR 2 — Analytics opt-out toggle subtitle. Calls out the user's right to withdraw at any time (LGPD Art. 9 / GDPR Art. 7(3)).
+  ///
+  /// In en, this message translates to:
+  /// **'Helps RepSaga improve. You can disable any time.'**
+  String get usageAnalyticsSubtitle;
+
+  /// Legal PR 2 — Age-gate checkbox label shown at signup. Required ticked before the Sign Up CTA is enabled (LGPD Art. 14 minimum-age compliance, mirrored by ToS §3 + Privacy Policy §8). The Privacy Policy and Terms of Service references render as two inline tap-links below the checkbox row (PR #309 review N1 — replaces the prior single ToS-only link).
+  ///
+  /// In en, this message translates to:
+  /// **'I confirm I am 18 years of age or older.'**
+  String get signupAgeConfirmation;
+
+  /// Legal PR 2 — Title of the consent dialog shown when the user tries to save a body-weight value before opting in. Reuses the LGPD Art. 11 / Privacy Policy §7 language that classifies body weight as health data.
+  ///
+  /// In en, this message translates to:
+  /// **'Body weight is sensitive data.'**
+  String get bodyweightConsentTitle;
+
+  /// Legal PR 2 — Body of the consent dialog shown when the user tries to save a body-weight value before opting in. Explains the purpose (XP calc for bodyweight exercises) and the withdrawal path (Privacy section toggle).
+  ///
+  /// In en, this message translates to:
+  /// **'Per the Privacy Policy, body weight is health data and requires your explicit consent. It\'s used solely to improve XP calculation for bodyweight exercises. You can revoke this consent any time in Profile → Settings → Privacy.'**
+  String get bodyweightConsentBody;
+
+  /// Legal PR 2 — Affirmative action on the body-weight consent dialog. Tapping flips `bodyweight_consent_enabled` to true AND proceeds with the upsert.
+  ///
+  /// In en, this message translates to:
+  /// **'Save with consent'**
+  String get bodyweightConsentAccept;
+
+  /// Legal PR 2 — Title for the withdrawal switch in Profile → Settings → Privacy. Mirrors `sendCrashReports` shape.
+  ///
+  /// In en, this message translates to:
+  /// **'Body weight tracking'**
+  String get bodyweightConsentToggleTitle;
+
+  /// Legal PR 2 — Subtitle clarifying that flipping the switch off only blocks future writes, not historical ones (retention is governed by the manage-data screen).
+  ///
+  /// In en, this message translates to:
+  /// **'Required to log body weight. Disabling does not delete past entries.'**
+  String get bodyweightConsentToggleSubtitle;
+
+  /// Legal PR 2 — Section header for the gender editor in Profile → Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Gender'**
+  String get genderLabel;
+
+  /// Legal PR 2 — One-time disclosure banner shown above the gender selector the FIRST time it's opened. Self-extinguishes once any value is picked. LGPD Art. 11 sensitive-data disclosure (Privacy Policy §7).
+  ///
+  /// In en, this message translates to:
+  /// **'Gender helps RepSaga match XP calculations to gender-aware strength tier tables. This is sensitive data — you can pick \"Other\" or leave it blank to skip.'**
+  String get genderConsentBanner;
+
+  /// Legal PR 2 — Gender option label (matches Symmetric Strength male tier tables).
+  ///
+  /// In en, this message translates to:
+  /// **'Male'**
+  String get genderMale;
+
+  /// Legal PR 2 — Gender option label (matches strengthlevel.com female tier tables).
+  ///
+  /// In en, this message translates to:
+  /// **'Female'**
+  String get genderFemale;
+
+  /// Legal PR 2 — Gender option label. Same backward-compat fallback as NULL (male tier tables) — documented in `lib/features/profile/models/profile.dart`.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get genderOther;
+
+  /// Legal PR 2 — Display value shown in the Profile → Settings row when `profile.gender == null`. Tapping opens the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get genderNotSet;
 }
 
 class _AppLocalizationsDelegate

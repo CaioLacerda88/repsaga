@@ -158,5 +158,68 @@ void main() {
         completes,
       );
     });
+
+    // Legal PR 2 — opt-out gate at the insert level.
+    // Cluster: `data-protection-compliance`. The `_enabled` flag is the
+    // gate that prevents any Supabase write when the user has opted out.
+    // This test pins that the gate-at-insert behavior is correct,
+    // complementing the provider-level tests in analytics_enabled_provider_test
+    // which assert the static flag's Hive sync.
+    test(
+      'skips Supabase write when _enabled is false (analytics opt-out)',
+      () async {
+        final builder = _FakeInsertBuilder();
+        final repo = AnalyticsRepository(_FakeClient(builder));
+
+        // Set the static gate to disabled (simulates user opt-out).
+        AnalyticsRepository.setEnabled(false);
+        addTearDown(() => AnalyticsRepository.debugResetEnabled());
+
+        await repo.insertEvent(
+          userId: 'user-abc',
+          event: const AnalyticsEvent.onboardingCompleted(
+            fitnessLevel: 'beginner',
+            trainingFrequency: 3,
+          ),
+          platform: 'android',
+          appVersion: '1.0.0',
+        );
+
+        // No rows must reach the fake client — the `if (!_enabled) return;`
+        // short-circuit at line 68 of analytics_repository.dart must fire
+        // before any `_client.from(...)` call.
+        expect(
+          builder.insertedRows,
+          isEmpty,
+          reason: 'insertEvent must not write when analytics opt-out is active',
+        );
+      },
+    );
+
+    test('resumes Supabase write after re-enabling', () async {
+      final builder = _FakeInsertBuilder();
+      final repo = AnalyticsRepository(_FakeClient(builder));
+
+      // Opt out then opt back in.
+      AnalyticsRepository.setEnabled(false);
+      AnalyticsRepository.setEnabled(true);
+      addTearDown(() => AnalyticsRepository.debugResetEnabled());
+
+      await repo.insertEvent(
+        userId: 'user-abc',
+        event: const AnalyticsEvent.onboardingCompleted(
+          fitnessLevel: 'beginner',
+          trainingFrequency: 3,
+        ),
+        platform: 'android',
+        appVersion: '1.0.0',
+      );
+
+      expect(
+        builder.insertedRows,
+        hasLength(1),
+        reason: 're-enabling analytics must restore insert behaviour',
+      );
+    });
   });
 }
