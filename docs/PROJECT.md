@@ -478,15 +478,67 @@ renumbering.
     Until shipped, the workaround is setting `Site URL` to any HTTPS
     domain so the post-confirm landing reads as "you're done, close
     this tab" rather than "localhost: connection refused".
+  - **Compliance follow-ups (LGPD/GDPR, post legal-pass PRs #305 + #308 + #309).**
+    The May–Jun 2026 legal pass shipped policy copy (#305), portability
+    in-app JSON export (#308), and the 4 consent UI surfaces — signup
+    age gate, bodyweight + gender opt-in, analytics opt-out (#309).
+    What's left to turn the policy's stated commitments into deliverables:
+    1. **`dpo@repsaga.app` email alias** — PR #305 §12 names Caio
+       Lacerda as DPO/Encarregado at this address. The alias must
+       actually resolve (forward to primary inbox) before any LGPD
+       Art. 41 rights request can be honored. Blocked on `repsaga.app`
+       domain registration above. **Critical.**
+    2. **LGPD Art. 7 IX legitimate-interest balancing memo** — one-page
+       internal doc covering: processing purposes (auth, workout sync,
+       aggregate analytics) · mitigations applied (no third-party
+       enrichment, no PII in event payloads, deletion-cascade on
+       account close, opt-out toggle in Profile) · data-subject impact
+       assessment. PR #305 §4a says "balancing test documented and
+       available on request" — must exist if ANPD asks. Store wherever
+       Caio keeps internal compliance docs (suggested: a private repo
+       or password manager note — NOT in this public repo). **Critical.**
+    3. **Backup retention SLA verification** — confirm hosted Supabase
+       project's actual PITR / backup window matches PR #305 §7's
+       "30 days" claim. Check Dashboard → Project Settings → Database.
+       If longer, hedge the policy text in a tiny follow-up PR. Free
+       tier is 7 days; paid tiers can be up to 30. **Important.**
+    4. **`#age` deep-link anchor support in `LegalDocScreen`** — PR
+       #309 added two side-by-side signup links: "Privacy Policy" →
+       `/privacy-policy` and "Terms of Service" → `/terms-of-service`.
+       Today both land at the top of each doc. Wire the markdown
+       renderer to honor `#age` anchors so taps jump to Privacy §8 /
+       ToS §3 directly. Small. **Nice-to-have.**
+    5. **Existing-user gender consent backfill** — Phase 29 (PR #251)
+       collected `profiles.gender` without an opt-in surface (editor
+       was deferred until #309). For any user with `gender IS NOT NULL`
+       AND `gender_consent_enabled = false`: either (a) auto-grant
+       consent on next sign-in (assumes prior collection was implicit
+       consent through profile edit), or (b) one-shot disclosure dialog
+       offering to clear. Low signal — likely zero affected users in
+       practice since the editor itself was deferred until #309. Audit
+       hosted DB to confirm before deciding. **Nice-to-have.**
+    6. **Existing-user age-confirmation backfill** — current users
+       signed up before PR #309 shipped the 18+ checkbox. New signups
+       are gated, existing accounts were never asked. One-shot
+       confirmation prompt on next sign-in would close this gap.
+       LGPD Art. 14 technically requires it for any active user the
+       service believes might be under 18, but for adult-leaning
+       fitness app the practical risk is low. **Nice-to-have.**
 
 **Scope expansion candidates** (decide closer to launch):
 - App icon redesign — direction decision was deferred from v1.1.
 - Push notifications — if telemetry / product direction calls for it.
-- Data export (CSV / JSON) — if competitive / regulatory pressure
-  appears.
+- ~~Data export (CSV / JSON)~~ — DONE in PR #308 (JSON-only, in-app via
+  Manage Data → Export my data). Closes LGPD Art. 18 V / GDPR Art. 20
+  portability. CSV variant could ship in v1.1 if Hevy-style spreadsheet
+  consumers demand it.
 - Security review pass — penetration / RLS audit before public release.
 - Store assets — screenshots, feature graphic, listing copy in pt-BR
   + en.
+- **Sentry breadcrumbs on profile-write paths** — original May 2026
+  auth-remediation audit's "PR #5", never started. Operational
+  observability for the profile / consent write paths added in #309.
+  Not compliance-driven; ship if Sentry signal is noisy post-launch.
 
 ---
 
