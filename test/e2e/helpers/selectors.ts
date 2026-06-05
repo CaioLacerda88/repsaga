@@ -829,6 +829,22 @@ export const MANAGE_DATA = {
 // ---------------------------------------------------------------------------
 export const BODYWEIGHT_CONSENT = {
   /**
+   * BodyweightRow tappable row on ProfileSettingsScreen.
+   *
+   * GenderRow / BodyweightRow both place Semantics(identifier:) INSIDE the
+   * InkWell as a content wrapper, not wrapping the InkWell itself. The
+   * flt-semantics-identifier CSS selector therefore targets a passive group
+   * node that does not receive pointer events — clicks on it do not reach the
+   * InkWell's hit-test path (cluster: semantics-identifier-pair-rule).
+   *
+   * The InkWell(onTap:) is auto-exposed as role=button in the Flutter web AOM
+   * with a computed accessible name that merges the title Text children. Use a
+   * role+name selector on the InkWell instead.
+   *
+   * Title ARB key: `profileBodyweightLabel` = "Body weight" (en).
+   */
+  row: 'role=button[name*="Body weight"]',
+  /**
    * "Save with consent" FilledButton in the body-weight consent dialog.
    * Tapping this flips bodyweightConsentProvider to true and proceeds with
    * the upsert. Use .first() if multiple button nodes exist (CanvasKit can
@@ -887,9 +903,16 @@ export const GENDER_EDITOR = {
   sheet: '[flt-semantics-identifier="profile-gender-sheet"]',
   /**
    * GenderRow tappable row on ProfileSettingsScreen.
-   * Semantics(identifier: 'profile-gender-row').
+   *
+   * GenderRow places Semantics(identifier: 'profile-gender-row') INSIDE the
+   * InkWell as a content wrapper, not wrapping the InkWell. The identifier CSS
+   * selector targets a passive group node — clicks on it do not reach the
+   * InkWell's hit-test path (cluster: semantics-identifier-pair-rule).
+   *
+   * The InkWell(onTap:) is auto-exposed as role=button in the Flutter web AOM.
+   * Use a role+name selector instead. Title ARB key: `genderLabel` = "Gender".
    */
-  row: '[flt-semantics-identifier="profile-gender-row"]',
+  row: 'role=button[name*="Gender"]',
   /**
    * One-time consent banner inside the sheet.
    * Semantics(identifier: 'profile-gender-consent-banner').

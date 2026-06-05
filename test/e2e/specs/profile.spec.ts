@@ -435,8 +435,11 @@ test.describe('Profile — bodyweight consent dialog', { tag: '@smoke' }, () => 
     page,
   }) => {
     // 1. Tap the bodyweight row to open the editor sheet.
-    await page.locator('[flt-semantics-identifier="profile-bodyweight-row"]').first().scrollIntoViewIfNeeded();
-    await page.locator('[flt-semantics-identifier="profile-bodyweight-row"]').first().click();
+    //    Use BODYWEIGHT_CONSENT.row (role=button selector) — the Semantics
+    //    identifier is inside the InkWell, not wrapping it, so the CSS
+    //    attribute selector targets a passive node (cluster: semantics-identifier-pair-rule).
+    await page.locator(BODYWEIGHT_CONSENT.row).first().scrollIntoViewIfNeeded();
+    await page.locator(BODYWEIGHT_CONSENT.row).first().click();
 
     // 2. Sheet is open — assert the input is visible.
     await expect(
