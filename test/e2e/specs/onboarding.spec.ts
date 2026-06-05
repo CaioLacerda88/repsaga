@@ -17,7 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import { login, loginExpectingOnboarding, logout } from '../helpers/auth';
-import { flutterFill } from '../helpers/app';
+import { flutterFill, waitForAppReady } from '../helpers/app';
 import { AUTH, NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
@@ -355,5 +355,143 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 5_000,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding — fresh-signup end-to-end (regression)
+//
+// Drives the actual app signup form (NOT Admin API pre-provisioning) through
+// the full signup → onboarding → /home arc in a SINGLE continuous session.
+//
+// WHY this block exists and differs from the 'Onboarding' block above:
+//   The pre-provisioned `smokeOnboarding` user has its `auth.users` row
+//   committed at global-setup time, so its JWT token chain is stable by
+//   the time any test runs. The 42501 RLS race that caused the five-PR
+//   fix-wave (PR #299–#312) is a fresh-signup race: a newly-created
+//   `auth.users` row reaches `saveOnboardingProfile` within the same
+//   session that created the row, before certain Postgres triggers / RLS
+//   policies see the committed user. No pre-provisioned user can exercise
+//   that window — only a user created mid-test via the real app signup form
+//   can hit it.
+//
+// What this pins:
+//   (a) The full signup form contract — toggle, fill, age-gate checkbox
+//       (PR #309: onPressed:null until ticked), tap Sign Up.
+//   (b) Immediate routing to /onboarding for a fresh account (no profile
+//       → `handle_new_user` trigger creates row with NULL onboarded_at).
+//   (c) `saveOnboardingProfile` completes WITHOUT a 42501 snackbar in the
+//       same session that created the auth.users row.
+//   (d) Happy-path: /home reached post-save, onboarded_at stamped.
+//
+// Teardown: ephemeral user deleted via Admin API in afterEach (mirrors
+// auth.spec.ts sign-up happy-path pattern). Best-effort — global teardown
+// also sweeps orphaned test accounts.
+//
+// Race-flushing: run with --repeat-each=10 periodically to flush timing-
+// dependent failures in the 42501 window.
+// ---------------------------------------------------------------------------
+test.describe('Onboarding — fresh-signup end-to-end (regression)', { tag: '@smoke' }, () => {
+  // Captured mid-test so afterEach can clean up even if later assertions fail.
+  let ephemeralUserId: string | null = null;
+
+  test.afterEach(async () => {
+    if (ephemeralUserId) {
+      const admin = getAdminClient();
+      try {
+        await admin.auth.admin.deleteUser(ephemeralUserId);
+      } catch {
+        // Best-effort — global teardown sweeps orphans.
+      }
+      ephemeralUserId = null;
+    }
+  });
+
+  test('should complete signup → onboarding → /home in one session without error snackbar', async ({
+    page,
+  }) => {
+    // Unique-per-run email so parallel workers never collide.
+    // Cluster: e2e-spec-state-leak-across-tests.
+    const ephemeralEmail = `e2e_fresh_signup_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 7)}@test.local`;
+    const password = 'TestPassword123!';
+
+    await page.goto('/');
+    await waitForAppReady(page);
+
+    // Toggle to sign-up mode.
+    await expect(page.locator(AUTH.toggleToSignUp)).toBeVisible({ timeout: 10_000 });
+    await page.locator(AUTH.toggleToSignUp).click();
+    await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+
+    // Fill credentials via real keyboard events (cluster: flutter-web-input-synthetic).
+    await flutterFill(page, AUTH.emailInput, ephemeralEmail);
+    await flutterFill(page, AUTH.passwordInput, password);
+
+    // PR #309 contract: Sign Up CTA has onPressed:null until age checkbox is ticked.
+    await expect(page.locator(AUTH.ageConfirmationCheckbox)).toBeVisible({ timeout: 5_000 });
+    await page.locator(AUTH.ageConfirmationCheckbox).click();
+
+    // Tap Sign Up.
+    await page.locator(AUTH.signUpButton).click();
+
+    // New user → `handle_new_user` trigger creates profile row with
+    // `onboarded_at = NULL` → router routes to /onboarding.
+    // Local Supabase: `enable_confirmations = false` (supabase/config.toml
+    // [auth.email]) → session returned immediately, no email confirm screen.
+    // Cluster: flutter-web-url-assertion — assert content, not URL.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({ timeout: 20_000 });
+
+    // Capture userId NOW so afterEach cleans up even if later assertions fail.
+    // (getUserIdByEmail does a DB lookup — safe to call mid-test.)
+    const admin = getAdminClient();
+    ephemeralUserId = await getUserIdByEmail(admin, ephemeralEmail);
+
+    // Advance to page 2.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Fill profile fields — this is the exact save path that triggered the
+    // 42501 race on fresh signups (PR #299 through #312 fix-wave).
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Fresh Signup User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    // -----------------------------------------------------------------------
+    // Critical regression assertion: no error snackbar must appear.
+    //
+    // Copies verbatim from lib/l10n/app_en.arb and lib/l10n/app_pt.arb:
+    //   failedToSaveProfile        — generic repository / RLS catch-all
+    //   onboardingErrorSessionExpired — 42501 / AuthException typed branch
+    //   onboardingErrorOffline     — NetworkException / TimeoutException branch
+    //
+    // Both locales are checked because the user's locale is not seeded for an
+    // ephemeral account — it defaults to the device locale, which may be pt on
+    // Portuguese-locale CI agents. The 5 s window is tight enough to catch a
+    // snackbar that fires immediately post-save, but we check before the /home
+    // navigation assertion so a save error surfaces the correct failure category
+    // rather than masking behind a nav timeout.
+    // -----------------------------------------------------------------------
+    for (const errorCopy of [
+      // en copies
+      'Failed to save profile. Please try again.',
+      'Your session expired. Sign in again.',
+      "You're offline. Check your connection and try again.",
+      // pt copies
+      'Falha ao salvar perfil. Tente novamente.',
+      'Sua sessão expirou. Faça login novamente.',
+      'Você está offline. Verifique sua conexão e tente novamente.',
+    ]) {
+      await expect(page.locator(`text=${errorCopy}`).first()).not.toBeVisible({
+        timeout: 1_000,
+      });
+    }
+
+    // Happy-path assert. Cluster: flutter-web-url-assertion — content before URL.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
   });
 });
