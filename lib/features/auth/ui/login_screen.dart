@@ -26,6 +26,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isSignUp = false;
   String? _errorMessage;
 
+  // Legal PR 2 — age-confirmation checkbox state. Local to the screen
+  // (transient per signup attempt — no Hive). Required ticked before the
+  // Sign Up CTA enables. Cluster: `data-protection-compliance`.
+  //
+  // Gated on `_isSignUp` so toggling between modes resets the value
+  // (`_toggleMode` clears it explicitly). Login mode ignores the flag
+  // entirely.
+  bool _ageConfirmed = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -38,6 +47,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isSignUp = !_isSignUp;
       _errorMessage = null;
       _passwordController.clear();
+      // Reset on every mode flip so a user toggling Login -> Sign Up
+      // can't accidentally inherit a pre-checked state from a prior
+      // mount or hot reload.
+      _ageConfirmed = false;
     });
   }
 
@@ -341,10 +354,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ],
+                    // Legal PR 2 — age confirmation checkbox.
+                    // Cluster: `data-protection-compliance`. Shown only
+                    // in signup mode. Required ticked before the Sign Up
+                    // CTA enables (LGPD Art. 14 minimum-age compliance,
+                    // mirrored by ToS §3 + Privacy Policy §8).
+                    if (_isSignUp) ...[
+                      const SizedBox(height: 8),
+                      Semantics(
+                        container: true,
+                        identifier: 'auth-age-confirmation',
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          dense: true,
+                          value: _ageConfirmed,
+                          onChanged: isLoading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _ageConfirmed = value ?? false;
+                                  });
+                                },
+                          title: Text(
+                            l10n.signupAgeConfirmation,
+                            style: AppTextStyles.body.copyWith(fontSize: 14),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12, bottom: 8),
+                        child: Semantics(
+                          container: true,
+                          identifier: 'auth-age-confirmation-link',
+                          child: TextButton(
+                            onPressed: isLoading
+                                ? null
+                                : () => context.push('/terms-of-service'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              alignment: Alignment.centerLeft,
+                            ),
+                            child: Text(
+                              l10n.signupAgeConfirmationLink,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.85,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     GradientButton(
                       label: _isSignUp ? l10n.signUp : l10n.logIn,
-                      onPressed: isLoading ? null : _submit,
+                      // Legal PR 2 — gate the CTA on age confirmation in
+                      // signup mode. Passing `null` to onPressed both
+                      // disables the visual state and prevents the tap
+                      // from dispatching, which is the structural guarantee
+                      // (per the architectural rule "structural guarantees
+                      // over runtime flags"). Login mode is unaffected.
+                      onPressed: isLoading || (_isSignUp && !_ageConfirmed)
+                          ? null
+                          : _submit,
                       isLoading: isLoading,
                       semanticsIdentifier: _isSignUp
                           ? 'auth-signup-btn'

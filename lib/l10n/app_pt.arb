@@ -929,5 +929,24 @@
   "historyCardPrCount": "◆ {count, plural, =1{1 PR} other{{count} PRs}}",
   "historyDetailStripXpPart": "+{xp} XP",
   "historyDetailStripPrPart": "{prs, plural, =1{1 PR} other{{prs} PRs}}",
-  "historyWeekLabelCurrent": "Esta semana"
+  "historyWeekLabelCurrent": "Esta semana",
+
+  "sendUsageAnalytics": "Enviar dados de uso",
+  "usageAnalyticsSubtitle": "Ajuda o RepSaga a melhorar. Você pode desativar a qualquer momento.",
+
+  "signupAgeConfirmation": "Confirmo que tenho 18 anos ou mais.",
+  "signupAgeConfirmationLink": "Leia a política de idade mínima.",
+
+  "bodyweightConsentTitle": "Peso corporal é dado sensível.",
+  "bodyweightConsentBody": "Conforme a Política de Privacidade, peso corporal é dado de saúde e requer seu consentimento explícito. É usado apenas para melhorar o cálculo de XP em exercícios de peso corporal. Você pode revogar este consentimento a qualquer momento em Perfil → Configurações → Privacidade.",
+  "bodyweightConsentAccept": "Salvar com consentimento",
+  "bodyweightConsentToggleTitle": "Registro de peso corporal",
+  "bodyweightConsentToggleSubtitle": "Necessário para registrar peso corporal. Desativar não apaga registros anteriores.",
+
+  "genderLabel": "Gênero",
+  "genderConsentBanner": "O gênero ajuda o RepSaga a usar tabelas de tier de força específicas. Este é um dado sensível — você pode escolher \"Outro\" ou deixar em branco para pular.",
+  "genderMale": "Masculino",
+  "genderFemale": "Feminino",
+  "genderOther": "Outro",
+  "genderNotSet": "Não definido"
 }

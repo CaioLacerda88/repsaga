@@ -10,6 +10,7 @@ import '../../../../core/theme/radii.dart';
 import '../../../../features/auth/providers/auth_providers.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../models/profile.dart';
+import '../../providers/bodyweight_consent_provider.dart';
 import '../../providers/profile_providers.dart';
 
 /// Tappable row that displays the user's stored bodyweight and opens
@@ -213,6 +214,21 @@ class _BodyweightEditorSheetState extends ConsumerState<BodyweightEditorSheet> {
       return;
     }
 
+    // Cluster: data-protection-compliance — body weight is sensitive
+    // health data under LGPD Art. 11 / Privacy Policy §7. Before the
+    // FIRST save we surface a consent dialog; the user must explicitly
+    // accept ("Save with consent") or cancel. Subsequent saves (consent
+    // already granted) bypass the dialog. The withdrawal mechanism lives
+    // in Profile → Settings → Privacy as `BodyweightConsentToggle`.
+    final hasConsent = ref.read(bodyweightConsentProvider);
+    if (!hasConsent) {
+      final accepted = await _showConsentDialog(l10n);
+      if (!mounted) return;
+      if (accepted != true) return;
+      await ref.read(bodyweightConsentProvider.notifier).setEnabled(true);
+      if (!mounted) return;
+    }
+
     setState(() => _saving = true);
     try {
       await ref
@@ -227,6 +243,43 @@ class _BodyweightEditorSheetState extends ConsumerState<BodyweightEditorSheet> {
       // Error surfacing left to the global recovery recorder hooked into the
       // repository — the sheet stays open so the user can retry.
     }
+  }
+
+  /// Surfaces the consent dialog. Returns `true` when the user taps
+  /// "Save with consent", `false`/`null` on cancel or dismiss.
+  ///
+  /// Kept inside the State so it can read `context` and `l10n` without
+  /// threading them through the call site. The dialog uses
+  /// `dialogTextButtonStyle` / `dialogFilledButtonStyle` for parity with
+  /// other in-sheet dialogs.
+  Future<bool?> _showConsentDialog(AppLocalizations l10n) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        final theme = Theme.of(dialogCtx);
+        return AlertDialog(
+          backgroundColor: theme.cardTheme.color,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(l10n.bodyweightConsentTitle),
+          content: Text(l10n.bodyweightConsentBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              style: dialogTextButtonStyle,
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              style: dialogFilledButtonStyle,
+              child: Text(l10n.bodyweightConsentAccept),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override

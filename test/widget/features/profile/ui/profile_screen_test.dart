@@ -408,9 +408,10 @@ void main() {
       await tester.pumpWidget(buildTestWidget(profile: profile));
       await tester.pump();
 
-      // Body Weight (Phase 24c), Weekly Goal, Language, Manage Data, Privacy
-      // Policy, and Terms of Service rows each render a chevron icon.
-      expect(find.byIcon(Icons.chevron_right), findsNWidgets(6));
+      // Body Weight (Phase 24c), Gender (Legal PR 2), Weekly Goal, Language,
+      // Manage Data, Privacy Policy, and Terms of Service rows each render a
+      // chevron icon.
+      expect(find.byIcon(Icons.chevron_right), findsNWidgets(7));
     });
 
     // PO-039: The display name must show an edit icon and be tappable, opening
@@ -606,7 +607,11 @@ void main() {
 
         expect(find.text('PRIVACY'), findsOneWidget);
         expect(find.text('Send crash reports'), findsOneWidget);
-        expect(find.byType(SwitchListTile), findsOneWidget);
+        // Legal PR 2 — the PRIVACY section now hosts three toggles:
+        // CrashReports + Analytics + BodyweightConsent.
+        expect(find.byType(SwitchListTile), findsNWidgets(3));
+        expect(find.text('Send usage analytics'), findsOneWidget);
+        expect(find.text('Body weight tracking'), findsOneWidget);
       },
     );
 
@@ -622,8 +627,10 @@ void main() {
         await tester.pumpWidget(buildTestWidget(profile: profile));
         await tester.pump();
 
+        // Locate the crash-reports tile specifically (Legal PR 2 added two
+        // sibling tiles to the PRIVACY section).
         final switchTile = tester.widget<SwitchListTile>(
-          find.byType(SwitchListTile),
+          find.widgetWithText(SwitchListTile, 'Send crash reports'),
         );
         expect(switchTile.value, isTrue);
       },

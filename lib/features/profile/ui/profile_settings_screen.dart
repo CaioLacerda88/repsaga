@@ -14,9 +14,12 @@ import '../../../features/auth/providers/auth_providers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../workouts/providers/share_controller.dart';
 import '../providers/profile_providers.dart';
+import 'widgets/analytics_toggle.dart';
 import 'widgets/avatar_crop_sheet.dart';
+import 'widgets/bodyweight_consent_toggle.dart';
 import 'widgets/bodyweight_row.dart';
 import 'widgets/crash_reports_toggle.dart';
+import 'widgets/gender_row.dart';
 import 'widgets/identity_card.dart';
 import 'widgets/legal_tile.dart';
 import 'widgets/logout_button.dart';
@@ -128,6 +131,22 @@ class ProfileSettingsScreen extends ConsumerWidget {
                 error: (_, _) => const BodyweightRow(profile: null),
               ),
               const SizedBox(height: 24),
+              // Gender section (Legal PR 2 — `data-protection-compliance`).
+              // Sensitive data under LGPD Art. 11 — the editor sheet
+              // surfaces a one-time disclosure banner on first open.
+              Text(
+                l10n.genderLabel,
+                style: AppTextStyles.sectionHeader,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              profileAsync.when(
+                data: (profile) => GenderRow(profile: profile),
+                loading: () => const GenderRow(profile: null),
+                error: (_, _) => const GenderRow(profile: null),
+              ),
+              const SizedBox(height: 24),
               // Weekly goal section
               Semantics(
                 container: true,
@@ -195,6 +214,16 @@ class ProfileSettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const CrashReportsToggle(),
+              // Legal PR 2 — analytics opt-out mounted directly below the
+              // crash-reports toggle so both PRIVACY-section affordances
+              // live together. Mirror of CrashReportsToggle shape.
+              const SizedBox(height: 8),
+              const AnalyticsToggle(),
+              // Legal PR 2 — body-weight sensitive-data consent withdrawal.
+              // The save-site dialog is the opt-in surface; this toggle is
+              // the documented withdrawal mechanism (LGPD Art. 7(3)).
+              const SizedBox(height: 8),
+              const BodyweightConsentToggle(),
               const SizedBox(height: 24),
               // Logout button
               const LogoutButton(),
