@@ -995,7 +995,13 @@ void main() {
         completer.complete('{"schemaVersion":1}');
         await tester.pumpAndSettle();
 
-        verify(() => service.buildJsonExport(any())).called(1);
+        // Behavior — not wiring (CLAUDE.md A2). The user-visible
+        // contract during a double-tap reentry is that exactly ONE
+        // export lands in the share sink. `verify(() => service.build…
+        // ).called(1)` would assert the SAME thing one layer down
+        // (service-invocation count) but pin the wrong contract —
+        // we care about the share-sink result, not the service-call
+        // count.
         expect(sink.calls, hasLength(1));
       });
     });

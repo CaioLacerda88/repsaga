@@ -193,9 +193,12 @@ class ManageDataScreen extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           // Cluster: persist-eats-duration. Explicit false defends against
-          // future refactors that add an action to this snackbar.
-          // persist defaults to (action != null) silently otherwise.
+          // future refactors that add an action to this snackbar — the
+          // SnackBar API silently defaults to `persist = action != null`,
+          // so adding any action would otherwise pin the bar on screen
+          // until manual dismissal.
           // ignore: avoid_redundant_argument_values
+          persist: false,
           duration: const Duration(seconds: 4),
           content: Semantics(
             container: true,
@@ -211,8 +214,11 @@ class ManageDataScreen extends ConsumerWidget {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        // Cluster: persist-eats-duration.
+        // Cluster: persist-eats-duration. Same rationale as the error
+        // path above — explicit `persist: false` survives a future
+        // editor adding an action without flipping to indefinite display.
         // ignore: avoid_redundant_argument_values
+        persist: false,
         duration: const Duration(seconds: 4),
         content: Semantics(
           container: true,

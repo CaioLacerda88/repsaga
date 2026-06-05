@@ -582,5 +582,58 @@ void main() {
       expect(thrown, isA<ExportException>());
       expect((thrown! as ExportException).stage, 'vitality_runs');
     });
+
+    test('serialization failure (non-encodable value in fetched row) tags '
+        'stage == "serialize"', () async {
+      // Stuff a `Duration` into the profile row. The per-stage fetcher
+      // copies the map through `Map<String, dynamic>.from(...)` without
+      // inspecting individual cell types, so every table fetch resolves
+      // successfully. The failure only surfaces at the final
+      // `JsonEncoder.withIndent('  ').convert(envelope)` step —
+      // `Duration` has no `toJson` override and `jsonEncode` throws
+      // `JsonUnsupportedObjectError`. The service's try/catch around
+      // the encoder wraps that as `ExportException(stage: 'serialize',
+      // cause: ...)` so the dev log pinpoints serialize vs a table
+      // fetch even when every row was fetched cleanly.
+      final client = _FakeClient(
+        email: 'serialize@example.com',
+        responses: {
+          'profiles': _TableResponse.maybeSingleMap({
+            'id': 'user-serialize',
+            // Non-encodable value — `jsonEncode` throws on this.
+            'bad_field': const Duration(seconds: 5),
+          }),
+          'workouts': _TableResponse.list(const []),
+          'personal_records': _TableResponse.list(const []),
+          'weekly_plans': _TableResponse.list(const []),
+          'xp_events': _TableResponse.list(const []),
+          'body_part_progress': _TableResponse.list(const []),
+          'exercise_peak_loads': _TableResponse.list(const []),
+          'exercise_peak_loads_by_rep_range': _TableResponse.list(const []),
+          'earned_titles': _TableResponse.list(const []),
+          'backfill_progress': _TableResponse.maybeSingleMap(null),
+          'vitality_runs': _TableResponse.list(const []),
+          'analytics_events': _TableResponse.list(const []),
+        },
+      );
+
+      Object? thrown;
+      try {
+        await _buildService(client).buildJsonExport('user-serialize');
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown, isA<ExportException>());
+      final ex = thrown! as ExportException;
+      expect(ex.stage, 'serialize');
+      // The cause is the underlying JsonUnsupportedObjectError (or a
+      // subclass) — the service preserves it on `.cause` for dev
+      // logging without leaking it to the user-facing message.
+      expect(ex.cause, isNotNull);
+      // The safe user message must NEVER reveal the encoder error.
+      expect(ex.userMessage, isNot(contains('Duration')));
+      expect(ex.userMessage, isNot(contains('JsonUnsupportedObjectError')));
+    });
   });
 }
