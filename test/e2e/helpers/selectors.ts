@@ -796,6 +796,24 @@ export const MANAGE_DATA = {
   historyCleared: '[flt-semantics-identifier="manage-data-history-cleared"]',
   /** SnackBar after successful reset — Semantics(identifier: 'manage-data-account-reset') */
   accountReset: '[flt-semantics-identifier="manage-data-account-reset"]',
+  /**
+   * "Export my data" list tile — Semantics(identifier: 'manage-data-export').
+   * Legal PR 3 — LGPD Art. 18 V / GDPR Art. 20 portability tile in the
+   * YOUR DATA section above the destructive sections.
+   */
+  exportTile: '[flt-semantics-identifier="manage-data-export"]',
+  /**
+   * SnackBar after successful JSON export hand-off to share sheet —
+   * Semantics(identifier: 'manage-data-export-success').
+   * Use .first() — Flutter renders two AOM boundaries per SnackBar.
+   */
+  exportSuccess: '[flt-semantics-identifier="manage-data-export-success"]',
+  /**
+   * SnackBar when JSON export fails —
+   * Semantics(identifier: 'manage-data-export-failed').
+   * Use .first() — Flutter renders two AOM boundaries per SnackBar.
+   */
+  exportFailed: '[flt-semantics-identifier="manage-data-export-failed"]',
 } as const;
 
 // ---------------------------------------------------------------------------
