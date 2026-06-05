@@ -11,6 +11,116 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+### Legal PR 3 — Portability JSON export
+
+Branch: `feat/legal-pr3-portability-json-export`
+
+Closes the hedge declared in PR 1 (#305) Privacy Policy §6 Portability row.
+LGPD Art. 18 V / GDPR Art. 20 portability mechanism delivered in-app via
+Profile → Manage Data → **Export my data**. Generates a JSON file of every
+user-owned table the user has rows in and hands it to the native share sheet
+via `share_plus` (same integration shape as Phase 30b post-session share
+card).
+
+**Cluster references:** `data-protection-compliance` (this PR IS the
+portability mechanism the policy promises); `persist-eats-duration` on the
+success/error snackbar; `permission-handler-web-silent-failure` does NOT
+apply directly (share_plus on web uses `navigator.share`/download fallback,
+no permission_handler dependency).
+
+**Out of scope:** subscription / payment data (Launch Phase paywall ships
+those tables — no rows for any user yet), `account_deletion_events`
+(anonymized aggregate, not tied to user_id), auth.users password hash + JWT
+(secrets, never exported — only id+email exposed at top of JSON).
+
+**JSON shape (top-level keys):**
+- `exportedAt`, `schemaVersion: 1`, `user{id,email}`, `profile`
+- `workouts[]` — denormalized: each workout embeds its `workoutExercises[]`
+  which embeds its `sets[]`
+- `personalRecords[]`, `weeklyPlans[]`, `xpEvents[]`,
+  `bodyPartProgress[]`, `exercisePeakLoads[]`,
+  `exercisePeakLoadsByRepRange[]`, `earnedTitles[]`,
+  `backfillProgress[]` (0-or-1 row), `vitalityRuns[]`, `analyticsEvents[]`
+- `exercises[]` — only slugs referenced by the user's data
+  (`{slug, userCreated}`), NOT the full default library
+
+**Implementation checklist:**
+
+- [x] `lib/core/exceptions/app_exception.dart` — add `ExportException`
+      subtype (sealed AppException). Holds the original cause + stage label
+      so the snackbar can show a stable user-safe message while the dev
+      log keeps the underlying error.
+- [x] `lib/features/profile/data/data_export_service.dart` — new
+      `DataExportService` with `Future<String> buildJsonExport(String
+      userId)`. Constructor takes `SupabaseClient` + `Clock` seam (for
+      `exportedAt` determinism). Queries each user-owned table directly,
+      assembles a `Map<String, dynamic>`, returns
+      `JsonEncoder.withIndent('  ').convert(map)`. Per-stage try/catch
+      wraps each table fetch and rethrows as `ExportException(stage:
+      'workouts', cause: ...)` so partial failures surface where they
+      happened.
+- [x] `lib/features/profile/providers/data_export_providers.dart` — new
+      `dataExportServiceProvider` (plain `Provider<DataExportService>`)
+      + `exportJobProvider`
+      (`NotifierProvider<ExportJobController, AsyncValue<ExportResult>>`).
+      `ExportResult` carries the generated `XFile` path + bytes so the
+      caller can hand it to `Share.shareXFiles`. The controller manages
+      idle → loading → data/error transitions.
+- [x] `lib/features/profile/ui/manage_data_screen.dart` — new "YOUR DATA"
+      section above "WORKOUT HISTORY"; "Export my data" tile +
+      `_showExportSheet` method that runs the export through the provider
+      and dispatches to share_plus. Loading dialog mirrors the
+      delete-account pattern (PopScope + CircularProgressIndicator). Error
+      snackbar uses `ExportException.userMessage`; success snackbar uses
+      a new `dataExportSuccess` ARB key. `persist: false` on the snackbar
+      builder where applicable.
+- [x] `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` — new keys:
+      `yourDataSection`, `exportMyData`, `exportMyDataSubtitle`,
+      `dataExportSuccess`, `dataExportFailed{message}`,
+      `dataExportPreparing`. en+pt parity.
+- [x] `assets/legal/privacy_policy.md` + `docs/privacy_policy.md` —
+      update §6 Portability row only: replace the email-15-business-days
+      hedge with the in-app path. Access row stays email-based (intentional
+      asymmetry — Access = human-readable summary; Portability = machine-
+      readable export).
+- [x] `test/unit/features/profile/data/data_export_service_test.dart` —
+      mocktail-driven `SupabaseClient` builder mock. Cases:
+      - empty user → valid skeleton with `schemaVersion: 1`, empty arrays
+        for every collection, `user.id` populated
+      - rich user → populated collections; `exercises[]` contains ONLY
+        slugs that appear in the user's workouts (not full default library)
+      - network error mid-export → propagates as `ExportException` with
+        `stage` field populated
+      - exported JSON is valid (`jsonDecode` round-trip succeeds)
+      - pretty-printed (contains 2-space indentation)
+- [x] `test/widget/features/profile/ui/manage_data_screen_test.dart` —
+      extend existing harness with `MockDataExportService`. Cases:
+      - "Your data" section + "Export my data" tile rendered
+      - tap → loading spinner shown → share sink invoked with XFile whose
+        filename matches `repsaga_export_YYYY-MM-DD.json`
+      - on success: success snackbar rendered
+      - on `ExportException`: error snackbar with safe user message
+        (no raw exception body)
+- [x] Run `make gen` (l10n regen — app_localizations_en.dart / _pt.dart
+      regenerate from the ARB additions).
+
+**Verification:**
+
+- [x] `dart format .` clean
+- [x] `dart analyze --fatal-infos` clean — 0 issues
+- [x] New unit tests green (7/7 in
+      `test/unit/features/profile/data/data_export_service_test.dart`)
+- [x] New widget tests green (5 new export tests in the existing
+      `manage_data_screen_test.dart` group; full file: 29/29)
+- [x] Full `flutter test` baseline: 3465 passed, 1 skipped, 25 failed
+      — identical to the PR #307 baseline (the 25 failures are all in
+      `test/integration/*` requiring a live local Supabase). Not
+      regressions.
+- [ ] PR body includes
+      `**QA pass pending — final coverage + E2E run after code review.**`
+
+---
+
 ### Fix — manage-data compliance: avatar storage leak + exercises FK + reset-all active workouts
 
 Branch: `fix/manage-data-avatar-storage-leak-and-cascade`

@@ -902,6 +902,23 @@
   "@prsRoutinesKept": { "description": "Delete history: second dialog content" },
   "workoutHistorySection": "WORKOUT HISTORY",
   "@workoutHistorySection": { "description": "Section header: workout history" },
+  "yourDataSection": "YOUR DATA",
+  "@yourDataSection": { "description": "Legal PR 3 — section header above the Export my data tile on Manage Data. Distinct from the destructive 'DANGER' section below so the LGPD Art. 18 V / GDPR Art. 20 portability affordance reads as a benign read-only operation, not a wipe action." },
+  "exportMyData": "Export my data",
+  "@exportMyData": { "description": "Legal PR 3 — Manage Data tile title. Triggers the in-app JSON export the Privacy Policy §6 Portability row promises (Profile → Manage Data → Export my data → native share sheet)." },
+  "exportMyDataSubtitle": "Download a JSON file of your account data.",
+  "@exportMyDataSubtitle": { "description": "Legal PR 3 — subtitle on the Export my data tile. Sets the expectation: a single JSON file, not a multi-format ZIP, delivered via the OS share sheet." },
+  "dataExportPreparing": "Preparing your data export…",
+  "@dataExportPreparing": { "description": "Legal PR 3 — loading-dialog body shown while the export aggregator fetches every user-owned table and serializes the JSON. The aggregation queries hit several tables and can take 2-5 seconds for users with rich history." },
+  "dataExportSuccess": "Data export ready",
+  "@dataExportSuccess": { "description": "Legal PR 3 — success snackbar shown when the JSON export has been handed to the native share sheet. The share sheet itself surfaces the file picker / target chooser; the snackbar simply confirms the export step completed." },
+  "dataExportFailed": "Failed to export data: {message}",
+  "@dataExportFailed": {
+    "description": "Legal PR 3 — error snackbar shown when the JSON export pipeline fails (network error, serialization failure, share-plus platform error). The {message} placeholder is ExportException.userMessage — a safe, generic surface that never leaks the underlying Postgres / network detail to the UI (the dev log + Sentry still see the raw cause).",
+    "placeholders": {
+      "message": { "type": "String", "example": "We couldn't prepare your data export. Please try again." }
+    }
+  },
   "dangerSection": "DANGER",
   "@dangerSection": { "description": "Section header: danger" },
   "privacySection": "PRIVACY",

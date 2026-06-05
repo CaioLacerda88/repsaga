@@ -166,9 +166,20 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       return;
     }
 
-    // Page 1 -> Page 2.
+    // Page 1 -> Page 2. Mirror the wait-then-click discipline of test 109
+    // (line 126) — under CanvasKit + GitHub Actions resource contention,
+    // the button can be visually painted before its AOM hit-target is
+    // wired, so a bare `.click()` lands on a not-yet-clickable node and
+    // the next `expect(profileSetupHeadline).toBeVisible` fails because
+    // the navigation never fired. The Manage Data export test (MD-013)
+    // exposed the same Flutter-web-timing class on this CI run.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
     await page.locator(ONBOARDING.getStartedButton).click();
-    await expect(page.locator(ONBOARDING_FLOW.profileSetupHeadline)).toBeVisible({
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupHeadline),
+    ).toBeVisible({
       timeout: 10_000,
     });
 
@@ -181,7 +192,10 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     // Submit.
     await page.locator(ONBOARDING.letsGoButton).click();
 
-    // Should navigate to /home.
+    // Should navigate to /home. Cluster:
+    // flutter-web-url-assertion — assert on destination-content
+    // visibility (NAV.homeTab) before the URL string assertion, since
+    // Flutter web hash routing can lag the AOM mount.
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
     expect(page.url()).toContain('/home');
   });
