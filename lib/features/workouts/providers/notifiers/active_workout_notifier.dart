@@ -1024,7 +1024,15 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
-  /// Fill all incomplete sets after the last completed set with its values.
+  /// Fill ALL incomplete sets with the most-recent completed set's values.
+  ///
+  /// Option C (First-Complete Trigger, `fill-remaining-gating-mockup-v1.html`
+  /// §3): the fill is non-directional — every `!isCompleted` set is filled,
+  /// whether its `setNumber` is above OR below the completed set that supplies
+  /// the values. The source values come from the most recent completed set
+  /// (highest `setNumber` among completed). This unblocks mid-session restart,
+  /// failed-set-1, and out-of-order logging, where the user ticks the last (or
+  /// a middle) set first and expects the earlier sets to back-fill.
   Future<void> fillRemainingSets(String workoutExerciseId) async {
     final current = state.value;
     if (current == null) return;
@@ -1033,7 +1041,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       exercises: current.exercises.map((e) {
         if (e.workoutExercise.id != workoutExerciseId) return e;
 
-        // Find the last completed set (highest setNumber).
+        // Source values: the most recent completed set (highest setNumber).
         ExerciseSet? lastCompleted;
         for (final s in e.sets) {
           if (s.isCompleted) {
@@ -1047,9 +1055,12 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
 
         return e.copyWith(
           sets: e.sets.map((s) {
-            if (!s.isCompleted && s.setNumber > lastCompleted!.setNumber) {
+            // Fill every incomplete set regardless of position — the old
+            // `setNumber > lastCompleted.setNumber` directional guard was the
+            // bug that hid earlier sets from back-filling.
+            if (!s.isCompleted) {
               return s.copyWith(
-                weight: lastCompleted.weight,
+                weight: lastCompleted!.weight,
                 reps: lastCompleted.reps,
                 isCompleted: true,
               );

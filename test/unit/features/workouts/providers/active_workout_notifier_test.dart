@@ -2753,49 +2753,181 @@ void main() {
       expect(sets[1].weight, 70.0);
     });
 
-    test('does not fill incomplete sets before the last completed set', () async {
-      // set 1: completed, set 2: incomplete, set 3: completed
-      // fillRemainingSets should NOT fill set 2 (setNumber < lastCompleted)
-      final initial = makeState(exerciseCount: 1, setsPerExercise: 3);
-      final container = makeContainer(initial);
-      addTearDown(container.dispose);
-      await container.read(activeWorkoutProvider.future);
+    // Option C (First-Complete Trigger): fillRemainingSets fills EVERY
+    // incomplete set, regardless of whether its setNumber is above or below
+    // the completed set that supplies the values. The source values come from
+    // the most-recent completed set (highest setNumber among completed).
 
-      final weId = initial.exercises.first.workoutExercise.id;
-      final sets = initial.exercises.first.sets;
+    test(
+      'completing ONLY the last set back-fills earlier incomplete sets',
+      () async {
+        // sets 1, 2 incomplete; set 3 completed → fill 1..2 from set 3's values.
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 3);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
 
-      // Set 1: completed with weight 50
-      container
-          .read(activeWorkoutProvider.notifier)
-          .updateSet(weId, sets[0].id, weight: 50.0);
+        final weId = initial.exercises.first.workoutExercise.id;
+        final sets = initial.exercises.first.sets;
 
-      // Set 2: mark incomplete (toggle off)
-      container
-          .read(activeWorkoutProvider.notifier)
-          .completeSet(weId, sets[1].id);
-      // sets from factory start isCompleted: true, so toggle makes it false
+        // Sets 1 and 2: toggle to incomplete (factory starts them completed).
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[0].id);
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[1].id);
+        // Set 3: the only completed set — give it distinct values.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .updateSet(weId, sets[2].id, weight: 80.0, reps: 4);
 
-      // Set 3: completed with weight 80 (remains completed from factory)
-      container
-          .read(activeWorkoutProvider.notifier)
-          .updateSet(weId, sets[2].id, weight: 80.0);
+        container.read(activeWorkoutProvider.notifier).fillRemainingSets(weId);
 
-      container.read(activeWorkoutProvider.notifier).fillRemainingSets(weId);
+        final result = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        // Earlier sets back-filled from set 3 — the case that was broken today.
+        expect(result[0].weight, 80.0);
+        expect(result[0].reps, 4);
+        expect(result[0].isCompleted, isTrue);
+        expect(result[1].weight, 80.0);
+        expect(result[1].reps, 4);
+        expect(result[1].isCompleted, isTrue);
+        // Set 3 (the source) is unchanged.
+        expect(result[2].weight, 80.0);
+        expect(result[2].reps, 4);
+      },
+    );
 
-      final result = container
-          .read(activeWorkoutProvider)
-          .value!
-          .exercises
-          .first
-          .sets;
-      // Set 2 should NOT be filled — its setNumber (2) < lastCompleted setNumber (3)
-      expect(result[1].weight, isNot(80.0));
-      // Set 2's weight should remain whatever it was before (factory default 60.0)
-      expect(result[1].weight, 60.0);
-      // Set 2 must remain incomplete — if the setNumber guard is removed, this
-      // assertion catches the regression.
-      expect(result[1].isCompleted, isFalse);
-    });
+    test(
+      'completing ONLY the first set forward-fills later incomplete sets',
+      () async {
+        // set 1 completed; sets 2, 3 incomplete → fill 2..3 from set 1.
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 3);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final sets = initial.exercises.first.sets;
+
+        // Set 1: the only completed set — distinct values.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .updateSet(weId, sets[0].id, weight: 100.0, reps: 5);
+        // Sets 2 and 3: toggle to incomplete.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[1].id);
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[2].id);
+
+        container.read(activeWorkoutProvider.notifier).fillRemainingSets(weId);
+
+        final result = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        expect(result[1].weight, 100.0);
+        expect(result[1].reps, 5);
+        expect(result[1].isCompleted, isTrue);
+        expect(result[2].weight, 100.0);
+        expect(result[2].reps, 5);
+        expect(result[2].isCompleted, isTrue);
+      },
+    );
+
+    test(
+      'completing a MIDDLE set fills incomplete sets on both sides',
+      () async {
+        // set 1 incomplete, set 2 completed, set 3 incomplete → fill 1 and 3
+        // from set 2's values (back-fill AND forward-fill in one action).
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 3);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final sets = initial.exercises.first.sets;
+
+        // Set 1 and 3: toggle to incomplete.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[0].id);
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[2].id);
+        // Set 2: the only completed set — distinct values.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .updateSet(weId, sets[1].id, weight: 70.0, reps: 6);
+
+        container.read(activeWorkoutProvider.notifier).fillRemainingSets(weId);
+
+        final result = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        // Set 1 back-filled, set 3 forward-filled — both from set 2.
+        expect(result[0].weight, 70.0);
+        expect(result[0].reps, 6);
+        expect(result[0].isCompleted, isTrue);
+        expect(result[2].weight, 70.0);
+        expect(result[2].reps, 6);
+        expect(result[2].isCompleted, isTrue);
+        // Middle source set unchanged.
+        expect(result[1].weight, 70.0);
+        expect(result[1].reps, 6);
+      },
+    );
+
+    test(
+      'uses the MOST RECENT completed set (highest setNumber) as the source',
+      () async {
+        // Two completed sets with different values + one incomplete set. The
+        // incomplete set must take the HIGHER-setNumber completed set's values.
+        final initial = makeState(exerciseCount: 1, setsPerExercise: 3);
+        final container = makeContainer(initial);
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        final weId = initial.exercises.first.workoutExercise.id;
+        final sets = initial.exercises.first.sets;
+
+        // Set 1 completed @ 50, set 2 completed @ 90 (most recent), set 3 open.
+        container
+            .read(activeWorkoutProvider.notifier)
+            .updateSet(weId, sets[0].id, weight: 50.0, reps: 8);
+        container
+            .read(activeWorkoutProvider.notifier)
+            .updateSet(weId, sets[1].id, weight: 90.0, reps: 3);
+        container
+            .read(activeWorkoutProvider.notifier)
+            .completeSet(weId, sets[2].id); // toggle set 3 to incomplete
+
+        container.read(activeWorkoutProvider.notifier).fillRemainingSets(weId);
+
+        final result = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets;
+        // Set 3 filled from set 2 (the highest-setNumber completed), not set 1.
+        expect(result[2].weight, 90.0);
+        expect(result[2].reps, 3);
+        expect(result[2].isCompleted, isTrue);
+      },
+    );
   });
 
   group('ActiveWorkoutNotifier — reorderExercise', () {

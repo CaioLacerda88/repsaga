@@ -11,6 +11,51 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+## Fill Remaining UX — Option C (First-Complete Trigger)
+
+**Branch:** `fix/fill-remaining-out-of-order`
+**Reference:** Per PROJECT.md §2 backlog / WIP "Queued" item 2 / locked design
+`docs/fill-remaining-gating-mockup-v1.html` §3 "Implementation Notes (Option C)".
+
+**The bug:** `_hasFillableSets` only returns true when an incomplete set has
+`setNumber > lastCompletedNumber` (directional). Completing ONLY the last set
+hides "Fill Remaining". Breaks mid-session restart, failed-set-1, and
+out-of-order logging.
+
+**"Most recent completed set" decision:** Keep the EXISTING selection intent —
+the most recent completed set = highest `setNumber` among completed sets. The
+old code already selected by `s.setNumber > lastCompleted.setNumber`. Only the
+*target filter* changes (drop the directional constraint on which sets get
+filled); the *source value* selection stays "highest-setNumber completed".
+
+### Checklist
+
+- [x] Branch created from main
+- [x] WIP section written (this)
+- [x] Grep all usages of `fillRemaining` / `fillRemainingSets` /
+      `_hasFillableSets` / `filledRemainingSets` across lib + test
+- [x] `_hasFillableSets` (exercise_card.dart): `any(isCompleted) && any(!isCompleted)`
+- [x] `fillRemainingSets` (active_workout_notifier.dart): fill ALL `!isCompleted`
+      from highest-setNumber completed set's weight+reps
+- [x] Button label → `l10n.fillRemainingSetsCount(count)` ("Preencher restantes (2 séries)")
+- [x] New parameterized ARB key (en + pt)
+- [x] `fillRemainingSetsSemantics` ARB string updated (en + pt)
+- [x] `make gen` regen l10n
+- [x] Notifier tests: last-only / first-only / middle-only expanded contract
+- [x] Widget tests: button visible out-of-order last-set-only; label count text
+- [x] `dart format .` + `dart analyze` (0 issues) + `flutter test` touched files
+- [x] Commit on branch (no push / no PR)
+
+### Files to modify
+
+- `lib/features/workouts/ui/widgets/exercise_card.dart` (predicate + label + count arg)
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` (filter)
+- `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` (new key + semantics edit)
+- `test/unit/features/workouts/providers/active_workout_notifier_test.dart`
+- `test/widget/features/workouts/ui/active_workout_fill_test.dart`
+
+---
+
 ## Session checkpoint — 2026-06-08 (pre-compact handoff)
 
 **Main HEAD:** `52bf93e3` (post Phase 34 closeout #313).

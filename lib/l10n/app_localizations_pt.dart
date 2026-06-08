@@ -833,7 +833,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get addSet => 'Adicionar Série';
 
   @override
-  String get fillRemaining => 'Preencher restantes';
+  String fillRemainingSetsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries',
+      one: '1 série',
+    );
+    return 'Preencher restantes ($_temp0)';
+  }
 
   @override
   String get filledRemainingSets => 'Séries restantes preenchidas';
@@ -1660,7 +1668,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get fillRemainingSetsSemantics =>
-      'Preencher séries restantes com os últimos valores';
+      'Preencher todas as séries não concluídas com os últimos valores';
 
   @override
   String get addExerciseToWorkoutSemantics => 'Adicionar exercício ao treino';

@@ -1538,11 +1538,11 @@ abstract class AppLocalizations {
   /// **'Add Set'**
   String get addSet;
 
-  /// Fill remaining sets button
+  /// Fill remaining sets button with the count of sets that will be filled
   ///
   /// In en, this message translates to:
-  /// **'Fill remaining'**
-  String get fillRemaining;
+  /// **'Fill remaining ({count, plural, =1{1 set} other{{count} sets}})'**
+  String fillRemainingSetsCount(int count);
 
   /// Snackbar: filled remaining sets
   ///
@@ -2883,7 +2883,7 @@ abstract class AppLocalizations {
   /// Accessibility: fill remaining sets button
   ///
   /// In en, this message translates to:
-  /// **'Fill remaining sets with last completed values'**
+  /// **'Fill all uncompleted sets with last completed values'**
   String get fillRemainingSetsSemantics;
 
   /// Accessibility: add exercise FAB

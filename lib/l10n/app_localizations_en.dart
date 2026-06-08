@@ -826,7 +826,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addSet => 'Add Set';
 
   @override
-  String get fillRemaining => 'Fill remaining';
+  String fillRemainingSetsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sets',
+      one: '1 set',
+    );
+    return 'Fill remaining ($_temp0)';
+  }
 
   @override
   String get filledRemainingSets => 'Filled remaining sets';
@@ -1646,7 +1654,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fillRemainingSetsSemantics =>
-      'Fill remaining sets with last completed values';
+      'Fill all uncompleted sets with last completed values';
 
   @override
   String get addExerciseToWorkoutSemantics => 'Add exercise to workout';
