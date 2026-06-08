@@ -446,7 +446,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         obscureText: true,
                         textInputAction: TextInputAction.done,
                         prefixIcon: Icons.lock_outlined,
-                        onFieldSubmitted: (_) => _submit(),
+                        // Gate the keyboard "Done" submit on the SAME
+                        // conditions the Sign Up CTA uses
+                        // (`isLoading || (_isSignUp && !_ageConfirmed)`).
+                        // The confirm field only exists in signup mode, so
+                        // `(!_ageConfirmed || isLoading)` is the equivalent
+                        // disable predicate here. Without this, pressing
+                        // "Done" bypassed the age-gate structural guarantee
+                        // and let a user sign up with the checkbox unticked.
+                        onFieldSubmitted: (!_ageConfirmed || isLoading)
+                            ? null
+                            : (_) => _submit(),
                         semanticsIdentifier: 'auth-confirm-password-input',
                         autofillHints: const [AutofillHints.newPassword],
                       ),
@@ -736,6 +746,11 @@ class _AgeGateLabel extends StatelessWidget {
         alignment: PlaceholderAlignment.middle,
         child: Semantics(
           container: true,
+          // Cluster: `semantics-button-missing`. Without `button: true` the
+          // outer Semantics node is passive on Flutter web's AOM, so
+          // Playwright taps land but don't forward to the inner InkWell —
+          // the inline legal links would be untappable in E2E.
+          button: true,
           identifier: identifier,
           child: TextButton(
             onPressed: enabled ? onTap : null,

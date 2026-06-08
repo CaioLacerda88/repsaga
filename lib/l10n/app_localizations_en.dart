@@ -3067,10 +3067,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Helps RepSaga improve. You can disable any time.';
 
   @override
-  String get signupAgeConfirmation =>
-      'I confirm I am 18 years of age or older.';
-
-  @override
   String get signupAgeConfirmationLead => 'I\'m 18+ and agree to the';
 
   @override

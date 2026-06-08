@@ -148,6 +148,36 @@ void main() {
       expect(find.text('Passwords do not match'), findsNothing);
     });
 
+    testWidgets(
+      'should show mismatch error when password is changed after confirm '
+      'was typed',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await enterSignupMode(tester);
+
+        // Password + confirm initially match.
+        await fillField(tester, 'auth-display-name-input', 'Alice');
+        await fillField(tester, 'auth-email-input', 'a@b.com');
+        await fillField(tester, 'auth-password-input', 'secret1!');
+        await fillField(tester, 'auth-confirm-password-input', 'secret1!');
+
+        // Now overwrite ONLY the password field with a different value, leaving
+        // the confirm field untouched. `_validateConfirmPassword` must read the
+        // password controller's text lazily at validate-time and surface the
+        // mismatch.
+        await fillField(tester, 'auth-password-input', 'changed9!');
+
+        await tester.tap(find.byType(Checkbox));
+        await tester.pump();
+        await tester.ensureVisible(semanticsId('auth-signup-btn'));
+        await tester.pump();
+        await tester.tap(semanticsId('auth-signup-btn'));
+        await tester.pump();
+
+        expect(find.text('Passwords do not match'), findsOneWidget);
+      },
+    );
+
     testWidgets('empty display name shows the required error on submit', (
       tester,
     ) async {

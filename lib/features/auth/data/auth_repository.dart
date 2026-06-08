@@ -84,6 +84,10 @@ class AuthRepository extends BaseRepository {
     final Map<String, dynamic>? signUpData =
         (locale == null && displayName == null)
         ? null
+        // Use `if (x != null)` collection-if rather than the newer null-aware
+        // map value syntax (`'locale': ?locale`): build_runner's bundled
+        // analyzer on CI can't parse the latter, so the freezed/json_serializable
+        // generators fail at the `auth_repository.dart` parse step.
         : <String, dynamic>{
             // ignore: use_null_aware_elements
             if (locale != null) 'locale': locale,
