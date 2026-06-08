@@ -222,6 +222,14 @@ export async function completeSet(
 
   await expect(checkboxes.nth(setIndex)).toBeVisible({ timeout: 5_000 });
 
+  // Order-agnostic completion baseline: `markSetDone` (incomplete) and
+  // `setCompleted` (completed) are distinct identifiers, so the index among
+  // ALL sets does NOT map onto `completed.nth(setIndex)` unless completion is
+  // sequential. Capture the completed count up front and assert it grows by
+  // one — this is correct whether the caller completes set 0 (every existing
+  // caller) or an out-of-order set (e.g. only the last of three).
+  const initialCompletedCount = await completed.count();
+
   // Helper: dismiss the rest timer overlay if visible. The overlay covers the
   // entire screen and intercepts all clicks, so we must dismiss it before any
   // subsequent interaction.
@@ -267,9 +275,9 @@ export async function completeSet(
   // Uses .or() to check both the nth "Set completed" checkbox AND a single
   // "Set completed" (when there's only one completed set on screen, nth(0)).
   async function isSetCompleted(): Promise<boolean> {
-    return completed.nth(setIndex)
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
+    // A set toggled to completed iff the completed-checkbox count grew. This
+    // is order-agnostic (see initialCompletedCount above).
+    return (await completed.count()) > initialCompletedCount;
   }
 
   // Attempt 1: Click the checkbox. The rest timer may appear after the click.
@@ -329,7 +337,9 @@ export async function completeSet(
     }
   }
 
-  await expect(completed.nth(setIndex)).toBeVisible({ timeout: 10_000 });
+  await expect(completed).toHaveCount(initialCompletedCount + 1, {
+    timeout: 10_000,
+  });
 }
 
 /**

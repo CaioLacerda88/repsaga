@@ -299,8 +299,10 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     await expect(page.locator(WORKOUT.fillRemainingButton)).toBeVisible({
       timeout: 10_000,
     });
-    // The visible count label confirms BOTH earlier sets are queued to fill.
-    await expect(page.locator('text=2 sets')).toBeVisible({ timeout: 5_000 });
+    // NOTE: the rendered "(2 sets)" count is drawn to the CanvasKit canvas and
+    // is NOT in the AOM/DOM, so it can't be asserted via a text locator. The
+    // fill scope is instead pinned by the incomplete/completed checkbox counts
+    // below (2 incomplete + 1 completed before the tap; 0 + 3 after).
 
     // Before the tap there are exactly two incomplete checkboxes and one
     // completed checkbox.
