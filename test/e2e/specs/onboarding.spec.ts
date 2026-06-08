@@ -238,7 +238,7 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 6: Session-expired recovery loop — navigate-to-login then re-auth
+  // Test 6: Session-expired recovery loop — session cleared then re-auth
   //         routes back to /onboarding (not /home), and completing onboarding
   //         after re-auth reaches /home.
   //
@@ -263,14 +263,14 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // correctly resumes the onboarding flow rather than dropping the user on
   // /home with an incomplete profile."
   //
-  // The test uses `page.goto('/')` to simulate the post-CTA navigation
-  // rather than clicking the actual CTA, because injecting a real 42501
-  // from the E2E layer would require modifying RLS policies (out of scope).
-  // The navigation target is identical: `context.go('/login')` in production
-  // maps to `page.goto('/')` here (the Flutter app's router redirects any
-  // unauthenticated request to the login screen, and `page.goto('/')` is
-  // what `loginExpectingOnboarding` uses internally). This makes the test
-  // deterministic without a mock server layer.
+  // Session simulation: `page.goto('/')` alone does NOT route to the login
+  // screen when the user is still authenticated — the Flutter router sees a
+  // live session and routes back to /onboarding. Instead we clear
+  // localStorage (which holds the Supabase `sb-*-auth-token` key) before
+  // navigating, so the Flutter app reinitializes with no stored session and
+  // routes to the login screen. This is equivalent to what the 42501 Sign in
+  // CTA achieves via `context.go('/login')` combined with Supabase's
+  // auth.signOut() call that clears the persisted token.
   // ---------------------------------------------------------------------------
   test('should route back to /onboarding after re-auth when onboarded_at is still null, then reach /home after completing onboarding', async ({
     page,
@@ -286,10 +286,15 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
 
-    // Step 2: Simulate the Sign in CTA navigation — navigate to the login
-    // screen as if `context.go('/login')` fired from the SnackBarAction.
-    // The profile row still has `onboarded_at = NULL` (onboarding was never
-    // completed), so after re-auth the router must route back to /onboarding.
+    // Step 2: Simulate the Sign in CTA navigation — clear the Supabase session
+    // from localStorage (the `sb-*-auth-token` key) then navigate to '/'.
+    // This is what `context.go('/login')` + auth.signOut() achieves in
+    // production: the persisted token is gone, so the Flutter app
+    // reinitializes as unauthenticated and the router redirects to the login
+    // screen. The profile row still has `onboarded_at = NULL` (onboarding was
+    // never completed), so after re-auth the router must route back to
+    // /onboarding.
+    await page.evaluate(() => window.localStorage.clear());
     await page.goto('/');
     await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 10_000 });
 
