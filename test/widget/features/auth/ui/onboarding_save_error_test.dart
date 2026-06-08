@@ -196,12 +196,106 @@ void main() {
     );
 
     testWidgets(
-      'should show generic save-failed copy for DatabaseException as safety net',
+      'should show session-expired copy with Sign in CTA for DatabaseException '
+      'code 42501 (post-retry RLS-rejection path)',
       (tester) async {
-        // DatabaseException isn't in the spec table directly — it falls
-        // through the typed branches into the catch-all `failedToSaveProfile`
-        // copy. Pinning this keeps the safety net honest: a future subtype
-        // that slips past the dispatch must hit the existing string.
+        // Cluster: stale-token-silent-anon-fallback (candidate). When
+        // `BaseRepository.refreshAndRetry` succeeds at the refresh step
+        // but the second `upsertProfile` ALSO surfaces PostgREST 42501,
+        // the repository rethrows the ORIGINAL 42501 → wrapped as
+        // `DatabaseException(code: '42501')` → reaches this catch block.
+        // The user-recoverable affordance is the same as the
+        // AuthException branch: re-login mints a fresh JWT and onboarding
+        // completes on the second attempt. Pinning the exact copy + CTA
+        // ensures the same user-perceptible recovery shape for both
+        // entry points.
+        await tester.pumpWidget(
+          _buildTree(
+            toThrow: const app.DatabaseException(
+              'permission denied for table profiles',
+              code: '42501',
+            ),
+          ),
+        );
+
+        await _completeOnboardingTap(tester);
+
+        expect(
+          find.text('Your session expired. Sign in again.'),
+          findsOneWidget,
+        );
+        expect(find.widgetWithText(SnackBarAction, 'Sign in'), findsOneWidget);
+        // Generic safety-net copy must NOT show — the 42501 branch
+        // supersedes it.
+        expect(
+          find.text('Failed to save profile. Please try again.'),
+          findsNothing,
+        );
+
+        // Cluster: persist-eats-duration. Behavior-not-wiring: the
+        // SnackBar must dismiss when the user taps the Sign in action.
+        // The 42501 branch is a separate entry point from the
+        // AuthException branch — its own dismissal assertion guards
+        // against a regression where the shared
+        // `_showSessionExpiredSnack` helper accidentally sets
+        // `persist: true` for this branch only (e.g. via a
+        // code-path-specific override added in a later refactor).
+        // Without this, the AuthException-branch test would catch the
+        // regression only if it ran first, which is not a contract —
+        // Dart test ordering is unspecified.
+        //
+        // `pumpAndSettle` once before the tap so the SnackBar's enter
+        // animation (kSnackBarTransitionDuration = 250 ms) finishes —
+        // without it the action lives at an off-stage offset and
+        // `tap()` misses. `pumpAndSettle` again after the tap so the
+        // hide animation completes before the `findsNothing` assertion.
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(SnackBarAction, 'Sign in'));
+        await tester.pumpAndSettle();
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'should show generic save-failed copy for DatabaseException with a '
+      'non-42501 code (e.g. 23514 CHECK violation) — safety net',
+      (tester) async {
+        // Discrimination test for the new typed-dispatch branch. Only
+        // PostgREST `42501` (RLS rejection) routes through the
+        // "Sign in" recovery — other DatabaseException codes
+        // (`23xxx` integrity violations, `500` internal errors, etc.)
+        // continue to fall through to the safety-net copy because they
+        // are NOT user-fixable via re-auth. Pinning a 23514 here guards
+        // against accidental broadening of the 42501 branch to "any
+        // DatabaseException".
+        await tester.pumpWidget(
+          _buildTree(
+            toThrow: const app.DatabaseException(
+              'check constraint failed',
+              code: '23514',
+            ),
+          ),
+        );
+
+        await _completeOnboardingTap(tester);
+
+        expect(
+          find.text('Failed to save profile. Please try again.'),
+          findsOneWidget,
+        );
+        // Session-expired branch must NOT fire for non-42501 codes — no
+        // Sign in CTA should be visible.
+        expect(find.byType(SnackBarAction), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'should show generic save-failed copy for DatabaseException 500 as '
+      'safety net (unmapped internal error)',
+      (tester) async {
+        // Internal-server-error class — falls through to the safety net
+        // because re-auth doesn't fix it and we don't want to mislead
+        // the user with a "session expired" recovery affordance.
         await tester.pumpWidget(
           _buildTree(
             toThrow: const app.DatabaseException('500 internal', code: '500'),

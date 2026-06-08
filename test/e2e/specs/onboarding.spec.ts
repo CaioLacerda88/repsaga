@@ -1,33 +1,24 @@
 /**
- * Onboarding spec — merged from smoke suite.
+ * Onboarding spec — smoke suite for the post-signup onboarding flow.
  *
  * Tests the 2-page onboarding flow that appears for new users after sign-up:
  *   Page 1: Welcome ("Track every rep, every time") -> GET STARTED
  *   Page 2: Profile setup (display name + fitness level + frequency) -> LET'S GO
  *
- * NOTE: This test requires a fresh account that has never completed onboarding.
- * The `smokeOnboarding` user is provisioned by global-setup with no profile row,
- * which causes the router to redirect to /onboarding after login.
- *
- * TODO (infrastructure): The global-setup creates auth users but does NOT
- * automatically delete the user's profile row between runs. If the smokeOnboarding
- * user has already completed onboarding (profile row exists), the router will
- * redirect to /home instead of /onboarding, and these tests will fail.
- *
- * To make these tests repeatable:
- *   Option A: Delete the profile row for smokeOnboarding in global-setup via
- *             the Supabase Admin API (DELETE from profiles WHERE id = <user_id>).
- *   Option B: Use a freshly created user per test run (unique email per run).
- *   Option C: Add a Supabase edge function or SQL to reset onboarding state.
- *
- * Until infrastructure supports this, the test navigates directly to /onboarding
- * to verify the UI renders, acknowledging this bypasses the auth redirect guard.
+ * **State contract.** The describe-level `beforeEach` below resets the
+ * `smokeOnboarding` user to fresh-signup state (no profile row → trigger
+ * recreates one with NULL onboarded_at → router routes to /onboarding)
+ * before every test. The reset is the seed contract — individual tests
+ * MUST NOT defensively guard for "what if we landed on /home"; that
+ * branch is impossible under this beforeEach, and the dead conditional
+ * was actively misleading (a future test author would see it and assume
+ * the seed contract is fragile).
  */
 
 import { test, expect } from '@playwright/test';
-import { loginExpectingOnboarding } from '../helpers/auth';
-import { waitForAppReady, flutterFill } from '../helpers/app';
-import { NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
+import { login, loginExpectingOnboarding, logout } from '../helpers/auth';
+import { flutterFill, waitForAppReady } from '../helpers/app';
+import { AUTH, NAV, ONBOARDING, ONBOARDING_FLOW } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 
@@ -35,14 +26,15 @@ import { getAdminClient, getUserIdByEmail } from '../helpers/test-data-reset';
 // Smoke — onboarding flow
 // ---------------------------------------------------------------------------
 test.describe('Onboarding', { tag: '@smoke' }, () => {
-  // Cluster: e2e-spec-state-leak-across-tests. Test 3 below COMPLETES
-  // onboarding (writes onboarded_at via the production save path), leaving
-  // the worker's smokeOnboarding profile in a fully-onboarded state. Without
-  // this reseed, Test 4 (and any future test sharing this user) finds the
-  // user routes to /home, so `loginExpectingOnboarding` times out on the
-  // GET STARTED locator. Deleting the row restores the fresh-signup state
-  // (no profile, the trigger will create one on next login with NULL
-  // onboarded_at => router goes /onboarding).
+  // Cluster: e2e-spec-state-leak-across-tests. Test 3 / Test 5 below
+  // COMPLETE onboarding (writes onboarded_at via the production save
+  // path), leaving the worker's smokeOnboarding profile in a
+  // fully-onboarded state. Without this reseed, Test 4 (and any future
+  // test sharing this user) finds the user routes to /home, so
+  // `loginExpectingOnboarding` times out on the GET STARTED locator.
+  // Deleting the row restores the fresh-signup state (no profile, the
+  // trigger will create one on next login with NULL onboarded_at =>
+  // router goes /onboarding).
   test.beforeEach(async () => {
     const admin = getAdminClient();
     const userId = await getUserIdByEmail(
@@ -57,9 +49,9 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // ---------------------------------------------------------------------------
   // Test 1: Onboarding Page 1 renders correctly.
   //
-  // Navigate directly to /onboarding and verify the welcome page content.
-  // This confirms the widget tree is correct even if the auth redirect guard
-  // would normally skip onboarding for an already-onboarded user.
+  // The describe-level beforeEach guarantees fresh-signup state, so
+  // login routes to /onboarding deterministically — no branch on
+  // page.url() needed.
   // ---------------------------------------------------------------------------
   test('should show welcome content and GET STARTED button on page 1', async ({
     page,
@@ -69,23 +61,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-
-    // Navigate directly to onboarding. The guard may redirect authenticated
-    // users with a profile to /home, in which case this test asserts the
-    // onboarding route is reachable (useful for visual regression).
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    // Either we land on onboarding or are redirected to home.
-    const isOnOnboarding = page.url().includes('/onboarding');
-
-    if (!isOnOnboarding) {
-      // TODO: Delete profile row in global-setup to allow testing fresh flow.
-      // For now we skip the onboarding-specific assertions.
-      test.skip();
-      return;
-    }
 
     // Page 1: Welcome content.
     await expect(page.locator(ONBOARDING_FLOW.welcomeHeadline)).toBeVisible({
@@ -103,8 +78,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
 
   // ---------------------------------------------------------------------------
   // Test 2: Tapping GET STARTED advances to page 2.
-  //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // ---------------------------------------------------------------------------
   test('should advance to profile setup page after tapping GET STARTED', async ({ page }) => {
     await loginExpectingOnboarding(
@@ -112,24 +85,15 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      // TODO: Reset profile row in global-setup.
-      test.skip();
-      return;
-    }
 
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 10_000,
     });
     await page.locator(ONBOARDING.getStartedButton).click();
 
-    // Page 2: Profile setup.
-    await expect(page.locator(ONBOARDING_FLOW.profileSetupHeadline)).toBeVisible({
+    // Page 2: Profile setup. profileSetupIndicator targets the
+    // "Beginner" pill — the first stable identifier on page 2.
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.locator(ONBOARDING_FLOW.displayNameInput)).toBeVisible({
@@ -143,7 +107,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   // ---------------------------------------------------------------------------
   // Test 3: Complete onboarding — fill name, select frequency, tap LET'S GO.
   //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
   // Full flow: Page 1 -> GET STARTED -> fill name -> choose frequency -> LET'S GO
   // -> assert redirect to /home.
   // ---------------------------------------------------------------------------
@@ -155,22 +118,12 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
 
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      // TODO: Reset profile row in global-setup.
-      test.skip();
-      return;
-    }
-
-    // Page 1 -> Page 2. Mirror the wait-then-click discipline of test 109
-    // (line 126) — under CanvasKit + GitHub Actions resource contention,
-    // the button can be visually painted before its AOM hit-target is
+    // Page 1 -> Page 2. Mirror the wait-then-click discipline of test 2
+    // — under CanvasKit + GitHub Actions resource contention, the
+    // button can be visually painted before its AOM hit-target is
     // wired, so a bare `.click()` lands on a not-yet-clickable node and
-    // the next `expect(profileSetupHeadline).toBeVisible` fails because
+    // the next `expect(profileSetupIndicator).toBeVisible` fails because
     // the navigation never fired. The Manage Data export test (MD-013)
     // exposed the same Flutter-web-timing class on this CI run.
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
@@ -178,7 +131,7 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     });
     await page.locator(ONBOARDING.getStartedButton).click();
     await expect(
-      page.locator(ONBOARDING_FLOW.profileSetupHeadline),
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({
       timeout: 10_000,
     });
@@ -192,6 +145,25 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     // Submit.
     await page.locator(ONBOARDING.letsGoButton).click();
 
+    // No error snackbar appears in the success path. Pins the regression
+    // window for the PR-302 / PR-310 / PR-312 fix-wave: if the
+    // `DatabaseException(42501)` or `failedToSaveProfile` snack ever
+    // surfaces here, the typed-dispatch branch in
+    // `_showSaveErrorSnack` has regressed (or the underlying
+    // server-side 42501 condition is back). Test fails BEFORE the
+    // home-nav timeout would, surfacing the right failure category.
+    //
+    // Bounded 2 s window matches Material's default SnackBar duration
+    // (4 s) minus the post-save->navigation lag — any error snack would
+    // be visible inside this window. Both en and pt copy strings are
+    // checked because the user-facing locale is profile-driven and the
+    // smokeOnboarding user's locale is not seeded explicitly.
+    await expect(
+      page
+        .locator('text=Failed to save profile')
+        .or(page.locator('text=Não foi possível salvar')),
+    ).not.toBeVisible({ timeout: 2_000 });
+
     // Should navigate to /home. Cluster:
     // flutter-web-url-assertion — assert on destination-content
     // visibility (NAV.homeTab) before the URL string assertion, since
@@ -201,9 +173,188 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 4: Back button on page 2 returns to page 1.
+  // Test 5: After completing onboarding, the user must land on /home
+  //         (NOT /onboarding) on the NEXT sign-in. Pins the
+  //         `profile.onboarded_at` persistence contract end-to-end —
+  //         today no other test asserts that a SECOND sign-in routes the
+  //         already-onboarded user past the onboarding gate.
   //
-  // TODO: Requires a fresh user (no profile row). See infrastructure note above.
+  //         Regression window: PR 1 (PR #299) moved the half-onboarded
+  //         decision from an in-memory `StateProvider<bool>` to a
+  //         derived check on `profile.onboarded_at == null`. The save
+  //         path (`ProfileRepository.upsertProfile`) stamps that column
+  //         from `saveOnboardingProfile`. If either the stamp or the
+  //         router gate regresses, this test fails the next time it
+  //         runs — making the bug visible BEFORE production users hit
+  //         the "onboarded twice" loop.
+  // ---------------------------------------------------------------------------
+  test('should reach /home on second sign-in after completing onboarding', async ({
+    page,
+  }) => {
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+
+    // Drive the onboarding flow to completion — same shape as Test 3.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Returning User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    // First sign-in: landed on /home post-onboarding.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
+
+    // Now log out and back in. The contract: the user must land on /home
+    // DIRECTLY, NOT be routed back to /onboarding. The `onboarded_at`
+    // column survives the SQL round-trip and `ProfileNotifier.build()`
+    // re-emits the same profile post-login, so the router gate's
+    // `profile.onboardedAt != null` check passes.
+    await logout(page);
+    await login(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+
+    // The login helper already waits for `NAV.homeTab` to be visible, so
+    // reaching this line proves the second sign-in did NOT bounce back
+    // to /onboarding. Pin the URL too for explicitness — if the router
+    // gate regresses and routes to /onboarding, both assertions fail
+    // with a clear category.
+    expect(page.url()).toContain('/home');
+    await expect(page.locator(ONBOARDING.getStartedButton)).not.toBeVisible({
+      timeout: 2_000,
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 6: Session-expired recovery loop — sign out via in-app flow, reset
+  //         onboarded_at, re-auth routes to /onboarding, completing it reaches
+  //         /home.
+  //
+  // What this pins:
+  //   (a) After the 42501 Sign in CTA fires `context.go('/login')` (simulated
+  //       here via the in-app logout flow, which calls auth.signOut() and
+  //       clears the Hive-persisted session), the user lands on the login
+  //       screen.
+  //   (b) Re-auth for a user whose `onboarded_at` has been reset to NULL
+  //       routes to /onboarding — not /home. The router gate checks
+  //       `onboardedAt != null` AFTER the profile provider resolves post-login;
+  //       if the gate regresses to a stale cached value or always-true, this
+  //       test fails.
+  //   (c) Completing onboarding after the re-auth stamps `onboarded_at` and
+  //       routes to /home — the full save path works end-to-end after a
+  //       sign-out/re-auth cycle.
+  //
+  // Regression window: the root cause of the 42501 fix-wave (five PRs over
+  // 48 hours, PR #299–#312) was that users hit the 42501 error on fresh
+  // signup, had NO recovery affordance, and were stuck. This test closes
+  // the final loop: "after a Sign in CTA triggers sign-out, re-auth with a
+  // NULL onboarded_at user correctly resumes the onboarding flow rather than
+  // dropping the user on /home with an incomplete profile."
+  //
+  // Why logout() and not localStorage.clear() + page.goto('/'):
+  //   supabase_flutter stores the session in Hive (IndexedDB on Flutter web),
+  //   NOT in localStorage. Clearing localStorage is a no-op — the Hive store
+  //   and in-memory authStateProvider survive unchanged and the router still
+  //   sees an authenticated user. The logout() helper walks the in-app sign-out
+  //   flow which calls auth.signOut() server-side, clearing both Hive and the
+  //   in-memory provider.
+  //
+  // Why complete onboarding before signing out:
+  //   logout() requires NAV.profileTab to be visible (CharacterSheetScreen
+  //   path). The onboarding screen has no bottom nav, so we must reach /home
+  //   first. After reaching /home we delete the profile row via Admin API to
+  //   restore the NULL onboarded_at state, then sign out.
+  // ---------------------------------------------------------------------------
+  test('should route back to /onboarding after re-auth when onboarded_at is still null, then reach /home after completing onboarding', async ({
+    page,
+  }) => {
+    // Step 1: Sign in — user lands on /onboarding (fresh-signup state per
+    // beforeEach, no profile row → trigger creates one with NULL onboarded_at).
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Step 2: Complete onboarding to reach /home (required to access the
+    // bottom nav for the logout flow). This drives the same save path as
+    // Test 3 — if it regresses here, Test 3 fails first.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
+    ).toBeVisible({ timeout: 10_000 });
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+
+    // Step 3: Reset the profile row back to NULL onboarded_at via Admin API.
+    // This mirrors what happens when a user encounters the 42501 error on
+    // fresh signup and their onboarding was never completed: the profile row
+    // exists but onboarded_at is NULL. We re-create this state artificially
+    // by deleting the row (the handle_new_user trigger will re-create it with
+    // NULL onboarded_at on the next login).
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('smokeOnboarding').email);
+    if (userId) {
+      await admin.from('profiles').delete().eq('id', userId);
+    }
+
+    // Step 4: Sign out via the in-app flow. logout() calls auth.signOut()
+    // which clears the Hive-persisted session and resets authStateProvider.
+    // The helper already asserts AUTH.appTitle is visible after sign-out,
+    // so no separate check is needed.
+    await logout(page);
+
+    // Step 5: Re-auth. The handle_new_user trigger re-created the profile row
+    // with NULL onboarded_at when logout() processed, or it will be re-created
+    // on next login. The router checks profileProvider → profile.onboardedAt
+    // == null → needsOnboarding = true → routes to /onboarding.
+    await loginExpectingOnboarding(
+      page,
+      getUser('smokeOnboarding').email,
+      getUser('smokeOnboarding').password,
+    );
+    // Pin (b): re-auth with NULL onboarded_at routes back to /onboarding, not
+    // /home.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    // Belt-and-suspenders: the home tab must NOT be visible yet.
+    await expect(page.locator(NAV.homeTab)).not.toBeVisible({ timeout: 2_000 });
+
+    // Step 6: Complete onboarding again after re-auth. Pins (c): the full
+    // recovery arc — sign out → re-auth → onboarding → /home.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User 2');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 4: Back button on page 2 returns to page 1.
   // ---------------------------------------------------------------------------
   test('should return to welcome page when tapping Back on profile setup page', async ({
     page,
@@ -213,18 +364,9 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Navigate via hash to avoid a full CanvasKit reload.
-    await page.evaluate(() => { window.location.hash = '#/onboarding'; });
-    await page.waitForURL(/\/(onboarding|home)/, { timeout: 10_000 });
-
-    const isOnOnboarding = page.url().includes('/onboarding');
-    if (!isOnOnboarding) {
-      test.skip();
-      return;
-    }
 
     await page.locator(ONBOARDING.getStartedButton).click();
-    await expect(page.locator(ONBOARDING_FLOW.profileSetupHeadline)).toBeVisible({
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -238,5 +380,143 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 5_000,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding — fresh-signup end-to-end (regression)
+//
+// Drives the actual app signup form (NOT Admin API pre-provisioning) through
+// the full signup → onboarding → /home arc in a SINGLE continuous session.
+//
+// WHY this block exists and differs from the 'Onboarding' block above:
+//   The pre-provisioned `smokeOnboarding` user has its `auth.users` row
+//   committed at global-setup time, so its JWT token chain is stable by
+//   the time any test runs. The 42501 RLS race that caused the five-PR
+//   fix-wave (PR #299–#312) is a fresh-signup race: a newly-created
+//   `auth.users` row reaches `saveOnboardingProfile` within the same
+//   session that created the row, before certain Postgres triggers / RLS
+//   policies see the committed user. No pre-provisioned user can exercise
+//   that window — only a user created mid-test via the real app signup form
+//   can hit it.
+//
+// What this pins:
+//   (a) The full signup form contract — toggle, fill, age-gate checkbox
+//       (PR #309: onPressed:null until ticked), tap Sign Up.
+//   (b) Immediate routing to /onboarding for a fresh account (no profile
+//       → `handle_new_user` trigger creates row with NULL onboarded_at).
+//   (c) `saveOnboardingProfile` completes WITHOUT a 42501 snackbar in the
+//       same session that created the auth.users row.
+//   (d) Happy-path: /home reached post-save, onboarded_at stamped.
+//
+// Teardown: ephemeral user deleted via Admin API in afterEach (mirrors
+// auth.spec.ts sign-up happy-path pattern). Best-effort — global teardown
+// also sweeps orphaned test accounts.
+//
+// Race-flushing: run with --repeat-each=10 periodically to flush timing-
+// dependent failures in the 42501 window.
+// ---------------------------------------------------------------------------
+test.describe('Onboarding — fresh-signup end-to-end (regression)', { tag: '@smoke' }, () => {
+  // Captured mid-test so afterEach can clean up even if later assertions fail.
+  let ephemeralUserId: string | null = null;
+
+  test.afterEach(async () => {
+    if (ephemeralUserId) {
+      const admin = getAdminClient();
+      try {
+        await admin.auth.admin.deleteUser(ephemeralUserId);
+      } catch {
+        // Best-effort — global teardown sweeps orphans.
+      }
+      ephemeralUserId = null;
+    }
+  });
+
+  test('should complete signup → onboarding → /home in one session without error snackbar', async ({
+    page,
+  }) => {
+    // Unique-per-run email so parallel workers never collide.
+    // Cluster: e2e-spec-state-leak-across-tests.
+    const ephemeralEmail = `e2e_fresh_signup_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 7)}@test.local`;
+    const password = 'TestPassword123!';
+
+    await page.goto('/');
+    await waitForAppReady(page);
+
+    // Toggle to sign-up mode.
+    await expect(page.locator(AUTH.toggleToSignUp)).toBeVisible({ timeout: 10_000 });
+    await page.locator(AUTH.toggleToSignUp).click();
+    await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+
+    // Fill credentials via real keyboard events (cluster: flutter-web-input-synthetic).
+    await flutterFill(page, AUTH.emailInput, ephemeralEmail);
+    await flutterFill(page, AUTH.passwordInput, password);
+
+    // PR #309 contract: Sign Up CTA has onPressed:null until age checkbox is ticked.
+    await expect(page.locator(AUTH.ageConfirmationCheckbox)).toBeVisible({ timeout: 5_000 });
+    await page.locator(AUTH.ageConfirmationCheckbox).click();
+
+    // Tap Sign Up.
+    await page.locator(AUTH.signUpButton).click();
+
+    // New user → `handle_new_user` trigger creates profile row with
+    // `onboarded_at = NULL` → router routes to /onboarding.
+    // Local Supabase: `enable_confirmations = false` (supabase/config.toml
+    // [auth.email]) → session returned immediately, no email confirm screen.
+    // Cluster: flutter-web-url-assertion — assert content, not URL.
+    await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({ timeout: 20_000 });
+
+    // Capture userId NOW so afterEach cleans up even if later assertions fail.
+    // (getUserIdByEmail does a DB lookup — safe to call mid-test.)
+    const admin = getAdminClient();
+    ephemeralUserId = await getUserIdByEmail(admin, ephemeralEmail);
+
+    // Advance to page 2.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Fill profile fields — this is the exact save path that triggered the
+    // 42501 race on fresh signups (PR #299 through #312 fix-wave).
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Fresh Signup User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+
+    // -----------------------------------------------------------------------
+    // Critical regression assertion: no error snackbar must appear.
+    //
+    // Copies verbatim from lib/l10n/app_en.arb and lib/l10n/app_pt.arb:
+    //   failedToSaveProfile        — generic repository / RLS catch-all
+    //   onboardingErrorSessionExpired — 42501 / AuthException typed branch
+    //   onboardingErrorOffline     — NetworkException / TimeoutException branch
+    //
+    // Both locales are checked because the user's locale is not seeded for an
+    // ephemeral account — it defaults to the device locale, which may be pt on
+    // Portuguese-locale CI agents. The 5 s window is tight enough to catch a
+    // snackbar that fires immediately post-save, but we check before the /home
+    // navigation assertion so a save error surfaces the correct failure category
+    // rather than masking behind a nav timeout.
+    // -----------------------------------------------------------------------
+    for (const errorCopy of [
+      // en copies
+      'Failed to save profile. Please try again.',
+      'Your session expired. Sign in again.',
+      "You're offline. Check your connection and try again.",
+      // pt copies
+      'Falha ao salvar perfil. Tente novamente.',
+      'Sua sessão expirou. Faça login novamente.',
+      'Você está offline. Verifique sua conexão e tente novamente.',
+    ]) {
+      await expect(page.locator(`text=${errorCopy}`).first()).not.toBeVisible({
+        timeout: 1_000,
+      });
+    }
+
+    // Happy-path assert. Cluster: flutter-web-url-assertion — content before URL.
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toContain('/home');
   });
 });
