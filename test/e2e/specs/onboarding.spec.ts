@@ -238,39 +238,44 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 6: Session-expired recovery loop — session cleared then re-auth
-  //         routes back to /onboarding (not /home), and completing onboarding
-  //         after re-auth reaches /home.
+  // Test 6: Session-expired recovery loop — sign out via in-app flow, reset
+  //         onboarded_at, re-auth routes to /onboarding, completing it reaches
+  //         /home.
   //
   // What this pins:
-  //   (a) After the 42501 Sign in CTA fires `context.go('/login')`, the user
-  //       lands on the login screen (navigation contract — widget test swallows
-  //       the FlutterError, so this E2E is the only test exercising the real
-  //       router path).
-  //   (b) Re-auth for a user whose `onboarded_at` is still NULL (the profile
-  //       row was deleted by `beforeEach`, not yet stamped) routes to
-  //       /onboarding — not /home. The router gate checks `onboardedAt != null`
-  //       AFTER the profile provider resolves post-login; if the gate regresses
-  //       to a stale cached null or always-true, this test fails.
+  //   (a) After the 42501 Sign in CTA fires `context.go('/login')` (simulated
+  //       here via the in-app logout flow, which calls auth.signOut() and
+  //       clears the Hive-persisted session), the user lands on the login
+  //       screen.
+  //   (b) Re-auth for a user whose `onboarded_at` has been reset to NULL
+  //       routes to /onboarding — not /home. The router gate checks
+  //       `onboardedAt != null` AFTER the profile provider resolves post-login;
+  //       if the gate regresses to a stale cached value or always-true, this
+  //       test fails.
   //   (c) Completing onboarding after the re-auth stamps `onboarded_at` and
-  //       routes to /home — the full save path works end-to-end.
+  //       routes to /home — the full save path works end-to-end after a
+  //       sign-out/re-auth cycle.
   //
   // Regression window: the root cause of the 42501 fix-wave (five PRs over
   // 48 hours, PR #299–#312) was that users hit the 42501 error on fresh
   // signup, had NO recovery affordance, and were stuck. This test closes
-  // the final loop: "the Sign in CTA's navigation target (`/login`) is
-  // reachable from `/onboarding` mid-session, and re-auth from that state
-  // correctly resumes the onboarding flow rather than dropping the user on
-  // /home with an incomplete profile."
+  // the final loop: "after a Sign in CTA triggers sign-out, re-auth with a
+  // NULL onboarded_at user correctly resumes the onboarding flow rather than
+  // dropping the user on /home with an incomplete profile."
   //
-  // Session simulation: `page.goto('/')` alone does NOT route to the login
-  // screen when the user is still authenticated — the Flutter router sees a
-  // live session and routes back to /onboarding. Instead we clear
-  // localStorage (which holds the Supabase `sb-*-auth-token` key) before
-  // navigating, so the Flutter app reinitializes with no stored session and
-  // routes to the login screen. This is equivalent to what the 42501 Sign in
-  // CTA achieves via `context.go('/login')` combined with Supabase's
-  // auth.signOut() call that clears the persisted token.
+  // Why logout() and not localStorage.clear() + page.goto('/'):
+  //   supabase_flutter stores the session in Hive (IndexedDB on Flutter web),
+  //   NOT in localStorage. Clearing localStorage is a no-op — the Hive store
+  //   and in-memory authStateProvider survive unchanged and the router still
+  //   sees an authenticated user. The logout() helper walks the in-app sign-out
+  //   flow which calls auth.signOut() server-side, clearing both Hive and the
+  //   in-memory provider.
+  //
+  // Why complete onboarding before signing out:
+  //   logout() requires NAV.profileTab to be visible (CharacterSheetScreen
+  //   path). The onboarding screen has no bottom nav, so we must reach /home
+  //   first. After reaching /home we delete the profile row via Admin API to
+  //   restore the NULL onboarded_at state, then sign out.
   // ---------------------------------------------------------------------------
   test('should route back to /onboarding after re-auth when onboarded_at is still null, then reach /home after completing onboarding', async ({
     page,
@@ -286,49 +291,64 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
 
-    // Step 2: Simulate the Sign in CTA navigation — clear the Supabase session
-    // from localStorage (the `sb-*-auth-token` key) then navigate to '/'.
-    // This is what `context.go('/login')` + auth.signOut() achieves in
-    // production: the persisted token is gone, so the Flutter app
-    // reinitializes as unauthenticated and the router redirects to the login
-    // screen. The profile row still has `onboarded_at = NULL` (onboarding was
-    // never completed), so after re-auth the router must route back to
-    // /onboarding.
-    await page.evaluate(() => window.localStorage.clear());
-    await page.goto('/');
-    await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 10_000 });
+    // Step 2: Complete onboarding to reach /home (required to access the
+    // bottom nav for the logout flow). This drives the same save path as
+    // Test 3 — if it regresses here, Test 3 fails first.
+    await page.locator(ONBOARDING.getStartedButton).click();
+    await expect(
+      page.locator(ONBOARDING_FLOW.profileSetupIndicator),
+    ).toBeVisible({ timeout: 10_000 });
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User');
+    await page.locator(ONBOARDING_FLOW.frequency3x).click();
+    await page.locator(ONBOARDING.letsGoButton).click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
 
-    // Step 3: Re-auth. The router checks profileProvider → profile.onboardedAt
+    // Step 3: Reset the profile row back to NULL onboarded_at via Admin API.
+    // This mirrors what happens when a user encounters the 42501 error on
+    // fresh signup and their onboarding was never completed: the profile row
+    // exists but onboarded_at is NULL. We re-create this state artificially
+    // by deleting the row (the handle_new_user trigger will re-create it with
+    // NULL onboarded_at on the next login).
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(admin, getUser('smokeOnboarding').email);
+    if (userId) {
+      await admin.from('profiles').delete().eq('id', userId);
+    }
+
+    // Step 4: Sign out via the in-app flow. logout() calls auth.signOut()
+    // which clears the Hive-persisted session and resets authStateProvider.
+    // The helper already asserts AUTH.appTitle is visible after sign-out,
+    // so no separate check is needed.
+    await logout(page);
+
+    // Step 5: Re-auth. The handle_new_user trigger re-created the profile row
+    // with NULL onboarded_at when logout() processed, or it will be re-created
+    // on next login. The router checks profileProvider → profile.onboardedAt
     // == null → needsOnboarding = true → routes to /onboarding.
-    // Using loginExpectingOnboarding (not login) because the profile row's
-    // `onboarded_at` is still NULL — the re-authed user must NOT land on /home.
     await loginExpectingOnboarding(
       page,
       getUser('smokeOnboarding').email,
       getUser('smokeOnboarding').password,
     );
-    // Pin (b): re-auth after the CTA redirects back to /onboarding, not /home.
+    // Pin (b): re-auth with NULL onboarded_at routes back to /onboarding, not
+    // /home.
     await expect(page.locator(ONBOARDING.getStartedButton)).toBeVisible({
       timeout: 10_000,
     });
     // Belt-and-suspenders: the home tab must NOT be visible yet.
     await expect(page.locator(NAV.homeTab)).not.toBeVisible({ timeout: 2_000 });
 
-    // Step 4: Complete onboarding after re-auth. This is the full recovery
-    // loop: the user fills in their profile and taps LET'S GO.
+    // Step 6: Complete onboarding again after re-auth. Pins (c): the full
+    // recovery arc — sign out → re-auth → onboarding → /home.
     await page.locator(ONBOARDING.getStartedButton).click();
     await expect(
       page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({ timeout: 10_000 });
 
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User');
+    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User 2');
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
     await page.locator(ONBOARDING.letsGoButton).click();
 
-    // Pin (c): after completing onboarding post-re-auth, the user reaches
-    // /home. The `onboarded_at` stamp written by `saveOnboardingProfile` is
-    // the same code path validated in Test 3; this test pins that the code
-    // path is still reachable after a mid-session logout/re-auth cycle.
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
     expect(page.url()).toContain('/home');
   });
