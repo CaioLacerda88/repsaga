@@ -7,13 +7,18 @@ import 'package:repsaga/shared/widgets/gradient_button.dart';
 
 import '../../../../helpers/test_material_app.dart';
 
-/// Legal PR 2 — Surface 1 (age confirmation) widget tests.
+/// Legal PR 2 (age confirmation) + Option A (inline legal links) widget tests.
 ///
 /// Cluster: `data-protection-compliance`. The Sign Up CTA must remain
 /// disabled until the age-confirmation checkbox is ticked (LGPD Art. 14
 /// minimum-age compliance). These tests assert what the user SEES — the
 /// `GradientButton.onPressed == null` state — not the internal flag,
 /// per CLAUDE.md A2 "behavior-not-wiring".
+///
+/// Option A replaced the `CheckboxListTile` + orphaned chip row with a bare
+/// `Checkbox` whose label inlines the Terms + Privacy links via `Text.rich`.
+/// The age-gate row carries the `auth-age-confirmation` Semantics identifier;
+/// the inline links carry `auth-age-link-terms` / `auth-age-link-privacy`.
 void main() {
   Widget buildTestWidget() {
     return ProviderScope(
@@ -28,46 +33,36 @@ void main() {
     await tester.pump();
   }
 
+  /// The age-gate Checkbox lives inside the `auth-age-confirmation` Semantics
+  /// row. Tapping the Checkbox directly toggles `_ageConfirmed` (the inline
+  /// label is no longer a tappable ListTile title).
+  Finder ageCheckbox() => find.byType(Checkbox);
+
+  /// Finds a Semantics node by identifier (locale-independent anchor).
+  Finder semanticsId(String id) => find.byWidgetPredicate(
+    (w) => w is Semantics && w.properties.identifier == id,
+  );
+
   group('Signup age-confirmation checkbox', () {
-    testWidgets('checkbox is shown in signup mode', (tester) async {
+    testWidgets('age-gate row + inline legal links are shown in signup mode', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildTestWidget());
       await enterSignupMode(tester);
 
-      expect(
-        find.text('I confirm I am 18 years of age or older.'),
-        findsOneWidget,
-      );
-      // PR #309 review N1 — the single ToS-only "Read the minimum-age
-      // policy" link was split into two side-by-side chips so the user
-      // has direct access to BOTH the Privacy Policy (LGPD Art. 14
-      // disclosure) and the Terms of Service (§3 minimum-age clause).
-      // Locate the chips by their Semantics identifiers so the test is
-      // robust against copy tweaks.
-      expect(
-        find.byWidgetPredicate(
-          (w) =>
-              w is Semantics &&
-              w.properties.identifier == 'auth-age-link-privacy',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byWidgetPredicate(
-          (w) =>
-              w is Semantics &&
-              w.properties.identifier == 'auth-age-link-terms',
-        ),
-        findsOneWidget,
-      );
+      expect(semanticsId('auth-age-confirmation'), findsOneWidget);
+      // Option A — the Privacy + Terms links are inlined into the checkbox
+      // label sentence (no separate chip row). Locate them by identifier so
+      // the test is robust against copy tweaks.
+      expect(semanticsId('auth-age-link-privacy'), findsOneWidget);
+      expect(semanticsId('auth-age-link-terms'), findsOneWidget);
     });
 
-    testWidgets('checkbox is hidden in login mode', (tester) async {
+    testWidgets('age-gate row is hidden in login mode', (tester) async {
       await tester.pumpWidget(buildTestWidget());
 
-      expect(
-        find.text('I confirm I am 18 years of age or older.'),
-        findsNothing,
-      );
+      expect(semanticsId('auth-age-confirmation'), findsNothing);
+      expect(find.byType(Checkbox), findsNothing);
     });
 
     testWidgets('sign-up CTA is DISABLED before the checkbox is ticked', (
@@ -76,7 +71,6 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await enterSignupMode(tester);
 
-      // Ensure the CTA is on screen, then read its onPressed.
       await tester.ensureVisible(find.byType(GradientButton));
       await tester.pump();
 
@@ -94,11 +88,9 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await enterSignupMode(tester);
 
-      await tester.ensureVisible(
-        find.text('I confirm I am 18 years of age or older.'),
-      );
+      await tester.ensureVisible(ageCheckbox());
       await tester.pump();
-      await tester.tap(find.text('I confirm I am 18 years of age or older.'));
+      await tester.tap(ageCheckbox());
       await tester.pump();
 
       await tester.ensureVisible(find.byType(GradientButton));
@@ -117,10 +109,7 @@ void main() {
     ) async {
       await tester.pumpWidget(buildTestWidget());
       // Pre-condition: login mode, checkbox hidden.
-      expect(
-        find.text('I confirm I am 18 years of age or older.'),
-        findsNothing,
-      );
+      expect(find.byType(Checkbox), findsNothing);
 
       await tester.ensureVisible(find.byType(GradientButton));
       await tester.pump();
@@ -140,11 +129,9 @@ void main() {
         await enterSignupMode(tester);
 
         // Tick the checkbox.
-        await tester.ensureVisible(
-          find.text('I confirm I am 18 years of age or older.'),
-        );
+        await tester.ensureVisible(ageCheckbox());
         await tester.pump();
-        await tester.tap(find.text('I confirm I am 18 years of age or older.'));
+        await tester.tap(ageCheckbox());
         await tester.pump();
 
         // CTA enabled.

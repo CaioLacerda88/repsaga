@@ -38,7 +38,6 @@ class _FakeProfileNotifier extends ProfileNotifier {
 
   @override
   Future<void> saveOnboardingProfile({
-    required String displayName,
     required String fitnessLevel,
     int trainingFrequencyPerWeek = 3,
   }) async {
@@ -116,9 +115,25 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Set up your profile'), findsOneWidget);
-      expect(find.text('Display name'), findsOneWidget);
       expect(find.text('Fitness level'), findsOneWidget);
     });
+
+    testWidgets(
+      'Option A: onboarding no longer collects the display name — it is '
+      'collected on the signup form, so page 2 has no name field',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+
+        await tester.tap(find.text('GET STARTED'));
+        await tester.pumpAndSettle();
+
+        // The page mounted (fitness selector present) but the display-name
+        // field + label are gone. Page 2 now collects only fitness signals.
+        expect(find.text('Fitness level'), findsOneWidget);
+        expect(find.text('Display name'), findsNothing);
+        expect(find.byType(TextField), findsNothing);
+      },
+    );
 
     testWidgets('shows fitness level chips on profile page', (tester) async {
       await tester.pumpWidget(buildTestWidget());
@@ -163,16 +178,6 @@ void main() {
       // Page 2 has "LET'S GO" as the final CTA, not "NEXT".
       expect(find.text("LET'S GO"), findsOneWidget);
       expect(find.text('NEXT'), findsNothing);
-    });
-
-    testWidgets('display name field accepts text input', (tester) async {
-      await tester.pumpWidget(buildTestWidget());
-
-      await tester.tap(find.text('GET STARTED'));
-      await tester.pumpAndSettle();
-
-      await tester.enterText(find.byType(TextField), 'Alice');
-      expect(find.text('Alice'), findsOneWidget);
     });
 
     testWidgets(

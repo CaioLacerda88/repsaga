@@ -181,8 +181,16 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
     return ref.read(authStateProvider).value?.session?.user.id;
   }
 
+  /// Persists the onboarding fitness signals (level + frequency) and stamps
+  /// the completion anchor.
+  ///
+  /// The display name is NOT written here — it is collected on the signup
+  /// form and lands on the profile row via the `handle_new_user` trigger
+  /// (Option A — full-form signup). Onboarding now only collects fitness
+  /// signals, so `upsertProfile` is called WITHOUT `displayName` (the repo
+  /// treats it as omit-on-null, so an absent name preserves the trigger-seeded
+  /// value rather than clobbering it).
   Future<void> saveOnboardingProfile({
-    required String displayName,
     required String fitnessLevel,
     int trainingFrequencyPerWeek = 3,
   }) async {
@@ -192,7 +200,6 @@ class ProfileNotifier extends AsyncNotifier<Profile?> {
     state = AsyncData(
       await repo.upsertProfile(
         userId: userId,
-        displayName: displayName,
         fitnessLevel: fitnessLevel,
         trainingFrequencyPerWeek: trainingFrequencyPerWeek,
         // PR 1 — stamp the onboarding-completion anchor here, exactly

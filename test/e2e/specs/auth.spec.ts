@@ -151,10 +151,12 @@ test.describe('Auth', { tag: '@smoke' }, () => {
     // Toggle to sign-up mode.
     await page.click(AUTH.toggleToSignUp);
 
-    // Button should now read SIGN UP and subtitle should read "Create your
-    // account" — both are hard-coded strings in LoginScreen._isSignUp branch.
+    // Button should now read SIGN UP and the signup heading ("CREATE ACCOUNT")
+    // should be present — Option A promoted the dim subtitle to a heading.
     await expect(page.locator(AUTH.signUpButton)).toBeVisible();
-    await expect(page.locator('text=Create your account')).toBeVisible();
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Toggle back.
     await page.click(AUTH.toggleToLogIn);
@@ -266,11 +268,14 @@ test.describe('Auth — edge cases', () => {
     // Toggle to sign-up mode.
     await page.click(AUTH.toggleToSignUp);
 
-    // Sign-up mode: SIGN UP button visible, "Create your account" subtitle.
+    // Sign-up mode: SIGN UP button visible, "CREATE ACCOUNT" heading present
+    // (Option A promoted the dim subtitle to a Rajdhani heading).
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({
       timeout: 5_000,
     });
-    await expect(page.locator('text=Create your account')).toBeVisible();
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Toggle back to login mode.
     await page.click(AUTH.toggleToLogIn);
@@ -287,8 +292,12 @@ test.describe('Auth — edge cases', () => {
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Attempt to create an account with an email that already exists.
+    // Option A — fill every signup field so the validators pass and the submit
+    // path actually reaches the backend (display name + confirm password).
+    await flutterFill(page, AUTH.displayNameInput, 'Already Registered');
     await flutterFill(page, AUTH.emailInput, getUser('fullAuth').email);
     await flutterFill(page, AUTH.passwordInput, getUser('fullAuth').password);
+    await flutterFill(page, AUTH.confirmPasswordInput, getUser('fullAuth').password);
 
     // Legal PR 2 — age gate: tick before the CTA is tappable.
     await tickAgeConfirmation(page);
@@ -388,8 +397,12 @@ test.describe('Auth — sign-up happy path', () => {
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Enter credentials for a brand-new email address (unique per run).
+    // Option A — the full signup form requires a display name + a matching
+    // confirm-password before the validators pass.
+    await flutterFill(page, AUTH.displayNameInput, 'Happy Path User');
     await flutterFill(page, AUTH.emailInput, throwawayEmail);
     await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+    await flutterFill(page, AUTH.confirmPasswordInput, 'TestPass123!');
 
     // Legal PR 2 — age gate: the Sign Up CTA has onPressed:null until the
     // age-confirmation checkbox is ticked. Tick it before clicking.
@@ -438,6 +451,25 @@ test.describe('Auth — signup age gate', { tag: '@smoke' }, () => {
     // Toggle to signup mode so the age checkbox and CTA are rendered.
     await page.click(AUTH.toggleToSignUp);
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should show the full-form signup surfaces in signup mode (Option A)', async ({
+    page,
+  }) => {
+    // Option A added a display-name field, a confirm-password field, a
+    // password-strength bar, and a "CREATE ACCOUNT" heading — all signup-only.
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.displayNameInput).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.confirmPasswordInput).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.passwordStrengthBar).first()).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test('should disable the Sign Up CTA before the age checkbox is ticked', async ({

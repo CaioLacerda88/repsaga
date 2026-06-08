@@ -41,7 +41,6 @@ class _StubProfileNotifier extends AsyncNotifier<Profile?>
 
   @override
   Future<void> saveOnboardingProfile({
-    required String displayName,
     required String fitnessLevel,
     int trainingFrequencyPerWeek = 3,
   }) async {}

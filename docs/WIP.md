@@ -11,6 +11,79 @@ the phase summary in PROJECT.md §4.
 
 ---
 
+## In-flight — Signup screen redesign (Option A, Full-Form Signup)
+
+**Branch:** `feature/signup-redesign-option-a`
+**Source of truth:** `docs/signup-screen-mockup-v1.html` §3 (Option A) + PROJECT.md §2 backlog.
+
+### Boundary inventory (gates implementation — traced, do NOT re-derive)
+
+**Signature changes (update ALL callers + tests):**
+- `AuthRepository.signUpWithEmail` — add `String? displayName`; thread into
+  the `data:`/user_metadata map alongside `locale` (only when non-null).
+- `AuthNotifier.signUpWithEmail` — add `displayName` param, forward to repo.
+- `LoginScreen._submit` — pass `_displayNameController.text`.
+- `ProfileNotifier.saveOnboardingProfile` — REMOVE `displayName` param;
+  upsert only fitnessLevel + frequency + onboarded_at. (`upsertProfile`
+  already treats `displayName` as omit-on-null, so no repo change needed.)
+
+**Signup form (login_screen.dart, signup is `_isSignUp` mode):**
+- Add `_displayNameController` + `_confirmPasswordController`; dispose + clear
+  on mode toggle.
+- displayName field above email (`AutofillHints.name`, non-empty validation).
+- confirm-password field (`obscureText`, `AutofillHints.newPassword`,
+  signup-only; validator `value == _passwordController.text`).
+- 3-segment non-blocking strength bar (score 1=len≥6, 2=len≥8|digit|special,
+  3=all three). Colors error/warning/success.
+- "CRIAR CONTA" heading (Rajdhani 700 ~16sp full-cream) signup-only, replaces
+  the dim subtitle in signup mode.
+- PRESERVE the structural age-gate: CTA `onPressed = null` until checkbox
+  ticked (PR #309).
+
+**Age-gate + legal:**
+- Inline Privacy + Terms links INTO the checkbox label via `Text.rich` +
+  `WidgetSpan(TextButton)`. Use `MaterialTapTargetSize.padded`.
+- DELETE the separate legal-chips Padding+Row (PR #309).
+- Hide `_LegalFooter` when `_isSignUp`.
+- Disabled-CTA helper text (`signupAgeRequiredHint`) when signup & !ageConfirmed.
+
+**Onboarding (onboarding_screen.dart):**
+- Remove `_nameController`, the name AppTextField, the empty-name guard, and
+  the `displayName:` arg to saveOnboardingProfile. Page 2 = level + frequency.
+- Drop dead `pleaseEnterName` ARB key (only referenced in onboarding).
+
+**L10n (both arb + gen):** add `confirmPassword`, `passwordMismatch`,
+`passwordStrengthWeak/Medium/Strong`, `signupHeading`, `signupAgeRequiredHint`.
+Reuse `displayName`, `termsOfService`, `privacyPolicy`. Remove `pleaseEnterName`.
+
+**Breakage to handle:** auth_notifier_test (displayName forwarding),
+profile_notifier_save_test (drop displayName), onboarding widget/provider
+tests (name field absent), E2E selectors + onboarding.spec + auth.spec +
+fresh-signup regression. Keep PR #312 fresh-signup save path intact.
+
+### Checklist
+
+- [x] Branch + WIP (this section)
+- [x] L10n keys (en + pt) + gen — `signupHeading`, `confirmPassword`,
+  `passwordMismatch`, `passwordStrengthWeak/Medium/Strong`,
+  `signupAgeRequiredHint`, `signupAgeConfirmationLead`, `displayNameRequired`;
+  removed `pleaseEnterName`.
+- [x] AuthRepository.signUpWithEmail + displayName (omit-on-null in `data:`)
+- [x] AuthNotifier.signUpWithEmail + displayName
+- [x] login_screen.dart: controllers, fields, strength bar, heading, inline
+  legal (`_AgeGateLabel`), footer suppression, helper text
+- [x] ProfileNotifier.saveOnboardingProfile: drop displayName
+- [x] onboarding_screen.dart: remove name field + guard + arg
+- [x] Widget tests: signup_form_test (new), signup_age_confirmation,
+  login_screen, duplicate_email_snackbar, onboarding (no name), save_error
+- [x] Unit tests: auth_notifier + auth_repository (displayName forward),
+  profile_notifier_save (no displayName)
+- [x] E2E selectors + specs (auth, onboarding, charter-d)
+- [x] format + analyze (0 issues) + test (591 passed across touched dirs)
+- [ ] commit locally (next)
+
+---
+
 ## Session checkpoint — 2026-06-08 (pre-compact handoff)
 
 **Main HEAD:** `52bf93e3` (post Phase 34 closeout #313).

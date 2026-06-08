@@ -266,6 +266,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signUp => 'SIGN UP';
 
   @override
+  String get signupHeading => 'CREATE ACCOUNT';
+
+  @override
+  String get confirmPassword => 'Confirm password';
+
+  @override
+  String get passwordMismatch => 'Passwords do not match';
+
+  @override
+  String get passwordStrengthWeak => 'Weak — add more characters';
+
+  @override
+  String get passwordStrengthMedium => 'Medium — add numbers or symbols';
+
+  @override
+  String get passwordStrengthStrong => 'Strong password!';
+
+  @override
+  String get signupAgeRequiredHint => 'Confirm your age to continue';
+
+  @override
   String get forgotPassword => 'Forgot password?';
 
   @override
@@ -397,6 +418,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordTooShort => 'Password must be at least 6 characters';
 
   @override
+  String get displayNameRequired => 'Enter a name';
+
+  @override
   String get forgotPasswordHint =>
       'Enter your email above, then tap \"Forgot password?\"';
 
@@ -518,9 +542,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get letsGo => 'LET\'S GO';
-
-  @override
-  String get pleaseEnterName => 'Please enter your name.';
 
   @override
   String get failedToSaveProfile => 'Failed to save profile. Please try again.';
@@ -3048,6 +3069,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get signupAgeConfirmation =>
       'I confirm I am 18 years of age or older.';
+
+  @override
+  String get signupAgeConfirmationLead => 'I\'m 18+ and agree to the';
 
   @override
   String get bodyweightConsentTitle => 'Body weight is sensitive data.';

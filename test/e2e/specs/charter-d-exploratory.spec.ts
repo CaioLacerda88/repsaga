@@ -93,8 +93,11 @@ async function signupFreshUser(page: Page, email: string, pass: string): Promise
   const toggleSignUp = page.locator('[flt-semantics-identifier="auth-toggle-signup"]');
   await expect(toggleSignUp).toBeVisible({ timeout: 15_000 });
   await toggleSignUp.click();
+  // Option A — the full signup form requires display name + confirm password.
+  await flutterFill(page, '[flt-semantics-identifier="auth-display-name-input"]', 'Sam DataNerd');
   await flutterFill(page, '[flt-semantics-identifier="auth-email-input"]', email);
   await flutterFill(page, '[flt-semantics-identifier="auth-password-input"]', pass);
+  await flutterFill(page, '[flt-semantics-identifier="auth-confirm-password-input"]', pass);
   // Legal PR 2 — age gate: Sign Up CTA disabled until checkbox ticked.
   await expect(
     page.locator(AUTH.ageConfirmationCheckbox),
@@ -109,9 +112,10 @@ async function completeOnboarding(page: Page): Promise<void> {
   await expect(getStarted).toBeVisible({ timeout: 15_000 });
   await getStarted.click();
 
-  const displayName = page.locator('[flt-semantics-identifier="onboarding-display-name"]');
-  await expect(displayName).toBeVisible({ timeout: 10_000 });
-  await flutterFill(page, '[flt-semantics-identifier="onboarding-display-name"]', 'Sam DataNerd');
+  // Option A — onboarding no longer collects the display name (it's on the
+  // signup form). Wait for the page-2 indicator, then submit fitness signals.
+  const profileSetup = page.locator('[flt-semantics-identifier="onboarding-beginner"]');
+  await expect(profileSetup).toBeVisible({ timeout: 10_000 });
 
   const letsGo = page.locator('[flt-semantics-identifier="onboarding-lets-go"]');
   await expect(letsGo).toBeVisible({ timeout: 10_000 });

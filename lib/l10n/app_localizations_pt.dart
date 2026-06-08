@@ -267,6 +267,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signUp => 'CADASTRAR';
 
   @override
+  String get signupHeading => 'CRIAR CONTA';
+
+  @override
+  String get confirmPassword => 'Confirmar senha';
+
+  @override
+  String get passwordMismatch => 'As senhas não coincidem';
+
+  @override
+  String get passwordStrengthWeak => 'Fraca — adicione mais caracteres';
+
+  @override
+  String get passwordStrengthMedium => 'Média — adicione números ou símbolos';
+
+  @override
+  String get passwordStrengthStrong => 'Ótima senha!';
+
+  @override
+  String get signupAgeRequiredHint => 'Confirme sua idade para continuar';
+
+  @override
   String get forgotPassword => 'Esqueceu a senha?';
 
   @override
@@ -398,6 +419,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get passwordTooShort => 'A senha deve ter pelo menos 6 caracteres';
 
   @override
+  String get displayNameRequired => 'Insira um nome';
+
+  @override
   String get forgotPasswordHint =>
       'Digite seu e-mail acima e toque em \"Esqueceu a senha?\"';
 
@@ -521,9 +545,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get letsGo => 'VAMOS LÁ';
-
-  @override
-  String get pleaseEnterName => 'Por favor, insira seu nome.';
 
   @override
   String get failedToSaveProfile => 'Falha ao salvar perfil. Tente novamente.';
@@ -3060,6 +3081,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get signupAgeConfirmation => 'Confirmo que tenho 18 anos ou mais.';
+
+  @override
+  String get signupAgeConfirmationLead => 'Tenho 18+ anos e concordo com os';
 
   @override
   String get bodyweightConsentTitle => 'Peso corporal é dado sensível.';

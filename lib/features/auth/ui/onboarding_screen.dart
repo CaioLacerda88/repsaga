@@ -13,7 +13,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/gradient_button.dart';
-import '../../../shared/widgets/app_text_field.dart';
 import '../../analytics/data/models/analytics_event.dart';
 import '../../analytics/providers/analytics_providers.dart';
 import '../../profile/providers/profile_providers.dart';
@@ -30,15 +29,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
 
-  // Page 2: Profile setup state
-  final _nameController = TextEditingController();
+  // Page 2: Profile setup state. The display name is collected on the signup
+  // form now (Option A — full-form signup), so onboarding only gathers the
+  // fitness signals below.
   String _fitnessLevel = 'beginner';
   int _trainingFrequency = 3;
 
   @override
   void dispose() {
     _pageController.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
@@ -61,21 +60,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      if (mounted) {
-        final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.pleaseEnterName)));
-      }
-      return;
-    }
     try {
       await ref
           .read(profileProvider.notifier)
           .saveOnboardingProfile(
-            displayName: name,
             fitnessLevel: _fitnessLevel,
             trainingFrequencyPerWeek: _trainingFrequency,
           );
@@ -294,7 +282,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   _WelcomePage(onNext: _nextPage),
                   _ProfileSetupPage(
-                    nameController: _nameController,
                     fitnessLevel: _fitnessLevel,
                     onFitnessLevelChanged: (level) {
                       setState(() => _fitnessLevel = level);
@@ -391,7 +378,6 @@ class _WelcomePage extends StatelessWidget {
 
 class _ProfileSetupPage extends StatelessWidget {
   const _ProfileSetupPage({
-    required this.nameController,
     required this.fitnessLevel,
     required this.onFitnessLevelChanged,
     required this.trainingFrequency,
@@ -400,7 +386,6 @@ class _ProfileSetupPage extends StatelessWidget {
     required this.onBack,
   });
 
-  final TextEditingController nameController;
   final String fitnessLevel;
   final ValueChanged<String> onFitnessLevelChanged;
   final int trainingFrequency;
@@ -446,16 +431,6 @@ class _ProfileSetupPage extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 40),
-          AppTextField(
-            label: l10n.displayName,
-            controller: nameController,
-            textInputAction: TextInputAction.done,
-            prefixIcon: Icons.person_outlined,
-            maxLength: 50,
-            showCounter: false,
-            semanticsIdentifier: 'onboarding-display-name',
-          ),
-          const SizedBox(height: 24),
           Text(l10n.fitnessLevel, style: AppTextStyles.title),
           const SizedBox(height: 12),
           // BUG-028: branded pill replacement for the previous M3 ChoiceChip.

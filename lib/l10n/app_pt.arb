@@ -85,6 +85,13 @@
   "password": "Senha",
   "logIn": "ENTRAR",
   "signUp": "CADASTRAR",
+  "signupHeading": "CRIAR CONTA",
+  "confirmPassword": "Confirmar senha",
+  "passwordMismatch": "As senhas não coincidem",
+  "passwordStrengthWeak": "Fraca — adicione mais caracteres",
+  "passwordStrengthMedium": "Média — adicione números ou símbolos",
+  "passwordStrengthStrong": "Ótima senha!",
+  "signupAgeRequiredHint": "Confirme sua idade para continuar",
   "forgotPassword": "Esqueceu a senha?",
   "sendResetEmail": "Enviar E-mail de Recuperação",
 
@@ -133,6 +140,7 @@
   "emailInvalid": "Insira um e-mail válido",
   "passwordRequired": "Senha é obrigatória",
   "passwordTooShort": "A senha deve ter pelo menos 6 caracteres",
+  "displayNameRequired": "Insira um nome",
   "forgotPasswordHint": "Digite seu e-mail acima e toque em \"Esqueceu a senha?\"",
   "resetPassword": "Redefinir Senha",
   "sendResetEmailTo": "Enviar e-mail de redefinição de senha para {email}?",
@@ -173,7 +181,6 @@
   "howOftenTrain": "Com que frequência você planeja treinar?",
   "weeklyGoalHint": "Sua meta semanal \u2014 você pode alterar a qualquer momento",
   "letsGo": "VAMOS LÁ",
-  "pleaseEnterName": "Por favor, insira seu nome.",
   "failedToSaveProfile": "Falha ao salvar perfil. Tente novamente.",
   "onboardingErrorOffline": "Você está offline. Verifique sua conexão e tente novamente.",
   "onboardingErrorSessionExpired": "Sua sessão expirou. Faça login novamente.",
@@ -941,6 +948,7 @@
   "usageAnalyticsSubtitle": "Ajuda o RepSaga a melhorar. Você pode desativar a qualquer momento.",
 
   "signupAgeConfirmation": "Confirmo que tenho 18 anos ou mais.",
+  "signupAgeConfirmationLead": "Tenho 18+ anos e concordo com os",
 
   "bodyweightConsentTitle": "Peso corporal é dado sensível.",
   "bodyweightConsentBody": "Conforme a Política de Privacidade, peso corporal é dado de saúde e requer seu consentimento explícito. É usado apenas para melhorar o cálculo de XP em exercícios de peso corporal. Você pode revogar este consentimento a qualquer momento em Perfil → Configurações → Privacidade.",

@@ -110,6 +110,7 @@ void main() {
           email: any(named: 'email'),
           password: any(named: 'password'),
           locale: any(named: 'locale'),
+          displayName: any(named: 'displayName'),
         ),
       ).thenAnswer((_) async => _FakeAuthResponseNoSession());
 
@@ -136,6 +137,7 @@ void main() {
           email: 'a@b.com',
           password: 'pw',
           locale: 'pt',
+          displayName: any(named: 'displayName'),
         ),
       ).called(1);
 
@@ -152,6 +154,7 @@ void main() {
           email: any(named: 'email'),
           password: any(named: 'password'),
           locale: any(named: 'locale'),
+          displayName: any(named: 'displayName'),
         ),
       ).thenAnswer((_) async => _FakeAuthResponseNoSession());
 
@@ -178,12 +181,68 @@ void main() {
           email: 'a@b.com',
           password: 'pw',
           locale: 'en',
+          displayName: any(named: 'displayName'),
         ),
       ).called(1);
 
       // User-visible outcome — same contract as the 'pt' path: the post-
       // signup state-lift to `signupPendingEmailProvider` must fire so the
       // "check your inbox" screen has an email to display.
+      expect(container.read(signupPendingEmailProvider), 'a@b.com');
+    });
+
+    // Option A (full-form signup): the display name collected on the signup
+    // form must be forwarded to the repository so `handle_new_user` can seed
+    // the profile row. Two assertions, both required (behavior-not-wiring):
+    //   1. the captured `displayName` equals what the caller passed (the
+    //      forwarding hook), AND
+    //   2. the post-signup pending-email state lifts (the surfaced UX) —
+    //      proving the notifier reached the post-await branch with the name
+    //      threaded through, not swallowed.
+    test('forwards the display name collected at signup', () async {
+      when(
+        () => mockRepo.signUpWithEmail(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          locale: any(named: 'locale'),
+          displayName: any(named: 'displayName'),
+        ),
+      ).thenAnswer((_) async => _FakeAuthResponseNoSession());
+
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(mockRepo),
+          hiveServiceProvider.overrideWithValue(mockHive),
+          localeProvider.overrideWith(
+            () => StubLocaleNotifier(const Locale('pt')),
+          ),
+        ],
+      );
+      when(() => mockRepo.currentSession).thenReturn(null);
+      container.read(authNotifierProvider);
+      addTearDown(container.dispose);
+
+      await container
+          .read(authNotifierProvider.notifier)
+          .signUpWithEmail(
+            email: 'a@b.com',
+            password: 'pw',
+            displayName: 'Joao',
+          );
+      await _waitForSettled(container);
+
+      final captured = verify(
+        () => mockRepo.signUpWithEmail(
+          email: 'a@b.com',
+          password: 'pw',
+          locale: any(named: 'locale'),
+          displayName: captureAny(named: 'displayName'),
+        ),
+      ).captured;
+      expect(captured.single, 'Joao');
+
+      // User-visible outcome: the pending-email state lifted, so the
+      // notifier reached the post-signup branch with the name threaded.
       expect(container.read(signupPendingEmailProvider), 'a@b.com');
     });
   });

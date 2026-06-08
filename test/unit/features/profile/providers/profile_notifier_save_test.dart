@@ -214,10 +214,7 @@ void main() {
         await expectLater(
           () => container
               .read(profileProvider.notifier)
-              .saveOnboardingProfile(
-                displayName: 'Alice',
-                fitnessLevel: 'beginner',
-              ),
+              .saveOnboardingProfile(fitnessLevel: 'beginner'),
           returnsNormally,
         );
 
@@ -278,25 +275,30 @@ void main() {
       await container
           .read(profileProvider.notifier)
           .saveOnboardingProfile(
-            displayName: 'Alice',
             fitnessLevel: 'beginner',
             trainingFrequencyPerWeek: 4,
           );
 
       // Verify the userId forwarded to the repository IS the session
-      // user id — not a stale cache, not a null sentinel.
+      // user id — not a stale cache, not a null sentinel. Option A: the
+      // display name is NO LONGER sent from onboarding (it lands via the
+      // signup form -> handle_new_user trigger), so we assert
+      // `displayName` is null in the upsert payload — onboarding must not
+      // clobber the trigger-seeded name with an empty value.
       final captured = verify(
         () => profileRepo.upsertProfile(
           userId: captureAny(named: 'userId'),
-          displayName: 'Alice',
+          displayName: captureAny(named: 'displayName'),
           fitnessLevel: 'beginner',
           trainingFrequencyPerWeek: 4,
           onboardedAt: captureAny(named: 'onboardedAt'),
         ),
       ).captured;
-      expect(captured.first, _userId);
+      expect(captured[0], _userId);
+      // displayName forwarded as null — onboarding no longer writes the name.
+      expect(captured[1], isNull);
       // onboardedAt was stamped (not null) — PR 1's anchor still fires.
-      expect(captured.last, isA<DateTime>());
+      expect(captured[2], isA<DateTime>());
     });
 
     test('updateTrainingFrequency invokes updateTrainingFrequency on the repo '
