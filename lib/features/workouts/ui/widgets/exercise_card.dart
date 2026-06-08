@@ -698,10 +698,15 @@ class _FillRemainingButton extends StatelessWidget {
       // container + explicitChildNodes establishes the boundary so the
       // TextButton stays its own discrete tappable node — see the same
       // rule applied to _AddSetButton above and the lessons.md entry on
-      // Semantics(identifier:) flag pairing.
+      // Semantics(identifier:) flag pairing. The `identifier` sits on this
+      // node (the actual tap target wraps the TextButton directly) so the
+      // E2E selector `WORKOUT.fillRemainingButton` addresses the button,
+      // not a sibling — pair-rule per cluster `semantics-identifier-pair-rule`
+      // + `semantics-button-missing`.
       child: Semantics(
         container: true,
         explicitChildNodes: true,
+        identifier: 'workout-fill-remaining',
         label: l10n.fillRemainingSetsSemantics,
         child: TextButton(
           onPressed: onPressed,

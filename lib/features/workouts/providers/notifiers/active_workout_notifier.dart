@@ -1053,6 +1053,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         }
         if (lastCompleted == null) return e;
 
+        // Bind a final non-nullable local AFTER the guard. `lastCompleted` is a
+        // non-final captured variable, so flow-promotion doesn't carry across
+        // the inner closure boundary — reading it there would otherwise force a
+        // `!` on every access. Promoting once here makes BOTH the weight and
+        // reps reads symmetric, non-null, and resilient to future edits that
+        // might add another field read (no per-line `!` to remember). The
+        // analyzer rejects redundant `!`, so a final local is the explicit-
+        // contract way to honour the "don't rely on flow-promotion" intent.
+        final source = lastCompleted;
+
         return e.copyWith(
           sets: e.sets.map((s) {
             // Fill every incomplete set regardless of position — the old
@@ -1060,8 +1070,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
             // bug that hid earlier sets from back-filling.
             if (!s.isCompleted) {
               return s.copyWith(
-                weight: lastCompleted!.weight,
-                reps: lastCompleted.reps,
+                weight: source.weight,
+                reps: source.reps,
                 isCompleted: true,
               );
             }

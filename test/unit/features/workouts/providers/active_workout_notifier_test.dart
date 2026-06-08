@@ -2926,6 +2926,10 @@ void main() {
         expect(result[2].weight, 90.0);
         expect(result[2].reps, 3);
         expect(result[2].isCompleted, isTrue);
+        // The two already-completed sets are NOT clobbered — fill only
+        // writes to incomplete rows, leaving set 1 @ 50 and set 2 @ 90.
+        expect(result[0].weight, 50.0);
+        expect(result[1].weight, 90.0);
       },
     );
   });
