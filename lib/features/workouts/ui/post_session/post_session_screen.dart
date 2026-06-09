@@ -817,8 +817,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     final bp = state.dominantBodyPart;
     final bpLabel = bp == null ? '' : (state.bodyPartLabels[bp] ?? bp.dbValue);
     final rank = payload.dominantBodyPartRank;
-    final classSlug = payload.characterClassSlug;
-    final className = classSlug.toUpperCase();
+    // Cluster slug-rendered-as-display-name: the payload carries the stable
+    // class *slug* (persistence/share token), never a display string. Resolve
+    // it to the enum and localize before rendering — mirrors
+    // `_buildClassChangeCut`. Fallback to `initiate` for an unrecognized slug
+    // so a forward-compat (e.g. v2 `wayfarer`) or corrupt token degrades to the
+    // newcomer label instead of crashing the share card.
+    final cls = CharacterClass.values.firstWhere(
+      (c) => c.slug == payload.characterClassSlug,
+      orElse: () => CharacterClass.initiate,
+    );
+    final className = localizedClassName(cls, l10n).toUpperCase();
     final pr = payload.pr;
     // Achievement Frame top-collar saga eyebrow: dropped on class-change
     // sessions (Q4 lock — top collar reads NEW class name only when the
@@ -835,9 +844,15 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     final bpRank = bpLabel.isEmpty || rank == null
         ? bpLabel
         : '$bpLabel · Rank $rank';
-    // Discreet eyebrow + d-hero keep their existing copy rules.
+    // Discreet eyebrow + d-hero keep their existing copy rules. The
+    // class-change "awakened" framing reuses `b3ClassSubline` — the same
+    // localized standalone subline the B3 cinematic cut renders ("AWAKENED." /
+    // "DESPERTOU.") — so the card no longer mixes a localized class name with a
+    // hardcoded pt word (cluster slug-rendered-as-display-name sibling: the
+    // eyebrow must follow app locale, like every share-card string except the
+    // brand-constant REPSAGA wordmark).
     final discreetEyebrow = payload.isClassChange
-        ? '$className DESPERTOU.'
+        ? '$className ${l10n.b3ClassSubline}'
         : bpRank;
     final discreetHero = payload.isClassChange
         ? className
