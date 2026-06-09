@@ -23,8 +23,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  // Option A (full-form signup): the display name + confirm-password fields
+  // are signup-only. They are created here for the screen lifetime (cheap)
+  // but only mounted into the tree when `_isSignUp`, and cleared on every
+  // mode flip so a Login -> Sign Up toggle never inherits stale text.
+  final _displayNameController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isSignUp = false;
   String? _errorMessage;
+
+  // Live password-strength score (0–3) for the non-blocking signup strength
+  // bar. Recomputed on every password keystroke (signup mode only). Purely
+  // presentational — it NEVER gates submission; `_validatePassword` (>= 6
+  // chars) remains the only hard requirement.
+  int _passwordStrength = 0;
 
   // Legal PR 2 — age-confirmation checkbox state. Local to the screen
   // (transient per signup attempt — no Hive). Required ticked before the
@@ -39,6 +51,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _displayNameController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -47,11 +61,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isSignUp = !_isSignUp;
       _errorMessage = null;
       _passwordController.clear();
+      // Clear the signup-only fields so neither mode inherits the other's
+      // text (and the confirm-password validator can't compare against a
+      // stale password).
+      _displayNameController.clear();
+      _confirmPasswordController.clear();
+      _passwordStrength = 0;
       // Reset on every mode flip so a user toggling Login -> Sign Up
       // can't accidentally inherit a pre-checked state from a prior
       // mount or hot reload.
       _ageConfirmed = false;
     });
+  }
+
+  /// Pure local password-strength scoring for the non-blocking signup bar.
+  /// Mirrors `docs/signup-screen-mockup-v1.html` §3:
+  ///   * 0 — empty.
+  ///   * 1 (weak)   — length >= 6.
+  ///   * 2 (medium) — length >= 8 OR contains a digit OR a special char.
+  ///   * 3 (strong) — length >= 8 AND a digit AND a special char.
+  /// Never gates submission — `_validatePassword` is the only hard rule.
+  static int passwordStrengthScore(String value) {
+    if (value.isEmpty) return 0;
+    final hasDigit = value.contains(RegExp(r'\d'));
+    final hasSpecial = value.contains(RegExp(r'[^A-Za-z0-9]'));
+    final longEnough = value.length >= 8;
+    if (longEnough && hasDigit && hasSpecial) return 3;
+    if (longEnough || hasDigit || hasSpecial) return 2;
+    if (value.length >= 6) return 1;
+    return 0;
   }
 
   void _clearError() {
@@ -79,7 +117,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // `onboarded_at` column instead (a fresh signup has no profile row
       // until `handle_new_user` trigger fires, so the derived provider
       // returns `true` deterministically — no flag write needed).
-      await notifier.signUpWithEmail(email: email, password: password);
+      await notifier.signUpWithEmail(
+        email: email,
+        password: password,
+        // Option A — collect the display name at signup so onboarding only
+        // gathers fitness signals. Trimmed; the validator already enforced
+        // non-empty before we got here.
+        displayName: _displayNameController.text.trim(),
+      );
       _finishAutofillIfSucceeded();
       // If signup succeeded and email confirmation is pending, navigate.
       if (mounted &&
@@ -190,6 +235,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return null;
   }
 
+  /// Display-name validator (signup only). Non-empty is the only rule — no
+  /// length minimum, matching the mockup's "Como quer ser chamado?" intent.
+  String? _validateDisplayName(String? value) {
+    final l10n = AppLocalizations.of(context);
+    if (value == null || value.trim().isEmpty) return l10n.displayNameRequired;
+    return null;
+  }
+
+  /// Confirm-password validator (signup only). Must equal the live password
+  /// field value; surfaces `passwordMismatch` otherwise.
+  String? _validateConfirmPassword(String? value) {
+    final l10n = AppLocalizations.of(context);
+    if (value == null || value.isEmpty) return l10n.passwordRequired;
+    if (value != _passwordController.text) return l10n.passwordMismatch;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -248,21 +310,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
+                    // Mode context line. In signup mode this is a promoted
+                    // Rajdhani-700 16sp "CREATE ACCOUNT" heading (full cream)
+                    // per Option A — it replaces the dim subtitle so the
+                    // login-vs-signup mode is unambiguous. In login mode it
+                    // stays the dim 16sp "Welcome back" subtitle. The
+                    // `auth-welcome-back` identifier is preserved across both
+                    // modes so the existing E2E anchor keeps resolving.
                     Semantics(
                       container: true,
-                      identifier: 'auth-welcome-back',
+                      identifier: _isSignUp
+                          ? 'auth-signup-heading'
+                          : 'auth-welcome-back',
                       child: Text(
-                        _isSignUp ? l10n.createYourAccount : l10n.welcomeBack,
-                        style: AppTextStyles.body.copyWith(
-                          fontSize: 16,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
+                        _isSignUp ? l10n.signupHeading : l10n.welcomeBack,
+                        style: _isSignUp
+                            ? AppTextStyles.display.copyWith(fontSize: 16)
+                            : AppTextStyles.body.copyWith(
+                                fontSize: 16,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
+                                ),
+                              ),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 40),
+                    // Display name — signup only, above email. Non-empty
+                    // validation only (no length minimum). Forwarded into
+                    // user_metadata.display_name on signUp.
+                    if (_isSignUp) ...[
+                      AppTextField(
+                        // Stable key: signup inserts this field ABOVE email,
+                        // shifting positions. Without keys Flutter reuses
+                        // sibling State by position, leaking the password
+                        // field's obscured state onto email.
+                        // cluster: missing-key-state-reuse.
+                        key: const ValueKey('auth-display-name-field'),
+                        label: l10n.displayName,
+                        controller: _displayNameController,
+                        validator: _validateDisplayName,
+                        textInputAction: TextInputAction.next,
+                        prefixIcon: Icons.person_outlined,
+                        maxLength: 50,
+                        showCounter: false,
+                        semanticsIdentifier: 'auth-display-name-input',
+                        autofillHints: const [AutofillHints.name],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     // Inline error message
                     if (_errorMessage != null) ...[
                       Semantics(
@@ -303,6 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                     ],
                     AppTextField(
+                      key: const ValueKey('auth-email-field'),
                       label: l10n.email,
                       controller: _emailController,
                       validator: _validateEmail,
@@ -314,13 +411,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
+                      key: const ValueKey('auth-password-field'),
                       label: l10n.password,
                       controller: _passwordController,
                       validator: _validatePassword,
                       obscureText: true,
-                      textInputAction: TextInputAction.done,
+                      // Signup chains password -> confirm -> submit; login
+                      // submits directly from the password field.
+                      textInputAction: _isSignUp
+                          ? TextInputAction.next
+                          : TextInputAction.done,
                       prefixIcon: Icons.lock_outlined,
-                      onFieldSubmitted: (_) => _submit(),
+                      onFieldSubmitted: _isSignUp ? null : (_) => _submit(),
+                      onChanged: _isSignUp
+                          ? (value) {
+                              final score = passwordStrengthScore(value);
+                              if (score != _passwordStrength) {
+                                setState(() => _passwordStrength = score);
+                              }
+                            }
+                          : null,
                       semanticsIdentifier: 'auth-password-input',
                       // Login → ask Credential Manager to FILL an existing
                       // password (`AutofillHints.password`). Signup → ask it
@@ -331,6 +441,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ? const [AutofillHints.newPassword]
                           : const [AutofillHints.password],
                     ),
+                    // Non-blocking 3-segment password-strength bar (signup
+                    // only). Purely presentational — never gates submit.
+                    if (_isSignUp) ...[
+                      const SizedBox(height: 8),
+                      _PasswordStrengthBar(score: _passwordStrength),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        key: const ValueKey('auth-confirm-password-field'),
+                        label: l10n.confirmPassword,
+                        controller: _confirmPasswordController,
+                        validator: _validateConfirmPassword,
+                        obscureText: true,
+                        textInputAction: TextInputAction.done,
+                        prefixIcon: Icons.lock_outlined,
+                        // Gate the keyboard "Done" submit on the SAME
+                        // conditions the Sign Up CTA uses
+                        // (`isLoading || (_isSignUp && !_ageConfirmed)`).
+                        // The confirm field only exists in signup mode, so
+                        // `(!_ageConfirmed || isLoading)` is the equivalent
+                        // disable predicate here. Without this, pressing
+                        // "Done" bypassed the age-gate structural guarantee
+                        // and let a user sign up with the checkbox unticked.
+                        onFieldSubmitted: (!_ageConfirmed || isLoading)
+                            ? null
+                            : (_) => _submit(),
+                        semanticsIdentifier: 'auth-confirm-password-input',
+                        autofillHints: const [AutofillHints.newPassword],
+                      ),
+                    ],
                     if (!_isSignUp) ...[
                       Align(
                         alignment: Alignment.centerRight,
@@ -361,98 +500,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // mirrored by ToS §3 + Privacy Policy §8).
                     if (_isSignUp) ...[
                       const SizedBox(height: 8),
+                      // Option A — inline the Privacy + Terms links INTO the
+                      // age-gate checkbox label (one LGPD-compliant sentence)
+                      // instead of an orphaned chip row. Reuses the existing
+                      // `privacyPolicy` / `termsOfService` link-label strings.
+                      // The links use `MaterialTapTargetSize.padded` (48dp
+                      // floor) rather than the prior `shrinkWrap` chips —
+                      // BUG-018 tap-target compliance.
                       Semantics(
                         container: true,
                         identifier: 'auth-age-confirmation',
-                        child: CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          dense: true,
-                          value: _ageConfirmed,
-                          onChanged: isLoading
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    _ageConfirmed = value ?? false;
-                                  });
-                                },
-                          title: Text(
-                            l10n.signupAgeConfirmation,
-                            style: AppTextStyles.body.copyWith(fontSize: 14),
-                          ),
-                        ),
-                      ),
-                      // PR #309 review N1 — the age-gate disclosure references
-                      // BOTH ToS §3 (minimum-age clause) and Privacy Policy §8
-                      // (LGPD Art. 14 disclosure). Render two side-by-side
-                      // chips so the user has direct access to either,
-                      // matching the `@signupAgeConfirmationLink` ARB
-                      // description. Reuses the existing `privacyPolicy` +
-                      // `termsOfService` link-label strings for parity with
-                      // the legal footer at the bottom of the screen.
-                      Padding(
-                        padding: const EdgeInsets.only(left: 12, bottom: 8),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Semantics(
-                              container: true,
-                              identifier: 'auth-age-link-privacy',
-                              child: TextButton(
-                                onPressed: isLoading
-                                    ? null
-                                    : () => context.push('/privacy-policy'),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                    horizontal: 4,
-                                  ),
-                                  minimumSize: const Size(0, 0),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  l10n.privacyPolicy,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.85,
-                                    ),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
+                            Checkbox(
+                              value: _ageConfirmed,
+                              onChanged: isLoading
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _ageConfirmed = value ?? false;
+                                      });
+                                    },
                             ),
-                            Text(
-                              l10n.andSeparator,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                            ),
-                            Semantics(
-                              container: true,
-                              identifier: 'auth-age-link-terms',
-                              child: TextButton(
-                                onPressed: isLoading
-                                    ? null
-                                    : () => context.push('/terms-of-service'),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                    horizontal: 4,
-                                  ),
-                                  minimumSize: const Size(0, 0),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  l10n.termsOfService,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.85,
-                                    ),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: _AgeGateLabel(
+                                  enabled: !isLoading,
+                                  onTapTerms: () =>
+                                      context.push('/terms-of-service'),
+                                  onTapPrivacy: () =>
+                                      context.push('/privacy-policy'),
                                 ),
                               ),
                             ),
@@ -477,6 +556,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ? 'auth-signup-btn'
                           : 'auth-login-btn',
                     ),
+                    // Helper text explaining WHY the signup CTA is disabled —
+                    // the disabled GradientButton alone is a subtle cue on the
+                    // dark surface. Only shown while the age-gate blocks submit.
+                    if (_isSignUp && !_ageConfirmed) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.signupAgeRequiredHint,
+                        style: AppTextStyles.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -547,14 +637,155 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _LegalFooter(),
+                    // Login mode keeps the bottom legal footer. In signup mode
+                    // the inline age-gate checkbox label already satisfies the
+                    // LGPD disclosure requirement, so the footer is suppressed
+                    // to avoid duplicated Terms/Privacy link sets.
+                    if (!_isSignUp) ...[
+                      const SizedBox(height: 16),
+                      _LegalFooter(),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Non-blocking 3-segment password-strength bar (signup mode only).
+///
+/// Purely presentational — it visualizes [_LoginScreenState.passwordStrengthScore]
+/// (0–3) and NEVER gates submission. Three fixed-width segments fill from the
+/// left as the score rises; the active color escalates error -> warning ->
+/// success. A label below names the tier (weak / medium / strong). When the
+/// score is 0 (empty field) the bar shows three empty tracks and no label, so
+/// it occupies stable vertical space without shouting at a not-yet-typed field.
+class _PasswordStrengthBar extends StatelessWidget {
+  const _PasswordStrengthBar({required this.score});
+
+  /// 0 (empty) … 3 (strong). See [_LoginScreenState.passwordStrengthScore].
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final emptyTrack = AppColors.textDim.withValues(alpha: 0.18);
+
+    // Active color + label keyed off the score. Null label at score 0 keeps
+    // the bar quiet before the user types.
+    final (Color activeColor, String? label) = switch (score) {
+      3 => (AppColors.success, l10n.passwordStrengthStrong),
+      2 => (AppColors.warning, l10n.passwordStrengthMedium),
+      1 => (AppColors.error, l10n.passwordStrengthWeak),
+      _ => (emptyTrack, null),
+    };
+
+    return Semantics(
+      container: true,
+      identifier: 'auth-password-strength',
+      // Announce the tier (or "empty") so screen-reader users get the same
+      // signal sighted users read off the colored segments.
+      label: label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: List.generate(3, (index) {
+              final filled = index < score;
+              return Expanded(
+                child: Container(
+                  height: 4,
+                  margin: EdgeInsets.only(right: index < 2 ? 6 : 0),
+                  decoration: BoxDecoration(
+                    color: filled ? activeColor : emptyTrack,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              );
+            }),
+          ),
+          if (label != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(color: activeColor),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline age-gate disclosure label: a single LGPD-compliant sentence with the
+/// Terms and Privacy links embedded via [WidgetSpan]/[TextButton]. Replaces the
+/// orphaned chip row PR #309 shipped. The link buttons keep the default
+/// [MaterialTapTargetSize.padded] (48dp floor) — BUG-018 tap-target compliance.
+class _AgeGateLabel extends StatelessWidget {
+  const _AgeGateLabel({
+    required this.enabled,
+    required this.onTapTerms,
+    required this.onTapPrivacy,
+  });
+
+  final bool enabled;
+  final VoidCallback onTapTerms;
+  final VoidCallback onTapPrivacy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final baseStyle = AppTextStyles.body.copyWith(
+      fontSize: 14,
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+    );
+    final linkStyle = AppTextStyles.body.copyWith(
+      fontSize: 14,
+      color: theme.colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    );
+
+    WidgetSpan linkSpan(String label, String identifier, VoidCallback onTap) {
+      return WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Semantics(
+          container: true,
+          // Cluster: `semantics-button-missing`. Without `button: true` the
+          // outer Semantics node is passive on Flutter web's AOM, so
+          // Playwright taps land but don't forward to the inner InkWell —
+          // the inline legal links would be untappable in E2E.
+          button: true,
+          identifier: identifier,
+          child: TextButton(
+            onPressed: enabled ? onTap : null,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              minimumSize: const Size(0, 48),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text(label, style: linkStyle),
+          ),
+        ),
+      );
+    }
+
+    // Sentence: "I'm 18+ and agree to the {Terms} and the {Privacy}".
+    // `signupAgeConfirmationLead` carries the leading clause; the links reuse
+    // the existing termsOfService / privacyPolicy labels and `andSeparator`.
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: '${l10n.signupAgeConfirmationLead} '),
+          linkSpan(l10n.termsOfService, 'auth-age-link-terms', onTapTerms),
+          TextSpan(text: l10n.andSeparator),
+          linkSpan(l10n.privacyPolicy, 'auth-age-link-privacy', onTapPrivacy),
+        ],
       ),
     );
   }

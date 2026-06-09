@@ -58,29 +58,45 @@ class AuthRepository extends BaseRepository {
 
   /// Sign up with email and password.
   ///
-  /// [locale] — when non-null, forwarded to Supabase as
-  /// `data: {'locale': locale}` so the new auth.users row carries
-  /// `user_metadata.locale`. The hosted email templates read this via the Go
-  /// conditional `{{ if eq .Data.locale "pt" }}` to render either pt-BR or
-  /// English (the `{{ else }}` branch) — see
-  /// `docs/auth-email-templates/README.md`. Null/omitted means "do not write
-  /// user_metadata" so we never clobber metadata set by other flows.
+  /// [locale] — when non-null, forwarded to Supabase as `data.locale` so the
+  /// new auth.users row carries `user_metadata.locale`. The hosted email
+  /// templates read this via the Go conditional `{{ if eq .Data.locale "pt" }}`
+  /// to render either pt-BR or English (the `{{ else }}` branch) — see
+  /// `docs/auth-email-templates/README.md`.
+  ///
+  /// [displayName] — when non-null, forwarded as `data.display_name`. The
+  /// `handle_new_user` trigger reads `raw_user_meta_data->>'display_name'`
+  /// when seeding the `profiles` row, so collecting the name at signup means
+  /// onboarding no longer has to ask for it (Option A — full-form signup).
+  ///
+  /// Each key is included only when its value is non-null, and the whole
+  /// `data:` map is left null when BOTH are null — so the underlying `signUp`
+  /// gets its default `data: null` and we leave `user_metadata` untouched
+  /// server-side (never overwrite OAuth/admin-set metadata).
   Future<AuthResponse> signUpWithEmail({
     required String email,
     required String password,
     String? locale,
+    String? displayName,
   }) {
-    // Build the metadata payload explicitly: null when no locale was passed
-    // (so the underlying signUp gets its default `data: null` and we leave
-    // `user_metadata` untouched server-side — never overwrite OAuth/admin-
-    // set metadata), or a single-key map when locale is set. Typed
-    // `Map<String, dynamic>?` lines up with `GoTrueClient.signUp(data:)`.
-    final Map<String, dynamic>? localeData = locale == null
+    // Typed `Map<String, dynamic>?` lines up with `GoTrueClient.signUp(data:)`.
+    // Stay null when there is nothing to write so we never send an empty map.
+    final Map<String, dynamic>? signUpData =
+        (locale == null && displayName == null)
         ? null
-        : {'locale': locale};
+        // Use `if (x != null)` collection-if rather than the newer null-aware
+        // map value syntax (`'locale': ?locale`): build_runner's bundled
+        // analyzer on CI can't parse the latter, so the freezed/json_serializable
+        // generators fail at the `auth_repository.dart` parse step.
+        : <String, dynamic>{
+            // ignore: use_null_aware_elements
+            if (locale != null) 'locale': locale,
+            // ignore: use_null_aware_elements
+            if (displayName != null) 'display_name': displayName,
+          };
     return mapException(
       () => _auth
-          .signUp(email: email, password: password, data: localeData)
+          .signUp(email: email, password: password, data: signUpData)
           .timeout(_authTimeout),
     );
   }

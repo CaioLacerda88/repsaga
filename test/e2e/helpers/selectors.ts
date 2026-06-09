@@ -50,6 +50,27 @@ export const AUTH = {
   appTitle: 'text=RepSaga',
   /** "Welcome back" subtitle (sign-in mode) — Semantics(identifier: 'auth-welcome-back') */
   welcomeBack: '[flt-semantics-identifier="auth-welcome-back"]',
+  /**
+   * Option A — "CREATE ACCOUNT" heading shown ONLY in signup mode
+   * (replaces the dim subtitle). Semantics(identifier: 'auth-signup-heading').
+   */
+  signupHeading: '[flt-semantics-identifier="auth-signup-heading"]',
+  /**
+   * Option A — display-name AppTextField (signup mode only), above email.
+   * Semantics(identifier: 'auth-display-name-input').
+   */
+  displayNameInput: '[flt-semantics-identifier="auth-display-name-input"]',
+  /**
+   * Option A — confirm-password AppTextField (signup mode only), below the
+   * strength bar. Semantics(identifier: 'auth-confirm-password-input').
+   */
+  confirmPasswordInput:
+    '[flt-semantics-identifier="auth-confirm-password-input"]',
+  /**
+   * Option A — non-blocking 3-segment password-strength bar (signup mode
+   * only). Semantics(identifier: 'auth-password-strength').
+   */
+  passwordStrengthBar: '[flt-semantics-identifier="auth-password-strength"]',
   /** Inline error message — Semantics(liveRegion: true) sets aria-live */
   errorMessage: '[aria-live="polite"]',
   /**
@@ -100,8 +121,6 @@ export const ONBOARDING = {
    * so tests can assert `not.toBeVisible()` on it.
    */
   nextButton: 'text=NEXT',
-  /** Display name input on page 2 — Semantics(identifier: 'onboarding-display-name') */
-  displayNameInput: '[flt-semantics-identifier="onboarding-display-name"]',
   /** Page 2 final CTA — Semantics(identifier: 'onboarding-lets-go') */
   letsGoButton: '[flt-semantics-identifier="onboarding-lets-go"]',
 } as const;
@@ -1157,11 +1176,6 @@ export const ONBOARDING_FLOW = {
    * carry semantics identifiers.
    */
   profileSetupIndicator: '[flt-semantics-identifier="onboarding-beginner"]',
-  /**
-   * Display name AppTextField on page 2.
-   * Semantics(identifier: 'onboarding-display-name') wraps the AppTextField.
-   */
-  displayNameInput: '[flt-semantics-identifier="onboarding-display-name"]',
   /**
    * "3x" frequency pill — the default selection.
    *

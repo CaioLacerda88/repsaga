@@ -584,6 +584,48 @@ abstract class AppLocalizations {
   /// **'SIGN UP'**
   String get signUp;
 
+  /// Heading shown above the signup form (replaces the dim subtitle in signup mode)
+  ///
+  /// In en, this message translates to:
+  /// **'CREATE ACCOUNT'**
+  String get signupHeading;
+
+  /// Confirm-password field label on the signup form
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get confirmPassword;
+
+  /// Validation error when the confirm-password value differs from the password
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match'**
+  String get passwordMismatch;
+
+  /// Non-blocking password-strength label, weakest tier
+  ///
+  /// In en, this message translates to:
+  /// **'Weak — add more characters'**
+  String get passwordStrengthWeak;
+
+  /// Non-blocking password-strength label, middle tier
+  ///
+  /// In en, this message translates to:
+  /// **'Medium — add numbers or symbols'**
+  String get passwordStrengthMedium;
+
+  /// Non-blocking password-strength label, strongest tier
+  ///
+  /// In en, this message translates to:
+  /// **'Strong password!'**
+  String get passwordStrengthStrong;
+
+  /// Helper text below the disabled signup CTA explaining the age-gate
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your age to continue'**
+  String get signupAgeRequiredHint;
+
   /// Forgot password link text
   ///
   /// In en, this message translates to:
@@ -824,6 +866,12 @@ abstract class AppLocalizations {
   /// **'Password must be at least 6 characters'**
   String get passwordTooShort;
 
+  /// Display-name validation error on the signup form: empty
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name'**
+  String get displayNameRequired;
+
   /// Hint when forgot password tapped without email
   ///
   /// In en, this message translates to:
@@ -1045,12 +1093,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'LET\'S GO'**
   String get letsGo;
-
-  /// Validation: name required on onboarding
-  ///
-  /// In en, this message translates to:
-  /// **'Please enter your name.'**
-  String get pleaseEnterName;
 
   /// Snackbar: profile save failed — safety-net copy for unmapped AppException subtypes on the onboarding save path
   ///
@@ -5202,11 +5244,11 @@ abstract class AppLocalizations {
   /// **'Helps RepSaga improve. You can disable any time.'**
   String get usageAnalyticsSubtitle;
 
-  /// Legal PR 2 — Age-gate checkbox label shown at signup. Required ticked before the Sign Up CTA is enabled (LGPD Art. 14 minimum-age compliance, mirrored by ToS §3 + Privacy Policy §8). The Privacy Policy and Terms of Service references render as two inline tap-links below the checkbox row (PR #309 review N1 — replaces the prior single ToS-only link).
+  /// Leading clause of the inline age-gate checkbox sentence (Option A). Followed inline by the Terms link, the localized 'and' separator, then the Privacy Policy link — e.g. 'I'm 18+ and agree to the Terms and the Privacy Policy'.
   ///
   /// In en, this message translates to:
-  /// **'I confirm I am 18 years of age or older.'**
-  String get signupAgeConfirmation;
+  /// **'I\'m 18+ and agree to the'**
+  String get signupAgeConfirmationLead;
 
   /// Legal PR 2 — Title of the consent dialog shown when the user tries to save a body-weight value before opting in. Reuses the LGPD Art. 11 / Privacy Policy §7 language that classifies body weight as health data.
   ///

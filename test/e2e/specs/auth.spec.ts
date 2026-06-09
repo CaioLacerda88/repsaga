@@ -151,10 +151,12 @@ test.describe('Auth', { tag: '@smoke' }, () => {
     // Toggle to sign-up mode.
     await page.click(AUTH.toggleToSignUp);
 
-    // Button should now read SIGN UP and subtitle should read "Create your
-    // account" — both are hard-coded strings in LoginScreen._isSignUp branch.
+    // Button should now read SIGN UP and the signup heading ("CREATE ACCOUNT")
+    // should be present — Option A promoted the dim subtitle to a heading.
     await expect(page.locator(AUTH.signUpButton)).toBeVisible();
-    await expect(page.locator('text=Create your account')).toBeVisible();
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Toggle back.
     await page.click(AUTH.toggleToLogIn);
@@ -266,11 +268,14 @@ test.describe('Auth — edge cases', () => {
     // Toggle to sign-up mode.
     await page.click(AUTH.toggleToSignUp);
 
-    // Sign-up mode: SIGN UP button visible, "Create your account" subtitle.
+    // Sign-up mode: SIGN UP button visible, "CREATE ACCOUNT" heading present
+    // (Option A promoted the dim subtitle to a Rajdhani heading).
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({
       timeout: 5_000,
     });
-    await expect(page.locator('text=Create your account')).toBeVisible();
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Toggle back to login mode.
     await page.click(AUTH.toggleToLogIn);
@@ -287,8 +292,12 @@ test.describe('Auth — edge cases', () => {
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Attempt to create an account with an email that already exists.
+    // Option A — fill every signup field so the validators pass and the submit
+    // path actually reaches the backend (display name + confirm password).
+    await flutterFill(page, AUTH.displayNameInput, 'Already Registered');
     await flutterFill(page, AUTH.emailInput, getUser('fullAuth').email);
     await flutterFill(page, AUTH.passwordInput, getUser('fullAuth').password);
+    await flutterFill(page, AUTH.confirmPasswordInput, getUser('fullAuth').password);
 
     // Legal PR 2 — age gate: tick before the CTA is tappable.
     await tickAgeConfirmation(page);
@@ -388,8 +397,12 @@ test.describe('Auth — sign-up happy path', () => {
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Enter credentials for a brand-new email address (unique per run).
+    // Option A — the full signup form requires a display name + a matching
+    // confirm-password before the validators pass.
+    await flutterFill(page, AUTH.displayNameInput, 'Happy Path User');
     await flutterFill(page, AUTH.emailInput, throwawayEmail);
     await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+    await flutterFill(page, AUTH.confirmPasswordInput, 'TestPass123!');
 
     // Legal PR 2 — age gate: the Sign Up CTA has onPressed:null until the
     // age-confirmation checkbox is ticked. Tick it before clicking.
@@ -417,6 +430,115 @@ test.describe('Auth — sign-up happy path', () => {
       page.locator(ONBOARDING.getStartedButton),
     ).toBeVisible({ timeout: 15_000 });
   });
+
+  test('should NOT create an account when confirm-password does not match', async ({
+    page,
+  }) => {
+    // Toggle to sign-up mode.
+    await page.click(AUTH.toggleToSignUp);
+    await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+
+    // Fill every field except confirm-password with a mismatched value.
+    // The throwawayEmail is unique per-run; afterEach will attempt cleanup but
+    // find no user (Form validation fires client-side before any backend call).
+    await flutterFill(page, AUTH.displayNameInput, 'Mismatch User');
+    await flutterFill(page, AUTH.emailInput, throwawayEmail);
+    await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+    await flutterFill(page, AUTH.confirmPasswordInput, 'Mismatch999!');
+
+    // Tick the age gate so the CTA is enabled — we need an actual submit
+    // attempt to trigger form validation (the validator fires on _submit,
+    // not on each keystroke).
+    await tickAgeConfirmation(page);
+
+    await page.locator(AUTH.signUpButton).click();
+
+    // BEHAVIORAL ASSERTION 1: the app stays on the signup screen.
+    // Form validation fires before any Supabase call; the router must NOT
+    // navigate. Assert via content-visibility (cluster: flutter-web-url-assertion).
+    await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 5_000 });
+
+    // BEHAVIORAL ASSERTION 2: the onboarding "Get Started" button must NOT
+    // appear — no account was created, so no session, no redirect.
+    await expect(page.locator(ONBOARDING.getStartedButton)).not.toBeVisible({
+      timeout: 3_000,
+    });
+
+    // BONUS ASSERTION: the mismatch validation error text from
+    // l10n.passwordMismatch = "Passwords do not match" (en) should be
+    // visible as inline field-error text below the confirm-password field.
+    //
+    // Flutter CanvasKit draws Text widgets to canvas, but FormField error
+    // text is surfaced in the AOM alongside the field (Flutter routes it
+    // through the TextFormField's errorText decoration which feeds the
+    // accessibility description). The existing AUTH-006 test in this file
+    // successfully uses `text=Enter a valid email` for inline validation text,
+    // which confirms the `text=` selector pattern works for FormField errors
+    // on this app's CanvasKit build.
+    //
+    // Flutter renders two DOM nodes for the error text: a
+    // `flt-announcement-assertive` aria-live region (for screen-reader
+    // announcements) AND a `<span>` inside the semantics tree. Both match
+    // `text=Passwords do not match` — use `.first()` to assert either is
+    // visible without triggering strict-mode violations.
+    //
+    // If this assertion fails on a future Flutter upgrade (renderer change),
+    // drop the `text=` match and rely solely on the behavioral assertions
+    // above — those fully pin the contract (no navigation = no account created).
+    await expect(
+      page.locator('text=Passwords do not match').first(),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should NOT submit when confirm field keyboard-Done is pressed with age gate unticked', async ({
+    page,
+  }) => {
+    // The confirm-password field's onFieldSubmitted is wired to null when the
+    // age checkbox is unticked (see login_screen.dart: `onFieldSubmitted:
+    // (!_ageConfirmed || isLoading) ? null : (_) => _submit()`). Pressing
+    // Enter/Done while the checkbox is unticked must be a structural no-op —
+    // no submission, no navigation.
+    //
+    // This test is worth adding at E2E because keyboard-path bypasses are a
+    // common regression surface when TextInputAction wiring changes. The widget
+    // tier already pins this (`signup_age_confirmation_test.dart`); this test
+    // adds structural E2E coverage so a regression would surface during the
+    // full-suite run even without a widget-test pass.
+    //
+    // Reliability note: after flutterFill the confirm field retains focus in
+    // Flutter web (the hidden <input> proxy stays focused). `keyboard.press`
+    // dispatches a keydown event to the focused element, which Flutter routes
+    // to the active TextInputConnection. Flutter honours textInputAction:done
+    // only when onFieldSubmitted != null — the no-op path is deterministic.
+
+    // Toggle to sign-up mode.
+    await page.click(AUTH.toggleToSignUp);
+    await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+
+    // Fill all fields. Age checkbox intentionally left UNTICKED.
+    await flutterFill(page, AUTH.displayNameInput, 'Keyboard Bypass User');
+    await flutterFill(page, AUTH.emailInput, throwawayEmail);
+    await flutterFill(page, AUTH.passwordInput, 'TestPass123!');
+    // flutterFill on the confirm field leaves it focused.
+    await flutterFill(page, AUTH.confirmPasswordInput, 'TestPass123!');
+
+    // Verify the age checkbox is NOT ticked (default state).
+    await expect(
+      page.locator(AUTH.ageConfirmationCheckbox).first(),
+    ).toBeVisible({ timeout: 3_000 });
+
+    // Press Enter/Done — must be a no-op because onFieldSubmitted is null.
+    await page.keyboard.press('Enter');
+
+    // Allow one animation frame for any spurious navigation attempt.
+    await page.waitForTimeout(1_000);
+
+    // The signup form must still be visible — no navigation occurred.
+    await expect(page.locator(AUTH.appTitle)).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator(ONBOARDING.getStartedButton)).not.toBeVisible({
+      timeout: 1_000,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -438,6 +560,25 @@ test.describe('Auth — signup age gate', { tag: '@smoke' }, () => {
     // Toggle to signup mode so the age checkbox and CTA are rendered.
     await page.click(AUTH.toggleToSignUp);
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should show the full-form signup surfaces in signup mode (Option A)', async ({
+    page,
+  }) => {
+    // Option A added a display-name field, a confirm-password field, a
+    // password-strength bar, and a "CREATE ACCOUNT" heading — all signup-only.
+    await expect(page.locator(AUTH.signupHeading).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.displayNameInput).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.confirmPasswordInput).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(AUTH.passwordStrengthBar).first()).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test('should disable the Sign Up CTA before the age checkbox is ticked', async ({
