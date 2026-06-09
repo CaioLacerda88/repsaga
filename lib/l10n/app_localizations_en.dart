@@ -1074,6 +1074,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routineName => 'Routine name';
 
   @override
+  String get routineNotesHint =>
+      'Program intent, form cues, deload schedule… (optional)';
+
+  @override
+  String get routineNotesEyebrow => 'TRAINING NOTES';
+
+  @override
+  String notesCharCounter(int current, int max) {
+    return '$current / $max';
+  }
+
+  @override
   String get failedToSaveRoutine => 'Failed to save routine. Please retry.';
 
   @override

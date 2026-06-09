@@ -115,6 +115,7 @@ class RoutineRepository extends BaseRepository {
     required String locale,
     required String name,
     required List<RoutineExercise> exercises,
+    String? notes,
   }) {
     return mapException(() async {
       final data = await _templates
@@ -123,6 +124,10 @@ class RoutineRepository extends BaseRepository {
             'name': name,
             'is_default': false,
             'exercises': exercises.map((e) => e.toJson()).toList(),
+            // Q2 routine notes — column writable via plain PostgREST insert;
+            // RLS gates by user_id/is_default, not by column whitelist
+            // (migration 00075). Null when the user left notes blank.
+            'notes': notes,
           })
           .select()
           .single();
@@ -146,12 +151,16 @@ class RoutineRepository extends BaseRepository {
     required String locale,
     required String name,
     required List<RoutineExercise> exercises,
+    String? notes,
   }) {
     return mapException(() async {
       final data = await _templates
           .update({
             'name': name,
             'exercises': exercises.map((e) => e.toJson()).toList(),
+            // Q2 routine notes — included unconditionally so clearing the
+            // field (null) persists the deletion, not a stale value.
+            'notes': notes,
           })
           .eq('id', id)
           .eq('user_id', userId)

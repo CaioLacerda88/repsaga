@@ -192,6 +192,7 @@ class TestRoutineFactory {
     List<Map<String, dynamic>>? exercises,
     String? createdAt,
     String? templateSlug,
+    String? notes,
   }) {
     return {
       'id': id ?? 'routine-001',
@@ -206,6 +207,7 @@ class TestRoutineFactory {
           ],
       'created_at': createdAt ?? '2026-01-01T00:00:00Z',
       'template_slug': templateSlug,
+      'notes': notes,
     };
   }
 }

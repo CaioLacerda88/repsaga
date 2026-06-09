@@ -20,13 +20,22 @@ class CreateRoutineScreen extends ConsumerStatefulWidget {
       _CreateRoutineScreenState();
 }
 
+/// DB + UI cap for routine notes (migration 00075 mirrors this).
+const _kRoutineNotesMaxLength = 600;
+
+/// Show the live character counter only once the user is within 100 chars of
+/// the cap — keeps the field chrome quiet until brevity actually matters.
+const _kRoutineNotesCounterThreshold = 500;
+
 class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   late final TextEditingController _nameController;
+  late final TextEditingController _notesController;
   final _exercises = <_RoutineExerciseEntry>[];
   bool _saving = false;
 
   bool get _isEditing => widget.routine != null;
 
+  // Notes are OPTIONAL — they intentionally do not gate _canSave.
   bool get _canSave =>
       _nameController.text.trim().isNotEmpty && _exercises.isNotEmpty;
 
@@ -34,6 +43,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.routine?.name ?? '');
+    _notesController = TextEditingController(text: widget.routine?.notes ?? '');
 
     if (widget.routine != null) {
       for (final re in widget.routine!.exercises) {
@@ -54,6 +64,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -78,6 +89,9 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
         )
         .toList();
 
+    final notesText = _notesController.text.trim();
+    final notes = notesText.isEmpty ? null : notesText;
+
     try {
       final notifier = ref.read(routineListProvider.notifier);
       if (_isEditing) {
@@ -85,11 +99,13 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           id: widget.routine!.id,
           name: _nameController.text.trim(),
           exercises: exercises,
+          notes: notes,
         );
       } else {
         await notifier.createRoutine(
           name: _nameController.text.trim(),
           exercises: exercises,
+          notes: notes,
         );
       }
 
@@ -120,6 +136,32 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
         ),
       );
     });
+  }
+
+  /// Custom notes counter. Hidden (zero-size) until the user is within 100
+  /// chars of the cap, then "{current} / {max}" colored by remaining headroom:
+  /// textDim normally → warning at ≤30 remaining → error at the cap (≤0).
+  Widget _buildNotesCounter(BuildContext context, int currentLength) {
+    if (currentLength < _kRoutineNotesCounterThreshold) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final remaining = _kRoutineNotesMaxLength - currentLength;
+    final Color color;
+    if (remaining <= 0) {
+      color = AppColors.error;
+    } else if (remaining <= 30) {
+      color = AppColors.warning;
+    } else {
+      color = AppColors.textDim;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        l10n.notesCharCounter(currentLength, _kRoutineNotesMaxLength),
+        style: AppTextStyles.bodySmall.copyWith(color: color),
+      ),
+    );
   }
 
   @override
@@ -164,6 +206,34 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
               maxLength: 80,
               decoration: InputDecoration(hintText: l10n.routineName),
               onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+            // Q2 routine notes — optional, multiline, flat field on surface2
+            // (no Card chrome). Lives below name, above the exercise list.
+            Semantics(
+              container: true,
+              identifier: 'create-routine-notes',
+              child: TextField(
+                controller: _notesController,
+                minLines: 2,
+                maxLines: 4,
+                maxLength: _kRoutineNotesMaxLength,
+                // Custom counter (see _buildNotesCounter): hide Material's
+                // default by returning an empty widget when below threshold.
+                buildCounter:
+                    (
+                      context, {
+                      required currentLength,
+                      required isFocused,
+                      maxLength,
+                    }) => _buildNotesCounter(context, currentLength),
+                decoration: InputDecoration(
+                  hintText: l10n.routineNotesHint,
+                  filled: true,
+                  fillColor: AppColors.surface2,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
             ),
             const SizedBox(height: 24),
             if (_exercises.isNotEmpty) ...[

@@ -48,6 +48,11 @@ abstract class Routine with _$Routine {
     // Used to join `workout_template_translations` for per-locale display
     // names. NULL on user-created routines. Phase 32 PR 32a.
     String? templateSlug,
+    // Free-text training notes (Q2): program intent, form cues, deload
+    // schedule. Editable on the create/edit-routine screen, rendered read-only
+    // during an active workout started from this routine. NULL when the user
+    // left it blank. DB caps at 600 chars (migration 00075); UI mirrors that.
+    String? notes,
   }) = _Routine;
 
   factory Routine.fromJson(Map<String, dynamic> json) =>

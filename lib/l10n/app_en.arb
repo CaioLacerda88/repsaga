@@ -797,6 +797,18 @@
   "@editRoutine": { "description": "Edit routine screen title" },
   "routineName": "Routine name",
   "@routineName": { "description": "Routine name field hint" },
+  "routineNotesHint": "Program intent, form cues, deload schedule… (optional)",
+  "@routineNotesHint": { "description": "Routine notes field placeholder; '(optional)' suffix signals the field is not required" },
+  "routineNotesEyebrow": "TRAINING NOTES",
+  "@routineNotesEyebrow": { "description": "Eyebrow label for the routine notes header strip and read-only sheet during an active workout" },
+  "notesCharCounter": "{current} / {max}",
+  "@notesCharCounter": {
+    "description": "Character counter for a notes field, shown near the cap",
+    "placeholders": {
+      "current": { "type": "int" },
+      "max": { "type": "int" }
+    }
+  },
   "failedToSaveRoutine": "Failed to save routine. Please retry.",
   "@failedToSaveRoutine": { "description": "Snackbar: routine save failed" },
   "setsLabel": "Sets",

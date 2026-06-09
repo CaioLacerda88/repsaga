@@ -1940,6 +1940,24 @@ abstract class AppLocalizations {
   /// **'Routine name'**
   String get routineName;
 
+  /// Routine notes field placeholder; '(optional)' suffix signals the field is not required
+  ///
+  /// In en, this message translates to:
+  /// **'Program intent, form cues, deload schedule… (optional)'**
+  String get routineNotesHint;
+
+  /// Eyebrow label for the routine notes header strip and read-only sheet during an active workout
+  ///
+  /// In en, this message translates to:
+  /// **'TRAINING NOTES'**
+  String get routineNotesEyebrow;
+
+  /// Character counter for a notes field, shown near the cap
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {max}'**
+  String notesCharCounter(int current, int max);
+
   /// Snackbar: routine save failed
   ///
   /// In en, this message translates to:

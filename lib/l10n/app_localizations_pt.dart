@@ -1081,6 +1081,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routineName => 'Nome do treino';
 
   @override
+  String get routineNotesHint =>
+      'Programa, observações de forma, deload… (opcional)';
+
+  @override
+  String get routineNotesEyebrow => 'NOTAS DO TREINO';
+
+  @override
+  String notesCharCounter(int current, int max) {
+    return '$current / $max';
+  }
+
+  @override
   String get failedToSaveRoutine => 'Falha ao salvar treino. Tente novamente.';
 
   @override

@@ -441,6 +441,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         workout: workout,
         exercises: exercises,
         routineId: config.routineId,
+        // Q2: carry the source routine's notes onto the state so the
+        // active-workout screen renders them read-only. Survives crash-recovery
+        // rehydration via the Hive JSON round-trip alongside routineId.
+        routineNotes: config.routineNotes,
       );
       await _saveToHive(activeState);
       _trackWorkoutEvent(
