@@ -609,8 +609,11 @@
   "@addExercise": { "description": "Add exercise button" },
   "addSet": "Add Set",
   "@addSet": { "description": "Add set button" },
-  "fillRemaining": "Fill remaining",
-  "@fillRemaining": { "description": "Fill remaining sets button" },
+  "fillRemainingSetsCount": "Fill remaining ({count, plural, =1{1 set} other{{count} sets}})",
+  "@fillRemainingSetsCount": {
+    "description": "Fill remaining sets button with the count of sets that will be filled",
+    "placeholders": { "count": { "type": "int" } }
+  },
   "filledRemainingSets": "Filled remaining sets",
   "@filledRemainingSets": { "description": "Snackbar: filled remaining sets" },
   "removeExerciseTitle": "Remove Exercise?",
@@ -1326,7 +1329,7 @@
       "name": { "type": "String", "example": "Bench Press" }
     }
   },
-  "fillRemainingSetsSemantics": "Fill remaining sets with last completed values",
+  "fillRemainingSetsSemantics": "Fill all uncompleted sets with last completed values",
   "@fillRemainingSetsSemantics": { "description": "Accessibility: fill remaining sets button" },
   "addExerciseToWorkoutSemantics": "Add exercise to workout",
   "@addExerciseToWorkoutSemantics": { "description": "Accessibility: add exercise FAB" },

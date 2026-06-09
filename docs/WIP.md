@@ -11,76 +11,48 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-## In-flight — Signup screen redesign (Option A, Full-Form Signup)
+## Fill Remaining UX — Option C (First-Complete Trigger)
 
-**Branch:** `feature/signup-redesign-option-a`
-**Source of truth:** `docs/signup-screen-mockup-v1.html` §3 (Option A) + PROJECT.md §2 backlog.
+**Branch:** `fix/fill-remaining-out-of-order`
+**Reference:** Per PROJECT.md §2 backlog / WIP "Queued" item 2 / locked design
+`docs/fill-remaining-gating-mockup-v1.html` §3 "Implementation Notes (Option C)".
 
-### Boundary inventory (gates implementation — traced, do NOT re-derive)
+**The bug:** `_hasFillableSets` only returns true when an incomplete set has
+`setNumber > lastCompletedNumber` (directional). Completing ONLY the last set
+hides "Fill Remaining". Breaks mid-session restart, failed-set-1, and
+out-of-order logging.
 
-**Signature changes (update ALL callers + tests):**
-- `AuthRepository.signUpWithEmail` — add `String? displayName`; thread into
-  the `data:`/user_metadata map alongside `locale` (only when non-null).
-- `AuthNotifier.signUpWithEmail` — add `displayName` param, forward to repo.
-- `LoginScreen._submit` — pass `_displayNameController.text`.
-- `ProfileNotifier.saveOnboardingProfile` — REMOVE `displayName` param;
-  upsert only fitnessLevel + frequency + onboarded_at. (`upsertProfile`
-  already treats `displayName` as omit-on-null, so no repo change needed.)
-
-**Signup form (login_screen.dart, signup is `_isSignUp` mode):**
-- Add `_displayNameController` + `_confirmPasswordController`; dispose + clear
-  on mode toggle.
-- displayName field above email (`AutofillHints.name`, non-empty validation).
-- confirm-password field (`obscureText`, `AutofillHints.newPassword`,
-  signup-only; validator `value == _passwordController.text`).
-- 3-segment non-blocking strength bar (score 1=len≥6, 2=len≥8|digit|special,
-  3=all three). Colors error/warning/success.
-- "CRIAR CONTA" heading (Rajdhani 700 ~16sp full-cream) signup-only, replaces
-  the dim subtitle in signup mode.
-- PRESERVE the structural age-gate: CTA `onPressed = null` until checkbox
-  ticked (PR #309).
-
-**Age-gate + legal:**
-- Inline Privacy + Terms links INTO the checkbox label via `Text.rich` +
-  `WidgetSpan(TextButton)`. Use `MaterialTapTargetSize.padded`.
-- DELETE the separate legal-chips Padding+Row (PR #309).
-- Hide `_LegalFooter` when `_isSignUp`.
-- Disabled-CTA helper text (`signupAgeRequiredHint`) when signup & !ageConfirmed.
-
-**Onboarding (onboarding_screen.dart):**
-- Remove `_nameController`, the name AppTextField, the empty-name guard, and
-  the `displayName:` arg to saveOnboardingProfile. Page 2 = level + frequency.
-- Drop dead `pleaseEnterName` ARB key (only referenced in onboarding).
-
-**L10n (both arb + gen):** add `confirmPassword`, `passwordMismatch`,
-`passwordStrengthWeak/Medium/Strong`, `signupHeading`, `signupAgeRequiredHint`.
-Reuse `displayName`, `termsOfService`, `privacyPolicy`. Remove `pleaseEnterName`.
-
-**Breakage to handle:** auth_notifier_test (displayName forwarding),
-profile_notifier_save_test (drop displayName), onboarding widget/provider
-tests (name field absent), E2E selectors + onboarding.spec + auth.spec +
-fresh-signup regression. Keep PR #312 fresh-signup save path intact.
+**"Most recent completed set" decision:** Keep the EXISTING selection intent —
+the most recent completed set = highest `setNumber` among completed sets. The
+old code already selected by `s.setNumber > lastCompleted.setNumber`. Only the
+*target filter* changes (drop the directional constraint on which sets get
+filled); the *source value* selection stays "highest-setNumber completed".
 
 ### Checklist
 
-- [x] Branch + WIP (this section)
-- [x] L10n keys (en + pt) + gen — `signupHeading`, `confirmPassword`,
-  `passwordMismatch`, `passwordStrengthWeak/Medium/Strong`,
-  `signupAgeRequiredHint`, `signupAgeConfirmationLead`, `displayNameRequired`;
-  removed `pleaseEnterName`.
-- [x] AuthRepository.signUpWithEmail + displayName (omit-on-null in `data:`)
-- [x] AuthNotifier.signUpWithEmail + displayName
-- [x] login_screen.dart: controllers, fields, strength bar, heading, inline
-  legal (`_AgeGateLabel`), footer suppression, helper text
-- [x] ProfileNotifier.saveOnboardingProfile: drop displayName
-- [x] onboarding_screen.dart: remove name field + guard + arg
-- [x] Widget tests: signup_form_test (new), signup_age_confirmation,
-  login_screen, duplicate_email_snackbar, onboarding (no name), save_error
-- [x] Unit tests: auth_notifier + auth_repository (displayName forward),
-  profile_notifier_save (no displayName)
-- [x] E2E selectors + specs (auth, onboarding, charter-d)
-- [x] format + analyze (0 issues) + test (591 passed across touched dirs)
-- [ ] commit locally (next)
+- [x] Branch created from main
+- [x] WIP section written (this)
+- [x] Grep all usages of `fillRemaining` / `fillRemainingSets` /
+      `_hasFillableSets` / `filledRemainingSets` across lib + test
+- [x] `_hasFillableSets` (exercise_card.dart): `any(isCompleted) && any(!isCompleted)`
+- [x] `fillRemainingSets` (active_workout_notifier.dart): fill ALL `!isCompleted`
+      from highest-setNumber completed set's weight+reps
+- [x] Button label → `l10n.fillRemainingSetsCount(count)` ("Preencher restantes (2 séries)")
+- [x] New parameterized ARB key (en + pt)
+- [x] `fillRemainingSetsSemantics` ARB string updated (en + pt)
+- [x] `make gen` regen l10n
+- [x] Notifier tests: last-only / first-only / middle-only expanded contract
+- [x] Widget tests: button visible out-of-order last-set-only; label count text
+- [x] `dart format .` + `dart analyze` (0 issues) + `flutter test` touched files
+- [x] Commit on branch (no push / no PR)
+
+### Files to modify
+
+- `lib/features/workouts/ui/widgets/exercise_card.dart` (predicate + label + count arg)
+- `lib/features/workouts/providers/notifiers/active_workout_notifier.dart` (filter)
+- `lib/l10n/app_en.arb` + `lib/l10n/app_pt.arb` (new key + semantics edit)
+- `test/unit/features/workouts/providers/active_workout_notifier_test.dart`
+- `test/widget/features/workouts/ui/active_workout_fill_test.dart`
 
 ---
 

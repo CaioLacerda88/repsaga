@@ -215,12 +215,27 @@ export async function setReps(page: Page, value: string): Promise<void> {
 export async function completeSet(
   page: Page,
   setIndex: number = 0,
+  options: { verifyByCount?: boolean } = {},
 ): Promise<void> {
+  // verifyByCount (opt-in): verify completion by the completed-checkbox COUNT
+  // growing rather than `completed.nth(setIndex)` becoming visible. Needed ONLY
+  // for OUT-OF-ORDER completion (e.g. completing just the last set), where the
+  // set's POSITION does not map onto its index in the completed list. Every
+  // sequential (index-0) caller keeps the original nth(setIndex) verification —
+  // do NOT flip the default: the lenient nth-visible check is more robust in
+  // celebration/overlay-heavy flows where the exact count momentarily differs.
+  const { verifyByCount = false } = options;
   const checkboxes = page.locator(WORKOUT.markSetDone);
   const completed = page.locator(WORKOUT.setCompleted);
   const restTimer = page.locator('role=progressbar[name*="Rest timer"]');
 
   await expect(checkboxes.nth(setIndex)).toBeVisible({ timeout: 5_000 });
+
+  // Baseline for the verifyByCount path: `markSetDone` (incomplete) and
+  // `setCompleted` (completed) are distinct identifiers, so the index among ALL
+  // sets does NOT map onto `completed.nth(setIndex)` unless completion is
+  // sequential. Captured only when verifyByCount is set.
+  const initialCompletedCount = verifyByCount ? await completed.count() : 0;
 
   // Helper: dismiss the rest timer overlay if visible. The overlay covers the
   // entire screen and intercepts all clicks, so we must dismiss it before any
@@ -263,11 +278,16 @@ export async function completeSet(
     }
   }
 
-  // Helper: check if the set already transitioned to the completed state.
-  // Uses .or() to check both the nth "Set completed" checkbox AND a single
-  // "Set completed" (when there's only one completed set on screen, nth(0)).
+  // Helper: check if the set transitioned to the completed state. Default path
+  // checks `completed.nth(setIndex)` is visible (original behaviour, correct
+  // for sequential index-0 callers). verifyByCount path checks the completed
+  // count grew (order-agnostic, for out-of-order completion).
   async function isSetCompleted(): Promise<boolean> {
-    return completed.nth(setIndex)
+    if (verifyByCount) {
+      return (await completed.count()) > initialCompletedCount;
+    }
+    return completed
+      .nth(setIndex)
       .isVisible({ timeout: 2_000 })
       .catch(() => false);
   }
@@ -329,7 +349,13 @@ export async function completeSet(
     }
   }
 
-  await expect(completed.nth(setIndex)).toBeVisible({ timeout: 10_000 });
+  if (verifyByCount) {
+    await expect(completed).toHaveCount(initialCompletedCount + 1, {
+      timeout: 10_000,
+    });
+  } else {
+    await expect(completed.nth(setIndex)).toBeVisible({ timeout: 10_000 });
+  }
 }
 
 /**

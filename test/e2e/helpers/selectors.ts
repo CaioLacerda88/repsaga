@@ -261,6 +261,16 @@ export const WORKOUT = {
   addExerciseFab: '[flt-semantics-identifier="workout-add-exercise"]',
   /** "Add Set" button — Semantics(identifier: 'workout-add-set') */
   addSetButton: '[flt-semantics-identifier="workout-add-set"]',
+  /**
+   * "Fill remaining (N sets)" TextButton — Semantics(identifier:
+   * 'workout-fill-remaining'). Rendered below the Add Set button ONLY when
+   * at least one set is completed AND at least one is still incomplete
+   * (Option C — First-Complete Trigger). The label carries the incomplete
+   * count, e.g. "Fill remaining (2 sets)" (en). The identifier sits on the
+   * Semantics node that wraps the TextButton tap target directly, so a tap
+   * routes to the fill-remaining handler.
+   */
+  fillRemainingButton: '[flt-semantics-identifier="workout-fill-remaining"]',
   /** Checkbox to mark set as done — Semantics(identifier: 'workout-set-done') */
   markSetDone: '[flt-semantics-identifier="workout-set-done"]',
   /** Checkbox set completed — Semantics(identifier: 'workout-set-completed') */

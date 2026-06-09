@@ -164,15 +164,17 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
     );
   }
 
-  /// Returns true when there are incomplete sets after the last completed set.
-  /// The fill-remaining action only affects those sets, so the button should
-  /// be hidden when there is nothing to fill.
+  /// Returns true when at least one set is completed AND at least one set is
+  /// still incomplete — i.e. there is something to fill from and something to
+  /// fill into.
+  ///
+  /// Option C (First-Complete Trigger, `fill-remaining-gating-mockup-v1.html`
+  /// §3): the old directional check (`setNumber > lastCompletedNumber`) hid
+  /// the button when the user completed only the LAST set, breaking
+  /// mid-session restart / failed-set-1 / out-of-order logging. The button
+  /// now appears whenever a non-directional fill is possible.
   bool _hasFillableSets(List<ExerciseSet> sets) {
-    final lastCompletedNumber = sets
-        .where((s) => s.isCompleted)
-        .fold<int>(0, (max, s) => s.setNumber > max ? s.setNumber : max);
-    if (lastCompletedNumber == 0) return false;
-    return sets.any((s) => !s.isCompleted && s.setNumber > lastCompletedNumber);
+    return sets.any((s) => s.isCompleted) && sets.any((s) => !s.isCompleted);
   }
 
   void _showExerciseDetail(BuildContext context, Exercise exercise) {
@@ -378,7 +380,12 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
               ),
             ),
             if (_hasFillableSets(activeExercise.sets))
-              _FillRemainingButton(onPressed: () => _fillRemaining(context)),
+              _FillRemainingButton(
+                incompleteCount: activeExercise.sets
+                    .where((s) => !s.isCompleted)
+                    .length,
+                onPressed: () => _fillRemaining(context),
+              ),
           ],
         ),
       ),
@@ -668,11 +675,19 @@ class _AddSetButton extends StatelessWidget {
   }
 }
 
-/// "Fill remaining" TextButton shown only when there are incomplete sets
-/// after the last completed set (BUG-3).
+/// "Fill remaining (N sets)" TextButton shown whenever at least one set is
+/// completed and at least one is still incomplete (Option C — First-Complete
+/// Trigger). The [incompleteCount] is surfaced in the label so the user knows
+/// exactly how many sets will be filled before tapping.
 class _FillRemainingButton extends StatelessWidget {
-  const _FillRemainingButton({required this.onPressed});
+  const _FillRemainingButton({
+    required this.incompleteCount,
+    required this.onPressed,
+  });
 
+  /// Number of incomplete sets that the action will fill. Rendered in the
+  /// label, e.g. "Preencher restantes (2 séries)".
+  final int incompleteCount;
   final VoidCallback onPressed;
 
   @override
@@ -683,15 +698,20 @@ class _FillRemainingButton extends StatelessWidget {
       // container + explicitChildNodes establishes the boundary so the
       // TextButton stays its own discrete tappable node — see the same
       // rule applied to _AddSetButton above and the lessons.md entry on
-      // Semantics(identifier:) flag pairing.
+      // Semantics(identifier:) flag pairing. The `identifier` sits on this
+      // node (the actual tap target wraps the TextButton directly) so the
+      // E2E selector `WORKOUT.fillRemainingButton` addresses the button,
+      // not a sibling — pair-rule per cluster `semantics-identifier-pair-rule`
+      // + `semantics-button-missing`.
       child: Semantics(
         container: true,
         explicitChildNodes: true,
+        identifier: 'workout-fill-remaining',
         label: l10n.fillRemainingSetsSemantics,
         child: TextButton(
           onPressed: onPressed,
           child: Text(
-            l10n.fillRemaining,
+            l10n.fillRemainingSetsCount(incompleteCount),
             style: AppTextStyles.body.copyWith(
               color: theme.colorScheme.primary.withValues(alpha: 0.7),
               fontWeight: FontWeight.w600,

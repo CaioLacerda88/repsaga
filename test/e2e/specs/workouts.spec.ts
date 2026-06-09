@@ -260,6 +260,83 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     });
   });
 
+  test('should fill remaining sets when only the last set is completed (out-of-order)', async ({
+    page,
+  }) => {
+    // Out-of-order / failed-set-1 repro: the user completes ONLY the last set
+    // of a 3-set exercise. The Fill Remaining button (Option C — First-Complete
+    // Trigger) must surface because there is at least one completed set AND at
+    // least one incomplete set, and tapping it must back-fill the two earlier
+    // incomplete sets from the most-recent completed set's values.
+    await startEmptyWorkout(page);
+    await addExercise(page, SEED_EXERCISES.benchPress);
+
+    // addExercise auto-seeds set 1 (Phase 23 D6). Add two more sets so the
+    // exercise has 3 total.
+    await expect(page.locator(WORKOUT.addSetButton).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.click(WORKOUT.addSetButton);
+    await expect(page.locator(WORKOUT.markSetDone).nth(1)).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.click(WORKOUT.addSetButton);
+    await expect(page.locator(WORKOUT.markSetDone).nth(2)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Three incomplete sets now exist. Fill Remaining must be ABSENT — nothing
+    // is completed yet, so there is no source to fill from.
+    await expect(page.locator(WORKOUT.fillRemainingButton)).not.toBeVisible();
+
+    // Complete ONLY the last set (index 2). The two earlier sets stay open.
+    // verifyByCount: out-of-order completion — set position 2 is NOT index 2 in
+    // the (empty) completed list, so the helper verifies by count, not
+    // `completed.nth(2)`.
+    await completeSet(page, 2, { verifyByCount: true });
+
+    // The Fill Remaining button now appears with the count of incomplete sets
+    // (2). The button's AOM accessible name is the fixed semantics label, so we
+    // anchor on the stable identifier selector for visibility (the rendered
+    // "(2 sets)" count is drawn to canvas and is not in the AOM name).
+    await expect(page.locator(WORKOUT.fillRemainingButton)).toBeVisible({
+      timeout: 10_000,
+    });
+    // NOTE: the rendered "(2 sets)" count is drawn to the CanvasKit canvas and
+    // is NOT in the AOM/DOM, so it can't be asserted via a text locator. The
+    // fill scope is instead pinned by the incomplete/completed checkbox counts
+    // below (2 incomplete + 1 completed before the tap; 0 + 3 after).
+
+    // Before the tap there are exactly two incomplete checkboxes and one
+    // completed checkbox.
+    expect(await page.locator(WORKOUT.markSetDone).count()).toBe(2);
+    expect(await page.locator(WORKOUT.setCompleted).count()).toBe(1);
+
+    // Tap Fill Remaining — the two previously-incomplete sets become completed.
+    await page.locator(WORKOUT.fillRemainingButton).click();
+
+    // User-perceptible outcome: no incomplete checkboxes remain and all three
+    // sets now render the completed state. This is the back-fill contract.
+    await expect(page.locator(WORKOUT.markSetDone)).toHaveCount(0, {
+      timeout: 10_000,
+    });
+    await expect(page.locator(WORKOUT.setCompleted)).toHaveCount(3, {
+      timeout: 10_000,
+    });
+
+    // With nothing left incomplete, the Fill Remaining button disappears.
+    await expect(page.locator(WORKOUT.fillRemainingButton)).not.toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Clean up by discarding.
+    await page.locator(WORKOUT.discardButton).click();
+    const confirmDiscard = page.locator(WORKOUT.discardConfirmButton);
+    await expect(confirmDiscard).toBeVisible({ timeout: 5_000 });
+    await confirmDiscard.click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
   // PR 32g EmptySessionGuardSheet E2E removed — guard is unreachable
   // from the UI's standard finish path. `FinishBottomBar.enabled` is
   // gated on `_hasCompletedSet` in `active_workout_screen.dart:561`,
