@@ -73,9 +73,10 @@ void main() {
   );
 
   // Enters text into the field wrapped by the given Semantics identifier.
-  // Option A added a display-name + confirm-password field, so positional
-  // `.first` / `.last` finders no longer map cleanly to email / password —
-  // fill every field by identifier instead.
+  // Option A added a display-name field (confirm-password was later dropped —
+  // the reveal toggle is the typo-safety net), so positional `.first` /
+  // `.last` finders no longer map cleanly to email / password — fill every
+  // field by identifier instead.
   Future<void> fillField(
     WidgetTester tester,
     String identifier,

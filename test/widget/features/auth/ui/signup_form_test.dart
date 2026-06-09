@@ -224,5 +224,24 @@ void main() {
         expect(editableFor('auth-password-input').obscureText, isTrue);
       },
     );
+
+    testWidgets(
+      'reveal hint appears in signup mode and dismisses after first eye tap',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await enterSignupMode(tester);
+        await fillField(tester, 'auth-password-input', 'Test12.ab');
+
+        // The ghost hint is the typo-safety education that replaces the
+        // dropped confirm field — present before any eye tap.
+        expect(find.text('Tap the eye to check your password'), findsOneWidget);
+
+        // Tapping the password reveal eye dismisses the hint permanently.
+        await tester.tap(find.byIcon(Icons.visibility_off));
+        await tester.pump();
+
+        expect(find.text('Tap the eye to check your password'), findsNothing);
+      },
+    );
   });
 }

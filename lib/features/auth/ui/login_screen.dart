@@ -469,8 +469,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         score: _passwordStrength,
                         password: _passwordController.text,
                       ),
-                      // One-time ghost hint: only while the field is still
-                      // obscured AND the user hasn't tapped the eye yet.
+                      // One-time ghost hint: shown from the first keystroke
+                      // until the user taps the eye once (regardless of the
+                      // field's current obscure state — `_AppTextFieldState`
+                      // owns `_obscured`, not readable here). The local
+                      // `_passwordRevealHintDismissed` flips on the first
+                      // `onObscureToggle` callback.
                       if (!_passwordRevealHintDismissed) ...[
                         const SizedBox(height: 6),
                         Text(
@@ -516,9 +520,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // age-gate checkbox label (one LGPD-compliant sentence)
                       // instead of an orphaned chip row. Reuses the existing
                       // `privacyPolicy` / `termsOfService` link-label strings.
-                      // The links use `MaterialTapTargetSize.padded` (48dp
-                      // floor) rather than the prior `shrinkWrap` chips —
-                      // BUG-018 tap-target compliance.
+                      // The links use `MaterialTapTargetSize.shrinkWrap` +
+                      // `minimumSize: Size.zero` + small vertical padding so
+                      // they flow inline at the 14sp line height instead of
+                      // inflating the line to a 48dp tap floor (the prior
+                      // 48dp min-height was what misaligned this label). The
+                      // 48dp gesture target stays on the checkbox itself; the
+                      // inline links are conventional sub-48dp text links.
                       Semantics(
                         container: true,
                         identifier: 'auth-age-confirmation',
