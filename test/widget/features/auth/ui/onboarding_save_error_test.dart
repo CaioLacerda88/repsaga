@@ -34,7 +34,6 @@ class _ThrowingProfileNotifier extends ProfileNotifier {
 
   @override
   Future<void> saveOnboardingProfile({
-    required String displayName,
     required String fitnessLevel,
     int trainingFrequencyPerWeek = 3,
   }) async {
@@ -42,13 +41,11 @@ class _ThrowingProfileNotifier extends ProfileNotifier {
   }
 }
 
-/// Drives the onboarding flow to the LET'S GO tap. Enters a valid display
-/// name so the "name required" guard does not short-circuit the save call.
+/// Drives the onboarding flow to the LET'S GO tap. Option A removed the name
+/// field from onboarding (the name is collected on the signup form), so there
+/// is no name to enter — the save fires directly on LET'S GO.
 Future<void> _completeOnboardingTap(WidgetTester tester) async {
   await tester.tap(find.text('GET STARTED'));
-  await tester.pumpAndSettle();
-
-  await tester.enterText(find.byType(TextField), 'Alice');
   await tester.pumpAndSettle();
 
   await tester.tap(find.text("LET'S GO"));

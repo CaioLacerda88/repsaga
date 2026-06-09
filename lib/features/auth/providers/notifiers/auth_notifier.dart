@@ -26,6 +26,7 @@ class AuthNotifier extends AsyncNotifier<Session?> {
   Future<void> signUpWithEmail({
     required String email,
     required String password,
+    String? displayName,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
@@ -35,11 +36,18 @@ class AuthNotifier extends AsyncNotifier<Session?> {
       // currently default to English because the OAuth flow writes no
       // user_metadata; see `docs/auth-email-templates/README.md` →
       // "Known edge case".
+      //
+      // `displayName` is collected on the signup form (Option A — full-form
+      // signup) and forwarded as `user_metadata.display_name` so the
+      // `handle_new_user` trigger can seed the profile row; onboarding no
+      // longer asks for the name. Trimmed/non-empty enforcement happens at
+      // the form layer; null/empty is forwarded as-is and omitted server-side.
       final locale = ref.read(localeProvider).languageCode;
       final response = await _repo.signUpWithEmail(
         email: email,
         password: password,
         locale: locale,
+        displayName: displayName,
       );
       // If no session returned, email confirmation is required.
       if (response.session == null) {

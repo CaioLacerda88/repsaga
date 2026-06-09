@@ -72,15 +72,42 @@ void main() {
     (w) => w is Semantics && w.properties.identifier == 'auth-signup-btn',
   );
 
+  // Enters text into the field wrapped by the given Semantics identifier.
+  // Option A added a display-name + confirm-password field, so positional
+  // `.first` / `.last` finders no longer map cleanly to email / password —
+  // fill every field by identifier instead.
+  Future<void> fillField(
+    WidgetTester tester,
+    String identifier,
+    String text,
+  ) async {
+    await tester.enterText(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.identifier == identifier,
+        ),
+        matching: find.byType(EditableText),
+      ),
+      text,
+    );
+  }
+
+  // Fills the full signup form (Option A — display name + confirm password
+  // are required for validators to pass and the submit path to fire).
+  Future<void> fillSignupForm(WidgetTester tester) async {
+    await fillField(tester, 'auth-display-name-input', 'Existing User');
+    await fillField(tester, 'auth-email-input', 'existing@example.com');
+    await fillField(tester, 'auth-password-input', 'TestPassword123!');
+    await fillField(tester, 'auth-confirm-password-input', 'TestPassword123!');
+  }
+
   // Legal PR 2 — the Sign Up CTA is gated on age confirmation. Tick the
   // checkbox so the submit path is reachable in these duplicate-email
   // regression tests (the age gate itself is exercised in
-  // `signup_age_confirmation_test.dart`).
+  // `signup_age_confirmation_test.dart`). Tap the Checkbox directly — Option A
+  // replaced the CheckboxListTile with a bare Checkbox + inline-link label.
   Future<void> tickAgeConfirmation(WidgetTester tester) async {
-    final checkbox = find.byWidgetPredicate(
-      (w) =>
-          w is Semantics && w.properties.identifier == 'auth-age-confirmation',
-    );
+    final checkbox = find.byType(Checkbox);
     await tester.ensureVisible(checkbox);
     await tester.pump();
     await tester.tap(checkbox);
@@ -100,6 +127,8 @@ void main() {
             password: any(named: 'password'),
             // Match the new locale: forwarding from AuthNotifier (Round 4.5).
             locale: any(named: 'locale'),
+            // Option A — display name is forwarded too.
+            displayName: any(named: 'displayName'),
           ),
         ).thenThrow(Exception('User already registered'));
 
@@ -111,15 +140,8 @@ void main() {
         await tester.tap(signupToggle());
         await tester.pump();
 
-        // Fill in credentials. Email + password validators both pass.
-        await tester.enterText(
-          find.byType(TextFormField).first,
-          'existing@example.com',
-        );
-        await tester.enterText(
-          find.byType(TextFormField).last,
-          'TestPassword123!',
-        );
+        // Fill every field so all signup validators pass.
+        await fillSignupForm(tester);
 
         // Legal PR 2 — Sign Up CTA disabled until age confirmation ticked.
         await tickAgeConfirmation(tester);
@@ -148,6 +170,8 @@ void main() {
           password: any(named: 'password'),
           // Match the new locale: forwarding from AuthNotifier (Round 4.5).
           locale: any(named: 'locale'),
+          // Option A — display name is forwarded too.
+          displayName: any(named: 'displayName'),
         ),
       ).thenThrow(Exception('User already registered'));
 
@@ -158,14 +182,7 @@ void main() {
       await tester.tap(signupToggle());
       await tester.pump();
 
-      await tester.enterText(
-        find.byType(TextFormField).first,
-        'existing@example.com',
-      );
-      await tester.enterText(
-        find.byType(TextFormField).last,
-        'TestPassword123!',
-      );
+      await fillSignupForm(tester);
 
       // Legal PR 2 — Sign Up CTA disabled until age confirmation ticked.
       await tickAgeConfirmation(tester);

@@ -193,6 +193,66 @@ void main() {
           ).called(1);
         },
       );
+
+      // Option A (full-form signup): the display name collected at signup is
+      // forwarded as `data.display_name` alongside locale so the
+      // `handle_new_user` trigger can seed the profile row.
+      test(
+        'forwards locale + displayName as data: {locale, display_name}',
+        () async {
+          when(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'pt', 'display_name': 'Joao'},
+            ),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(
+            email: 'a@b.com',
+            password: '123456',
+            locale: 'pt',
+            displayName: 'Joao',
+          );
+
+          verify(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'locale': 'pt', 'display_name': 'Joao'},
+            ),
+          ).called(1);
+        },
+      );
+
+      test(
+        'forwards displayName alone as data: {display_name} when locale null',
+        () async {
+          when(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'display_name': 'Joao'},
+            ),
+          ).thenAnswer((_) async => FakeAuthResponse());
+
+          await repo.signUpWithEmail(
+            email: 'a@b.com',
+            password: '123456',
+            displayName: 'Joao',
+          );
+
+          // No `locale` key leaks into the payload when locale is null —
+          // omit-on-null discipline, mirroring the locale-only path.
+          verify(
+            () => mockAuth.signUp(
+              email: 'a@b.com',
+              password: '123456',
+              data: {'display_name': 'Joao'},
+            ),
+          ).called(1);
+        },
+      );
     });
 
     group('signInWithGoogle', () {

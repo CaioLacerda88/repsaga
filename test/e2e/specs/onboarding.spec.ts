@@ -96,21 +96,20 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await expect(page.locator(ONBOARDING_FLOW.profileSetupIndicator)).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.locator(ONBOARDING_FLOW.displayNameInput)).toBeVisible({
-      timeout: 5_000,
-    });
+    // Option A — the display-name field moved to the signup form, so onboarding
+    // page 2 collects only fitness signals (level + frequency).
     await expect(page.locator(ONBOARDING.letsGoButton)).toBeVisible({
       timeout: 5_000,
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Test 3: Complete onboarding — fill name, select frequency, tap LET'S GO.
+  // Test 3: Complete onboarding — select frequency, tap LET'S GO.
   //
-  // Full flow: Page 1 -> GET STARTED -> fill name -> choose frequency -> LET'S GO
-  // -> assert redirect to /home.
+  // Full flow: Page 1 -> GET STARTED -> choose frequency -> LET'S GO
+  // -> assert redirect to /home. (Option A moved the name to the signup form.)
   // ---------------------------------------------------------------------------
-  test('should redirect to /home after completing onboarding with name and frequency', async ({
+  test('should redirect to /home after completing onboarding with frequency', async ({
     page,
   }) => {
     await loginExpectingOnboarding(
@@ -136,9 +135,8 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
 
-    // Fill display name.
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Smoke Tester');
-
+    // Option A — onboarding no longer collects the display name (it's on the
+    // signup form now); page 2 only picks the training frequency.
     // Select 3x training frequency (already the default, but tap it explicitly).
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
 
@@ -206,7 +204,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({ timeout: 10_000 });
 
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Returning User');
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
     await page.locator(ONBOARDING.letsGoButton).click();
 
@@ -298,7 +295,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
     await expect(
       page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({ timeout: 10_000 });
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User');
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
     await page.locator(ONBOARDING.letsGoButton).click();
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 20_000 });
@@ -345,7 +341,6 @@ test.describe('Onboarding', { tag: '@smoke' }, () => {
       page.locator(ONBOARDING_FLOW.profileSetupIndicator),
     ).toBeVisible({ timeout: 10_000 });
 
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Recovery User 2');
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
     await page.locator(ONBOARDING.letsGoButton).click();
 
@@ -451,8 +446,13 @@ test.describe('Onboarding — fresh-signup end-to-end (regression)', { tag: '@sm
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Fill credentials via real keyboard events (cluster: flutter-web-input-synthetic).
+    // Option A — the signup form now collects the display name + a confirm
+    // password, so all five fields are filled here (the name later lands on
+    // the profile row via the handle_new_user trigger).
+    await flutterFill(page, AUTH.displayNameInput, 'Fresh Signup User');
     await flutterFill(page, AUTH.emailInput, ephemeralEmail);
     await flutterFill(page, AUTH.passwordInput, password);
+    await flutterFill(page, AUTH.confirmPasswordInput, password);
 
     // PR #309 contract: Sign Up CTA has onPressed:null until age checkbox is ticked.
     await expect(page.locator(AUTH.ageConfirmationCheckbox)).toBeVisible({ timeout: 5_000 });
@@ -479,9 +479,10 @@ test.describe('Onboarding — fresh-signup end-to-end (regression)', { tag: '@sm
       timeout: 10_000,
     });
 
-    // Fill profile fields — this is the exact save path that triggered the
-    // 42501 race on fresh signups (PR #299 through #312 fix-wave).
-    await flutterFill(page, ONBOARDING_FLOW.displayNameInput, 'Fresh Signup User');
+    // Pick the training frequency — this is the exact save path that triggered
+    // the 42501 race on fresh signups (PR #299 through #312 fix-wave). Option A
+    // moved the display name to the signup form, so onboarding only sends the
+    // fitness signals here.
     await page.locator(ONBOARDING_FLOW.frequency3x).click();
     await page.locator(ONBOARDING.letsGoButton).click();
 

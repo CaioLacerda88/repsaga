@@ -39,7 +39,9 @@ void main() {
       await tester.pump();
 
       expect(find.text('SIGN UP'), findsOneWidget);
-      expect(find.text('Create your account'), findsOneWidget);
+      // Option A — the dim "Create your account" subtitle was promoted to a
+      // Rajdhani-700 "CREATE ACCOUNT" heading.
+      expect(find.text('CREATE ACCOUNT'), findsOneWidget);
     });
 
     testWidgets('toggles back to login mode', (tester) async {
@@ -234,6 +236,24 @@ void main() {
       );
     });
 
+    // Locates the password field's EditableText by walking down from the
+    // `auth-password-input` Semantics identifier. Option A added a
+    // display-name + confirm-password field, so `find.byType(TextFormField)
+    // .last` is no longer the password field in signup mode (it's the confirm
+    // field) — target the identifier to stay unambiguous across modes.
+    EditableText passwordEditable(WidgetTester tester) {
+      return tester.widget<EditableText>(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.identifier == 'auth-password-input',
+          ),
+          matching: find.byType(EditableText),
+        ),
+      );
+    }
+
     // PO-004: toggling login→signup must clear the password field so a user
     // cannot accidentally carry a password from one mode to the other.
     testWidgets('PO-004: toggling to sign-up mode clears the password field', (
@@ -241,7 +261,8 @@ void main() {
     ) async {
       await tester.pumpWidget(buildTestWidget());
 
-      // Type a password in login mode.
+      // Type a password in login mode (login has only email+password, so the
+      // password field is the last TextFormField here).
       await tester.enterText(find.byType(TextFormField).last, 'mySecret123');
 
       // Switch to sign-up mode.
@@ -251,13 +272,7 @@ void main() {
       await tester.pump();
 
       // The password field must be empty after the toggle.
-      final passwordField = tester.widget<EditableText>(
-        find.descendant(
-          of: find.byType(TextFormField).last,
-          matching: find.byType(EditableText),
-        ),
-      );
-      expect(passwordField.controller.text, isEmpty);
+      expect(passwordEditable(tester).controller.text, isEmpty);
     });
 
     testWidgets(
@@ -265,12 +280,23 @@ void main() {
       (tester) async {
         await tester.pumpWidget(buildTestWidget());
 
-        // Navigate to sign-up mode and enter a password.
+        // Navigate to sign-up mode and enter a password (by identifier so we
+        // hit the password field, not the confirm field).
         await tester.ensureVisible(find.text("Don't have an account? Sign up"));
         await tester.pump();
         await tester.tap(find.text("Don't have an account? Sign up"));
         await tester.pump();
-        await tester.enterText(find.byType(TextFormField).last, 'signupPass');
+        await tester.enterText(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (w) =>
+                  w is Semantics &&
+                  w.properties.identifier == 'auth-password-input',
+            ),
+            matching: find.byType(EditableText),
+          ),
+          'signupPass',
+        );
 
         // Switch back to login mode.
         await tester.ensureVisible(
@@ -281,13 +307,7 @@ void main() {
         await tester.pump();
 
         // The password field must be empty.
-        final passwordField = tester.widget<EditableText>(
-          find.descendant(
-            of: find.byType(TextFormField).last,
-            matching: find.byType(EditableText),
-          ),
-        );
-        expect(passwordField.controller.text, isEmpty);
+        expect(passwordEditable(tester).controller.text, isEmpty);
       },
     );
 
