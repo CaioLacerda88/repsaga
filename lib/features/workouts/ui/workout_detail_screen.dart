@@ -264,9 +264,13 @@ class _NotesSection extends ConsumerWidget {
       context,
       initialNotes: notes,
       title: l10n.notes,
-      hintText: l10n.addNote,
+      // Evocative in-field prompt — distinct from the `addNote` affordance
+      // label so the empty field invites reflection rather than echoing the
+      // button the user just tapped.
+      hintText: l10n.addNotesHint,
       saveLabel: l10n.save,
       cancelLabel: l10n.cancel,
+      counterFormatter: l10n.notesCharCounter,
     );
     if (result == null || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -315,22 +319,30 @@ class _NotesSection extends ConsumerWidget {
                           color: AppColors.textCream.withValues(alpha: 0.85),
                         ),
                       )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.edit_note,
-                            size: 16,
-                            color: AppColors.textDim,
+                    // Empty-state affordance floored at the 48dp tap-target
+                    // minimum (the icon + label row alone is ~28dp).
+                    : ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.edit_note,
+                                size: 16,
+                                color: AppColors.textDim,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.addNote,
+                                style: AppTextStyles.body.copyWith(
+                                  color: AppColors.textDim,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            l10n.addNote,
-                            style: AppTextStyles.body.copyWith(
-                              color: AppColors.textDim,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
               ),
             ),

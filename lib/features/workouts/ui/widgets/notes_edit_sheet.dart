@@ -25,7 +25,9 @@ class NotesEditSheet extends StatefulWidget {
     required this.hintText,
     required this.saveLabel,
     required this.cancelLabel,
+    required this.counterFormatter,
     this.maxLength = 2000,
+    this.counterThreshold = 1800,
   });
 
   /// Existing note text to prefill (empty/null → empty field).
@@ -40,8 +42,19 @@ class NotesEditSheet extends StatefulWidget {
   final String saveLabel;
   final String cancelLabel;
 
+  /// Formats the near-cap counter label, e.g. `"1853 / 2000"`. Takes the
+  /// current length + the max so the localized string is supplied by the
+  /// caller (keeps the widget l10n-harness-free per Decoupling Rule 2).
+  final String Function(int current, int max) counterFormatter;
+
   /// Hard character cap. Defaults to the 2000-char column budget.
   final int maxLength;
+
+  /// The counter stays hidden until the current length reaches this value
+  /// (default 1800 → shown only when ≤ 200 chars remain of a 2000 cap). The
+  /// always-on `N/M` counter reads as a nag; surfacing it only near the cap
+  /// keeps the field calm.
+  final int counterThreshold;
 
   /// Open the sheet and return the user's edit, or `null` if cancelled.
   static Future<NotesEditResult?> show(
@@ -51,7 +64,9 @@ class NotesEditSheet extends StatefulWidget {
     required String hintText,
     required String saveLabel,
     required String cancelLabel,
+    required String Function(int current, int max) counterFormatter,
     int maxLength = 2000,
+    int counterThreshold = 1800,
   }) {
     return showModalBottomSheet<NotesEditResult>(
       context: context,
@@ -68,7 +83,9 @@ class NotesEditSheet extends StatefulWidget {
         hintText: hintText,
         saveLabel: saveLabel,
         cancelLabel: cancelLabel,
+        counterFormatter: counterFormatter,
         maxLength: maxLength,
+        counterThreshold: counterThreshold,
       ),
     );
   }
@@ -118,11 +135,36 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
                 controller: _controller,
                 autofocus: true,
                 maxLength: widget.maxLength,
-                maxLines: 5,
+                maxLines: 8,
                 minLines: 3,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
                 style: AppTextStyles.body.copyWith(color: AppColors.textCream),
+                // Custom counter: nothing until the user nears the cap, then
+                // a colored remaining-budget readout. Material calls this on
+                // every change, so it tracks `currentLength` without a manual
+                // setState. Returning `null` (not an empty Text) collapses the
+                // counter row entirely so the field doesn't reserve the gap.
+                buildCounter:
+                    (
+                      context, {
+                      required int currentLength,
+                      required int? maxLength,
+                      required bool isFocused,
+                    }) {
+                      if (currentLength < widget.counterThreshold) return null;
+                      final cap = maxLength ?? widget.maxLength;
+                      final remaining = cap - currentLength;
+                      final color = remaining <= 0
+                          ? AppColors.error
+                          : remaining <= 50
+                          ? AppColors.warning
+                          : AppColors.textDim;
+                      return Text(
+                        widget.counterFormatter(currentLength, cap),
+                        style: AppTextStyles.label.copyWith(color: color),
+                      );
+                    },
                 decoration: InputDecoration(
                   hintText: widget.hintText,
                   hintStyle: AppTextStyles.body.copyWith(
@@ -147,6 +189,7 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
                       onPressed: () => Navigator.of(context).pop(),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.textDim,
+                        minimumSize: const Size(80, 48),
                       ),
                       child: Text(widget.cancelLabel),
                     ),
@@ -163,6 +206,7 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primaryViolet,
                         foregroundColor: AppColors.textCream,
+                        minimumSize: const Size(80, 48),
                       ),
                       child: Text(widget.saveLabel),
                     ),

@@ -607,6 +607,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(TextField), findsOneWidget);
+      // The in-field hint is the evocative prompt (addNotesHint), distinct
+      // from the "Add a note" affordance label the user just tapped. (The
+      // affordance stays in the tree behind the modal, so we don't assert
+      // its absence here — only that the distinct hint rendered.)
+      expect(
+        find.text(
+          'How was the session? Observations, how you felt, what you\'d '
+          'adjust…',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('saving a note persists it and renders the text', (

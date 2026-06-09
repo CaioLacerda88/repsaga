@@ -935,7 +935,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get addNotesHint => 'Add notes (optional)';
+  String get addNotesHint =>
+      'How was the session? Observations, how you felt, what you\'d adjust…';
 
   @override
   String get keepGoing => 'Keep Going';
@@ -1033,6 +1034,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addNote => 'Add a note';
+
+  @override
+  String notesCharCounter(int current, int max) {
+    return '$current / $max';
+  }
 
   @override
   String get workoutDetailTotalVolumeLabel => 'Total volume';

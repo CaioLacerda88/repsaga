@@ -942,7 +942,8 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get addNotesHint => 'Adicionar notas (opcional)';
+  String get addNotesHint =>
+      'Como foi o treino? Observações, sensações, o que ajustaria…';
 
   @override
   String get keepGoing => 'Continuar Treinando';
@@ -1040,6 +1041,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get addNote => 'Adicionar anotação';
+
+  @override
+  String notesCharCounter(int current, int max) {
+    return '$current / $max';
+  }
 
   @override
   String get workoutDetailTotalVolumeLabel => 'Volume total';
