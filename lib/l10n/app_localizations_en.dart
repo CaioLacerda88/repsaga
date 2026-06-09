@@ -1040,6 +1040,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get starterRoutinesSection => 'STARTER ROUTINES';
 
   @override
+  String get hintRoutineLongPress => 'Press and hold to edit';
+
+  @override
   String get routinesEmptyTitle => 'No routines yet';
 
   @override

@@ -1874,6 +1874,12 @@ abstract class AppLocalizations {
   /// **'STARTER ROUTINES'**
   String get starterRoutinesSection;
 
+  /// One-time discoverability hint shown above the routine list explaining that long-pressing a routine card opens edit/delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Press and hold to edit'**
+  String get hintRoutineLongPress;
+
   /// Routines empty-state headline, branded illustration. BUG-029.
   ///
   /// In en, this message translates to:

@@ -1047,6 +1047,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get starterRoutinesSection => 'TREINOS INICIAIS';
 
   @override
+  String get hintRoutineLongPress => 'Mantenha pressionado para editar';
+
+  @override
   String get routinesEmptyTitle => 'Nenhum treino ainda';
 
   @override
