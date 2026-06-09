@@ -290,7 +290,10 @@ test.describe('Workouts', { tag: '@smoke' }, () => {
     await expect(page.locator(WORKOUT.fillRemainingButton)).not.toBeVisible();
 
     // Complete ONLY the last set (index 2). The two earlier sets stay open.
-    await completeSet(page, 2);
+    // verifyByCount: out-of-order completion — set position 2 is NOT index 2 in
+    // the (empty) completed list, so the helper verifies by count, not
+    // `completed.nth(2)`.
+    await completeSet(page, 2, { verifyByCount: true });
 
     // The Fill Remaining button now appears with the count of incomplete sets
     // (2). The button's AOM accessible name is the fixed semantics label, so we
