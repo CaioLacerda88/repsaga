@@ -190,4 +190,67 @@ void main() {
       expect(holder.result, isNull);
     });
   });
+
+  group('NotesEditSheet layout', () {
+    testWidgets(
+      'does not overflow at 320dp with a long note + keyboard inset',
+      (tester) async {
+        // Reproduce the reviewer's blocking case: smallest Android width,
+        // short available height (keyboard up), and a long multiline note.
+        // The SingleChildScrollView wrapper must absorb the content height
+        // instead of painting the yellow overflow stripe.
+        tester.view.physicalSize = const Size(320, 480);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final longNote = List.generate(
+          12,
+          (i) => 'Line ${i + 1}: felt strong, bumped the working weight.',
+        ).join('\n');
+
+        await tester.pumpWidget(
+          TestMaterialApp(
+            theme: AppTheme.dark,
+            home: Scaffold(
+              // 220dp keyboard inset simulates the on-screen keyboard pushing
+              // the available height down — the exact condition that
+              // overflowed pre-fix.
+              body: MediaQuery(
+                data: const MediaQueryData(
+                  size: Size(320, 480),
+                  viewInsets: EdgeInsets.only(bottom: 220),
+                ),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: NotesEditSheet(
+                    initialNotes: longNote,
+                    title: 'Notes',
+                    hintText: _hint,
+                    saveLabel: 'Save',
+                    cancelLabel: 'Cancel',
+                    counterFormatter: _counter,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // No RenderFlex overflow / layout exception was thrown.
+        expect(tester.takeException(), isNull);
+
+        // The field + both actions are still in the (scrollable) tree.
+        expect(find.byType(TextField), findsOneWidget);
+        expect(
+          find.bySemanticsIdentifier('workout-notes-save'),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsIdentifier('workout-notes-cancel'),
+          findsOneWidget,
+        );
+      },
+    );
+  });
 }

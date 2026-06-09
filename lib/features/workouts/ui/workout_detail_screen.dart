@@ -302,9 +302,10 @@ class _NotesSection extends ConsumerWidget {
           children: [
             Text(
               l10n.notes.toUpperCase(),
-              style: AppTextStyles.label.copyWith(
-                color: AppColors.textDim.withValues(alpha: 0.6),
-              ),
+              // Same eyebrow register as the NotesEditSheet title — plain
+              // AppColors.textDim (no extra alpha) so the section header and
+              // the editor header read identically.
+              style: AppTextStyles.label.copyWith(color: AppColors.textDim),
             ),
             const SizedBox(height: 8),
             InkWell(

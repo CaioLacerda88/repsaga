@@ -49,6 +49,10 @@ void main() {
           .read(workoutNotesNotifierProvider.notifier)
           .save('w-1', '  Felt strong  ');
 
+      // The trim contract has no observable effect except the value that
+      // reaches the repository (the mock doesn't surface it back, and the
+      // notifier state is void), so `verify` on the repo arg is the least-bad
+      // handle here — not a lazy wiring trace.
       verify(
         () => mockRepo.updateWorkoutNotes(
           'w-1',
