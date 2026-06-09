@@ -1706,10 +1706,10 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{You have 1 incomplete set} other{You have {count} incomplete sets}}'**
   String incompleteSetsWarning(int count);
 
-  /// Workout notes hint
+  /// Q1 notes-edit-after — evocative placeholder hint inside the workout-notes edit field (distinct from the addNote affordance label on the detail screen).
   ///
   /// In en, this message translates to:
-  /// **'Add notes (optional)'**
+  /// **'How was the session? Observations, how you felt, what you\'d adjust…'**
   String get addNotesHint;
 
   /// Keep going button in finish dialog
@@ -1862,6 +1862,18 @@ abstract class AppLocalizations {
   /// **'Notes'**
   String get notes;
 
+  /// Q1 notes-edit-after — tappable empty-state affordance on the workout-detail notes section, prompting the user to write a note for a past workout.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note'**
+  String get addNote;
+
+  /// Q1 notes-edit-after — character counter inside the notes edit field. Only shown near the cap (remaining <= 200).
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {max}'**
+  String notesCharCounter(int current, int max);
+
   /// PR #285 device-verification (UX-critic Q2) — label half of the 48dp surface2 strip below the exercise list on the workout-detail screen. Mirrors the top XP/PRs strip pattern. Rendered in AppTextStyles.label (Barlow Condensed tracked) at textDim alpha 0.6, paired with workoutDetailTotalVolumeValue (Rajdhani numeric) for the value.
   ///
   /// In en, this message translates to:
@@ -1951,12 +1963,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'TRAINING NOTES'**
   String get routineNotesEyebrow;
-
-  /// Character counter for a notes field, shown near the cap
-  ///
-  /// In en, this message translates to:
-  /// **'{current} / {max}'**
-  String notesCharCounter(int current, int max);
 
   /// Snackbar: routine save failed
   ///

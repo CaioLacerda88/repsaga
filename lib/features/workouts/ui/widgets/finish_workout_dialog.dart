@@ -5,17 +5,22 @@ import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Result returned when the user confirms finishing a workout.
+///
+/// Q1 (notes-edit-after): the notes field was removed from the finish gate —
+/// reflective text at the RPG celebration beat adds friction for the majority
+/// who leave it blank and suffers recency bias. Notes are now written on the
+/// calm, full-context History detail screen. This record is kept (rather than
+/// collapsed to a bare `bool`) so the confirm/cancel contract stays explicit
+/// and the type has a natural home if a future finish-gate field returns.
 class FinishWorkoutResult {
-  const FinishWorkoutResult({this.notes});
-
-  final String? notes;
+  const FinishWorkoutResult();
 }
 
 /// Dialog shown when the user taps "Finish" on the active workout screen.
 ///
-/// Warns about incomplete sets and allows adding optional notes.
-/// Returns a [FinishWorkoutResult] on confirm, or `null` on cancel.
-class FinishWorkoutDialog extends StatefulWidget {
+/// Warns about incomplete sets and confirms the finish. Returns a
+/// [FinishWorkoutResult] on confirm, or `null` on cancel.
+class FinishWorkoutDialog extends StatelessWidget {
   const FinishWorkoutDialog({required this.incompleteCount, super.key});
 
   final int incompleteCount;
@@ -31,31 +36,16 @@ class FinishWorkoutDialog extends StatefulWidget {
   }
 
   @override
-  State<FinishWorkoutDialog> createState() => _FinishWorkoutDialogState();
-}
-
-class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
-  final _notesController = TextEditingController();
-
-  @override
-  void dispose() {
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
     return AlertDialog(
       title: Text(l10n.finishWorkoutTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.incompleteCount > 0) ...[
-            Row(
+      content: incompleteCount > 0
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.warning_amber_rounded,
@@ -65,34 +55,18 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    l10n.incompleteSetsWarning(widget.incompleteCount),
+                    l10n.incompleteSetsWarning(incompleteCount),
                     style: AppTextStyles.body.copyWith(
                       color: theme.colorScheme.error,
                     ),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-          ],
-          Semantics(
-            container: true,
-            identifier: 'workout-notes',
-            label: l10n.notes,
-            child: TextField(
-              controller: _notesController,
-              maxLength: 1000,
-              decoration: InputDecoration(
-                hintText: l10n.addNotesHint,
-                border: const OutlineInputBorder(),
-              ),
-              maxLines: 3,
-              minLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-            ),
-          ),
-        ],
-      ),
+            )
+          // No incomplete sets and no notes field — the dialog is a plain
+          // confirm gate. A null content keeps AlertDialog's title + actions
+          // tightly spaced (no empty content gap).
+          : null,
       actions: [
         Semantics(
           container: true,
@@ -108,12 +82,8 @@ class _FinishWorkoutDialogState extends State<FinishWorkoutDialog> {
           identifier: 'workout-dialog-finish',
           label: l10n.saveAndFinish,
           child: FilledButton(
-            onPressed: () {
-              final notes = _notesController.text.trim();
-              Navigator.of(
-                context,
-              ).pop(FinishWorkoutResult(notes: notes.isEmpty ? null : notes));
-            },
+            onPressed: () =>
+                Navigator.of(context).pop(const FinishWorkoutResult()),
             // Use the shared FilledButton style so the 48dp floor is the
             // same single-source-of-truth as `dialogTextButtonStyle`.
             style: dialogFilledButtonStyle,
