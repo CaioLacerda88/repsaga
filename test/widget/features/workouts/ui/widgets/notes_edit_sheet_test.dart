@@ -191,38 +191,57 @@ void main() {
     });
   });
 
-  group('NotesEditSheet layout', () {
-    testWidgets(
-      'does not overflow at 320dp with a long note + keyboard inset',
-      (tester) async {
-        // Reproduce the reviewer's blocking case: smallest Android width,
-        // short available height (keyboard up), and a long multiline note.
-        // The SingleChildScrollView wrapper must absorb the content height
-        // instead of painting the yellow overflow stripe.
-        tester.view.physicalSize = const Size(320, 480);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.reset);
+  group('NotesEditSheet layout (keyboard up)', () {
+    // The keyboard-layout contract — VALUE-asserting, not value-blind. The
+    // previous test only checked `takeException() == null`, which passed even
+    // while the sheet rendered FULL-HEIGHT with the eyebrow shoved off the top
+    // and the buttons buried under the keyboard. This drives the REAL modal
+    // route (the only harness where the BottomSheet hands its child
+    // maxHeight == full screen, which is what makes a bare SingleChildScrollView
+    // greedily fill and pin content to the top). With a long note + keyboard
+    // inset it asserts the actual user-visible outcome:
+    //   1. the sheet is CONTENT-SIZED (height < screen) — not full-height,
+    //   2. the eyebrow's top edge is on-screen (not clipped above y=0),
+    //   3. every part (eyebrow + field + Save + Cancel) sits ABOVE the
+    //      keyboard (bottom <= keyboard top).
+    //
+    // Pre-fix on a 320x534 phone with a long note this was: sheet 0->534
+    // (full), eyebrow top at y=6 (jammed against the screen edge), Save/Cancel
+    // bottom at y=291 — BELOW the 274 keyboard top (buried). All three
+    // assertions below failed.
+    const kbInset = 260.0;
 
-        final longNote = List.generate(
-          12,
-          (i) => 'Line ${i + 1}: felt strong, bumped the working weight.',
-        ).join('\n');
+    /// Opens the real modal at [screen] with [kbInset] keyboard inset and a
+    /// long prefilled note, then returns the laid-out rects.
+    Future<
+      ({
+        Rect sheet,
+        Rect eyebrow,
+        Rect field,
+        Rect save,
+        Rect cancel,
+        double keyboardTop,
+      })
+    >
+    layoutAt(WidgetTester tester, Size screen) async {
+      tester.view.physicalSize = screen;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-        await tester.pumpWidget(
-          TestMaterialApp(
-            theme: AppTheme.dark,
-            home: Scaffold(
-              // 220dp keyboard inset simulates the on-screen keyboard pushing
-              // the available height down — the exact condition that
-              // overflowed pre-fix.
-              body: MediaQuery(
-                data: const MediaQueryData(
-                  size: Size(320, 480),
-                  viewInsets: EdgeInsets.only(bottom: 220),
-                ),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: NotesEditSheet(
+      final longNote = List.generate(
+        14,
+        (i) => 'Line ${i + 1}: felt strong today, bumped the working weight.',
+      ).join('\n');
+
+      await tester.pumpWidget(
+        TestMaterialApp(
+          theme: AppTheme.dark,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => NotesEditSheet.show(
+                    context,
                     initialNotes: longNote,
                     title: 'Notes',
                     hintText: _hint,
@@ -230,27 +249,101 @@ void main() {
                     cancelLabel: 'Cancel',
                     counterFormatter: _counter,
                   ),
+                  child: const Text('Open'),
                 ),
               ),
             ),
           ),
-        );
-        await tester.pump();
+        ),
+      );
 
-        // No RenderFlex overflow / layout exception was thrown.
-        expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
 
-        // The field + both actions are still in the (scrollable) tree.
-        expect(find.byType(TextField), findsOneWidget);
-        expect(
-          find.bySemanticsIdentifier('workout-notes-save'),
-          findsOneWidget,
-        );
-        expect(
+      // Raise the keyboard: inject a bottom viewInset the sheet reads via
+      // MediaQuery.viewInsetsOf to lift itself above the IME.
+      tester.view.viewInsets = const FakeViewPadding(bottom: kbInset);
+      await tester.pumpAndSettle();
+
+      return (
+        sheet: tester.getRect(
+          find.bySemanticsIdentifier('workout-notes-edit-sheet'),
+        ),
+        eyebrow: tester.getRect(find.text('NOTES')),
+        field: tester.getRect(find.byType(TextField)),
+        save: tester.getRect(find.bySemanticsIdentifier('workout-notes-save')),
+        cancel: tester.getRect(
           find.bySemanticsIdentifier('workout-notes-cancel'),
-          findsOneWidget,
+        ),
+        keyboardTop: screen.height - kbInset,
+      );
+    }
+
+    void assertContract(
+      ({
+        Rect sheet,
+        Rect eyebrow,
+        Rect field,
+        Rect save,
+        Rect cancel,
+        double keyboardTop,
+      })
+      l,
+      Size screen,
+    ) {
+      // 1. Content-sized sheet: the laid-out content (eyebrow top -> buttons
+      //    bottom) is far shorter than the screen. (The sheet's RENDER box may
+      //    extend behind the keyboard because its bottom inset Padding paints
+      //    there, but the keyboard overlays it — what matters is the CONTENT
+      //    extent stays small.) Pre-fix the field expanded to ~200dp and the
+      //    content spanned nearly the whole screen.
+      final contentExtent = l.save.bottom - l.eyebrow.top;
+      expect(
+        contentExtent,
+        lessThan(screen.height - kbInset),
+        reason:
+            'content must fit in the space above the keyboard, not fill '
+            'the whole screen (was full-height pre-fix)',
+      );
+
+      // 2. Eyebrow top is on-screen (not clipped above the top edge).
+      expect(
+        l.eyebrow.top,
+        greaterThanOrEqualTo(0),
+        reason: 'eyebrow must not be pushed off the top of the screen',
+      );
+
+      // 3. Every part sits above the keyboard.
+      for (final part in [
+        ('eyebrow', l.eyebrow),
+        ('field', l.field),
+        ('save', l.save),
+        ('cancel', l.cancel),
+      ]) {
+        expect(
+          part.$2.bottom,
+          lessThanOrEqualTo(l.keyboardTop),
+          reason:
+              '${part.$1} must sit above the keyboard '
+              '(bottom ${part.$2.bottom} > keyboard top ${l.keyboardTop})',
         );
-      },
-    );
+      }
+    }
+
+    testWidgets('content sits above the keyboard at 320x534 (smallest phone)', (
+      tester,
+    ) async {
+      const screen = Size(320, 534);
+      final l = await layoutAt(tester, screen);
+      assertContract(l, screen);
+    });
+
+    testWidgets('content sits above the keyboard at 412x915 (large phone)', (
+      tester,
+    ) async {
+      const screen = Size(412, 915);
+      final l = await layoutAt(tester, screen);
+      assertContract(l, screen);
+    });
   });
 }

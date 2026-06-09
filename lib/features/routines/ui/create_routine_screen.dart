@@ -138,12 +138,16 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     });
   }
 
-  /// Custom notes counter. Hidden (zero-size) until the user is within 100
-  /// chars of the cap, then "{current} / {max}" colored by remaining headroom:
-  /// textDim normally → warning at ≤30 remaining → error at the cap (≤0).
-  Widget _buildNotesCounter(BuildContext context, int currentLength) {
+  /// Custom notes counter. Returns `null` (fully collapsing the counter
+  /// sub-row, so the field reserves no vertical gap for it) until the user is
+  /// within 100 chars of the cap, then "{current} / {max}" colored by
+  /// remaining headroom: textDim normally → warning at ≤30 remaining → error
+  /// at the cap (≤0). `null` (not `SizedBox.shrink()`) matches the
+  /// NotesEditSheet pattern and avoids InputDecorator's counter sub-row
+  /// padding entirely while the counter is hidden.
+  Widget? _buildNotesCounter(BuildContext context, int currentLength) {
     if (currentLength < _kRoutineNotesCounterThreshold) {
-      return const SizedBox.shrink();
+      return null;
     }
     final l10n = AppLocalizations.of(context);
     final remaining = _kRoutineNotesMaxLength - currentLength;

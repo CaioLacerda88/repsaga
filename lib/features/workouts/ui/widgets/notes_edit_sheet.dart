@@ -120,110 +120,115 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
       identifier: 'workout-notes-edit-sheet',
       child: SafeArea(
         top: false,
-        // bottomInset Padding stays OUTSIDE the scroll view so the whole sheet
-        // still lifts above the keyboard; the SingleChildScrollView absorbs any
-        // leftover content overflow (title + maxLines:8 field + buttons) at
-        // 320dp with the keyboard up, instead of painting a yellow stripe.
+        // The bottomInset Padding lifts the whole sheet above the keyboard.
+        // The Column(min) makes the sheet SHRINK-WRAP its content (eyebrow +
+        // field + buttons) so it sits DIRECTLY above the keyboard — no
+        // full-height sheet, no dead gap. A bare SingleChildScrollView here is
+        // GREEDY in its scroll axis: inside the isScrollControlled sheet it
+        // gets maxHeight == full screen and fills it (RenderBox.constrain
+        // clamps to maxHeight), pinning content to the top with the keyboard
+        // inset painted as empty space below. The field's own maxLines cap
+        // (capped at 5) gives it an internal scrollbar for long notes, so we
+        // never need an outer scroll view that fights the shrink-wrap.
         child: Padding(
           padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.title.toUpperCase(),
-                  style: AppTextStyles.label.copyWith(color: AppColors.textDim),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLength: widget.maxLength,
-                  maxLines: 8,
-                  minLines: 3,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.textCream,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.title.toUpperCase(),
+                style: AppTextStyles.label.copyWith(color: AppColors.textDim),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                maxLength: widget.maxLength,
+                // Capped so eyebrow + field + buttons fit above the keyboard on
+                // the smallest real Android phone (~534dp tall, keyboard
+                // ~260dp → ~250dp budget). Long notes scroll INSIDE the field.
+                maxLines: 5,
+                minLines: 3,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                style: AppTextStyles.body.copyWith(color: AppColors.textCream),
+                // Custom counter: nothing until the user nears the cap, then
+                // a colored remaining-budget readout. Material calls this on
+                // every change, so it tracks `currentLength` without a manual
+                // setState. Returning `null` (not an empty Text) collapses the
+                // counter row entirely so the field doesn't reserve the gap.
+                buildCounter:
+                    (
+                      context, {
+                      required int currentLength,
+                      required int? maxLength,
+                      required bool isFocused,
+                    }) {
+                      if (currentLength < widget.counterThreshold) {
+                        return null;
+                      }
+                      final cap = maxLength ?? widget.maxLength;
+                      final remaining = cap - currentLength;
+                      final color = remaining <= 0
+                          ? AppColors.error
+                          : remaining <= 50
+                          ? AppColors.warning
+                          : AppColors.textDim;
+                      return Text(
+                        widget.counterFormatter(currentLength, cap),
+                        style: AppTextStyles.label.copyWith(color: color),
+                      );
+                    },
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  hintStyle: AppTextStyles.body.copyWith(
+                    color: AppColors.textDim,
                   ),
-                  // Custom counter: nothing until the user nears the cap, then
-                  // a colored remaining-budget readout. Material calls this on
-                  // every change, so it tracks `currentLength` without a manual
-                  // setState. Returning `null` (not an empty Text) collapses the
-                  // counter row entirely so the field doesn't reserve the gap.
-                  buildCounter:
-                      (
-                        context, {
-                        required int currentLength,
-                        required int? maxLength,
-                        required bool isFocused,
-                      }) {
-                        if (currentLength < widget.counterThreshold) {
-                          return null;
-                        }
-                        final cap = maxLength ?? widget.maxLength;
-                        final remaining = cap - currentLength;
-                        final color = remaining <= 0
-                            ? AppColors.error
-                            : remaining <= 50
-                            ? AppColors.warning
-                            : AppColors.textDim;
-                        return Text(
-                          widget.counterFormatter(currentLength, cap),
-                          style: AppTextStyles.label.copyWith(color: color),
-                        );
-                      },
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    hintStyle: AppTextStyles.body.copyWith(
-                      color: AppColors.textDim,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.surface2,
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(8)),
-                      borderSide: BorderSide.none,
-                    ),
+                  filled: true,
+                  fillColor: AppColors.surface2,
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Semantics(
-                      container: true,
-                      identifier: 'workout-notes-cancel',
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.textDim,
-                          minimumSize: const Size(80, 48),
-                        ),
-                        child: Text(widget.cancelLabel),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Semantics(
+                    container: true,
+                    identifier: 'workout-notes-cancel',
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textDim,
+                        minimumSize: const Size(80, 48),
                       ),
+                      child: Text(widget.cancelLabel),
                     ),
-                    const SizedBox(width: 8),
-                    Semantics(
-                      container: true,
-                      identifier: 'workout-notes-save',
-                      label: widget.saveLabel,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(
-                          context,
-                        ).pop(NotesEditResult(_controller.text)),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryViolet,
-                          foregroundColor: AppColors.textCream,
-                          minimumSize: const Size(80, 48),
-                        ),
-                        child: Text(widget.saveLabel),
+                  ),
+                  const SizedBox(width: 8),
+                  Semantics(
+                    container: true,
+                    identifier: 'workout-notes-save',
+                    label: widget.saveLabel,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pop(NotesEditResult(_controller.text)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primaryViolet,
+                        foregroundColor: AppColors.textCream,
+                        minimumSize: const Size(80, 48),
                       ),
+                      child: Text(widget.saveLabel),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
