@@ -23,14 +23,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  // Option A (full-form signup): the display name + confirm-password fields
-  // are signup-only. They are created here for the screen lifetime (cheap)
-  // but only mounted into the tree when `_isSignUp`, and cleared on every
-  // mode flip so a Login -> Sign Up toggle never inherits stale text.
+  // Option A (full-form signup): the display name field is signup-only. It is
+  // created here for the screen lifetime (cheap) but only mounted into the
+  // tree when `_isSignUp`, and cleared on every mode flip so a Login -> Sign
+  // Up toggle never inherits stale text.
   final _displayNameController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   bool _isSignUp = false;
   String? _errorMessage;
+
+  // One-time per-session nudge under the signup strength bar telling the user
+  // they can reveal their password. There is no confirm-password field to
+  // catch typos, so the reveal toggle is the typo-safety net — this hint
+  // surfaces it. Dismissed permanently (for the session) the first time the
+  // user taps the eye. Local state, not Hive: per-session is sufficient.
+  bool _passwordRevealHintDismissed = false;
 
   // Live password-strength score (0–3) for the non-blocking signup strength
   // bar. Recomputed on every password keystroke (signup mode only). Purely
@@ -52,7 +58,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _displayNameController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -61,12 +66,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isSignUp = !_isSignUp;
       _errorMessage = null;
       _passwordController.clear();
-      // Clear the signup-only fields so neither mode inherits the other's
-      // text (and the confirm-password validator can't compare against a
-      // stale password).
+      // Clear the signup-only field so neither mode inherits the other's text.
       _displayNameController.clear();
-      _confirmPasswordController.clear();
       _passwordStrength = 0;
+      // Re-arm the one-time reveal hint on a fresh signup entry.
+      _passwordRevealHintDismissed = false;
       // Reset on every mode flip so a user toggling Login -> Sign Up
       // can't accidentally inherit a pre-checked state from a prior
       // mount or hot reload.
@@ -243,15 +247,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return null;
   }
 
-  /// Confirm-password validator (signup only). Must equal the live password
-  /// field value; surfaces `passwordMismatch` otherwise.
-  String? _validateConfirmPassword(String? value) {
-    final l10n = AppLocalizations.of(context);
-    if (value == null || value.isEmpty) return l10n.passwordRequired;
-    if (value != _passwordController.text) return l10n.passwordMismatch;
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -416,13 +411,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       controller: _passwordController,
                       validator: _validatePassword,
                       obscureText: true,
-                      // Signup chains password -> confirm -> submit; login
-                      // submits directly from the password field.
-                      textInputAction: _isSignUp
-                          ? TextInputAction.next
-                          : TextInputAction.done,
+                      // With the confirm field gone, the password field is the
+                      // keyboard-submit point in BOTH modes, so "Done" closes
+                      // the form. (Previously signup chained to a confirm
+                      // field via TextInputAction.next.)
+                      textInputAction: TextInputAction.done,
                       prefixIcon: Icons.lock_outlined,
-                      onFieldSubmitted: _isSignUp ? null : (_) => _submit(),
+                      // The password field now inherits the age-gate guard
+                      // that used to live on the confirm field: in signup mode
+                      // a keyboard "Done" must NOT bypass the unticked-age
+                      // structural guarantee. Mirrors the CTA's exact gate so
+                      // it is correct in both login and signup modes.
+                      onFieldSubmitted:
+                          isLoading || (_isSignUp && !_ageConfirmed)
+                          ? null
+                          : (_) => _submit(),
+                      // State-aware tooltip → Material 3 reveal-eye semantics
+                      // label. Localized show/hide handles.
+                      obscureTooltipShow: l10n.showPassword,
+                      obscureTooltipHide: l10n.hidePassword,
+                      // First eye tap dismisses the one-time reveal hint.
+                      onObscureToggle: _isSignUp
+                          ? () {
+                              if (!_passwordRevealHintDismissed) {
+                                setState(
+                                  () => _passwordRevealHintDismissed = true,
+                                );
+                              }
+                            }
+                          : null,
                       onChanged: _isSignUp
                           ? (value) {
                               final score = passwordStrengthScore(value);
@@ -441,34 +458,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ? const [AutofillHints.newPassword]
                           : const [AutofillHints.password],
                     ),
-                    // Non-blocking 3-segment password-strength bar (signup
-                    // only). Purely presentational — never gates submit.
+                    // Non-blocking password-strength bar + tip (signup only).
+                    // Purely presentational — never gates submit. The bar
+                    // names the single highest-priority MISSING requirement
+                    // (length -> number -> symbol) so the hint is always
+                    // accurate to the typed value.
                     if (_isSignUp) ...[
                       const SizedBox(height: 8),
-                      _PasswordStrengthBar(score: _passwordStrength),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        key: const ValueKey('auth-confirm-password-field'),
-                        label: l10n.confirmPassword,
-                        controller: _confirmPasswordController,
-                        validator: _validateConfirmPassword,
-                        obscureText: true,
-                        textInputAction: TextInputAction.done,
-                        prefixIcon: Icons.lock_outlined,
-                        // Gate the keyboard "Done" submit on the SAME
-                        // conditions the Sign Up CTA uses
-                        // (`isLoading || (_isSignUp && !_ageConfirmed)`).
-                        // The confirm field only exists in signup mode, so
-                        // `(!_ageConfirmed || isLoading)` is the equivalent
-                        // disable predicate here. Without this, pressing
-                        // "Done" bypassed the age-gate structural guarantee
-                        // and let a user sign up with the checkbox unticked.
-                        onFieldSubmitted: (!_ageConfirmed || isLoading)
-                            ? null
-                            : (_) => _submit(),
-                        semanticsIdentifier: 'auth-confirm-password-input',
-                        autofillHints: const [AutofillHints.newPassword],
+                      _PasswordStrengthBar(
+                        score: _passwordStrength,
+                        password: _passwordController.text,
                       ),
+                      // One-time ghost hint: shown from the first keystroke
+                      // until the user taps the eye once (regardless of the
+                      // field's current obscure state — `_AppTextFieldState`
+                      // owns `_obscured`, not readable here). The local
+                      // `_passwordRevealHintDismissed` flips on the first
+                      // `onObscureToggle` callback.
+                      if (!_passwordRevealHintDismissed) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          l10n.passwordRevealHint,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontSize: 12,
+                            color: AppColors.textDim,
+                          ),
+                        ),
+                      ],
                     ],
                     if (!_isSignUp) ...[
                       Align(
@@ -504,17 +520,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // age-gate checkbox label (one LGPD-compliant sentence)
                       // instead of an orphaned chip row. Reuses the existing
                       // `privacyPolicy` / `termsOfService` link-label strings.
-                      // The links use `MaterialTapTargetSize.padded` (48dp
-                      // floor) rather than the prior `shrinkWrap` chips —
-                      // BUG-018 tap-target compliance.
+                      // The links use `MaterialTapTargetSize.shrinkWrap` +
+                      // `minimumSize: Size.zero` + small vertical padding so
+                      // they flow inline at the 14sp line height instead of
+                      // inflating the line to a 48dp tap floor (the prior
+                      // 48dp min-height was what misaligned this label). The
+                      // 48dp gesture target stays on the checkbox itself; the
+                      // inline links are conventional sub-48dp text links.
                       Semantics(
                         container: true,
                         identifier: 'auth-age-confirmation',
                         child: Row(
+                          // Top-align the checkbox box with the first text
+                          // line. The Checkbox keeps a compact tap-target box
+                          // (shrinkWrap) so it doesn't push the label down with
+                          // its default 48dp padded box; the prior magic
+                          // `Padding(top: 12)` faking alignment is gone.
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Checkbox(
                               value: _ageConfirmed,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
                               onChanged: isLoading
                                   ? null
                                   : (value) {
@@ -523,16 +551,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       });
                                     },
                             ),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: _AgeGateLabel(
-                                  enabled: !isLoading,
-                                  onTapTerms: () =>
-                                      context.push('/terms-of-service'),
-                                  onTapPrivacy: () =>
-                                      context.push('/privacy-policy'),
-                                ),
+                              child: _AgeGateLabel(
+                                enabled: !isLoading,
+                                onTapTerms: () =>
+                                    context.push('/terms-of-service'),
+                                onTapPrivacy: () =>
+                                    context.push('/privacy-policy'),
                               ),
                             ),
                           ],
@@ -661,28 +687,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 /// Purely presentational — it visualizes [_LoginScreenState.passwordStrengthScore]
 /// (0–3) and NEVER gates submission. Three fixed-width segments fill from the
 /// left as the score rises; the active color escalates error -> warning ->
-/// success. A label below names the tier (weak / medium / strong). When the
-/// score is 0 (empty field) the bar shows three empty tracks and no label, so
-/// it occupies stable vertical space without shouting at a not-yet-typed field.
+/// success.
+///
+/// The label below the bar names the tier word AND the single highest-priority
+/// MISSING requirement, composed as `{tier} — {tip}`. The tip is prioritized
+/// length -> number -> symbol, so it always reflects what the typed value is
+/// actually short on (e.g. "Test12." has a digit + symbol but only 7 chars →
+/// "Medium — use 8+ characters"). The strong tier (3) shows a standalone
+/// celebratory string with no tip. At score 0 (empty field) the bar shows
+/// three empty tracks and no label, occupying stable vertical space without
+/// shouting at a not-yet-typed field.
 class _PasswordStrengthBar extends StatelessWidget {
-  const _PasswordStrengthBar({required this.score});
+  const _PasswordStrengthBar({required this.score, required this.password});
 
   /// 0 (empty) … 3 (strong). See [_LoginScreenState.passwordStrengthScore].
   final int score;
+
+  /// The live password value — used to derive the next-step tip. The score
+  /// alone is insufficient (a short value with a digit+symbol and a long
+  /// alpha-only value are both score 2 but need different tips).
+  final String password;
+
+  /// The single highest-priority unmet requirement for [password], prioritized
+  /// length -> number -> symbol. Returns `null` only when all three are met
+  /// (which corresponds to the strong tier, where no tip is shown).
+  String? _nextStepTip(AppLocalizations l10n) {
+    if (password.length < 8) return l10n.passwordTipLength;
+    if (!password.contains(RegExp(r'\d'))) return l10n.passwordTipNumber;
+    if (!password.contains(RegExp(r'[^A-Za-z0-9]'))) {
+      return l10n.passwordTipSymbol;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final emptyTrack = AppColors.textDim.withValues(alpha: 0.18);
 
-    // Active color + label keyed off the score. Null label at score 0 keeps
-    // the bar quiet before the user types.
-    final (Color activeColor, String? label) = switch (score) {
-      3 => (AppColors.success, l10n.passwordStrengthStrong),
+    // Active color + composed label keyed off the score. Null label at score 0
+    // keeps the bar quiet before the user types. Tiers 1 & 2 compose the tier
+    // word with the next-step tip; tier 3 is the standalone celebratory string.
+    final (Color activeColor, String? tierWord) = switch (score) {
+      3 => (AppColors.success, null),
       2 => (AppColors.warning, l10n.passwordStrengthMedium),
       1 => (AppColors.error, l10n.passwordStrengthWeak),
       _ => (emptyTrack, null),
     };
+    final String? label;
+    if (score == 3) {
+      label = l10n.passwordStrengthStrong;
+    } else if (tierWord != null) {
+      final tip = _nextStepTip(l10n);
+      label = tip != null ? '$tierWord — $tip' : tierWord;
+    } else {
+      label = null;
+    }
 
     return Semantics(
       container: true,
@@ -723,8 +783,14 @@ class _PasswordStrengthBar extends StatelessWidget {
 
 /// Inline age-gate disclosure label: a single LGPD-compliant sentence with the
 /// Terms and Privacy links embedded via [WidgetSpan]/[TextButton]. Replaces the
-/// orphaned chip row PR #309 shipped. The link buttons keep the default
-/// [MaterialTapTargetSize.padded] (48dp floor) — BUG-018 tap-target compliance.
+/// orphaned chip row PR #309 shipped.
+///
+/// The inline links use `MaterialTapTargetSize.shrinkWrap` with a small
+/// vertical padding instead of the prior `minimumSize: Size(0, 48)`: a 48dp
+/// inline height inflated the whole text line, breaking line flow and the
+/// baseline against the checkbox (the on-device misplacement). The links still
+/// expose a comfortable tap area via horizontal+vertical padding while wrapping
+/// inline at the surrounding 14sp line height.
 class _AgeGateLabel extends StatelessWidget {
   const _AgeGateLabel({
     required this.enabled,
@@ -764,8 +830,9 @@ class _AgeGateLabel extends StatelessWidget {
           child: TextButton(
             onPressed: enabled ? onTap : null,
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
             ),
             child: Text(label, style: linkStyle),

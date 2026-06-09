@@ -61,12 +61,6 @@ export const AUTH = {
    */
   displayNameInput: '[flt-semantics-identifier="auth-display-name-input"]',
   /**
-   * Option A — confirm-password AppTextField (signup mode only), below the
-   * strength bar. Semantics(identifier: 'auth-confirm-password-input').
-   */
-  confirmPasswordInput:
-    '[flt-semantics-identifier="auth-confirm-password-input"]',
-  /**
    * Option A — non-blocking 3-segment password-strength bar (signup mode
    * only). Semantics(identifier: 'auth-password-strength').
    */

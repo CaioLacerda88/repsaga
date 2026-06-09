@@ -237,10 +237,10 @@ void main() {
     });
 
     // Locates the password field's EditableText by walking down from the
-    // `auth-password-input` Semantics identifier. Option A added a
-    // display-name + confirm-password field, so `find.byType(TextFormField)
-    // .last` is no longer the password field in signup mode (it's the confirm
-    // field) — target the identifier to stay unambiguous across modes.
+    // `auth-password-input` Semantics identifier. Option A added a display-name
+    // field above email, so `find.byType(TextFormField).last` is brittle across
+    // modes — target the identifier to stay unambiguous. (Password is now the
+    // last text field in signup mode since the confirm field was dropped.)
     EditableText passwordEditable(WidgetTester tester) {
       return tester.widget<EditableText>(
         find.descendant(

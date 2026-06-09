@@ -446,13 +446,12 @@ test.describe('Onboarding — fresh-signup end-to-end (regression)', { tag: '@sm
     await expect(page.locator(AUTH.signUpButton)).toBeVisible({ timeout: 5_000 });
 
     // Fill credentials via real keyboard events (cluster: flutter-web-input-synthetic).
-    // Option A — the signup form now collects the display name + a confirm
-    // password, so all five fields are filled here (the name later lands on
-    // the profile row via the handle_new_user trigger).
+    // Option A — the signup form collects the display name + a password (the
+    // confirm field was dropped; the reveal toggle is the typo-safety net). The
+    // name later lands on the profile row via the handle_new_user trigger.
     await flutterFill(page, AUTH.displayNameInput, 'Fresh Signup User');
     await flutterFill(page, AUTH.emailInput, ephemeralEmail);
     await flutterFill(page, AUTH.passwordInput, password);
-    await flutterFill(page, AUTH.confirmPasswordInput, password);
 
     // PR #309 contract: Sign Up CTA has onPressed:null until age checkbox is ticked.
     await expect(page.locator(AUTH.ageConfirmationCheckbox)).toBeVisible({ timeout: 5_000 });

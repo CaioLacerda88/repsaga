@@ -270,19 +270,31 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signupHeading => 'CRIAR CONTA';
 
   @override
-  String get confirmPassword => 'Confirmar senha';
+  String get passwordStrengthWeak => 'Fraca';
 
   @override
-  String get passwordMismatch => 'As senhas não coincidem';
-
-  @override
-  String get passwordStrengthWeak => 'Fraca — adicione mais caracteres';
-
-  @override
-  String get passwordStrengthMedium => 'Média — adicione números ou símbolos';
+  String get passwordStrengthMedium => 'Média';
 
   @override
   String get passwordStrengthStrong => 'Ótima senha!';
+
+  @override
+  String get passwordTipLength => 'use 8+ caracteres';
+
+  @override
+  String get passwordTipNumber => 'adicione um número';
+
+  @override
+  String get passwordTipSymbol => 'adicione um símbolo';
+
+  @override
+  String get showPassword => 'Mostrar senha';
+
+  @override
+  String get hidePassword => 'Ocultar senha';
+
+  @override
+  String get passwordRevealHint => 'Toque no olho para verificar';
 
   @override
   String get signupAgeRequiredHint => 'Confirme sua idade para continuar';
