@@ -198,23 +198,13 @@ test.describe.skip('Charter D — Finish-flow happy + sad paths — US-1 [SUPERS
 
     await ss(page, 'SETUP-W1-before-finish');
 
-    // Probe the notes field here (first time the finish dialog opens)
+    // Q1 (notes-edit-after): the finish dialog no longer carries a notes
+    // field — notes are written later on the History detail screen. The
+    // finish gate is now a plain confirm. (The NOTES edge-case test below
+    // was retired with the field.)
     await page.click(WORKOUT.finishButton);
     const dialogFinish = page.locator(WORKOUT.dialogFinishButton);
     await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
-
-    // Notes field probe
-    const notesField = page.locator(WORKOUT.notesInput);
-    const notesVisible = await notesField.isVisible({ timeout: 3_000 }).catch(() => false);
-    log(`[NOTES-1] Notes field visible in finish dialog: ${notesVisible}`);
-
-    if (notesVisible) {
-      // Check it's empty by default
-      log('[NOTES-2] Notes field present — checking default state (should be empty)');
-      await ss(page, 'SETUP-notes-empty');
-    } else {
-      log('[NOTES-FINDING] Notes field NOT visible in finish dialog — selector gap or field missing');
-    }
 
     await dialogFinish.click();
 
@@ -1156,141 +1146,6 @@ test.describe.skip('Charter D — Finish-flow happy + sad paths — US-1 [SUPERS
     });
 
     log('[B12] DONE');
-  });
-
-  // ---------------------------------------------------------
-  // NOTES: Notes field edge cases
-  // ---------------------------------------------------------
-  test('NOTES — notes field edge cases in finish dialog', async ({ page }) => {
-    await loginUser(page);
-    log('[NOTES] Notes field edge case probes');
-
-    await startEmptyWorkout(page);
-    await addExercise(page, 'Barbell Bench Press');
-    await setWeight(page, '40');
-    await setReps(page, '5');
-    await completeSet(page, 0);
-
-    await page.click(WORKOUT.finishButton);
-    const dialogFinish = page.locator(WORKOUT.dialogFinishButton);
-    await expect(dialogFinish).toBeVisible({ timeout: 8_000 });
-
-    await ss(page, 'NOTES-dialog-open');
-
-    const notesField = page.locator(WORKOUT.notesInput);
-    const notesVisible = await notesField.isVisible({ timeout: 5_000 }).catch(() => false);
-    log(`[NOTES] Notes field visible: ${notesVisible}`);
-
-    if (!notesVisible) {
-      log('[NOTES] SKIP: Notes field not visible — closing dialog');
-      const keepGoing = page.locator(WORKOUT.keepGoingButton);
-      if (await keepGoing.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await keepGoing.click();
-      }
-      log('[NOTES] DONE');
-      return;
-    }
-
-    // Check if Flutter's native input proxy is already active (notes field may be auto-focused).
-    let inputProxy = page.locator('textarea, input').last();
-    let proxyAttached = await inputProxy.waitFor({ state: 'attached', timeout: 2_000 }).then(() => true).catch(() => false);
-    log(`[NOTES] Native input proxy already attached (auto-focus check): ${proxyAttached}`);
-
-    if (!proxyAttached) {
-      // Click the notes field semantics element to focus it.
-      const notesEl = page.locator(WORKOUT.notesInput).last();
-      const notesBB = await notesEl.boundingBox().catch(() => null);
-      log(`[NOTES] notes field bounding box: ${JSON.stringify(notesBB)}`);
-
-      if (notesBB) {
-        await page.mouse.click(notesBB.x + notesBB.width / 2, notesBB.y + notesBB.height / 2);
-      } else {
-        await notesEl.click({ timeout: 8_000 }).catch(e => log(`[NOTES] notes click error: ${e.message}`));
-      }
-      await page.waitForTimeout(1_000);
-
-      inputProxy = page.locator('textarea, input').last();
-      proxyAttached = await inputProxy.waitFor({ state: 'attached', timeout: 4_000 }).then(() => true).catch(() => false);
-    }
-    log(`[NOTES] Native input proxy attached after notes click: ${proxyAttached}`);
-
-    if (!proxyAttached) {
-      log('[NOTES-FINDING] Notes field does not surface a native input proxy when clicked in dialog — cannot probe char limits via keyboard. Logging visual state only.');
-      const notesAomNodes = await aomDump(page);
-      log('[NOTES] AOM at notes field state:');
-      notesAomNodes.slice(0, 20).forEach(l => log(`  ${l}`));
-      await ss(page, 'NOTES-no-proxy');
-
-      // Skip character-limit probes — close dialog and proceed
-      const keepGoing = page.locator(WORKOUT.keepGoingButton);
-      if (await keepGoing.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await keepGoing.click();
-      } else {
-        await page.keyboard.press('Escape');
-      }
-      log('[NOTES] DONE (proxy not available)');
-      return;
-    }
-
-    // Probe 1: Exactly 1000 chars
-    const chars1000 = 'A'.repeat(1000);
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type(chars1000, { delay: 1 });
-    await page.waitForTimeout(700);
-    await ss(page, 'NOTES-1000-chars');
-    log('[NOTES-1] 1000 chars typed');
-
-    // Check character counter in AOM
-    const aomAfter1000 = await aomDump(page);
-    const counterNode = aomAfter1000.find(l => l.includes('1000') || l.includes('/1000'));
-    log(`[NOTES-1] Counter node: ${counterNode ?? 'not found'}`);
-
-    // Probe 2: 1001 chars (should be truncated or rejected)
-    const chars1001 = 'B'.repeat(1001);
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type(chars1001, { delay: 1 });
-    await page.waitForTimeout(700);
-    await ss(page, 'NOTES-1001-chars');
-    log('[NOTES-2] 1001 chars typed (checking if truncated)');
-
-    // Try to read the actual character count from the AOM
-    const notesAom = await aomDump(page);
-    const notesNode = notesAom.find(l => l.includes('notes') || l.includes('Notes'));
-    const counterNodeAfter = notesAom.find(l => l.includes('/1000') || l.includes('1001') || l.includes('1000'));
-    log(`[NOTES-2] Notes AOM node: ${notesNode ?? 'not found'}`);
-    log(`[NOTES-2] Counter node after 1001 chars: ${counterNodeAfter ?? 'not found'}`);
-
-    // Probe 3: Emojis
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type('🏋️💪🔥 Great workout!', { delay: 10 });
-    await page.waitForTimeout(700);
-    await ss(page, 'NOTES-emojis');
-    log('[NOTES-3] Emoji input typed');
-
-    // Probe 4: Leading/trailing whitespace
-    await page.keyboard.press('Control+a');
-    await page.keyboard.type('   whitespace test   ', { delay: 10 });
-    await page.waitForTimeout(500);
-    log('[NOTES-4] Leading/trailing whitespace typed');
-
-    // Probe 5: Empty notes — clear and submit
-    await page.keyboard.press('Control+a');
-    await page.keyboard.press('Backspace');
-    await page.waitForTimeout(500);
-    log('[NOTES-5] Notes cleared (empty state before finish)');
-
-    // Save with empty notes
-    await dialogFinish.click();
-
-    await page.waitForURL(/\/(home|pr-celebration|workout\/finish\/)/, { timeout: 25_000 });
-    const urlNotes = page.url();
-    log(`[NOTES] URL after finish with empty notes: ${urlNotes}`);
-
-    if (urlNotes.includes('pr-celebration')) {
-      await dismissPrCelebrationIfPresent(page);
-    }
-
-    log('[NOTES] DONE');
   });
 
   // ---------------------------------------------------------

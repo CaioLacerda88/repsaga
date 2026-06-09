@@ -595,6 +595,34 @@ class WorkoutRepository extends BaseRepository {
     );
   }
 
+  /// Update the free-text `notes` on an existing (finished) workout.
+  ///
+  /// Q1 (notes-edit-after): the `save_workout` RPC sets `notes` at creation
+  /// time, but editing a past workout from the History detail screen needs a
+  /// targeted UPDATE. RLS scopes writes to the owner; the explicit
+  /// `.eq('user_id', userId)` is defence-in-depth (mirrors [discardWorkout]).
+  ///
+  /// Pass an empty/blank string to clear the note — the caller normalizes
+  /// blank input to `null` before persisting so the column carries a clean
+  /// "no note" sentinel rather than an empty string.
+  ///
+  /// **Online-only:** unlike [saveWorkout], this is NOT routed through the
+  /// offline queue. Editing a past session's note is a rare, deliberate
+  /// action; if the device is offline the write surfaces as a domain error
+  /// the UI reports, rather than silently queueing.
+  Future<void> updateWorkoutNotes(
+    String workoutId, {
+    required String? notes,
+    required String userId,
+  }) {
+    return mapException(() async {
+      await _workouts
+          .update({'notes': notes})
+          .eq('id', workoutId)
+          .eq('user_id', userId);
+    });
+  }
+
   /// Discard (delete) an active workout.
   Future<void> discardWorkout(String workoutId, {required String userId}) {
     return mapException(() async {

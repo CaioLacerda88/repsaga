@@ -84,26 +84,14 @@ void main() {
         expect(find.text('Finish Workout?'), findsNothing);
       });
 
-      testWidgets('shows notes text field', (tester) async {
+      testWidgets('has no notes field (Q1 notes-edit-after)', (tester) async {
+        // Q1: notes capture moved off the finish gate onto the calm History
+        // detail screen. The finish dialog is now a plain confirm gate — no
+        // TextField, no "Add notes" prompt.
         await showDialog(tester, incompleteCount: 0);
 
-        expect(find.byType(TextField), findsOneWidget);
-        expect(find.text('Add notes (optional)'), findsOneWidget);
-      });
-
-      testWidgets('clamps workout notes input to 1000 characters', (
-        tester,
-      ) async {
-        await showDialog(tester, incompleteCount: 0);
-
-        final overLimit = 'x' * 1500;
-        await tester.enterText(find.byType(TextField), overLimit);
-        await tester.pumpAndSettle();
-
-        // The controller should hold exactly 1000 chars — MaxLengthEnforcement
-        // default on mobile/web is `truncateAfterCompositionEnds` / `enforced`.
-        final field = tester.widget<TextField>(find.byType(TextField));
-        expect(field.controller!.text.length, 1000);
+        expect(find.byType(TextField), findsNothing);
+        expect(find.text('Add notes (optional)'), findsNothing);
       });
 
       testWidgets('shows "Keep Going" and "Save & Finish" buttons', (
@@ -151,78 +139,9 @@ void main() {
     });
 
     group('"Save & Finish" button', () {
-      testWidgets(
-        'returns FinishWorkoutResult with null notes when field is empty',
-        (tester) async {
-          FinishWorkoutResult? captured;
-
-          await tester.pumpWidget(
-            TestMaterialApp(
-              theme: AppTheme.dark,
-              home: Builder(
-                builder: (context) => Scaffold(
-                  body: ElevatedButton(
-                    onPressed: () async {
-                      captured = await FinishWorkoutDialog.show(
-                        context,
-                        incompleteCount: 0,
-                      );
-                    },
-                    child: const Text('Open'),
-                  ),
-                ),
-              ),
-            ),
-          );
-
-          await tester.tap(find.text('Open'));
-          await tester.pumpAndSettle();
-
-          await tester.tap(find.text('Save & Finish'));
-          await tester.pumpAndSettle();
-
-          expect(captured, isNotNull);
-          expect(captured!.notes, isNull);
-        },
-      );
-
-      testWidgets(
-        'returns FinishWorkoutResult with notes when text is entered',
-        (tester) async {
-          FinishWorkoutResult? captured;
-
-          await tester.pumpWidget(
-            TestMaterialApp(
-              theme: AppTheme.dark,
-              home: Builder(
-                builder: (context) => Scaffold(
-                  body: ElevatedButton(
-                    onPressed: () async {
-                      captured = await FinishWorkoutDialog.show(
-                        context,
-                        incompleteCount: 0,
-                      );
-                    },
-                    child: const Text('Open'),
-                  ),
-                ),
-              ),
-            ),
-          );
-
-          await tester.tap(find.text('Open'));
-          await tester.pumpAndSettle();
-
-          await tester.enterText(find.byType(TextField), 'Great session today');
-          await tester.tap(find.text('Save & Finish'));
-          await tester.pumpAndSettle();
-
-          expect(captured, isNotNull);
-          expect(captured!.notes, 'Great session today');
-        },
-      );
-
-      testWidgets('trims whitespace-only notes to null', (tester) async {
+      testWidgets('returns a non-null FinishWorkoutResult on confirm', (
+        tester,
+      ) async {
         FinishWorkoutResult? captured;
 
         await tester.pumpWidget(
@@ -247,12 +166,47 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        await tester.enterText(find.byType(TextField), '   ');
+        await tester.tap(find.text('Save & Finish'));
+        await tester.pumpAndSettle();
+
+        // Confirming returns a result (the coordinator treats non-null as
+        // "proceed with finish"); the dialog no longer carries notes.
+        expect(captured, isNotNull);
+      });
+
+      testWidgets('confirms even with incomplete sets', (tester) async {
+        // The warning is advisory — the user can still seal the session.
+        FinishWorkoutResult? captured;
+
+        await tester.pumpWidget(
+          TestMaterialApp(
+            theme: AppTheme.dark,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () async {
+                    captured = await FinishWorkoutDialog.show(
+                      context,
+                      incompleteCount: 2,
+                    );
+                  },
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('You have 2 incomplete sets'), findsOneWidget);
+
         await tester.tap(find.text('Save & Finish'));
         await tester.pumpAndSettle();
 
         expect(captured, isNotNull);
-        expect(captured!.notes, isNull);
+        expect(find.text('Seal this session?'), findsNothing);
       });
 
       testWidgets('dismisses dialog after confirming', (tester) async {

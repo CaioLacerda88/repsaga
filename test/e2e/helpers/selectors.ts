@@ -279,8 +279,18 @@ export const WORKOUT = {
   enterWeightDialog: 'text=Enter weight',
   /** Tappable reps value that opens the reps entry dialog */
   enterRepsDialog: 'text=Enter reps',
-  /** Workout notes input — Semantics(identifier: 'workout-notes') */
-  notesInput: '[flt-semantics-identifier="workout-notes"]',
+  /**
+   * Q1 (notes-edit-after): notes moved off the finish gate onto the History
+   * detail screen. These handles address the new editable section + sheet.
+   */
+  /** Notes section on the workout-detail screen (tap to edit). */
+  notesSection: '[flt-semantics-identifier="workout-detail-notes"]',
+  /** Multiline notes editor bottom sheet. */
+  notesEditSheet: '[flt-semantics-identifier="workout-notes-edit-sheet"]',
+  /** Save button inside the notes editor sheet. */
+  notesSaveButton: '[flt-semantics-identifier="workout-notes-save"]',
+  /** Cancel button inside the notes editor sheet. */
+  notesCancelButton: '[flt-semantics-identifier="workout-notes-cancel"]',
   /**
    * Stop button inside ActiveWorkoutLoadingOverlay (PR1 — Q1; relabeled in
    * PR-7 from "Cancel" to "Stop" — UI-critic deferred copy fix).
