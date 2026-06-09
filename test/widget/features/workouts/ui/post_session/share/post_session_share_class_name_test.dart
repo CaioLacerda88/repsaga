@@ -117,6 +117,9 @@ Future<ShareCtaButton> _shareCtaAfterSummary(WidgetTester tester) async {
   await tester.longPress(find.byType(PostSessionScreen));
   await tester.pump(const Duration(milliseconds: 50));
 
+  // Fail readably if the share CTA didn't mount (e.g. a future params change
+  // flips `hasShareCta` false) instead of an opaque `tester.widget<>` throw.
+  expect(find.byType(ShareCtaButton), findsOneWidget);
   final cta = tester.widget<ShareCtaButton>(find.byType(ShareCtaButton));
   addTearDown(() async {
     // Tear down without leaving the controller's pending timers behind.
@@ -184,6 +187,28 @@ void main() {
       });
 
       testWidgets(
+        'ascendant slug resolves to its localized pt name, not the slug',
+        (tester) async {
+          // Parallel to the bulwark pt case: pt `Ascendente` vs slug
+          // `ascendant` — a real locale-specific regression catcher.
+          await tester.pumpWidget(
+            _harness(
+              characterClass: CharacterClass.ascendant,
+              locale: const Locale('pt'),
+            ),
+          );
+          final cta = await _shareCtaAfterSummary(tester);
+
+          final l10n = await AppLocalizations.delegate.load(const Locale('pt'));
+          expect(
+            cta.strings.achievementFrameClassName,
+            l10n.classAscendant.toUpperCase(),
+          );
+          expect(cta.strings.achievementFrameClassName, isNot('ASCENDANT'));
+        },
+      );
+
+      testWidgets(
         'class-change discreet eyebrow is fully localized in pt — both the '
         'class name AND the "awakened" subline follow app locale (no mixed-'
         'locale "Baluarte DESPERTOU." regression where only the word is pt)',
@@ -213,6 +238,9 @@ void main() {
           // hardcoded English/other-locale framing, and must NOT leak the slug.
           expect(cta.strings.discreetEyebrow, isNot(contains('BULWARK')));
           expect(cta.strings.discreetEyebrow, contains('BALUARTE'));
+          // The Discreet variant also renders the class name in the hero slot
+          // (separate render path) — pin it localized too, not the slug.
+          expect(cta.strings.discreetHero, l10n.classBulwark.toUpperCase());
         },
       );
 
@@ -239,6 +267,8 @@ void main() {
           );
           // en subline is "AWAKENED." — the pt literal must never appear.
           expect(cta.strings.discreetEyebrow, isNot(contains('DESPERTOU')));
+          // Hero slot localized too (en here, parity with the pt case above).
+          expect(cta.strings.discreetHero, l10n.classBulwark.toUpperCase());
         },
       );
     },
