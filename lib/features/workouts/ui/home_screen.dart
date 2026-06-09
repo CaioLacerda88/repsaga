@@ -8,9 +8,11 @@ import '../../../l10n/app_localizations.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
+import '../../routines/providers/routine_hint_provider.dart';
 import '../../routines/ui/start_routine_action.dart';
 import '../../routines/ui/widgets/routine_action_sheet.dart';
 import '../../routines/ui/widgets/routine_card.dart';
+import '../../routines/ui/widgets/routine_long_press_hint.dart';
 import '../../weekly_plan/providers/weekly_plan_provider.dart';
 import '../../../shared/widgets/pending_sync_badge.dart';
 import '../../../shared/widgets/sync_failure_card.dart';
@@ -430,13 +432,26 @@ class _HomeRoutinesList extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
+            // One-time long-press discoverability hint, between the MY
+            // ROUTINES eyebrow and the first card. Self-gates to nothing once
+            // the gesture is discovered or the view cap is reached. The home
+            // section already sits inside the page's 16dp horizontal padding,
+            // so the hint takes `horizontalPadding: 0` to align its glyph to
+            // the same x=16 card edge instead of doubling the inset.
+            RoutineLongPressHint(
+              label: AppLocalizations.of(context).hintRoutineLongPress,
+              horizontalPadding: 0,
+            ),
             for (final r in shown)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: RoutineCard(
                   routine: r,
                   onTap: () => startRoutineWorkout(context, ref, r),
-                  onLongPress: () => showRoutineActionSheet(context, ref, r),
+                  onLongPress: () {
+                    ref.read(routineHintProvider.notifier).markSeen();
+                    showRoutineActionSheet(context, ref, r);
+                  },
                 ),
               ),
             if (hasMore)

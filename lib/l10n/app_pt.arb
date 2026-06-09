@@ -327,6 +327,7 @@
   "failedToLoadRoutines": "Falha ao carregar treinos",
   "myRoutinesSection": "MEUS TREINOS",
   "starterRoutinesSection": "TREINOS INICIAIS",
+  "hintRoutineLongPress": "Mantenha pressionado para editar",
   "routinesEmptyTitle": "Nenhum treino ainda",
   "routinesEmptyBody": "Planeje uma sequência de exercícios uma vez e reutilize a cada treino.",
   "routinesEmptyCta": "Criar treino",

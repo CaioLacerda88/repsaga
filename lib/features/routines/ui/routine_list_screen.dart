@@ -6,10 +6,12 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../providers/routine_hint_provider.dart';
 import 'widgets/routine_action_sheet.dart';
 import '../providers/notifiers/routine_list_notifier.dart';
 import 'start_routine_action.dart';
 import 'widgets/routine_card.dart';
+import 'widgets/routine_long_press_hint.dart';
 
 class RoutineListScreen extends ConsumerWidget {
   const RoutineListScreen({super.key});
@@ -76,7 +78,13 @@ class RoutineListScreen extends ConsumerWidget {
                     onCreateTap: () => context.go('/routines/create'),
                   ),
                 )
-              else
+              else ...[
+                // One-time long-press discoverability hint, placed between the
+                // MY ROUTINES header and the first card (self-gates to nothing
+                // once the gesture is discovered or the view cap is reached).
+                SliverToBoxAdapter(
+                  child: RoutineLongPressHint(label: l10n.hintRoutineLongPress),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverList.builder(
@@ -90,15 +98,19 @@ class RoutineListScreen extends ConsumerWidget {
                           ref,
                           userRoutines[index],
                         ),
-                        onLongPress: () => showRoutineActionSheet(
-                          context,
-                          ref,
-                          userRoutines[index],
-                        ),
+                        onLongPress: () {
+                          ref.read(routineHintProvider.notifier).markSeen();
+                          showRoutineActionSheet(
+                            context,
+                            ref,
+                            userRoutines[index],
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
+              ],
 
               if (defaultRoutines.isNotEmpty) ...[
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -125,11 +137,14 @@ class RoutineListScreen extends ConsumerWidget {
                           ref,
                           defaultRoutines[index],
                         ),
-                        onLongPress: () => showRoutineActionSheet(
-                          context,
-                          ref,
-                          defaultRoutines[index],
-                        ),
+                        onLongPress: () {
+                          ref.read(routineHintProvider.notifier).markSeen();
+                          showRoutineActionSheet(
+                            context,
+                            ref,
+                            defaultRoutines[index],
+                          );
+                        },
                       ),
                     ),
                   ),

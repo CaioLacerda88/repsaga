@@ -782,6 +782,8 @@
   "@myRoutinesSection": { "description": "Section header: my routines" },
   "starterRoutinesSection": "STARTER ROUTINES",
   "@starterRoutinesSection": { "description": "Section header: starter routines" },
+  "hintRoutineLongPress": "Press and hold to edit",
+  "@hintRoutineLongPress": { "description": "One-time discoverability hint shown above the routine list explaining that long-pressing a routine card opens edit/delete." },
   "routinesEmptyTitle": "No routines yet",
   "@routinesEmptyTitle": { "description": "Routines empty-state headline, branded illustration. BUG-029." },
   "routinesEmptyBody": "Plan a workout sequence once and reuse it every session.",
