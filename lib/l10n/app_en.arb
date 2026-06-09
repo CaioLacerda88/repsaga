@@ -762,6 +762,8 @@
   "@exerciseGeneric": { "description": "Fallback exercise name when name is null" },
   "notes": "Notes",
   "@notes": { "description": "Notes section label" },
+  "addNote": "Add a note",
+  "@addNote": { "description": "Q1 notes-edit-after — tappable empty-state affordance on the workout-detail notes section, prompting the user to write a note for a past workout." },
   "workoutDetailTotalVolumeLabel": "Total volume",
   "@workoutDetailTotalVolumeLabel": {
     "description": "PR #285 device-verification (UX-critic Q2) — label half of the 48dp surface2 strip below the exercise list on the workout-detail screen. Mirrors the top XP/PRs strip pattern. Rendered in AppTextStyles.label (Barlow Condensed tracked) at textDim alpha 0.6, paired with workoutDetailTotalVolumeValue (Rajdhani numeric) for the value."

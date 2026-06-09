@@ -271,7 +271,11 @@ class FinishWorkoutCoordinator {
       // play uninterrupted (GoRouter's go() does a full-stack replacement
       // which would instantly pop any showDialog overlay).
       _isFinishHandled = true;
-      final finishResult = await notifier.finishWorkout(notes: result.notes);
+      // Q1 (notes-edit-after): the finish gate no longer captures notes —
+      // they're written later on the calm History detail screen. The
+      // `notes` param on `finishWorkout` is retained for the save-RPC /
+      // offline-queue contract but always `null` from this path.
+      final finishResult = await notifier.finishWorkout(notes: null);
       if (!context.mounted) {
         _isFinishHandled = false;
         return;

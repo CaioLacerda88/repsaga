@@ -128,12 +128,18 @@ class FakeRoutingSupabaseClient extends Fake
 }
 
 /// Records chained query calls and returns preset data or error.
+// ignore: must_be_immutable
 class FakeQueryBuilder extends Fake implements supabase.SupabaseQueryBuilder {
   FakeQueryBuilder({this.data = const [], this.error});
 
   final List<Map<String, dynamic>> data;
   final Exception? error;
   final List<String> calledMethods = [];
+
+  /// Captures the payload passed to the most recent `update(...)` call so
+  /// tests can assert the persisted values (behavior, not just "update was
+  /// called"). Null until `update` runs.
+  Map<dynamic, dynamic>? lastUpdateValues;
 
   @override
   FakeFilterBuilder select([String columns = '*']) {
@@ -150,6 +156,7 @@ class FakeQueryBuilder extends Fake implements supabase.SupabaseQueryBuilder {
   @override
   FakeFilterBuilder update(Map values) {
     calledMethods.add('update');
+    lastUpdateValues = values;
     return FakeFilterBuilder(this);
   }
 

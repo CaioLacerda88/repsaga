@@ -320,6 +320,7 @@
   "workout": "Treino",
   "exerciseGeneric": "Exercício",
   "notes": "Notas",
+  "addNote": "Adicionar anotação",
   "workoutDetailTotalVolumeLabel": "Volume total",
   "workoutDetailTotalVolumeValue": "{volume}",
 

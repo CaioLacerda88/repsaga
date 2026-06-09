@@ -4,18 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
+import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/personal_records/providers/pr_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
 import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
+import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/workout_detail_screen.dart';
 import 'package:repsaga/shared/widgets/reward_accent.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
+
+class _MockWorkoutRepository extends Mock implements WorkoutRepository {}
 
 class _ProfileNotifierWithUnit extends AsyncNotifier<Profile?>
     implements ProfileNotifier {
@@ -510,5 +515,181 @@ void main() {
         expect(rendered.text.style?.color, AppColors.heroGold);
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Q1 (notes-edit-after) — editable notes section on the detail screen.
+  //
+  // The notes field moved off the finish gate. On the History detail screen:
+  //   * empty → a quiet "Add a note" affordance,
+  //   * tapping → opens the NotesEditSheet,
+  //   * saving → persists + re-renders the note,
+  //   * re-opening the editor → prefills the saved text.
+  // The persisted value is exercised through a mock repository + a mutable
+  // detail holder that the notifier's invalidate re-reads, so the round-trip
+  // (not just "save was called") is the asserted behavior.
+  // -------------------------------------------------------------------------
+  group('WorkoutDetailScreen notes editing', () {
+    late _MockWorkoutRepository mockRepo;
+    // Mutable detail the workoutDetailProvider override re-reads on invalidate.
+    late WorkoutDetail currentDetail;
+
+    WorkoutDetail detailWithNotes(String? notes) {
+      final base = makeDetail();
+      return (
+        workout: base.workout.copyWith(notes: notes),
+        exercises: base.exercises,
+        setsByExercise: base.setsByExercise,
+      );
+    }
+
+    setUp(() {
+      mockRepo = _MockWorkoutRepository();
+      // The mock persists by mutating the holder so the provider invalidate
+      // surfaces the new value — simulating the Supabase round-trip.
+      when(
+        () => mockRepo.updateWorkoutNotes(
+          any(),
+          notes: any(named: 'notes'),
+          userId: any(named: 'userId'),
+        ),
+      ).thenAnswer((invocation) async {
+        currentDetail = detailWithNotes(
+          invocation.namedArguments[#notes] as String?,
+        );
+      });
+    });
+
+    Widget buildNotesWidget() {
+      return ProviderScope(
+        overrides: [
+          workoutDetailProvider(
+            'w-1',
+          ).overrideWith((ref) => Future.value(currentDetail)),
+          workoutPRSetIdsProvider(
+            'w-1',
+          ).overrideWith((ref) => Future.value(<String>{})),
+          workoutRepositoryProvider.overrideWithValue(mockRepo),
+          currentUserIdProvider.overrideWithValue('user-001'),
+        ],
+        child: TestMaterialApp(
+          theme: AppTheme.dark,
+          home: const WorkoutDetailScreen(workoutId: 'w-1'),
+        ),
+      );
+    }
+
+    testWidgets('empty notes shows the "Add a note" affordance', (
+      tester,
+    ) async {
+      currentDetail = detailWithNotes(null);
+
+      await tester.pumpWidget(buildNotesWidget());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Add a note'), findsOneWidget);
+      expect(find.byIcon(Icons.edit_note), findsOneWidget);
+    });
+
+    testWidgets('tapping the affordance opens the edit sheet', (tester) async {
+      currentDetail = detailWithNotes(null);
+
+      await tester.pumpWidget(buildNotesWidget());
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Add a note'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.bySemanticsIdentifier('workout-notes-edit-sheet'),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('saving a note persists it and renders the text', (
+      tester,
+    ) async {
+      currentDetail = detailWithNotes(null);
+
+      await tester.pumpWidget(buildNotesWidget());
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Add a note'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Deload week, felt easy');
+      await tester.tap(find.bySemanticsIdentifier('workout-notes-save'));
+      await tester.pumpAndSettle();
+
+      // The persisted value round-trips: the sheet is gone and the note text
+      // now renders in the section. The "Add a note" prompt is replaced.
+      expect(
+        find.bySemanticsIdentifier('workout-notes-edit-sheet'),
+        findsNothing,
+      );
+      expect(find.text('Deload week, felt easy'), findsOneWidget);
+      expect(find.text('Add a note'), findsNothing);
+
+      verify(
+        () => mockRepo.updateWorkoutNotes(
+          'w-1',
+          notes: 'Deload week, felt easy',
+          userId: 'user-001',
+        ),
+      ).called(1);
+    });
+
+    testWidgets('re-opening the editor prefills the saved note', (
+      tester,
+    ) async {
+      currentDetail = detailWithNotes('Existing note text');
+
+      await tester.pumpWidget(buildNotesWidget());
+      await tester.pump();
+      await tester.pump();
+
+      // The note renders (tappable), not the add affordance.
+      expect(find.text('Existing note text'), findsOneWidget);
+      expect(find.text('Add a note'), findsNothing);
+
+      await tester.tap(find.text('Existing note text'));
+      await tester.pumpAndSettle();
+
+      // The sheet's TextField is prefilled with the saved value.
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'Existing note text');
+    });
+
+    testWidgets('cancelling the editor leaves the note unchanged', (
+      tester,
+    ) async {
+      currentDetail = detailWithNotes('Original');
+
+      await tester.pumpWidget(buildNotesWidget());
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Original'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Discarded edit');
+      await tester.tap(find.bySemanticsIdentifier('workout-notes-cancel'));
+      await tester.pumpAndSettle();
+
+      // Cancel persists nothing; the original note still renders.
+      expect(find.text('Original'), findsOneWidget);
+      expect(find.text('Discarded edit'), findsNothing);
+      verifyNever(
+        () => mockRepo.updateWorkoutNotes(
+          any(),
+          notes: any(named: 'notes'),
+          userId: any(named: 'userId'),
+        ),
+      );
+    });
   });
 }

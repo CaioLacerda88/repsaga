@@ -1862,6 +1862,12 @@ abstract class AppLocalizations {
   /// **'Notes'**
   String get notes;
 
+  /// Q1 notes-edit-after — tappable empty-state affordance on the workout-detail notes section, prompting the user to write a note for a past workout.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note'**
+  String get addNote;
+
   /// PR #285 device-verification (UX-critic Q2) — label half of the 48dp surface2 strip below the exercise list on the workout-detail screen. Mirrors the top XP/PRs strip pattern. Rendered in AppTextStyles.label (Barlow Condensed tracked) at textDim alpha 0.6, paired with workoutDetailTotalVolumeValue (Rajdhani numeric) for the value.
   ///
   /// In en, this message translates to:

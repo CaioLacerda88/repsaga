@@ -13,6 +13,7 @@ import '../models/exercise_set.dart';
 import '../models/set_type.dart';
 import '../models/workout_exercise.dart';
 import '../providers/workout_history_providers.dart';
+import 'widgets/notes_edit_sheet.dart';
 
 /// Read-only detail view of a completed workout.
 class WorkoutDetailScreen extends ConsumerWidget {
@@ -186,33 +187,13 @@ class _WorkoutDetailBody extends ConsumerWidget {
             );
           }, childCount: detail.exercises.length),
         ),
-        // Notes section
-        if (workout.notes != null && workout.notes!.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(l10n.notes, style: AppTextStyles.title),
-                      const SizedBox(height: 8),
-                      Text(
-                        workout.notes!,
-                        style: AppTextStyles.body.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        // Notes section — Q1 (notes-edit-after). Flat layout (no Card chrome),
+        // editable in place. Empty → quiet "add note" affordance; present →
+        // tappable text. Tapping opens the NotesEditSheet (multiline, 2000-char
+        // cap, Save/Cancel) and persists via workoutNotesNotifierProvider.
+        SliverToBoxAdapter(
+          child: _NotesSection(workoutId: workout.id, notes: workout.notes),
+        ),
         // 48dp total-volume strip — mirrors the top XP/PRs strip (lines
         // ~120-160 above) so the screen reads as two anchor bands around
         // the exercise list rather than a free-floating Material icon
@@ -258,6 +239,104 @@ class _WorkoutDetailBody extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Flat, editable notes section on the workout-detail screen (Q1).
+///
+/// Renders an eyebrow label (`l10n.notes`, Barlow-Condensed tracked) over
+/// either the note body (tappable) or — when empty — a quiet
+/// `Icons.edit_note` + `l10n.addNote` affordance. Tapping opens
+/// [NotesEditSheet]; saving persists through [workoutNotesNotifierProvider]
+/// and the detail provider invalidation re-renders the new value.
+class _NotesSection extends ConsumerWidget {
+  const _NotesSection({required this.workoutId, required this.notes});
+
+  final String workoutId;
+  final String? notes;
+
+  bool get _hasNote => notes != null && notes!.isNotEmpty;
+
+  Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final result = await NotesEditSheet.show(
+      context,
+      initialNotes: notes,
+      title: l10n.notes,
+      hintText: l10n.addNote,
+      saveLabel: l10n.save,
+      cancelLabel: l10n.cancel,
+    );
+    if (result == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final failedMessage = l10n.failedToSaveWorkout;
+    try {
+      await ref
+          .read(workoutNotesNotifierProvider.notifier)
+          .save(workoutId, result.notes);
+    } on Object {
+      // The notifier rethrows the domain exception on a failed write; the
+      // detail provider is NOT invalidated in that case, so the prior note
+      // stays rendered. Surface a snackbar so the edit isn't silently lost.
+      messenger.showSnackBar(SnackBar(content: Text(failedMessage)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: 'workout-detail-notes',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.notes.toUpperCase(),
+              style: AppTextStyles.label.copyWith(
+                color: AppColors.textDim.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _openEditor(context, ref),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: _hasNote
+                    ? Text(
+                        notes!,
+                        style: AppTextStyles.body.copyWith(
+                          color: AppColors.textCream.withValues(alpha: 0.85),
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.edit_note,
+                            size: 16,
+                            color: AppColors.textDim,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            l10n.addNote,
+                            style: AppTextStyles.body.copyWith(
+                              color: AppColors.textDim,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

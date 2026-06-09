@@ -1032,6 +1032,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notes => 'Notes';
 
   @override
+  String get addNote => 'Add a note';
+
+  @override
   String get workoutDetailTotalVolumeLabel => 'Total volume';
 
   @override

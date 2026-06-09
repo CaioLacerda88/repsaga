@@ -1039,6 +1039,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get notes => 'Notas';
 
   @override
+  String get addNote => 'Adicionar anotação';
+
+  @override
   String get workoutDetailTotalVolumeLabel => 'Volume total';
 
   @override

@@ -189,6 +189,61 @@ final workoutDetailProvider = FutureProvider.autoDispose
       return repo.getWorkoutDetail(workoutId, userId: userId, locale: locale);
     });
 
+/// Persists an edit to a workout's free-text notes (Q1 notes-edit-after).
+///
+/// Exposes `save(workoutId, notes)` which:
+///   1. normalizes blank input to `null` (clean "no note" sentinel),
+///   2. routes the write through [WorkoutRepository.updateWorkoutNotes]
+///      (online-only; errors surface as the notifier's `AsyncError`),
+///   3. invalidates `workoutDetailProvider(workoutId)` so the detail screen
+///      re-reads the persisted value and reflects the edit immediately.
+///
+/// Plain (non-family) `AsyncNotifier<void>` — the `workoutId` is a per-call
+/// parameter, not a provider key. There's only ever one detail screen open
+/// at a time, so a single shared controller is simpler than a family and
+/// avoids the Riverpod 3 family-argument plumbing. State is `AsyncData(null)`
+/// at rest; `save` flips to `AsyncLoading` while the write is in flight (so
+/// the edit sheet can disable Save), then `AsyncData(null)` on success or
+/// `AsyncError` on failure. The UI awaits the returned future to decide
+/// whether to dismiss the sheet or surface the error.
+class WorkoutNotesNotifier extends AsyncNotifier<void> {
+  @override
+  FutureOr<void> build() {}
+
+  /// Save [notes] for [workoutId] (blank → cleared). Returns the future so
+  /// the caller can await success before dismissing the edit sheet. Rethrows
+  /// the domain exception on failure so the caller can surface it.
+  Future<void> save(String workoutId, String? notes) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) {
+      throw StateError('WorkoutNotesNotifier requires a signed-in user');
+    }
+    final trimmed = notes?.trim();
+    final normalized = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(workoutRepositoryProvider);
+      await repo.updateWorkoutNotes(
+        workoutId,
+        notes: normalized,
+        userId: userId,
+      );
+    });
+    // Surface the failure to the caller (the sheet) and short-circuit the
+    // invalidate so we don't re-fetch on a write that didn't land.
+    if (state.hasError) {
+      throw (state as AsyncError<void>).error;
+    }
+    // Re-read the detail so the persisted value renders immediately.
+    ref.invalidate(workoutDetailProvider(workoutId));
+  }
+}
+
+/// Notes-edit controller. Shared across the (single) open detail screen.
+final workoutNotesNotifierProvider =
+    AsyncNotifierProvider<WorkoutNotesNotifier, void>(WorkoutNotesNotifier.new);
+
 /// Data about the user's most recent completed workout.
 ///
 /// Returns the workout name and how long ago it was. Used by the editorial
