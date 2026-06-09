@@ -13,13 +13,19 @@ class _FakeRoutineHintNotifier extends RoutineHintNotifier {
 
   final bool _initial;
   int recordViewCalls = 0;
+  int _views = 0;
 
   @override
   bool build() => _initial;
 
   @override
   Future<void> recordView() async {
+    // Model the real cap (3) so the widget test can assert the visibility
+    // OUTCOME (the hint auto-retires on the 3rd view) rather than a call-count
+    // wiring trace.
     recordViewCalls++;
+    _views++;
+    if (_views >= 3) state = false;
   }
 
   @override
@@ -87,12 +93,26 @@ void main() {
       expect(find.byIcon(Icons.touch_app), findsNothing);
     });
 
-    testWidgets('records exactly one surface view on mount', (tester) async {
+    testWidgets('auto-dismisses once surface views reach the cap (3)', (
+      tester,
+    ) async {
       final fake = _FakeRoutineHintNotifier(true);
       await tester.pumpWidget(_harness(initialShow: true, fake: fake));
+      await tester.pump(); // mount → first recorded view; still visible
+      expect(find.text('Press and hold to edit'), findsOneWidget);
+
+      // Two more surface views reach the cap — the hint retires on its own
+      // even though the gesture was never long-pressed. Behavior, not a
+      // call-count trace.
+      final notifier = ProviderScope.containerOf(
+        tester.element(find.byType(RoutineLongPressHint)),
+      ).read(routineHintProvider.notifier);
+      await notifier.recordView();
+      await notifier.recordView();
       await tester.pump();
 
-      expect(fake.recordViewCalls, 1);
+      expect(find.text('Press and hold to edit'), findsNothing);
+      expect(find.byIcon(Icons.touch_app), findsNothing);
     });
 
     testWidgets('aligns to a custom card edge via horizontalPadding', (
