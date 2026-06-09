@@ -17,6 +17,9 @@ class AppTextField extends StatefulWidget {
     this.showCounter = true,
     this.semanticsIdentifier,
     this.autofillHints,
+    this.obscureTooltipShow,
+    this.obscureTooltipHide,
+    this.onObscureToggle,
   });
 
   final String label;
@@ -50,6 +53,23 @@ class AppTextField extends StatefulWidget {
   /// iOS Passwords sheet on iOS 12+). Defaults to `null` so existing call
   /// sites stay opt-out.
   final Iterable<String>? autofillHints;
+
+  /// Tooltip shown on the reveal-password eye while the field is obscured
+  /// (i.e. tapping it will SHOW the password). Material 3 derives the
+  /// IconButton's semantics label from this tooltip, so screen readers and
+  /// E2E tooling get a stable, localized handle. Only meaningful when
+  /// [obscureText] is true; defaults to `null` (no tooltip / unchanged
+  /// behavior for existing call sites).
+  final String? obscureTooltipShow;
+
+  /// Tooltip shown on the reveal-password eye while the field is revealed
+  /// (i.e. tapping it will HIDE the password). See [obscureTooltipShow].
+  final String? obscureTooltipHide;
+
+  /// Fired after the obscure state toggles via the eye button. Lets callers
+  /// react to the first reveal (e.g. dismiss a one-time "tap the eye" hint).
+  /// Defaults to `null`.
+  final VoidCallback? onObscureToggle;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -97,7 +117,16 @@ class _AppTextFieldState extends State<AppTextField> {
         suffixIcon: widget.obscureText
             ? IconButton(
                 icon: Icon(_obscured ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _obscured = !_obscured),
+                // Material 3 surfaces the tooltip as the IconButton's
+                // semantics label, so the reveal affordance is announced and
+                // E2E-addressable. State-aware: show vs hide.
+                tooltip: _obscured
+                    ? widget.obscureTooltipShow
+                    : widget.obscureTooltipHide,
+                onPressed: () {
+                  setState(() => _obscured = !_obscured);
+                  widget.onObscureToggle?.call();
+                },
               )
             : null,
       ),

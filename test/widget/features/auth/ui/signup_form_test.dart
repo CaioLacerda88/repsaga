@@ -49,23 +49,23 @@ void main() {
 
   group('Signup form — Option A', () {
     testWidgets(
-      'shows the CREATE ACCOUNT heading + display-name + confirm-password '
-      'fields in signup mode, none of which exist in login mode',
+      'shows the CREATE ACCOUNT heading + display-name field + strength bar '
+      'in signup mode, none of which exist in login mode',
       (tester) async {
         await tester.pumpWidget(buildTestWidget());
 
         // Login mode: no signup-only surfaces.
         expect(find.text('CREATE ACCOUNT'), findsNothing);
         expect(semanticsId('auth-display-name-input'), findsNothing);
-        expect(semanticsId('auth-confirm-password-input'), findsNothing);
         expect(semanticsId('auth-password-strength'), findsNothing);
 
         await enterSignupMode(tester);
 
-        // Signup mode: all four appear.
+        // Signup mode: the signup-only surfaces appear. The confirm-password
+        // field was dropped (UX option a — the reveal toggle is the typo-safety
+        // net), so there is no `auth-confirm-password-input`.
         expect(find.text('CREATE ACCOUNT'), findsOneWidget);
         expect(semanticsId('auth-display-name-input'), findsOneWidget);
-        expect(semanticsId('auth-confirm-password-input'), findsOneWidget);
         expect(semanticsId('auth-password-strength'), findsOneWidget);
       },
     );
@@ -76,18 +76,49 @@ void main() {
       await tester.pumpWidget(buildTestWidget());
       await enterSignupMode(tester);
 
+      // "abcdef" — len 6, no digit, no symbol → weak tier, highest-priority
+      // unmet requirement is length.
       await fillField(tester, 'auth-password-input', 'abcdef');
-      expect(find.text('Weak — add more characters'), findsOneWidget);
+      expect(find.text('Weak — use 8+ characters'), findsOneWidget);
     });
 
     testWidgets(
-      'strength bar surfaces the medium label when a digit is added',
+      'strength hint names the missing requirement, not a generic phrase',
       (tester) async {
         await tester.pumpWidget(buildTestWidget());
         await enterSignupMode(tester);
 
-        await fillField(tester, 'auth-password-input', 'abcde1');
-        expect(find.text('Medium — add numbers or symbols'), findsOneWidget);
+        // "Test12." already has a digit AND a symbol; it is ONLY short on
+        // length (7 chars). The hint must name length, not the stale generic
+        // "add numbers or symbols" — the misleading-hint bug this PR fixes.
+        await fillField(tester, 'auth-password-input', 'Test12.');
+        expect(find.text('Medium — use 8+ characters'), findsOneWidget);
+        expect(find.text('Medium — add numbers or symbols'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'strength hint asks for a number when length is met but no digit',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await enterSignupMode(tester);
+
+        // "testtest" — len 8, no digit, no symbol → length met, next-priority
+        // unmet requirement is number.
+        await fillField(tester, 'auth-password-input', 'testtest');
+        expect(find.text('Medium — add a number'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'strength hint asks for a symbol when only the symbol is missing',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await enterSignupMode(tester);
+
+        // "Test12ab" — len 8, has digit, no symbol → only symbol unmet.
+        await fillField(tester, 'auth-password-input', 'Test12ab');
+        expect(find.text('Medium — add a symbol'), findsOneWidget);
       },
     );
 
@@ -97,84 +128,8 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
         await enterSignupMode(tester);
 
-        await fillField(tester, 'auth-password-input', 'abcd1234!');
+        await fillField(tester, 'auth-password-input', 'Test12.ab');
         expect(find.text('Strong password!'), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'mismatched confirm-password shows the mismatch error on submit',
-      (tester) async {
-        await tester.pumpWidget(buildTestWidget());
-        await enterSignupMode(tester);
-
-        await fillField(tester, 'auth-display-name-input', 'Alice');
-        await fillField(tester, 'auth-email-input', 'a@b.com');
-        await fillField(tester, 'auth-password-input', 'secret1!');
-        await fillField(tester, 'auth-confirm-password-input', 'different1!');
-
-        // Tick the age gate so the CTA is enabled, then submit.
-        await tester.tap(find.byType(Checkbox));
-        await tester.pump();
-        await tester.ensureVisible(semanticsId('auth-signup-btn'));
-        await tester.pump();
-        await tester.tap(semanticsId('auth-signup-btn'));
-        await tester.pump();
-
-        expect(find.text('Passwords do not match'), findsOneWidget);
-      },
-    );
-
-    testWidgets('matching confirm-password produces no mismatch error', (
-      tester,
-    ) async {
-      await tester.pumpWidget(buildTestWidget());
-      await enterSignupMode(tester);
-
-      await fillField(tester, 'auth-display-name-input', 'Alice');
-      await fillField(tester, 'auth-email-input', 'a@b.com');
-      await fillField(tester, 'auth-password-input', 'secret1!');
-      await fillField(tester, 'auth-confirm-password-input', 'secret1!');
-
-      // Validate the form by attempting submit (no router/notifier wired —
-      // the validators run regardless). The mismatch error must be absent.
-      await tester.tap(find.byType(Checkbox));
-      await tester.pump();
-      await tester.ensureVisible(semanticsId('auth-signup-btn'));
-      await tester.pump();
-      await tester.tap(semanticsId('auth-signup-btn'));
-      await tester.pump();
-
-      expect(find.text('Passwords do not match'), findsNothing);
-    });
-
-    testWidgets(
-      'should show mismatch error when password is changed after confirm '
-      'was typed',
-      (tester) async {
-        await tester.pumpWidget(buildTestWidget());
-        await enterSignupMode(tester);
-
-        // Password + confirm initially match.
-        await fillField(tester, 'auth-display-name-input', 'Alice');
-        await fillField(tester, 'auth-email-input', 'a@b.com');
-        await fillField(tester, 'auth-password-input', 'secret1!');
-        await fillField(tester, 'auth-confirm-password-input', 'secret1!');
-
-        // Now overwrite ONLY the password field with a different value, leaving
-        // the confirm field untouched. `_validateConfirmPassword` must read the
-        // password controller's text lazily at validate-time and surface the
-        // mismatch.
-        await fillField(tester, 'auth-password-input', 'changed9!');
-
-        await tester.tap(find.byType(Checkbox));
-        await tester.pump();
-        await tester.ensureVisible(semanticsId('auth-signup-btn'));
-        await tester.pump();
-        await tester.tap(semanticsId('auth-signup-btn'));
-        await tester.pump();
-
-        expect(find.text('Passwords do not match'), findsOneWidget);
       },
     );
 
@@ -186,7 +141,6 @@ void main() {
 
       await fillField(tester, 'auth-email-input', 'a@b.com');
       await fillField(tester, 'auth-password-input', 'secret1!');
-      await fillField(tester, 'auth-confirm-password-input', 'secret1!');
 
       await tester.tap(find.byType(Checkbox));
       await tester.pump();
@@ -261,14 +215,13 @@ void main() {
         );
 
         // User-perceptible outcome: email shows real characters (not dots),
-        // password + confirm mask them.
+        // password masks them. (Confirm field dropped — UX option a.)
         expect(
           editableFor('auth-email-input').obscureText,
           isFalse,
           reason: 'Email must never render masked.',
         );
         expect(editableFor('auth-password-input').obscureText, isTrue);
-        expect(editableFor('auth-confirm-password-input').obscureText, isTrue);
       },
     );
   });

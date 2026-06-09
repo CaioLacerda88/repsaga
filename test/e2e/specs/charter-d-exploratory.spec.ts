@@ -93,11 +93,11 @@ async function signupFreshUser(page: Page, email: string, pass: string): Promise
   const toggleSignUp = page.locator('[flt-semantics-identifier="auth-toggle-signup"]');
   await expect(toggleSignUp).toBeVisible({ timeout: 15_000 });
   await toggleSignUp.click();
-  // Option A — the full signup form requires display name + confirm password.
+  // Option A — the full signup form requires display name + password (the
+  // confirm field was dropped; the reveal toggle is the typo-safety net).
   await flutterFill(page, '[flt-semantics-identifier="auth-display-name-input"]', 'Sam DataNerd');
   await flutterFill(page, '[flt-semantics-identifier="auth-email-input"]', email);
   await flutterFill(page, '[flt-semantics-identifier="auth-password-input"]', pass);
-  await flutterFill(page, '[flt-semantics-identifier="auth-confirm-password-input"]', pass);
   // Legal PR 2 — age gate: Sign Up CTA disabled until checkbox ticked.
   await expect(
     page.locator(AUTH.ageConfirmationCheckbox),

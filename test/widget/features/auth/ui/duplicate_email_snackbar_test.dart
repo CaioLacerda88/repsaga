@@ -92,13 +92,13 @@ void main() {
     );
   }
 
-  // Fills the full signup form (Option A — display name + confirm password
-  // are required for validators to pass and the submit path to fire).
+  // Fills the full signup form (Option A — display name + password are
+  // required for validators to pass and the submit path to fire; the confirm
+  // field was dropped per the reveal-toggle UX).
   Future<void> fillSignupForm(WidgetTester tester) async {
     await fillField(tester, 'auth-display-name-input', 'Existing User');
     await fillField(tester, 'auth-email-input', 'existing@example.com');
     await fillField(tester, 'auth-password-input', 'TestPassword123!');
-    await fillField(tester, 'auth-confirm-password-input', 'TestPassword123!');
   }
 
   // Legal PR 2 — the Sign Up CTA is gated on age confirmation. Tick the
