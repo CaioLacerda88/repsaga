@@ -32,6 +32,14 @@ abstract class ActiveWorkoutState with _$ActiveWorkoutState {
     /// Used for matching bucket completion in the weekly plan.
     String? routineId,
 
+    /// The source routine's training notes (Q2), captured at start time so the
+    /// active-workout screen can render them read-only. Carried on the state
+    /// (not read live from the routine) so the notes survive crash-recovery
+    /// rehydration through the same Hive JSON round-trip as [routineId]. Null
+    /// for ad-hoc workouts and routines without notes — in both cases the
+    /// exercise list shows no notes header strip (identical to today).
+    String? routineNotes,
+
     /// Whether the most recent `finishWorkout` saved to the offline queue
     /// instead of syncing to the server.
     ///

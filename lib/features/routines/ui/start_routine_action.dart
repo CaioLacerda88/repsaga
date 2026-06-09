@@ -86,6 +86,10 @@ Future<void> startRoutineWorkout(
     routineName: routine.name,
     exercises: exercises,
     routineId: routine.id,
+    // Q2: thread the source routine's training notes onto the start config so
+    // the active-workout screen can render them read-only (header strip +
+    // sheet). Null/blank routines add no chrome — list is identical to today.
+    routineNotes: routine.notes,
   );
 
   await ref.read(activeWorkoutProvider.notifier).startFromRoutine(config);

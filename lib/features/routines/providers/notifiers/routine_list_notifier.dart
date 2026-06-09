@@ -22,6 +22,7 @@ class RoutineListNotifier extends AsyncNotifier<List<Routine>> {
   Future<void> createRoutine({
     required String name,
     required List<RoutineExercise> exercises,
+    String? notes,
   }) async {
     final userId = ref.read(authRepositoryProvider).currentUser?.id;
     if (userId == null) return;
@@ -32,6 +33,7 @@ class RoutineListNotifier extends AsyncNotifier<List<Routine>> {
       locale: locale,
       name: name,
       exercises: exercises,
+      notes: notes,
     );
     ref.invalidateSelf();
   }
@@ -41,6 +43,7 @@ class RoutineListNotifier extends AsyncNotifier<List<Routine>> {
     required String id,
     required String name,
     required List<RoutineExercise> exercises,
+    String? notes,
   }) async {
     final userId = ref.read(authRepositoryProvider).currentUser?.id;
     if (userId == null) return;
@@ -52,6 +55,7 @@ class RoutineListNotifier extends AsyncNotifier<List<Routine>> {
       locale: locale,
       name: name,
       exercises: exercises,
+      notes: notes,
     );
     ref.invalidateSelf();
   }
@@ -70,6 +74,7 @@ class RoutineListNotifier extends AsyncNotifier<List<Routine>> {
         locale: locale,
         name: '${source.name} (Copy)',
         exercises: source.exercises,
+        notes: source.notes,
       );
       ref.invalidateSelf();
       return copy;

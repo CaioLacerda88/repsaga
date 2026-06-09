@@ -161,6 +161,33 @@ void main() {
       expect((json['exercises'] as List), hasLength(1));
     });
 
+    test('notes round-trips through fromJson/toJson', () {
+      final routine = Routine.fromJson(
+        TestRoutineFactory.create(
+          notes: 'Program: 5x5. Form: brace before each rep. Deload week 4.',
+        ),
+      );
+
+      expect(
+        routine.notes,
+        'Program: 5x5. Form: brace before each rep. Deload week 4.',
+      );
+
+      final roundTripped = Routine.fromJson(routine.toJson());
+      expect(roundTripped.notes, routine.notes);
+      expect(roundTripped, routine);
+    });
+
+    test('notes defaults to null when absent', () {
+      final json = TestRoutineFactory.create();
+      json.remove('notes');
+
+      final routine = Routine.fromJson(json);
+
+      expect(routine.notes, isNull);
+      expect(routine.toJson()['notes'], isNull);
+    });
+
     test('fromJson matches realistic seed.sql JSONB structure', () {
       // Simulates what Supabase returns for a workout_templates row
       final json = {

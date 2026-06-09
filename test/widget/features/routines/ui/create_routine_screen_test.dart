@@ -51,8 +51,8 @@ void main() {
         await tester.pumpWidget(_buildScreen());
         await tester.pumpAndSettle();
 
-        // Enter a name
-        await tester.enterText(find.byType(TextField), 'My Routine');
+        // Enter a name (first TextField — the notes field is second)
+        await tester.enterText(find.byType(TextField).first, 'My Routine');
         await tester.pump();
 
         final saveButton = find.widgetWithText(TextButton, 'Save');
@@ -125,8 +125,8 @@ void main() {
       await tester.pumpWidget(_buildScreen(routine: routine));
       await tester.pumpAndSettle();
 
-      // Name should be pre-filled
-      final textField = tester.widget<TextField>(find.byType(TextField));
+      // Name should be pre-filled (first TextField — notes field is second)
+      final textField = tester.widget<TextField>(find.byType(TextField).first);
       expect(textField.controller?.text, 'Push Day');
 
       // Exercise name should appear
@@ -288,6 +288,94 @@ void main() {
         find.ancestor(of: find.text('2m'), matching: find.byType(ChoiceChip)),
       );
       expect(chip2m.selected, isTrue);
+    });
+
+    testWidgets('shows the notes field on the create screen', (tester) async {
+      await tester.pumpWidget(_buildScreen());
+      await tester.pumpAndSettle();
+
+      // Placeholder with the load-bearing "(optional)" suffix.
+      expect(
+        find.text('Program intent, form cues, deload schedule… (optional)'),
+        findsOneWidget,
+      );
+      // Two TextFields: name + notes.
+      expect(find.byType(TextField), findsNWidgets(2));
+    });
+
+    testWidgets('pre-fills notes when editing a routine that has notes', (
+      tester,
+    ) async {
+      final routine = Routine(
+        id: 'routine-001',
+        name: 'Push Day',
+        isDefault: false,
+        notes: 'Brace before every rep.',
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'ex-1',
+            setConfigs: [const RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(),
+          ),
+        ],
+        createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+      );
+
+      await tester.pumpWidget(_buildScreen(routine: routine));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Brace before every rep.'), findsOneWidget);
+    });
+
+    testWidgets(
+      'notes are optional — Save stays enabled with name + exercise and '
+      'empty notes',
+      (tester) async {
+        final routine = Routine(
+          id: 'routine-001',
+          name: 'Push Day',
+          isDefault: false,
+          exercises: [
+            RoutineExercise(
+              exerciseId: 'ex-1',
+              setConfigs: [const RoutineSetConfig(restSeconds: 90)],
+              exercise: _makeExercise(),
+            ),
+          ],
+          createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+        );
+
+        await tester.pumpWidget(_buildScreen(routine: routine));
+        await tester.pumpAndSettle();
+
+        // Notes left blank — Save must still be enabled.
+        final button = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, 'Save'),
+        );
+        expect(button.onPressed, isNotNull);
+      },
+    );
+
+    testWidgets('notes counter is hidden at low length', (tester) async {
+      await tester.pumpWidget(_buildScreen());
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).last, 'Short note');
+      await tester.pump();
+
+      // No "/ 600" counter while well below the 500-char threshold.
+      expect(find.textContaining('/ 600'), findsNothing);
+    });
+
+    testWidgets('notes counter appears near the cap', (tester) async {
+      await tester.pumpWidget(_buildScreen());
+      await tester.pumpAndSettle();
+
+      // 520 chars — past the 500-char threshold, under the 600 cap.
+      await tester.enterText(find.byType(TextField).last, 'x' * 520);
+      await tester.pump();
+
+      expect(find.text('520 / 600'), findsOneWidget);
     });
 
     testWidgets('remove button removes exercise card', (tester) async {

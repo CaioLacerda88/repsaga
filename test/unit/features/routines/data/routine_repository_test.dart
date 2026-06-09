@@ -42,21 +42,33 @@ class _FakeSupabaseClient extends Fake implements supabase.SupabaseClient {
   }
 }
 
+// Mutable test fake: captures the last write payload so write-path tests can
+// assert the exact columns sent to PostgREST. The mutable field is the point.
+// ignore: must_be_immutable
 class _FakeQueryBuilder extends Fake implements supabase.SupabaseQueryBuilder {
   _FakeQueryBuilder({this.data = const [], this.error});
 
   final List<Map<String, dynamic>> data;
   final Exception? error;
 
+  /// Last payload passed to `insert` / `update`, captured so write-path tests
+  /// can assert exactly what columns the repository sends to PostgREST.
+  Map<String, dynamic>? lastWrittenPayload;
+
   @override
   _FakeFilterBuilder select([String columns = '*']) => _FakeFilterBuilder(this);
 
   @override
-  _FakeFilterBuilder insert(dynamic values, {bool defaultToNull = true}) =>
-      _FakeFilterBuilder(this);
+  _FakeFilterBuilder insert(dynamic values, {bool defaultToNull = true}) {
+    lastWrittenPayload = (values as Map).cast<String, dynamic>();
+    return _FakeFilterBuilder(this);
+  }
 
   @override
-  _FakeFilterBuilder update(Map values) => _FakeFilterBuilder(this);
+  _FakeFilterBuilder update(Map values) {
+    lastWrittenPayload = values.cast<String, dynamic>();
+    return _FakeFilterBuilder(this);
+  }
 
   @override
   _FakeFilterBuilder delete() => _FakeFilterBuilder(this);
@@ -67,6 +79,9 @@ class _FakeFilterBuilder extends Fake
   _FakeFilterBuilder(this._parent);
 
   final _FakeQueryBuilder _parent;
+
+  @override
+  _FakeFilterBuilder select([String columns = '*']) => this;
 
   @override
   _FakeFilterBuilder eq(String column, Object value) => this;
@@ -132,10 +147,16 @@ class _FakeTransformBuilder<T> extends Fake
 // ---------------------------------------------------------------------------
 
 class _RepoBundle {
-  _RepoBundle(this.repo, this.mockExerciseRepo, this.mockTemplateTranslations);
+  _RepoBundle(
+    this.repo,
+    this.mockExerciseRepo,
+    this.mockTemplateTranslations,
+    this.templatesBuilder,
+  );
   final RoutineRepository repo;
   final _MockExerciseRepository mockExerciseRepo;
   final _MockTemplateTranslations mockTemplateTranslations;
+  final _FakeQueryBuilder templatesBuilder;
 }
 
 _RepoBundle _makeRepo({
@@ -143,9 +164,11 @@ _RepoBundle _makeRepo({
   Map<String, Exercise> exerciseMap = const {},
   Exception? templatesError,
 }) {
-  final client = _FakeSupabaseClient(
-    _FakeQueryBuilder(data: templates, error: templatesError),
+  final templatesBuilder = _FakeQueryBuilder(
+    data: templates,
+    error: templatesError,
   );
+  final client = _FakeSupabaseClient(templatesBuilder);
   final mockExerciseRepo = _MockExerciseRepository();
   when(
     () => mockExerciseRepo.getExercisesByIds(
@@ -173,6 +196,7 @@ _RepoBundle _makeRepo({
     ),
     mockExerciseRepo,
     mockTemplateTranslations,
+    templatesBuilder,
   );
 }
 
@@ -408,6 +432,95 @@ void main() {
         expect(captured.toSet(), {'ex-A', 'ex-B'});
       },
     );
+  });
+
+  group('RoutineRepository write path persists notes (Q2)', () {
+    test('createRoutine sends notes in the insert payload', () async {
+      // single() after insert returns data.first — seed it with the row the
+      // DB would echo back so _resolveExercises has something to parse.
+      final echoed = TestRoutineFactory.create(
+        id: 'r-new',
+        name: 'Push Day',
+        exercises: [],
+        notes: 'Brace before every rep.',
+      );
+      final bundle = _makeRepo(templates: [echoed]);
+
+      await bundle.repo.createRoutine(
+        userId: 'user-001',
+        locale: 'en',
+        name: 'Push Day',
+        exercises: const [],
+        notes: 'Brace before every rep.',
+      );
+
+      expect(
+        bundle.templatesBuilder.lastWrittenPayload?['notes'],
+        'Brace before every rep.',
+      );
+    });
+
+    test('createRoutine sends null notes when none provided', () async {
+      final echoed = TestRoutineFactory.create(id: 'r-new', exercises: []);
+      final bundle = _makeRepo(templates: [echoed]);
+
+      await bundle.repo.createRoutine(
+        userId: 'user-001',
+        locale: 'en',
+        name: 'Push Day',
+        exercises: const [],
+      );
+
+      expect(
+        bundle.templatesBuilder.lastWrittenPayload!.containsKey('notes'),
+        isTrue,
+      );
+      expect(bundle.templatesBuilder.lastWrittenPayload!['notes'], isNull);
+    });
+
+    test('updateRoutine sends notes in the update payload', () async {
+      final echoed = TestRoutineFactory.create(
+        id: 'r-1',
+        exercises: [],
+        notes: 'Deload week 4.',
+      );
+      final bundle = _makeRepo(templates: [echoed]);
+
+      await bundle.repo.updateRoutine(
+        id: 'r-1',
+        userId: 'user-001',
+        locale: 'en',
+        name: 'Push Day',
+        exercises: const [],
+        notes: 'Deload week 4.',
+      );
+
+      expect(
+        bundle.templatesBuilder.lastWrittenPayload?['notes'],
+        'Deload week 4.',
+      );
+    });
+
+    test('updateRoutine sends null notes to clear an existing value', () async {
+      final echoed = TestRoutineFactory.create(id: 'r-1', exercises: []);
+      final bundle = _makeRepo(templates: [echoed]);
+
+      await bundle.repo.updateRoutine(
+        id: 'r-1',
+        userId: 'user-001',
+        locale: 'en',
+        name: 'Push Day',
+        exercises: const [],
+      );
+
+      // The key is present-and-null so clearing the field persists, rather
+      // than leaving a stale value untouched.
+      expect(
+        bundle.templatesBuilder.lastWrittenPayload!.containsKey('notes'),
+        isTrue,
+      );
+      expect(bundle.templatesBuilder.lastWrittenPayload!['notes'], isNull);
+    });
   });
 
   group('RoutineRepository.parseRoutineRow', () {

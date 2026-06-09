@@ -504,6 +504,7 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
         ? ExerciseList(
             exercises: widget.state.exercises,
             reorderMode: _reorderMode,
+            routineNotes: widget.state.routineNotes,
           )
         : EmptyWorkoutBody(onAddExercise: _onAddExercise);
 

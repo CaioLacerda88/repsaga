@@ -337,6 +337,8 @@
   "createRoutine": "Criar Treino",
   "editRoutine": "Editar Treino",
   "routineName": "Nome do treino",
+  "routineNotesHint": "Programa, observações de forma, deload… (opcional)",
+  "routineNotesEyebrow": "NOTAS DO TREINO",
   "failedToSaveRoutine": "Falha ao salvar treino. Tente novamente.",
   "setsLabel": "Séries",
   "restLabel": "Descanso",
