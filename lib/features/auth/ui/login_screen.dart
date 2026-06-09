@@ -341,6 +341,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // user_metadata.display_name on signUp.
                     if (_isSignUp) ...[
                       AppTextField(
+                        // Stable key: signup inserts this field ABOVE email,
+                        // shifting positions. Without keys Flutter reuses
+                        // sibling State by position, leaking the password
+                        // field's obscured state onto email.
+                        // cluster: missing-key-state-reuse.
+                        key: const ValueKey('auth-display-name-field'),
                         label: l10n.displayName,
                         controller: _displayNameController,
                         validator: _validateDisplayName,
@@ -393,6 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                     ],
                     AppTextField(
+                      key: const ValueKey('auth-email-field'),
                       label: l10n.email,
                       controller: _emailController,
                       validator: _validateEmail,
@@ -404,6 +411,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
+                      key: const ValueKey('auth-password-field'),
                       label: l10n.password,
                       controller: _passwordController,
                       validator: _validatePassword,
@@ -440,6 +448,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _PasswordStrengthBar(score: _passwordStrength),
                       const SizedBox(height: 16),
                       AppTextField(
+                        key: const ValueKey('auth-confirm-password-field'),
                         label: l10n.confirmPassword,
                         controller: _confirmPasswordController,
                         validator: _validateConfirmPassword,

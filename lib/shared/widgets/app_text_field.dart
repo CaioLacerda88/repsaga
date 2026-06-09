@@ -65,6 +65,19 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   @override
+  void didUpdateWidget(AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Re-sync the local obscure state when the obscureText prop changes.
+    // Without this, a State object reused across a widget swap (Flutter
+    // reconciles same-typed siblings by position when they lack keys) keeps
+    // its old `_obscured` — e.g. an email field inheriting a password field's
+    // State would render masked. cluster: missing-key-state-reuse.
+    if (oldWidget.obscureText != widget.obscureText) {
+      _obscured = widget.obscureText;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     Widget field = TextFormField(
       controller: widget.controller,

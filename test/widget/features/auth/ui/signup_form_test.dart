@@ -238,5 +238,38 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'email field stays unobscured after toggling to signup mode while the '
+      'password field stays obscured (no sibling State reuse) — regression',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+
+        // Toggle to signup: this inserts the display-name field ABOVE email,
+        // shifting field positions. Before the fix (stable keys +
+        // AppTextField.didUpdateWidget syncing _obscured), Flutter reused the
+        // password field's State for the email widget and email rendered
+        // masked. cluster: missing-key-state-reuse.
+        await enterSignupMode(tester);
+        await tester.pump();
+
+        EditableText editableFor(String id) => tester.widget<EditableText>(
+          find.descendant(
+            of: semanticsId(id),
+            matching: find.byType(EditableText),
+          ),
+        );
+
+        // User-perceptible outcome: email shows real characters (not dots),
+        // password + confirm mask them.
+        expect(
+          editableFor('auth-email-input').obscureText,
+          isFalse,
+          reason: 'Email must never render masked.',
+        );
+        expect(editableFor('auth-password-input').obscureText, isTrue);
+        expect(editableFor('auth-confirm-password-input').obscureText, isTrue);
+      },
+    );
   });
 }
