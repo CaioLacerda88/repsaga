@@ -590,35 +590,59 @@ abstract class AppLocalizations {
   /// **'CREATE ACCOUNT'**
   String get signupHeading;
 
-  /// Confirm-password field label on the signup form
+  /// Non-blocking password-strength tier word, weakest tier (composed with a tip as '{tier} — {tip}')
   ///
   /// In en, this message translates to:
-  /// **'Confirm password'**
-  String get confirmPassword;
-
-  /// Validation error when the confirm-password value differs from the password
-  ///
-  /// In en, this message translates to:
-  /// **'Passwords do not match'**
-  String get passwordMismatch;
-
-  /// Non-blocking password-strength label, weakest tier
-  ///
-  /// In en, this message translates to:
-  /// **'Weak — add more characters'**
+  /// **'Weak'**
   String get passwordStrengthWeak;
 
-  /// Non-blocking password-strength label, middle tier
+  /// Non-blocking password-strength tier word, middle tier (composed with a tip as '{tier} — {tip}')
   ///
   /// In en, this message translates to:
-  /// **'Medium — add numbers or symbols'**
+  /// **'Medium'**
   String get passwordStrengthMedium;
 
-  /// Non-blocking password-strength label, strongest tier
+  /// Non-blocking password-strength label, strongest tier (shown standalone, no tip)
   ///
   /// In en, this message translates to:
   /// **'Strong password!'**
   String get passwordStrengthStrong;
+
+  /// Password strength next-step tip: the password is too short
+  ///
+  /// In en, this message translates to:
+  /// **'use 8+ characters'**
+  String get passwordTipLength;
+
+  /// Password strength next-step tip: the password has no digit
+  ///
+  /// In en, this message translates to:
+  /// **'add a number'**
+  String get passwordTipNumber;
+
+  /// Password strength next-step tip: the password has no special character
+  ///
+  /// In en, this message translates to:
+  /// **'add a symbol'**
+  String get passwordTipSymbol;
+
+  /// Tooltip / accessibility label for the reveal-password eye when the password is hidden
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get showPassword;
+
+  /// Tooltip / accessibility label for the reveal-password eye when the password is shown
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get hidePassword;
+
+  /// One-time ghost hint under the signup password strength bar nudging the user to reveal their password
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the eye to check your password'**
+  String get passwordRevealHint;
 
   /// Helper text below the disabled signup CTA explaining the age-gate
   ///

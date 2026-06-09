@@ -160,128 +160,124 @@ void main() {
       );
     });
 
-    testWidgets(
-      'should NOT sign up via confirm-password keyboard submit while age '
-      'checkbox is unticked',
-      (tester) async {
-        final mockRepo = MockAuthRepository();
-        final mockHive = MockHiveService();
-        when(() => mockRepo.currentSession).thenReturn(null);
-        when(
-          () => mockRepo.signUpWithEmail(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-            locale: any(named: 'locale'),
-            displayName: any(named: 'displayName'),
-          ),
-        ).thenAnswer((_) async => _FakeAuthResponseNoSession());
+    testWidgets('should NOT sign up via password-field keyboard submit while age '
+        'checkbox is unticked', (tester) async {
+      final mockRepo = MockAuthRepository();
+      final mockHive = MockHiveService();
+      when(() => mockRepo.currentSession).thenReturn(null);
+      when(
+        () => mockRepo.signUpWithEmail(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          locale: any(named: 'locale'),
+          displayName: any(named: 'displayName'),
+        ),
+      ).thenAnswer((_) async => _FakeAuthResponseNoSession());
 
-        // A minimal GoRouter so the success-path `context.go('/email-confirmation')`
-        // resolves to a real navigation we can assert on (the sentinel below),
-        // instead of throwing for lack of a GoRouter ancestor.
-        final router = GoRouter(
-          initialLocation: '/',
-          routes: [
-            GoRoute(path: '/', builder: (_, _) => const LoginScreen()),
-            GoRoute(
-              path: '/email-confirmation',
-              builder: (_, _) =>
-                  const Scaffold(body: Text('CONFIRMATION SENTINEL')),
+      // A minimal GoRouter so the success-path `context.go('/email-confirmation')`
+      // resolves to a real navigation we can assert on (the sentinel below),
+      // instead of throwing for lack of a GoRouter ancestor.
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => const LoginScreen()),
+          GoRoute(
+            path: '/email-confirmation',
+            builder: (_, _) =>
+                const Scaffold(body: Text('CONFIRMATION SENTINEL')),
+          ),
+        ],
+      );
+
+      late ProviderContainer container;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(mockRepo),
+            hiveServiceProvider.overrideWithValue(mockHive),
+            localeProvider.overrideWith(
+              () => StubLocaleNotifier(const Locale('en')),
             ),
           ],
-        );
-
-        late ProviderContainer container;
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              authRepositoryProvider.overrideWithValue(mockRepo),
-              hiveServiceProvider.overrideWithValue(mockHive),
-              localeProvider.overrideWith(
-                () => StubLocaleNotifier(const Locale('en')),
-              ),
-            ],
-            child: Builder(
-              builder: (context) {
-                container = ProviderScope.containerOf(context);
-                return MaterialApp.router(
-                  routerConfig: router,
-                  theme: AppTheme.dark,
-                  debugShowCheckedModeBanner: false,
-                  locale: const Locale('en'),
-                  localizationsDelegates:
-                      AppLocalizations.localizationsDelegates,
-                  supportedLocales: AppLocalizations.supportedLocales,
-                );
-              },
-            ),
+          child: Builder(
+            builder: (context) {
+              container = ProviderScope.containerOf(context);
+              return MaterialApp.router(
+                routerConfig: router,
+                theme: AppTheme.dark,
+                debugShowCheckedModeBanner: false,
+                locale: const Locale('en'),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+              );
+            },
           ),
-        );
-        await enterSignupMode(tester);
+        ),
+      );
+      await enterSignupMode(tester);
 
-        // Fill every field so the validators would otherwise pass — the ONLY
-        // thing blocking submit must be the unticked age checkbox.
-        await fillField(tester, 'auth-display-name-input', 'Alice');
-        await fillField(tester, 'auth-email-input', 'a@b.com');
-        await fillField(tester, 'auth-password-input', 'secret1!');
-        await fillField(tester, 'auth-confirm-password-input', 'secret1!');
+      // Fill every field so the validators would otherwise pass — the ONLY
+      // thing blocking submit must be the unticked age checkbox.
+      await fillField(tester, 'auth-display-name-input', 'Alice');
+      await fillField(tester, 'auth-email-input', 'a@b.com');
+      await fillField(tester, 'auth-password-input', 'secret1!');
 
-        // Leave the age checkbox UNTICKED. Trigger the confirm field's
-        // keyboard "Done" action (the BLOCKER path: a passive onFieldSubmitted
-        // used to call _submit() directly, bypassing the age gate).
-        await tester.showKeyboard(
-          find.descendant(
-            of: semanticsId('auth-confirm-password-input'),
-            matching: find.byType(EditableText),
-          ),
-        );
-        await tester.testTextInput.receiveAction(TextInputAction.done);
-        await tester.pump();
-        await tester.pump();
+      // Leave the age checkbox UNTICKED. Trigger the PASSWORD field's
+      // keyboard "Done" action. With the confirm field dropped (UX option a),
+      // the password field is now the keyboard-submit point and inherits the
+      // age-gate guard, so a passive onFieldSubmitted must NOT bypass it.
+      await tester.showKeyboard(
+        find.descendant(
+          of: semanticsId('auth-password-input'),
+          matching: find.byType(EditableText),
+        ),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump();
 
-        // Behavior, not wiring: no sign-up fired → the user stays on the
-        // signup screen (no navigation to the confirmation sentinel), the
-        // pending-email state never lifts, and the repo is never called.
-        expect(find.text('CONFIRMATION SENTINEL'), findsNothing);
-        expect(container.read(signupPendingEmailProvider), isNull);
-        verifyNever(
-          () => mockRepo.signUpWithEmail(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-            locale: any(named: 'locale'),
-            displayName: any(named: 'displayName'),
-          ),
-        );
+      // Behavior, not wiring: no sign-up fired → the user stays on the
+      // signup screen (no navigation to the confirmation sentinel), the
+      // pending-email state never lifts, and the repo is never called.
+      expect(find.text('CONFIRMATION SENTINEL'), findsNothing);
+      expect(container.read(signupPendingEmailProvider), isNull);
+      verifyNever(
+        () => mockRepo.signUpWithEmail(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+          locale: any(named: 'locale'),
+          displayName: any(named: 'displayName'),
+        ),
+      );
 
-        // Now tick the checkbox and repeat — the SAME keyboard submit MUST
-        // fire the sign-up and lift the pending-email state.
-        await tester.tap(ageCheckbox());
-        await tester.pump();
-        await tester.showKeyboard(
-          find.descendant(
-            of: semanticsId('auth-confirm-password-input'),
-            matching: find.byType(EditableText),
-          ),
-        );
-        await tester.testTextInput.receiveAction(TextInputAction.done);
-        await tester.pump();
-        await tester.pump();
+      // Now tick the checkbox and repeat — the SAME keyboard submit MUST
+      // fire the sign-up and lift the pending-email state.
+      await tester.tap(ageCheckbox());
+      await tester.pump();
+      await tester.showKeyboard(
+        find.descendant(
+          of: semanticsId('auth-password-input'),
+          matching: find.byType(EditableText),
+        ),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump();
 
-        // User-visible outcome: the same keyboard "Done" now drives the user
-        // to the email-confirmation screen.
-        await tester.pumpAndSettle();
-        expect(find.text('CONFIRMATION SENTINEL'), findsOneWidget);
-        expect(container.read(signupPendingEmailProvider), 'a@b.com');
-        verify(
-          () => mockRepo.signUpWithEmail(
-            email: 'a@b.com',
-            password: 'secret1!',
-            locale: any(named: 'locale'),
-            displayName: 'Alice',
-          ),
-        ).called(1);
-      },
-    );
+      // User-visible outcome: the same keyboard "Done" now drives the user
+      // to the email-confirmation screen.
+      await tester.pumpAndSettle();
+      expect(find.text('CONFIRMATION SENTINEL'), findsOneWidget);
+      expect(container.read(signupPendingEmailProvider), 'a@b.com');
+      verify(
+        () => mockRepo.signUpWithEmail(
+          email: 'a@b.com',
+          password: 'secret1!',
+          locale: any(named: 'locale'),
+          displayName: 'Alice',
+        ),
+      ).called(1);
+    });
 
     testWidgets(
       'toggling back to Login then to Sign Up resets the checkbox state',

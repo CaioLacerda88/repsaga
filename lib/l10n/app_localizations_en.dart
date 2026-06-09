@@ -269,19 +269,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signupHeading => 'CREATE ACCOUNT';
 
   @override
-  String get confirmPassword => 'Confirm password';
+  String get passwordStrengthWeak => 'Weak';
 
   @override
-  String get passwordMismatch => 'Passwords do not match';
-
-  @override
-  String get passwordStrengthWeak => 'Weak — add more characters';
-
-  @override
-  String get passwordStrengthMedium => 'Medium — add numbers or symbols';
+  String get passwordStrengthMedium => 'Medium';
 
   @override
   String get passwordStrengthStrong => 'Strong password!';
+
+  @override
+  String get passwordTipLength => 'use 8+ characters';
+
+  @override
+  String get passwordTipNumber => 'add a number';
+
+  @override
+  String get passwordTipSymbol => 'add a symbol';
+
+  @override
+  String get showPassword => 'Show password';
+
+  @override
+  String get hidePassword => 'Hide password';
+
+  @override
+  String get passwordRevealHint => 'Tap the eye to check your password';
 
   @override
   String get signupAgeRequiredHint => 'Confirm your age to continue';
