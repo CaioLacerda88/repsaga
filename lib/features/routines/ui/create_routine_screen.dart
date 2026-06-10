@@ -138,12 +138,16 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     });
   }
 
-  /// Custom notes counter. Hidden (zero-size) until the user is within 100
-  /// chars of the cap, then "{current} / {max}" colored by remaining headroom:
-  /// textDim normally → warning at ≤30 remaining → error at the cap (≤0).
-  Widget _buildNotesCounter(BuildContext context, int currentLength) {
+  /// Custom notes counter. Returns `null` (fully collapsing the counter
+  /// sub-row, so the field reserves no vertical gap for it) until the user is
+  /// within 100 chars of the cap, then "{current} / {max}" colored by
+  /// remaining headroom: textDim normally → warning at ≤30 remaining → error
+  /// at the cap (≤0). `null` (not `SizedBox.shrink()`) matches the
+  /// NotesEditSheet pattern and avoids InputDecorator's counter sub-row
+  /// padding entirely while the counter is hidden.
+  Widget? _buildNotesCounter(BuildContext context, int currentLength) {
     if (currentLength < _kRoutineNotesCounterThreshold) {
-      return const SizedBox.shrink();
+      return null;
     }
     final l10n = AppLocalizations.of(context);
     final remaining = _kRoutineNotesMaxLength - currentLength;
@@ -170,6 +174,16 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
+      // The keyboard OVERLAYS the form instead of resizing/reflowing it: tapping
+      // the name or notes field (both near the top, always above the IME) just
+      // slides the keyboard up over the content below — the screen behind stays
+      // put. Without this the body shrinks on focus, the list reflows, and the
+      // exercises get shoved under a rising empty band. The only editable fields
+      // sit above the keyboard, so nothing the user types is ever covered. If a
+      // future editable field is added INSIDE an _ExerciseCard (e.g. per-exercise
+      // notes), revisit this — that field would sit below the keyboard with no
+      // auto-scroll affordance to reach it.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Semantics(
           container: true,
@@ -195,6 +209,15 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           ),
         ],
       ),
+      // The exercise cards below the focused notes field used to stop painting
+      // while the keyboard was up — an empty card-shaped void tracking the IME.
+      // That was triggered by the keyboard RESIZING the Scaffold body; with
+      // `resizeToAvoidBottomInset: false` (above) the body never resizes, so a
+      // plain SingleChildScrollView repaints correctly. SingleChildScrollView
+      // (not ListView) is deliberate: it builds ALL children eagerly, so every
+      // exercise card is in the tree/AOM for E2E + screen readers even when
+      // scrolled off — a lazy ListView dropped off-viewport cards from the DOM
+      // and broke the routine-create E2E flow.
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Column(

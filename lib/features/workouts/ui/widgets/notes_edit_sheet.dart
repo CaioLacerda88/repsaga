@@ -111,119 +111,130 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Lift the sheet above the keyboard so the multiline field + actions
-    // stay visible while typing.
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Semantics(
       container: true,
       explicitChildNodes: true,
       identifier: 'workout-notes-edit-sheet',
+      // `showModalBottomSheet(isScrollControlled: true)` ALREADY constrains the
+      // sheet to the space above the keyboard — it hands its child a maxHeight
+      // of `screen − viewInsets.bottom`. So we must NOT add `viewInsets.bottom`
+      // again as padding: that double-counts the keyboard and squeezes the
+      // content into a sliver, overflowing and pinning to the top with a
+      // keyboard-sized dead gap below. Confirmed on-device: 384×832 screen,
+      // 358dp keyboard → sheet content area 473dp, but a manual +358 bottom
+      // padding left the Column only 79dp (cluster: notes-sheet-double-kbd-inset).
+      //
+      // The SingleChildScrollView keeps the sheet keyboard-inset agnostic: it
+      // shrink-wraps when the content fits (sheet sits directly above the
+      // keyboard) and SCROLLS when content would exceed the available height on
+      // a small screen / large system font — so the eyebrow + field + actions
+      // are always reachable on ANY device, with no hardcoded dp budget. The
+      // NAV-BAR inset (gesture pill) is handled separately by SafeArea(top:false)
+      // below, which pads `viewPadding.bottom` — the widget test harness models
+      // only the keyboard inset, not the gesture inset, so nav-bar overlap stays
+      // a device-verified concern (see feedback_visual_verification_physical_device).
       child: SafeArea(
         top: false,
-        // bottomInset Padding stays OUTSIDE the scroll view so the whole sheet
-        // still lifts above the keyboard; the SingleChildScrollView absorbs any
-        // leftover content overflow (title + maxLines:8 field + buttons) at
-        // 320dp with the keyboard up, instead of painting a yellow stripe.
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.title.toUpperCase(),
-                  style: AppTextStyles.label.copyWith(color: AppColors.textDim),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLength: widget.maxLength,
-                  maxLines: 8,
-                  minLines: 3,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.textCream,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.title.toUpperCase(),
+                style: AppTextStyles.label.copyWith(color: AppColors.textDim),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                maxLength: widget.maxLength,
+                // Soft cap on the field's natural height; the outer
+                // SingleChildScrollView is the responsive safety net for
+                // overflow, and long notes scroll INSIDE the field once past
+                // this many lines.
+                maxLines: 6,
+                minLines: 3,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                style: AppTextStyles.body.copyWith(color: AppColors.textCream),
+                // Custom counter: nothing until the user nears the cap, then
+                // a colored remaining-budget readout. Material calls this on
+                // every change, so it tracks `currentLength` without a manual
+                // setState. Returning `null` (not an empty Text) collapses the
+                // counter row entirely so the field doesn't reserve the gap.
+                buildCounter:
+                    (
+                      context, {
+                      required int currentLength,
+                      required int? maxLength,
+                      required bool isFocused,
+                    }) {
+                      if (currentLength < widget.counterThreshold) {
+                        return null;
+                      }
+                      final cap = maxLength ?? widget.maxLength;
+                      final remaining = cap - currentLength;
+                      final color = remaining <= 0
+                          ? AppColors.error
+                          : remaining <= 50
+                          ? AppColors.warning
+                          : AppColors.textDim;
+                      return Text(
+                        widget.counterFormatter(currentLength, cap),
+                        style: AppTextStyles.label.copyWith(color: color),
+                      );
+                    },
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  hintStyle: AppTextStyles.body.copyWith(
+                    color: AppColors.textDim,
                   ),
-                  // Custom counter: nothing until the user nears the cap, then
-                  // a colored remaining-budget readout. Material calls this on
-                  // every change, so it tracks `currentLength` without a manual
-                  // setState. Returning `null` (not an empty Text) collapses the
-                  // counter row entirely so the field doesn't reserve the gap.
-                  buildCounter:
-                      (
-                        context, {
-                        required int currentLength,
-                        required int? maxLength,
-                        required bool isFocused,
-                      }) {
-                        if (currentLength < widget.counterThreshold) {
-                          return null;
-                        }
-                        final cap = maxLength ?? widget.maxLength;
-                        final remaining = cap - currentLength;
-                        final color = remaining <= 0
-                            ? AppColors.error
-                            : remaining <= 50
-                            ? AppColors.warning
-                            : AppColors.textDim;
-                        return Text(
-                          widget.counterFormatter(currentLength, cap),
-                          style: AppTextStyles.label.copyWith(color: color),
-                        );
-                      },
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    hintStyle: AppTextStyles.body.copyWith(
-                      color: AppColors.textDim,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.surface2,
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(8)),
-                      borderSide: BorderSide.none,
-                    ),
+                  filled: true,
+                  fillColor: AppColors.surface2,
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Semantics(
-                      container: true,
-                      identifier: 'workout-notes-cancel',
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.textDim,
-                          minimumSize: const Size(80, 48),
-                        ),
-                        child: Text(widget.cancelLabel),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Semantics(
+                    container: true,
+                    identifier: 'workout-notes-cancel',
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textDim,
+                        minimumSize: const Size(80, 48),
                       ),
+                      child: Text(widget.cancelLabel),
                     ),
-                    const SizedBox(width: 8),
-                    Semantics(
-                      container: true,
-                      identifier: 'workout-notes-save',
-                      label: widget.saveLabel,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(
-                          context,
-                        ).pop(NotesEditResult(_controller.text)),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryViolet,
-                          foregroundColor: AppColors.textCream,
-                          minimumSize: const Size(80, 48),
-                        ),
-                        child: Text(widget.saveLabel),
+                  ),
+                  const SizedBox(width: 8),
+                  Semantics(
+                    container: true,
+                    identifier: 'workout-notes-save',
+                    label: widget.saveLabel,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).pop(NotesEditResult(_controller.text)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primaryViolet,
+                        foregroundColor: AppColors.textCream,
+                        minimumSize: const Size(80, 48),
                       ),
+                      child: Text(widget.saveLabel),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
