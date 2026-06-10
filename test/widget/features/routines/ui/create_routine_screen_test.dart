@@ -415,5 +415,72 @@ void main() {
       expect(find.text('Bench Press'), findsNothing);
       expect(find.text('OHP'), findsOneWidget);
     });
+
+    // Keyboard behavior contract. Tapping the name / notes field must OVERLAY
+    // the keyboard over the form — the screen behind stays untouched — instead
+    // of resizing the body and reflowing the list (which shoved the exercises
+    // under a rising empty band). Two properties deliver this and are pinned
+    // here; the on-device rendering itself was verified manually because a
+    // widget test cannot raise a real soft keyboard (see
+    // feedback_visual_verification_physical_device):
+    //   * resizeToAvoidBottomInset == false → keyboard overlays, no reflow,
+    //   * a ListView body → a lazy viewport that repaints correctly under the
+    //     IME (a SingleChildScrollView left the cards below the focused field
+    //     unpainted when the body resized).
+    group('keyboard overlays the form (does not reflow)', () {
+      Routine routineWithExercises() => Routine(
+        id: 'routine-kbd',
+        name: 'Push Day',
+        isDefault: false,
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'ex-1',
+            setConfigs: [const RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(name: 'Bench Press'),
+          ),
+          RoutineExercise(
+            exerciseId: 'ex-2',
+            setConfigs: [const RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(
+              id: 'exercise-002',
+              name: 'OHP',
+              muscleGroup: 'shoulders',
+            ),
+          ),
+        ],
+        createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+      );
+
+      testWidgets('Scaffold does not resize for the keyboard', (tester) async {
+        await tester.pumpWidget(_buildScreen(routine: routineWithExercises()));
+        await tester.pumpAndSettle();
+
+        final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+        expect(
+          scaffold.resizeToAvoidBottomInset,
+          isFalse,
+          reason:
+              'the keyboard must overlay the form (screen behind untouched), '
+              'not push the body up and reflow the exercise list',
+        );
+      });
+
+      testWidgets('form body is a ListView (lazy viewport repaints under IME)', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen(routine: routineWithExercises()));
+        await tester.pumpAndSettle();
+
+        final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+        expect(
+          scaffold.body,
+          isA<ListView>(),
+          reason:
+              'a SingleChildScrollView left the cards below the focused notes '
+              'field unpainted when the body resized; ListView repaints its '
+              'lazy viewport correctly',
+        );
+      });
+    });
   });
 }

@@ -111,27 +111,28 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Lift the sheet above the keyboard so the multiline field + actions
-    // stay visible while typing.
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Semantics(
       container: true,
       explicitChildNodes: true,
       identifier: 'workout-notes-edit-sheet',
+      // `showModalBottomSheet(isScrollControlled: true)` ALREADY constrains the
+      // sheet to the space above the keyboard — it hands its child a maxHeight
+      // of `screen − viewInsets.bottom`. So we must NOT add `viewInsets.bottom`
+      // again as padding: that double-counts the keyboard and squeezes the
+      // content into a sliver, overflowing and pinning to the top with a
+      // keyboard-sized dead gap below. Confirmed on-device: 384×832 screen,
+      // 358dp keyboard → sheet content area 473dp, but a manual +358 bottom
+      // padding left the Column only 79dp (cluster: notes-sheet-double-kbd-inset).
+      //
+      // The SingleChildScrollView keeps the sheet device-agnostic: it
+      // shrink-wraps when the content fits (sheet sits directly above the
+      // keyboard) and SCROLLS when content would exceed the available height on
+      // a small screen / large system font — so the eyebrow + field + actions
+      // are always reachable on ANY device, with no hardcoded dp budget.
       child: SafeArea(
         top: false,
-        // The bottomInset Padding lifts the whole sheet above the keyboard.
-        // The Column(min) makes the sheet SHRINK-WRAP its content (eyebrow +
-        // field + buttons) so it sits DIRECTLY above the keyboard — no
-        // full-height sheet, no dead gap. A bare SingleChildScrollView here is
-        // GREEDY in its scroll axis: inside the isScrollControlled sheet it
-        // gets maxHeight == full screen and fills it (RenderBox.constrain
-        // clamps to maxHeight), pinning content to the top with the keyboard
-        // inset painted as empty space below. The field's own maxLines cap
-        // (capped at 5) gives it an internal scrollbar for long notes, so we
-        // never need an outer scroll view that fights the shrink-wrap.
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + bottomInset),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -145,10 +146,11 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
                 controller: _controller,
                 autofocus: true,
                 maxLength: widget.maxLength,
-                // Capped so eyebrow + field + buttons fit above the keyboard on
-                // the smallest real Android phone (~534dp tall, keyboard
-                // ~260dp → ~250dp budget). Long notes scroll INSIDE the field.
-                maxLines: 5,
+                // Soft cap on the field's natural height; the outer
+                // SingleChildScrollView is the responsive safety net for
+                // overflow, and long notes scroll INSIDE the field once past
+                // this many lines.
+                maxLines: 6,
                 minLines: 3,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,

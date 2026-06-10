@@ -192,27 +192,39 @@ void main() {
   });
 
   group('NotesEditSheet layout (keyboard up)', () {
-    // The keyboard-layout contract — VALUE-asserting, not value-blind. The
-    // previous test only checked `takeException() == null`, which passed even
-    // while the sheet rendered FULL-HEIGHT with the eyebrow shoved off the top
-    // and the buttons buried under the keyboard. This drives the REAL modal
-    // route (the only harness where the BottomSheet hands its child
-    // maxHeight == full screen, which is what makes a bare SingleChildScrollView
-    // greedily fill and pin content to the top). With a long note + keyboard
-    // inset it asserts the actual user-visible outcome:
-    //   1. the sheet is CONTENT-SIZED (height < screen) — not full-height,
-    //   2. the eyebrow's top edge is on-screen (not clipped above y=0),
-    //   3. every part (eyebrow + field + Save + Cancel) sits ABOVE the
-    //      keyboard (bottom <= keyboard top).
+    // The keyboard-layout contract — VALUE-asserting AND device-faithful.
     //
-    // Pre-fix on a 320x534 phone with a long note this was: sheet 0->534
-    // (full), eyebrow top at y=6 (jammed against the screen edge), Save/Cancel
-    // bottom at y=291 — BELOW the 274 keyboard top (buried). All three
-    // assertions below failed.
+    // `showModalBottomSheet(isScrollControlled: true)` constrains the sheet to
+    // the area ABOVE the keyboard (maxHeight == screen − viewInsets.bottom). The
+    // shipped bug added `viewInsets.bottom` AGAIN as bottom padding, double-
+    // counting the keyboard: on a real 384x832 device (358dp keyboard) the
+    // Column was squeezed to 79dp, overflowed, and the sheet filled the screen
+    // top-to-keyboard with content jammed at y=0.
+    //
+    // This test reproduces that constraint chain by raising the keyboard
+    // (FakeViewPadding) BEFORE the modal opens — see layoutAt. The earlier
+    // version set viewInsets AFTER the sheet had settled, so the modal never
+    // reduced the content area and the test gave a FALSE GREEN that let the bug
+    // ship. (Keyboard-inset rendering is also verified on a physical device —
+    // see feedback_visual_verification_physical_device — because a single
+    // widget viewport can't model every real keyboard height / font scale.)
     const kbInset = 260.0;
 
-    /// Opens the real modal at [screen] with [kbInset] keyboard inset and a
-    /// long prefilled note, then returns the laid-out rects.
+    /// Lays the sheet out inside the EXACT constraint chain the modal produces
+    /// on a real device when the keyboard is up:
+    ///   * the content area is bounded to maxHeight == screen − keyboard (the
+    ///     framework already lifts an isScrollControlled sheet above the IME —
+    ///     proven on-device: 384×832 screen, 358dp keyboard → 473.6dp area),
+    ///   * AND `MediaQuery.viewInsets.bottom == keyboard` is still readable.
+    ///
+    /// Driving `showModalBottomSheet` in a widget test does NOT reproduce this:
+    /// the test harness never reduces the sheet's content area, so the sheet
+    /// renders to the true screen bottom and the bug can't surface (that false
+    /// green is exactly what let the double-inset ship). Pumping the sheet
+    /// directly into the device's constraint chain DOES reproduce it: with a
+    /// manual `Padding(bottom: viewInsets.bottom)` the content + a second
+    /// keyboard inset overflow the bounded area; without it the
+    /// SingleChildScrollView fits or scrolls. This is the regression guard.
     Future<
       ({
         Rect sheet,
@@ -223,46 +235,57 @@ void main() {
         double keyboardTop,
       })
     >
-    layoutAt(WidgetTester tester, Size screen) async {
+    layoutAt(WidgetTester tester, Size screen, {String? note}) async {
       tester.view.physicalSize = screen;
       tester.view.devicePixelRatio = 1.0;
+      tester.view.viewInsets = const FakeViewPadding(bottom: kbInset);
       addTearDown(tester.view.reset);
 
-      final longNote = List.generate(
-        14,
-        (i) => 'Line ${i + 1}: felt strong today, bumped the working weight.',
-      ).join('\n');
+      final longNote =
+          note ??
+          List.generate(
+            14,
+            (i) =>
+                'Line ${i + 1}: felt strong today, bumped the working weight.',
+          ).join('\n');
 
       await tester.pumpWidget(
         TestMaterialApp(
           theme: AppTheme.dark,
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  onPressed: () => NotesEditSheet.show(
-                    context,
-                    initialNotes: longNote,
-                    title: 'Notes',
-                    hintText: _hint,
-                    saveLabel: 'Save',
-                    cancelLabel: 'Cancel',
-                    counterFormatter: _counter,
-                  ),
-                  child: const Text('Open'),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => MediaQuery(
+                // Keyboard is up: the sheet can still read viewInsets, so a
+                // re-introduced manual inset would overflow here.
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(viewInsets: const EdgeInsets.only(bottom: kbInset)),
+                child: Column(
+                  children: [
+                    // The above-keyboard area: the modal bounds the sheet to
+                    // exactly this height on a real device.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: NotesEditSheet(
+                          initialNotes: longNote,
+                          title: 'Notes',
+                          hintText: _hint,
+                          saveLabel: 'Save',
+                          cancelLabel: 'Cancel',
+                          counterFormatter: _counter,
+                        ),
+                      ),
+                    ),
+                    // The keyboard itself.
+                    const SizedBox(height: kbInset),
+                  ],
                 ),
               ),
             ),
           ),
         ),
       );
-
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-
-      // Raise the keyboard: inject a bottom viewInset the sheet reads via
-      // MediaQuery.viewInsetsOf to lift itself above the IME.
-      tester.view.viewInsets = const FakeViewPadding(bottom: kbInset);
       await tester.pumpAndSettle();
 
       return (
@@ -291,30 +314,61 @@ void main() {
       l,
       Size screen,
     ) {
-      // 1. Content-sized sheet: the laid-out content (eyebrow top -> buttons
-      //    bottom) is far shorter than the screen. (The sheet's RENDER box may
-      //    extend behind the keyboard because its bottom inset Padding paints
-      //    there, but the keyboard overlays it — what matters is the CONTENT
-      //    extent stays small.) Pre-fix the field expanded to ~200dp and the
-      //    content spanned nearly the whole screen. Post-fix the content
-      //    extent settles at ~156dp on the 320x534 worst-case viewport.
-      final contentExtent = l.save.bottom - l.eyebrow.top;
+      // Reaching here means NO RenderFlex overflow — the core regression guard.
+      // The shipped double-inset bug adds `viewInsets.bottom` as padding INSIDE
+      // the already-keyboard-bounded area (this harness reproduces both: maxH ==
+      // screen − keyboard AND a readable viewInsets), so the content + a second
+      // keyboard inset can't fit → pumpAndSettle throws here. The fix fits or
+      // scrolls, so it survives.
+      //
+      // The device-agnostic positional contract is about the sheet BOX (its
+      // internal SingleChildScrollView may scroll to the focused field on a
+      // genuinely too-small area, which is correct — content stays reachable):
+      //   1. the whole sheet sits ABOVE the keyboard (bottom <= keyboard top),
+      //   2. the sheet's top is ON-SCREEN (>= 0) — the double-inset made the box
+      //      taller than the area so its top clipped off the top,
+      //   3. the sheet never exceeds the above-keyboard area (no double-count).
+      const epsilon = 0.5;
       expect(
-        contentExtent,
-        lessThan(screen.height - kbInset),
+        l.sheet.bottom,
+        lessThanOrEqualTo(l.keyboardTop + epsilon),
         reason:
-            'content must fit in the space above the keyboard, not fill '
-            'the whole screen (was full-height pre-fix)',
+            'the whole sheet must sit above the keyboard '
+            '(bottom ${l.sheet.bottom} > keyboard top ${l.keyboardTop})',
       );
-
-      // 2. Eyebrow top is on-screen (not clipped above the top edge).
       expect(
-        l.eyebrow.top,
-        greaterThanOrEqualTo(0),
-        reason: 'eyebrow must not be pushed off the top of the screen',
+        l.sheet.top,
+        greaterThanOrEqualTo(-epsilon),
+        reason:
+            'the sheet top must be on-screen, not clipped above y=0 — the '
+            'double-inset bug made the sheet taller than the available area',
       );
+      expect(
+        l.sheet.height,
+        lessThanOrEqualTo(screen.height - kbInset + epsilon),
+        reason:
+            'the sheet must fit within the area above the keyboard; a larger '
+            'height means the keyboard inset was double-counted',
+      );
+    }
 
-      // 3. Every part sits above the keyboard.
+    testWidgets('sheet sits above the keyboard at 320x534 (smallest phone)', (
+      tester,
+    ) async {
+      const screen = Size(320, 534);
+      final l = await layoutAt(tester, screen);
+      assertContract(l, screen);
+    });
+
+    testWidgets('sheet sits above the keyboard at 412x915 (large phone)', (
+      tester,
+    ) async {
+      const screen = Size(412, 915);
+      final l = await layoutAt(tester, screen);
+      assertContract(l, screen);
+
+      // On a roomy phone the content fits without scrolling, so every part —
+      // eyebrow, field, Save, Cancel — must be visible above the keyboard.
       for (final part in [
         ('eyebrow', l.eyebrow),
         ('field', l.field),
@@ -323,28 +377,36 @@ void main() {
       ]) {
         expect(
           part.$2.bottom,
-          lessThanOrEqualTo(l.keyboardTop),
+          lessThanOrEqualTo(l.keyboardTop + 0.5),
           reason:
-              '${part.$1} must sit above the keyboard '
+              '${part.$1} must be visible above the keyboard on a large phone '
               '(bottom ${part.$2.bottom} > keyboard top ${l.keyboardTop})',
         );
       }
-    }
-
-    testWidgets('content sits above the keyboard at 320x534 (smallest phone)', (
-      tester,
-    ) async {
-      const screen = Size(320, 534);
-      final l = await layoutAt(tester, screen);
-      assertContract(l, screen);
     });
 
-    testWidgets('content sits above the keyboard at 412x915 (large phone)', (
-      tester,
-    ) async {
-      const screen = Size(412, 915);
-      final l = await layoutAt(tester, screen);
-      assertContract(l, screen);
+    testWidgets('no keyboard-sized dead gap below the buttons', (tester) async {
+      // A SHORT note so the sheet shrink-wraps with no scroll: the distance
+      // from the Save button to the sheet's bottom edge is then exactly the
+      // bottom padding. The shipped double-inset bug re-adds a FULL keyboard
+      // inset (260dp) as bottom padding, leaving a keyboard-sized empty region
+      // below the buttons. A SingleChildScrollView absorbs that by scrolling
+      // instead of overflowing, so the overflow- and box-level checks can't see
+      // it — ONLY this gap assertion catches the regression. (kbInset / 2
+      // cleanly separates the ~20dp fix from the 260dp+ bug, no device budget.)
+      final l = await layoutAt(
+        tester,
+        const Size(412, 915),
+        note: 'Quick note',
+      );
+      final gapBelowButtons = l.sheet.bottom - l.save.bottom;
+      expect(
+        gapBelowButtons,
+        lessThan(kbInset / 2),
+        reason:
+            'the bottom padding must not re-add the keyboard inset '
+            '(dead gap below buttons was $gapBelowButtons)',
+      );
     });
   });
 }

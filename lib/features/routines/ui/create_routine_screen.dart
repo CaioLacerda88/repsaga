@@ -174,6 +174,13 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
+      // The keyboard OVERLAYS the form instead of resizing/reflowing it: tapping
+      // the name or notes field (both near the top, always above the IME) just
+      // slides the keyboard up over the content below — the screen behind stays
+      // put. Without this the body shrinks on focus, the list reflows, and the
+      // exercises get shoved under a rising empty band. The only editable fields
+      // sit above the keyboard, so nothing the user types is ever covered.
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Semantics(
           container: true,
@@ -199,84 +206,88 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      // ListView (not SingleChildScrollView+Column) so the scrollable form
+      // body uses a proper lazy viewport: it repaints correctly when the
+      // keyboard resizes the Scaffold body. A SingleChildScrollView here left
+      // the exercise cards below the focused notes field unpainted while the
+      // keyboard was up (an empty card-shaped void that tracked the IME).
+      // ListView stretches its children to the cross-axis width, so the fields
+      // stay full-width without an explicit CrossAxisAlignment.stretch.
+      body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _nameController,
-              autofocus: !_isEditing,
-              maxLength: 80,
-              decoration: InputDecoration(hintText: l10n.routineName),
+        children: [
+          TextField(
+            controller: _nameController,
+            autofocus: !_isEditing,
+            maxLength: 80,
+            decoration: InputDecoration(hintText: l10n.routineName),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 16),
+          // Q2 routine notes — optional, multiline, flat field on surface2
+          // (no Card chrome). Lives below name, above the exercise list.
+          Semantics(
+            container: true,
+            identifier: 'create-routine-notes',
+            child: TextField(
+              controller: _notesController,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: _kRoutineNotesMaxLength,
+              // Custom counter (see _buildNotesCounter): hide Material's
+              // default by returning an empty widget when below threshold.
+              buildCounter:
+                  (
+                    context, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => _buildNotesCounter(context, currentLength),
+              decoration: InputDecoration(
+                hintText: l10n.routineNotesHint,
+                filled: true,
+                fillColor: AppColors.surface2,
+              ),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 16),
-            // Q2 routine notes — optional, multiline, flat field on surface2
-            // (no Card chrome). Lives below name, above the exercise list.
-            Semantics(
-              container: true,
-              identifier: 'create-routine-notes',
-              child: TextField(
-                controller: _notesController,
-                minLines: 2,
-                maxLines: 4,
-                maxLength: _kRoutineNotesMaxLength,
-                // Custom counter (see _buildNotesCounter): hide Material's
-                // default by returning an empty widget when below threshold.
-                buildCounter:
-                    (
-                      context, {
-                      required currentLength,
-                      required isFocused,
-                      maxLength,
-                    }) => _buildNotesCounter(context, currentLength),
-                decoration: InputDecoration(
-                  hintText: l10n.routineNotesHint,
-                  filled: true,
-                  fillColor: AppColors.surface2,
-                ),
-                onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 24),
+          if (_exercises.isNotEmpty) ...[
+            ..._exercises.asMap().entries.map(
+              (entry) => _ExerciseCard(
+                entry: entry.value,
+                onSetCountChanged: (count) {
+                  setState(() => entry.value.setCount = count);
+                },
+                onRestChanged: (rest) {
+                  setState(() => entry.value.restSeconds = rest);
+                },
+                onRemove: () {
+                  setState(() => _exercises.removeAt(entry.key));
+                },
               ),
             ),
-            const SizedBox(height: 24),
-            if (_exercises.isNotEmpty) ...[
-              ..._exercises.asMap().entries.map(
-                (entry) => _ExerciseCard(
-                  entry: entry.value,
-                  onSetCountChanged: (count) {
-                    setState(() => entry.value.setCount = count);
-                  },
-                  onRestChanged: (rest) {
-                    setState(() => entry.value.restSeconds = rest);
-                  },
-                  onRemove: () {
-                    setState(() => _exercises.removeAt(entry.key));
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Semantics(
-              container: true,
-              identifier: 'create-routine-add-exercise',
-              child: OutlinedButton.icon(
-                onPressed: _addExercise,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addExercise),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  side: BorderSide(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: 8),
           ],
-        ),
+          Semantics(
+            container: true,
+            identifier: 'create-routine-add-exercise',
+            child: OutlinedButton.icon(
+              onPressed: _addExercise,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addExercise),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: BorderSide(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
