@@ -298,6 +298,11 @@ void main() {
         cancel: tester.getRect(
           find.bySemanticsIdentifier('workout-notes-cancel'),
         ),
+        // The keyboard is placed via a SizedBox(height: kbInset) below the
+        // Expanded, and no window padding is modelled, so `screen.height −
+        // kbInset` is the exact keyboard top for THIS harness. If a future
+        // variant adds `tester.view.padding` (to model the nav-bar gesture
+        // inset), recompute this — it would no longer be exact.
         keyboardTop: screen.height - kbInset,
       );
     }

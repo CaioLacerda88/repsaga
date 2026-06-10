@@ -124,11 +124,15 @@ class _NotesEditSheetState extends State<NotesEditSheet> {
       // 358dp keyboard → sheet content area 473dp, but a manual +358 bottom
       // padding left the Column only 79dp (cluster: notes-sheet-double-kbd-inset).
       //
-      // The SingleChildScrollView keeps the sheet device-agnostic: it
+      // The SingleChildScrollView keeps the sheet keyboard-inset agnostic: it
       // shrink-wraps when the content fits (sheet sits directly above the
       // keyboard) and SCROLLS when content would exceed the available height on
       // a small screen / large system font — so the eyebrow + field + actions
-      // are always reachable on ANY device, with no hardcoded dp budget.
+      // are always reachable on ANY device, with no hardcoded dp budget. The
+      // NAV-BAR inset (gesture pill) is handled separately by SafeArea(top:false)
+      // below, which pads `viewPadding.bottom` — the widget test harness models
+      // only the keyboard inset, not the gesture inset, so nav-bar overlap stays
+      // a device-verified concern (see feedback_visual_verification_physical_device).
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(

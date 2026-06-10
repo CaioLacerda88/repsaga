@@ -179,7 +179,10 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
       // slides the keyboard up over the content below — the screen behind stays
       // put. Without this the body shrinks on focus, the list reflows, and the
       // exercises get shoved under a rising empty band. The only editable fields
-      // sit above the keyboard, so nothing the user types is ever covered.
+      // sit above the keyboard, so nothing the user types is ever covered. If a
+      // future editable field is added INSIDE an _ExerciseCard (e.g. per-exercise
+      // notes), revisit this — that field would sit below the keyboard with no
+      // auto-scroll affordance to reach it.
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Semantics(
