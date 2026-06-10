@@ -419,14 +419,17 @@ void main() {
     // Keyboard behavior contract. Tapping the name / notes field must OVERLAY
     // the keyboard over the form — the screen behind stays untouched — instead
     // of resizing the body and reflowing the list (which shoved the exercises
-    // under a rising empty band). Two properties deliver this and are pinned
-    // here; the on-device rendering itself was verified manually because a
-    // widget test cannot raise a real soft keyboard (see
-    // feedback_visual_verification_physical_device):
-    //   * resizeToAvoidBottomInset == false → keyboard overlays, no reflow,
-    //   * a ListView body → a lazy viewport that repaints correctly under the
-    //     IME (a SingleChildScrollView left the cards below the focused field
-    //     unpainted when the body resized).
+    // under a rising empty band, AND left the cards unpainted because the
+    // SingleChildScrollView mis-repaints on resize). `resizeToAvoidBottomInset:
+    // false` is the single fix: no resize → no reflow → no mis-repaint. The
+    // on-device rendering itself was verified manually because a widget test
+    // cannot raise a real soft keyboard (see
+    // feedback_visual_verification_physical_device).
+    //
+    // The body stays a SingleChildScrollView (NOT a ListView) on purpose: it
+    // builds every exercise card eagerly, so all cards are in the widget tree /
+    // AOM for E2E + screen readers even when scrolled off. A lazy ListView
+    // dropped off-viewport cards from the DOM and broke the routine-create E2E.
     group('keyboard overlays the form (does not reflow)', () {
       Routine routineWithExercises() => Routine(
         id: 'routine-kbd',
@@ -465,7 +468,7 @@ void main() {
         );
       });
 
-      testWidgets('form body is a ListView (lazy viewport repaints under IME)', (
+      testWidgets('form body eagerly builds all exercise cards (no lazy viewport)', (
         tester,
       ) async {
         await tester.pumpWidget(_buildScreen(routine: routineWithExercises()));
@@ -474,12 +477,15 @@ void main() {
         final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
         expect(
           scaffold.body,
-          isA<ListView>(),
+          isA<SingleChildScrollView>(),
           reason:
-              'a SingleChildScrollView left the cards below the focused notes '
-              'field unpainted when the body resized; ListView repaints its '
-              'lazy viewport correctly',
+              'the body must build every exercise card eagerly so all cards are '
+              'in the tree/AOM for E2E + screen readers even when scrolled off; '
+              'a lazy ListView dropped off-viewport cards and broke E2E',
         );
+        // Both seeded exercise cards are in the tree, not just the on-screen one.
+        expect(find.text('Bench Press'), findsOneWidget);
+        expect(find.text('OHP'), findsOneWidget);
       });
     });
   });
