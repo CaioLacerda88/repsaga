@@ -296,7 +296,8 @@ void main() {
       //    extend behind the keyboard because its bottom inset Padding paints
       //    there, but the keyboard overlays it — what matters is the CONTENT
       //    extent stays small.) Pre-fix the field expanded to ~200dp and the
-      //    content spanned nearly the whole screen.
+      //    content spanned nearly the whole screen. Post-fix the content
+      //    extent settles at ~156dp on the 320x534 worst-case viewport.
       final contentExtent = l.save.bottom - l.eyebrow.top;
       expect(
         contentExtent,
