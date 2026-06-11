@@ -105,6 +105,11 @@ jobs:
             fi
             echo "Waiting for auth endpoint... (attempt $i/30)"
             sleep 2
+            # Hard-fail rather than fall through to a cryptic global-setup auth
+            # error. Newly load-bearing under sharding: 3 parallel runners each
+            # boot their own Supabase, so a Docker resource-pressure failure on
+            # one shard must fail fast with a clear cause, not a 30-min timeout.
+            if [ "$i" -eq 30 ]; then echo "ERROR: Supabase auth endpoint never became ready"; exit 1; fi
           done
           # Verify Supabase REST API is also reachable (PostgREST).
           for i in $(seq 1 15); do
@@ -114,6 +119,7 @@ jobs:
             fi
             echo "Waiting for REST API... (attempt $i/15)"
             sleep 2
+            if [ "$i" -eq 15 ]; then echo "ERROR: Supabase REST API never became ready"; exit 1; fi
           done
           echo "Supabase URL: $(head -1 .env)"
 
