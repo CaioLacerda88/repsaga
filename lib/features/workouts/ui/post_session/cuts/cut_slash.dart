@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-/// Renders the Concept B cut slash — a single thin geometric line
-/// (mockup `docs/post-session-screen-mockup-v2.html:920-927`):
+/// Renders the Concept B cut slash — a single thin geometric line. The
+/// design-locked spec (inlined here so it survives independently):
 ///
 /// ```css
 /// .flash .flash-slash {

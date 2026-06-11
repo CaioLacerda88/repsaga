@@ -1030,8 +1030,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
 
   /// Fill ALL incomplete sets with the most-recent completed set's values.
   ///
-  /// Option C (First-Complete Trigger, `fill-remaining-gating-mockup-v1.html`
-  /// §3): the fill is non-directional — every `!isCompleted` set is filled,
+  /// Option C (First-Complete Trigger): the fill is non-directional — every
+  /// `!isCompleted` set is filled,
   /// whether its `setNumber` is above OR below the completed set that supplies
   /// the values. The source values come from the most recent completed set
   /// (highest `setNumber` among completed). This unblocks mid-session restart,

@@ -62,8 +62,8 @@ class B1XpCutWidget extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             // Diagonal hotViolet slash — `clip-path: polygon` equivalent
-            // per the Concept B grammar (`docs/post-session-screen-mockup-v2.html`
-            // §0 anti-AI render rules: no box-shadow, no border-radius).
+            // per the Concept B anti-AI render rules: no box-shadow, no
+            // border-radius.
             const _DiagonalSlash(color: AppColors.hotViolet),
             // Cluster: safearea-system-overlay-overlap — same class as bff76bd
             // + 0d0b4b7. Background flood stays edge-to-edge; content insets

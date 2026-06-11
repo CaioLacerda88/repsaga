@@ -168,8 +168,8 @@ class _ExerciseCardState extends ConsumerState<ExerciseCard> {
   /// still incomplete — i.e. there is something to fill from and something to
   /// fill into.
   ///
-  /// Option C (First-Complete Trigger, `fill-remaining-gating-mockup-v1.html`
-  /// §3): the old directional check (`setNumber > lastCompletedNumber`) hid
+  /// Option C (First-Complete Trigger): the old directional check
+  /// (`setNumber > lastCompletedNumber`) hid
   /// the button when the user completed only the LAST set, breaking
   /// mid-session restart / failed-set-1 / out-of-order logging. The button
   /// now appears whenever a non-directional fill is possible.
