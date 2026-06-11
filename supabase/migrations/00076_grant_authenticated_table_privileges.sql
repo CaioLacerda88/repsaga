@@ -105,6 +105,9 @@ REVOKE EXECUTE ON FUNCTION public.record_session_xp_batch(uuid) FROM authenticat
 --   REVOKE USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
 --   GRANT EXECUTE ON FUNCTION public.record_set_xp(uuid)           TO authenticated;
 --   GRANT EXECUTE ON FUNCTION public.record_session_xp_batch(uuid) TO authenticated;
+--   REVOKE USAGE ON SCHEMA public FROM authenticated, service_role;  -- only if fully unwinding
 -- (Re-granting the service-only tables to authenticated is intentionally
---  omitted — they were deny-all to clients before this migration.)
+--  omitted — they were deny-all to clients before this migration. The schema
+--  USAGE revoke is listed for completeness but is normally left in place —
+--  USAGE without table grants yields no data access.)
 -- =============================================================================

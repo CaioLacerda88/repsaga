@@ -69,7 +69,10 @@ historical seeding / shared-login races (the per-role × per-worker isolation in
 - [x] Exclude the env-gated exploratory charter specs from CI collection (Playwright `testIgnore` under `process.env.CI`) so skipped tests don't imbalance the 3-way split. Verified all 9 files: charter-a-exploratory (EXPL_CHARTER_A), charter-a-refined (EXPL_CHARTER_A_REFINED), charter-a-verify-weight (VERIFY_WEIGHT), charter-a-weight-test (EXPL_WEIGHT_DIALOG), charter-b-exploratory (EXPL_CHARTER_B), charter-b-followup (EXPL_CHARTER_B_FU), charter-c-exploratory (EXPL_CHARTER_C), charter-d-exploratory (EXPL_CHARTER_D), exploratory.spec.ts (EXPL_DRIVER). None of these env vars are set in e2e.yml.
 - [x] Optional: `e2e-summary` job `needs: [e2e]`, `if: always()`, fails unless `needs.e2e.result == 'success'` — gives one clean status line (e2e is not a required check, so this is cosmetic).
 - [x] `WORKERS_COUNT` stays 4 (per shard). `playwright.config.ts` reporter/workers unchanged.
-- [x] Local validation (`playwright --list`): CI collection = 286 tests / 30 files (61 charter tests dropped); local = 347 / 39 (unchanged). Shard split 110/83/93 (1.33× spread, under the 1.4× rebalance threshold).
-- [x] Reviewer read (PR #330): 1 Important fixed (hard-fail Supabase wait loops on timeout); 1 Blocker rejected as false positive (top-level concurrency + matrix is canonical — shards share one run, don't self-cancel).
-- [ ] Verify on CI: push branch, confirm 3 shards each finish < 30 min and the suite is green. Capture per-shard durations; if a shard's wall-clock is hot (>~1.4× the fastest), rebalance (bump N to 4 / split workouts.spec.ts).
-- [ ] After merge: condense to a one-line note; clear this WIP section.
+- [x] Local validation (`playwright --list`): CI collection = 286 tests / 30 files; shard split 110/83/93.
+- [x] Reviewer (sharding): 1 Important fixed (hard-fail Supabase wait loops); 1 Blocker rejected (concurrency+matrix is canonical).
+- [x] Security audit (all tables) + grants migration 00076 (service_role + authenticated) + I-1 revoke.
+- [x] **CI GREEN** (run 27381520684): all 3 shards pass — 283 passed, 0 seeding errors, 2 flaky-but-passed. Wall-clock 15 / 16 / 21.5 min (was: timing out at 45). Shard 3 (RPG/saga/animation-heavy serial specs) is the long pole at 21.5 min — under cap with margin; rebalance is a future nice-to-have, not needed.
+- [ ] Final reviewer pass on migration 00076 for production-safety (ships via `db push`).
+- [ ] Merge PR #330.
+- [ ] After merge: `supabase db push` migration 00076 to hosted Supabase (verified additive/no-op). Then condense to a one-line note + clear this WIP section. Write `cluster_*` memory (version:latest tool drift dropped implicit grants → mass E2E failure masked as timeout).
