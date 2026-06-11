@@ -16,7 +16,11 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v6
@@ -159,14 +163,28 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: test/e2e
-        run: npx playwright test --reporter=line
+        run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             test/e2e/playwright-report/
             test/e2e/test-results/
           retention-days: 7
+
+  e2e-summary:
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report shard results
+        run: |
+          echo "E2E shard results: ${{ needs.e2e.result }}"
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "One or more E2E shards failed or were cancelled."
+            exit 1
+          fi
+          echo "All E2E shards passed."
