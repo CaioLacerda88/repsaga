@@ -11,24 +11,41 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-## E2E suite sharding (fix CI timeout) — branch `fix/e2e-shard-timeout`
+## Fix E2E: grant regression + sharding — branch `fix/e2e-shard-timeout`
 
-**Problem.** The `E2E Tests` workflow (`e2e.yml`) is a single job, `timeout-minutes: 45`.
-Test execution alone is ~33–40 min (343 tests / 4 workers / `retries:1`); fixed
-setup ~5.5 min (web build is cached & off the critical path). Since 06-11 ~13:35
-*every* run on every branch + main is cancelled at the 45-min cap (runner-speed
-variance + retries tipping an at-the-edge suite over the ceiling). Not new tests,
-not the build — the test execution outgrew the budget.
+**THE REAL ROOT CAUSE (the "timeout" was a symptom).** Since ~06-11 *every* E2E
+run (single-job AND sharded, on every branch + main) was cancelled at the cap.
+Sharding surfaced the truth: the app boots, authenticates, then its first query
+`GET /rest/v1/profiles?id=eq.<uid>` returns **403 / `42501 permission denied for
+table profiles`**. The splash waits on that profile load to route → app hangs on
+the REPSAGA splash → `nav-home` never renders → EVERY test fails → failures ×
+`retries:1` × 15–20s timeouts blow past the 45-min cap → cancellation, which
+masked the real cause as a "timeout". (Proof it predates sharding: the PR #329
+single-job run had 540 identical `nav-home` failure lines.)
 
-**Root-cause evidence.** Last green E2E 06-10 21:32 = 38m32s total (≈6-min headroom).
-Timed-out runs: tests started 5.5 min in, ran 40 min, still unfinished at cancel.
-`ci` aggregator does NOT depend on `e2e` → e2e is advisory, not a required check
-(only `ci` is required by branch protection). Fixing it is about signal + runner
-cost, not unblocking a hard gate.
+**Why the 403.** `supabase/setup-cli@v1` floats on `version: latest`; a CLI/image
+released ~06-11 stopped applying the implicit default
+`GRANT ... ON public tables TO authenticated`. RepSaga's migrations never granted
+table privileges explicitly (only a single view grant in 00025) — they relied on
+that implicit default. The 06-10 green run and production both still have it.
 
-**Decision: shard the test run across 3 isolated-backend jobs (durable fix).**
-- Rejected: raise timeout (kicks the can); split build to own job (build isn't
-  the bottleneck — proven); smoke-on-PR/full-nightly (weakens the gate philosophy).
+**Decision.** Fix the root cause (make grants explicit) + keep the sharding (it
+made the suite *reportable* and ~halves wall-clock once green). `ci` does NOT
+depend on `e2e` (only `ci` is a required check), so e2e was advisory throughout.
+
+**Security audit (DONE, all tables).** 24 user-data tables, all RLS-enabled
+(0 disabled), all owner-scoped (`auth.uid()`); both views `security_invoker=true`;
+avatars bucket private. No critical holes. One low-sev gap (I-1): `record_set_xp`
+/ `record_session_xp_batch` are SECURITY DEFINER + granted to `authenticated` but
+don't assert caller ownership — client never calls them directly (zero `.rpc()`
+sites), production path is `save_workout` (DEFINER, guarded) → fixed by REVOKE.
+
+### Migration `00076_grant_authenticated_table_privileges.sql`
+- Explicit, per-table, least-privilege grants to `authenticated` only (no `anon`;
+  service-only tables `account_deletion_events`/`migration_checkpoints` ungranted).
+  Additive → no-op on prod (already has the implicit defaults), safe to `db push`.
+- REVOKE EXECUTE on the two unguarded XP DEFINER funcs from `authenticated` (I-1).
+- Embedded ROLLBACK block = the backout plan (ship the inverse as a new migration).
 
 **Shard-safety audit (DONE — read-only, all 39 specs).** Every CI-running spec is
 either fully `mode:'serial'` (bucket 1) or per-test-independent with `beforeEach`
@@ -53,6 +70,6 @@ historical seeding / shared-login races (the per-role × per-worker isolation in
 - [x] Optional: `e2e-summary` job `needs: [e2e]`, `if: always()`, fails unless `needs.e2e.result == 'success'` — gives one clean status line (e2e is not a required check, so this is cosmetic).
 - [x] `WORKERS_COUNT` stays 4 (per shard). `playwright.config.ts` reporter/workers unchanged.
 - [x] Local validation (`playwright --list`): CI collection = 286 tests / 30 files (61 charter tests dropped); local = 347 / 39 (unchanged). Shard split 110/83/93 (1.33× spread, under the 1.4× rebalance threshold).
-- [ ] Reviewer reads (CI change → reviewer reads, QA skipped per CLAUDE.md pipeline exceptions).
+- [x] Reviewer read (PR #330): 1 Important fixed (hard-fail Supabase wait loops on timeout); 1 Blocker rejected as false positive (top-level concurrency + matrix is canonical — shards share one run, don't self-cancel).
 - [ ] Verify on CI: push branch, confirm 3 shards each finish < 30 min and the suite is green. Capture per-shard durations; if a shard's wall-clock is hot (>~1.4× the fastest), rebalance (bump N to 4 / split workouts.spec.ts).
 - [ ] After merge: condense to a one-line note; clear this WIP section.

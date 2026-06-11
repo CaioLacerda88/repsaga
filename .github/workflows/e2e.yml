@@ -79,9 +79,15 @@ jobs:
       - name: Extract Supabase keys and write env files
         run: |
           supabase status -o env > /tmp/sb_status.env
-          SB_URL=$(grep '^API_URL=' /tmp/sb_status.env | cut -d= -f2-)
-          SB_ANON=$(grep '^ANON_KEY=' /tmp/sb_status.env | cut -d= -f2-)
-          SB_SERVICE=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb_status.env | cut -d= -f2-)
+          # `tr -d '"'` defensively strips surrounding quotes. Newer Supabase
+          # CLIs quote `status -o env` values (`API_URL="http://..."`); flutter_
+          # dotenv tolerates the quotes today (the green 06-10 run had them too,
+          # so they are NOT the boot-hang cause — that was a grant regression,
+          # see the migration in this PR), but stripping keeps the .env clean and
+          # version-proof regardless of the CLI's quoting behavior.
+          SB_URL=$(grep '^API_URL=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+          SB_ANON=$(grep '^ANON_KEY=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+          SB_SERVICE=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
 
           echo "--- Supabase API URL: $SB_URL ---"
 
