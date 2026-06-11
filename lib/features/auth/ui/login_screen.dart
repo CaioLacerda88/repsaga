@@ -79,7 +79,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   /// Pure local password-strength scoring for the non-blocking signup bar.
-  /// Mirrors `docs/signup-screen-mockup-v1.html` §3:
+  /// Scoring rubric (design-locked):
   ///   * 0 — empty.
   ///   * 1 (weak)   — length >= 6.
   ///   * 2 (medium) — length >= 8 OR contains a digit OR a special char.

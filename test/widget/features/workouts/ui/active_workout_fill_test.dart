@@ -1,5 +1,5 @@
 /// Fill Remaining button visibility + label (Option C — First-Complete
-/// Trigger, `docs/fill-remaining-gating-mockup-v1.html` §3).
+/// Trigger).
 ///
 /// The button must be:
 /// - HIDDEN when ALL sets are incomplete (nothing to fill from).

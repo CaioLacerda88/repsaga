@@ -9,8 +9,7 @@ import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/workouts/domain/post_session_choreographer.dart';
 import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 
-/// Pins the post-session cut sequence per State 1-10 storyboards
-/// (`docs/post-session-screen-mockup-v2.html` §5).
+/// Pins the post-session cut sequence per the State 1-10 storyboards.
 ///
 /// Mockup-locked cut counts (WIP.md PR 30a acceptance criteria #2):
 ///   S1=2 cuts (B1 + B2 single)

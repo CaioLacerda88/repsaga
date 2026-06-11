@@ -9,8 +9,8 @@
 /// one place to look. Magic numbers spread across 7 widget files would be
 /// the cluster `feedback_fixed_values_in_design` waiting to happen.
 ///
-/// **Per the post-session mockup v2 (`docs/post-session-screen-mockup-v2.html`)
-/// §2 + §5 storyboards (rewritten 2026-05-22, Path A pivot):** all hold
+/// **Per the post-session cinematic storyboards (§2 + §5, Path A pivot,
+/// rewritten 2026-05-22):** all hold
 /// durations are minimum parse times for first-exposure revelations, not
 /// confirmation-mode rests. Path A killed the mid-workout flash layer; every
 /// cut on this screen is the user's first sighting of the event. Treat
