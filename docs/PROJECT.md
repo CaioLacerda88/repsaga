@@ -141,6 +141,22 @@ auto-memory entry of the same slug.
 | §4 Completed Phases | Need historical context |
 | §5 Parked / Archived | Considering reviving a parked phase |
 
+### Satellite docs
+
+PROJECT.md is the implementation hub. Long-lived detail lives in these
+flat `docs/` files — load one only when the task needs it:
+
+| Doc | What it is | Read when |
+|---|---|---|
+| [`rpg-design.md`](rpg-design.md) | RPG system design spec (Rank + Vitality) | Touching XP / ranks / classes / titles |
+| [`xp-balance-baseline.md`](xp-balance-baseline.md) | OFFICIAL launch XP baseline + 13-persona panel | Changing XP constants or the formula chain |
+| [`xp-difficulty-framework.md`](xp-difficulty-framework.md) | Exercise difficulty-multiplier framework | Adding/retuning exercise difficulty |
+| [`pt-glossary.md`](pt-glossary.md) | pt-BR localization glossary | Writing/translating user-facing strings |
+| [`gcp-project-recreation.md`](gcp-project-recreation.md) | GCP `repsaga-prod` recovery runbook | Recreating / recovering the GCP project |
+| [`manual-qa-checklist.md`](manual-qa-checklist.md) | Manual exploratory QA test plan (12 journeys) | Planning a manual pre-release QA pass |
+| Legal site (`index.md`, `privacy_policy.md`, `terms_of_service.md`, `_config.yml`) | Published GitHub Pages legal hub | Editing legal copy or the published site |
+| `auth-email-templates/` | Supabase auth email templates (deployed) | Changing auth email copy/branding |
+
 ---
 
 ## §1 Architecture & Conventions
@@ -381,7 +397,7 @@ one passes reliably in normal CI single-run mode.
 
 ### Phase 33 audit deferrals
 
-Findings parked from the Phase 33 pre-launch audit (`docs/pre-launch-audit.md`, Stage 2 triage 2026-06-01). Each parked finding has a concrete revisit-condition per Phase 33 triage principles. The full audit doc lives on `main` until the final Phase 33 cleanup PR deletes it; this §2 entry persists in PROJECT.md as the long-lived backlog record.
+Findings parked from the Phase 33 pre-launch audit (Stage 2 triage 2026-06-01). Each parked finding has a concrete revisit-condition per Phase 33 triage principles. The full 66-finding audit doc (`docs/pre-launch-audit.md`) was deleted in the Phase 33 cleanup; this §2 entry is the surviving long-lived backlog record.
 
 **Downgraded IMPORTANTs → PARKED (4):**
 
