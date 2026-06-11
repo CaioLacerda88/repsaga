@@ -61,6 +61,35 @@ export default defineConfig({
           timeout: 30_000,
         },
       }),
+  // In CI, exclude the env-gated exploratory / charter specs from the
+  // collection entirely so Playwright doesn't count their skipped tests when
+  // distributing work across --shard=k/n shards. Each of these files guards
+  // itself behind an env var that CI never sets (EXPL_CHARTER_A, EXPL_CHARTER_B,
+  // etc.), so they produce 0 runnable tests in CI — but Playwright still assigns
+  // them to a shard bucket, which skews the 3-way split heavily toward shard 1
+  // (alphabetically first). Ignoring them in CI keeps the distribution even.
+  // Locally (no CI env var), testIgnore is undefined and the files are visible
+  // so developers can activate them via their respective env flags.
+  ...(process.env['CI']
+    ? {
+        testIgnore: [
+          // charter-a cluster
+          '**/specs/charter-a-exploratory.spec.ts',
+          '**/specs/charter-a-refined.spec.ts',
+          '**/specs/charter-a-verify-weight.spec.ts',
+          '**/specs/charter-a-weight-test.spec.ts',
+          // charter-b cluster
+          '**/specs/charter-b-exploratory.spec.ts',
+          '**/specs/charter-b-followup.spec.ts',
+          // charter-c cluster
+          '**/specs/charter-c-exploratory.spec.ts',
+          // charter-d cluster
+          '**/specs/charter-d-exploratory.spec.ts',
+          // generic exploratory driver
+          '**/specs/exploratory.spec.ts',
+        ],
+      }
+    : {}),
   projects: [
     {
       name: 'regression',

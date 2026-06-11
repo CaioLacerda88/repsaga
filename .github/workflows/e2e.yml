@@ -16,7 +16,11 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v6
@@ -75,9 +79,15 @@ jobs:
       - name: Extract Supabase keys and write env files
         run: |
           supabase status -o env > /tmp/sb_status.env
-          SB_URL=$(grep '^API_URL=' /tmp/sb_status.env | cut -d= -f2-)
-          SB_ANON=$(grep '^ANON_KEY=' /tmp/sb_status.env | cut -d= -f2-)
-          SB_SERVICE=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb_status.env | cut -d= -f2-)
+          # `tr -d '"'` defensively strips surrounding quotes. Newer Supabase
+          # CLIs quote `status -o env` values (`API_URL="http://..."`); flutter_
+          # dotenv tolerates the quotes today (the green 06-10 run had them too,
+          # so they are NOT the boot-hang cause — that was a grant regression,
+          # see the migration in this PR), but stripping keeps the .env clean and
+          # version-proof regardless of the CLI's quoting behavior.
+          SB_URL=$(grep '^API_URL=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+          SB_ANON=$(grep '^ANON_KEY=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+          SB_SERVICE=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
 
           echo "--- Supabase API URL: $SB_URL ---"
 
@@ -101,6 +111,11 @@ jobs:
             fi
             echo "Waiting for auth endpoint... (attempt $i/30)"
             sleep 2
+            # Hard-fail rather than fall through to a cryptic global-setup auth
+            # error. Newly load-bearing under sharding: 3 parallel runners each
+            # boot their own Supabase, so a Docker resource-pressure failure on
+            # one shard must fail fast with a clear cause, not a 30-min timeout.
+            if [ "$i" -eq 30 ]; then echo "ERROR: Supabase auth endpoint never became ready"; exit 1; fi
           done
           # Verify Supabase REST API is also reachable (PostgREST).
           for i in $(seq 1 15); do
@@ -110,6 +125,7 @@ jobs:
             fi
             echo "Waiting for REST API... (attempt $i/15)"
             sleep 2
+            if [ "$i" -eq 15 ]; then echo "ERROR: Supabase REST API never became ready"; exit 1; fi
           done
           echo "Supabase URL: $(head -1 .env)"
 
@@ -159,14 +175,28 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: test/e2e
-        run: npx playwright test --reporter=line
+        run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             test/e2e/playwright-report/
             test/e2e/test-results/
           retention-days: 7
+
+  e2e-summary:
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report shard results
+        run: |
+          echo "E2E shard results: ${{ needs.e2e.result }}"
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "One or more E2E shards failed or were cancelled."
+            exit 1
+          fi
+          echo "All E2E shards passed."
