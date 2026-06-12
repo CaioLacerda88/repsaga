@@ -48,6 +48,15 @@ Science anchors (citations in docs/cardio-balance-baseline.md):
   - WHO 2020: 500-1000 MET-min/week recommended; elite ~10× that.
   - Coyle detraining: ~-7% / 12 days, asymptotic (Vitality decay — modeled in
     the app's Vitality layer, not scored here).
+  - STRENGTH→CARDIO cross-credit (one-directional): resistance training is a real
+    but smaller, density-dependent CRF stimulus (circuit RT +6.3% VO2max,
+    PMC8145598; RT-alone +1.9 mL/kg/min, Oxford afac143), and the interference
+    effect is directional (Wilson 2012 JSCR: endurance impairs strength, strength
+    does NOT impair aerobic gains). So a lifting session feeds THIS pipeline as a
+    kind='abs' fixed-MET entry (`_lift`/`_metcon`), credited strength→cardio only,
+    never the reverse. The demonstrated-VO2 gate keeps heavy lifting ~0 and
+    metcons modest. See MODALITY_MULT comment + the powerlifter/crossfitter
+    personas.
 
 Run:  python tasks/cardio-xp-simulation.py --persona-panel
       python tasks/cardio-xp-simulation.py --curves
@@ -103,9 +112,35 @@ OVER_CAP_MULT = 0.30
 # Modality normalization (whole-body / weight-bearing elicit higher VO2 at a
 # given %effort; the MET model already captures most of it — this is a small
 # "difficulty" analog). Reference = running 1.00.
+#
+# STRENGTH → CARDIO cross-contribution (resistance work earns cardio credit too):
+#   Resistance training produces a REAL but smaller, intensity/density-dependent
+#   cardiorespiratory adaptation (circuit/metabolic RT ~+6.3% VO2max, 45-study
+#   meta-analysis PMC8145598; traditional RT alone ~+1.9 mL/kg/min in untrained,
+#   ~0 in trained — Oxford afac143). The interference is DIRECTIONAL (Wilson 2012
+#   JSCR, 21 studies/422 ES): endurance training impairs strength, but "aerobic
+#   capacity gains are NOT compromised by concurrent strength training." So the
+#   cross-credit flows ONE WAY — strength → cardio, never cardio → strength
+#   (which is why running must never feed a strength/legs rank: §3 Option C).
+#   A resistance session enters this SAME pipeline as a kind='abs' fixed-MET
+#   session; the demonstrated-VO2 gate then does the honest sorting for free:
+#     * traditional heavy/long-rest lifting averages ~3.5-4 MET (rests pull the
+#       session mean down) → demonstrates ~walking-level VO2 → ~0 cardio rank.
+#       You CANNOT farm cardio rank by lifting heavy. (Correct: heavy RT barely
+#       moves VO2max.)
+#     * high-density circuit/metcon averages ~7-8 MET, short rest → demonstrates
+#       moderate VO2 → real but sub-runner cardio credit. (Correct: metcons do
+#       build CRF.)
+#   "strength"/"circuit" get a modality penalty vs running because RT is less
+#   central-cardiovascular-specific at a matched %VO2max (aerobic training still
+#   beats RT for VO2max at equal effort — the meta-analyses above).
+# MET bands: ACSM 2024 Compendium — light/moderate weight training ~3.5 (02050),
+# vigorous free-weight/multi ~5.0 (02054), powerlifting/bodybuilding vigorous
+# ~6.0, circuit w/ minimal rest + some aerobic, vigorous ~8.0 (02040).
 MODALITY_MULT = {
     "run": 1.00, "treadmill": 1.00, "row": 1.00, "swim": 1.00,
     "elliptical": 0.97, "bike": 0.95, "walk": 0.95, "hiit": 1.05,
+    "strength": 0.80, "circuit": 0.90,
 }
 
 # Genetic ceiling for VO2max progression (practical human max ~90).
@@ -409,6 +444,11 @@ def _intervals(mod, dur): return (mod, dur, "rel", 0.95)
 # RELATIVE intensity (and thus reward) falls as the user gets fitter.
 def _walk(dur):   return ("walk", dur, "abs", 3.8)   # brisk walk ≈ 3.8 MET
 def _stroll(dur): return ("walk", dur, "abs", 3.0)   # leisurely walk ≈ 3.0 MET
+# Resistance sessions feed the SAME cardio pipeline as a fixed-MET activity. The
+# MET is the SESSION AVERAGE (rests included), which is what the app estimates
+# from work density (rest length / rep range / set volume), never user-declared.
+def _lift(dur, met=3.8):   return ("strength", dur, "abs", met)   # traditional, long rest
+def _metcon(dur, met=8.0): return ("circuit", dur, "abs", met)    # high-density circuit
 
 PERSONAS = {
     # Sedentary → couch-to-5k. Starts with WALK+JOG; the jogs (above threshold)
@@ -490,6 +530,28 @@ PERSONAS = {
         sessions=[_easy("run", 60), _easy("run", 75), _easy("run", 90),
                   _tempo("run", 40), _easy("run", 120)],
         target_band=(34, 50)),
+    # STRENGTH→CARDIO GATE — un-farmable from lifting. Pure powerlifter, 4x/wk
+    # heavy long-rest sessions (~3.8 MET session avg, 60 min). Genuinely strong,
+    # mediocre CRF. The session demonstrates ~walking-level VO2 → tier ~3 → ~zero
+    # cardio rank, AND barely raises VO2max (heavy RT ≈ 0 aerobic adaptation —
+    # Oxford afac143). Validates: you CANNOT lift your way to a cardio rank.
+    "powerlifter": CardioPersona(
+        name="Pure Powerlifter (M, 35, 100kg, heavy/long-rest)", female=False,
+        age=35, bodyweight_kg=100, vo2_start=36.0, vo2_ceiling=42.0,
+        sessions=[_lift(60), _lift(65), _lift(60), _lift(70)],
+        target_band=(1, 10)),
+    # STRENGTH→CARDIO GATE — metcon earns REAL but sub-runner cardio credit. 5x/wk
+    # high-density circuits (~8 MET, 25-30 min, short rest). The session
+    # demonstrates moderate VO2 → modest tier, and the metcons genuinely build CRF
+    # (circuit RT ~+6.3% VO2max — PMC8145598). Lands mid-pack: above the
+    # powerlifter (real conditioning), below a dedicated runner of equal VO2
+    # (RT is less central-cardio-specific). Validates the complete-athlete credit.
+    "crossfitter": CardioPersona(
+        name="CrossFit / Metcon Athlete (M, 29, 82kg)", female=False, age=29,
+        bodyweight_kg=82, vo2_start=44.0, vo2_ceiling=54.0,
+        sessions=[_metcon(28), _metcon(25), _metcon(30), _metcon(25),
+                  _metcon(28)],
+        target_band=(12, 30)),
 }
 
 

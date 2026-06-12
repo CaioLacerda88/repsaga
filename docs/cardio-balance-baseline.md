@@ -138,7 +138,7 @@ vitality_xp_mult = VITALITY_XP_FLOOR + (1 − VITALITY_XP_FLOOR) × vitality_pct
 - **Why:** anchors rank progress to *sustained* conditioning, so a one-off burst
   after a long layoff can't bank full rank — the same un-farmable property as the
   demonstrated-tier and intensity gates. (Consistent trainers sit at 100% Vitality
-  → `mult = 1.00` → the 12-persona panel is unaffected.)
+  → `mult = 1.00` → the 14-persona panel is unaffected.)
 
 `python tasks/cardio-xp-simulation.py --vitality` — comeback demo (4-wk build →
 6-wk layoff → return):
@@ -157,6 +157,38 @@ back to full as Vitality rebuilds. Note the steeper drop than strength would sho
 stat should *also* gate XP is a separate UX decision (§8) — and if so it runs on
 *its own* slow-decay kinetics, never these.
 
+### 2.5 Strength sessions feed the SAME pipeline (one-directional cross-credit)
+
+Resistance training is itself a cardiorespiratory stimulus, so a strength session
+earns cardio XP — through the *exact same* function, as a `kind='abs'` fixed-MET
+session (its session-average MET, e.g. `_lift(60, met=3.8)` / `_metcon(25, met=8)`).
+**No separate strength→cardio path; no new mechanic.** The demonstrated-VO₂ gate
+already does the honest sorting:
+
+- **Heavy long-rest lifting** averages ~3.5–4 MET (rests pull the session mean
+  down) → demonstrates ~walking-level VO₂ → **~0 cardio rank**. Un-farmable from
+  the strength side — matching the physiology (heavy RT ≈ 0 VO₂max gain).
+- **High-density circuit / metcon** averages ~7–8 MET, short rest → demonstrates
+  moderate VO₂ → **real but sub-runner credit** (matching circuit RT ~+6.3%
+  VO₂max).
+
+**The credit is strictly one-directional** — strength → cardio, never the reverse.
+This is not a design preference; it's the **directional interference effect**
+(Wilson et al. 2012, 21 studies / 422 ES): endurance training impairs strength
+gains (frequency/duration-dependent), but aerobic-capacity gains are *not*
+compromised by concurrent strength work. So lifting may credit cardio; running
+must never credit a strength rank (the physiological reason `cardio-stat-plan.md`
+§3 Option C is auto-fail). Two derived, intended consequences: one session can
+bank on *both* tracks (it built some strength *and* some CRF — two real outcomes,
+not double-counting one), and the session MET is **estimated from work density**
+(rest / rep-range / set-volume → ACSM MET band), never user-declared — same
+estimate-don't-ask rigor as the est-VO₂max source.
+
+`MODALITY_MULT` adds `strength 0.80` / `circuit 0.90` (a penalty vs running's
+1.00 — RT is less central-cardiovascular-specific at matched %VO₂max; aerobic
+training still beats RT for VO₂max at equal effort). Validated by the Powerlifter
+(rank 8) and CrossFitter (rank 18) personas in §5.
+
 ---
 
 ## 3. Constants snapshot (v1 DRAFT — tuned on the panel)
@@ -168,7 +200,7 @@ stat should *also* gate XP is a separate UX decision (§8) — and if so it runs
 | `INTENSITY_ANCHORS` | `(0.35,0.05) (0.50,0.35) (0.70,0.75) (0.85,1.05) (0.95,1.35) (1.05,1.45)` | %VO₂max → multiplier; sub-50% ≈ maintenance (Wenger & Bell) |
 | `WEEKLY_CARDIO_CAP_METMIN` | `2500` | intensity-weighted MET-min before over-cap discount |
 | `OVER_CAP_MULT` | `0.30` | applied to weekly volume beyond the cap |
-| `MODALITY_MULT` | run/row/swim/treadmill `1.00`, hiit `1.05`, elliptical `0.97`, bike/walk `0.95` | "difficulty" analog; MET already captures most modality difference |
+| `MODALITY_MULT` | run/row/swim/treadmill `1.00`, hiit `1.05`, elliptical `0.97`, bike/walk `0.95`, **circuit `0.90`, strength `0.80`** | "difficulty" analog; MET already captures most modality difference. strength/circuit penalized vs running (RT less central-cardio specific at matched %VO₂max) — see §2.5 |
 | `VO2_CEILING_CAP` | `90` | practical human VO₂max max (Svendsen 97.5 / Dæhlie 96 records) |
 | `VO2_GAIN_K` | `0.040` | progression rate (novice +~15%/12wk, trained ≤5%; saturating toward genetic ceiling) |
 | `VO2_STIMULUS_NORM` | `1200` | weekly eff-MET-min counting as 1 stimulus unit |
@@ -212,16 +244,21 @@ tier as a 25-yo at the 75th. Full table in `tasks/cardio-xp-simulation.py`
 | Detraining (Vitality decay) | **Coyle et al.** (−7%/12 days, asymptotic) |
 | Modality normalization | CPET comparison studies (treadmill ~7–12% > cycle) |
 | 1 MET = 3.5 mL O₂·kg⁻¹·min⁻¹ | ACSM definition |
+| **Strength→cardio credit (circuit RT improves CRF)** | **Ramos-Campo et al. 2021** (PMC8145598, 45-study meta — resistance circuit training +6.3% VO₂max); **Age & Ageing 2022** (afac143 — RT alone +1.9 mL·kg⁻¹·min⁻¹ in older adults, < aerobic) |
+| **One-directional credit (interference is directional)** | **Wilson et al. 2012** (JSCR, 21 studies / 422 ES — endurance impairs strength frequency/duration-dependently; aerobic gains NOT compromised by concurrent strength) |
+| **Resistance-session MET bands** | **ACSM 2024 Adult Compendium** — weight training light/moderate ~3.5 (02050), vigorous free-weight/multi ~5.0 (02054), powerlifting/bodybuilding vigorous ~6.0, circuit minimal-rest + aerobic vigorous ~8.0 (02040) |
+| **Cardio→strength does NOT credit (specificity)** | Practitioner consensus syntheses — **Barbell Medicine** & **Stronger by Science** on concurrent training: endurance makes legs "strong enough to run," not a higher 1RM squat |
+| **Cardio→strength by training status** | **Concurrent maximal-dynamic-strength meta by training status** (PMC8053170) — concurrent endurance does NOT impair 1RM leg gains in *untrained* (ES = 0.03, p = 0.87), but interference suppresses strength in *trained* |
+| **High-intensity cardio leg adaptation (real but modest)** | **HIIT muscle meta-analysis** (MDPI Sports 2025, 13(9):293) — HIIT/sprint work yields modest strength/CSA gains, mostly untrained; cycling hypertrophy localized + eccentric-light |
 
-Full source list + per-number confidence notes are in the research brief
-appended to the PR that introduces this file. Two values are flagged as
-*engineering choices to tune, not physiological constants*: the exact
-intensity-multiplier ladder and the ~50% VO₂max threshold (defensible from
-Wenger & Bell's qualitative findings, not a single published cutoff).
+**The full addressable bibliography (every source, with links) is §8.** Two
+values are flagged as *engineering choices to tune, not physiological constants*:
+the exact intensity-multiplier ladder and the ~50% VO₂max threshold (defensible
+from Wenger & Bell's qualitative findings, not a single published cutoff).
 
 ---
 
-## 5. 12-persona balance panel — v1 DRAFT (12/12 PASS)
+## 5. 14-persona balance panel — v1 DRAFT (14/14 PASS)
 
 `python tasks/cardio-xp-simulation.py --persona-panel`. Bands are an independent
 product/design call on "what rank this profile *should* be," derived from the
@@ -241,12 +278,14 @@ persona's VO₂max percentile (capacity), not fit to the model output.
 | **Fit Newcomer** (capacity-honored gate) | M/27 | 64.0→66.4 | 60.1 | 45 | 40–60 | PASS |
 | Elite Endurance | M/26 | 72.0→79.2 | 65.5 | 60 | 56–72 | PASS |
 | **Easy-Miles Marathoner** (intensity gate) | M/38 | 50.0→56.3 | 49.6 | 39 | 34–50 | PASS |
+| **Pure Powerlifter** (strength→cardio un-farmable gate) | M/35 | 36.0→36.2 | 18.3 | 8 | 1–10 | PASS |
+| **CrossFit / Metcon Athlete** (strength→cardio credit gate) | M/29 | 44.0→46.3 | 23.5 | 18 | 12–30 | PASS |
 
 > "capacity tier" = the percentile tier of the user's *standing* VO₂max (their
 > actual fitness). The **rank** comes from *demonstrated* performance, so rank ≤
 > capacity until the user demonstrates that capacity at intensity.
 
-### Why the four bold personas are load-bearing
+### Why the four bold endurance personas are load-bearing
 - **Daily Walker** — 6×/wk, 45–60 min, brisk walk (~3.8 MET ≈ 51% VO₂max at
   start). Underlying VO₂ improves modestly (26→28.8, real physiology) but the
   walk *demonstrates* only ~15 mL/kg/min → rank lands at **14** and can never
@@ -262,6 +301,20 @@ persona's VO₂max percentile (capacity), not fit to the model output.
 - **Easy-Miles Marathoner** — 5×/wk, mostly easy, ~420 min/wk. Easy runs
   under-demonstrate, so rank converges to **39** (his hard tempo sets the tier),
   *not* to his elite volume. Intensity-honest: you rank for what you demonstrate.
+
+### Why the two strength→cardio personas are load-bearing (see §2.5)
+- **Pure Powerlifter** — 4×/wk heavy, long-rest lifting. Session-average MET ~3.8
+  (rests pull the mean down), so it *demonstrates* ~walking-level VO₂ → tier ~3 →
+  rank **8**, and VO₂max barely moves (36.0→36.2 — heavy RT ≈ 0 aerobic
+  adaptation). **You cannot lift your way to a cardio rank** — the same
+  un-farmable gate that caps the walker, applied to the strength side.
+- **CrossFit / Metcon Athlete** — 5×/wk high-density circuits (~8 MET, 25–30 min,
+  short rest). The session demonstrates moderate VO₂ → modest tier, and the
+  metcons genuinely build CRF (44→46.3, +5.2% ≈ the ~6.3% circuit-RT literature)
+  → rank **18**: real credit, **above the powerlifter** (he actually conditions)
+  but **below a dedicated runner of equal VO₂** (RT is less central-cardio
+  specific). This is the "complete athlete" credit that was missing — without it
+  a metcon-heavy lifter is wrongly invisible on the cardio rail.
 
 ---
 
@@ -289,6 +342,13 @@ persona's VO₂max percentile (capacity), not fit to the model output.
 5. **Wayfarer class dominance threshold** (the reserved cardio-dominant class).
 6. **Weekly cap & modality mults** — `WEEKLY_CARDIO_CAP_METMIN` and the
    modality table are first-pass; revisit with telemetry.
+6b. **Strength→cardio session-MET derivation (§2.5).** The mechanism + science
+   are settled (one-directional credit; demonstrated-VO₂ gate; 14/14 panel). What
+   needs an engineering/product call: the exact map from a resistance session's
+   work density (inter-set rest, rep range, set volume vs. wall-clock) to an ACSM
+   MET band, and whether the strength→cardio credit ships with the first cardio
+   release or one release later (`cardio-stat-plan.md` §8 #2 — recommendation:
+   ship it). `strength 0.80` / `circuit 0.90` modality mults are first-pass.
 7. **Detraining cadence** — confirm the Vitality `TAU_DOWN` for cardio matches
    Coyle's faster early decay (cardio detrains faster than strength).
 8. **Vitality XP-gate — a design mechanic, separate from the (already-decided)
@@ -307,7 +367,7 @@ persona's VO₂max percentile (capacity), not fit to the model output.
 ## 7. How to reproduce / next steps
 
 ```bash
-python tasks/cardio-xp-simulation.py                 # curves + 11-persona panel
+python tasks/cardio-xp-simulation.py                 # curves + 14-persona panel
 python tasks/cardio-xp-simulation.py --persona-panel # panel only
 python tasks/cardio-xp-simulation.py --curves        # rank curve, tier map, ladders
 python tasks/cardio-xp-simulation.py --traj walker   # week-by-week trajectory
@@ -320,3 +380,52 @@ and gate CI on 4-site parity at 1e-4 — exactly as the strength chain does. Add
 the cardio data model (`cardio_sessions` table), flip cardio "active" (6→7),
 wire Wayfarer + a cardio title ladder, and promote the dormant Saga row to a
 real Endurance progression surface.
+
+---
+
+## 8. Full reference list (the canonical bibliography — both research rounds)
+
+Every source consulted for this baseline, with links so a future revisit doesn't
+re-research from scratch. Peer-reviewed primary sources are the basis for locked
+constants; practitioner-consensus syntheses are used only for direction/qualitative
+calls and are flagged as **[secondary]**. Classic citations carried from domain
+knowledge (no canonical open URL captured) are listed by name. The §4 table maps
+each *parameter* to its source; this section is the *addressable bibliography*.
+
+### A. Cardio capacity, VO₂max norms & progression (core formula)
+- **Cooper Institute / ACSM Guidelines, 11th ed.** — VO₂max percentile norms by sex × age decade (>80k treadmill tests). Basis for the `_VO2_NORMS` tier tables. *(classic; ACSM publication)*
+- **Bacon AP, Carter RE, Ogle EA, Joyner MJ (2013).** "VO₂max trainability and high intensity interval training in humans: a meta-analysis." *PLOS ONE* 8(9):e73182 — ~+0.51 L·min⁻¹ (~+13–15%), saturating. → progression curve shape. https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0073182
+- **Bouchard C et al. — HERITAGE Family Study (1999).** Genetic ceiling on VO₂max trainability (±1.0 L·min⁻¹ spread). → personal ceiling. *(J Appl Physiol)*
+- **Montero D, Lundby C (2017).** "Refuting the myth of non-response to exercise training." *J Physiol* 595(11):3377–3387 — dose eliminates non-responders. https://physoc.onlinelibrary.wiley.com/doi/10.1113/JP273480
+- **Wenger HA, Bell GJ (1986).** "The interactions of intensity, frequency and duration of exercise training in altering cardiorespiratory fitness." *Sports Med* 3:346–356 — intensity dominance, ~50% VO₂max floor, 90–100% = max-gain band. → `intensity_mult` ladder.
+- **WHO (2020)** Physical activity guidelines — 500–1000 MET-min/wk (elite ~10×). → weekly anchors / cap.
+- **Coyle EF et al. (1984).** "Time course of loss of adaptations after stopping prolonged intense endurance training." *J Appl Physiol* 57(6):1857–1864 — VO₂max −7%/12 days, asymptotic. → Vitality `τ_down = 3 wk`.
+- **ACSM definition** — 1 MET = 3.5 mL O₂·kg⁻¹·min⁻¹.
+
+### B. MET-minutes currency (earning basis)
+- **2024 Adult Compendium of Physical Activities** (Herrmann SD et al.) — third update of energy costs; RT MET codes. https://pmc.ncbi.nlm.nih.gov/articles/PMC10818145/
+- **2011 Compendium of Physical Activities** (Ainsworth BE et al.) — original MET code structure (02050 / 02054 / 02040 etc.). https://cdn-links.lww.com/permalink/mss/a/mss_43_8_2011_06_13_ainsworth_202093_sdc1.pdf
+
+### C. Strength → cardio cross-credit (§2.5 — one-directional, *credited*)
+- **Ramos-Campo DJ et al. (2021).** "Effects of Resistance Circuit-Based Training on Body Composition, Strength and Cardiorespiratory Fitness: A Systematic Review and Meta-Analysis." *Biology* 10(5):377 (45 studies; **+6.3% VO₂max**). https://pmc.ncbi.nlm.nih.gov/articles/PMC8145598/
+- **(2022) "Role of resistance exercise training for improving cardiorespiratory fitness in healthy older adults: a systematic review and meta-analysis."** *Age and Ageing* 51(6):afac143 (22 RCTs; **RT alone +1.9 mL·kg⁻¹·min⁻¹**, < aerobic). https://academic.oup.com/ageing/article/51/6/afac143/6612690
+- **(2024) "Effect of aerobic training versus resistance training for improving cardiorespiratory fitness and body composition in middle-aged to older adults."** Meta-analysis of RCTs — aerobic MD +1.80 mL/kg/min over RT (aerobic still wins; RT non-zero). https://pubmed.ncbi.nlm.nih.gov/38878596/
+
+### D. Directional interference + cardio → strength does NOT credit (§2.6 — *not* credited)
+- **Wilson JM, Marin PJ, Rhea MR, Wilson SMC, Loenneke JP, Anderson JC (2012).** "Concurrent Training: A Meta-Analysis Examining Interference of Aerobic and Resistance Exercises." *J Strength Cond Res* 26(8):2293–2307 (21 studies / 422 ES). **The directional-interference keystone:** endurance impairs strength/hypertrophy/power (frequency- & duration-dependent; running > cycling); aerobic gains NOT compromised by concurrent strength. https://journals.lww.com/nsca-jscr/Fulltext/2012/08000/Concurrent_Training__A_Meta_Analysis_Examining.35.aspx
+- **"Development of Maximal Dynamic Strength During Concurrent Resistance and Endurance Training in Untrained, Moderately Trained, and Trained Individuals: A Systematic Review and Meta-analysis."** *Sports Med* (PMC8053170) — untrained 1RM leg gain NOT impaired by endurance (ES = 0.03, p = 0.87); interference emerges with training status. https://pmc.ncbi.nlm.nih.gov/articles/PMC8053170/
+- **"Does High-Intensity Interval Training Increase Muscle Strength, Muscle Mass, and Muscle Endurance? A Systematic Review and Meta-Analysis."** *Sports* 2025, 13(9):293 — HIIT/sprint leg adaptation is real but modest, mostly untrained. https://www.mdpi.com/2075-4663/13/9/293
+- **Barbell Medicine — "Concurrent Training and the Interference Effect: Will Cardio Kill Your Gains?"** **[secondary / practitioner consensus]** — specificity: running makes legs "strong enough to run," not a higher 1RM squat. https://www.barbellmedicine.com/blog/concurrent-training-and-the-interference-effect/
+- **Stronger by Science — "Concurrent Training for the Powerlifter."** **[secondary / practitioner consensus]** — same specificity framing; modality (cycling < running interference). https://www.strongerbyscience.com/concurrent-training/
+
+### E. Strength Vitality kinetics (separate physiology — cited for the explicit non-unification, §2)
+- **Bruusgaard JC et al. (2010).** Myonuclei acquired during overload are retained → muscle-memory basis for strength's slow `τ_down`. *PNAS* 107(34):15111–15116.
+- **Seaborne RA et al. (2018).** "Human skeletal muscle possesses an epigenetic memory of hypertrophy." *Sci Rep* 8:1898 — epigenetic retention. https://www.nature.com/articles/s41598-018-20287-3
+
+> **Scope note:** §A–B + E underpin the *cardio* and *strength-Vitality* constants
+> (locked on the panel). §C–D are the **cross-stat** evidence added in this revision
+> (strength→cardio credited one-directionally; cardio→strength structurally not),
+> validated by the Powerlifter (rank 8) + CrossFitter (rank 18) personas. Two values
+> remain *engineering choices to tune, not physiological constants*: the exact
+> `intensity_mult` ladder and the ~50% VO₂max threshold (defensible from Wenger &
+> Bell's qualitative findings, not a single published cutoff).
