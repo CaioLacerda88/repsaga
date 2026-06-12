@@ -141,12 +141,12 @@ FLUTTER_APP_URL= npx playwright test "specs/auth.spec.ts:16"
 
 | Agent           | Role                                                         | Writes Code | Model  |
 | --------------- | ------------------------------------------------------------ | ----------- | ------ |
-| `tech-lead`     | Architecture, implementation, bug fixes, migrations          | Yes         | Opus   |
+| `tech-lead`     | Architecture, implementation, bug fixes, migrations          | Yes         | Fable  |
 | `qa-engineer`   | Test strategy, unit/widget/e2e tests, Playwright             | Yes         | Sonnet |
 | `devops`        | CI/CD pipelines, GitHub Actions, releases                    | Yes         | Sonnet |
-| `reviewer`      | Code review, quality checks                                  | Read-only   | Sonnet |
+| `reviewer`      | Code review, quality checks                                  | Read-only   | Opus   |
 | `product-owner` | Market research, competitor analysis, feature priorities     | Read-only   | Sonnet |
-| `ui-ux-critic`  | Design critique, anti-generic-AI aesthetics                  | Read-only   | Sonnet |
+| `ui-ux-critic`  | Design critique, anti-generic-AI aesthetics                  | Read-only   | Opus   |
 
 ### How it works
 
