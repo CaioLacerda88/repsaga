@@ -19,8 +19,12 @@ analyze:
 	bash scripts/check_typography_call_sites.sh
 	bash scripts/check_no_developer_log.sh
 
+# Single --exclude-tags with a boolean tag selector: package:test treats
+# repeated --exclude-tags flags as last-wins (NOT additive), so the previous
+# `--exclude-tags integration --exclude-tags golden` silently dropped the
+# integration exclusion and ran the Supabase-dependent suite.
 test:
-	flutter test --exclude-tags integration --exclude-tags golden
+	flutter test --exclude-tags "integration || golden"
 
 # Golden image tests (post-session summary panel + future visual-gate
 # pins). EXCLUDED from `make test` / CI because golden bytes vary across
