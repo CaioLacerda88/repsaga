@@ -5,9 +5,10 @@
 > market) fed this doc. Nothing here is built. See "Open decisions" before acting.
 >
 > **Formula refined + balance-simulated** (the cardio analogue of the Phase 29
-> strength calibration): a v1 cardio XP formula now passes an 11-persona balance
-> panel. Source of truth `tasks/cardio-xp-simulation.py`; calibration writeup +
-> constants + science citations in **`docs/cardio-balance-baseline.md`**.
+> strength calibration): a v1 cardio XP formula now passes a **14-persona** balance
+> panel — including the strength→cardio cross-contribution (§2.5). Source of truth
+> `tasks/cardio-xp-simulation.py`; calibration writeup + constants + science
+> citations in **`docs/cardio-balance-baseline.md`**.
 
 ---
 
@@ -18,6 +19,8 @@
 | **Does cardio need separate science research to be accurate?** | **Yes — unavoidably.** Strength scoring is *load* (weight×reps→1RM tiers); cardio is *rate × time* (energy turnover). They are dimensionally incompatible — cardio cannot reuse the strength tier tables. Recommended basis: **MET-minutes** (ACSM Compendium) + a per-user estimated-VO₂max tier multiplier. |
 | **How does it impact the RPG formula?** | Cardio **cannot** plug into the existing 11-multiplier strength chain (`record_session_xp_batch`). It needs a **parallel cardio-XP function** with its own inputs and its own calibration baseline (a Phase-29-sized effort). The character-level math was *pre-designed* to append cardio additively (`N_active` 6→7); the class system has a reserved **Wayfarer** slot; `xp_events` already has `cardio_session`/`hr_zone`/`kcal` event types. |
 | **Does it fit the thesis ("RPG never decouples from real lifts")?** | **Extends it, conditionally.** The veto killed RPE because RPE is *subjective*. Cardio metrics (pace/distance/duration/HR) are *objective*. The condition: the earning path must be anchored to objective session data — never a "I did 30 min of cardio" free-text. |
+| **Does lifting earn cardio XP too?** | **Yes — one-directionally, and it was the missing piece.** Resistance training is a real (smaller, density-dependent) CRF stimulus, so a strength session earns cardio XP through the *same* MET-minutes pipeline. But the credit flows **strength → cardio only, never cardio → strength** — the interference effect is directional (Wilson 2012: endurance impairs strength; strength doesn't impair aerobic gains). Heavy long-rest lifting demonstrates ~walking-level VO₂ → ~0 cardio rank (un-farmable); high-density metcons earn real, sub-runner credit. No new mechanism — the demonstrated-VO₂ gate sorts it for free. See **§2.5**. |
+| **Then does running earn a *strength* rank (running→legs)?** | **No — structurally, not as a tuning choice.** Running/cycling *can* build some leg tissue (mostly in the untrained; sprints/hills more than jogging), but specificity caps it at "strong enough to run," never a higher 1RM — and it fades with training (interference). The strength rank credits *demonstrated load* (weight×reps→1RM); a run demonstrates none, so it scores zero **by construction** — the exact mirror of walking earning ~0 cardio rank. The one save-gate fix (§1) seals both directions at once. See **§2.6**. |
 | **Recommended shape** | A **separate parallel "Endurance/Cardio" track** (not a 7th strength body-part, not woven into legs). The `docs/rpg-design.md` spec already chose this; the schema already supports it. |
 | **When** | **Post-launch** (the spec's "Phase 18b / v2 conditioning track"). Not a launch blocker. Do **not** pre-build before launch. One launch-adjacent decision: keep or hide the existing "Cardio — coming v2" teaser row (it's a promise). |
 
@@ -66,6 +69,45 @@ Cardio XP         = MET-minutes × intensity/tier multiplier
 
 **Caveats:** MET tables are population averages (the VO₂max tier multiplier corrects per-user); self-reported activity type is coarse (logging pace collapses the error band); no HR = external/estimated load, not measured physiological response; field VO₂max estimates are *within-protocol trend only*, never an absolute lab number.
 
+### 2.5 Strength → cardio cross-contribution (the directional credit) — **was missing; now specified**
+
+**A strength session is itself a cardiorespiratory stimulus, and the cardio track must credit it — one-directionally.** This was the gap: the original plan modeled the two tracks as fully orthogonal (cardio earned *only* from cardio modalities), which is science-wrong and leaves a genuinely-conditioned metcon athlete invisible on the cardio rail.
+
+**The science says credit it, but asymmetrically:**
+
+1. **Resistance training produces real, intensity/density-dependent CRF gains.** Resistance *circuit*-based training improves VO₂max ~**6.3%** (45-study meta-analysis); traditional resistance training alone adds ~**+1.9 mL·kg⁻¹·min⁻¹** in untrained/older adults and ≈0 in the already-trained. So the contribution is real but smaller than dedicated aerobic work, and it *scales with the session's metabolic density* (short-rest circuits ≫ heavy long-rest singles).
+2. **The interference effect is directional** (Wilson et al. 2012 meta-analysis, 21 studies / 422 effect sizes): endurance training measurably *impairs* strength/hypertrophy/power (frequency- and duration-dependent; running worse than cycling), **but "aerobic-capacity gains are not compromised by concurrent strength training."** Lifting helps (a little) cardio; cardio hurts strength. **This is the scientific keystone for the whole cross-stat policy: credit flows strength → cardio, NEVER cardio → strength.** It is *why* running must never feed a legs/strength rank (§3 Option C is not just a grammar choice — it's the physiologically-correct direction), and why crediting lifting toward cardio is not the symmetric mistake.
+
+**The elegant part — no new mechanism.** A resistance session enters the *same* MET-minutes → intensity-gate → demonstrated-VO₂-tier pipeline as any fixed-MET activity (a `kind='abs'` session, like walking). The existing honesty gate then sorts it correctly for free:
+
+| Session | Session-avg MET | Demonstrates | Cardio credit |
+|---|---|---|---|
+| Heavy powerlifting (long rests pull the mean down) | ~3.5–4 | ~walking-level VO₂ | **~zero** — you can't farm cardio rank by lifting heavy (correct: heavy RT ≈ 0 VO₂max gain) |
+| High-density circuit / metcon (short rest) | ~7–8 | moderate VO₂ | **real but sub-runner** (correct: metcons genuinely build CRF) |
+
+Validated in the sim: a **Pure Powerlifter lands cardio rank 8** (band 1–10, VO₂ barely moves); a **CrossFit/Metcon athlete lands rank 18** (band 12–30, VO₂ +5.2% ≈ the literature), below a dedicated runner of equal VO₂. The 12 original personas are unchanged. Panel is now **14/14**.
+
+**Two design decisions this surfaces (both defensible, intended):**
+- **One session earns on BOTH tracks** — a metcon banks strength XP (weight×reps) *and* cardio XP (MET-min). This is not double-counting one adaptation; it's crediting two distinct real outcomes of one session (it built some strength *and* some CRF). Intended.
+- **Session MET must be estimated, never declared** — to stay un-farmable, the resistance-session MET comes from *work density* (inter-set rest, rep range, set volume vs. session wall-clock — all already logged or derivable), mapped to an ACSM MET band (light/moderate ~3.5, vigorous free-weight ~5.0, circuit-minimal-rest ~8.0). "I did a hard workout" never sets it. This is the same estimate-don't-ask philosophy as the est-VO₂max source (§8).
+
+*(Sources: resistance-circuit-training VO₂max meta-analysis [Ramos-Campo et al., PMC8145598]; RT-for-CRF in older adults [Oxford, Age & Ageing afac143]; concurrent-training directional interference [Wilson et al. 2012, JSCR]; ACSM 2024 Compendium RT MET codes. Full citations in `cardio-balance-baseline.md` §8.)*
+
+### 2.6 Cardio → strength: why the credit does NOT flow back (the running→legs question)
+
+The mirror question: running/cycling load the legs — should a hard run earn a *strength* rank? **No — and it's a structural guarantee, not a tuning choice.** But the honest answer is more nuanced than "running does nothing for your legs," so here's the full reasoning:
+
+**The science (running/cycling *can* build some leg tissue — but not what a strength rank measures):**
+1. **Specificity caps it at "strong enough to run," not a higher 1RM.** A sedentary person's legs do get stronger from a running program — *only strong enough to support running*; you would no more expect running to raise a 1RM squat than expect heavy squats to improve swimming (practitioner consensus: Barbell Medicine, Stronger by Science). High-intensity work (sprints, hills, hard cycling intervals) *can* add real quad/hamstring cross-sectional area — one cited protocol found 4×30 s bike sprints ≈ 4×10–12 leg-press for 5-week lower-body strength — but cycling hypertrophy is localized, eccentric-light, and needs enormous volume; a HIIT meta-analysis finds only modest strength/mass effects.
+2. **The effect is real mainly in the untrained and vanishes with training.** Concurrent-training meta-analysis by training status (PMC8053170): in *untrained* people endurance does **not** impair 1RM leg gains (ES = 0.03, p = 0.87) and beginners can even gain some strength from endurance; in *trained* people the directional interference effect suppresses strength (Wilson 2012). So any running→legs strength credit would be a transient beginner artifact, not a durable signal.
+
+**Why it must still earn zero strength rank — the same gate that handles walking, mirrored:**
+- **The strength rank credits *demonstrated load* (weight×reps → 1RM tier). A run demonstrates no quantifiable external load** — there is no bar, no weight×reps — so by *construction* it earns zero strength XP. This is exactly symmetric to walking earning ~zero cardio rank: each rank credits only what is **demonstrated in its own currency**. A dense lifting circuit *inherently sustains* an elevated VO₂ (so it demonstrates cardio performance → credited on cardio, §2.5); a run *never produces* a maximal external load (so it demonstrates nothing in the strength currency → not credited). Not a double standard — cardiorespiratory flux is a property of *any* sustained session; peak demonstrated load is a property of *only* lifting.
+- **The real leg-strength base a beginner builds from sprints only "counts" once they demonstrate it under a bar** — precisely as walking's VO₂ base only counts once demonstrated at intensity. The system's demonstrated-performance gate already encodes this with zero special-casing.
+- **Crediting it would be farmable and would corrupt rank meaning** — a marathoner who never squats showing a high "legs rank" reads to every lifter as "heavy squatter." That is the auto-fail dilution the thesis forbids (and the §3 Option C rejection).
+
+**Implementation consequence: nothing to build, and one fix protects both directions.** No strength-formula change, no simulation needed — the protection is *structural* (the weight×reps formula can't score a load-less run). The single save-gate fix already flagged in §1 (branch on `muscle_group`/`event_type` so a cardio entry can't enter the weight×reps path) is what *enforces* it: it simultaneously stops cardio from mis-attributing into strength **and** stops any "run logged with reps" from farming a legs rank. One gate, both cross-directions sealed.
+
 **Consumer grounding:** every high-fidelity model (Garmin Training Load, Whoop Strain, Strava Relative Effort) leans on continuous HR; the only models that degrade gracefully to no-sensor input are MET/active-energy (Apple's rings) and manual RPE (Strava's fallback). A manual logger must therefore be MET-based with optional RPE/pace sharpeners.
 
 *(Sources: ACSM 2024 Compendium; Cooper/1.5-mi/Rockport VO₂max field formulas; Uth–Sørensen HR-ratio; ACSM metabolic equations; Banister TRIMP; TrainingPeaks rTSS; Strava/Garmin/Whoop/Apple scoring docs. Full citations in the research notes appended to the PR.)*
@@ -83,7 +125,7 @@ Cardio XP         = MET-minutes × intensity/tier multiplier
 |---|---|
 | **(A) 7th body-part stat** | ✗ Breaks the anatomical grammar ("you level up your *body parts*"). Cardio is a systemic capacity, not a body part. Distorts class-resolution math built around 6 strength specialists. |
 | **(B) Separate parallel "Endurance/Cardio" track** | ✓ **Recommended.** What the spec already specifies. Lands as a 7th `body_part_progress` row that feeds the character level *additively* (denominator stays 4), enters the class resolver at its own weight (Wayfarer), has its own title ladder + Vitality glow + earning path. A strength-only user sees a dormant "awaits your first stride" rune — invitation, not accusation. |
-| **(C) Woven into existing parts (running→legs)** | ✗ **Worst option / auto-fail.** Corrupts the rank's meaning — a runner who never squats would show a "legs rank" a lifter reads as heavy squatting. Directly dilutes rank identity. |
+| **(C) Woven into existing parts (running→legs)** | ✗ **Worst option / auto-fail.** Corrupts the rank's meaning — a runner who never squats would show a "legs rank" a lifter reads as heavy squatting. Directly dilutes rank identity. **And it's the physiologically *wrong direction*:** running builds running-specific fitness, not max 1RM strength (specificity), and can *impair* trained strength (directional interference, Wilson 2012). Running demonstrates no barbell load, so it earns zero strength rank structurally — full reasoning in **§2.6**. The *reverse* credit — strength → cardio — IS science-valid and IS specified (§2.5); these are not symmetric, and the asymmetry is the whole point. |
 
 ### Dilution vs. upside
 - **Risk (earning path):** if cardio XP flows from duration alone, a 60-min leisurely walk earns like a 60-min tempo run → erodes the "honest, un-farmable" property. Mitigation = intensity (MET/HR-zone) weighting, the cardio analogue of `intensity_mult`.
@@ -99,7 +141,7 @@ Cardio XP         = MET-minutes × intensity/tier multiplier
 > product-owner class/identity pass (this PR).
 
 ### 4.1 Earning layer (formula & math)
-1. **New parallel earning function** — `record_cardio_session` (SQL) + Dart `CardioXpCalculator`, NOT a branch in the weight×reps chain. A **4-site parity change** (Python → fixture → Dart → SQL, 1e-4) with its own calibration baseline (`cardio-balance-baseline.md`, done — 12/12 panel).
+1. **New parallel earning function** — `record_cardio_session` (SQL) + Dart `CardioXpCalculator`, NOT a branch in the weight×reps chain. A **4-site parity change** (Python → fixture → Dart → SQL, 1e-4) with its own calibration baseline (`cardio-balance-baseline.md`, done — 14/14 panel). Resistance sessions feed this same function as a `kind='abs'` fixed-MET entry (§2.5) — no separate strength→cardio path.
 2. **Save gate must branch** — `reps >= 1` (`00065:731,1360`) excludes cardio; route by `muscle_group='cardio'`/`event_type` to the cardio path; close the latent mis-attribution bug (§1).
 
 ### 4.2 Ranks & character level
@@ -167,13 +209,15 @@ Logging cardio needs net-new storage. Two shapes:
 
 User-facing minimum: **activity type + duration**. Recommended optional: **distance/pace** (biggest accuracy gain) and **RPE**. Wearable HR is a later integration, never required.
 
+**Strength-session cardio MET (for the §2.5 cross-contribution) needs no new user input** — it's *derived* from data the strength side already captures: session wall-clock (`workouts.duration_seconds`), completed-set count, rep ranges, and inter-set rest (derivable from set timestamps or estimated from set-type). Map work-density → an ACSM RT MET band (≈3.5 light/moderate · ≈5.0 vigorous free-weight · ≈8.0 minimal-rest circuit) → feed the cardio pipeline as a `kind='abs'` session. The one schema touch worth considering: persist a per-session `est_met` (or the rest-density inputs) so the cardio-XP function can read it without re-deriving. **Decision needed:** whether v1 ships the strength→cardio credit (richer, more honest "complete athlete") or defers it to a v2.1 once the pure-cardio track is validated — see §8.
+
 ---
 
 ## 7. Suggested phasing (post-launch)
 
 0. **Pre-feature hygiene (small, do anytime):** branch the save gate so cardio can't silently mis-attribute (§1 latent bug). Decide the launch teaser: keep the dormant "awaits your first stride" rune (a promise you'll keep) or hide it until ship.
 1. **Cardio data model** — `cardio_sessions` table + Dart models + logging UI (type + duration + optional distance/pace/RPE).
-2. **MET-minutes earning formula + calibration baseline** — ACSM MET table, pace→MET sharpener, per-user est-VO₂max tier multiplier; new `cardio-balance-baseline.md`; 4-site parity (Python/fixture/Dart/SQL). *This is the Phase-29-sized research+calibration block.*
+2. **MET-minutes earning formula + calibration baseline** — ACSM MET table, pace→MET sharpener, per-user est-VO₂max tier multiplier; new `cardio-balance-baseline.md`; 4-site parity (Python/fixture/Dart/SQL). *This is the Phase-29-sized research+calibration block.* **Includes the strength→cardio cross-credit (§2.5):** route each resistance session into the same function as a work-density-derived `kind='abs'` MET entry; persist a per-session `est_met`. (If deferred per §8 #2, this sub-step slips one release — but the formula is identical, so deferring is purely a scope call, not a model change.)
 3. **Wire into progression** — flip cardio "active" (6→7), character-level additive, Wayfarer class, cardio title ladder, Vitality on the cardio track, celebrations.
 4. **UI** — promote the dormant row to a real Endurance progression surface; cardio rank-ups in the post-session cinematic.
 5. **Parity + QA + visual-verification** per the standard pipeline.
@@ -194,10 +238,11 @@ User-facing minimum: **activity type + duration**. Recommended optional: **dista
 
 ### Still genuinely open (need a product call before an active phase)
 1. **Wearable scope:** manual-only v1, or HR/GPS (Apple Health / Google Fit / Garmin) from the start? Manual-only is thesis-sufficient; HR is a sharpener.
-2. **Est-VO₂max source** when no distance/HR is logged — non-exercise estimate (age/sex/BMI/activity) vs. a periodic "fitness-test" entry vs. best-effort-derived.
-3. **Tier-threshold calibration** — confirm the cardio VO₂max bands by sex/age against the ACSM tables on real data (engineering/calibration, the cardio analogue of the gender tier tables).
-4. **`VITALITY_XP_FLOOR`** (0.40 default) and whether the Vitality XP-gate should also apply to **strength** (would need a fresh 13-persona re-tune — see `cardio-balance-baseline.md` §8).
-5. **Launch teaser** — keep or hide the dormant "awaits your first stride" cardio row at launch (it's a promise).
+2. **Strength→cardio credit — v1 or v2.1?** The mechanism + science are specified and sim-validated (§2.5; 14/14 panel), and it costs no new user input (MET derived from work density). Open call: ship it with the first cardio release (richer "complete athlete" from day one; needs the per-session `est_met` derivation wired) or defer one release until the pure-cardio track is validated on real data (simpler first cut). Recommendation: **ship it** — without it a CrossFit/metcon-heavy user is wrongly invisible on cardio, the exact gap that prompted this section; the demonstrated-VO₂ gate already makes it un-farmable.
+3. **Est-VO₂max source** when no distance/HR is logged — non-exercise estimate (age/sex/BMI/activity) vs. a periodic "fitness-test" entry vs. best-effort-derived.
+4. **Tier-threshold calibration** — confirm the cardio VO₂max bands by sex/age against the ACSM tables on real data (engineering/calibration, the cardio analogue of the gender tier tables).
+5. **`VITALITY_XP_FLOOR`** (0.40 default) and whether the Vitality XP-gate should also apply to **strength** (would need a fresh 13-persona re-tune — see `cardio-balance-baseline.md` §8).
+6. **Launch teaser** — keep or hide the dormant "awaits your first stride" cardio row at launch (it's a promise).
 
 ---
 
