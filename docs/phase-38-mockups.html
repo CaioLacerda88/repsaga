@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 38 — CardioEntryCard mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* RepSaga Arcane Ascent tokens (approximated for the mockup) */
+    --bg:#0E0D13; --surface:#17151E; --surface2:#211E2B; --hair:#3A3543;
+    --cream:#F2EEF7; --dim:#8C8597; --violet:#A78BFA; --success:#4ADE80;
+    --cardio:#22D3EE;              /* teal-cyan — the locked cardio identity (cyan-400) */
+    --cardio-dim:rgba(34,211,238,.72);
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--cream);font-family:'Barlow',sans-serif;
+       padding:32px 16px 80px;-webkit-font-smoothing:antialiased}
+  h1{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5px;font-size:26px;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:6px}
+  .note{color:var(--dim);font-size:12.5px;max-width:760px;line-height:1.5;margin-bottom:28px}
+  .note b{color:var(--cardio)}
+  .grid{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+  .panel{width:360px}
+  .panel h2{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+            letter-spacing:1.5px;font-size:12px;color:var(--dim);margin-bottom:10px}
+  .device{background:var(--bg);border:1px solid var(--hair);border-radius:14px;padding:10px}
+
+  /* ---- shared card shell ---- */
+  .card{position:relative;background:var(--surface);border:1px solid var(--hair);
+        border-radius:var(--radius);margin:8px 0;padding:16px 12px 16px 14px;overflow:hidden}
+  .card.cardio::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cardio)}
+  .hdr{display:flex;align-items:center;gap:10px}
+  .hdr .name{font-family:'Barlow',sans-serif;font-weight:600;font-size:16px;color:var(--cream);flex:1}
+  .hdr .ico{color:var(--dim);font-size:17px;width:24px;text-align:center}
+  .hdr .done{color:var(--success);font-size:18px}
+  .eyebrow{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+           letter-spacing:1.4px;font-size:11px;color:var(--cardio-dim);margin-top:3px}
+
+  /* ---- duration hero ---- */
+  .hero{display:flex;align-items:center;justify-content:center;gap:14px;margin:18px 0 6px}
+  .step{width:40px;height:48px;border:1px solid var(--hair);border-radius:9px;background:var(--surface2);
+        color:var(--cardio);font-size:24px;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani'}
+  .duration{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:44px;line-height:1;
+            color:var(--cardio);font-variant-numeric:tabular-nums;letter-spacing:1px;min-width:150px;text-align:center}
+  .heromid{display:flex;flex-direction:column;align-items:center}
+  .minlbl{font-family:'Barlow Semi Condensed',sans-serif;text-transform:uppercase;letter-spacing:2px;
+          font-size:11px;color:var(--dim);margin-top:2px}
+
+  /* ---- secondary row ---- */
+  .secrow{display:flex;gap:10px;margin-top:14px}
+  .field{flex:1;background:var(--surface2);border:1px solid var(--hair);border-radius:9px;padding:8px 10px;min-height:52px}
+  .field .lbl{font-family:'Barlow Semi Condensed',sans-serif;text-transform:uppercase;letter-spacing:1.3px;
+              font-size:10px;color:rgba(242,238,247,.5);margin-bottom:4px}
+  .field .ghost{color:var(--dim);font-size:13px}
+  .field .val{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:18px;color:var(--cream);font-variant-numeric:tabular-nums}
+  .field .unit{font-family:'Barlow Semi Condensed',sans-serif;font-size:11px;color:var(--dim);margin-left:3px;letter-spacing:.5px}
+  .field .edit{float:right;color:var(--dim);font-size:13px}
+  .pips{display:flex;gap:4px;margin-top:3px}
+  .pip{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--hair)}
+  .pip.on{background:var(--cardio);border-color:var(--cardio)}
+
+  /* ---- done CTA ---- */
+  .cta{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;height:48px;
+       border-radius:10px;background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.6);
+       color:var(--cardio);font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;letter-spacing:.3px}
+
+  /* ---- completed summary ---- */
+  .summary{text-align:center;margin-top:12px;color:var(--dim);font-size:15px;font-family:'Rajdhani';
+           font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .summary .sep{color:var(--hair);margin:0 7px}
+
+  /* ---- strength card (for mixed-session) ---- */
+  .strength .setrow{display:grid;grid-template-columns:28px 1fr 1fr 32px;gap:8px;align-items:center;
+                    padding:7px 2px;font-size:14px}
+  .strength .setrow.head{color:var(--dim);font-family:'Barlow Semi Condensed';text-transform:uppercase;
+                         letter-spacing:1px;font-size:10px;border-bottom:1px solid var(--hair);padding-bottom:5px}
+  .strength .num{font-family:'Rajdhani';font-weight:600;font-variant-numeric:tabular-nums;color:var(--cream)}
+  .strength .mark{color:var(--success)} .strength .mark.off{color:var(--hair)}
+  .addset{margin-top:10px;height:42px;border-radius:9px;border:1px dashed rgba(167,139,250,.4);
+          color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;font-family:'Barlow'}
+  .legend{margin-top:26px;max-width:760px;color:var(--dim);font-size:12.5px;line-height:1.6}
+  .legend code{color:var(--cardio);font-family:ui-monospace,monospace;font-size:11.5px}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin:0 4px}
+</style>
+</head>
+<body>
+  <h1>Phase 38 — CardioEntryCard</h1>
+  <div class="sub">Manual-only cardio logging surface · teal identity <span class="swatch" style="background:#22D3EE"></span><code style="color:#22D3EE">#22D3EE</code></div>
+  <div class="note">Same card shell as the strength <b>ExerciseCard</b> (surface, hair border, 12px radius, header).
+    Divergent grammar: a <b>duration hero</b> (the only mandatory input, teal numerals, stepper geometry borrowed from
+    WeightStepper) instead of a weight×reps table; optional <b>distance</b> + <b>RPE</b> that invite (<i>+ adicionar</i>)
+    rather than nag (never <i>0.0 km</i>). The 3px teal card-stripe + the hero hue are the at-a-glance "this is cardio" cues.</div>
+
+  <div class="grid">
+    <!-- EMPTY -->
+    <div class="panel">
+      <h2>1 · Empty (default)</h2>
+      <div class="device">
+        <div class="card cardio">
+          <div class="hdr"><span class="name">Esteira</span><span class="ico">&#9432;</span><span class="ico">&#8646;</span><span class="ico">&#128465;</span></div>
+          <div class="eyebrow">Corrida · Cardio</div>
+          <div class="hero">
+            <div class="step">&minus;</div>
+            <div class="heromid"><div class="duration">30:00</div><div class="minlbl">min</div></div>
+            <div class="step">+</div>
+          </div>
+          <div class="secrow">
+            <div class="field"><div class="lbl">Distância</div><div class="ghost">+ adicionar</div></div>
+            <div class="field"><div class="lbl">Esforço (RPE)</div><div class="ghost">+ adicionar</div></div>
+          </div>
+          <div class="cta">&#10003;&nbsp; Concluir cardio</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILLED -->
+    <div class="panel">
+      <h2>2 · Filled (distance + RPE)</h2>
+      <div class="device">
+        <div class="card cardio">
+          <div class="hdr"><span class="name">Esteira</span><span class="ico">&#9432;</span><span class="ico">&#8646;</span><span class="ico">&#128465;</span></div>
+          <div class="eyebrow">Corrida · Cardio</div>
+          <div class="hero">
+            <div class="step">&minus;</div>
+            <div class="heromid"><div class="duration">28:45</div><div class="minlbl">min</div></div>
+            <div class="step">+</div>
+          </div>
+          <div class="secrow">
+            <div class="field"><div class="lbl">Distância <span class="edit">&#9998;</span></div><div><span class="val">5.2</span><span class="unit">km</span></div></div>
+            <div class="field"><div class="lbl">Esforço</div>
+              <div class="pips"><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span><span class="pip on"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+            </div>
+          </div>
+          <div class="cta">&#10003;&nbsp; Concluir cardio</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPLETED -->
+    <div class="panel">
+      <h2>3 · Completed (collapsed)</h2>
+      <div class="device">
+        <div class="card cardio">
+          <div class="hdr"><span class="name">Esteira</span><span class="done">&#10003;</span></div>
+          <div class="eyebrow">Corrida · Cardio</div>
+          <div class="summary">28:45 min<span class="sep">·</span>5.2 km<span class="sep">·</span>esforço 7/10</div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.5">Green ✓ = logged (app-wide done semantics); teal stripe persists as the cardio identity. Body collapses to one glanceable line.</div>
+    </div>
+
+    <!-- MIXED SESSION -->
+    <div class="panel">
+      <h2>4 · Mixed session (coherence)</h2>
+      <div class="device">
+        <!-- strength card: no stripe, set table -->
+        <div class="card strength">
+          <div class="hdr"><span class="name">Supino Reto</span><span class="ico">&#9432;</span><span class="ico">&#8646;</span><span class="ico">&#128465;</span></div>
+          <div class="setrow head"><span>#</span><span>Peso</span><span>Reps</span><span></span></div>
+          <div class="setrow"><span class="num">1</span><span class="num">60 kg</span><span class="num">8</span><span class="mark">&#10003;</span></div>
+          <div class="setrow"><span class="num">2</span><span class="num">60 kg</span><span class="num">8</span><span class="mark off">&#9711;</span></div>
+          <div class="addset">+ Adicionar série</div>
+        </div>
+        <!-- cardio card: stripe, hero -->
+        <div class="card cardio">
+          <div class="hdr"><span class="name">Esteira</span><span class="ico">&#9432;</span><span class="ico">&#8646;</span><span class="ico">&#128465;</span></div>
+          <div class="eyebrow">Corrida · Cardio</div>
+          <div class="hero">
+            <div class="step">&minus;</div>
+            <div class="heromid"><div class="duration">30:00</div><div class="minlbl">min</div></div>
+            <div class="step">+</div>
+          </div>
+          <div class="cta">&#10003;&nbsp; Concluir cardio</div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.5">Same shell + header + button geometry = siblings. Teal stripe + hero-vs-table grammar = unambiguous disambiguation.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b style="color:var(--cream)">Notes for build (tech-lead):</b><br>
+    • Duration is the hero — <code>AppTextStyles.numeric</code> @ ~40sp in <code>AppColors.bodyPartCardio</code> (teal). Stepper geometry/interaction mirrors <code>WeightStepper</code> (40×48 ± buttons, long-press accel), but new <code>DurationStepper</code> formats <code>mm:ss</code>, 30s increment.<br>
+    • Distance = tap-to-type (range too wide for a stepper); RPE = 1–10 selector via a sheet (sub-48dp pips inline are display-only; precise pick routes through a 48dp-floor sheet).<br>
+    • Optional fields empty = <i>+ adicionar</i> ghost, never a 0-value nag.<br>
+    • Teal token: retune <code>AppColors.bodyPartCardio</code> orange→<code>#22D3EE</code> in 38b (currently a dead token — every cardio surface uses <code>hair</code> gray, so zero sweep impact until 38d wires <code>BodyPartHues</code>).<br>
+    • No Slider, no SegmentedButton, no decorative activity icon, no gradient. Card-level stripe is cardio-only (strength cards unchanged).
+  </div>
+</body>
+</html>
