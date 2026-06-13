@@ -59,8 +59,22 @@ rest of Phase 38; ships on its own.
 - [x] Gate mechanism: **(a) source-query exclusion on `muscle_group='cardio'`** — (b) per-key skip would still emit zero-XP `xp_events` rows. Data audit: all 8 cardio exercises have pure `{"cardio":1.0}` attribution + `muscle_group='cardio'`; no mixed maps; `fn_insert_user_exercise` has no attribution param (NULL fallback = `{muscle_group:1.0}`) → muscle_group gate is complete. `save_workout` needs NO change (persists raw sets, delegates XP to the batch RPC; reversal pattern self-heals pre-gate latent rows). `backfill_rpg_v1` convergence unaffected (visited-underflow check, no precomputed totals)
 - [x] Integration test `test/integration/rpg_cardio_save_gate_test.dart` (tag `integration`): zero cardio `body_part_progress`/`xp_events`, zero strength-peak rows for weighted cardio (sled), control-user strength-XP equality + all three writers covered
 - [x] `dart format` (0 changed) + `dart analyze --fatal-infos` (no issues) + unit/widget suite green (+3553, 0 failures). Side-find fixed: Makefile `test:` passed `--exclude-tags` twice — package:test is last-wins, so `make test` was silently RUNNING the integration suite; now a single boolean selector `"integration || golden"`
-- [ ] `make test-integration` — **BLOCKED by the WSL2/Docker reboot blocker above**; SQL verified by manual trace (all three writers + backfill_rpg_v1 convergence + save_workout reversal). Run in the post-reboot batch window before merge
-- [ ] Reviewer → (QA: tooling/DB, no E2E surface) → ship → condense; apply migration to hosted Supabase post-merge
+- [x] Reviewer — **zero findings** (independently re-verified the verbatim-diff, gate completeness, exactly-three-writers, test quality). `dart format`/`analyze`/`make test` (+3553) green. **PR #335 open**, CI running.
+- [ ] `make test-integration` — **BLOCKED by the WSL2/Docker reboot blocker above**; SQL verified by manual trace + reviewer's independent diff. Run in the post-reboot batch window **before merge** (held).
 
-### PR 38b–38f — queued (see plan file)
-38b data model + `CardioEntryCard` · 38c earning formula + 4-site parity + est-VO₂max · 38d activation (atomic boundary flip + UI) · 38e titles · 38f E2E + QA + calibration sign-off.
+### PR 38b — Cardio data model + logging surface (active) — branch `feature/phase38b-cardio-logging` (stacked on 38a)
+
+Net-new `cardio_sessions` table + `CardioEntryCard` input. Cardio entries persist
+but earn nothing yet (cardio still excluded from `activeBodyParts`). Manual-only
+logging (decision): activity type + duration (mandatory) + optional distance + RPE.
+
+- [x] **ui-ux-critic design direction** + mockup `docs/phase-38-mockups.html` (4 states: empty/filled/completed/mixed-session) — **user-approved as-is**. Teal locked `#22D3EE`; duration-as-hero stepper; distance=tap-to-type, RPE=1–10 via sheet; optional fields invite (`+ adicionar`) not nag; card-level teal stripe (strength cards untouched)
+- [ ] Migration `00078`: `cardio_sessions` (`workout_id`, `exercise_id`, `duration_s` NOT NULL, `distance_m?`, `rpe?`, computed `met`, `met_minutes`, `est_met`) + RLS + explicit grants (cluster `supabase-cli-latest-grant-drift`)
+- [ ] `CardioSession` Freezed model; thread through `ActiveWorkoutState` (Hive crash-recovery, mirroring routine-notes wiring)
+- [ ] `CardioEntryCard` widget in the shared `ExerciseList`; activity chip + duration stepper + optional distance + RPE chip row + done CTA
+- [ ] Extend save path (`save_workout`/paired) to persist cardio entries from `active_workout_notifier`
+- [ ] Unit + widget tests (model serialization, card states); save round-trip = integration (deferred to reboot window)
+- [ ] ui-ux-critic review → verify → PR → reviewer → QA
+
+### PR 38c–38f — queued (see plan file)
+38c earning formula + 4-site parity + est-VO₂max · 38d activation (atomic boundary flip + UI) · 38e titles · 38f E2E + QA + calibration sign-off. **Reboot to batch-verify 38a+38b and unblock 38c.**
