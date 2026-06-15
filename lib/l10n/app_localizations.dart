@@ -5369,6 +5369,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not set'**
   String get genderNotSet;
+
+  /// Phase 38b — uppercase tracked eyebrow on the CardioEntryCard, e.g. 'RUNNING · CARDIO'. ARB supplies the casing (label-register convention).
+  ///
+  /// In en, this message translates to:
+  /// **'{activity} · CARDIO'**
+  String cardioEyebrow(String activity);
+
+  /// Phase 38b — eyebrow fallback for cardio exercises without a known activity mapping (user-created).
+  ///
+  /// In en, this message translates to:
+  /// **'CARDIO'**
+  String get cardioEyebrowGeneric;
+
+  /// Phase 38b — activity label for treadmill (uppercase, eyebrow register).
+  ///
+  /// In en, this message translates to:
+  /// **'RUNNING'**
+  String get cardioActivityRunning;
+
+  /// Phase 38b — activity label for rowing_machine.
+  ///
+  /// In en, this message translates to:
+  /// **'ROWING'**
+  String get cardioActivityRowing;
+
+  /// Phase 38b — activity label for stationary_bike / assault_bike.
+  ///
+  /// In en, this message translates to:
+  /// **'CYCLING'**
+  String get cardioActivityCycling;
+
+  /// Phase 38b — activity label for jump_rope.
+  ///
+  /// In en, this message translates to:
+  /// **'JUMP ROPE'**
+  String get cardioActivityJumpRope;
+
+  /// Phase 38b — activity label for elliptical.
+  ///
+  /// In en, this message translates to:
+  /// **'ELLIPTICAL'**
+  String get cardioActivityElliptical;
+
+  /// Phase 38b — activity label for sled_push / sled_drag.
+  ///
+  /// In en, this message translates to:
+  /// **'SLED'**
+  String get cardioActivitySled;
+
+  /// Phase 38b — tiny uppercase unit label under the mm:ss duration hero.
+  ///
+  /// In en, this message translates to:
+  /// **'MIN'**
+  String get cardioDurationMinLabel;
+
+  /// Phase 38b — field label above the optional distance value (uppercase, field-label register).
+  ///
+  /// In en, this message translates to:
+  /// **'DISTANCE'**
+  String get cardioDistanceLabel;
+
+  /// Phase 38b — field label above the optional RPE value when empty.
+  ///
+  /// In en, this message translates to:
+  /// **'EFFORT (RPE)'**
+  String get cardioEffortLabel;
+
+  /// Phase 38b — shorter field label above the RPE pips once a value is set (mirrors the locked mockup).
+  ///
+  /// In en, this message translates to:
+  /// **'EFFORT'**
+  String get cardioEffortShortLabel;
+
+  /// Phase 38b — ghost affordance on an empty optional field (distance / RPE). Invites, never nags — the mockup forbids rendering '0.0 km'.
+  ///
+  /// In en, this message translates to:
+  /// **'+ add'**
+  String get cardioAddValue;
+
+  /// Phase 38b — done CTA at the bottom of the CardioEntryCard. Collapses the card to the summary line.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete cardio'**
+  String get completeCardio;
+
+  /// Phase 38b — duration segment of the collapsed completed-card summary line, e.g. '28:45 min'.
+  ///
+  /// In en, this message translates to:
+  /// **'{duration} min'**
+  String cardioSummaryDuration(String duration);
+
+  /// Phase 38b — RPE segment of the collapsed summary line, e.g. 'effort 7/10'.
+  ///
+  /// In en, this message translates to:
+  /// **'effort {rpe}/10'**
+  String cardioSummaryEffort(int rpe);
+
+  /// Phase 38b — accessibility label on the green check in the completed cardio card header (tapping un-completes).
+  ///
+  /// In en, this message translates to:
+  /// **'Cardio logged. Tap to edit again.'**
+  String get cardioUncompleteSemantics;
+
+  /// Phase 38b — DurationStepper number-input dialog title. Accepts mm:ss or whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter duration'**
+  String get enterDuration;
+
+  /// Phase 38b — hint inside the duration dialog text field.
+  ///
+  /// In en, this message translates to:
+  /// **'mm:ss'**
+  String get enterDurationHint;
+
+  /// Phase 38b — distance tap-to-type dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter distance'**
+  String get enterDistance;
+
+  /// Phase 38b — accessibility label: DurationStepper minus button (30s step).
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease duration'**
+  String get decrementDuration;
+
+  /// Phase 38b — accessibility label: DurationStepper plus button (30s step).
+  ///
+  /// In en, this message translates to:
+  /// **'Increase duration'**
+  String get incrementDuration;
+
+  /// Phase 38b — accessibility label on the DurationStepper center value zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration: {formatted} minutes. Tap to enter duration.'**
+  String durationValueSemantics(String formatted);
+
+  /// Phase 38b — accessibility label on the distance field of the CardioEntryCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance. Tap to enter distance.'**
+  String get cardioDistanceSemantics;
+
+  /// Phase 38b — accessibility label on the RPE field of the CardioEntryCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Effort (RPE). Tap to choose 1 to 10.'**
+  String get cardioEffortSemantics;
+
+  /// Phase 38b — title of the 1–10 RPE picker bottom sheet (48dp-floor targets; the inline pips are display-only).
+  ///
+  /// In en, this message translates to:
+  /// **'Effort (RPE)'**
+  String get rpeSheetTitle;
+
+  /// Phase 38b — helper line under the RPE sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'How hard did it feel, from 1 (easy) to 10 (max effort)?'**
+  String get rpeSheetSubtitle;
+
+  /// Phase 38b — accessibility label on each 1–10 option in the RPE sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Effort {value} of 10'**
+  String rpeOptionSemantics(int value);
 }
 
 class _AppLocalizationsDelegate

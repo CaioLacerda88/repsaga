@@ -12,8 +12,14 @@ void main() {
       expect(AppColors.bodyPartBack, const Color(0xFF38BDF8));
     });
 
-    test('bodyPartCardio is Tailwind Orange 400 (#FB923C)', () {
-      expect(AppColors.bodyPartCardio, const Color(0xFFFB923C));
+    test('bodyPartCardio is Tailwind Cyan 400 (#22D3EE) — Phase 38b locked '
+        'cardio identity', () {
+      // Retuned from the Phase 26a orange placeholder (#FB923C), which was
+      // a dead token (no live surface read it). The teal-cyan deliberately
+      // sits outside both the warm body-part family and the brand violet
+      // stack: cardio is a parallel capacity track, not a 7th body part.
+      // Locked in docs/phase-38-mockups.html.
+      expect(AppColors.bodyPartCardio, const Color(0xFF22D3EE));
     });
   });
 

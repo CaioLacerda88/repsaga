@@ -3143,4 +3143,99 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get genderNotSet => 'Not set';
+
+  @override
+  String cardioEyebrow(String activity) {
+    return '$activity · CARDIO';
+  }
+
+  @override
+  String get cardioEyebrowGeneric => 'CARDIO';
+
+  @override
+  String get cardioActivityRunning => 'RUNNING';
+
+  @override
+  String get cardioActivityRowing => 'ROWING';
+
+  @override
+  String get cardioActivityCycling => 'CYCLING';
+
+  @override
+  String get cardioActivityJumpRope => 'JUMP ROPE';
+
+  @override
+  String get cardioActivityElliptical => 'ELLIPTICAL';
+
+  @override
+  String get cardioActivitySled => 'SLED';
+
+  @override
+  String get cardioDurationMinLabel => 'MIN';
+
+  @override
+  String get cardioDistanceLabel => 'DISTANCE';
+
+  @override
+  String get cardioEffortLabel => 'EFFORT (RPE)';
+
+  @override
+  String get cardioEffortShortLabel => 'EFFORT';
+
+  @override
+  String get cardioAddValue => '+ add';
+
+  @override
+  String get completeCardio => 'Complete cardio';
+
+  @override
+  String cardioSummaryDuration(String duration) {
+    return '$duration min';
+  }
+
+  @override
+  String cardioSummaryEffort(int rpe) {
+    return 'effort $rpe/10';
+  }
+
+  @override
+  String get cardioUncompleteSemantics => 'Cardio logged. Tap to edit again.';
+
+  @override
+  String get enterDuration => 'Enter duration';
+
+  @override
+  String get enterDurationHint => 'mm:ss';
+
+  @override
+  String get enterDistance => 'Enter distance';
+
+  @override
+  String get decrementDuration => 'Decrease duration';
+
+  @override
+  String get incrementDuration => 'Increase duration';
+
+  @override
+  String durationValueSemantics(String formatted) {
+    return 'Duration: $formatted minutes. Tap to enter duration.';
+  }
+
+  @override
+  String get cardioDistanceSemantics => 'Distance. Tap to enter distance.';
+
+  @override
+  String get cardioEffortSemantics => 'Effort (RPE). Tap to choose 1 to 10.';
+
+  @override
+  String get rpeSheetTitle => 'Effort (RPE)';
+
+  @override
+  String get rpeSheetSubtitle =>
+      'How hard did it feel, from 1 (easy) to 10 (max effort)?';
+
+  @override
+  String rpeOptionSemantics(int value) {
+    return 'Effort $value of 10';
+  }
 }

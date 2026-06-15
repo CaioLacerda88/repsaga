@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_annotation_target
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'cardio_session.dart';
 import 'exercise_set.dart';
 import 'workout.dart';
 import 'workout_exercise.dart';
@@ -14,6 +15,15 @@ abstract class ActiveWorkoutExercise with _$ActiveWorkoutExercise {
   const factory ActiveWorkoutExercise({
     required WorkoutExercise workoutExercise,
     @JsonKey(defaultValue: <ExerciseSet>[]) required List<ExerciseSet> sets,
+
+    /// Phase 38b — the cardio entry for this exercise when
+    /// `workoutExercise.exercise.muscleGroup == cardio`. Cardio entries
+    /// carry no weight×reps sets ([sets] stays empty); strength entries
+    /// carry no cardio session (this stays null). The muscle group is the
+    /// discriminator; this field is the payload. Nullable + absent-key
+    /// tolerant so pre-38b Hive crash-recovery JSON deserializes unchanged
+    /// (same threading pattern as `ActiveWorkoutState.routineNotes`).
+    CardioSession? cardioSession,
   }) = _ActiveWorkoutExercise;
 
   factory ActiveWorkoutExercise.fromJson(Map<String, dynamic> json) =>

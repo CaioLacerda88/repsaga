@@ -229,6 +229,22 @@ class _StubActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
       throw UnimplementedError('completeSet is not stubbed for this test');
 
   @override
+  Future<void> updateCardioSession(
+    String workoutExerciseId, {
+    int? durationSeconds,
+    double? distanceM,
+    int? rpe,
+  }) => throw UnimplementedError(
+    'updateCardioSession is not stubbed for this test',
+  );
+
+  @override
+  Future<void> completeCardioEntry(String workoutExerciseId) =>
+      throw UnimplementedError(
+        'completeCardioEntry is not stubbed for this test',
+      );
+
+  @override
   Future<void> deleteSet(String workoutExerciseId, String setId) =>
       throw UnimplementedError('deleteSet is not stubbed for this test');
 
