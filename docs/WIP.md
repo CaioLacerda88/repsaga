@@ -56,6 +56,18 @@ and `docs/cardio-stat-plan.md` §4–§7 + `docs/cardio-balance-baseline.md` (14
 panel). 6 sequential PRs (38a–38f). Decisions locked: build now (pre-launch),
 manual-only logging, ship strength→cardio cross-credit in v1, teal-cyan hue.
 
+> **RESUME STATE (2026-06-15, awaiting reboot).** Current branch
+> `feature/phase38b-cardio-logging` (clean, pushed). **38a → PR #335 open**,
+> **38b → PR #336 open** (stacked, base = 38a branch) — BOTH code-complete,
+> reviewed, gates green, **merge-held only on the reboot-window integration
+> tests**. Next action when the user returns = the "Post-reboot batch runbook"
+> in the Environment-blocker section above (steps 1–7), then build 38c. Stashes:
+> dropped the redundant `phase38b-review-fixes-temp`; the only remaining stash is
+> the unrelated June-4 `session-checkpoint` on main (do not touch). Note: the
+> `fable` model failed to spawn as a SUBAGENT twice this session — route
+> tech-lead/qa dispatches to `opus`/`sonnet` via the Agent `model` override if it
+> recurs (main loop on fable is fine).
+
 ### PR 38a — Save-gate fix (active) — branch `feature/phase38a-cardio-save-gate`
 
 Pre-feature hygiene: branch the XP/save path so a cardio-attributed set can never
@@ -90,7 +102,8 @@ logging (decision): activity type + duration (mandatory) + optional distance + R
 - [x] ui-ux-critic design-match review — **DISTINCTIVE, mockup-faithful**; flagged RPE-pips/summary 320dp clip risk (fixed defensively below)
 - [x] reviewer code review — contract checks (save_workout 3→4-arg boundary, mocktail, Hive wipe, legacy offline replay) all SOUND; 2 Important + 2 Suggestions
 - [x] review fixes (all same-cycle): (1) completed cardio ✓ no longer hides reorder arrows in reorderMode; (2) `FittedBox(scaleDown)` on RPE pips + completed summary (320dp no-overflow); (3) DurationStepper floors at 30s (invariant ">0 by construction" now literally true); (4) legacy offline-map (no `cardio_json` key) → `cardioJson == []` test. 0-XP cinematic finding **owner-decided: accept interim** (guard unchanged). +tests; gate green (3617)
-- [ ] PR open (merge held) → `make test-integration` in reboot window before merge
+- [x] **PR #336 open** (base = `feature/phase38a-cardio-save-gate`, stacked); gate green (3613)
+- [ ] `make test-integration` (`cardio_save_roundtrip`) in reboot window → merge held until green
 
 ### PR 38c–38f — queued (see plan file)
 38c earning formula + 4-site parity + est-VO₂max · 38d activation (atomic boundary flip + UI) · 38e titles · 38f E2E + QA + calibration sign-off. **Reboot to batch-verify 38a+38b and unblock 38c.**
