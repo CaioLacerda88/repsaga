@@ -35,6 +35,7 @@ import '../../../weekly_plan/providers/weekly_plan_provider.dart';
 import '../../data/workout_local_storage.dart';
 import '../../data/workout_repository.dart';
 import '../../models/active_workout_state.dart';
+import '../../models/cardio_session.dart';
 import '../../models/exercise_set.dart';
 import '../../models/routine_start_config.dart';
 import '../../models/set_type.dart';
@@ -44,6 +45,12 @@ import '../../utils/set_defaults.dart';
 import '../workout_providers.dart';
 
 const _uuid = Uuid();
+
+/// Default duration seeded onto a fresh cardio entry (Phase 38b) — the
+/// locked mockup's "Empty (default)" state shows 30:00. Lives here (not in
+/// the widget) because the notifier owns entry creation; the card only
+/// renders whatever the state carries.
+const _defaultCardioDurationSeconds = 30 * 60;
 
 /// Locales we currently ship ARBs for. Kept local to this file rather than
 /// centralized — `lookupAppLocalizations` throws on unrecognized codes, and
@@ -283,13 +290,23 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// `finish_workout_coordinator.dart` (the `preFinishSetsCount` capture
   /// alongside `priorWorkoutCount`) for the established pattern, and
   /// auto-memory `cluster_async_caller_broke_snackbar.md` for the cluster.
+  /// Phase 38b: completed CARDIO entries count as one unit of committable
+  /// work each. Without this, a cardio-only session reads 0 and the
+  /// empty-session guard blocks the finish — but a completed cardio entry
+  /// IS real logged work (it persists to `cardio_sessions`); only its XP
+  /// is deferred to 38c. The guard's intent is "did the user do anything
+  /// worth saving", not "did the user earn XP".
   int get totalSetsCount {
     final current = state.value;
     if (current == null) return 0;
-    return current.exercises
+    final completedSets = current.exercises
         .expand((e) => e.sets)
         .where((s) => s.isCompleted)
         .length;
+    final completedCardio = current.exercises
+        .where((e) => e.cardioSession?.isCompleted ?? false)
+        .length;
+    return completedSets + completedCardio;
   }
 
   /// Start a new workout session.
@@ -391,6 +408,23 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           restSeconds: re.restSeconds,
           exercise: re.exercise,
         );
+
+        // Phase 38b — a routine containing a cardio exercise (the picker
+        // has listed the 8 default cardio movements since 00014) seeds a
+        // default CardioSession instead of `setCount` weight×reps slots.
+        if (re.exercise.muscleGroup == MuscleGroup.cardio) {
+          exercises.add(
+            ActiveWorkoutExercise(
+              workoutExercise: workoutExercise,
+              sets: const [],
+              cardioSession: _seedCardioSession(
+                workoutId: workout.id,
+                exerciseId: re.exerciseId,
+              ),
+            ),
+          );
+          continue;
+        }
 
         // PR-4 / M1 — filter previous-session warmups before clamping.
         // Same Q2 contract as `_computeNewSetDefaults` Priority 1
@@ -555,22 +589,51 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       exercise: exercise,
     );
 
-    final seededSet = await _seedFirstSetForAddedExercise(
-      workoutExerciseId: workoutExerciseId,
-      exercise: exercise,
-    );
+    // Phase 38b — cardio entries carry no weight×reps sets. Seed a default
+    // CardioSession (30:00, no distance, no RPE) instead of a set 1 so the
+    // CardioEntryCard renders the locked "Empty (default)" state.
+    final ActiveWorkoutExercise newEntry;
+    if (exercise.muscleGroup == MuscleGroup.cardio) {
+      newEntry = ActiveWorkoutExercise(
+        workoutExercise: workoutExercise,
+        sets: const [],
+        cardioSession: _seedCardioSession(
+          workoutId: current.workout.id,
+          exerciseId: exercise.id,
+        ),
+      );
+    } else {
+      final seededSet = await _seedFirstSetForAddedExercise(
+        workoutExerciseId: workoutExerciseId,
+        exercise: exercise,
+      );
+      newEntry = ActiveWorkoutExercise(
+        workoutExercise: workoutExercise,
+        sets: [seededSet],
+      );
+    }
 
     final newState = current.copyWith(
-      exercises: [
-        ...current.exercises,
-        ActiveWorkoutExercise(
-          workoutExercise: workoutExercise,
-          sets: [seededSet],
-        ),
-      ],
+      exercises: [...current.exercises, newEntry],
     );
     state = AsyncData(newState);
     await _saveToHive(newState);
+  }
+
+  /// Fresh default cardio entry (Phase 38b): the mandatory duration starts
+  /// at 30:00; distance and RPE start empty (`+ adicionar` ghosts).
+  CardioSession _seedCardioSession({
+    required String workoutId,
+    required String exerciseId,
+  }) {
+    return CardioSession(
+      id: _uuid.v4(),
+      workoutId: workoutId,
+      exerciseId: exerciseId,
+      durationSeconds: _defaultCardioDurationSeconds,
+      isCompleted: false,
+      createdAt: DateTime.now().toUtc(),
+    );
   }
 
   /// Builds the auto-seeded set 1 for [addExercise].
@@ -877,6 +940,62 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
+  /// Update fields on a cardio entry (Phase 38b).
+  ///
+  /// Mirrors [updateSet]'s null-coalescing contract: a null parameter means
+  /// "leave unchanged" — the UI dialogs always supply a concrete value, so
+  /// no clear-to-null sentinel is needed in v1. No-op when the targeted
+  /// exercise has no cardio session (defensive — the CardioEntryCard only
+  /// renders for entries that carry one).
+  Future<void> updateCardioSession(
+    String workoutExerciseId, {
+    int? durationSeconds,
+    double? distanceM,
+    int? rpe,
+  }) async {
+    final current = state.value;
+    if (current == null) return;
+
+    final newState = current.copyWith(
+      exercises: current.exercises.map((e) {
+        if (e.workoutExercise.id != workoutExerciseId) return e;
+        final session = e.cardioSession;
+        if (session == null) return e;
+        return e.copyWith(
+          cardioSession: session.copyWith(
+            durationSeconds: durationSeconds ?? session.durationSeconds,
+            distanceM: distanceM ?? session.distanceM,
+            rpe: rpe ?? session.rpe,
+          ),
+        );
+      }).toList(),
+    );
+    state = AsyncData(newState);
+    await _saveToHive(newState);
+  }
+
+  /// Toggle the completion state of a cardio entry (Phase 38b).
+  ///
+  /// Mirrors [completeSet]. The card's done CTA completes; tapping the
+  /// green ✓ in the collapsed header un-completes (back to editable).
+  Future<void> completeCardioEntry(String workoutExerciseId) async {
+    final current = state.value;
+    if (current == null) return;
+
+    final newState = current.copyWith(
+      exercises: current.exercises.map((e) {
+        if (e.workoutExercise.id != workoutExerciseId) return e;
+        final session = e.cardioSession;
+        if (session == null) return e;
+        return e.copyWith(
+          cardioSession: session.copyWith(isCompleted: !session.isCompleted),
+        );
+      }).toList(),
+    );
+    state = AsyncData(newState);
+    await _saveToHive(newState);
+  }
+
   /// Delete a set and renumber the remaining sets.
   ///
   /// **PR-4 / M3 — original-index bookkeeping.** Before mutating the
@@ -1121,6 +1240,17 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   }
 
   /// Replace the exercise on a [WorkoutExercise] while keeping all sets.
+  ///
+  /// **Phase 38b — modality-safe swap.** Strength→strength keeps the sets
+  /// (the historical contract); cardio→cardio keeps the in-progress cardio
+  /// session (duration/distance/RPE carry over, re-pointed at the new
+  /// exercise). CROSS-modality swaps reset the payload: strength→cardio
+  /// drops the sets and seeds a fresh default cardio entry; cardio→strength
+  /// drops the cardio session and leaves an empty set list (the user adds
+  /// sets via the normal Add Set affordance). Without the reset, a stale
+  /// `cardioSession` would dangle on a strength card (and be silently
+  /// persisted on finish), and stale sets attached to a cardio exercise
+  /// would be invisible in the UI yet written to history.
   Future<void> swapExercise(
     String workoutExerciseId,
     Exercise newExercise,
@@ -1128,15 +1258,38 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     final current = state.value;
     if (current == null) return;
 
+    final newIsCardio = newExercise.muscleGroup == MuscleGroup.cardio;
+
     final newState = current.copyWith(
       exercises: current.exercises.map((e) {
         if (e.workoutExercise.id != workoutExerciseId) return e;
 
+        final oldIsCardio =
+            e.workoutExercise.exercise?.muscleGroup == MuscleGroup.cardio;
+        final swapped = e.workoutExercise.copyWith(
+          exerciseId: newExercise.id,
+          exercise: newExercise,
+        );
+
+        if (newIsCardio) {
+          return e.copyWith(
+            workoutExercise: swapped,
+            sets: const [],
+            // Same-modality swap carries the entry over (re-pointed at the
+            // new exercise); strength→cardio seeds a fresh default.
+            cardioSession: oldIsCardio && e.cardioSession != null
+                ? e.cardioSession!.copyWith(exerciseId: newExercise.id)
+                : _seedCardioSession(
+                    workoutId: current.workout.id,
+                    exerciseId: newExercise.id,
+                  ),
+          );
+        }
         return e.copyWith(
-          workoutExercise: e.workoutExercise.copyWith(
-            exerciseId: newExercise.id,
-            exercise: newExercise,
-          ),
+          workoutExercise: swapped,
+          // cardio→strength: drop the cardio payload; strength→strength:
+          // this is already null and the sets carry over untouched.
+          cardioSession: null,
         );
       }).toList(),
     );
@@ -1429,6 +1582,20 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         .where((e) => e.sets.isNotEmpty)
         .toList();
 
+    // Phase 38b — committed cardio entries (the user tapped "Concluir
+    // cardio"). Persisted to `cardio_sessions` via save_workout's p_cardio
+    // array in the SAME transaction as the workout + sets. Cardio entries
+    // deliberately do NOT produce `workout_exercises` rows: they carry no
+    // sets (an empty set-table card in history would read as a bug), the
+    // `cardio_sessions` row is self-contained (workout_id + exercise_id),
+    // and history rendering of cardio is the Phase 38c/38d CardioLiftRow
+    // work. They never enter PR detection (no sets) and never call any XP
+    // RPC (the 00077 gate is the structural backstop; earning is 38c).
+    final committedCardio = exercises
+        .where((e) => e.cardioSession?.isCompleted ?? false)
+        .map((e) => e.cardioSession!)
+        .toList();
+
     final exerciseIds = committedExercises
         .map((e) => e.workoutExercise.exerciseId)
         .toSet()
@@ -1475,6 +1642,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
           workout: workout,
           exercises: workoutExercises,
           sets: sets,
+          // Phase 38b: completed cardio entries ride the same RPC
+          // transaction (p_cardio → cardio_sessions, migration 00078).
+          cardio: committedCardio,
           // 26e: source routine for weekly_plans bucket find-or-create
           // (00063). Null for free workouts started ad-hoc — the RPC
           // treats them as spontaneous-append candidates.
@@ -1578,6 +1748,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // crash on replay — `_$ExerciseSetFromJson` calls
         // `DateTime.parse(json['created_at'] as String)` unconditionally.
         final setsJson = sets.map((s) => s.toRpcJson()).toList();
+        // Phase 38b: shared `toRpcJson()` keeps the offline cardio payload
+        // byte-identical to the online one — same BUG-001 drift guard as
+        // setsJson above.
+        final cardioJson = committedCardio.map((c) => c.toRpcJson()).toList();
 
         // Phase 32 PR 32h retired the user-create-exercise surface, so a
         // queued workout can no longer depend on an offline exercise create
@@ -1595,6 +1769,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
                 workoutJson: workoutJson,
                 exercisesJson: exercisesJson,
                 setsJson: setsJson,
+                cardioJson: cardioJson,
                 userId: workout.userId,
                 queuedAt: now,
               ),

@@ -69,13 +69,20 @@ class HiveService {
   ///   into `/onboarding` on cold start until the next profile fetch.
   ///   Wiping forces a fresh read against the authoritative column.
   ///
+  /// - 5: Phase 38b cardio logging — adds `Exercise.slug` (`String?`).
+  ///   Legacy cached exercise rows deserialize fine (null slug) but the
+  ///   cardio logging card keys its activity-label mapping on slug, so a
+  ///   stale-null row would render the generic "CARDIO" eyebrow instead of
+  ///   "CORRIDA · CARDIO" until the cache TTL fires. One forced refresh
+  ///   repopulates with the authoritative server slugs.
+  ///
   /// Adding `usesBodyweightLoad` with `@Default(false)` is technically
   /// backward-compatible at the Freezed level (legacy rows deserialize as
   /// `false`), but we still wipe so the next read repopulates from the
   /// authoritative server flags — leaving stale `false`s in cache would let
   /// the 20 curated bodyweight exercises miss their effective-load math
   /// until the cache TTL fires.
-  static const int currentCacheSchemaVersion = 4;
+  static const int currentCacheSchemaVersion = 5;
 
   /// Hive boxes whose contents are model-serialized payloads from Supabase
   /// reads. These are wiped on cache schema version mismatch — the cost is

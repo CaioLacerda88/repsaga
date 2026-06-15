@@ -2455,5 +2455,77 @@
   "genderOther": "Other",
   "@genderOther": { "description": "Legal PR 2 — Gender option label. Same backward-compat fallback as NULL (male tier tables) — documented in `lib/features/profile/models/profile.dart`." },
   "genderNotSet": "Not set",
-  "@genderNotSet": { "description": "Legal PR 2 — Display value shown in the Profile → Settings row when `profile.gender == null`. Tapping opens the editor." }
+  "@genderNotSet": { "description": "Legal PR 2 — Display value shown in the Profile → Settings row when `profile.gender == null`. Tapping opens the editor." },
+
+  "cardioEyebrow": "{activity} · CARDIO",
+  "@cardioEyebrow": {
+    "description": "Phase 38b — uppercase tracked eyebrow on the CardioEntryCard, e.g. 'RUNNING · CARDIO'. ARB supplies the casing (label-register convention).",
+    "placeholders": { "activity": { "type": "String" } }
+  },
+  "cardioEyebrowGeneric": "CARDIO",
+  "@cardioEyebrowGeneric": { "description": "Phase 38b — eyebrow fallback for cardio exercises without a known activity mapping (user-created)." },
+  "cardioActivityRunning": "RUNNING",
+  "@cardioActivityRunning": { "description": "Phase 38b — activity label for treadmill (uppercase, eyebrow register)." },
+  "cardioActivityRowing": "ROWING",
+  "@cardioActivityRowing": { "description": "Phase 38b — activity label for rowing_machine." },
+  "cardioActivityCycling": "CYCLING",
+  "@cardioActivityCycling": { "description": "Phase 38b — activity label for stationary_bike / assault_bike." },
+  "cardioActivityJumpRope": "JUMP ROPE",
+  "@cardioActivityJumpRope": { "description": "Phase 38b — activity label for jump_rope." },
+  "cardioActivityElliptical": "ELLIPTICAL",
+  "@cardioActivityElliptical": { "description": "Phase 38b — activity label for elliptical." },
+  "cardioActivitySled": "SLED",
+  "@cardioActivitySled": { "description": "Phase 38b — activity label for sled_push / sled_drag." },
+  "cardioDurationMinLabel": "MIN",
+  "@cardioDurationMinLabel": { "description": "Phase 38b — tiny uppercase unit label under the mm:ss duration hero." },
+  "cardioDistanceLabel": "DISTANCE",
+  "@cardioDistanceLabel": { "description": "Phase 38b — field label above the optional distance value (uppercase, field-label register)." },
+  "cardioEffortLabel": "EFFORT (RPE)",
+  "@cardioEffortLabel": { "description": "Phase 38b — field label above the optional RPE value when empty." },
+  "cardioEffortShortLabel": "EFFORT",
+  "@cardioEffortShortLabel": { "description": "Phase 38b — shorter field label above the RPE pips once a value is set (mirrors the locked mockup)." },
+  "cardioAddValue": "+ add",
+  "@cardioAddValue": { "description": "Phase 38b — ghost affordance on an empty optional field (distance / RPE). Invites, never nags — the mockup forbids rendering '0.0 km'." },
+  "completeCardio": "Complete cardio",
+  "@completeCardio": { "description": "Phase 38b — done CTA at the bottom of the CardioEntryCard. Collapses the card to the summary line." },
+  "cardioSummaryDuration": "{duration} min",
+  "@cardioSummaryDuration": {
+    "description": "Phase 38b — duration segment of the collapsed completed-card summary line, e.g. '28:45 min'.",
+    "placeholders": { "duration": { "type": "String" } }
+  },
+  "cardioSummaryEffort": "effort {rpe}/10",
+  "@cardioSummaryEffort": {
+    "description": "Phase 38b — RPE segment of the collapsed summary line, e.g. 'effort 7/10'.",
+    "placeholders": { "rpe": { "type": "int" } }
+  },
+  "cardioUncompleteSemantics": "Cardio logged. Tap to edit again.",
+  "@cardioUncompleteSemantics": { "description": "Phase 38b — accessibility label on the green check in the completed cardio card header (tapping un-completes)." },
+  "enterDuration": "Enter duration",
+  "@enterDuration": { "description": "Phase 38b — DurationStepper number-input dialog title. Accepts mm:ss or whole minutes." },
+  "enterDurationHint": "mm:ss",
+  "@enterDurationHint": { "description": "Phase 38b — hint inside the duration dialog text field." },
+  "enterDistance": "Enter distance",
+  "@enterDistance": { "description": "Phase 38b — distance tap-to-type dialog title." },
+  "decrementDuration": "Decrease duration",
+  "@decrementDuration": { "description": "Phase 38b — accessibility label: DurationStepper minus button (30s step)." },
+  "incrementDuration": "Increase duration",
+  "@incrementDuration": { "description": "Phase 38b — accessibility label: DurationStepper plus button (30s step)." },
+  "durationValueSemantics": "Duration: {formatted} minutes. Tap to enter duration.",
+  "@durationValueSemantics": {
+    "description": "Phase 38b — accessibility label on the DurationStepper center value zone.",
+    "placeholders": { "formatted": { "type": "String" } }
+  },
+  "cardioDistanceSemantics": "Distance. Tap to enter distance.",
+  "@cardioDistanceSemantics": { "description": "Phase 38b — accessibility label on the distance field of the CardioEntryCard." },
+  "cardioEffortSemantics": "Effort (RPE). Tap to choose 1 to 10.",
+  "@cardioEffortSemantics": { "description": "Phase 38b — accessibility label on the RPE field of the CardioEntryCard." },
+  "rpeSheetTitle": "Effort (RPE)",
+  "@rpeSheetTitle": { "description": "Phase 38b — title of the 1–10 RPE picker bottom sheet (48dp-floor targets; the inline pips are display-only)." },
+  "rpeSheetSubtitle": "How hard did it feel, from 1 (easy) to 10 (max effort)?",
+  "@rpeSheetSubtitle": { "description": "Phase 38b — helper line under the RPE sheet title." },
+  "rpeOptionSemantics": "Effort {value} of 10",
+  "@rpeOptionSemantics": {
+    "description": "Phase 38b — accessibility label on each 1–10 option in the RPE sheet.",
+    "placeholders": { "value": { "type": "int" } }
+  }
 }

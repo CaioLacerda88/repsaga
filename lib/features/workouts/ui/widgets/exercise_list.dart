@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../exercises/models/exercise.dart';
 import '../../models/active_workout_state.dart';
+import 'cardio_entry_card.dart';
 import 'exercise_card.dart';
 import 'routine_notes_strip.dart';
 
@@ -41,8 +43,26 @@ class ExerciseList extends StatelessWidget {
           return RoutineNotesStrip(notes: routineNotes!.trim());
         }
         final exerciseIndex = index - notesOffset;
+        final activeExercise = exercises[exerciseIndex];
+        // Phase 38b — mixed sessions: cardio entries render the dedicated
+        // CardioEntryCard (duration-hero grammar, teal stripe) while
+        // strength entries keep the weight×reps ExerciseCard, in the SAME
+        // list. The muscle group is the modality discriminator (the
+        // notifier seeds `cardioSession` for cardio entries and sets for
+        // strength ones).
+        final isCardio =
+            activeExercise.workoutExercise.exercise?.muscleGroup ==
+            MuscleGroup.cardio;
+        if (isCardio) {
+          return CardioEntryCard(
+            activeExercise: activeExercise,
+            reorderMode: reorderMode,
+            isFirst: exerciseIndex == 0,
+            isLast: exerciseIndex == exercises.length - 1,
+          );
+        }
         return ExerciseCard(
-          activeExercise: exercises[exerciseIndex],
+          activeExercise: activeExercise,
           reorderMode: reorderMode,
           isFirst: exerciseIndex == 0,
           isLast: exerciseIndex == exercises.length - 1,

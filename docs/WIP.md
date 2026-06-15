@@ -38,6 +38,15 @@ and reboot again:
 **Blocks until then:** 38a `make test-integration`, 38c 4-site parity (needs local
 Supabase), 38f Playwright E2E, and `npx supabase db push` of new migrations.
 
+**Post-reboot batch runbook (38a #335 + 38b #336 are merge-held on this):**
+1. Reboot → verify `wsl -d Ubuntu echo ok` → start Docker Desktop → `docker info`.
+2. `npx supabase start` → `npx supabase db reset` (applies all migs incl. 00077+00078).
+3. `make test-integration` — runs 38a gate test + 38b `cardio_save_roundtrip`. Must be green.
+4. Merge **#335 (38a)** squash→main (CI already green on push; confirm).
+5. Rebase **#336 (38b)** onto main (drop 38a's squashed commits), force-push, retarget PR base main→main, merge.
+6. `npx supabase db push` 00077+00078 to **hosted** Supabase; verify schema.
+7. Start **38c** (earning formula + 4-site parity + est-VO₂max).
+
 ---
 
 ## Phase 38 — Cardio / Conditioning Track
@@ -46,6 +55,18 @@ Per the approved implementation plan (`~/.claude/plans/noble-stirring-scroll.md`
 and `docs/cardio-stat-plan.md` §4–§7 + `docs/cardio-balance-baseline.md` (14/14
 panel). 6 sequential PRs (38a–38f). Decisions locked: build now (pre-launch),
 manual-only logging, ship strength→cardio cross-credit in v1, teal-cyan hue.
+
+> **RESUME STATE (2026-06-15, awaiting reboot).** Current branch
+> `feature/phase38b-cardio-logging` (clean, pushed). **38a → PR #335 open**,
+> **38b → PR #336 open** (stacked, base = 38a branch) — BOTH code-complete,
+> reviewed, gates green, **merge-held only on the reboot-window integration
+> tests**. Next action when the user returns = the "Post-reboot batch runbook"
+> in the Environment-blocker section above (steps 1–7), then build 38c. Stashes:
+> dropped the redundant `phase38b-review-fixes-temp`; the only remaining stash is
+> the unrelated June-4 `session-checkpoint` on main (do not touch). Note: the
+> `fable` model failed to spawn as a SUBAGENT twice this session — route
+> tech-lead/qa dispatches to `opus`/`sonnet` via the Agent `model` override if it
+> recurs (main loop on fable is fine).
 
 ### PR 38a — Save-gate fix (active) — branch `feature/phase38a-cardio-save-gate`
 
@@ -59,8 +80,30 @@ rest of Phase 38; ships on its own.
 - [x] Gate mechanism: **(a) source-query exclusion on `muscle_group='cardio'`** — (b) per-key skip would still emit zero-XP `xp_events` rows. Data audit: all 8 cardio exercises have pure `{"cardio":1.0}` attribution + `muscle_group='cardio'`; no mixed maps; `fn_insert_user_exercise` has no attribution param (NULL fallback = `{muscle_group:1.0}`) → muscle_group gate is complete. `save_workout` needs NO change (persists raw sets, delegates XP to the batch RPC; reversal pattern self-heals pre-gate latent rows). `backfill_rpg_v1` convergence unaffected (visited-underflow check, no precomputed totals)
 - [x] Integration test `test/integration/rpg_cardio_save_gate_test.dart` (tag `integration`): zero cardio `body_part_progress`/`xp_events`, zero strength-peak rows for weighted cardio (sled), control-user strength-XP equality + all three writers covered
 - [x] `dart format` (0 changed) + `dart analyze --fatal-infos` (no issues) + unit/widget suite green (+3553, 0 failures). Side-find fixed: Makefile `test:` passed `--exclude-tags` twice — package:test is last-wins, so `make test` was silently RUNNING the integration suite; now a single boolean selector `"integration || golden"`
-- [ ] `make test-integration` — **BLOCKED by the WSL2/Docker reboot blocker above**; SQL verified by manual trace (all three writers + backfill_rpg_v1 convergence + save_workout reversal). Run in the post-reboot batch window before merge
-- [ ] Reviewer → (QA: tooling/DB, no E2E surface) → ship → condense; apply migration to hosted Supabase post-merge
+- [x] Reviewer — **zero findings** (independently re-verified the verbatim-diff, gate completeness, exactly-three-writers, test quality). `dart format`/`analyze`/`make test` (+3553) green. **PR #335 open**, CI running.
+- [ ] `make test-integration` — **BLOCKED by the WSL2/Docker reboot blocker above**; SQL verified by manual trace + reviewer's independent diff. Run in the post-reboot batch window **before merge** (held).
 
-### PR 38b–38f — queued (see plan file)
-38b data model + `CardioEntryCard` · 38c earning formula + 4-site parity + est-VO₂max · 38d activation (atomic boundary flip + UI) · 38e titles · 38f E2E + QA + calibration sign-off.
+### PR 38b — Cardio data model + logging surface (active) — branch `feature/phase38b-cardio-logging` (stacked on 38a)
+
+Net-new `cardio_sessions` table + `CardioEntryCard` input. Cardio entries persist
+but earn nothing yet (cardio still excluded from `activeBodyParts`). Manual-only
+logging (decision): activity type + duration (mandatory) + optional distance + RPE.
+
+- [x] **ui-ux-critic design direction** + mockup `docs/phase-38-mockups.html` (4 states: empty/filled/completed/mixed-session) — **user-approved as-is**. Teal locked `#22D3EE`; duration-as-hero stepper; distance=tap-to-type, RPE=1–10 via sheet; optional fields invite (`+ adicionar`) not nag; card-level teal stripe (strength cards untouched)
+- [x] Migration `00078`: `cardio_sessions` (raw inputs only — `duration_seconds` NOT NULL CHECK>0, `distance_m?` CHECK>=0, `rpe?` 1–10; the computed `met`/`met_minutes`/`est_met` columns are DEFERRED to 38c per the PR brief) + RLS via parent workout ownership + explicit grants (cluster `supabase-cli-latest-grant-drift`) + `save_workout` gains `p_cardio jsonb DEFAULT '[]'` (drop 3-arg, recreate 4-arg — old clients calling with 3 named params still resolve via the default; RPC re-pins `workout_id` server-side; DELETE+INSERT idempotent re-save)
+- [x] `CardioSession` Freezed model (`toRpcJson`/`fromJson` mirroring `ExerciseSet`); threaded as `ActiveWorkoutExercise.cardioSession?` (nullable field, discriminated by `exercise.muscleGroup == cardio`) → survives Hive crash-recovery like routineNotes
+- [x] Notifier: cardio seed in `addExercise`/`startFromRoutine` (default 30:00, no set-1 seed), `updateCardioSession` + `completeCardioEntry` mutations, modality-safe `swapExercise`, `totalSetsCount` counts completed cardio entries (finish guard unblocks cardio-only sessions), `finishWorkout` builds committed-cardio payload (online RPC + offline `PendingSaveWorkout.cardioJson`). Cardio entries do NOT produce `workout_exercises`/`sets` rows (history rendering = 38c/38d CardioLiftRow)
+- [x] `CardioEntryCard` (4 mockup states) + `DurationStepper` (mm:ss, 30s steps, 40-wide ± at the real 48dp rendered floor — no `visualDensity: compact`, which silently shrinks WeightStepper's rendered buttons to 40×40) + distance tap-to-type dialog (km/mi by profile weight unit) + RPE bottom sheet (48dp floor; inline pips display-only); shared `ExerciseCardHeader` extracted from `exercise_card.dart` (gains `trailing` slot for the completed ✓); `ExerciseDetailSheet` promoted public so both card types share the detail surface
+- [x] `ExerciseList` branches `CardioEntryCard` vs `ExerciseCard`; teal token retune `AppColors.bodyPartCardio` orange→`0xFF22D3EE` (dead token, safe; `body_part_hues.dart` untouched — 38d)
+- [x] l10n keys (en+pt): eyebrow activity labels per default cardio slug (keyed on new `Exercise.slug` field returned by `fn_exercises_localized`; Hive cache schema v4→v5 one-shot wipe), field labels, dialogs, semantics
+- [x] Unit tests (CardioSession round-trip + rpc shape; CardioFormat duration/distance; notifier cardio lifecycle incl. swap modality + finish payloads — 35 tests) + widget tests (card states, stepper, dialogs, RPE sheet, ≥48dp tap targets via `tester.getSize` — 20 tests) — green locally
+- [ ] Integration test `test/integration/cardio_save_roundtrip_test.dart` (tag `integration`): cardio row persists + NO `xp_events`/`body_part_progress[cardio]` + re-save idempotency + legacy 3-arg call + RLS — **written but NOT RUN (WSL2/Docker reboot blocker)**; run `flutter test --tags integration test/integration/cardio_save_roundtrip_test.dart` in the post-reboot batch window (also apply 00077+00078 to local first)
+- [x] `make gen` + `dart format` + `dart analyze --fatal-infos` + full unit/widget suite + CI token gates (typography/colors/reward-accent) green
+- [x] ui-ux-critic design-match review — **DISTINCTIVE, mockup-faithful**; flagged RPE-pips/summary 320dp clip risk (fixed defensively below)
+- [x] reviewer code review — contract checks (save_workout 3→4-arg boundary, mocktail, Hive wipe, legacy offline replay) all SOUND; 2 Important + 2 Suggestions
+- [x] review fixes (all same-cycle): (1) completed cardio ✓ no longer hides reorder arrows in reorderMode; (2) `FittedBox(scaleDown)` on RPE pips + completed summary (320dp no-overflow); (3) DurationStepper floors at 30s (invariant ">0 by construction" now literally true); (4) legacy offline-map (no `cardio_json` key) → `cardioJson == []` test. 0-XP cinematic finding **owner-decided: accept interim** (guard unchanged). +tests; gate green (3617)
+- [x] **PR #336 open** (base = `feature/phase38a-cardio-save-gate`, stacked); gate green (3613)
+- [ ] `make test-integration` (`cardio_save_roundtrip`) in reboot window → merge held until green
+
+### PR 38c–38f — queued (see plan file)
+38c earning formula + 4-site parity + est-VO₂max · 38d activation (atomic boundary flip + UI) · 38e titles · 38f E2E + QA + calibration sign-off. **Reboot to batch-verify 38a+38b and unblock 38c.**

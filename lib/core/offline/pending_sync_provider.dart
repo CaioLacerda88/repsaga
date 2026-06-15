@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/personal_records/models/personal_record.dart';
 import '../../features/personal_records/providers/pr_providers.dart';
+import '../../features/workouts/models/cardio_session.dart';
 import '../../features/workouts/models/exercise_set.dart';
 import '../../features/workouts/models/workout.dart';
 import '../../features/workouts/models/workout_exercise.dart';
@@ -96,6 +97,7 @@ class PendingSyncNotifier extends Notifier<int> {
         :final workoutJson,
         :final exercisesJson,
         :final setsJson,
+        :final cardioJson,
       ):
         final repo = ref.read(workoutRepositoryProvider);
         // Extract routine_id from the persisted workout JSON so the 26e
@@ -109,6 +111,9 @@ class PendingSyncNotifier extends Notifier<int> {
           workout: Workout.fromJson(workoutJson),
           exercises: exercisesJson.map(WorkoutExercise.fromJson).toList(),
           sets: setsJson.map(ExerciseSet.fromJson).toList(),
+          // Phase 38b: replay cardio entries through the same RPC param as
+          // the online path. Empty (the @Default) for pre-38b queue rows.
+          cardio: cardioJson.map(CardioSession.fromJson).toList(),
           routineId: routineId,
         );
 
