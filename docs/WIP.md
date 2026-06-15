@@ -38,6 +38,15 @@ and reboot again:
 **Blocks until then:** 38a `make test-integration`, 38c 4-site parity (needs local
 Supabase), 38f Playwright E2E, and `npx supabase db push` of new migrations.
 
+**Post-reboot batch runbook (38a #335 + 38b #336 are merge-held on this):**
+1. Reboot → verify `wsl -d Ubuntu echo ok` → start Docker Desktop → `docker info`.
+2. `npx supabase start` → `npx supabase db reset` (applies all migs incl. 00077+00078).
+3. `make test-integration` — runs 38a gate test + 38b `cardio_save_roundtrip`. Must be green.
+4. Merge **#335 (38a)** squash→main (CI already green on push; confirm).
+5. Rebase **#336 (38b)** onto main (drop 38a's squashed commits), force-push, retarget PR base main→main, merge.
+6. `npx supabase db push` 00077+00078 to **hosted** Supabase; verify schema.
+7. Start **38c** (earning formula + 4-site parity + est-VO₂max).
+
 ---
 
 ## Phase 38 — Cardio / Conditioning Track
