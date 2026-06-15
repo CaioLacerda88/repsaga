@@ -74,13 +74,23 @@ class AppColors {
   /// to resolve the chest/back "two purples" hue collision.
   static const bodyPartBack = Color(0xFF38BDF8);
 
-  /// Orange — cardio body-part identity (Phase 26a).
+  /// Teal-cyan — cardio track identity (Phase 38b, locked in the
+  /// `docs/phase-38-mockups.html` design pass).
   ///
-  /// **Infrastructure-only for v1.** Token shipped so v1.1+ can introduce
-  /// cardio as an active stat without re-touching the palette. NOT exposed
-  /// on any UI surface in Phase 26 (rank rail, Saga, Stats, `Engajamento`
-  /// all hide cardio).
-  static const bodyPartCardio = Color(0xFFFB923C);
+  /// Retuned from the Phase 26a orange placeholder (`0xFFFB923C`) — that
+  /// token was infrastructure-only and DEAD (no live surface read it;
+  /// cardio rendered in `hair` gray everywhere), so the retune has zero
+  /// sweep impact. Cardio is a systemic *capacity*, not a 7th anatomical
+  /// body part; the cyan deliberately sits outside the warm body-part
+  /// family AND outside the brand violet stack so "teal = my conditioning"
+  /// reads as its own parallel track.
+  ///
+  /// First consumer: the `CardioEntryCard` logging surface (card stripe,
+  /// duration hero, done CTA). `body_part_hues.dart` still maps cardio →
+  /// `hair`; that wiring + its design-token sweep across Saga/Stats/
+  /// celebration surfaces is Phase 38d (cluster:
+  /// design-token-sweep-on-new-tokens).
+  static const bodyPartCardio = Color(0xFF22D3EE);
 
   // ─── Progress infrastructure (Phase 26a) ─────────────────────────────
   /// Violet-tinted XP/progress bar track (Phase 26a).

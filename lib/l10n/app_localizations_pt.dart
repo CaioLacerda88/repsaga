@@ -3156,4 +3156,102 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get genderNotSet => 'Não definido';
+
+  @override
+  String cardioEyebrow(String activity) {
+    return '$activity · CARDIO';
+  }
+
+  @override
+  String get cardioEyebrowGeneric => 'CARDIO';
+
+  @override
+  String get cardioActivityRunning => 'CORRIDA';
+
+  @override
+  String get cardioActivityRowing => 'REMO';
+
+  @override
+  String get cardioActivityCycling => 'CICLISMO';
+
+  @override
+  String get cardioActivityJumpRope => 'PULAR CORDA';
+
+  @override
+  String get cardioActivityElliptical => 'ELÍPTICO';
+
+  @override
+  String get cardioActivitySled => 'TRENÓ';
+
+  @override
+  String get cardioDurationMinLabel => 'MIN';
+
+  @override
+  String get cardioDistanceLabel => 'DISTÂNCIA';
+
+  @override
+  String get cardioEffortLabel => 'ESFORÇO (RPE)';
+
+  @override
+  String get cardioEffortShortLabel => 'ESFORÇO';
+
+  @override
+  String get cardioAddValue => '+ adicionar';
+
+  @override
+  String get completeCardio => 'Concluir cardio';
+
+  @override
+  String cardioSummaryDuration(String duration) {
+    return '$duration min';
+  }
+
+  @override
+  String cardioSummaryEffort(int rpe) {
+    return 'esforço $rpe/10';
+  }
+
+  @override
+  String get cardioUncompleteSemantics =>
+      'Cardio registrado. Toque para editar novamente.';
+
+  @override
+  String get enterDuration => 'Inserir duração';
+
+  @override
+  String get enterDurationHint => 'mm:ss';
+
+  @override
+  String get enterDistance => 'Inserir distância';
+
+  @override
+  String get decrementDuration => 'Diminuir duração';
+
+  @override
+  String get incrementDuration => 'Aumentar duração';
+
+  @override
+  String durationValueSemantics(String formatted) {
+    return 'Duração: $formatted minutos. Toque para inserir a duração.';
+  }
+
+  @override
+  String get cardioDistanceSemantics =>
+      'Distância. Toque para inserir a distância.';
+
+  @override
+  String get cardioEffortSemantics =>
+      'Esforço (RPE). Toque para escolher de 1 a 10.';
+
+  @override
+  String get rpeSheetTitle => 'Esforço (RPE)';
+
+  @override
+  String get rpeSheetSubtitle =>
+      'Quão difícil foi, de 1 (fácil) a 10 (esforço máximo)?';
+
+  @override
+  String rpeOptionSemantics(int value) {
+    return 'Esforço $value de 10';
+  }
 }

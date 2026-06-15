@@ -76,6 +76,12 @@ sealed class PendingAction with _$PendingAction {
     required Map<String, dynamic> workoutJson,
     required List<Map<String, dynamic>> exercisesJson,
     required List<Map<String, dynamic>> setsJson,
+
+    /// Phase 38b — completed cardio entries (`CardioSession.toRpcJson()`
+    /// shape) replayed as `save_workout`'s `p_cardio` array. Defaults to
+    /// empty so pre-38b queue entries surviving an app upgrade in the Hive
+    /// box deserialize unchanged.
+    @Default(<Map<String, dynamic>>[]) List<Map<String, dynamic>> cardioJson,
     required String userId,
     required DateTime queuedAt,
     @Default(0) int retryCount,

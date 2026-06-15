@@ -117,6 +117,13 @@ abstract class Exercise with _$Exercise {
     // rows + non-strength exercises; consumers fall back to
     // `muscle_group` when null.
     @JsonKey(name: 'xp_attribution') Map<String, num>? xpAttribution,
+    // Phase 38b — stable machine identifier (`exercises.slug`, returned by
+    // `fn_exercises_localized` since 00034). The cardio logging surface
+    // keys its activity-label mapping on it (treadmill → "CORRIDA · CARDIO"
+    // eyebrow); Phase 38c keys the slug→MET table on it. Nullable so legacy
+    // Hive cache rows that pre-date this field deserialize safely —
+    // consumers fall back to the generic "CARDIO" eyebrow when null.
+    String? slug,
   }) = _Exercise;
 
   factory Exercise.fromJson(Map<String, dynamic> json) =>

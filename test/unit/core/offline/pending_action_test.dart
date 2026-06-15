@@ -59,6 +59,42 @@ void main() {
         expect(typed.retryCount, 3);
         expect(typed.lastError, 'NetworkException: timeout');
       });
+
+      // Phase 38b: a queue entry written by a PRE-38b build (no cardio
+      // concept) and read back AFTER the app upgrades has no `cardio_json`
+      // key in its Hive blob. The factory always writes the key, so the
+      // round-trip tests above never exercise the missing-key path — this
+      // pins it directly. Missing key must default to an empty list (not
+      // throw, not null), keeping legacy save-workout replays valid.
+      test(
+        'deserializes a legacy blob WITHOUT cardio_json to an empty list',
+        () {
+          final legacyJson = <String, dynamic>{
+            'type': 'saveWorkout',
+            'id': 'w-legacy',
+            'workout_json': {'id': 'w-legacy', 'user_id': 'u-1'},
+            'exercises_json': <Map<String, dynamic>>[
+              {'id': 'we-1', 'exercise_id': 'e-1', 'order': 0},
+            ],
+            'sets_json': <Map<String, dynamic>>[
+              {'id': 's-1', 'workout_exercise_id': 'we-1', 'set_number': 1},
+            ],
+            // NO 'cardio_json' key — this is the pre-38b shape.
+            'user_id': 'u-1',
+            'queued_at': now.toIso8601String(),
+          };
+
+          final restored = PendingAction.fromJson(legacyJson);
+
+          expect(restored, isA<PendingSaveWorkout>());
+          final typed = restored as PendingSaveWorkout;
+          expect(typed.cardioJson, const <Map<String, dynamic>>[]);
+          // The rest of the legacy payload still deserializes unchanged.
+          expect(typed.id, 'w-legacy');
+          expect(typed.exercisesJson.length, 1);
+          expect(typed.setsJson.length, 1);
+        },
+      );
     });
 
     group('PendingUpsertRecords', () {

@@ -8,6 +8,7 @@ import '../../../core/local_storage/cache_service.dart';
 import '../../../core/local_storage/hive_service.dart';
 import '../../exercises/data/exercise_repository.dart';
 import '../../exercises/models/exercise.dart';
+import '../models/cardio_session.dart';
 import '../models/exercise_set.dart';
 import '../models/workout.dart';
 import '../models/workout_exercise.dart';
@@ -67,6 +68,12 @@ class WorkoutRepository extends BaseRepository {
     required Workout workout,
     required List<WorkoutExercise> exercises,
     required List<ExerciseSet> sets,
+    // Phase 38b: completed cardio entries → `cardio_sessions` rows, same
+    // transaction (migration 00078 `p_cardio`). Defaults to empty so the
+    // 78 pre-existing call sites and the offline drain stay source-
+    // compatible (feedback: measure-blast-radius-of-shared-code — opt-in
+    // param, old behavior preserved by default).
+    List<CardioSession> cardio = const [],
     String? routineId,
   }) {
     return mapException(() async {
@@ -99,6 +106,9 @@ class WorkoutRepository extends BaseRepository {
                   )
                   .toList(),
               'p_sets': sets.map((s) => s.toRpcJson()).toList(),
+              // Phase 38b: raw cardio inputs; the RPC re-pins workout_id
+              // server-side and inserts in the same transaction.
+              'p_cardio': cardio.map((c) => c.toRpcJson()).toList(),
             },
           )
           .timeout(_saveWorkoutTimeout);
