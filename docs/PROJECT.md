@@ -88,6 +88,8 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | 36 | Manual QA-scan polish (on-device pass of the Phase-35 build) — **#319 Signup polish:** strength hint now names the single missing requirement (length→number→symbol) instead of a stale "add numbers or symbols"; age-gate checkbox alignment fix (inline links no longer forced to a 48dp line height); **dropped confirm-password** per GOV.UK/Apple-HIG/NN/g (single reveal toggle + state-aware tooltip + one-time ghost hint replaces it; age-gate keyboard-submit guard moved to the password field). **#320 Share card:** RPG class name localized on the post-session overlay (was the raw slug uppercased — cluster `slug-rendered-as-display-name`) + reused `b3ClassSubline` so the discreet eyebrow stops mixing locales. **#321 Routines:** one-time long-press discoverability hint row (Hive-gated dismiss on first long-press + 3-view cap; degrades gracefully when the prefs box isn't open). One reviewer "Critical" pushed back with evidence (Hive's synchronous in-memory write makes the proposed double-count race non-existent). | DONE | #319 #320 #321 |
 | 37 | Training notes (product-owner + ui-ux-critic analysis; user-driven) — **#323 Q1:** moved workout notes OUT of the finish-workout dialog (it competed with the RPG celebration beat) → editable on the History detail screen (flat section, custom near-cap counter hidden until ≤200 remaining, `SingleChildScrollView` to avoid 320dp+keyboard overflow); new owner-scoped online-only `updateWorkoutNotes` + Riverpod-3 `WorkoutNotesNotifier`. **#324 Q2:** routine-level training notes — editable (optional, 600-char) in the routine creator, read-only "TRAINING NOTES" header strip while training (exercise-list first item, present ONLY when notes exist → drag-to-dismiss read sheet; zero chrome otherwise). Migration **00075** (`workout_templates.notes` + `valid_workout_templates_notes_length` ≤600 CHECK, applied to hosted). Notes threaded via `RoutineStartConfig` → `ActiveWorkoutState` (Hive-persisted, survives crash-recovery). Char cap 600 (UX: read mid-set → brevity enforced) vs workouts.notes 2000 (retrospective). | DONE | #323 #324 |
 | 38a | Cardio / Conditioning Track — **save-gate fix.** Pre-feature hygiene branching the XP/save path so a cardio-attributed set can never enter the strength weight×reps chain (closes the latent mis-attribution bug + the running→strength farm vector; `cardio-stat-plan.md` §1+§2.6). Migration **00077** redefines the **three** writers of the invariant (`record_set_xp`, `record_session_xp_batch`, `_rpg_backfill_chunk`) with a source-query exclusion on `muscle_group='cardio'` (verbatim-diff vs 00065 — gate lines only). Data audit confirmed all 8 cardio exercises carry pure `{"cardio":1.0}` attribution; `save_workout` needed no change. Side-find: Makefile `test:` double-passed `--exclude-tags` (package:test last-wins) so `make test` was silently running the integration suite → fixed to a single `"integration || golden"` selector. Integration test `rpg_cardio_save_gate_test.dart` (all 3 writers) green on hosted-parity local. | DONE | #335 |
+| 38c | Cardio / Conditioning Track — **earning formula + 4-site parity + est-VO₂max.** Ports `cardio-xp-simulation.py` (14/14 personas) to production: SQL `record_cardio_session` (migration **00079**; reuses `rpg_tier_diff_mult` + rank curve verbatim, cardio base `capped_met_min^0.60`, weekly MET-min cap accumulating across the ISO week, dedicated partial-unique index for the no-set_id cardio `xp_events` conflict key) + Dart `CardioXpCalculator` + `EstVo2max` (pace→ACSM→`sustainableFraction` best-effort, p25 non-exercise seed, 42-day rolling best-of on new `profiles.cardio_vo2max`) + strength→cardio cross-credit (work-density→ACSM MET band, one-directional, demonstrated-VO₂ gate). Cardio XP accrues to `body_part_progress`/`xp_events` but stays **SILENT** (out of `activeBodyParts`/`character_state` until 38e — `character_state` already structurally excludes it). 4-site parity (Python→fixture→Dart→SQL) @1e-4 (live-row @0.01). Adds nullable `profiles.date_of_birth` (no UI — collection is 38d). Review: 1 Blocker (stale tests vs new cross-credit contract) + 4 findings fixed same-cycle. | DONE | #340 |
+| — | Integration-suite repair (38c-discovered prerequisite) — fixed **18 pre-existing stale integration failures on main** (record_set_xp parity oracle missing the Phase-29-v2 implied-tier chain → ~2.94× under-compute; peak_load seeding the Phase-15f-removed `exercises.name`; backfill `computeDartReference` staleness; backfill_zero_weight calling a service_role-forbidden RPC). All test-side, zero production changes; suite `+48 -18`→`+66 -0`. CI excludes integration so the rot was invisible — see memory `project_integration_suite_red_on_main`. | DONE | #339 |
 | 38b | Cardio / Conditioning Track — **data model + logging surface.** Net-new `cardio_sessions` table (migration **00078**: `duration_seconds>0` NOT NULL, `distance_m>=0?`, `rpe 1–10?`; computed met columns deferred to 38c) + owner-scoped RLS via parent workout + explicit grants (`supabase-cli-latest-grant-drift`); `save_workout` 3→4-arg (`p_cardio jsonb DEFAULT '[]'`, atomic finish, legacy clients resolve via default, idempotent DELETE+INSERT). `CardioSession` Freezed model threaded as `ActiveWorkoutExercise.cardioSession?` (discriminated by `muscleGroup==cardio`, Hive crash-recovery). `CardioEntryCard` (4 user-approved states, `docs/phase-38-mockups.html`) + `DurationStepper` (mm:ss, 48dp floor) + distance tap-to-type + RPE sheet; shared `ExerciseCardHeader` extracted. Teal `bodyPartCardio` retuned orange→`#22D3EE` (dead token; hue wiring is 38d). New `Exercise.slug` keys the eyebrow (Hive cache v4→v5 wipe). Cardio entries persist but **earn nothing yet** (still out of `activeBodyParts`; earning = 38c). Integration test `cardio_save_roundtrip_test.dart` (persist + no XP + idempotency + legacy 3-arg + RLS) green; migrations 00077+00078 pushed to hosted. | DONE | #337 |
 
 ### Cluster Ledger — named bug patterns
@@ -254,6 +256,40 @@ Single source of truth for **deferred work that is not yet a phase but is on the
 - (d) Post-launch decisions waiting on telemetry
 
 Items in (d) move to the "v2-park" sub-list and don't get worked on without new product input.
+
+### Phase 38 — Cardio / Conditioning Track: remaining stages (sequential)
+
+38a (#335) + 38b (#337) + 38c (#340) shipped; migrations 00077–00079 on hosted.
+Full per-stage spec in the plan `~/.claude/plans/noble-stirring-scroll.md`. Cardio
+XP is computed but **silent** (out of `activeBodyParts`/`character_state`) until 38e.
+
+- **38d — Age capture (birth-year).** Collect birth-year so cardio scores on real
+  age-decade norms instead of the age-35 fallback (38c added nullable
+  `profiles.date_of_birth`; this adds the UI). **Decisions locked:** birth-YEAR
+  granularity (stored `YYYY-01-01`, no migration change — LGPD data-minimization);
+  **optional**, never gates cardio XP; backfill prompt = post-session summary
+  (one-time dismissible); LGPD **Art. 6 consent** (not Art. 11) → point-of-collection
+  disclosure + privacy-policy §2 row + data-export inclusion, **no** Hive consent
+  toggle. UI: `AgeRow` + `AgeEditorSheet` cloning gender/bodyweight grammar +
+  branded birth-year wheel (structural ≥18 floor, never re-asks the signup age-gate).
+  Net-new user-facing surface → ui-ux-critic mockup + visual-verification gate.
+- **38e — Activation (atomic boundary flip + coherent UI) ⚠ largest.** Add cardio to
+  `activeBodyParts` + both `_activeKeys` + `character_state`/in-RPC char-level (7 parts,
+  denominator stays 4; max level 148→172); `Wayfarer` class (Ascendant stays
+  6-strength-only); teal hue retune; `CardioProgressRow` on Saga + vitality table/chart;
+  `CardioEntryRow` in the post-session summary. Visual-verification gate.
+- **38f — Titles:** cardio ladder + cross-build + level-cap title at 172 (90→106).
+- **38g — E2E + QA + calibration sign-off:** new `cardio.spec.ts`, affected-spec
+  regression, calibration sign-off (tier bands vs ACSM on real data).
+
+### CI integration-test job (follow-up from #339)
+
+The integration-tagged suite is NOT run in CI (`--exclude-tags "integration || golden"`)
+because it needs a live Supabase — so it rotted to 18 failures undetected until the 38c
+review (#339 repaired it; memory `project_integration_suite_red_on_main`). **devops
+follow-up:** stand up a CI job running `flutter test --tags integration` against a CI
+Supabase service so this can't silently rot again. Until then, the integration gate is
+manual ("no new failures vs main", run the FULL suite locally).
 
 ### Architectural follow-ups (parked, no urgency)
 
