@@ -35,6 +35,7 @@ library;
 // ignore_for_file: avoid_dynamic_calls
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/rpg/domain/implied_tier.dart';
 import 'package:repsaga/features/rpg/domain/xp_calculator.dart';
 import 'package:repsaga/features/rpg/domain/xp_distribution.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
@@ -103,7 +104,11 @@ void main() {
         // the same exercises row the SQL RPC reads (mirror the SQL side).
         final difficulty = await difficultyMultForSlug(adminClient, slug);
 
-        // Dart: fresh first set, no prior peak → strength_mult = 1.0
+        // Dart: fresh first set, no prior peak → strength_mult = 1.0.
+        // Phase 29 v2: feed the same implied_tier / current_rank the SQL
+        // chain derives for the seeded fresh user (NULL bodyweight → tier
+        // 15.0; no progress row → rank 1) so tier_diff_mult /
+        // abs_strength_premium match exactly.
         final dartComps = XpCalculator.computeSetXp(
           weightKg: weight,
           reps: reps,
@@ -111,6 +116,8 @@ void main() {
           sessionVolumeForBodyPart: 0,
           weeklyVolumeForBodyPart: 0,
           difficultyMult: difficulty,
+          impliedTier: _seededImpliedTier(slug, weight, reps),
+          currentRank: _seededCurrentRank,
         );
         final dartXp = XpDistribution.distribute(
           setXp: dartComps.setXp,
@@ -241,6 +248,8 @@ void main() {
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
         difficultyMult: difficulty,
+        impliedTier: _seededImpliedTier(slug, weight, reps),
+        currentRank: _seededCurrentRank,
       );
       final dartXp = XpDistribution.distribute(
         setXp: dartComps.setXp,
@@ -308,6 +317,8 @@ void main() {
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
         difficultyMult: difficulty,
+        impliedTier: _seededImpliedTier(slug, weight, reps),
+        currentRank: _seededCurrentRank,
       );
       final dartXp = XpDistribution.distribute(
         setXp: dartComps.setXp,
@@ -450,7 +461,11 @@ void main() {
       // production save_workout chain ends up taking).
       await userClient.rpc('record_set_xp', params: {'p_set_id': setId});
 
-      // Dart reference: difficulty_mult = 1.0 (column default).
+      // Dart reference: difficulty_mult = 1.0 (column default). The seeded
+      // user has no profile bodyweight → SQL implied_tier = 15.0 (the
+      // NULL-bodyweight fallback, independent of the exercise slug since the
+      // fallback fires before the family dispatch); no body_part_progress
+      // row → current_rank = 1.
       final dartComps = XpCalculator.computeSetXp(
         weightKg: weight,
         reps: reps,
@@ -458,6 +473,8 @@ void main() {
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
         difficultyMult: 1.0,
+        impliedTier: _seededImpliedTier('barbell_bench_press', weight, reps),
+        currentRank: _seededCurrentRank,
       );
 
       final pgRow = await userClient
@@ -540,7 +557,10 @@ void main() {
       // multiplier value because both sides scale by the same constant; we
       // still mirror what record_set_xp uses for completeness.
       final difficulty = await difficultyMultForSlug(adminClient, slug);
-      // Single set XP at 80kg×8 (strength_mult=1.0 for first set).
+      // Single set XP at 80kg×8 (strength_mult=1.0 for first set). Phase 29
+      // v2: mirror the SQL implied_tier / current_rank for the seeded fresh
+      // user so the single-set reference is on the same scale as the 5
+      // accumulated sets (both bounds scale identically by tier_diff_mult).
       final singleComps = XpCalculator.computeSetXp(
         weightKg: weight,
         reps: reps,
@@ -548,6 +568,8 @@ void main() {
         sessionVolumeForBodyPart: 0,
         weeklyVolumeForBodyPart: 0,
         difficultyMult: difficulty,
+        impliedTier: _seededImpliedTier(slug, weight, reps),
+        currentRank: _seededCurrentRank,
       );
       final singleChestXp = singleComps.setXp * 0.70;
 
@@ -711,13 +733,43 @@ void main() {
           numSets: 1,
         );
 
-        // Final state must equal a single-save of 90kg×5 — NOT
-        // (80kg + 90kg) stacked.
+        // Final state must equal the 90kg×5 award ALONE — NOT (80kg + 90kg)
+        // stacked. The reversal pattern reverts the prior 80kg contribution
+        // before re-adding, so chest holds only the second save's award.
         final finalChest = await _readBodyPartXp(userClient, 'chest');
 
-        // Reference: single 90kg×5 save on a fresh user.
+        // Reference: a fresh user whose state EXACTLY reproduces the re-save
+        // user's at the moment its 90kg×5 set is (re-)processed, so the two
+        // chest totals are deterministically equal.
+        //
+        // Why not a single fresh 90kg×5 save? Phase 29 v2's overload_mult
+        // (Refinement #2) reads exercise_peak_loads_by_rep_range — a SEPARATE
+        // per-band PR tracker NOT cascade-deleted by save_workout's re-save.
+        // After the re-save user's first save (80kg×5), its 'strength'-band
+        // PR is 80kg×5; the second save's 90 > 80 legitimately earns
+        // overload_mult = 1.15. A fresh single 90kg×5 save has no prior band
+        // → overload_mult = 1.0, under-rewarding by exactly 1.15× — NOT a
+        // valid oracle. (This 1.15× gap, not a stacking bug, is what the old
+        // 0.5 tolerance masked and then failed on once Phase 29 v2 shipped.)
+        //
+        // We can't replay the 80kg×5 as a real prior WORKOUT either: that
+        // would add a second chest session in the 7d window, bumping
+        // frequency_mult to 1.06 (the re-save user's 80kg was the SAME
+        // session, reverted, so its frequency_mult stays 1.00). Instead we
+        // seed ONLY the band-peak ladder directly (admin, bypassing RLS) —
+        // the exact residual state the re-save leaves — then save 90kg×5 as
+        // the user's only chest workout. Result: overload_mult = 1.15,
+        // frequency_mult = 1.00, no extra chest XP stacked. The reference
+        // chest must then equal the re-save user's final chest EXACTLY.
         final ref = await freshUser();
         final refClient = authenticatedClient(ref);
+        await adminClient.from('exercise_peak_loads_by_rep_range').insert({
+          'user_id': ref.userId,
+          'exercise_slug': slug,
+          'rep_band': 'strength', // 5 reps → 'strength' band (rpg_rep_band)
+          'best_weight': 80.0,
+          'best_reps': reps,
+        });
         final refSeed = await seedWorkout(
           adminClient: adminClient,
           userId: ref.userId,
@@ -736,18 +788,19 @@ void main() {
         );
         final refChest = await _readBodyPartXp(refClient, 'chest');
 
-        // Re-save user's chest XP must approximately equal a single save of
-        // the final weight (modulo strength_mult differences from the prior
-        // peak being 80 — which actually means the second save's
-        // strength_mult is 1.0 since peak advances to 90 inside record_set_xp
-        // before strength_mult is computed; same as the reference).
+        // Deterministic equality: re-save replaced (kept only the 90kg×5
+        // award), and both 90kg×5 awards carry the identical 11-multiplier
+        // chain (overload 1.15 from the seeded 80kg×5 strength-band PR).
         expect(
           (finalChest - refChest).abs(),
-          lessThanOrEqualTo(0.5),
+          lessThanOrEqualTo(_kTol),
           reason:
-              'Re-save with heavier weight must produce ~the same XP as a '
-              'single save of the heavier weight. Re-saved=$finalChest, '
-              'reference=$refChest, delta=${(finalChest - refChest).abs()}',
+              'Re-save with heavier weight must REPLACE the prior award, '
+              'leaving exactly the 90kg×5 award. Re-saved chest=$finalChest, '
+              'reference 90kg×5 award=$refChest, '
+              'delta=${(finalChest - refChest).abs()}. A delta ≈ the 80kg '
+              'award means the reversal stacked; a delta ≈ 1.15× factor means '
+              'the overload ladders diverged.',
         );
       },
     );
@@ -1382,6 +1435,39 @@ void main() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Phase 29 v2 parity oracle: compute the same `implied_tier` the SQL
+/// `record_set_xp` chain derives for a freshly-seeded integration set.
+///
+/// The seed helpers ([seedWorkout]) NEVER set `profiles.bodyweight_kg` or
+/// `profiles.gender`, so the SQL pre-fetch reads NULL for both. The PL/pgSQL
+/// `rpg_implied_tier_for_exercise` short-circuits to the
+/// `kBodyweightZeroFallback` (15.0) when `p_bw IS NULL OR p_bw <= 0` —
+/// regardless of weight/reps/exercise. The Dart [impliedTier] mirrors this
+/// with the identical `bodyweightKg <= 0` branch, so passing
+/// `bodyweightKg: 0` reproduces the SQL value exactly (no theorizing — the
+/// SQL function returns 15.0 for all three parity slugs, verified against the
+/// live DB).
+///
+/// At a fresh user with no `body_part_progress` rows, the dominant-BP
+/// `current_rank` defaults to 1 in the SQL. Together these feed the same
+/// `tier_diff_mult` / `abs_strength_premium` the SQL applies — without them
+/// the Dart oracle left both at the neutral 1.0 default and under-computed by
+/// `tier_diff_mult(15, 1) ≈ 2.94×`.
+double _seededImpliedTier(String slug, double weightKg, int reps) {
+  // bodyweightKg: 0 → Dart impliedTier returns kBodyweightZeroFallback (15.0),
+  // matching the SQL NULL-bodyweight fallback for the seeded fresh user.
+  return impliedTier(
+    exercise: slug,
+    weightKg: weightKg,
+    reps: reps,
+    bodyweightKg: 0,
+  );
+}
+
+/// Current rank for a freshly-seeded user's dominant body part: the SQL
+/// defaults `v_current_rank` to 1 when no `body_part_progress` row exists.
+const double _seededCurrentRank = 1.0;
 
 Future<double> _readBodyPartXp(dynamic userClient, String bodyPart) async {
   final row = await (userClient as dynamic)

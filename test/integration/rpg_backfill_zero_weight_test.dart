@@ -77,9 +77,15 @@ void main() {
       numSets: 3,
     );
 
-    // Run backfill. Pre-fix: throws PostgrestException code=23514.
-    // Post-fix: returns out_is_complete=true after one chunk.
-    final result = await admin.rpc(
+    // Run backfill AS THE AUTHENTICATED USER — the production path
+    // (RpgRepository.runBackfill) and the only role `backfill_rpg_v1` is
+    // GRANTed to (migration 00040 REVOKEs PUBLIC/anon, GRANTs authenticated
+    // only; service_role is NOT granted, so the admin client gets 42501).
+    // Admin stays the seeding client (RLS bypass for setup), matching the
+    // other passing backfill integration tests. Pre-00051 this threw
+    // PostgrestException code=23514; post-fix it returns out_is_complete=true.
+    final userClient = authenticatedClient(user);
+    final result = await userClient.rpc(
       'backfill_rpg_v1',
       params: {'p_user_id': user.userId, 'p_chunk_size': 500},
     );
@@ -170,7 +176,10 @@ void main() {
         startedAt: DateTime.now().subtract(const Duration(days: 1)),
       );
 
-      final result = await admin.rpc(
+      // Authenticated-user RPC call (see the first test for the GRANT
+      // rationale — backfill_rpg_v1 is authenticated-only).
+      final userClient = authenticatedClient(user);
+      final result = await userClient.rpc(
         'backfill_rpg_v1',
         params: {'p_user_id': user.userId, 'p_chunk_size': 500},
       );

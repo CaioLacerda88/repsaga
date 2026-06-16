@@ -23,6 +23,8 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/rpg/domain/implied_tier.dart';
+import 'package:repsaga/features/rpg/domain/rank_curve.dart';
 import 'package:repsaga/features/rpg/domain/xp_calculator.dart';
 
 import 'rpg_integration_setup.dart';
@@ -331,73 +333,136 @@ Future<List<SeedResult>> seedFixtureWorkouts(
 
 /// Sequential Dart-side simulation of [fixture].
 ///
-/// Mirrors the `_rpg_backfill_chunk` PL/pgSQL replay logic exactly:
-///   - Sets ordered by (workout.started_at, set.id) — same as fixture seed order.
-///   - `session_volume[bp]` accumulates **per-bp XP values** within a session
-///     (NOT shares — matches the PG implementation which sums
-///     `xp_events.attribution[bp]` directly, where `attribution[bp]` is the
-///     attributed XP). The Python sim and `XpCalculator` doc-comment talk
-///     about "shares", but the live PG code stores and reads XP — this
-///     reference matches the live code path so the parity test compares
-///     like-with-like. Realigning storage to true-shares is a separate
-///     spec/code change tracked outside this bug-fix cycle.
-///   - `weekly_volume[bp]` looks back 7 days from each set's timestamp,
-///     summing per-bp XP from prior xp_events (matches PG).
-///   - Peak advances inside the loop before `strength_mult` is computed
-///     (matches PG and the Python sim).
+/// Mirrors the Phase 29 v2 `_rpg_backfill_chunk` PL/pgSQL replay byte-for-byte
+/// (migration 00065 PART F). The full 11-multiplier chain is reproduced — the
+/// pre-29 reference (base × intensity × strength × novelty × cap × difficulty
+/// only) under-computed by the same ~2.94× tier_diff factor that the per-set
+/// parity oracle did, because it left tier_diff_mult / abs_strength_premium /
+/// overload_mult / frequency_mult at their neutral 1.0 defaults.
+///
+/// Per set, in chronological order (sets ordered by (workout.started_at,
+/// set.id) — same as the fixture seed order), this reference replicates:
+///
+///   - **session_volume[bp] / weekly_volume[bp] as SHARE accumulators.** The
+///     SQL sums each prior set's `xp_attribution ->> bp` (the attribution
+///     SHARE, e.g. 0.70), NOT the attributed XP. session_volume sums shares
+///     within the same session (workout); weekly_volume sums shares over the
+///     trailing half-open 7-day window. These feed novelty_mult = exp(-sv/15)
+///     and cap_mult (sv/wv are share counts, matching the Python sim's
+///     `novelty_count[bp] += share`).
+///   - **implied_tier = 15.0** for every set. The fixture never sets
+///     `profiles.bodyweight_kg`, so the SQL pre-fetch reads NULL and
+///     `rpg_implied_tier_for_exercise` returns the kBodyweightZeroFallback
+///     (15.0) regardless of exercise/weight/reps. We reproduce it with the
+///     identical `bodyweightKg: 0` branch in the Dart [impliedTier].
+///   - **current_rank** = the dominant body part's rank, re-derived from its
+///     running total_xp via [RankCurve.rankForXp] (default 1 before any XP).
+///     This evolves as the backfill progresses, so tier_diff_mult shifts
+///     per-set exactly as the SQL recomputes it from the live
+///     body_part_progress.rank.
+///   - **overload_mult** via a per-(slug, rep_band) running best. The SQL
+///     reads exercise_peak_loads_by_rep_range and updates it per set; for the
+///     stagnant-lifter fixture (weight + reps constant per exercise) the
+///     first set in a band sets the PR and every later same-band set ties it
+///     → overload_mult stays 1.0, but we track it faithfully so a future
+///     progressive fixture stays correct.
+///   - **frequency_mult** via the count of DISTINCT prior sessions in the
+///     trailing 7-day window touching the dominant body part, EXCLUDING the
+///     current workout, plus 1 for the current session. The SQL's
+///     `rpg_frequency_mult` looks up [1.00, 1.06, 1.10, 1.06, 1.00] on that
+///     1-indexed count.
+///   - Peak (the exercise-wide `exercise_peak_loads`) advances inside the loop
+///     before strength_mult is computed (matches PG and the Python sim).
 Map<String, double> computeDartReference(BackfillFixture fixture) {
   final xpPool = <String, double>{};
   final peakLoads = <String, double>{}; // keyed by exercise slug
+  // Per-(slug, rep_band) best lift for overload_mult (mirrors
+  // exercise_peak_loads_by_rep_range). value = (weight, reps).
+  final bandBest = <String, (double, int)>{};
 
   final baseDate = DateTime.now().subtract(
     Duration(days: fixture.weeksCount * 7 + 7),
   );
 
-  // Event log: each entry is one body-part contribution from one set.
-  // Used for weekly_volume lookups AND session_volume lookups (latter is
-  // just events with the same sessionDate/workout).
-  final events = <Map<String, dynamic>>[];
+  // Event log mirroring xp_events. Each entry records the SHARE a set
+  // contributed to a body part (for session/weekly share accumulators) plus
+  // its session (workout) identity + timestamp + dominant body part (for the
+  // frequency-mult distinct-session count).
+  final events = <_RefEvent>[];
 
   for (var week = 0; week < fixture.weeksCount; week++) {
     for (var session = 0; session < fixture.sessionsPerWeek; session++) {
       final sessionDate = baseDate.add(Duration(days: week * 7 + session));
+      // Each fixture session is ONE workout (see seedFixtureWorkouts). Use a
+      // synthetic stable session id so session-scoped accumulators + the
+      // frequency distinct-session count match the SQL's session_id grouping.
+      final sessionId = 'w${week}_s$session';
 
       for (final ex in fixture.exercises) {
         final slug = ex.slug;
         final weight = ex.weightKg;
         final reps = ex.reps;
 
-        // Advance peak before strength_mult (matches PG behavior).
+        // Advance exercise-wide peak before strength_mult (matches PG).
         final priorPeak = peakLoads[slug] ?? 0.0;
         final effectivePeak = weight > priorPeak ? weight : priorPeak;
         peakLoads[slug] = effectivePeak;
+
+        // Dominant body part = max share (ties broken by key asc — matches the
+        // SQL ORDER BY (v::numeric) DESC, k ASC).
+        final dominantBp = _dominantBodyPart(ex.attribution);
+
+        // current_rank for the dominant bp from its running total_xp.
+        final domTotal = xpPool[dominantBp] ?? 0.0;
+        final currentRank = RankCurve.rankForXp(domTotal).toDouble();
+
+        // implied_tier: NULL bodyweight → 15.0 fallback (bodyweightKg: 0).
+        final tier = impliedTier(
+          exercise: slug,
+          weightKg: weight,
+          reps: reps,
+          bodyweightKg: 0,
+        );
+
+        // overload_mult inputs: prior best in this set's rep band.
+        final band = _repBand(reps);
+        final bandKey = '$slug|$band';
+        final prior = bandBest[bandKey];
+        final priorBandWeight = prior?.$1;
+        final priorBandReps = prior?.$2;
+
+        // frequency_mult: distinct prior sessions in (sessionDate - 7d,
+        // sessionDate] touching the dominant bp, EXCLUDING the current
+        // workout, +1 for the current session.
+        final windowStart = sessionDate.subtract(const Duration(days: 7));
+        final priorSessions = <String>{};
+        for (final ev in events) {
+          if (ev.sessionId == sessionId) continue; // exclude current workout
+          if (!ev.ts.isAfter(windowStart) || ev.ts.isAfter(sessionDate)) {
+            continue;
+          }
+          if (ev.touchesBodyPart(dominantBp)) priorSessions.add(ev.sessionId);
+        }
+        final sessionsThisWeek = priorSessions.length + 1;
 
         for (final bpEntry in ex.attribution.entries) {
           final bp = bpEntry.key;
           final share = bpEntry.value;
 
-          // session_volume[bp] = sum of per-bp XP from prior events in this
-          // session. PG queries `xp_events.attribution[bp]` filtered by
-          // `session_id = current_workout_id`. The Dart reference filters
-          // by `ts == sessionDate` since each session has a unique
-          // sessionDate in the fixture.
+          // session_volume[bp] = SUM of prior same-session sets' SHARE for bp
+          // (SQL sums xp_attribution ->> bp filtered by session_id).
           var svBp = 0.0;
           for (final ev in events) {
-            if (ev['ts'] == sessionDate && ev['bp'] == bp) {
-              svBp += ev['xp'] as double;
-            }
+            if (ev.sessionId == sessionId) svBp += ev.shareFor(bp);
           }
 
-          // weekly_volume[bp] = sum of per-bp XP in (sessionDate - 7d,
-          // sessionDate]. PG matches this exactly.
-          final windowStart = sessionDate.subtract(const Duration(days: 7));
+          // weekly_volume[bp] = SUM of prior sets' SHARE for bp in the
+          // half-open trailing 7-day window (SQL: occurred_at > now-7d AND
+          // occurred_at <= now).
           var wvBp = 0.0;
           for (final ev in events) {
-            final evTs = ev['ts'] as DateTime;
-            if (evTs.isAfter(windowStart) &&
-                !evTs.isAfter(sessionDate) &&
-                ev['bp'] == bp) {
-              wvBp += ev['xp'] as double;
+            if (ev.ts.isAfter(windowStart) && !ev.ts.isAfter(sessionDate)) {
+              wvBp += ev.shareFor(bp);
             }
           }
 
@@ -407,22 +472,86 @@ Map<String, double> computeDartReference(BackfillFixture fixture) {
             peakLoad: effectivePeak,
             sessionVolumeForBodyPart: svBp,
             weeklyVolumeForBodyPart: wvBp,
-            // Phase 24a Phase F: mirror what `_rpg_backfill_chunk` does
-            // — read the per-exercise curated multiplier from the fixture
-            // (which holds the values from migration 00053). Default 1.0
-            // covers any future fixture exercise that omits the field.
+            // Phase 24a Phase F: per-exercise curated multiplier (00053).
             difficultyMult: ex.difficultyMult,
+            // Phase 29 v2 — same inputs _rpg_backfill_chunk derives.
+            impliedTier: tier,
+            currentRank: currentRank,
+            priorBandWeight: priorBandWeight,
+            priorBandReps: priorBandReps,
+            sessionsThisWeekForBodyPart: sessionsThisWeek,
           );
           final xpForBp = comps.setXp * share;
-
           xpPool[bp] = (xpPool[bp] ?? 0.0) + xpForBp;
-          events.add({'ts': sessionDate, 'bp': bp, 'xp': xpForBp});
+        }
+
+        // Record one event per set carrying its full attribution shares.
+        events.add(
+          _RefEvent(
+            ts: sessionDate,
+            sessionId: sessionId,
+            shares: ex.attribution,
+          ),
+        );
+
+        // Update the per-band best AFTER processing the set (SQL writes the
+        // band table at the end of each set iteration). Improve on strictly
+        // greater weight, or equal weight with more reps.
+        if (weight > 0) {
+          final better =
+              prior == null ||
+              weight > prior.$1 ||
+              (weight == prior.$1 && reps > prior.$2);
+          if (better) bandBest[bandKey] = (weight, reps);
         }
       }
     }
   }
 
   return xpPool;
+}
+
+/// Dominant body part = the attribution key with the max share; ties broken
+/// by key ascending (matches `ORDER BY (v::numeric) DESC, k ASC` in the SQL).
+String _dominantBodyPart(Map<String, double> attribution) {
+  String? best;
+  var bestShare = -1.0;
+  for (final entry in attribution.entries) {
+    if (entry.value > bestShare ||
+        (entry.value == bestShare &&
+            (best == null || entry.key.compareTo(best) < 0))) {
+      bestShare = entry.value;
+      best = entry.key;
+    }
+  }
+  return best!;
+}
+
+/// Mirrors the SQL `rpg_rep_band`: ≤4 heavy, ≤7 strength, ≤12 hypertrophy,
+/// else endurance.
+String _repBand(int reps) {
+  if (reps <= 4) return 'heavy';
+  if (reps <= 7) return 'strength';
+  if (reps <= 12) return 'hypertrophy';
+  return 'endurance';
+}
+
+/// One replayed set's contribution, mirroring an `xp_events` row's
+/// attribution-share footprint for the reference's session/weekly/frequency
+/// accumulators.
+class _RefEvent {
+  const _RefEvent({
+    required this.ts,
+    required this.sessionId,
+    required this.shares,
+  });
+
+  final DateTime ts;
+  final String sessionId;
+  final Map<String, double> shares;
+
+  double shareFor(String bp) => shares[bp] ?? 0.0;
+  bool touchesBodyPart(String bp) => (shares[bp] ?? 0.0) > 0;
 }
 
 // ---------------------------------------------------------------------------
