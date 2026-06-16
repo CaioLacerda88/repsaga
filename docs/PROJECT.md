@@ -91,6 +91,7 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | 38c | Cardio / Conditioning Track — **earning formula + 4-site parity + est-VO₂max.** Ports `cardio-xp-simulation.py` (14/14 personas) to production: SQL `record_cardio_session` (migration **00079**; reuses `rpg_tier_diff_mult` + rank curve verbatim, cardio base `capped_met_min^0.60`, weekly MET-min cap accumulating across the ISO week, dedicated partial-unique index for the no-set_id cardio `xp_events` conflict key) + Dart `CardioXpCalculator` + `EstVo2max` (pace→ACSM→`sustainableFraction` best-effort, p25 non-exercise seed, 42-day rolling best-of on new `profiles.cardio_vo2max`) + strength→cardio cross-credit (work-density→ACSM MET band, one-directional, demonstrated-VO₂ gate). Cardio XP accrues to `body_part_progress`/`xp_events` but stays **SILENT** (out of `activeBodyParts`/`character_state` until 38e — `character_state` already structurally excludes it). 4-site parity (Python→fixture→Dart→SQL) @1e-4 (live-row @0.01). Adds nullable `profiles.date_of_birth` (no UI — collection is 38d). Review: 1 Blocker (stale tests vs new cross-credit contract) + 4 findings fixed same-cycle. | DONE | #340 |
 | — | Integration-suite repair (38c-discovered prerequisite) — fixed **18 pre-existing stale integration failures on main** (record_set_xp parity oracle missing the Phase-29-v2 implied-tier chain → ~2.94× under-compute; peak_load seeding the Phase-15f-removed `exercises.name`; backfill `computeDartReference` staleness; backfill_zero_weight calling a service_role-forbidden RPC). All test-side, zero production changes; suite `+48 -18`→`+66 -0`. CI excludes integration so the rot was invisible — see memory `project_integration_suite_red_on_main`. | DONE | #339 |
 | 38b | Cardio / Conditioning Track — **data model + logging surface.** Net-new `cardio_sessions` table (migration **00078**: `duration_seconds>0` NOT NULL, `distance_m>=0?`, `rpe 1–10?`; computed met columns deferred to 38c) + owner-scoped RLS via parent workout + explicit grants (`supabase-cli-latest-grant-drift`); `save_workout` 3→4-arg (`p_cardio jsonb DEFAULT '[]'`, atomic finish, legacy clients resolve via default, idempotent DELETE+INSERT). `CardioSession` Freezed model threaded as `ActiveWorkoutExercise.cardioSession?` (discriminated by `muscleGroup==cardio`, Hive crash-recovery). `CardioEntryCard` (4 user-approved states, `docs/phase-38-mockups.html`) + `DurationStepper` (mm:ss, 48dp floor) + distance tap-to-type + RPE sheet; shared `ExerciseCardHeader` extracted. Teal `bodyPartCardio` retuned orange→`#22D3EE` (dead token; hue wiring is 38d). New `Exercise.slug` keys the eyebrow (Hive cache v4→v5 wipe). Cardio entries persist but **earn nothing yet** (still out of `activeBodyParts`; earning = 38c). Integration test `cardio_save_roundtrip_test.dart` (persist + no XP + idempotency + legacy 3-arg + RLS) green; migrations 00077+00078 pushed to hosted. | DONE | #337 |
+| 38d | Cardio / Conditioning Track — **age capture (birth-year).** Populates 38c's nullable `profiles.date_of_birth` so cardio scores on real age-decade norms instead of the age-35 fallback (no migration). `Profile.dateOfBirth` with date-only `@JsonKey` converters (`YYYY-MM-DD`, not `timestamptz`); `upsertProfile(dateOfBirth:)` + explicit `clearDateOfBirth` (omit-on-null upsert can't write NULL). **`AgeRow` + `AgeEditorSheet`** clone the gender row+sheet grammar: branded birth-year `ListWheelScrollView` (years `currentYear−18..−100`, default rests on `currentYear−35`, **structural ≥18 floor**, `itemExtent` scales off `textScaler`), violet selection band, derived-age display, point-of-collection disclosure (**no consent toggle** — DOB is LGPD Art. 6, not Art. 11), "Prefer not to say"→NULL. Post-session one-time prompt gated on `hadCardio && dateOfBirth==null && !dismissed` (Hive flag; `hadCardio` from the exercise snapshot since completed cardio emits no `BodyPart.cardio` XP delta). l10n en+pt; privacy-policy §2/§3 DOB rows + "Last updated" bump; data-export auto-includes. **QA caught + fixed a latent 38b defect:** a cardio-only workout couldn't be finished (the screen FINISH enable-gate was strength-only) — `_hasCompletedSet`→`_hasProgress` counts cardio + generalized hint copy + regression tests. Visual gate matched the mockup; 28 narrow-width (320/360/412 × en/pt + textScaler 1.3) overflow guards added. NOTE: cardio-flavored post-session summary row (`CardioEntryRow`) is 38e, so a cardio-only session still shows the generic debrief. | DONE | #342 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -259,20 +260,11 @@ Items in (d) move to the "v2-park" sub-list and don't get worked on without new 
 
 ### Phase 38 — Cardio / Conditioning Track: remaining stages (sequential)
 
-38a (#335) + 38b (#337) + 38c (#340) shipped; migrations 00077–00079 on hosted.
-Full per-stage spec in the plan `~/.claude/plans/noble-stirring-scroll.md`. Cardio
-XP is computed but **silent** (out of `activeBodyParts`/`character_state`) until 38e.
+38a (#335) + 38b (#337) + 38c (#340) + 38d (#342) shipped; migrations 00077–00079
+on hosted. Full per-stage spec in the plan `~/.claude/plans/noble-stirring-scroll.md`.
+Cardio XP is computed but **silent** (out of `activeBodyParts`/`character_state`)
+until 38e; real ages now flow (38d).
 
-- **38d — Age capture (birth-year).** Collect birth-year so cardio scores on real
-  age-decade norms instead of the age-35 fallback (38c added nullable
-  `profiles.date_of_birth`; this adds the UI). **Decisions locked:** birth-YEAR
-  granularity (stored `YYYY-01-01`, no migration change — LGPD data-minimization);
-  **optional**, never gates cardio XP; backfill prompt = post-session summary
-  (one-time dismissible); LGPD **Art. 6 consent** (not Art. 11) → point-of-collection
-  disclosure + privacy-policy §2 row + data-export inclusion, **no** Hive consent
-  toggle. UI: `AgeRow` + `AgeEditorSheet` cloning gender/bodyweight grammar +
-  branded birth-year wheel (structural ≥18 floor, never re-asks the signup age-gate).
-  Net-new user-facing surface → ui-ux-critic mockup + visual-verification gate.
 - **38e — Activation (atomic boundary flip + coherent UI) ⚠ largest.** Add cardio to
   `activeBodyParts` + both `_activeKeys` + `character_state`/in-RPC char-level (7 parts,
   denominator stays 4; max level 148→172); `Wayfarer` class (Ascendant stays

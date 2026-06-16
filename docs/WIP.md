@@ -11,72 +11,9 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-## Phase 38d — Age capture (birth-year)
+_No in-flight work._
 
-Branch `feature/phase38d-age-capture`. Per `docs/PROJECT.md` §2 → "Phase 38 —
-remaining stages" + the plan `~/.claude/plans/noble-stirring-scroll.md` → "PR 38d"
-+ the product-owner + ui-ux-critic scoping (2026-06-15/16). Net-new user-facing
-surface → **ui-ux-critic mockup + user approval BEFORE build, + visual-verification
-gate before merge.**
-
-**Goal:** collect birth-year so cardio scores on real age-decade norms instead of
-the age-35 fallback. 38c added nullable `profiles.date_of_birth`; this adds the UI
-that populates it. Cardio scoring already reads the column server-side.
-
-### Locked decisions (user, this session)
-1. **Birth-YEAR granularity** — stored `YYYY-01-01` in the existing
-   `profiles.date_of_birth date` column (NO migration change; formula keys on
-   age-decade, so year is the minimal stable representation = LGPD data-minimization).
-2. **Optional** — age-35 fallback is a valid steady state; **never gates cardio XP**.
-3. **Backfill prompt = post-session summary** — one-time dismissible (Hive flag,
-   `bodyweight_prompt_coordinator` pattern); fires after a cardio session when DOB
-   is NULL; settings row always available regardless.
-4. **Privacy = LGPD Art. 6 consent** (like avatars), **NOT Art. 11 sensitive** (unlike
-   gender/bodyweight) → point-of-collection disclosure + privacy-policy §2 row +
-   data-export inclusion; **NO Hive consent toggle** (do not clone `BodyweightConsentToggle`).
-5. **Control = branded birth-year wheel** (`ListWheelScrollView`, years
-   `currentYear−18 … currentYear−100`, default rests on `currentYear−35` so
-   skip==fallback; ≥18 floor STRUCTURAL — wheel can't represent under-18, never
-   re-asks the signup age-gate). NO Material calendar (over-collects month/day).
-6. **No onboarding step** (highest friction, zero day-zero payoff — cardio invisible
-   until 38e).
-
-### Boundary inventory (filled via Explore — implementation may start)
-- **Profile model** `lib/features/profile/models/profile.dart` — Freezed, `@JsonSerializable(fieldRename: snake)`, `Profile.fromJson` (`:30-77`). Add `dateOfBirth DateTime?` (snake `date_of_birth`). ⚠ it's a Postgres `date`, NOT `timestamptz` — the `createdAt`/`onboardedAt` precedent serializes a FULL timestamp (`profile.g.dart:17-19,35`); DOB needs a **date-only `@JsonKey` converter** (`YYYY-MM-DD`), not `.toIso8601String()`.
-- **Write path** `profile_repository.dart` `upsertProfile(...)` (`:65-124`, omit-on-null per field) — add `DateTime? dateOfBirth` → `if (dateOfBirth != null) 'date_of_birth': <date-only>`. UI watches `profileProvider` (`profile_providers.dart:41`); editor sheets call `upsertProfile` directly then `ref.invalidate(profileProvider)`.
-- **Settings insert point** `profile_settings_screen.dart` — after the Gender section, at `:149` (before Weekly goal). Clone the Gender `profileAsync.when(data/loading/error → GenderRow(profile:))` block (`:144-148`).
-- **Row+sheet grammar to clone = `gender_row.dart`** (row `:42-83` id `profile-gender-row`; `showModalBottomSheet<…>(isScrollControlled:true)` `:90-99`; Save→`upsertProfile`→`invalidate`→`pop` `:144-149`; Cancel `:255-262`). Use gender's **inline disclosure banner LOOK** (`:187-226`, `info_outline` + copy) BUT **decision #4 = no consent provider** — DOB is Art. 6, so it's a pure point-of-collection disclosure (show when value==null), NOT a Hive-gated consent toggle. Button styles `core/theme/dialog_button_style.dart`.
-- **Post-session prompt** `lib/features/workouts/ui/post_session/post_session_screen.dart` — one-shot analog of `_fireMountAnalytics()` (`:182-221`, `_analyticsFired` flag, post-frame in initState `:130-134`); gate to cardio sessions (`post_session_controller.dart:344/379/389` `bp==BodyPart.cardio`) with NULL DOB. Dismissal: clone `bodyweight_prompt_dismissal_provider.dart` (`Notifier<bool>` over Hive `userPrefs`, presence==dismissed; survives cache wipes). Coordinator pattern: `bodyweight_prompt_coordinator.dart maybeShow(...)` (`:80-113`).
-- **l10n** `lib/l10n/app_{en,pt}.arb` + `make gen-l10n`; each key needs a paired `@key` desc; completeness guard `test/unit/core/l10n/arb_completeness_test.dart`. Precedent: `genderLabel`/`genderConsentBanner` (`app_en.arb:2447+`).
-- **Data export** `data_export_service.dart` — exports the FULL profile row via `select()` (`:178-185`), so `date_of_birth` is auto-included; **no code change**, just add a test assertion (`data_export_service_test.dart`).
-- **Test factories** `test/fixtures/test_factories.dart:73-103` (`TestProfileFactory.create` — add `dateOfBirth` param + `date_of_birth` key); raw `Profile(...)` test constructors at `onboarding_gate_test.dart:162,187` + `router_refresh_listenable_test.dart:45,99,128` (safe — adding optional field). Model tests to extend: `profile_model_test.dart`, `profile_repository_test.dart`.
-- **Age-gate coherence** — signup `auth-age-confirmation` (`login_screen.dart:530-566`) is a boolean 18+ checkbox (no year captured); birth-year input is independent but the wheel's min year implies ≥18. Never re-ask the gate.
-- **No existing Dart DOB field** (38c added only the SQL column + server read + AGE_FALLBACK=35 mirror in `cardio_xp_calculator.dart:84`).
-
-### Pipeline checklist
-- [x] Boundary Explore → inventory filled above.
-- [x] Mockup (`docs/phase-38-mockups.html` "Phase 38d" section, 3 surfaces, en+pt) →
-      ui-ux-critic: DISTINCTIVE (2 grammar fixes applied) → **USER-APPROVED 2026-06-16**
-      ("look ok"). This is the locked visual target for the visual-verification gate.
-- [x] tech-lead TDD: `Profile.dateOfBirth DateTime?` (model + repo + date-only serialization
-      + `clearDateOfBirth` clear path); `AgeRow` + `AgeEditorSheet` (`ListWheelScrollView`,
-      structural ≥18 floor, textScaler-scaled itemExtent, clear-to-NULL via PNS) in profile
-      settings after Gender; post-session one-time prompt (`AgePromptBanner` +
-      `agePromptDismissalProvider` Hive flag + `PostSessionState.hadCardio` gate); l10n en+pt;
-      privacy-policy §2 + §3 DOB rows; `DataExportService` test asserts date_of_birth.
-- [x] Tests: Profile date-only serialization round-trip (11) + repo payload/clear (5);
-      AgeRow/AgeEditorSheet widget states + ≥18 floor + clear-to-NULL + textScaler 1.3 no-clip
-      + 48dp tap targets (14); post-session prompt gating shows-iff-cardio+null+not-dismissed
-      + dismiss-removes + Set-age-opens-sheet (6); deriveAge (3); data-export assertion.
-      E2E (flow change): set-age-in-settings + first-cardio-prompt flow → QA's job.
-- [x] `make gen` + `dart format` + `dart analyze --fatal-infos` (0 issues) + `flutter test`
-      green (3674 pass / 1 pre-existing skip; arb_completeness_test green).
-- [ ] reviewer → fixes → QA gate (E2E flow change → write/update specs, run them).
-- [ ] **Visual-verification gate** (new surface): 320/360/412 dp (+ textScaler 1.3 corner)
-      vs the mockup; foundation + fresh users.
-- [ ] Verify before PR → PR → ship. (No migration → no hosted push.)
-
-### Edge cases (surface in mockup + tests)
-Wheel item-extent vs large textScaler (cap visible items / size off scaled metric);
-empty "Not set" state reads non-alarming (no warning icon / incomplete-profile nag);
-clearing a previously-set value; gender-NULL coherence; never re-ask the 18+ gate.
+Phase 38 (Cardio / Conditioning Track): 38a (#335) + 38b (#337) + 38c (#340) +
+38d (#342) shipped; migrations 00077–00079 on hosted. **38e (Activation — the
+atomic boundary flip ⚠ largest) next** — see `docs/PROJECT.md` §2 → "Phase 38 —
+remaining stages" + the plan `~/.claude/plans/noble-stirring-scroll.md`.
