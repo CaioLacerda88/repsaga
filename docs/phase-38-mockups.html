@@ -189,5 +189,298 @@
     • Teal token: retune <code>AppColors.bodyPartCardio</code> orange→<code>#22D3EE</code> in 38b (currently a dead token — every cardio surface uses <code>hair</code> gray, so zero sweep impact until 38d wires <code>BodyPartHues</code>).<br>
     • No Slider, no SegmentedButton, no decorative activity icon, no gradient. Card-level stripe is cardio-only (strength cards unchanged).
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- ════════════════  PHASE 38d — AGE CAPTURE  ═══════════════════════ -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <style>
+    /* ---- 38d-only styles; scoped under .age* / .d38 so they never bleed into the 38b cardio sections above ---- */
+    .d38-rule{border:0;border-top:1px solid var(--hair);margin:64px 0 36px}
+    .d38-violet{color:var(--violet)}
+    h1.d38{margin-top:6px}
+    .d38 .note b{color:var(--violet)}
+
+    /* settings-row grammar (clone of GenderRow / BodyweightRow: label / dimmed value / chevron) */
+    .setrow38{display:flex;align-items:center;background:var(--surface);border:1px solid var(--hair);
+              border-radius:var(--radius);padding:14px 16px;margin:8px 0}
+    .setrow38 .rlabel{font-family:'Barlow',sans-serif;font-weight:600;font-size:16px;color:var(--cream);flex:1}
+    .setrow38 .rval{font-family:'Barlow',sans-serif;font-size:14px;color:rgba(242,238,247,.55)}
+    .setrow38 .rval.num{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:16px;color:rgba(242,238,247,.92);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+    .setrow38 .chev{color:rgba(242,238,247,.3);font-size:20px;margin-left:10px;line-height:1}
+    .ctx-eyebrow{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+                 letter-spacing:1.4px;font-size:11px;color:var(--dim);margin:4px 2px 2px}
+
+    /* ---- bottom sheet (AgeEditorSheet) ---- */
+    .sheet{background:var(--surface);border:1px solid var(--hair);border-bottom:none;
+           border-radius:16px 16px 0 0;padding:22px 22px 18px;margin-top:60px;position:relative}
+    .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--hair);margin:0 auto 16px}
+    .sheet .stitle{font-family:'Barlow',sans-serif;font-weight:600;font-size:20px;letter-spacing:.2px;color:var(--cream)}
+    .sheet .shelp{font-family:'Barlow',sans-serif;font-size:13px;line-height:1.5;color:rgba(242,238,247,.65);margin-top:8px}
+
+    /* ---- branded birth-year wheel (ListWheelScrollView look) ---- */
+    .wheel{position:relative;height:208px;margin:18px 0 6px;overflow:hidden;
+           background:var(--surface2);border:1px solid var(--hair);border-radius:var(--radius)}
+    /* selection band — centered, violet-tinted, the resting slot */
+    .wheel .band{position:absolute;left:0;right:0;top:50%;height:56px;transform:translateY(-50%);
+                 background:rgba(167,139,250,.10);border-top:1px solid rgba(167,139,250,.45);
+                 border-bottom:1px solid rgba(167,139,250,.45);pointer-events:none}
+    /* top + bottom fade overscroll masks so flanking years dim toward the edges */
+    .wheel .fade{position:absolute;left:0;right:0;height:62px;pointer-events:none;z-index:2}
+    .wheel .fade.top{top:0;background:linear-gradient(var(--surface2),rgba(33,30,43,0))}
+    .wheel .fade.bot{bottom:0;background:linear-gradient(rgba(33,30,43,0),var(--surface2))}
+    .wheel .col{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+                display:flex;flex-direction:column;align-items:center}
+    .wheel .yr{font-family:'Rajdhani',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;
+               line-height:52px;height:52px;letter-spacing:1px}
+    .wheel .yr.center{font-size:38px;font-weight:700;color:var(--cream)}
+    .wheel .yr.near{font-size:26px;color:rgba(242,238,247,.55)}
+    .wheel .yr.far{font-size:22px;color:rgba(242,238,247,.28)}
+    .wheel .yr.faint{font-size:20px;color:rgba(242,238,247,.14)}
+    .wheel .agetag{position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:3;
+                   font-family:'Barlow Semi Condensed',sans-serif;text-transform:uppercase;letter-spacing:1.3px;
+                   font-size:11px;color:var(--violet)}
+    .wheel .agetag b{font-family:'Rajdhani';font-weight:700;font-size:17px;letter-spacing:.5px;display:block;text-align:right}
+
+    /* ---- prefer-not-to-say (tappable ghost affordance — clears to null + pops) + button row ---- */
+    .pns{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:10px 14px;
+         border:1px solid var(--hair);border-radius:10px;cursor:pointer;
+         color:rgba(242,238,247,.72);font-family:'Barlow';font-size:13px;font-weight:600}
+    .pns .x{font-size:15px;color:var(--violet)}
+    .btnrow{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:18px}
+    .btn{font-family:'Barlow Semi Condensed',sans-serif;text-transform:uppercase;letter-spacing:1px;
+         font-weight:600;font-size:13px;border-radius:10px;padding:11px 22px}
+    .btn.ghost{color:var(--violet);background:transparent}
+    .btn.fill{color:var(--cream);background:var(--violet)}
+
+    /* ---- post-session prompt (slim in-context card) ---- */
+    .ps-wrap{padding:14px 12px 6px}
+    .ps-summary{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);padding:16px;text-align:center}
+    .ps-summary .ps-eyebrow{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:1.5px;font-size:11px;color:var(--cardio-dim);margin-bottom:6px}
+    .ps-summary .ps-dur{font-family:'Rajdhani';font-weight:700;font-size:40px;color:var(--cardio);font-variant-numeric:tabular-nums;line-height:1}
+    .ps-summary .ps-meta{font-family:'Rajdhani';font-weight:600;font-size:14px;color:var(--dim);margin-top:8px;font-variant-numeric:tabular-nums}
+    .ps-summary .ps-meta .sep{color:var(--hair);margin:0 7px}
+    .ps-xp{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-family:'Rajdhani';font-weight:700;
+           font-size:15px;color:var(--success);font-variant-numeric:tabular-nums}
+    /* the nudge: slim banner, violet hairline, NOT a modal */
+    .ageprompt{display:flex;align-items:center;gap:12px;margin-top:14px;padding:13px 14px;
+               background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.32);border-radius:var(--radius)}
+    .ageprompt .pi{color:var(--violet);font-size:18px;line-height:1}
+    .ageprompt .ptxt{flex:1;font-family:'Barlow';font-size:13px;line-height:1.4;color:rgba(242,238,247,.86)}
+    .ageprompt .pcta{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:.8px;font-weight:600;
+                     font-size:12px;color:var(--violet);white-space:nowrap}
+    .ageprompt .pdismiss{color:var(--dim);font-size:16px;line-height:1;margin-left:14px;padding:2px 4px}
+
+    .twocol{display:flex;flex-wrap:wrap;gap:14px}
+    .twocol .panel{width:340px}
+  </style>
+
+  <hr class="d38-rule">
+  <h1 class="d38">Phase 38d — Age capture <span class="d38-violet">(birth-year)</span></h1>
+  <div class="sub">Optional birth-year so cardio scores on real age-decade norms instead of the age-35 fallback · brand violet <span class="swatch" style="background:#A78BFA"></span><code style="color:#A78BFA">#A78BFA / hotViolet</code></div>
+  <div class="note">Reuses the <b>row + bottom-sheet grammar</b> of <b>GenderRow</b> / <b>BodyweightRow</b> (label · dimmed value · chevron → sheet with title + helper + control + Cancel/Save). Unlike gender/bodyweight (LGPD Art. 11 sensitive → Hive consent toggle), DOB is <b>Art. 6 consent</b> like avatars: a <b>pure point-of-collection disclosure</b>, no consent toggle. The control is a <b>branded birth-year wheel</b> — NOT a Material calendar (a calendar over-collects month/day; we only key on age-decade). The ≥18 floor is <b>structural</b>: the wheel simply cannot scroll past <code>currentYear−18</code>, so it never re-asks the signup 18+ gate. Default rest = <code>currentYear−35</code>, so <i>skip == fallback</i>. Three surfaces below; en + pt-BR copy throughout.</div>
+
+  <!-- ─────────────  SURFACE 1 · AgeRow (settings)  ───────────── -->
+  <div class="grid">
+    <div class="panel">
+      <h2>1 · AgeRow — not set</h2>
+      <div class="device">
+        <div class="ctx-eyebrow">Perfil · Configurações</div>
+        <!-- sibling rows above for context (dimmed) -->
+        <div class="setrow38" style="opacity:.5">
+          <span class="rlabel">Gênero</span><span class="rval">Masculino</span><span class="chev">&#8250;</span>
+        </div>
+        <!-- the AGE row, not-set state -->
+        <div class="setrow38">
+          <span class="rlabel">Idade</span><span class="rval">Não informado</span><span class="chev">&#8250;</span>
+        </div>
+        <div class="setrow38" style="opacity:.5">
+          <span class="rlabel">Peso corporal</span><span class="rval num">82,0 kg</span><span class="chev">&#8250;</span>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.5">
+        <b style="color:var(--cream)">EN:</b> "Age" → "Not set". <b style="color:var(--cream)">PT:</b> "Idade" → "Não informado".
+        Calm invitation, <b style="color:var(--cream)">never an error</b>: no warning icon, no "incomplete profile" nag —
+        dimmed at the same <code>onSurface@0.55</code> as every other unset row. Placed directly under <b style="color:var(--cream)">Gênero</b>.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2 · AgeRow — set (derived age)</h2>
+      <div class="device">
+        <div class="ctx-eyebrow">Perfil · Configurações</div>
+        <div class="setrow38" style="opacity:.5">
+          <span class="rlabel">Gênero</span><span class="rval">Masculino</span><span class="chev">&#8250;</span>
+        </div>
+        <div class="setrow38">
+          <span class="rlabel">Idade</span><span class="rval num">39 anos</span><span class="chev">&#8250;</span>
+        </div>
+        <div class="setrow38" style="opacity:.5">
+          <span class="rlabel">Peso corporal</span><span class="rval num">82,0 kg</span><span class="chev">&#8250;</span>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.5">
+        Shows the <b style="color:var(--cream)">derived age</b> in Rajdhani numerals (<code>AppTextStyles.numeric</code> register),
+        <b style="color:var(--cream)">not the raw year</b> — "39 anos" / "39" (EN), computed from <code>currentYear − birthYear</code>.
+        Stored as <code>YYYY-01-01</code>; the row never reveals the exact stored date (data minimization).
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────  SURFACE 2 · AgeEditorSheet (the centerpiece)  ───────────── -->
+  <div class="grid" style="margin-top:34px">
+    <div class="panel" style="width:360px">
+      <h2>3 · AgeEditorSheet — birth-year wheel (mid-scroll)</h2>
+      <div class="device" style="background:linear-gradient(180deg,rgba(14,13,19,0) 0%,var(--bg) 38%)">
+        <!-- dimmed screen peeking above to read as a modal bottom sheet -->
+        <div style="height:34px;opacity:.35;padding:0 4px">
+          <div class="ctx-eyebrow">Perfil · Configurações</div>
+        </div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="stitle">Idade</div>
+          <div class="shelp">Usamos sua idade para avaliar o cardio com as referências de condicionamento certas para você. Opcional.</div>
+
+          <!-- branded birth-year wheel, caught mid-scroll -->
+          <div class="wheel">
+            <div class="band"></div>
+            <div class="fade top"></div>
+            <div class="fade bot"></div>
+            <div class="agetag">idade<b>39</b></div>
+            <div class="col">
+              <span class="yr faint">1983</span>
+              <span class="yr far">1984</span>
+              <span class="yr near">1986</span>
+              <span class="yr center">1987</span>
+              <span class="yr near">1988</span>
+              <span class="yr far">1990</span>
+              <span class="yr faint">1991</span>
+            </div>
+          </div>
+
+          <!-- prefer-not-to-say → clears to null -->
+          <div class="pns"><span class="x">&#10005;</span>&nbsp;Prefiro não informar</div>
+
+          <div class="btnrow">
+            <div class="btn ghost">Cancelar</div>
+            <div class="btn fill">Salvar</div>
+          </div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.55">
+        <b style="color:var(--cream)">The centerpiece.</b> A <code>ListWheelScrollView</code>: center year large in Rajdhani
+        (<code>AppTextStyles.numeric</code>), flanking years dim toward the edges, a violet selection band marks the resting slot.
+        Top = <code>currentYear−18</code> (max), bottom = <code>currentYear−100</code>; default rest = <code>currentYear−35</code>
+        (so <i>skip == fallback</i>). A live <b style="color:var(--cream)">"idade 39"</b> tag confirms the derived age as you spin —
+        the user never has to do the year→age math. Shown mid-scroll so the wheel affordance is unmistakable.
+      </div>
+    </div>
+
+    <div class="panel" style="width:360px">
+      <h2>4 · AgeEditorSheet — EN + large-text (textScaler 1.3)</h2>
+      <div class="device" style="background:linear-gradient(180deg,rgba(14,13,19,0) 0%,var(--bg) 38%)">
+        <div style="height:34px;opacity:.35;padding:0 4px">
+          <div class="ctx-eyebrow">Profile · Settings</div>
+        </div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="stitle" style="font-size:25px">Age</div>
+          <div class="shelp" style="font-size:16px">We use your age to score cardio against the right fitness norms. Optional.</div>
+          <!-- wheel: at large text the center numeral grows but item-extent caps visible items to 5 so it can't clip -->
+          <div class="wheel" style="height:208px">
+            <div class="band" style="height:64px"></div>
+            <div class="fade top"></div>
+            <div class="fade bot"></div>
+            <div class="agetag" style="font-size:13px"><b style="font-size:20px">35</b></div>
+            <div class="col">
+              <span class="yr far" style="font-size:26px">1989</span>
+              <span class="yr near" style="font-size:30px">1990</span>
+              <span class="yr center" style="font-size:44px">1991</span>
+              <span class="yr near" style="font-size:30px">1992</span>
+              <span class="yr far" style="font-size:26px">1993</span>
+            </div>
+          </div>
+          <div class="pns" style="font-size:15px"><span class="x">&#10005;</span>&nbsp;Prefer not to say</div>
+          <div class="btnrow">
+            <div class="btn ghost">Cancel</div>
+            <div class="btn fill">Save</div>
+          </div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.55">
+        <b style="color:var(--cream)">Large-text safety.</b> At <code>textScaler 1.3</code> the title, helper and numerals all grow,
+        but the wheel's <b style="color:var(--cream)">item-extent must scale off the scaled font metric and cap the visible
+        item count (5 → 3)</b> so the center year <b style="color:var(--cream)">never clips</b> against the band edges. The sheet is
+        <code>isScrollControlled</code> + shrink-wraps, so it grows upward and the body scrolls if needed — same keyboard-aware
+        contract as <code>BodyweightEditorSheet</code>. Shown here resting at default (1991 → "35"): <i>skip == fallback</i>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────  SURFACE 3 · Post-session prompt  ───────────── -->
+  <div class="grid" style="margin-top:34px">
+    <div class="panel" style="width:360px">
+      <h2>5 · Post-session age prompt (in-context)</h2>
+      <div class="device">
+        <div class="ps-wrap">
+          <div class="ps-summary">
+            <div class="ps-eyebrow">Cardio concluído</div>
+            <div class="ps-dur">28:45</div>
+            <div class="ps-meta">5,2 km<span class="sep">·</span>esforço 7/10</div>
+            <div class="ps-xp">&#9650;&nbsp;+ 240 XP</div>
+          </div>
+          <!-- the one-time nudge: slim banner, NOT a full-screen modal -->
+          <div class="ageprompt">
+            <span class="pi">&#9788;</span>
+            <span class="ptxt">Informe sua idade para pontuar o cardio nas referências certas.</span>
+            <span class="pcta">Definir idade</span>
+            <span class="pdismiss">&#10005;</span>
+          </div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.55">
+        <b style="color:var(--cream)">One-time, dismissible, in-context.</b> Fires on the <b style="color:var(--cream)">post-session
+        summary</b> after a cardio session <b style="color:var(--cream)">only when DOB is null</b>. A slim violet-hairline banner
+        sitting under the session result — <b style="color:var(--cream)">not a full-screen modal nag</b>. One line + "Set age" (opens the
+        sheet above) + a dismiss <span style="color:var(--violet)">✕</span>. Invite, not nag.
+      </div>
+    </div>
+
+    <div class="panel" style="width:360px">
+      <h2>6 · Post-session prompt — EN</h2>
+      <div class="device">
+        <div class="ps-wrap">
+          <div class="ps-summary">
+            <div class="ps-eyebrow">Cardio complete</div>
+            <div class="ps-dur">28:45</div>
+            <div class="ps-meta">5.2 km<span class="sep">·</span>effort 7/10</div>
+            <div class="ps-xp">&#9650;&nbsp;+ 240 XP</div>
+          </div>
+          <div class="ageprompt">
+            <span class="pi">&#9788;</span>
+            <span class="ptxt">Add your age to score this cardio against the right fitness norms.</span>
+            <span class="pcta">Set age</span>
+            <span class="pdismiss">&#10005;</span>
+          </div>
+        </div>
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px;line-height:1.55">
+        Dismiss → keeps the <b style="color:var(--cream)">age-35 fallback</b> and is <b style="color:var(--cream)">never re-shown</b>
+        (Hive flag, <code>bodyweight_prompt_coordinator</code> pattern; presence == dismissed, survives cache wipes).
+        Settings <b style="color:var(--cream)">AgeRow</b> stays available regardless — this banner is a convenience entry point, not the only one.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────  38d build notes  ───────────── -->
+  <div class="legend" style="border-top:1px solid var(--hair);padding-top:22px">
+    <b style="color:var(--cream)">Notes for build (tech-lead) — 38d:</b><br>
+    • <b style="color:var(--cream)">Row</b>: clone <code>GenderRow</code> (id <code>profile-age-row</code>, placed after the gender section). Subtitle = derived age string ("39 anos" / "39") via <code>AppTextStyles.numeric</code>-register when set, <code>onSurface@0.55</code> "Não informado" / "Not set" when null. No warning icon.<br>
+    • <b style="color:var(--cream)">Sheet</b>: <code>showModalBottomSheet(isScrollControlled:true)</code>; title <code>AppTextStyles.title.copyWith(fontSize:20)</code>; one-line disclosure helper (<code>body</code> @ <code>onSurface@0.65</code>) — point-of-collection only, <b style="color:var(--cream)">NO consent banner/toggle</b> (DOB = LGPD Art. 6, not Art. 11). Save → <code>upsertProfile(dateOfBirth: DateTime(year,1,1))</code> → <code>ref.invalidate(profileProvider)</code> → pop.<br>
+    • <b style="color:var(--cream)">Wheel</b>: <code>ListWheelScrollView.useDelegate</code>, years <code>currentYear−18 … currentYear−100</code> (top→bottom), initial item = <code>currentYear−35</code>. Center numeral <code>AppTextStyles.numeric</code> in <code>textCream</code>; flanking items dim via <code>onSurface</code> alpha ramp; selection band = <code>hotViolet@0.10</code> fill + <code>hotViolet@0.45</code> top/bottom hairlines. <code>itemExtent</code> derived from <code>MediaQuery.textScalerOf(context).scale(...)</code> so it <b style="color:var(--cream)">can't clip at large text</b>; cap visible items 5→3 under heavy scale.<br>
+    • <b style="color:var(--cream)">≥18 floor is structural</b> — the delegate's min child IS <code>currentYear−18</code>; there is no under-18 row to scroll to, so the signup 18+ gate is never re-asked.<br>
+    • <b style="color:var(--cream)">Prefer not to say</b> → writes <code>date_of_birth = null</code> (clears a previously-set value) and pops. Cancel / Save row = <code>dialogTextButtonStyle</code> / <code>dialogFilledButtonStyle</code> (gender-sheet parity).<br>
+    • <b style="color:var(--cream)">Post-session prompt</b>: one-shot in <code>post_session_screen.dart</code> (analog of <code>_fireMountAnalytics</code>); gate to <code>bp == BodyPart.cardio</code> sessions with null DOB. Dismissal via a <code>Notifier&lt;bool&gt;</code> over Hive <code>userPrefs</code> (clone <code>bodyweight_prompt_dismissal_provider</code>); "Set age" opens the same <code>AgeEditorSheet</code>.<br>
+    • No Material <code>showDatePicker</code>, no calendar, no month/day collection, no gradient, no <code>heroGold</code> (reward-scarcity).
+  </div>
 </body>
 </html>
