@@ -54,9 +54,10 @@ that populates it. Cardio scoring already reads the column server-side.
 - **No existing Dart DOB field** (38c added only the SQL column + server read + AGE_FALLBACK=35 mirror in `cardio_xp_calculator.dart:84`).
 
 ### Pipeline checklist
-- [ ] Boundary Explore → fill the inventory above.
-- [ ] ui-ux-critic mockup: add AgeRow + AgeEditorSheet (birth-year wheel) + post-session
-      age prompt to `docs/phase-38-mockups.html`; ui-ux-critic critique → **USER APPROVAL**.
+- [x] Boundary Explore → inventory filled above.
+- [x] Mockup (`docs/phase-38-mockups.html` "Phase 38d" section, 3 surfaces, en+pt) →
+      ui-ux-critic: DISTINCTIVE (2 grammar fixes applied) → **USER-APPROVED 2026-06-16**
+      ("look ok"). This is the locked visual target for the visual-verification gate.
 - [ ] tech-lead TDD: `Profile.dateOfBirth DateTime?` (model + repo + serialization);
       `AgeRow` + `AgeEditorSheet` (wheel, structural ≥18 floor, clear-to-NULL) in
       profile settings after Gender; post-session one-time prompt (Hive dismissal flag);
