@@ -41,11 +41,17 @@ that populates it. Cardio scoring already reads the column server-side.
 6. **No onboarding step** (highest friction, zero day-zero payoff — cardio invisible
    until 38e).
 
-### Boundary inventory — TO FILL via Explore before implementation
-_(Profile model + repo read/write/serialization + all consumers; post-session summary
-injection point for the prompt; bodyweight-prompt-coordinator + dismissal-flag pattern;
-profile_settings_screen structure + the gender_row/bodyweight_row grammar to clone;
-l10n key pattern; data_export_service.)_
+### Boundary inventory (filled via Explore — implementation may start)
+- **Profile model** `lib/features/profile/models/profile.dart` — Freezed, `@JsonSerializable(fieldRename: snake)`, `Profile.fromJson` (`:30-77`). Add `dateOfBirth DateTime?` (snake `date_of_birth`). ⚠ it's a Postgres `date`, NOT `timestamptz` — the `createdAt`/`onboardedAt` precedent serializes a FULL timestamp (`profile.g.dart:17-19,35`); DOB needs a **date-only `@JsonKey` converter** (`YYYY-MM-DD`), not `.toIso8601String()`.
+- **Write path** `profile_repository.dart` `upsertProfile(...)` (`:65-124`, omit-on-null per field) — add `DateTime? dateOfBirth` → `if (dateOfBirth != null) 'date_of_birth': <date-only>`. UI watches `profileProvider` (`profile_providers.dart:41`); editor sheets call `upsertProfile` directly then `ref.invalidate(profileProvider)`.
+- **Settings insert point** `profile_settings_screen.dart` — after the Gender section, at `:149` (before Weekly goal). Clone the Gender `profileAsync.when(data/loading/error → GenderRow(profile:))` block (`:144-148`).
+- **Row+sheet grammar to clone = `gender_row.dart`** (row `:42-83` id `profile-gender-row`; `showModalBottomSheet<…>(isScrollControlled:true)` `:90-99`; Save→`upsertProfile`→`invalidate`→`pop` `:144-149`; Cancel `:255-262`). Use gender's **inline disclosure banner LOOK** (`:187-226`, `info_outline` + copy) BUT **decision #4 = no consent provider** — DOB is Art. 6, so it's a pure point-of-collection disclosure (show when value==null), NOT a Hive-gated consent toggle. Button styles `core/theme/dialog_button_style.dart`.
+- **Post-session prompt** `lib/features/workouts/ui/post_session/post_session_screen.dart` — one-shot analog of `_fireMountAnalytics()` (`:182-221`, `_analyticsFired` flag, post-frame in initState `:130-134`); gate to cardio sessions (`post_session_controller.dart:344/379/389` `bp==BodyPart.cardio`) with NULL DOB. Dismissal: clone `bodyweight_prompt_dismissal_provider.dart` (`Notifier<bool>` over Hive `userPrefs`, presence==dismissed; survives cache wipes). Coordinator pattern: `bodyweight_prompt_coordinator.dart maybeShow(...)` (`:80-113`).
+- **l10n** `lib/l10n/app_{en,pt}.arb` + `make gen-l10n`; each key needs a paired `@key` desc; completeness guard `test/unit/core/l10n/arb_completeness_test.dart`. Precedent: `genderLabel`/`genderConsentBanner` (`app_en.arb:2447+`).
+- **Data export** `data_export_service.dart` — exports the FULL profile row via `select()` (`:178-185`), so `date_of_birth` is auto-included; **no code change**, just add a test assertion (`data_export_service_test.dart`).
+- **Test factories** `test/fixtures/test_factories.dart:73-103` (`TestProfileFactory.create` — add `dateOfBirth` param + `date_of_birth` key); raw `Profile(...)` test constructors at `onboarding_gate_test.dart:162,187` + `router_refresh_listenable_test.dart:45,99,128` (safe — adding optional field). Model tests to extend: `profile_model_test.dart`, `profile_repository_test.dart`.
+- **Age-gate coherence** — signup `auth-age-confirmation` (`login_screen.dart:530-566`) is a boolean 18+ checkbox (no year captured); birth-year input is independent but the wheel's min year implies ≥18. Never re-ask the gate.
+- **No existing Dart DOB field** (38c added only the SQL column + server read + AGE_FALLBACK=35 mirror in `cardio_xp_calculator.dart:84`).
 
 ### Pipeline checklist
 - [ ] Boundary Explore → fill the inventory above.
