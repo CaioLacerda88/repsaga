@@ -132,12 +132,46 @@ void main() {
       expect(liveXp, greaterThan(0));
     });
 
-    test('cardio XP does NOT change character level (stays out of '
-        'character_state — Phase 38d gate)', () async {
+    test('cardio XP does NOT change an ESTABLISHED character level (stays out '
+        'of character_state — Phase 38d gate)', () async {
       final adminClient = serviceRoleClient();
       final user = await freshUser();
       final client = authenticatedClient(user);
 
+      // Establish a NON-trivial character level via the 6 strength parts first.
+      // Level = GREATEST(1, FLOOR((SUM(rank) - COUNT(*)) / 4) + 1). Six parts
+      // at rank 5 → FLOOR((30-6)/4)+1 = 7. (A cardio-only workout would leave
+      // level at the floor of 1 regardless, making the assertion vacuous — this
+      // is the load-bearing version that actually pins the 38d gate.)
+      for (final bp in const [
+        'chest',
+        'back',
+        'legs',
+        'shoulders',
+        'arms',
+        'core',
+      ]) {
+        await seedBodyPartProgress(
+          adminClient: adminClient,
+          userId: user.userId,
+          bodyPart: bp,
+          totalXp: 5000,
+          rank: 5,
+        );
+      }
+
+      final csBefore = await client
+          .from('character_state')
+          .select('character_level')
+          .single();
+      final levelBefore = ((csBefore as Map)['character_level'] as num).toInt();
+      expect(
+        levelBefore,
+        7,
+        reason: 'six strength parts at rank 5 must establish character level 7',
+      );
+
+      // Now save a cardio workout (earns cardio body_part_progress).
       final seeded = await _seedActiveCardioWorkout(
         adminClient: adminClient,
         userId: user.userId,
@@ -164,28 +198,32 @@ void main() {
         },
       );
 
-      // The cardio row earned XP...
+      // Cardio body_part_progress grew...
       final cardio = await client
           .from('body_part_progress')
-          .select('total_xp, rank')
+          .select('total_xp')
           .eq('body_part', 'cardio')
           .single();
-      expect(((cardio as Map)['total_xp'] as num).toDouble(), greaterThan(0));
+      expect(
+        ((cardio as Map)['total_xp'] as num).toDouble(),
+        greaterThan(0),
+        reason: 'the cardio save must have written body_part_progress[cardio]',
+      );
 
-      // ...but character_state ignores it entirely (no active strength parts).
-      final cs = await client
+      // ...but the established character level is UNCHANGED — character_state
+      // filters to the 6 strength parts, so cardio rank never enters the math.
+      final csAfter = await client
           .from('character_state')
           .select('character_level')
-          .maybeSingle();
-      // The view GROUPs by user over the 6 strength parts only; with none
-      // present, the user has no character_state row → level is the floor.
-      final level = cs == null ? 1 : (cs['character_level'] as num).toInt();
+          .single();
+      final levelAfter = ((csAfter as Map)['character_level'] as num).toInt();
       expect(
-        level,
-        1,
+        levelAfter,
+        levelBefore,
         reason:
-            'cardio XP must NOT lift character level until Phase 38d flips '
-            'cardio into the active set',
+            'cardio XP must NOT change the established character level until '
+            'Phase 38d flips cardio into the active set '
+            '(before=$levelBefore, after=$levelAfter)',
       );
     });
 
@@ -252,6 +290,149 @@ void main() {
           .eq('event_type', 'cardio_session');
       expect(events as List, hasLength(1));
     });
+
+    test(
+      'weekly MET-min cap accumulates ACROSS saves within the ISO week — '
+      'a second large cardio workout the same week earns LESS (finding [2])',
+      () async {
+        final adminClient = serviceRoleClient();
+        final user = await freshUser();
+        final client = authenticatedClient(user);
+
+        final treadmillId = await exerciseIdForSlug(adminClient, 'treadmill');
+
+        // Two SEPARATE workouts (distinct workout_ids) so this is genuinely a
+        // cross-SAVE accumulation, not a multi-entry single save. Each carries a
+        // long duration-only treadmill session big enough that the running ISO-
+        // week eff_met_min crosses WEEKLY_CARDIO_CAP_METMIN (2500) by the second
+        // save → the second save's over-cap portion is attenuated (× 0.30).
+        const durationSeconds =
+            9000; // 150 min @ MET 9.8 ≈ 1470 met-min/session
+
+        // Returns (workoutId, cumulative cardio total_xp after this save) so the
+        // assertions can address each save's cardio_session event by its own
+        // session_id — never by occurred_at ordering, which ties when two saves
+        // land in the same clock resolution.
+        Future<({String workoutId, double cardioTotal})>
+        saveOneCardioWorkout() async {
+          final seeded = await _seedActiveCardioWorkout(
+            adminClient: adminClient,
+            userId: user.userId,
+          );
+          await client.rpc(
+            'save_workout',
+            params: {
+              'p_workout': seeded.workoutJson,
+              'p_exercises': <Map<String, dynamic>>[],
+              'p_sets': <Map<String, dynamic>>[],
+              'p_cardio': [
+                {
+                  'id': _uuid.v4(),
+                  'workout_id': seeded.workoutId,
+                  'exercise_id': treadmillId,
+                  'duration_seconds': durationSeconds,
+                  'distance_m': null,
+                  'rpe': null,
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                },
+              ],
+            },
+          );
+          final row = await client
+              .from('body_part_progress')
+              .select('total_xp')
+              .eq('body_part', 'cardio')
+              .single();
+          return (
+            workoutId: seeded.workoutId,
+            cardioTotal: ((row as Map)['total_xp'] as num).toDouble(),
+          );
+        }
+
+        final first = await saveOneCardioWorkout();
+        final second = await saveOneCardioWorkout();
+        final afterFirst = first.cardioTotal;
+        final afterSecond = second.cardioTotal;
+
+        final firstIncrement = afterFirst;
+        final secondIncrement = afterSecond - afterFirst;
+
+        expect(
+          firstIncrement,
+          greaterThan(0),
+          reason: 'the first large cardio workout must earn cardio XP',
+        );
+        expect(
+          secondIncrement,
+          greaterThan(0),
+          reason: 'the second workout still earns SOMETHING (over-cap × 0.30)',
+        );
+        // The load-bearing assertion: identical sessions, but the second earns
+        // strictly LESS because the weekly cap carried over from the first save.
+        // If v_week_used reset to 0 each save (the bug), both increments would be
+        // EQUAL. A meaningful margin (second < 80% of first) proves the cap
+        // engaged rather than a rounding wobble.
+        expect(
+          secondIncrement,
+          lessThan(firstIncrement * 0.80),
+          reason:
+              'cross-save weekly cap must attenuate the second identical '
+              'workout (first=$firstIncrement, second=$secondIncrement). Equal '
+              'increments would mean v_week_used reset per save.',
+        );
+
+        // Both cardio xp_events this week carry an eff_met_min payload key (the
+        // accumulator the seed query sums). Two distinct sessions → two rows.
+        final events = await client
+            .from('xp_events')
+            .select('payload')
+            .eq('event_type', 'cardio_session');
+        expect(events as List, hasLength(2));
+        for (final e in events) {
+          final payload = (e as Map)['payload'] as Map<String, dynamic>;
+          expect(
+            payload.containsKey('eff_met_min'),
+            isTrue,
+            reason:
+                'each cardio_session event must persist eff_met_min so the next '
+                'save can seed v_week_used from it',
+          );
+        }
+        // The second save's week_used_before must equal the FIRST save's
+        // eff_met_min (the cross-save carry), not 0. Address each event by its
+        // own session_id (workout_id) — NOT by occurred_at ordering, which is a
+        // non-deterministic tie when both saves land in the same clock tick.
+        final firstEvent = await client
+            .from('xp_events')
+            .select('payload')
+            .eq('event_type', 'cardio_session')
+            .eq('session_id', first.workoutId)
+            .single();
+        final secondEvent = await client
+            .from('xp_events')
+            .select('payload')
+            .eq('event_type', 'cardio_session')
+            .eq('session_id', second.workoutId)
+            .single();
+        final firstEff =
+            (((firstEvent as Map)['payload']
+                        as Map<String, dynamic>)['eff_met_min']
+                    as num)
+                .toDouble();
+        final secondBefore =
+            (((secondEvent as Map)['payload']
+                        as Map<String, dynamic>)['week_used_before']
+                    as num)
+                .toDouble();
+        expect(
+          secondBefore,
+          closeTo(firstEff, 0.01),
+          reason:
+              'the second save must seed v_week_used from the first save\'s '
+              'eff_met_min (carry across saves), not 0',
+        );
+      },
+    );
 
     test(
       'run WITH distance writes back a pace-derived profiles.cardio_vo2max',

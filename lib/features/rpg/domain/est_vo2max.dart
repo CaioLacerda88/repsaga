@@ -45,7 +45,11 @@ class EstVo2max {
   };
 
   /// Cardio exercise slug → sim modality (the 5 default cardio slugs from
-  /// migration 00014).
+  /// migration 00014). Unknown / user-created slugs resolve to [unknownModality]
+  /// ('other') via [modalityForSlug] — a NON-distance modality on purpose, so a
+  /// custom slug logged with a distance is NOT pace-scored by the ACSM running
+  /// equation (it would over/under-credit an arbitrary activity). Mirrors the
+  /// SQL `rpg_cardio_slug_to_modality` ELSE branch.
   static const Map<String, String> slugToModality = {
     'treadmill': 'treadmill',
     'rowing_machine': 'row',
@@ -53,6 +57,16 @@ class EstVo2max {
     'jump_rope': 'hiit',
     'elliptical': 'elliptical',
   };
+
+  /// Neutral fallback modality for unrecognized slugs — non-distance, so
+  /// distance never feeds the pace equation; falls to the table-average MET
+  /// path (via [cardioDefaultMet]'s `?? metRest`) and skips best-effort VO₂.
+  static const String unknownModality = 'other';
+
+  /// Resolves a cardio slug to a sim modality, defaulting unknown slugs to the
+  /// non-distance [unknownModality]. Mirrors `rpg_cardio_slug_to_modality`.
+  static String modalityForSlug(String slug) =>
+      slugToModality[slug] ?? unknownModality;
 
   /// A1 best-effort est-VO₂max from a logged run/treadmill session.
   ///

@@ -283,8 +283,15 @@ BEGIN
 END;
 $$;
 
--- slug → sim modality (the 5 default cardio slugs; user slugs → 'run' default
--- since the default-MET path then keys on it harmlessly via session_met).
+-- slug → sim modality (the 5 default cardio slugs). Unknown / user-created
+-- slugs default to 'other' — a NON-distance modality on purpose: defaulting an
+-- unrecognized slug to a distance modality ('run') would make a custom slug
+-- logged WITH a distance get pace-scored by the ACSM running-pace equation,
+-- which over/under-credits an arbitrary user activity whose distance is not a
+-- running pace. 'other' is not in DISTANCE_MODALITIES, so a custom slug with a
+-- distance falls through to the table-average MET path (rpg_cardio_session_met
+-- ELSE 3.5) and best-effort VO₂ estimation is skipped (returns NULL), rather
+-- than fabricating a running pace. modality_mult('other') → 1.00 (neutral ELSE).
 CREATE OR REPLACE FUNCTION public.rpg_cardio_slug_to_modality(p_slug text)
 RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
@@ -295,7 +302,7 @@ AS $$
     WHEN 'stationary_bike' THEN 'bike'
     WHEN 'jump_rope'       THEN 'hiit'
     WHEN 'elliptical'      THEN 'elliptical'
-    ELSE 'run'
+    ELSE 'other'
   END;
 $$;
 
@@ -339,7 +346,9 @@ DECLARE
   v_vo2max     numeric;        -- standing estimate used for THIS session
   v_rank       int;
   v_total_xp   numeric;
-  v_week_used  numeric := 0;   -- intensity-weighted MET-min this week
+  v_week_used  numeric := 0;   -- intensity-weighted MET-min already used this week
+  v_week_start timestamptz;    -- ISO (Monday) week boundary for the cap window
+  v_session_eff_met_min numeric := 0;  -- this session's eff_met_min (for payload)
 
   -- per-entry locals
   v_rec          record;
@@ -404,6 +413,27 @@ BEGIN
   v_rank := public.rpg_rank_for_xp(v_total_xp);
 
   -- ===========================================================================
+  -- Seed v_week_used from this user's prior cardio eff_met_min EARNED THIS ISO
+  -- WEEK. The sim's WEEKLY_CARDIO_CAP_METMIN (2500) is a per-training-week
+  -- diminishing-returns cap whose accumulator (week_cap_state['used']) carries
+  -- ACROSS sessions — not reset per save. Without this seed the cap only ever
+  -- applied within a single multi-entry save, diverging from compute_session_xp.
+  -- Mirrors the strength 7-day frequency_mult aggregate pattern (00077:757-785):
+  -- a window query over the payload, excluding THIS workout (its prior cardio
+  -- xp_events are DELETEd by save_workout before this runs, but excluding it is
+  -- belt-and-suspenders for any direct re-invocation). ISO week = Monday-based
+  -- date_trunc('week', ...), matching the sim's per-week reset semantics.
+  v_week_start := date_trunc('week', v_now);
+  SELECT COALESCE(SUM((e.payload ->> 'eff_met_min')::numeric), 0)
+  INTO v_week_used
+  FROM public.xp_events e
+  WHERE e.user_id = v_user_id
+    AND e.event_type = 'cardio_session'
+    AND e.set_id IS NULL
+    AND e.occurred_at >= v_week_start
+    AND (e.session_id IS DISTINCT FROM p_workout_id);
+
+  -- ===========================================================================
   -- Per logged cardio entry (kind='abs', session-resolved MET).
   -- ===========================================================================
   FOR v_rec IN
@@ -431,6 +461,7 @@ BEGIN
     v_over  := v_eff - v_under;
     v_capped := v_under + v_over * 0.30;
     v_week_used := v_week_used + v_eff;
+    v_session_eff_met_min := v_session_eff_met_min + v_eff;
 
     v_base := power(v_capped, 0.60);
     v_dvo2 := public.rpg_cardio_demonstrated_vo2(v_abs_met, v_dur_min);
@@ -496,6 +527,7 @@ BEGIN
     v_over  := v_eff - v_under;
     v_capped := v_under + v_over * 0.30;
     v_week_used := v_week_used + v_eff;
+    v_session_eff_met_min := v_session_eff_met_min + v_eff;
 
     v_base := power(v_capped, 0.60);
     v_dvo2 := public.rpg_cardio_demonstrated_vo2(v_abs_met, v_dur_min);
@@ -519,6 +551,12 @@ BEGIN
       'cardio', round(v_total_cardio_xp, 4));
     v_payload := jsonb_build_object(
       'cardio_xp', round(v_total_cardio_xp, 4),
+      -- eff_met_min: this session's intensity-weighted MET-min. Summed by the
+      -- next save's v_week_used seed query above to carry the weekly cap across
+      -- saves. Stored UNCAPPED (the cap is applied at scoring time) so the
+      -- accumulator matches the sim's week_cap_state['used'] semantics exactly.
+      'eff_met_min', round(v_session_eff_met_min, 4),
+      'week_used_before', round(v_week_used - v_session_eff_met_min, 4),
       'standing_vo2max', round(v_vo2max, 1),
       'age', v_age,
       'female', v_female);

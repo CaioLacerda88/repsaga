@@ -108,6 +108,7 @@ void main() {
     test('all cardio sections present in regenerated fixture', () {
       const requiredSections = {
         'cardio_session_xp',
+        'cardio_cross_week',
         'cardio_components',
         'est_vo2max_cases',
         'cross_credit_met_bands',
@@ -126,6 +127,12 @@ void main() {
 
     test('cardio_session_xp has exactly 18 rows', () {
       expect((fixtures['cardio_session_xp'] as List).length, 18);
+    });
+
+    test('cardio_cross_week has exactly 4 carried-cap sessions', () {
+      final cw = fixtures['cardio_cross_week'] as Map<String, dynamic>;
+      expect((cw['sessions'] as List).length, 4);
+      expect(cw['weekly_cap_metmin'], 2500.0);
     });
 
     test('cross_credit_met_bands has exactly 8 rows', () {

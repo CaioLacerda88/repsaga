@@ -7,8 +7,14 @@
 ///
 ///   * A finished workout carrying a completed cardio entry writes EXACTLY
 ///     one `cardio_sessions` row with the raw inputs (duration / distance /
-///     RPE) — and NO `xp_events` rows, NO `body_part_progress['cardio']`
-///     row (earning is Phase 38c; the 00077 gate is the backstop).
+///     RPE).
+///   * Phase 38c contract: the cardio *entry's* raw row persists, and cardio
+///     XP now legitimately accrues — but via the STRENGTH-density cross-credit
+///     (one `cardio_session` xp_events row, session_id = workout_id) derived
+///     from the bench set, NOT from the treadmill entry. The bench STRENGTH
+///     `set` xp_events row is unaffected. (Pre-38c this test asserted cardio
+///     earned nothing; 38c's cross-credit intentionally fires for every
+///     workout with completed working strength sets.)
 ///   * The strength set in the same mixed workout still earns normally.
 ///   * Re-saving the same workout converges (DELETE+INSERT keyed by
 ///     workout_id — no duplicate cardio rows).
@@ -55,8 +61,8 @@ void main() {
 
   group('save_workout p_cardio — persistence round-trip', () {
     test('mixed workout (bench + treadmill cardio entry): cardio_sessions row '
-        'persists the raw inputs; strength still earns; NO cardio xp_events / '
-        'body_part_progress', () async {
+        'persists the raw inputs; strength still earns; cardio XP accrues via '
+        'the strength-density cross-credit (not the treadmill entry)', () async {
       final adminClient = serviceRoleClient();
       final user = await freshUser();
       final client = authenticatedClient(user);
@@ -101,28 +107,60 @@ void main() {
       expect((row['distance_m'] as num).toDouble(), 5200.0);
       expect(row['rpe'], 7);
 
-      // 2. NO cardio earning artifacts (38c is not wired; 00077 gate).
+      // 2. Phase 38c contract: cardio XP accrues via the strength-density
+      //    cross-credit (NOT the treadmill entry). The cross-credit fires
+      //    because the workout has a completed working bench set.
       final cardioBpp = await client
           .from('body_part_progress')
-          .select('body_part')
-          .eq('body_part', 'cardio');
+          .select('total_xp')
+          .eq('body_part', 'cardio')
+          .maybeSingle();
       expect(
-        cardioBpp as List,
-        isEmpty,
+        cardioBpp,
+        isNotNull,
         reason:
-            'A persisted cardio entry must NOT write body_part_progress '
-            'until the Phase 38c earning function exists.',
+            'Phase 38c cross-credit: a workout with completed working '
+            'strength sets writes a cardio body_part_progress row derived '
+            'from work density.',
       );
-      final sessionEvents = await client
+      expect(
+        ((cardioBpp as Map<String, dynamic>)['total_xp'] as num).toDouble(),
+        greaterThan(0),
+      );
+
+      // The session has exactly TWO xp_events rows: the bench STRENGTH set
+      // (event_type='set') + ONE cardio cross-credit row
+      // (event_type='cardio_session', no set_id). The treadmill ENTRY produces
+      // neither — it has no set, and the cross-credit is attributed to the
+      // strength sets, not the cardio entry.
+      final strengthSetEvents = await client
           .from('xp_events')
           .select('id, set_id')
-          .eq('session_id', seeded.workoutId);
+          .eq('session_id', seeded.workoutId)
+          .eq('event_type', 'set');
       expect(
-        sessionEvents as List,
+        strengthSetEvents as List,
         hasLength(1),
         reason:
-            'Only the bench set may produce an xp_events row — the '
-            'cardio entry has no set and must produce none.',
+            'Only the bench set may produce a strength `set` xp_events row — '
+            'the cardio entry has no set and writes no strength event.',
+      );
+      final cardioEvents = await client
+          .from('xp_events')
+          .select('id, set_id, session_id')
+          .eq('session_id', seeded.workoutId)
+          .eq('event_type', 'cardio_session');
+      expect(
+        cardioEvents as List,
+        hasLength(1),
+        reason:
+            'Exactly one cardio_session xp_events row per workout (the '
+            'cross-credit), session_id = workout_id, no set_id.',
+      );
+      expect(
+        cardioEvents.single['set_id'],
+        isNull,
+        reason: 'the cardio cross-credit event carries no set_id',
       );
 
       // 3. The strength set still earned (bench: chest 0.70 dominant).

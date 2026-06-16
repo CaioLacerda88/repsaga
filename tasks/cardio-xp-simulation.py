@@ -344,6 +344,11 @@ CARDIO_DEFAULT_MET = {
 
 # cardio exercise slug -> sim modality. The 5 default cardio slugs (00014):
 # treadmill / rowing_machine / stationary_bike / jump_rope / elliptical.
+# Unknown / user-created slugs resolve to the NON-distance default 'other'
+# (.get(slug, "other")) so a custom slug with a distance is NOT pace-scored by
+# the ACSM running equation — it falls to the table-average MET path
+# (CARDIO_DEFAULT_MET.get(modality, MET_REST)). Mirrors the SQL
+# rpg_cardio_slug_to_modality ELSE branch + Dart EstVo2max.unknownModality.
 CARDIO_SLUG_TO_MODALITY = {
     "treadmill": "treadmill",
     "rowing_machine": "row",

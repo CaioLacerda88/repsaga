@@ -155,7 +155,35 @@ Formula order: `eff_met_min = abs_met×dur×intensity_mult(rel)` → weekly cap 
 - [x] **4-site parity:** cardio sim wired into generator (importlib); `rpg_xp_fixtures.json` regenerated with raw cardio rows (`cardio_session_xp` 18, `cardio_components`, `est_vo2max_cases`, `cross_credit_met_bands` 8, meta.cardio); Dart parity test `cardio_xp_calculator_test.dart` @1e-4; SQL integration parity test `cardio_earning_parity_test.dart` @0.01; `phase29_formula_parity_test.dart` extended with cardio section/row-count + meta guards.
 - [x] **Tests:** 14-persona oracle @1e-4 (green), est-VO₂max unit tests, cross-credit tests, idempotent re-save integration test (reversal pin, green), cardio-invisible-to-character-level assertion (green), est-VO₂max writeback (green).
 - [x] `dart format` + `dart analyze --fatal-infos` (0 issues) + full unit/widget suite (3636 pass, 1 skip, 0 fail serial) + integration parity (4/4 green); `python tasks/cardio-xp-simulation.py` still 14/14. (No Freezed added → `make gen` not required.)
-- [ ] reviewer → fixes → QA gate (E2E selector impact only; no UI surface in 38c) → PR.
+- [x] reviewer → **fixes (this cycle, all 5 findings + the investigate item)**:
+  - **[1 Blocker]** 3 stale pre-existing integration tests updated to the cross-credit contract,
+    scoping count assertions to `event_type='set'` and asserting the cardio cross-credit comes from
+    the strength density (present iff working strength sets), not the cardio sets. Cardio SETS still
+    write zero STRENGTH bpp rows. Also fixed 3 ADDITIONAL pre-existing tests the cross-credit broke
+    that the reviewer hadn't caught (full integration blast-radius diff vs `main`):
+    `rpg_record_set_xp_test` xp_events-cascade + `save_workout_zero_weight_test` (×2) — same
+    `event_type='set'` scoping, original intent preserved.
+  - **[2 Important]** Cross-week MET-min cap: the SQL seed query (window over `xp_events.payload
+    eff_met_min` this ISO week) is correct and verified at the `record_cardio_session` AND
+    `save_workout` level via psql repro (w2 `week_used_before` = w1 `eff_met_min` = 1992.48). The
+    finding-[2] integration test FAILED only on a non-deterministic `.order('occurred_at')` tie
+    (both saves same clock tick) — fixed to address each event by its own `session_id`. Cross-week
+    Dart/SQL parity fixture (`cardio_cross_week`, 4 carried-cap sessions) + parity guards added.
+  - **[3 Important]** char-level test now establishes level 7 via the 6 strength parts first, then
+    asserts a cardio save leaves it at 7 AND grows `body_part_progress.cardio` — load-bearing 38d gate.
+  - **[4 Suggestion]** dropped the unused `computeSessionXp` call in the `cardio_base_xp` test.
+  - **[5 Suggestion]** unknown/user slugs → `'other'` (non-distance) in SQL `rpg_cardio_slug_to_modality`
+    + Dart `EstVo2max.modalityForSlug` + sim, so a custom slug with a distance is NOT pace-scored.
+  - **[INVESTIGATE]** `record_set_xp PG/Dart parity` drift (chest/shoulders PG ≈ 2.94× Dart):
+    **CONFIRMED PRE-EXISTING on `main`** (HEAD 35a4b2b4, clean tree) — byte-identical failure values
+    (shoulders PG=91.5866 vs Dart=31.197188183054905) reproduced with NO 00079. Full integration
+    suite has **18 pre-existing failures on main**; the branch has the **same 18, zero new**.
+    Root cause: the test's Dart oracle calls `XpCalculator.computeSetXp(...)` WITHOUT `impliedTier`,
+    so tier_diff_mult=1.0 & abs_strength_premium=1.0, while the SQL batch applies the real Phase-29-v2
+    implied-tier chain (≈2.94×). Test-oracle drift, not a formula bug — NOT fixed here (out of 38c scope).
+    *Ticket:* "Strength record_set_xp PG/Dart integration parity stale since Phase 29 v2 — test oracle
+    omits impliedTier/overload/frequency inputs; peak_load_per_body_part seeds removed `exercises.name`
+    column (Phase 15f); backfill suite red. 18 pre-existing integration failures on main."
 - [ ] Verify before PR (verification-before-completion skill) → ship → `npx supabase db push` 00079 to hosted.
 - [ ] **Backlog note at merge:** DOB-collection UI + LGPD consent + existing-user `date_of_birth` backfill (38c added the nullable column only) → PROJECT.md §2.
 

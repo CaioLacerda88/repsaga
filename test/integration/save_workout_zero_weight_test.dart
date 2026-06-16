@@ -120,13 +120,17 @@ void main() {
             'exercise — found: $peakLoads',
       );
 
-      // Assertion 2: xp_events rows ARE present. Bodyweight workouts still
-      // earn XP through the per-set inserts (Steps 4 + 5). One row per set.
+      // Assertion 2: strength `set` xp_events rows ARE present. Bodyweight
+      // workouts still earn XP through the per-set inserts (Steps 4 + 5). One
+      // `set` row per set. Scoped to event_type='set' because Phase 38c's
+      // strength→cardio cross-credit adds a separate 'cardio_session' row per
+      // save (this plank workout has completed working sets, so it fires).
       final events = await userClient
           .from('xp_events')
           .select('id, set_id, total_xp')
           .eq('user_id', user.userId)
-          .eq('session_id', seed.workoutId);
+          .eq('session_id', seed.workoutId)
+          .eq('event_type', 'set');
       expect(
         events as List,
         hasLength(numSets),
@@ -327,13 +331,17 @@ void main() {
           'legitimate peaks',
     );
 
-    // Assertion 3: BOTH sets produced xp_events. The weighted set and the
-    // bodyweight set each get a row.
+    // Assertion 3: BOTH sets produced strength `set` xp_events. The weighted
+    // set and the bodyweight set each get a row. Scoped to event_type='set'
+    // because Phase 38c's strength→cardio cross-credit adds a separate
+    // 'cardio_session' row per save (this mixed workout has completed working
+    // sets, so it fires).
     final events = await userClient
         .from('xp_events')
         .select('set_id, total_xp')
         .eq('user_id', user.userId)
-        .eq('session_id', workoutId);
+        .eq('session_id', workoutId)
+        .eq('event_type', 'set');
     expect(events as List, hasLength(2));
     final eventSetIds = {for (final row in events) row['set_id'] as String};
     expect(eventSetIds, containsAll([setIdSquat, setIdPlank]));

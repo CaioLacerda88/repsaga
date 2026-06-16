@@ -692,6 +692,83 @@
       }
     ]
   },
+  "cardio_cross_week": {
+    "sessions": [
+      {
+        "inputs": {
+          "age": 32,
+          "current_rank": 10,
+          "duration_min": 60,
+          "female": false,
+          "kind": "rel",
+          "modality": "run",
+          "value": 0.88,
+          "vo2max": 52.0
+        },
+        "met_minutes": 784.4571428571428,
+        "name": "session_1",
+        "rel_intensity": 0.88,
+        "week_used_after": 894.2811428571429,
+        "week_used_before": 0.0,
+        "xp": 652.1739852419505
+      },
+      {
+        "inputs": {
+          "age": 32,
+          "current_rank": 10,
+          "duration_min": 60,
+          "female": false,
+          "kind": "rel",
+          "modality": "run",
+          "value": 0.88,
+          "vo2max": 52.0
+        },
+        "met_minutes": 784.4571428571428,
+        "name": "session_2",
+        "rel_intensity": 0.88,
+        "week_used_after": 1788.5622857142857,
+        "week_used_before": 894.2811428571429,
+        "xp": 652.1739852419505
+      },
+      {
+        "inputs": {
+          "age": 32,
+          "current_rank": 10,
+          "duration_min": 60,
+          "female": false,
+          "kind": "rel",
+          "modality": "run",
+          "value": 0.88,
+          "vo2max": 52.0
+        },
+        "met_minutes": 784.4571428571428,
+        "name": "session_3",
+        "rel_intensity": 0.88,
+        "week_used_after": 2682.8434285714284,
+        "week_used_before": 1788.5622857142857,
+        "xp": 594.4497855148505
+      },
+      {
+        "inputs": {
+          "age": 32,
+          "current_rank": 10,
+          "duration_min": 60,
+          "female": false,
+          "kind": "rel",
+          "modality": "run",
+          "value": 0.88,
+          "vo2max": 52.0
+        },
+        "met_minutes": 784.4571428571428,
+        "name": "session_4",
+        "rel_intensity": 0.88,
+        "week_used_after": 3577.1245714285715,
+        "week_used_before": 2682.8434285714284,
+        "xp": 316.6913664701023
+      }
+    ],
+    "weekly_cap_metmin": 2500.0
+  },
   "cardio_session_xp": [
     {
       "inputs": {

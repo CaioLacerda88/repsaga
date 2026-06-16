@@ -980,6 +980,51 @@ def fx_cardio_session_xp() -> list[dict]:
     return cases
 
 
+def fx_cardio_cross_week() -> dict:
+    """Cross-SAVE weekly-cap accumulation (finding [2], Phase 38c reviewer).
+
+    The WEEKLY_CARDIO_CAP_METMIN accumulator carries ACROSS saves within an ISO
+    week, NOT reset per save. This drives a sequence of same-week sessions where
+    each session's `week_used` is the PRIOR session's `week_used_after`, exactly
+    as the SQL `record_cardio_session` seeds v_week_used from prior cardio
+    eff_met_min this week. The later sessions are cap-attenuated (OVER_CAP_MULT
+    path) once the running total passes the cap — the SQL must reproduce this
+    sequence, not treat each save as a fresh week.
+
+    `sessions` is an ordered list; replaying them with a single carried
+    `week_used` must reproduce each row's `xp` / `week_used_after`.
+    """
+    sessions: list[dict] = []
+    # Four big same-week run sessions: ~1000 eff_met_min each so by session 3 the
+    # running total crosses WEEKLY_CARDIO_CAP_METMIN (2500) and the over-portion
+    # is attenuated. vo2max/age/female/rank fixed so the ONLY moving part is the
+    # carried cap.
+    vo2max, age, female, modality, dur, kind, value, rank = (
+        52.0, 32, False, 'run', 60, 'rel', 0.88, 10)
+    state = {'used': 0.0}
+    for i in range(4):
+        used_before = state['used']
+        xp, met_min, rel = csim.compute_session_xp(
+            vo2max, age, female, modality, dur, kind, value, rank, state)
+        sessions.append({
+            'name': f'session_{i + 1}',
+            'inputs': {
+                'vo2max': vo2max, 'age': age, 'female': female,
+                'modality': modality, 'duration_min': dur,
+                'kind': kind, 'value': value, 'current_rank': rank,
+            },
+            'week_used_before': used_before,
+            'xp': xp,
+            'met_minutes': met_min,
+            'rel_intensity': rel,
+            'week_used_after': state['used'],
+        })
+    return {
+        'weekly_cap_metmin': csim.WEEKLY_CARDIO_CAP_METMIN,
+        'sessions': sessions,
+    }
+
+
 def fx_cardio_components() -> dict:
     """Component lists mirroring the strength fixture style — pins each pure
     sub-function Dart must replay @1e-4."""
@@ -1203,6 +1248,7 @@ def main() -> None:
         'backfill_replay': fx_backfill_replay(),
         # Phase 38c cardio oracle sections.
         'cardio_session_xp': fx_cardio_session_xp(),
+        'cardio_cross_week': fx_cardio_cross_week(),
         'cardio_components': fx_cardio_components(),
         'est_vo2max_cases': fx_est_vo2max_cases(),
         'cross_credit_met_bands': fx_cross_credit_met_bands(),
@@ -1229,6 +1275,7 @@ def main() -> None:
     print(f'  vitality trajectory:     {len(fixtures["vitality"]["rebuild_then_decay_trajectory"])} weeks')
     print(f'  backfill_replay:         {fixtures["backfill_replay"]["total_sets"]} sets')
     print(f'  cardio_session_xp:       {len(fixtures["cardio_session_xp"])} cases')
+    print(f'  cardio_cross_week:       {len(fixtures["cardio_cross_week"]["sessions"])} sessions')
     print(f'  cross_credit_met_bands:  {len(fixtures["cross_credit_met_bands"])} cases')
 
 

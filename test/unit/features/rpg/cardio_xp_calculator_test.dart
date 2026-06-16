@@ -84,6 +84,70 @@ void main() {
       }
     });
 
+    test('cardio_cross_week — weekly cap carries across saves, attenuating '
+        'later sessions (finding [2])', () {
+      final cw = fixtures['cardio_cross_week'] as Map<String, dynamic>;
+      final sessions = cw['sessions'] as List<dynamic>;
+      expect(sessions, hasLength(4), reason: 'expected 4 cross-week sessions');
+
+      // Replay the sequence with a SINGLE carried accumulator — exactly the
+      // semantics the SQL seed query reconstructs from prior cardio events this
+      // ISO week. Each session's week_used_before must equal the running total.
+      var weekUsed = 0.0;
+      var prevXp = double.infinity;
+      var sawAttenuation = false;
+      for (final raw in sessions) {
+        final s = raw as Map<String, dynamic>;
+        final name = s['name'] as String;
+        final inputs = s['inputs'] as Map<String, dynamic>;
+
+        expect(
+          weekUsed,
+          closeTo((s['week_used_before'] as num).toDouble(), eps),
+          reason:
+              '$name: carried week_used must equal the oracle week_used_before',
+        );
+
+        final result = CardioXpCalculator.computeSessionXp(
+          vo2max: (inputs['vo2max'] as num).toDouble(),
+          age: inputs['age'] as int,
+          female: inputs['female'] as bool,
+          modality: inputs['modality'] as String,
+          durationMin: (inputs['duration_min'] as num).toDouble(),
+          kind: inputs['kind'] as String,
+          value: (inputs['value'] as num).toDouble(),
+          currentRank: (inputs['current_rank'] as num).toDouble(),
+          weekUsedMetMin: weekUsed,
+        );
+
+        expect(
+          result.sessionXp,
+          closeTo((s['xp'] as num).toDouble(), eps),
+          reason: '$name: xp mismatch',
+        );
+        expect(
+          result.weekUsedAfter,
+          closeTo((s['week_used_after'] as num).toDouble(), eps),
+          reason: '$name: week_used_after mismatch',
+        );
+
+        // Once the running total crosses the cap, the over-portion is
+        // attenuated → later identical sessions earn strictly LESS XP. This is
+        // the behavior that would be invisible if the cap reset per save.
+        if (result.sessionXp < prevXp - eps) sawAttenuation = true;
+        prevXp = result.sessionXp;
+        weekUsed = result.weekUsedAfter;
+      }
+
+      expect(
+        sawAttenuation,
+        isTrue,
+        reason:
+            'identical sessions must earn LESS once the carried weekly cap '
+            'engages — proving cross-save accumulation, not a per-save reset',
+      );
+    });
+
     test('walk-when-fit edge demonstrates ~0 reward (thesis gate)', () {
       // The reformed-runner walk row: a VO₂-54 athlete walking earns trivial
       // XP — the un-farmable property, asserted on the actual value.
@@ -199,24 +263,10 @@ void main() {
               as List<dynamic>;
       for (final raw in rows) {
         final r = raw as Map<String, dynamic>;
-        // base_xp is exercised end-to-end via computeSessionXp; here we pin the
-        // exponent directly by reconstructing it from cappedMetMin.
+        // base_xp = capped_met_min ^ 0.60. Pin the exponent directly by
+        // reconstructing it from cappedMetMin — coupling it to a full
+        // computeSessionXp call would only obscure which factor diverged.
         final capped = (r['capped_met_min'] as num).toDouble();
-        final base = CardioXpCalculator.computeSessionXp(
-          // A 'rel' kind whose abs_met×dur×imult lands exactly at `capped`
-          // would over-couple the test; instead assert the math directly.
-          vo2max: 50,
-          age: 30,
-          female: false,
-          modality: 'run',
-          durationMin: 1,
-          kind: 'abs',
-          value: 1,
-          currentRank: 1,
-        );
-        // Sanity that the component exists; the precise exponent is asserted
-        // by recomputing capped^0.60.
-        expect(base.baseXp, isPositive);
         expect(
           _pow(capped, CardioXpCalculator.volumeExponent),
           closeTo((r['base_xp'] as num).toDouble(), eps),
