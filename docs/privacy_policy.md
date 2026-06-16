@@ -5,7 +5,7 @@ layout: default
 
 # Privacy Policy
 
-**Last updated: 2026-06-04**
+**Last updated: 2026-06-16**
 
 This Privacy Policy describes how RepSaga ("we", "us", or "our") collects, uses, and protects your information when you use the RepSaga mobile and web application (the "App"). RepSaga's primary market is Brazil and the App is operated in compliance with the Lei Geral de Proteção de Dados (LGPD, Lei nº 13.709/2018). Users in the European Economic Area (EEA) and the United Kingdom are additionally protected by the General Data Protection Regulation (GDPR) and UK GDPR.
 
