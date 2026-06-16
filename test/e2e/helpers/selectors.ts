@@ -239,9 +239,12 @@ export const WORKOUT = {
    * PR-5 H6 — helper text shown beneath the disabled FINISH button.
    *
    * `Semantics(identifier: 'finish-disabled-hint')` wraps a localized line
-   * ("Complete at least one set to finish." in en / "Complete pelo menos
-   * uma série para finalizar." in pt). Rendered ONLY when the bar is
-   * `enabled: false` (no completed sets / in-flight save / cancellation).
+   * ("Complete at least one set or cardio entry to finish." in en /
+   * "Complete pelo menos uma série ou registro de cardio para finalizar."
+   * in pt — Phase 38b generalized the copy so it reads correctly for a
+   * cardio-only session). Rendered ONLY when the bar is
+   * `enabled: false` (no completed sets/cardio / in-flight save /
+   * cancellation).
    * Disappears when the button becomes tappable.
    *
    * E2E uses this to assert the disabled-state UX: the user sees a
@@ -982,6 +985,100 @@ export const GENDER_EDITOR = {
   otherTile: '[flt-semantics-identifier="profile-gender-other"]',
   /** "Not set" option tile — Semantics(identifier: 'profile-gender-not-set', button: true) */
   notSetTile: '[flt-semantics-identifier="profile-gender-not-set"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Phase 38d — Age (birth-year) capture.
+//
+// Two surfaces share the SAME editor sheet (AgeEditorSheet, opened via
+// showAgeEditorSheet):
+//   1. Profile → Settings AgeRow (`profile-age-row`).
+//   2. Post-session "Set age" nudge (`post-session-age-prompt-cta`).
+//
+// The sheet's control is a real Flutter `ListWheelScrollView` (birth-year
+// wheel) under CanvasKit. WHEEL-DRIVABILITY NOTE: a ListWheelScrollView's
+// per-row numerals are drawn to the <canvas> (no DOM text nodes) and the
+// wheel does NOT surface stable per-item AOM nodes Playwright can address by
+// year. Precise wheel-spin to an arbitrary target year is therefore NOT
+// reliably drivable in E2E (the rendered selection is in the canvas, not the
+// DOM). Wheel arithmetic — the ≥18 structural floor, clear-to-NULL, and the
+// textScaler item-extent — is pinned at the widget tier (age_row_test.dart).
+// E2E covers the load-bearing user-perceptible outcomes instead: the sheet
+// opens, the disclosure + Save / Cancel / Prefer-not-to-say affordances are
+// present, saving the DEFAULT resting year (age-35) persists + the row
+// reflects a numeric age, and Prefer-not-to-say reverts the row to "Not set".
+//
+// The row/sheet identifier nodes sit inside an InkWell with
+// explicitChildNodes:true (same `semantics-identifier-pair-rule` barrier as
+// GENDER_EDITOR / BODYWEIGHT_CONSENT) → the InkWell's computed AOM name is
+// empty, so `role=button[name*=...]` matches 0 elements. Use the identifier
+// CSS selector for visibility/scroll + `.click({ force: true })` to dispatch
+// pointer events at the node coordinates; Flutter hit-testing routes them to
+// the enclosing InkWell.
+// ---------------------------------------------------------------------------
+export const AGE_EDITOR = {
+  /**
+   * AgeRow tappable row on ProfileSettingsScreen — Semantics(identifier:
+   * 'profile-age-row', container: true, explicitChildNodes: true). Tapping
+   * opens AgeEditorSheet. The row's accessible label is `ageRowSemantics`
+   * ("Age, {value}"), where value is the derived age ("39") or "Not set".
+   */
+  row: '[flt-semantics-identifier="profile-age-row"]',
+  /**
+   * AgeEditorSheet root — Semantics(identifier: 'profile-age-sheet').
+   * Visibility = the sheet is open.
+   */
+  sheet: '[flt-semantics-identifier="profile-age-sheet"]',
+  /**
+   * The branded birth-year ListWheelScrollView — Semantics(identifier:
+   * 'profile-age-wheel'). Present iff the sheet is open. NOT spin-drivable
+   * to a target year (see header note); use for presence assertions only.
+   */
+  wheel: '[flt-semantics-identifier="profile-age-wheel"]',
+  /**
+   * "Prefer not to say" ghost — Semantics(identifier:
+   * 'profile-age-prefer-not-to-say', button: true). Clears any stored DOB to
+   * NULL and pops the sheet. `button:true` is set on the wrapper so a normal
+   * click forwards (no force needed), but force is harmless if used.
+   */
+  preferNotToSay: '[flt-semantics-identifier="profile-age-prefer-not-to-say"]',
+  /**
+   * Save FilledButton inside the sheet. No identifier — match by accessible
+   * role+name. Label is the `save` l10n key ("Save" en). Persists
+   * `date_of_birth = DateTime(selectedYear, 1, 1)` for the wheel's resting
+   * year (default = currentYear − 35) and pops.
+   */
+  saveButton: 'role=button[name="Save"]',
+  /**
+   * Cancel TextButton inside the sheet. No identifier — match by role+name.
+   * Label is the `cancel` l10n key ("Cancel" en). Pops without writing.
+   */
+  cancelButton: 'role=button[name="Cancel"]',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Phase 38b — Cardio entry card (CardioEntryCard) on the active-workout
+// screen. A cardio exercise (e.g. Treadmill, a default since 00014) seeds a
+// default CardioSession (30:00, no distance/RPE) when added — so the
+// "Complete cardio" CTA is enabled immediately with no further input.
+// Completing a cardio entry is the load-bearing precondition for the
+// Phase 38d post-session age prompt (`PostSessionState.hadCardio`).
+// ---------------------------------------------------------------------------
+export const CARDIO = {
+  /**
+   * "Complete cardio" OutlinedButton — Semantics(identifier:
+   * 'cardio-complete', container: true, explicitChildNodes: true). Enabled
+   * once durationSeconds > 0 (the seeded default is 30:00). The identifier
+   * wraps the button; explicitChildNodes blocks name-merge so use the
+   * identifier CSS selector + `.click({ force: true })`.
+   */
+  complete: '[flt-semantics-identifier="cardio-complete"]',
+  /**
+   * Green ✓ in the completed-cardio header that re-opens the entry for edits
+   * — Semantics(identifier: 'cardio-uncomplete'). Present only after
+   * completion; a useful sentinel that the entry is in the completed state.
+   */
+  uncomplete: '[flt-semantics-identifier="cardio-uncomplete"]',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1750,6 +1847,28 @@ export const POST_SESSION = {
    * Semantics(identifier: 'mission-debrief-xp-bar').
    */
   missionDebriefXpBar: '[flt-semantics-identifier="mission-debrief-xp-bar"]',
+
+  /**
+   * Phase 38d — one-time post-session "set your age" nudge banner
+   * (AgePromptBanner). Rendered on the summary panel ONLY when all gates
+   * hold: the session had a completed cardio entry (hadCardio), the cached
+   * profile's `date_of_birth` is NULL, and the never-show-again Hive flag is
+   * unset. Semantics(identifier: 'post-session-age-prompt').
+   */
+  agePrompt: '[flt-semantics-identifier="post-session-age-prompt"]',
+  /**
+   * "SET AGE" CTA inside the age-prompt banner — Semantics(identifier:
+   * 'post-session-age-prompt-cta', button: true). Opens the shared
+   * AgeEditorSheet (AGE_EDITOR.sheet).
+   */
+  agePromptCta: '[flt-semantics-identifier="post-session-age-prompt-cta"]',
+  /**
+   * Dismiss ✕ inside the age-prompt banner — Semantics(identifier:
+   * 'post-session-age-prompt-dismiss', button: true). Records the
+   * never-show-again Hive flag + removes the banner for the session.
+   */
+  agePromptDismiss:
+    '[flt-semantics-identifier="post-session-age-prompt-dismiss"]',
 } as const;
 
 // ---------------------------------------------------------------------------

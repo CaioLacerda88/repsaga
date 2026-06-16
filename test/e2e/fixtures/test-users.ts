@@ -449,4 +449,24 @@ export const TEST_USERS = {
     email: 'e2e-smoke-exercise-retirement@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // Phase 38d — age (birth-year) capture E2E (specs/age-capture.spec.ts)
+  // -------------------------------------------------------------------------
+  // smokeAgeCapture: lapsed user (one prior workout for the "Free workout"
+  // ActionHero CTA so startEmptyWorkout resolves) with profile.date_of_birth
+  // = NULL and no DOB ever set. Drives BOTH 38d flows:
+  //   1. Profile → Settings → AgeRow → AgeEditorSheet → Save default (age-35)
+  //      → row shows a numeric age; reopen → Prefer not to say → "Not set".
+  //   2. Finish a cardio-only workout → post-session summary shows the
+  //      one-time "set your age" nudge (gated on hadCardio + DOB null).
+  //
+  // The DOB column is mutated by flow 1, so the spec reseeds it back to NULL
+  // in beforeEach (per-test reseed + serial mode) — same isolation contract
+  // as the bodyweight / rank-up specs. Isolated from every other user so the
+  // DOB column stays deterministic across runs and worker counts.
+  smokeAgeCapture: {
+    email: 'e2e-smoke-age-capture@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

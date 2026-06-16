@@ -1732,6 +1732,30 @@ function buildRoleSeedRunners(): Record<
       await seedMinimalWorkout(supabase, userId);
     },
 
+    // ── Phase 38d: age (birth-year) capture E2E ──────────────────────────
+    // Lapsed user (one prior workout for the "Free workout" ActionHero CTA)
+    // with profile.date_of_birth forced to NULL. The spec reseeds DOB→NULL
+    // per-test (the set-age flow mutates it), so the seed here only has to
+    // establish: a profile row, lapsed state, and a NULL starting DOB.
+    smokeAgeCapture: async (supabase, userId) => {
+      await cleanFreshStateUser(supabase, userId);
+      await ensureProfile(supabase, userId, {
+        display_name: 'Age Capture User',
+      });
+      // Force NULL DOB even if a future ensureProfile change pre-fills it —
+      // defence in depth (mirrors the smokeBodyweightPrompt bodyweight reset).
+      const { error: dobError } = await supabase
+        .from('profiles')
+        .update({ date_of_birth: null })
+        .eq('id', userId);
+      if (dobError) {
+        console.log(
+          `[global-setup] Warning: could not reset date_of_birth for ${userId}: ${dobError.message}`,
+        );
+      }
+      await seedMinimalWorkout(supabase, userId);
+    },
+
     // ── Exercise progress chart (P1) ─────────────────────────────────────
     smokeExerciseProgress: async (supabase, userId) => {
       await ensureProfile(supabase, userId, {
