@@ -39,6 +39,7 @@ void main() {
     Profile? profile,
     _MockProfileRepository? repo,
     double textScale = 1.0,
+    Locale locale = const Locale('en'),
   }) {
     final mockRepo = repo ?? _MockProfileRepository();
     final mockAuth = _MockAuthRepository();
@@ -54,12 +55,17 @@ void main() {
       ],
       child: TestMaterialApp(
         theme: AppTheme.dark,
-        home: Scaffold(
-          body: MediaQuery(
-            data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-            child: AgeRow(profile: profile),
-          ),
+        locale: locale,
+        // Apply the text scaler app-wide (via builder) so it also reaches the
+        // AgeEditorSheet modal route, which is pushed onto the root navigator
+        // and would otherwise miss a MediaQuery wrapped only around AgeRow.
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
         ),
+        home: Scaffold(body: AgeRow(profile: profile)),
       ),
     );
   }
@@ -316,5 +322,110 @@ void main() {
       final scaledExtent = const TextScaler.linear(1.3).scale(52.0);
       expect(yearSize.height, lessThanOrEqualTo(scaledExtent));
     });
+  });
+
+  // Narrow-device regression guards (responsive-layout-real-devices lesson):
+  // every layout must survive the smallest Android (320dp), baseline (360dp),
+  // and large-phone (412dp) logical widths — in BOTH locales, since pt-BR
+  // strings ("Não informado", "Prefiro não informar", the disclosure line)
+  // run longer than EN. An overflow throws a FlutterError during pump in test
+  // mode, surfacing via `tester.takeException()`.
+  group('AgeRow narrow-width layout', () {
+    void setNarrow(WidgetTester tester, double width) {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    for (final locale in const [Locale('en'), Locale('pt')]) {
+      for (final width in const [320.0, 360.0, 412.0]) {
+        testWidgets(
+          'does not overflow at ${width}dp (${locale.languageCode}), unset',
+          (tester) async {
+            setNarrow(tester, width);
+            const profile = Profile(id: 'user-1');
+
+            await tester.pumpWidget(
+              buildHost(profile: profile, locale: locale),
+            );
+            await tester.pump();
+
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+
+      // Set state with the longest derived-age value ("100" / "100 anos").
+      testWidgets(
+        'does not overflow at 320dp (${locale.languageCode}), long age value',
+        (tester) async {
+          setNarrow(tester, 320.0);
+          final profile = Profile(
+            id: 'user-1',
+            dateOfBirth: DateTime(DateTime.now().year - 100, 1),
+          );
+
+          await tester.pumpWidget(buildHost(profile: profile, locale: locale));
+          await tester.pump();
+
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  });
+
+  group('AgeEditorSheet narrow-width layout', () {
+    void setNarrow(WidgetTester tester, double width) {
+      // Tall surface so vertical Column content (helper line, wheel, PNS,
+      // buttons) lays out without a vertical overflow masking the horizontal
+      // checks we care about.
+      tester.view.physicalSize = Size(width, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    for (final locale in const [Locale('en'), Locale('pt')]) {
+      for (final width in const [320.0, 360.0, 412.0]) {
+        testWidgets(
+          'does not overflow at ${width}dp (${locale.languageCode})',
+          (tester) async {
+            setNarrow(tester, width);
+            const profile = Profile(id: 'user-1');
+
+            await tester.pumpWidget(
+              buildHost(profile: profile, locale: locale),
+            );
+            await tester.pump();
+            await tester.tap(find.byType(AgeRow));
+            await tester.pumpAndSettle();
+
+            // Sheet open — disclosure line, wheel, PNS, Cancel/Save row all
+            // laid out at this width without a RenderFlex overflow.
+            expect(find.byType(AgeEditorSheet), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+
+      // Narrow width COMBINED with the 1.3 accessibility scale — the harshest
+      // realistic case for the wheel band (derived-age tag) + button row.
+      testWidgets(
+        'does not overflow at 320dp x1.3 scale (${locale.languageCode})',
+        (tester) async {
+          setNarrow(tester, 320.0);
+          const profile = Profile(id: 'user-1');
+
+          await tester.pumpWidget(
+            buildHost(profile: profile, locale: locale, textScale: 1.3),
+          );
+          await tester.pump();
+          await tester.tap(find.byType(AgeRow));
+          await tester.pumpAndSettle();
+
+          expect(find.byType(AgeEditorSheet), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   });
 }

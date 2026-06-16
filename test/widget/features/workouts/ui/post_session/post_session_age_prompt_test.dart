@@ -268,4 +268,100 @@ void main() {
     expect(find.byType(AgeEditorSheet), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  // Narrow-device regression guards (responsive-layout-real-devices lesson).
+  // The banner is a single Row — icon + Expanded copy + "SET AGE" CTA +
+  // dismiss ✕ — its highest overflow risk is the smallest Android width
+  // (320dp) in pt-BR, whose copy ("Informe sua idade para pontuar o cardio
+  // nas referências certas.") is the longest. The Expanded copy must absorb
+  // the squeeze (wrap/ellipsis) while the CTA + dismiss stay intact, with no
+  // RenderFlex overflow. Pumped standalone (the widget is l10n-harness-free,
+  // taking pre-localized strings) so we can exercise both locales directly.
+  group('AgePromptBanner narrow-width layout', () {
+    Widget bannerHost(Locale locale) {
+      return MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context);
+            return Scaffold(
+              body: AgePromptBanner(
+                message: l10n.agePromptMessage,
+                setAgeLabel: l10n.agePromptSetAge,
+                dismissSemanticsLabel: l10n.agePromptDismissSemantics,
+                onSetAge: () {},
+                onDismiss: () {},
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    for (final locale in const [Locale('en'), Locale('pt')]) {
+      for (final width in const [320.0, 360.0, 412.0]) {
+        testWidgets(
+          'does not overflow at ${width}dp (${locale.languageCode})',
+          (tester) async {
+            tester.view.physicalSize = Size(width, 800);
+            tester.view.devicePixelRatio = 1.0;
+            addTearDown(tester.view.reset);
+
+            await tester.pumpWidget(bannerHost(locale));
+            await tester.pump();
+
+            // The CTA stays intact (its label is never dropped) and the copy
+            // absorbs the squeeze without a RenderFlex overflow.
+            expect(find.byType(AgePromptBanner), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+
+      // Narrow + 1.3 accessibility scale — the harshest realistic squeeze on
+      // the fixed-width CTA/dismiss against the Expanded copy.
+      testWidgets(
+        'does not overflow at 320dp x1.3 scale (${locale.languageCode})',
+        (tester) async {
+          tester.view.physicalSize = const Size(320, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(1.3)),
+                child: child!,
+              ),
+              home: Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context);
+                  return Scaffold(
+                    body: AgePromptBanner(
+                      message: l10n.agePromptMessage,
+                      setAgeLabel: l10n.agePromptSetAge,
+                      dismissSemanticsLabel: l10n.agePromptDismissSemantics,
+                      onSetAge: () {},
+                      onDismiss: () {},
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+          await tester.pump();
+
+          expect(find.byType(AgePromptBanner), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  });
 }
