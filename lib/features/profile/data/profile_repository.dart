@@ -73,6 +73,7 @@ class ProfileRepository extends BaseRepository {
     Gender? gender,
     String? avatarUrl,
     DateTime? onboardedAt,
+    DateTime? dateOfBirth,
   }) {
     return _withStaleTokenRetry(() async {
       final updates = <String, dynamic>{
@@ -113,6 +114,18 @@ class ProfileRepository extends BaseRepository {
         // avatar upload). `ProfileNotifier.saveOnboardingProfile` stamps
         // `DateTime.now()` exactly once at the end of the onboarding flow.
         if (onboardedAt != null) 'onboarded_at': onboardedAt.toIso8601String(),
+        // Phase 38d — birth date. Same omit-on-null discipline: forwarding
+        // null would clobber a previously-set DOB on every unrelated
+        // profile update (the AgeEditorSheet's "Prefer not to say" clears
+        // the value via a dedicated explicit-null path, not by omission).
+        // Serialized as the Postgres `date` wire shape (`YYYY-MM-DD`), NOT
+        // `.toIso8601String()` — a full timestamp would be rejected /
+        // coerced by the `date` column. Mirrors `Profile._dateToJson`.
+        if (dateOfBirth != null)
+          'date_of_birth':
+              '${dateOfBirth.year.toString().padLeft(4, '0')}-'
+              '${dateOfBirth.month.toString().padLeft(2, '0')}-'
+              '${dateOfBirth.day.toString().padLeft(2, '0')}',
       };
       final data = await _client
           .from('profiles')
@@ -120,6 +133,24 @@ class ProfileRepository extends BaseRepository {
           .select()
           .single();
       return Profile.fromJson(data);
+    });
+  }
+
+  /// Explicitly clear the user's birth date (Phase 38d "Prefer not to
+  /// say" / clear-a-previously-set-value path).
+  ///
+  /// [upsertProfile] omits null fields to avoid clobbering unrelated
+  /// columns, so it cannot represent an intentional clear. This dedicated
+  /// `UPDATE ... SET date_of_birth = NULL` is the only writer that nulls
+  /// the column — keeping the destructive intent explicit at the call site
+  /// (the AgeEditorSheet's ghost affordance) rather than overloading the
+  /// omit-on-null upsert with a magic sentinel.
+  Future<void> clearDateOfBirth(String userId) {
+    return _withStaleTokenRetry(() async {
+      await _client
+          .from('profiles')
+          .update({'date_of_birth': null})
+          .eq('id', userId);
     });
   }
 

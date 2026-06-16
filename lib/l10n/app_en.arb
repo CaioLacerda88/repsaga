@@ -2527,5 +2527,37 @@
   "@rpeOptionSemantics": {
     "description": "Phase 38b — accessibility label on each 1–10 option in the RPE sheet.",
     "placeholders": { "value": { "type": "int" } }
-  }
+  },
+
+  "ageLabel": "Age",
+  "@ageLabel": { "description": "Phase 38d — Profile → Settings row label + AgeEditorSheet title for the optional birth-year capture." },
+  "ageNotSet": "Not set",
+  "@ageNotSet": { "description": "Phase 38d — dimmed value shown in the Age row when `profile.dateOfBirth == null`. Calm invitation, never an error (no warning icon)." },
+  "ageYears": "{age}",
+  "@ageYears": {
+    "description": "Phase 38d — derived age shown in the Age row + the wheel's live age tag once a birth year is picked, e.g. '39'. Computed as currentYear − birthYear; the raw stored date is never revealed (data minimization).",
+    "placeholders": { "age": { "type": "int" } }
+  },
+  "ageSheetHelper": "We use your age to score cardio against the right fitness norms. Optional.",
+  "@ageSheetHelper": { "description": "Phase 38d — one-line point-of-collection disclosure helper under the AgeEditorSheet title. DOB is LGPD Art. 6 consent, so this is a pure disclosure (NOT a sensitive-data consent toggle like gender/bodyweight)." },
+  "ageWheelTag": "age",
+  "@ageWheelTag": { "description": "Phase 38d — tiny uppercase tracked caption above the live derived-age number in the birth-year wheel's selection band, e.g. 'age 39'." },
+  "agePreferNotToSay": "Prefer not to say",
+  "@agePreferNotToSay": { "description": "Phase 38d — ghost affordance in the AgeEditorSheet that clears any stored birth date to NULL (age-35 fallback) and closes the sheet." },
+  "ageWheelSemantics": "Birth year. Swipe to choose. Currently {year}, age {age}.",
+  "@ageWheelSemantics": {
+    "description": "Phase 38d — accessibility label on the birth-year wheel.",
+    "placeholders": { "year": { "type": "int" }, "age": { "type": "int" } }
+  },
+  "ageRowSemantics": "Age. {value}. Tap to edit.",
+  "@ageRowSemantics": {
+    "description": "Phase 38d — accessibility label on the Age settings row; `value` is the derived age string or 'Not set'.",
+    "placeholders": { "value": { "type": "String" } }
+  },
+  "agePromptMessage": "Add your age to score this cardio against the right fitness norms.",
+  "@agePromptMessage": { "description": "Phase 38d — copy in the one-time post-session nudge shown after a cardio session when DOB is null. Invite, not nag." },
+  "agePromptSetAge": "Set age",
+  "@agePromptSetAge": { "description": "Phase 38d — CTA in the post-session age nudge; opens the AgeEditorSheet." },
+  "agePromptDismissSemantics": "Dismiss age prompt",
+  "@agePromptDismissSemantics": { "description": "Phase 38d — accessibility label on the dismiss (✕) affordance of the post-session age nudge; records the never-show-again flag." }
 }

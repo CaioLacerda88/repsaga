@@ -9,6 +9,10 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../analytics/data/models/analytics_event.dart';
 import '../../../analytics/providers/analytics_providers.dart';
 import '../../../auth/providers/auth_providers.dart';
+import '../../../profile/models/profile.dart';
+import '../../../profile/providers/age_prompt_dismissal_provider.dart';
+import '../../../profile/providers/profile_providers.dart';
+import '../../../profile/ui/widgets/age_row.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/models/character_class.dart';
@@ -38,6 +42,7 @@ import 'share/share_localizations.dart';
 import 'summary/mission_debrief_localizations.dart';
 import 'summary/mission_debrief_section.dart';
 import 'summary/next_step_hook.dart';
+import 'summary/age_prompt_banner.dart';
 import 'summary/post_session_summary_panel.dart';
 import 'summary/title_equip_row.dart';
 
@@ -775,6 +780,15 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       classLabel: classLabel,
     );
 
+    // Phase 38d — one-time "set your age" nudge. Gated to: this session had
+    // a completed cardio entry AND the user has no birth date on file AND
+    // they haven't dismissed the prompt forever. Rendering a banner is a
+    // pure, idempotent function of reactive state — no fired-flag needed:
+    // dismissing flips the Hive-backed provider, which re-renders without
+    // the banner; the "never again" guarantee is the persisted flag, not an
+    // in-memory boolean (structural-guarantee-over-runtime-flag).
+    final agePromptWidget = _buildAgePrompt(state, l10n);
+
     return PostSessionSummaryPanel(
       sagaLabel: sagaLabel,
       durationSetsLabel: durationSets,
@@ -791,11 +805,42 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
       debriefSection: debriefSection,
+      agePrompt: agePromptWidget,
       onContinue: () {
         _stateController.onContinue();
         widget.onContinue();
       },
       nextStepHookFormatter: (h) => _formatHook(h, state, l10n),
+    );
+  }
+
+  /// Build the one-time post-session age nudge, or null when any gate
+  /// fails. Gates (all must hold):
+  ///   * [PostSessionState.hadCardio] — the session had a completed cardio
+  ///     entry (cardio is the only modality scored against age-decade
+  ///     norms, so the prompt only makes sense after cardio).
+  ///   * `profile.dateOfBirth == null` — the user has no birth date on file
+  ///     (a set DOB means the age-35 fallback is already superseded).
+  ///   * `!dismissed` — the user hasn't permanently dismissed the prompt.
+  ///
+  /// Reads `profile` from the cached `profileProvider` value; if the profile
+  /// hasn't loaded yet the prompt simply doesn't render this frame (the
+  /// settings AgeRow remains the always-available entry point).
+  Widget? _buildAgePrompt(PostSessionState state, AppLocalizations l10n) {
+    if (!state.hadCardio) return null;
+    final Profile? profile = ref.watch(profileProvider).value;
+    if (profile == null) return null;
+    if (profile.dateOfBirth != null) return null;
+    final dismissed = ref.watch(agePromptDismissalProvider);
+    if (dismissed) return null;
+
+    return AgePromptBanner(
+      message: l10n.agePromptMessage,
+      setAgeLabel: l10n.agePromptSetAge,
+      dismissSemanticsLabel: l10n.agePromptDismissSemantics,
+      onSetAge: () => showAgeEditorSheet(context, profile: profile),
+      onDismiss: () =>
+          ref.read(agePromptDismissalProvider.notifier).markDismissed(),
     );
   }
 

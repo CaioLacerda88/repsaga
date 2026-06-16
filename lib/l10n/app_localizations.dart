@@ -5537,6 +5537,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Effort {value} of 10'**
   String rpeOptionSemantics(int value);
+
+  /// Phase 38d — Profile → Settings row label + AgeEditorSheet title for the optional birth-year capture.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get ageLabel;
+
+  /// Phase 38d — dimmed value shown in the Age row when `profile.dateOfBirth == null`. Calm invitation, never an error (no warning icon).
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get ageNotSet;
+
+  /// Phase 38d — derived age shown in the Age row + the wheel's live age tag once a birth year is picked, e.g. '39'. Computed as currentYear − birthYear; the raw stored date is never revealed (data minimization).
+  ///
+  /// In en, this message translates to:
+  /// **'{age}'**
+  String ageYears(int age);
+
+  /// Phase 38d — one-line point-of-collection disclosure helper under the AgeEditorSheet title. DOB is LGPD Art. 6 consent, so this is a pure disclosure (NOT a sensitive-data consent toggle like gender/bodyweight).
+  ///
+  /// In en, this message translates to:
+  /// **'We use your age to score cardio against the right fitness norms. Optional.'**
+  String get ageSheetHelper;
+
+  /// Phase 38d — tiny uppercase tracked caption above the live derived-age number in the birth-year wheel's selection band, e.g. 'age 39'.
+  ///
+  /// In en, this message translates to:
+  /// **'age'**
+  String get ageWheelTag;
+
+  /// Phase 38d — ghost affordance in the AgeEditorSheet that clears any stored birth date to NULL (age-35 fallback) and closes the sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Prefer not to say'**
+  String get agePreferNotToSay;
+
+  /// Phase 38d — accessibility label on the birth-year wheel.
+  ///
+  /// In en, this message translates to:
+  /// **'Birth year. Swipe to choose. Currently {year}, age {age}.'**
+  String ageWheelSemantics(int year, int age);
+
+  /// Phase 38d — accessibility label on the Age settings row; `value` is the derived age string or 'Not set'.
+  ///
+  /// In en, this message translates to:
+  /// **'Age. {value}. Tap to edit.'**
+  String ageRowSemantics(String value);
+
+  /// Phase 38d — copy in the one-time post-session nudge shown after a cardio session when DOB is null. Invite, not nag.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your age to score this cardio against the right fitness norms.'**
+  String get agePromptMessage;
+
+  /// Phase 38d — CTA in the post-session age nudge; opens the AgeEditorSheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set age'**
+  String get agePromptSetAge;
+
+  /// Phase 38d — accessibility label on the dismiss (✕) affordance of the post-session age nudge; records the never-show-again flag.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss age prompt'**
+  String get agePromptDismissSemantics;
 }
 
 class _AppLocalizationsDelegate

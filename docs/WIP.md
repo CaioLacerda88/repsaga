@@ -58,14 +58,19 @@ that populates it. Cardio scoring already reads the column server-side.
 - [x] Mockup (`docs/phase-38-mockups.html` "Phase 38d" section, 3 surfaces, en+pt) →
       ui-ux-critic: DISTINCTIVE (2 grammar fixes applied) → **USER-APPROVED 2026-06-16**
       ("look ok"). This is the locked visual target for the visual-verification gate.
-- [ ] tech-lead TDD: `Profile.dateOfBirth DateTime?` (model + repo + serialization);
-      `AgeRow` + `AgeEditorSheet` (wheel, structural ≥18 floor, clear-to-NULL) in
-      profile settings after Gender; post-session one-time prompt (Hive dismissal flag);
-      l10n en+pt; privacy-policy §2 DOB row; `DataExportService` includes date_of_birth.
-- [ ] Tests: Profile serialization; AgeRow/AgeEditorSheet widget states + ≥18 floor +
-      clear-to-NULL + textScaler on wheel; post-session prompt one-time/dismiss logic;
-      age-derivation. E2E (flow change): set-age-in-settings + first-cardio-prompt flow.
-- [ ] `make gen` + `dart format` + `dart analyze --fatal-infos` + `make test` green.
+- [x] tech-lead TDD: `Profile.dateOfBirth DateTime?` (model + repo + date-only serialization
+      + `clearDateOfBirth` clear path); `AgeRow` + `AgeEditorSheet` (`ListWheelScrollView`,
+      structural ≥18 floor, textScaler-scaled itemExtent, clear-to-NULL via PNS) in profile
+      settings after Gender; post-session one-time prompt (`AgePromptBanner` +
+      `agePromptDismissalProvider` Hive flag + `PostSessionState.hadCardio` gate); l10n en+pt;
+      privacy-policy §2 + §3 DOB rows; `DataExportService` test asserts date_of_birth.
+- [x] Tests: Profile date-only serialization round-trip (11) + repo payload/clear (5);
+      AgeRow/AgeEditorSheet widget states + ≥18 floor + clear-to-NULL + textScaler 1.3 no-clip
+      + 48dp tap targets (14); post-session prompt gating shows-iff-cardio+null+not-dismissed
+      + dismiss-removes + Set-age-opens-sheet (6); deriveAge (3); data-export assertion.
+      E2E (flow change): set-age-in-settings + first-cardio-prompt flow → QA's job.
+- [x] `make gen` + `dart format` + `dart analyze --fatal-infos` (0 issues) + `flutter test`
+      green (3674 pass / 1 pre-existing skip; arb_completeness_test green).
 - [ ] reviewer → fixes → QA gate (E2E flow change → write/update specs, run them).
 - [ ] **Visual-verification gate** (new surface): 320/360/412 dp (+ textScaler 1.3 corner)
       vs the mockup; foundation + fresh users.

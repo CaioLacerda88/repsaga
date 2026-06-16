@@ -80,6 +80,7 @@ class TestProfileFactory {
     String? createdAt,
     double? bodyweightKg,
     String? onboardedAt,
+    String? dateOfBirth,
   }) {
     return {
       'id': id ?? 'user-001',
@@ -93,6 +94,11 @@ class TestProfileFactory {
       // care leave it null so the schema reflects the "user has not entered
       // a bodyweight yet" baseline.
       'bodyweight_kg': bodyweightKg,
+      // Phase 38d: birth date is opt-in (Postgres `date`, `YYYY-MM-DD`).
+      // Null by default — most tests don't care and the column reflects
+      // the "user hasn't supplied a birth year yet → age-35 fallback"
+      // baseline. Tests of the cardio-age path pass an explicit value.
+      'date_of_birth': dateOfBirth,
       // PR 1 — by default, the fixture represents a fully-onboarded
       // user (most widget/unit tests want the router to land on /home).
       // Tests that exercise the half-onboarded path pass `onboardedAt: null`

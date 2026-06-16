@@ -123,6 +123,14 @@ abstract class PostSessionState with _$PostSessionState {
 
     /// Next character level value.
     required int? nextLevel,
+
+    /// Phase 38d — true when the finished session contained at least one
+    /// COMPLETED cardio entry. Gates the one-time post-session "set your
+    /// age" nudge (cardio scores against age-decade norms; the prompt only
+    /// makes sense after cardio). Computed by the controller from the
+    /// pre-finish exercise snapshot — cardio earns no `BodyPart.cardio` XP
+    /// delta, so `bpXpDeltas` cannot be the signal.
+    @Default(false) bool hadCardio,
   }) = _PostSessionState;
 }
 

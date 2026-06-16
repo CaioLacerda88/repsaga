@@ -3238,4 +3238,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String rpeOptionSemantics(int value) {
     return 'Effort $value of 10';
   }
+
+  @override
+  String get ageLabel => 'Age';
+
+  @override
+  String get ageNotSet => 'Not set';
+
+  @override
+  String ageYears(int age) {
+    return '$age';
+  }
+
+  @override
+  String get ageSheetHelper =>
+      'We use your age to score cardio against the right fitness norms. Optional.';
+
+  @override
+  String get ageWheelTag => 'age';
+
+  @override
+  String get agePreferNotToSay => 'Prefer not to say';
+
+  @override
+  String ageWheelSemantics(int year, int age) {
+    return 'Birth year. Swipe to choose. Currently $year, age $age.';
+  }
+
+  @override
+  String ageRowSemantics(String value) {
+    return 'Age. $value. Tap to edit.';
+  }
+
+  @override
+  String get agePromptMessage =>
+      'Add your age to score this cardio against the right fitness norms.';
+
+  @override
+  String get agePromptSetAge => 'Set age';
+
+  @override
+  String get agePromptDismissSemantics => 'Dismiss age prompt';
 }

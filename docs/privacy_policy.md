@@ -30,6 +30,7 @@ We collect only the information you provide directly and a small number of in-ap
 - **Body weight (`bodyweight_kg`)** — *sensitive personal data* under LGPD Art. 11 / GDPR Art. 9 (data concerning health). Collection is **opt-in**: the field is omittable and can be deleted at any time. See Section 2a below.
 - **Gender (`male`, `female`, or `other`)** — *sensitive personal data* under LGPD Art. 11 / GDPR Art. 9. Collection is **opt-in**. Used solely to select the per-lift strength-tier reference table that calibrates XP for resistance exercises (male-tier tables are sourced from Symmetric Strength reference data; female-tier tables from strengthlevel.com). If you leave gender unset or choose `'other'`, the App falls back to the male-tier table for now — this is a documented, conservative default and has no other effect on your account. See Section 2a below.
 - **Avatar photo (`avatar_url`)** — optional. If you upload one, it is stored in a **private Supabase Storage bucket** and served to the App via short-lived signed URLs that expire and are automatically regenerated. The photo is never publicly accessible.
+- **Birth year (`date_of_birth`)** — *optional*. Collected with your consent under LGPD Art. 6 / GDPR Art. 6 §1(a). The App captures only your **birth year** (stored as `YYYY-01-01` — never the exact day or month) and uses it solely to score your cardio against age-appropriate fitness norms. If you leave it unset, the App applies an **age-35 fallback** — a valid default that never blocks any feature or affects your XP eligibility. You can edit or delete it at any time in **Profile → Settings → Age** (the "Prefer not to say" option clears it).
 
 ### Fitness Data
 - Workout history: exercises, sets, reps, weight, dates, notes, and workout duration
@@ -105,6 +106,7 @@ Under LGPD Art. 6 (and the parallel GDPR Art. 6 §1 and Art. 9 §2 where applica
 | **Body weight** | **Art. 11, I (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Improve XP accuracy for bodyweight exercises |
 | **Gender** | **Art. 11, I (explicit consent for sensitive data)** | **Art. 9 §2(a) (explicit consent)** | Select the strength-tier reference table for XP calibration |
 | Avatar photo | Art. 7 I (consent) | Art. 6 §1(a) (consent) | Personalize your profile |
+| Birth year (`date_of_birth`) | Art. 6 I (consent) | Art. 6 §1(a) (consent) | Score cardio against age-appropriate fitness norms (optional; age-35 fallback when unset; editable/deletable in Profile → Settings → Age) |
 | Usage events (Section 2 list) | Art. 7 IX (legitimate interest) | Art. 6 §1(f) (legitimate interest) | Diagnose bugs, prioritize features, measure reliability. Balancing test documented and available on request. |
 | Crash reports (Sentry) | Art. 7 IX (legitimate interest) | Art. 6 §1(f) (legitimate interest) | Diagnose and fix App crashes |
 | Subscription data (Launch Phase) | Art. 6 V (contract performance) | Art. 6 §1(b) | Verify and provision your paid subscription |

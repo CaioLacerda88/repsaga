@@ -226,6 +226,15 @@ class PostSessionController extends ChangeNotifier {
       }
     }
 
+    // Phase 38d — did this session include a completed cardio entry? Cardio
+    // earns no `BodyPart.cardio` XP delta (its XP path is separate from the
+    // strength `bpXpDeltas`), so the only reliable signal is the pre-finish
+    // exercise snapshot. Gates the one-time post-session "set your age"
+    // nudge in the screen layer.
+    final hadCardio = params.exercises.any(
+      (e) => e.cardioSession?.isCompleted ?? false,
+    );
+
     // Defensive: for any BP that earned XP but is missing from
     // `params.bpRankBefore` (e.g. legacy fixtures, pre-Blocker-1 callers),
     // fall back to `bpRankAfter - 1` clamped to 1. The fallback only ever
@@ -265,6 +274,7 @@ class PostSessionController extends ChangeNotifier {
       dominantNextRank: dominantNextRank,
       ranksToNextLevel: ranksToNextLevel,
       nextLevel: nextLevel,
+      hadCardio: hadCardio,
     );
   }
 
