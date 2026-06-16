@@ -139,17 +139,25 @@ Formula order: `eff_met_min = abs_met×dur×intensity_mult(rel)` → weekly cap 
 → `× vitality_xp_mult` (caller-applied, computed once per week from start-of-week conditioning).
 14-persona oracle XP values captured in the formula-digest agent output (use for fixture).
 
+### Implementation progress (this session)
+- [x] **[1] Python sim + fixture oracle** — new pure fns (`est_met_from_density`, `best_effort_vo2_from_pace`, `nonexercise_seed_vo2`, `session_met_from_cardio_log`) + consts (`SET_WORK_SECONDS=30`, `REST_DEFAULT=90`, `AGE_FALLBACK=35`, `VO2_ROLLING_WINDOW_DAYS=42`, per-modality default METs). 14/14 panel unchanged. Wired into generator; regen fixture with `cardio_session_xp`, `cardio_components`, `est_vo2max_cases`, `cross_credit_met_bands`, cardio `meta`.
+- [x] **[2] Dart layer** — `CardioXpCalculator` + `CardioXpComponents`; est-VO₂max util; cross-credit `estMetFromDensity`. Parity tests @1e-4. `phase29_formula_parity_test.dart` extended with cardio section/row-count guards.
+- [x] **[3] SQL `00079`** — ALTER cardio_sessions (+met/met_minutes/est_met), ALTER profiles (+cardio_vo2max/_updated_at/date_of_birth); `record_cardio_session`; cross-credit derivation; wire into save_workout; grants; integration parity test.
+
+**Sub-decision D6 (tech-lead, session resolution):** A logged `cardio_session` resolves to the sim's `compute_session_xp` as `kind='abs'`. `abs_met` is derived: for run/treadmill WITH distance → pace-derived MET via ACSM (`acsm_vo2/MET_REST`); otherwise (duration-only, or non-distance modality) → per-modality ACSM table-average MET (`CARDIO_DEFAULT_MET`: run/treadmill 9.8, bike/stationary_bike 7.0, row/rowing_machine 8.5, elliptical 7.0, jump_rope 11.0, walk 3.8). Slug→modality map: treadmill→treadmill, rowing_machine→row, stationary_bike→bike, elliptical→elliptical, jump_rope→hiit. This is the honest "activity type → ACSM MET" basis from cardio-stat-plan §2.5; never user-declared (RPE is NOT used for MET). Documented in the sim + the calculator dartdoc.
+
 ### Implementation checklist (TDD per CLAUDE.md pipeline)
 - [ ] **product-owner gut-check** (thesis-dilution): confirm cardio-as-7th-track + cross-credit don't dilute the RPG thesis (`project_rpg_thesis`). Quick pass — design is pre-locked.
-- [ ] **Migration `00079`**: add `met`, `met_minutes`, `est_met` (+ any est-VO₂max persistence) cols to `cardio_sessions`; new `record_cardio_session(p_workout_id uuid)` reusing tier_diff_mult + rank curve verbatim; cardio `xp_events`/`body_part_progress` writes (distinct conflict key, no set_id); wire into `save_workout` after the batch PERFORM; cross-credit est_met derivation in the strength path. RLS/grants verbatim. Cardio STAYS OUT of `activeBodyParts`/`character_state`.
-- [ ] **Dart `CardioXpCalculator`** (`lib/features/rpg/domain/`, mirrors `XpCalculator`) + `CardioXpComponents` w/ `toJson()`.
-- [ ] **est-VO₂max util** (net-new): race-equation best-effort + non-exercise seed + rolling per-user max. tech-lead proposes equations → sign-off.
-- [ ] **Cross-credit work-density→MET-band fn** (net-new): tech-lead proposes → sign-off.
-- [ ] **4-site parity:** extend `cardio-xp-simulation.py` for generator import; regen `rpg_xp_fixtures.json` with raw cardio rows; Dart parity test; SQL integration parity test; **update `phase29_formula_parity_test.dart` section-count guard**.
-- [ ] **Tests:** formula unit tests (14 personas @1e-4), est-VO₂max unit tests, cross-credit tests, idempotent re-save integration test (reversal pin), no-cardio-in-character-level assertion.
-- [ ] `make gen` + `dart format` + `dart analyze --fatal-infos` + `make test` green; `python tasks/cardio-xp-simulation.py` still 14/14.
-- [ ] reviewer → fixes → QA gate (E2E selector impact only; no UI surface in 38c) → `make test-integration` green (local Supabase) → PR.
+- [x] **Migration `00079`**: ALTER cardio_sessions (+met/met_minutes/est_met), ALTER profiles (+cardio_vo2max/_updated_at/date_of_birth); `record_cardio_session(p_workout_id uuid)` reusing rpg_tier_diff_mult + rank curve verbatim; cardio `xp_events` (distinct partial-unique conflict key `(user_id,session_id) WHERE set_id IS NULL AND event_type='cardio_session'`, no set_id) + `body_part_progress['cardio']` upsert at idx 7; wired into save_workout after the batch PERFORM (same txn); cross-credit est_met derivation from strength work-density; rolling cardio_vo2max writeback (best-of 42d window). REVOKE/GRANT verbatim. Cardio STAYS OUT of `character_state` (structurally — view already filters to 6 strength parts). Re-save reversal extended to delete prior cardio xp_events.
+- [x] **Dart `CardioXpCalculator`** (`lib/features/rpg/domain/cardio_xp_calculator.dart`, mirrors `XpCalculator`) + `CardioXpComponents` w/ `toJson()`; reuses `tierDiffMult` + `RankCurve` from the strength domain (imported, not re-ported).
+- [x] **est-VO₂max util** (`lib/features/rpg/domain/est_vo2max.dart`): A1 best-effort (ACSM + sustainable_fraction), A3 p25 seed, A4 rolling best-of-window + seed floor.
+- [x] **Cross-credit work-density→MET-band fn** (`est_vo2max.dart::CrossCredit.estMetFromDensity`, corrected §B function).
+- [x] **4-site parity:** cardio sim wired into generator (importlib); `rpg_xp_fixtures.json` regenerated with raw cardio rows (`cardio_session_xp` 18, `cardio_components`, `est_vo2max_cases`, `cross_credit_met_bands` 8, meta.cardio); Dart parity test `cardio_xp_calculator_test.dart` @1e-4; SQL integration parity test `cardio_earning_parity_test.dart` @0.01; `phase29_formula_parity_test.dart` extended with cardio section/row-count + meta guards.
+- [x] **Tests:** 14-persona oracle @1e-4 (green), est-VO₂max unit tests, cross-credit tests, idempotent re-save integration test (reversal pin, green), cardio-invisible-to-character-level assertion (green), est-VO₂max writeback (green).
+- [x] `dart format` + `dart analyze --fatal-infos` (0 issues) + full unit/widget suite (3636 pass, 1 skip, 0 fail serial) + integration parity (4/4 green); `python tasks/cardio-xp-simulation.py` still 14/14. (No Freezed added → `make gen` not required.)
+- [ ] reviewer → fixes → QA gate (E2E selector impact only; no UI surface in 38c) → PR.
 - [ ] Verify before PR (verification-before-completion skill) → ship → `npx supabase db push` 00079 to hosted.
+- [ ] **Backlog note at merge:** DOB-collection UI + LGPD consent + existing-user `date_of_birth` backfill (38c added the nullable column only) → PROJECT.md §2.
 
 ---
 

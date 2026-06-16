@@ -389,6 +389,635 @@
       "weekly_volume_for_body_part": 50
     }
   ],
+  "cardio_components": {
+    "cardio_base_xp": [
+      {
+        "base_xp": 10.45639552591273,
+        "capped_met_min": 50.0
+      },
+      {
+        "base_xp": 15.848931924611133,
+        "capped_met_min": 100.0
+      },
+      {
+        "base_xp": 24.022488679628623,
+        "capped_met_min": 200.0
+      },
+      {
+        "base_xp": 30.26971962147576,
+        "capped_met_min": 294.0
+      },
+      {
+        "base_xp": 41.62766037009365,
+        "capped_met_min": 500.0
+      },
+      {
+        "base_xp": 63.095734448019314,
+        "capped_met_min": 1000.0
+      },
+      {
+        "base_xp": 109.33620739432779,
+        "capped_met_min": 2500.0
+      }
+    ],
+    "cardio_weekly_cap": [
+      {
+        "capped_met_min": 500.0,
+        "eff_met_min": 500.0,
+        "week_used": 0.0
+      },
+      {
+        "capped_met_min": 2500.0,
+        "eff_met_min": 2500.0,
+        "week_used": 0.0
+      },
+      {
+        "capped_met_min": 2650.0,
+        "eff_met_min": 3000.0,
+        "week_used": 0.0
+      },
+      {
+        "capped_met_min": 650.0,
+        "eff_met_min": 1000.0,
+        "week_used": 2000.0
+      },
+      {
+        "capped_met_min": 220.0,
+        "eff_met_min": 500.0,
+        "week_used": 2400.0
+      },
+      {
+        "capped_met_min": 370.0,
+        "eff_met_min": 1000.0,
+        "week_used": 2400.0
+      }
+    ],
+    "demonstrated_vo2": [
+      {
+        "abs_met": 3.8,
+        "demonstrated_vo2": 15.833333333333332,
+        "duration_min": 45
+      },
+      {
+        "abs_met": 8.0,
+        "demonstrated_vo2": 31.57894736842105,
+        "duration_min": 28
+      },
+      {
+        "abs_met": 10.0,
+        "demonstrated_vo2": 39.77272727272727,
+        "duration_min": 30
+      },
+      {
+        "abs_met": 12.0,
+        "demonstrated_vo2": 48.46153846153846,
+        "duration_min": 35
+      },
+      {
+        "abs_met": 15.0,
+        "demonstrated_vo2": 61.52343750000001,
+        "duration_min": 40
+      },
+      {
+        "abs_met": 6.0,
+        "demonstrated_vo2": 26.25,
+        "duration_min": 60
+      },
+      {
+        "abs_met": 3.0,
+        "demonstrated_vo2": 13.81578947368421,
+        "duration_min": 90
+      }
+    ],
+    "implied_cardio_tier": [
+      {
+        "age": 30,
+        "female": false,
+        "implied_cardio_tier": 6.195402298850576,
+        "vo2": 28
+      },
+      {
+        "age": 30,
+        "female": false,
+        "implied_cardio_tier": 22.415384615384617,
+        "vo2": 40
+      },
+      {
+        "age": 30,
+        "female": false,
+        "implied_cardio_tier": 41.98630136986301,
+        "vo2": 52
+      },
+      {
+        "age": 30,
+        "female": false,
+        "implied_cardio_tier": 61.39072847682118,
+        "vo2": 64
+      },
+      {
+        "age": 55,
+        "female": false,
+        "implied_cardio_tier": 34.12676056338027,
+        "vo2": 38
+      },
+      {
+        "age": 30,
+        "female": true,
+        "implied_cardio_tier": 24.714285714285715,
+        "vo2": 30
+      },
+      {
+        "age": 28,
+        "female": true,
+        "implied_cardio_tier": 35.8169014084507,
+        "vo2": 44
+      }
+    ],
+    "intensity_mult": [
+      {
+        "intensity_mult": 0.05,
+        "pct_vo2max": 0.3
+      },
+      {
+        "intensity_mult": 0.05,
+        "pct_vo2max": 0.35
+      },
+      {
+        "intensity_mult": 0.19,
+        "pct_vo2max": 0.42
+      },
+      {
+        "intensity_mult": 0.35,
+        "pct_vo2max": 0.5
+      },
+      {
+        "intensity_mult": 0.55,
+        "pct_vo2max": 0.6
+      },
+      {
+        "intensity_mult": 0.75,
+        "pct_vo2max": 0.7
+      },
+      {
+        "intensity_mult": 0.9500000000000002,
+        "pct_vo2max": 0.8
+      },
+      {
+        "intensity_mult": 1.05,
+        "pct_vo2max": 0.85
+      },
+      {
+        "intensity_mult": 1.2000000000000002,
+        "pct_vo2max": 0.9
+      },
+      {
+        "intensity_mult": 1.35,
+        "pct_vo2max": 0.95
+      },
+      {
+        "intensity_mult": 1.4,
+        "pct_vo2max": 1.0
+      },
+      {
+        "intensity_mult": 1.45,
+        "pct_vo2max": 1.05
+      },
+      {
+        "intensity_mult": 1.45,
+        "pct_vo2max": 1.2
+      }
+    ],
+    "modality_mult": [
+      {
+        "modality": "run",
+        "modality_mult": 1.0
+      },
+      {
+        "modality": "treadmill",
+        "modality_mult": 1.0
+      },
+      {
+        "modality": "row",
+        "modality_mult": 1.0
+      },
+      {
+        "modality": "swim",
+        "modality_mult": 1.0
+      },
+      {
+        "modality": "elliptical",
+        "modality_mult": 0.97
+      },
+      {
+        "modality": "bike",
+        "modality_mult": 0.95
+      },
+      {
+        "modality": "walk",
+        "modality_mult": 0.95
+      },
+      {
+        "modality": "hiit",
+        "modality_mult": 1.05
+      },
+      {
+        "modality": "strength",
+        "modality_mult": 0.8
+      },
+      {
+        "modality": "circuit",
+        "modality_mult": 0.9
+      }
+    ],
+    "sustainable_fraction": [
+      {
+        "duration_min": 6,
+        "sustainable_fraction": 1.0
+      },
+      {
+        "duration_min": 10,
+        "sustainable_fraction": 0.9688888888888889
+      },
+      {
+        "duration_min": 15,
+        "sustainable_fraction": 0.93
+      },
+      {
+        "duration_min": 22,
+        "sustainable_fraction": 0.9066666666666667
+      },
+      {
+        "duration_min": 30,
+        "sustainable_fraction": 0.88
+      },
+      {
+        "duration_min": 38,
+        "sustainable_fraction": 0.8586666666666667
+      },
+      {
+        "duration_min": 45,
+        "sustainable_fraction": 0.84
+      },
+      {
+        "duration_min": 52,
+        "sustainable_fraction": 0.8213333333333334
+      },
+      {
+        "duration_min": 60,
+        "sustainable_fraction": 0.8
+      },
+      {
+        "duration_min": 75,
+        "sustainable_fraction": 0.78
+      },
+      {
+        "duration_min": 90,
+        "sustainable_fraction": 0.76
+      },
+      {
+        "duration_min": 105,
+        "sustainable_fraction": 0.75
+      },
+      {
+        "duration_min": 120,
+        "sustainable_fraction": 0.74
+      },
+      {
+        "duration_min": 150,
+        "sustainable_fraction": 0.72
+      },
+      {
+        "duration_min": 180,
+        "sustainable_fraction": 0.7
+      }
+    ]
+  },
+  "cardio_session_xp": [
+    {
+      "inputs": {
+        "age": 30,
+        "current_rank": 1,
+        "duration_min": 30,
+        "female": false,
+        "kind": "abs",
+        "modality": "walk",
+        "value": 3.8,
+        "vo2max": 30.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 114.0,
+      "name": "persona__couch_to_5k",
+      "rel_intensity": 0.4433333333333333,
+      "week_used_after": 26.979999999999997,
+      "xp": 32.52452114038244
+    },
+    {
+      "inputs": {
+        "age": 35,
+        "current_rank": 1,
+        "duration_min": 35,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 42.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 260.4,
+      "name": "persona__rec_jogger",
+      "rel_intensity": 0.62,
+      "week_used_after": 153.636,
+      "xp": 168.68570522947718
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 1,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 52.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 414.51428571428573,
+      "name": "persona__committed_runner",
+      "rel_intensity": 0.62,
+      "week_used_after": 244.5634285714286,
+      "xp": 317.4218634615403
+    },
+    {
+      "inputs": {
+        "age": 28,
+        "current_rank": 1,
+        "duration_min": 22,
+        "female": true,
+        "kind": "rel",
+        "modality": "hiit",
+        "value": 0.95,
+        "vo2max": 38.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 226.91428571428574,
+      "name": "persona__hiit",
+      "rel_intensity": 0.95,
+      "week_used_after": 306.3342857142858,
+      "xp": 428.4204406016482
+    },
+    {
+      "inputs": {
+        "age": 40,
+        "current_rank": 1,
+        "duration_min": 60,
+        "female": false,
+        "kind": "rel",
+        "modality": "bike",
+        "value": 0.62,
+        "vo2max": 46.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 488.91428571428565,
+      "name": "persona__cyclist",
+      "rel_intensity": 0.62,
+      "week_used_after": 288.4594285714286,
+      "xp": 343.38161284045066
+    },
+    {
+      "inputs": {
+        "age": 30,
+        "current_rank": 1,
+        "duration_min": 35,
+        "female": true,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 36.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 223.2,
+      "name": "persona__female_rec",
+      "rel_intensity": 0.62,
+      "week_used_after": 131.68800000000002,
+      "xp": 210.31563460414117
+    },
+    {
+      "inputs": {
+        "age": 55,
+        "current_rank": 1,
+        "duration_min": 35,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 38.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 235.6,
+      "name": "persona__older_runner",
+      "rel_intensity": 0.62,
+      "week_used_after": 139.00400000000002,
+      "xp": 214.69968817170118
+    },
+    {
+      "inputs": {
+        "age": 45,
+        "current_rank": 1,
+        "duration_min": 45,
+        "female": true,
+        "kind": "abs",
+        "modality": "walk",
+        "value": 3.8,
+        "vo2max": 26.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 171.0,
+      "name": "persona__walker",
+      "rel_intensity": 0.5115384615384615,
+      "week_used_after": 63.79615384615383,
+      "xp": 68.00981957699545
+    },
+    {
+      "inputs": {
+        "age": 40,
+        "current_rank": 1,
+        "duration_min": 45,
+        "female": false,
+        "kind": "abs",
+        "modality": "walk",
+        "value": 3.8,
+        "vo2max": 54.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 171.0,
+      "name": "persona__reformed_walker",
+      "rel_intensity": 0.24629629629629626,
+      "week_used_after": 8.55,
+      "xp": 17.43109431416657
+    },
+    {
+      "inputs": {
+        "age": 27,
+        "current_rank": 1,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 64.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 510.1714285714285,
+      "name": "persona__fit_newcomer",
+      "rel_intensity": 0.62,
+      "week_used_after": 301.0011428571429,
+      "xp": 381.65669271073995
+    },
+    {
+      "inputs": {
+        "age": 26,
+        "current_rank": 1,
+        "duration_min": 70,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 72.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 892.8,
+      "name": "persona__elite",
+      "rel_intensity": 0.62,
+      "week_used_after": 526.7520000000001,
+      "xp": 622.070078431642
+    },
+    {
+      "inputs": {
+        "age": 38,
+        "current_rank": 1,
+        "duration_min": 60,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.62,
+        "vo2max": 50.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 531.4285714285714,
+      "name": "persona__easy_marathoner",
+      "rel_intensity": 0.62,
+      "week_used_after": 313.5428571428572,
+      "xp": 371.12513167689826
+    },
+    {
+      "inputs": {
+        "age": 35,
+        "current_rank": 1,
+        "duration_min": 60,
+        "female": false,
+        "kind": "abs",
+        "modality": "strength",
+        "value": 3.8,
+        "vo2max": 36.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 228.0,
+      "name": "persona__powerlifter",
+      "rel_intensity": 0.3694444444444444,
+      "week_used_after": 20.26666666666666,
+      "xp": 23.95799638167906
+    },
+    {
+      "inputs": {
+        "age": 29,
+        "current_rank": 1,
+        "duration_min": 28,
+        "female": false,
+        "kind": "abs",
+        "modality": "circuit",
+        "value": 8.0,
+        "vo2max": 44.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 224.0,
+      "name": "persona__crossfitter",
+      "rel_intensity": 0.6363636363636364,
+      "week_used_after": 139.4909090909091,
+      "xp": 133.69787129473642
+    },
+    {
+      "inputs": {
+        "age": 40,
+        "current_rank": 1,
+        "duration_min": 45,
+        "female": false,
+        "kind": "abs",
+        "modality": "walk",
+        "value": 3.8,
+        "vo2max": 54.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 171.0,
+      "name": "edge__walk_when_fit",
+      "rel_intensity": 0.24629629629629626,
+      "week_used_after": 8.55,
+      "xp": 17.43109431416657
+    },
+    {
+      "inputs": {
+        "age": 29,
+        "current_rank": 1,
+        "duration_min": 28,
+        "female": false,
+        "kind": "abs",
+        "modality": "circuit",
+        "value": 8.0,
+        "vo2max": 44.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 224.0,
+      "name": "edge__metcon",
+      "rel_intensity": 0.6363636363636364,
+      "week_used_after": 139.4909090909091,
+      "xp": 133.69787129473642
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 20,
+        "duration_min": 60,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.88,
+        "vo2max": 52.0,
+        "week_used": 2300.0
+      },
+      "met_minutes": 784.4571428571428,
+      "name": "edge__over_cap_split",
+      "rel_intensity": 0.88,
+      "week_used_after": 3194.281142857143,
+      "xp": 294.4935776394843
+    },
+    {
+      "inputs": {
+        "age": 27,
+        "current_rank": 45,
+        "duration_min": 40,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.95,
+        "vo2max": 64.0,
+        "week_used": 0.0
+      },
+      "met_minutes": 694.8571428571428,
+      "name": "edge__fit_high_rank",
+      "rel_intensity": 0.95,
+      "week_used_after": 938.0571428571428,
+      "xp": 298.75552975189805
+    }
+  ],
   "character_level": [
     {
       "character_level": 1,
@@ -446,6 +1075,198 @@
       }
     }
   ],
+  "cross_credit_met_bands": [
+    {
+      "avg_rest": 180,
+      "completed_sets": 20,
+      "est_met": 3.5,
+      "expected": 3.5,
+      "name": "powerlifter_worked",
+      "session_seconds": 4200
+    },
+    {
+      "avg_rest": 30,
+      "completed_sets": 15,
+      "est_met": 8.0,
+      "expected": 8.0,
+      "name": "metcon_worked",
+      "session_seconds": 1680
+    },
+    {
+      "avg_rest": 35,
+      "completed_sets": 15,
+      "est_met": 8.0,
+      "expected": 8.0,
+      "name": "band_8_boundary",
+      "session_seconds": 1680
+    },
+    {
+      "avg_rest": 36,
+      "completed_sets": 15,
+      "est_met": 6.0,
+      "expected": 6.0,
+      "name": "band_6_avg_rest_36",
+      "session_seconds": 1680
+    },
+    {
+      "avg_rest": 75,
+      "completed_sets": 14,
+      "est_met": 6.0,
+      "expected": 6.0,
+      "name": "band_6_boundary",
+      "session_seconds": 1680
+    },
+    {
+      "avg_rest": 76,
+      "completed_sets": 14,
+      "est_met": 5.0,
+      "expected": 5.0,
+      "name": "band_5_avg_rest_76",
+      "session_seconds": 1680
+    },
+    {
+      "avg_rest": 120,
+      "completed_sets": 8,
+      "est_met": 5.0,
+      "expected": 5.0,
+      "name": "band_5_boundary",
+      "session_seconds": 2400
+    },
+    {
+      "avg_rest": 121,
+      "completed_sets": 8,
+      "est_met": 3.5,
+      "expected": 3.5,
+      "name": "band_3_5_long_rest",
+      "session_seconds": 2400
+    }
+  ],
+  "est_vo2max_cases": {
+    "best_effort": [
+      {
+        "best_effort_vo2": 41.85606060606061,
+        "distance_m": 5000,
+        "duration_s": 1800,
+        "modality": "run"
+      },
+      {
+        "best_effort_vo2": 52.62096774193549,
+        "distance_m": 10000,
+        "duration_s": 3000,
+        "modality": "treadmill"
+      },
+      {
+        "best_effort_vo2": 46.774193548387096,
+        "distance_m": 3000,
+        "duration_s": 900,
+        "modality": "run"
+      },
+      {
+        "best_effort_vo2": null,
+        "distance_m": 5000,
+        "duration_s": 1800,
+        "modality": "bike"
+      },
+      {
+        "best_effort_vo2": null,
+        "distance_m": null,
+        "duration_s": 1800,
+        "modality": "run"
+      },
+      {
+        "best_effort_vo2": null,
+        "distance_m": 0,
+        "duration_s": 1800,
+        "modality": "run"
+      }
+    ],
+    "seed": [
+      {
+        "age": 20,
+        "female": false,
+        "seed_vo2": 40.1
+      },
+      {
+        "age": 30,
+        "female": false,
+        "seed_vo2": 35.9
+      },
+      {
+        "age": 45,
+        "female": false,
+        "seed_vo2": 31.9
+      },
+      {
+        "age": 55,
+        "female": false,
+        "seed_vo2": 27.1
+      },
+      {
+        "age": 30,
+        "female": true,
+        "seed_vo2": 25.3
+      },
+      {
+        "age": 45,
+        "female": true,
+        "seed_vo2": 22.1
+      },
+      {
+        "age": null,
+        "female": false,
+        "seed_vo2": 35.9
+      },
+      {
+        "age": null,
+        "female": true,
+        "seed_vo2": 25.3
+      }
+    ],
+    "session_met": [
+      {
+        "distance_m": 5000,
+        "duration_s": 1800,
+        "modality": "run",
+        "session_met": 10.523809523809524
+      },
+      {
+        "distance_m": 10000,
+        "duration_s": 3000,
+        "modality": "treadmill",
+        "session_met": 12.428571428571429
+      },
+      {
+        "distance_m": null,
+        "duration_s": 1800,
+        "modality": "bike",
+        "session_met": 7.0
+      },
+      {
+        "distance_m": null,
+        "duration_s": 1500,
+        "modality": "row",
+        "session_met": 8.5
+      },
+      {
+        "distance_m": 5000,
+        "duration_s": 1800,
+        "modality": "elliptical",
+        "session_met": 7.0
+      },
+      {
+        "distance_m": null,
+        "duration_s": 2700,
+        "modality": "walk",
+        "session_met": 3.8
+      },
+      {
+        "distance_m": null,
+        "duration_s": 1320,
+        "modality": "hiit",
+        "session_met": 11.0
+      }
+    ]
+  },
   "frequency_mult": [
     {
       "expected": 1.0,
@@ -741,6 +1562,152 @@
       "wide_grip_pull_up",
       "wide_push_up"
     ],
+    "cardio": {
+      "age_fallback": 35,
+      "cardio_default_met": {
+        "bike": 7.0,
+        "elliptical": 7.0,
+        "hiit": 11.0,
+        "row": 8.5,
+        "run": 9.8,
+        "swim": 8.0,
+        "treadmill": 9.8,
+        "walk": 3.8
+      },
+      "cardio_slug_to_modality": {
+        "elliptical": "elliptical",
+        "jump_rope": "hiit",
+        "rowing_machine": "row",
+        "stationary_bike": "bike",
+        "treadmill": "treadmill"
+      },
+      "cardio_xp_scale": 3.5,
+      "distance_modalities": [
+        "run",
+        "treadmill"
+      ],
+      "intensity_anchors": [
+        [
+          0.35,
+          0.05
+        ],
+        [
+          0.5,
+          0.35
+        ],
+        [
+          0.7,
+          0.75
+        ],
+        [
+          0.85,
+          1.05
+        ],
+        [
+          0.95,
+          1.35
+        ],
+        [
+          1.05,
+          1.45
+        ]
+      ],
+      "met_rest": 3.5,
+      "modality_mult": {
+        "bike": 0.95,
+        "circuit": 0.9,
+        "elliptical": 0.97,
+        "hiit": 1.05,
+        "row": 1.0,
+        "run": 1.0,
+        "strength": 0.8,
+        "swim": 1.0,
+        "treadmill": 1.0,
+        "walk": 0.95
+      },
+      "over_cap_mult": 0.3,
+      "rest_default": 90,
+      "set_work_seconds": 30,
+      "sustain_anchors": [
+        [
+          6,
+          1.0
+        ],
+        [
+          15,
+          0.93
+        ],
+        [
+          30,
+          0.88
+        ],
+        [
+          45,
+          0.84
+        ],
+        [
+          60,
+          0.8
+        ],
+        [
+          90,
+          0.76
+        ],
+        [
+          120,
+          0.74
+        ],
+        [
+          180,
+          0.7
+        ]
+      ],
+      "tier_anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          25,
+          18
+        ],
+        [
+          50,
+          25
+        ],
+        [
+          75,
+          37
+        ],
+        [
+          90,
+          50
+        ],
+        [
+          95,
+          60
+        ],
+        [
+          99,
+          68
+        ],
+        [
+          100,
+          70
+        ]
+      ],
+      "vitality_tau_down_weeks": 3.0,
+      "vitality_tau_up_weeks": 2.0,
+      "vitality_xp_floor": 0.4,
+      "vo2_ceiling_cap": 90.0,
+      "vo2_rolling_window_days": 42,
+      "volume_exponent": 0.6,
+      "weekly_cardio_cap_metmin": 2500.0
+    },
     "char_level_denominator": 4,
     "difficulty_mult_ceiling": 1.25,
     "difficulty_mult_floor": 0.85,
