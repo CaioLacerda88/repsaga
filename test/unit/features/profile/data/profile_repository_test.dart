@@ -446,6 +446,62 @@ void main() {
         );
       });
 
+      // ---------------------------------------------------------------
+      // Phase 38d — date_of_birth parameter
+      //
+      // The SQL column is a Postgres `date` (NOT `timestamptz`), so the
+      // payload must carry a bare `YYYY-MM-DD` string — NOT a full
+      // `.toIso8601String()` timestamp, which the `date` column rejects /
+      // coerces. Same omit-on-null discipline as the other optional params:
+      // the explicit clear-to-NULL path is `clearDateOfBirth`, not a null
+      // forwarded through the upsert.
+      // ---------------------------------------------------------------
+      test('includes date_of_birth as YYYY-MM-DD when provided', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(
+          userId: 'user-1',
+          dateOfBirth: DateTime(1987, 1, 1),
+        );
+
+        expect(builder.capturedUpsert, isNotNull);
+        expect(builder.capturedUpsert!['date_of_birth'], '1987-01-01');
+        // Must be the bare `date` wire shape, never a full timestamp.
+        expect(
+          builder.capturedUpsert!['date_of_birth'] as String,
+          isNot(contains('T')),
+        );
+      });
+
+      test('zero-pads single-digit month/day in date_of_birth', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(
+          userId: 'user-1',
+          dateOfBirth: DateTime(2001, 3, 5),
+        );
+
+        expect(builder.capturedUpsert!['date_of_birth'], '2001-03-05');
+      });
+
+      test('omits date_of_birth from payload when null', () async {
+        final builder = _builderFor(row: _profileRow());
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.upsertProfile(userId: 'user-1', displayName: 'Bob');
+
+        expect(
+          builder.capturedUpsert!.containsKey('date_of_birth'),
+          isFalse,
+          reason:
+              'Forwarding null would clobber a stored birth date on every '
+              'unrelated profile update; clearing goes through '
+              'clearDateOfBirth instead.',
+        );
+      });
+
       test('maps Supabase exception to AppException', () async {
         final repo = _makeRepo(
           error: const supabase.PostgrestException(message: 'unique violation'),
@@ -453,6 +509,41 @@ void main() {
 
         expect(
           () => repo.upsertProfile(userId: 'user-1'),
+          throwsA(isA<app.AppException>()),
+        );
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // clearDateOfBirth (Phase 38d)
+    //
+    // The only writer that NULLs the column. upsertProfile omits null
+    // fields (to avoid clobbering unrelated columns), so an explicit clear
+    // needs its own `UPDATE ... SET date_of_birth = NULL` path.
+    // -------------------------------------------------------------------
+    group('clearDateOfBirth', () {
+      test('issues update with date_of_birth: null and eq filter', () async {
+        final builder = _builderFor(row: null);
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        await repo.clearDateOfBirth('user-1');
+
+        expect(builder.calledMethods, contains('update'));
+        expect(builder.calledMethods, contains('eq:id=user-1'));
+        expect(builder.capturedUpdate, isNotNull);
+        expect(builder.capturedUpdate!.containsKey('date_of_birth'), isTrue);
+        expect(builder.capturedUpdate!['date_of_birth'], isNull);
+      });
+
+      test('maps Supabase exception to AppException', () async {
+        final builder = _builderFor(
+          row: null,
+          error: const supabase.PostgrestException(message: 'rls denied'),
+        );
+        final repo = ProfileRepository(_FakeSupabaseClient(builder));
+
+        expect(
+          () => repo.clearDateOfBirth('user-1'),
           throwsA(isA<app.AppException>()),
         );
       });

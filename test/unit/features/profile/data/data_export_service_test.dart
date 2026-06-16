@@ -294,6 +294,10 @@ void main() {
             'locale': 'en',
             'weight_unit': 'kg',
             'bodyweight_kg': 80.0,
+            // Phase 38d — birth date is exported as part of the full
+            // profile row (LGPD/GDPR right of access). Stored as the
+            // Postgres `date` wire shape `YYYY-01-01`.
+            'date_of_birth': '1987-01-01',
           }),
           'workouts': _TableResponse.list([
             {
@@ -401,6 +405,8 @@ void main() {
       final profile = json['profile'] as Map<String, dynamic>;
       expect(profile['display_name'], 'Test Lifter');
       expect(profile['bodyweight_kg'], 80.0);
+      // Phase 38d — birth date is included in the export when set.
+      expect(profile['date_of_birth'], '1987-01-01');
 
       final workouts = json['workouts'] as List;
       expect(workouts, hasLength(1));

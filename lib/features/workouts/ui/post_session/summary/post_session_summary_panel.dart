@@ -57,6 +57,7 @@ class PostSessionSummaryPanel extends StatelessWidget {
     this.debriefSection,
     this.nextStepHookFormatter,
     this.nextStepEyebrowColor,
+    this.agePrompt,
   });
 
   /// "Saga 47" or "1ª saga" (day-zero variant). Pre-resolved.
@@ -129,6 +130,13 @@ class PostSessionSummaryPanel extends StatelessWidget {
   /// summaryNextStepLabel + summaryNextRank/Level pair) is hidden because
   /// the debrief section's next-target callout subsumes it.
   final Widget? debriefSection;
+
+  /// Phase 38d — optional one-time "set your age" nudge. Supplied by the
+  /// screen layer only when the finished session had a completed cardio
+  /// entry, the user has no birth date on file, and the prompt hasn't been
+  /// dismissed. Renders directly under the summary metrics block (mockup
+  /// §5/§6 — a slim in-context banner, not a modal).
+  final Widget? agePrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -211,6 +219,7 @@ class PostSessionSummaryPanel extends StatelessWidget {
                   const SizedBox(height: 8),
                   debriefSection!,
                 ],
+                ?agePrompt,
                 const Spacer(),
                 if (hasShareCta &&
                     sharePayload != null &&

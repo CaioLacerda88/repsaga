@@ -1915,7 +1915,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get finishWorkoutDisabledHint =>
-      'Complete pelo menos uma série para finalizar.';
+      'Complete pelo menos uma série ou registro de cardio para finalizar.';
 
   @override
   String get addExerciseFabLabel => 'Adicionar exercício';
@@ -3254,4 +3254,45 @@ class AppLocalizationsPt extends AppLocalizations {
   String rpeOptionSemantics(int value) {
     return 'Esforço $value de 10';
   }
+
+  @override
+  String get ageLabel => 'Idade';
+
+  @override
+  String get ageNotSet => 'Não informado';
+
+  @override
+  String ageYears(int age) {
+    return '$age anos';
+  }
+
+  @override
+  String get ageSheetHelper =>
+      'Usamos sua idade para avaliar o cardio com as referências de condicionamento certas para você. Opcional.';
+
+  @override
+  String get ageWheelTag => 'idade';
+
+  @override
+  String get agePreferNotToSay => 'Prefiro não informar';
+
+  @override
+  String ageWheelSemantics(int year, int age) {
+    return 'Ano de nascimento. Deslize para escolher. Atualmente $year, idade $age.';
+  }
+
+  @override
+  String ageRowSemantics(String value) {
+    return 'Idade. $value. Toque para editar.';
+  }
+
+  @override
+  String get agePromptMessage =>
+      'Informe sua idade para pontuar o cardio nas referências certas.';
+
+  @override
+  String get agePromptSetAge => 'Definir idade';
+
+  @override
+  String get agePromptDismissSemantics => 'Dispensar aviso de idade';
 }

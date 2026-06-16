@@ -603,7 +603,7 @@
   "equippedLabel": "EQUIPADO",
   "prChipLabel": "PR",
   "finishButtonLabel": "FINALIZAR",
-  "finishWorkoutDisabledHint": "Complete pelo menos uma série para finalizar.",
+  "finishWorkoutDisabledHint": "Complete pelo menos uma série ou registro de cardio para finalizar.",
   "addExerciseFabLabel": "Adicionar exercício",
   "celebrationOverflowLabel": "{count, plural, one{Mais 1 rank — abrir Saga} other{Mais {count} ranks — abrir Saga}}",
   "celebrationOverflowTapHint": "Toque para continuar",
@@ -998,5 +998,16 @@
   "cardioEffortSemantics": "Esforço (RPE). Toque para escolher de 1 a 10.",
   "rpeSheetTitle": "Esforço (RPE)",
   "rpeSheetSubtitle": "Quão difícil foi, de 1 (fácil) a 10 (esforço máximo)?",
-  "rpeOptionSemantics": "Esforço {value} de 10"
+  "rpeOptionSemantics": "Esforço {value} de 10",
+  "ageLabel": "Idade",
+  "ageNotSet": "Não informado",
+  "ageYears": "{age} anos",
+  "ageSheetHelper": "Usamos sua idade para avaliar o cardio com as referências de condicionamento certas para você. Opcional.",
+  "ageWheelTag": "idade",
+  "agePreferNotToSay": "Prefiro não informar",
+  "ageWheelSemantics": "Ano de nascimento. Deslize para escolher. Atualmente {year}, idade {age}.",
+  "ageRowSemantics": "Idade. {value}. Toque para editar.",
+  "agePromptMessage": "Informe sua idade para pontuar o cardio nas referências certas.",
+  "agePromptSetAge": "Definir idade",
+  "agePromptDismissSemantics": "Dispensar aviso de idade"
 }

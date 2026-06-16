@@ -184,13 +184,15 @@ void main() {
           await tester.pumpWidget(_host(enabled: false, onPressed: () {}));
 
           expect(
-            find.text('Complete at least one set to finish.'),
+            find.text('Complete at least one set or cardio entry to finish.'),
             findsOneWidget,
             reason:
                 'H6 (PR-5): when the FINISH button is disabled, the user '
                 'must see a concrete unblock action. The localized en '
                 'string `finishWorkoutDisabledHint` ("Complete at least '
-                'one set to finish.") is the contract.',
+                'one set or cardio entry to finish.") is the contract — '
+                'Phase 38b generalized it so it reads correctly for a '
+                'cardio-only session, not just strength.',
           );
         },
       );
@@ -204,7 +206,7 @@ void main() {
         await tester.pumpWidget(_host(enabled: true, onPressed: () {}));
 
         expect(
-          find.text('Complete at least one set to finish.'),
+          find.text('Complete at least one set or cardio entry to finish.'),
           findsNothing,
           reason:
               'H6 (PR-5): the disabled-state hint must vanish once the '

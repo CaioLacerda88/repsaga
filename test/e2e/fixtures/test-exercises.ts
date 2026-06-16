@@ -27,6 +27,12 @@ export const SEED_EXERCISES = {
   // the test surface aligned with what real users will most commonly
   // hit the prompt on (the move is in nearly every routine library).
   pullUp: 'Pull-Up',
+  // Phase 38d — age-capture E2E drives a cardio-only workout to reach the
+  // post-session age prompt. Treadmill is a default cardio exercise (muscle
+  // group 'cardio', seeded since 00014; slug 'treadmill' via 00030; en+pt
+  // translations exist). Adding it seeds a default 30:00 CardioSession so the
+  // "Complete cardio" CTA is enabled with no further input.
+  treadmill: 'Treadmill',
 } as const;
 
 /**

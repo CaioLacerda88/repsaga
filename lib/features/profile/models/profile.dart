@@ -71,8 +71,47 @@ abstract class Profile with _$Profile {
     // `profiles.onboarded_at timestamptz` is nullable, so the Dart field
     // mirrors that with `DateTime?`.
     DateTime? onboardedAt,
+    // Phase 38d — user-declared birth date. Drives cardio scoring against
+    // the correct age-decade fitness norms server-side; NULL falls back to
+    // the age-35 baseline (a valid steady state — DOB never gates cardio
+    // XP). The UI captures birth-YEAR only and stores `YYYY-01-01` (LGPD
+    // data-minimization — the cardio formula keys on age-decade, so the
+    // year is the minimal stable representation).
+    //
+    // ⚠ Serialization differs from [createdAt] / [onboardedAt]: the SQL
+    // column `profiles.date_of_birth` is a Postgres `date` (NOT
+    // `timestamptz`), so PostgREST returns a bare `YYYY-MM-DD` string and
+    // expects the same on write. A full `.toIso8601String()` timestamp
+    // would be rejected by the `date` column / drift the stored value, so
+    // this field routes through the date-only [_dateFromJson] / [_dateToJson]
+    // converters instead of the default `DateTime` codec.
+    @JsonKey(fromJson: _dateFromJson, toJson: _dateToJson)
+    DateTime? dateOfBirth,
   }) = _Profile;
 
   factory Profile.fromJson(Map<String, dynamic> json) =>
       _$ProfileFromJson(json);
+}
+
+/// Parse a Postgres `date` (`YYYY-MM-DD`) into a date-only [DateTime].
+///
+/// Accepts either a bare `YYYY-MM-DD` (the PostgREST shape for a `date`
+/// column) or a fuller ISO-8601 string (defensive — a future column-type
+/// change or a hand-rolled fixture won't silently drop the value). Returns
+/// a midnight-local [DateTime] truncated to year/month/day so equality +
+/// round-trips stay stable regardless of any time component on input.
+DateTime? _dateFromJson(Object? value) {
+  if (value == null) return null;
+  final parsed = DateTime.parse(value as String);
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
+/// Serialize a date-only [DateTime] back to the Postgres `date` wire shape
+/// (`YYYY-MM-DD`) — NOT a full `.toIso8601String()` timestamp, which the
+/// `date` column would reject / coerce. Pads month + day to two digits.
+String? _dateToJson(DateTime? value) {
+  if (value == null) return null;
+  final mm = value.month.toString().padLeft(2, '0');
+  final dd = value.day.toString().padLeft(2, '0');
+  return '${value.year.toString().padLeft(4, '0')}-$mm-$dd';
 }

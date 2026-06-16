@@ -188,5 +188,109 @@ void main() {
         expect(a, isNot(equals(b)));
       });
     });
+
+    // -----------------------------------------------------------------
+    // Phase 38d — date_of_birth (Postgres `date`, NOT `timestamptz`)
+    //
+    // The column is a bare `date`, so PostgREST returns `YYYY-MM-DD` and
+    // expects the same on write. Serialization must NOT emit a full
+    // `.toIso8601String()` timestamp (which the `date` column rejects /
+    // coerces) — the date-only @JsonKey converters handle this.
+    // -----------------------------------------------------------------
+    group('dateOfBirth (Phase 38d)', () {
+      test('is null when date_of_birth key is absent from JSON', () {
+        final profile = Profile.fromJson({'id': 'user-123'});
+        expect(profile.dateOfBirth, isNull);
+      });
+
+      test('is null when date_of_birth is explicitly null in JSON', () {
+        final profile = Profile.fromJson({
+          'id': 'user-123',
+          'date_of_birth': null,
+        });
+        expect(profile.dateOfBirth, isNull);
+      });
+
+      test('parses a bare YYYY-MM-DD date string', () {
+        final profile = Profile.fromJson({
+          'id': 'user-123',
+          'date_of_birth': '1987-01-01',
+        });
+        expect(profile.dateOfBirth, isA<DateTime>());
+        expect(profile.dateOfBirth!.year, 1987);
+        expect(profile.dateOfBirth!.month, 1);
+        expect(profile.dateOfBirth!.day, 1);
+      });
+
+      test('truncates any time component to date-only on parse', () {
+        // Defensive: a future column-type change or hand-rolled fixture
+        // shouldn't leak a time-of-day into the stored value.
+        final profile = Profile.fromJson({
+          'id': 'user-123',
+          'date_of_birth': '1990-06-15T13:45:30.000Z',
+        });
+        expect(profile.dateOfBirth!.year, 1990);
+        expect(profile.dateOfBirth!.month, 6);
+        expect(profile.dateOfBirth!.day, 15);
+        expect(profile.dateOfBirth!.hour, 0);
+        expect(profile.dateOfBirth!.minute, 0);
+        expect(profile.dateOfBirth!.second, 0);
+      });
+
+      test('toJson serializes as date-only YYYY-MM-DD, NOT a timestamp', () {
+        final profile = Profile(
+          id: 'user-123',
+          dateOfBirth: DateTime(1987, 1, 1),
+        );
+        final json = profile.toJson();
+        expect(json['date_of_birth'], '1987-01-01');
+        // Must not be a full ISO timestamp.
+        expect(json['date_of_birth'], isNot(contains('T')));
+      });
+
+      test('toJson zero-pads single-digit month and day', () {
+        final profile = Profile(
+          id: 'user-123',
+          dateOfBirth: DateTime(2001, 3, 5),
+        );
+        expect(profile.toJson()['date_of_birth'], '2001-03-05');
+      });
+
+      test('toJson serializes null dateOfBirth as null', () {
+        const profile = Profile(id: 'user-123');
+        final json = profile.toJson();
+        expect(json.containsKey('date_of_birth'), isTrue);
+        expect(json['date_of_birth'], isNull);
+      });
+
+      test('round-trip preserves the stored YYYY-01-01 date', () {
+        final profile = Profile(
+          id: 'user-123',
+          dateOfBirth: DateTime(1995, 1, 1),
+        );
+        final roundTripped = Profile.fromJson(profile.toJson());
+        expect(roundTripped.dateOfBirth, DateTime(1995, 1, 1));
+        expect(roundTripped, profile);
+      });
+
+      test('round-trip preserves null dateOfBirth', () {
+        const profile = Profile(id: 'user-123');
+        final roundTripped = Profile.fromJson(profile.toJson());
+        expect(roundTripped.dateOfBirth, isNull);
+      });
+
+      test('copyWith updates dateOfBirth', () {
+        const profile = Profile(id: 'user-123');
+        final updated = profile.copyWith(dateOfBirth: DateTime(1980, 1, 1));
+        expect(updated.dateOfBirth, DateTime(1980, 1, 1));
+        expect(profile.dateOfBirth, isNull);
+      });
+
+      test('two profiles with different dateOfBirth are not equal', () {
+        final a = Profile(id: 'user-1', dateOfBirth: DateTime(1990, 1, 1));
+        final b = Profile(id: 'user-1', dateOfBirth: DateTime(1991, 1, 1));
+        expect(a, isNot(equals(b)));
+      });
+    });
   });
 }

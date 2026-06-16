@@ -15,6 +15,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../workouts/providers/share_controller.dart';
 import '../providers/profile_providers.dart';
 import 'widgets/analytics_toggle.dart';
+import 'widgets/age_row.dart';
 import 'widgets/avatar_crop_sheet.dart';
 import 'widgets/bodyweight_consent_toggle.dart';
 import 'widgets/bodyweight_row.dart';
@@ -145,6 +146,24 @@ class ProfileSettingsScreen extends ConsumerWidget {
                 data: (profile) => GenderRow(profile: profile),
                 loading: () => const GenderRow(profile: null),
                 error: (_, _) => const GenderRow(profile: null),
+              ),
+              const SizedBox(height: 24),
+              // Age section (Phase 38d — birth-year capture). LGPD Art. 6
+              // consent (like avatars), NOT Art. 11 sensitive — the editor
+              // surfaces a point-of-collection disclosure, no consent toggle.
+              // Drives cardio scoring against age-decade norms; NULL falls
+              // back to the age-35 baseline (never gates cardio XP).
+              Text(
+                l10n.ageLabel,
+                style: AppTextStyles.sectionHeader,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              profileAsync.when(
+                data: (profile) => AgeRow(profile: profile),
+                loading: () => const AgeRow(profile: null),
+                error: (_, _) => const AgeRow(profile: null),
               ),
               const SizedBox(height: 24),
               // Weekly goal section
