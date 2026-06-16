@@ -48,18 +48,22 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 SIM_PATH = os.path.join(ROOT, 'tasks', 'rpg-xp-simulation.py')
+CARDIO_SIM_PATH = os.path.join(ROOT, 'tasks', 'cardio-xp-simulation.py')
 
 
-def _load_sim():
+def _load_module(name, path):
     import importlib.util
-    spec = importlib.util.spec_from_file_location('rpg_sim', SIM_PATH)
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
-    sys.modules['rpg_sim'] = mod
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
-sim = _load_sim()
+sim = _load_module('rpg_sim', SIM_PATH)
+# Phase 38c — the cardio formula oracle. Same importlib pattern (hyphenated
+# filename). The cardio sim is standalone; we only read its pure fns.
+csim = _load_module('cardio_sim', CARDIO_SIM_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -923,6 +927,241 @@ def fx_backfill_replay() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Phase 38c — cardio oracle builders (csim)
+# ---------------------------------------------------------------------------
+
+def fx_cardio_session_xp() -> list[dict]:
+    """End-to-end cardio session XP (the 14-persona oracle + edge rows).
+
+    Each row carries the full input tuple compute_session_xp consumes and the
+    RAW UNROUNDED outputs (xp, met_minutes, rel_intensity). Driven from the 14
+    personas' week-1 first-session state (rank=1, fresh weekly cap) plus edge
+    rows: walk-when-fit (~0), metcon, over-cap split.
+    """
+    cases: list[dict] = []
+
+    def row(name, vo2max, age, female, modality, dur, kind, value,
+            current_rank, week_used):
+        state = {'used': week_used}
+        xp, met_min, rel = csim.compute_session_xp(
+            vo2max, age, female, modality, dur, kind, value,
+            current_rank, state)
+        cases.append({
+            'name': name,
+            'inputs': {
+                'vo2max': vo2max, 'age': age, 'female': female,
+                'modality': modality, 'duration_min': dur,
+                'kind': kind, 'value': value,
+                'current_rank': current_rank, 'week_used': week_used,
+            },
+            'xp': xp,
+            'met_minutes': met_min,
+            'rel_intensity': rel,
+            'week_used_after': state['used'],
+        })
+
+    # The 14 personas, week-1 first session (rank=1, cap fresh).
+    for key, p in csim.PERSONAS.items():
+        modality, dur, kind, value = p.sessions[0]
+        row(f'persona__{key}', p.vo2_start, p.age, p.female,
+            modality, dur, kind, value, 1, 0.0)
+
+    # Edge: reformed walker's walk (fit + walks) -> ~0 reward.
+    row('edge__walk_when_fit', 54.0, 40, False, 'walk', 45, 'abs', 3.8, 1, 0.0)
+    # Edge: metcon (crossfitter literal 8.0 MET).
+    row('edge__metcon', 44.0, 29, False, 'circuit', 28, 'abs', 8.0, 1, 0.0)
+    # Edge: over-cap split — start with the week nearly capped so the
+    # eff_met_min straddles WEEKLY_CARDIO_CAP_METMIN (the OVER_CAP_MULT path).
+    row('edge__over_cap_split', 52.0, 32, False, 'run', 60, 'rel', 0.88,
+        20, csim.WEEKLY_CARDIO_CAP_METMIN - 200.0)
+    # Edge: high tier vs high rank (Diego-equivalent cardio) — tier_diff floor.
+    row('edge__fit_high_rank', 64.0, 27, False, 'run', 40, 'rel', 0.95, 45, 0.0)
+
+    return cases
+
+
+def fx_cardio_cross_week() -> dict:
+    """Cross-SAVE weekly-cap accumulation (finding [2], Phase 38c reviewer).
+
+    The WEEKLY_CARDIO_CAP_METMIN accumulator carries ACROSS saves within an ISO
+    week, NOT reset per save. This drives a sequence of same-week sessions where
+    each session's `week_used` is the PRIOR session's `week_used_after`, exactly
+    as the SQL `record_cardio_session` seeds v_week_used from prior cardio
+    eff_met_min this week. The later sessions are cap-attenuated (OVER_CAP_MULT
+    path) once the running total passes the cap — the SQL must reproduce this
+    sequence, not treat each save as a fresh week.
+
+    `sessions` is an ordered list; replaying them with a single carried
+    `week_used` must reproduce each row's `xp` / `week_used_after`.
+    """
+    sessions: list[dict] = []
+    # Four big same-week run sessions: ~1000 eff_met_min each so by session 3 the
+    # running total crosses WEEKLY_CARDIO_CAP_METMIN (2500) and the over-portion
+    # is attenuated. vo2max/age/female/rank fixed so the ONLY moving part is the
+    # carried cap.
+    vo2max, age, female, modality, dur, kind, value, rank = (
+        52.0, 32, False, 'run', 60, 'rel', 0.88, 10)
+    state = {'used': 0.0}
+    for i in range(4):
+        used_before = state['used']
+        xp, met_min, rel = csim.compute_session_xp(
+            vo2max, age, female, modality, dur, kind, value, rank, state)
+        sessions.append({
+            'name': f'session_{i + 1}',
+            'inputs': {
+                'vo2max': vo2max, 'age': age, 'female': female,
+                'modality': modality, 'duration_min': dur,
+                'kind': kind, 'value': value, 'current_rank': rank,
+            },
+            'week_used_before': used_before,
+            'xp': xp,
+            'met_minutes': met_min,
+            'rel_intensity': rel,
+            'week_used_after': state['used'],
+        })
+    return {
+        'weekly_cap_metmin': csim.WEEKLY_CARDIO_CAP_METMIN,
+        'sessions': sessions,
+    }
+
+
+def fx_cardio_components() -> dict:
+    """Component lists mirroring the strength fixture style — pins each pure
+    sub-function Dart must replay @1e-4."""
+    intensity_mult = []
+    for pct in [0.30, 0.35, 0.42, 0.50, 0.60, 0.70, 0.80, 0.85, 0.90,
+                0.95, 1.00, 1.05, 1.20]:
+        intensity_mult.append({'pct_vo2max': pct,
+                               'intensity_mult': csim.intensity_mult(pct)})
+
+    sustainable_fraction = []
+    for dur in [6, 10, 15, 22, 30, 38, 45, 52, 60, 75, 90, 105, 120, 150, 180]:
+        sustainable_fraction.append(
+            {'duration_min': dur,
+             'sustainable_fraction': csim.sustainable_fraction(dur)})
+
+    demonstrated_vo2 = []
+    for abs_met, dur in [(3.8, 45), (8.0, 28), (10.0, 30), (12.0, 35),
+                         (15.0, 40), (6.0, 60), (3.0, 90)]:
+        demonstrated_vo2.append({'abs_met': abs_met, 'duration_min': dur,
+                                'demonstrated_vo2':
+                                    csim.demonstrated_vo2(abs_met, dur)})
+
+    implied_cardio_tier = []
+    for vo2, age, female in [(28, 30, False), (40, 30, False), (52, 30, False),
+                             (64, 30, False), (38, 55, False), (30, 30, True),
+                             (44, 28, True)]:
+        implied_cardio_tier.append(
+            {'vo2': vo2, 'age': age, 'female': female,
+             'implied_cardio_tier': csim.implied_cardio_tier(vo2, age, female)})
+
+    modality_mult = []
+    for mod in ['run', 'treadmill', 'row', 'swim', 'elliptical', 'bike',
+                'walk', 'hiit', 'strength', 'circuit']:
+        modality_mult.append({'modality': mod,
+                             'modality_mult': csim.MODALITY_MULT[mod]})
+
+    cardio_base_xp = []
+    for met_min in [50.0, 100.0, 200.0, 294.0, 500.0, 1000.0, 2500.0]:
+        cardio_base_xp.append(
+            {'capped_met_min': met_min,
+             'base_xp': met_min ** csim.VOLUME_EXPONENT})
+
+    cardio_weekly_cap = []
+    for eff, used in [(500.0, 0.0), (2500.0, 0.0), (3000.0, 0.0),
+                      (1000.0, 2000.0), (500.0, 2400.0), (1000.0, 2400.0)]:
+        remaining = max(0.0, csim.WEEKLY_CARDIO_CAP_METMIN - used)
+        under = min(eff, remaining)
+        over = eff - under
+        capped = under + over * csim.OVER_CAP_MULT
+        cardio_weekly_cap.append({
+            'eff_met_min': eff, 'week_used': used,
+            'capped_met_min': capped,
+        })
+
+    return {
+        'intensity_mult': intensity_mult,
+        'sustainable_fraction': sustainable_fraction,
+        'demonstrated_vo2': demonstrated_vo2,
+        'implied_cardio_tier': implied_cardio_tier,
+        'modality_mult': modality_mult,
+        'cardio_base_xp': cardio_base_xp,
+        'cardio_weekly_cap': cardio_weekly_cap,
+    }
+
+
+def fx_est_vo2max_cases() -> dict:
+    """Stateless est-VO2max pure cores: A1 best-effort (ACSM + sustainable_
+    fraction) + A3 p25 non-exercise seed. Rolling-window/recompute is Dart+SQL
+    unit/integration territory (stateful), NOT here."""
+    best_effort = []
+    for dist, dur_s, mod in [
+        (5000, 1800, 'run'),       # 30-min 5k -> ~41.9 (the worked example)
+        (10000, 3000, 'treadmill'),  # 50-min 10k
+        (3000, 900, 'run'),        # fast 5:00/km-ish over 15 min
+        (5000, 1800, 'bike'),      # non-distance modality -> None
+        (None, 1800, 'run'),       # duration-only -> None
+        (0, 1800, 'run'),          # zero distance -> None
+    ]:
+        best_effort.append({
+            'distance_m': dist, 'duration_s': dur_s, 'modality': mod,
+            'best_effort_vo2': csim.best_effort_vo2_from_pace(dist, dur_s, mod),
+        })
+
+    seed = []
+    for age, female in [(20, False), (30, False), (45, False), (55, False),
+                        (30, True), (45, True), (None, False), (None, True)]:
+        seed.append({'age': age, 'female': female,
+                     'seed_vo2': csim.nonexercise_seed_vo2(age, female)})
+
+    session_met = []
+    for mod, dist, dur_s in [
+        ('run', 5000, 1800), ('treadmill', 10000, 3000),
+        ('bike', None, 1800), ('row', None, 1500),
+        ('elliptical', 5000, 1800), ('walk', None, 2700),
+        ('hiit', None, 1320),
+    ]:
+        session_met.append({
+            'modality': mod, 'distance_m': dist, 'duration_s': dur_s,
+            'session_met': csim.session_met_from_cardio_log(mod, dist, dur_s),
+        })
+
+    return {
+        'best_effort': best_effort,
+        'seed': seed,
+        'session_met': session_met,
+    }
+
+
+def fx_cross_credit_met_bands() -> list[dict]:
+    """§B work-density -> MET band derivation. The two worked examples + each
+    band boundary (~8 rows)."""
+    cases: list[dict] = []
+    spec = [
+        # name, completed_sets, session_seconds, avg_rest, expected_band
+        ('powerlifter_worked', 20, 4200, 180, 3.5),   # §B worked example
+        ('metcon_worked', 15, 1680, 30, 8.0),         # §B corrected worked example
+        ('band_8_boundary', 15, 1680, 35, 8.0),       # avg_rest==35 -> 8.0
+        ('band_6_avg_rest_36', 15, 1680, 36, 6.0),    # rest just over 35 -> 6.0
+        ('band_6_boundary', 14, 1680, 75, 6.0),       # sets/min 0.50, rest 75
+        ('band_5_avg_rest_76', 14, 1680, 76, 5.0),    # rest just over 75 -> 5.0
+        ('band_5_boundary', 8, 2400, 120, 5.0),       # rest 120 -> 5.0
+        ('band_3_5_long_rest', 8, 2400, 121, 3.5),    # rest > 120 -> 3.5
+    ]
+    for name, sets, secs, rest, expected in spec:
+        band = csim.est_met_from_density(sets, secs, rest)
+        cases.append({
+            'name': name,
+            'completed_sets': sets,
+            'session_seconds': secs,
+            'avg_rest': rest,
+            'est_met': band,
+            'expected': expected,
+        })
+    return cases
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -963,6 +1202,29 @@ def main() -> None:
             'bodyweight_load_slugs': sorted(sim.USES_BODYWEIGHT_LOAD_BY_SLUG),
             # Phase 29 v2 Refinement #5 — per-slug bodyweight load ratio
             'bodyweight_load_ratios': dict(sim.BODYWEIGHT_LOAD_RATIO),
+            # Phase 38c — cardio formula constants (csim).
+            'cardio': {
+                'met_rest': csim.MET_REST,
+                'volume_exponent': csim.VOLUME_EXPONENT,
+                'cardio_xp_scale': csim.CARDIO_XP_SCALE,
+                'weekly_cardio_cap_metmin': csim.WEEKLY_CARDIO_CAP_METMIN,
+                'over_cap_mult': csim.OVER_CAP_MULT,
+                'vitality_xp_floor': csim.VITALITY_XP_FLOOR,
+                'vitality_tau_up_weeks': csim.VITALITY_TAU_UP_WEEKS,
+                'vitality_tau_down_weeks': csim.VITALITY_TAU_DOWN_WEEKS,
+                'vo2_ceiling_cap': csim.VO2_CEILING_CAP,
+                'set_work_seconds': csim.SET_WORK_SECONDS,
+                'rest_default': csim.REST_DEFAULT,
+                'age_fallback': csim.AGE_FALLBACK,
+                'vo2_rolling_window_days': csim.VO2_ROLLING_WINDOW_DAYS,
+                'distance_modalities': sorted(csim.DISTANCE_MODALITIES),
+                'cardio_default_met': dict(csim.CARDIO_DEFAULT_MET),
+                'cardio_slug_to_modality': dict(csim.CARDIO_SLUG_TO_MODALITY),
+                'modality_mult': dict(csim.MODALITY_MULT),
+                'intensity_anchors': [list(a) for a in csim.INTENSITY_ANCHORS],
+                'sustain_anchors': [list(a) for a in csim._SUSTAIN_ANCHORS],
+                'tier_anchors': [list(a) for a in csim._TIER_ANCHORS],
+            },
         },
         'intensity_lookup': fx_intensity_lookup(),
         'volume_load': fx_volume_load(),
@@ -984,6 +1246,12 @@ def main() -> None:
         'vitality': fx_vitality(),
         'character_level': fx_character_level(),
         'backfill_replay': fx_backfill_replay(),
+        # Phase 38c cardio oracle sections.
+        'cardio_session_xp': fx_cardio_session_xp(),
+        'cardio_cross_week': fx_cardio_cross_week(),
+        'cardio_components': fx_cardio_components(),
+        'est_vo2max_cases': fx_est_vo2max_cases(),
+        'cross_credit_met_bands': fx_cross_credit_met_bands(),
     }
     out = os.path.join(HERE, 'rpg_xp_fixtures.json')
     with open(out, 'w', encoding='utf-8') as f:
@@ -1006,6 +1274,9 @@ def main() -> None:
     print(f'  rank_curve milestones:   {len(fixtures["rank_curve"]["milestones"])}')
     print(f'  vitality trajectory:     {len(fixtures["vitality"]["rebuild_then_decay_trajectory"])} weeks')
     print(f'  backfill_replay:         {fixtures["backfill_replay"]["total_sets"]} sets')
+    print(f'  cardio_session_xp:       {len(fixtures["cardio_session_xp"])} cases')
+    print(f'  cardio_cross_week:       {len(fixtures["cardio_cross_week"]["sessions"])} sessions')
+    print(f'  cross_credit_met_bands:  {len(fixtures["cross_credit_met_bands"])} cases')
 
 
 if __name__ == '__main__':

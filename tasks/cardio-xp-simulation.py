@@ -312,6 +312,120 @@ def demonstrated_vo2(abs_met, duration_min):
 
 
 # ============================================================================
+# Phase 38c NET-NEW pure functions (app-derivation oracle — do NOT change
+# compute_session_xp or the 14-persona panel). These pin Dart/SQL parity for
+# the est-VO2max chain + cross-credit derivation + session resolution.
+# See docs/WIP.md "Phase 38c DESIGN PROPOSAL" §A/§B + sub-decision D6.
+# ============================================================================
+
+# Cross-credit (strength -> cardio) work-density constants. These ONLY feed the
+# MET-band derivation; they never touch strength XP and never touch the 14
+# personas (which pass a literal MET via _lift/_metcon).
+SET_WORK_SECONDS = 30      # a ~8-12 rep working set under tension
+REST_DEFAULT = 90          # default inter-set rest when we.rest_seconds is NULL
+
+# est-VO2max chain constants.
+AGE_FALLBACK = 35          # median adult; used when profiles.date_of_birth is NULL
+VO2_ROLLING_WINDOW_DAYS = 42   # best-of trailing window (6 wk ~= 2 x tau_down)
+
+# Modalities for which logged distance is physiologically interpretable as
+# pace -> VO2 via the ACSM *running* equation (A1 best-effort). Bike/row/swim
+# need separate equations -> duration-only for estimation in v1.
+DISTANCE_MODALITIES = {"run", "treadmill"}
+
+# Per-modality ACSM table-average MET for a logged cardio session WITHOUT a
+# pace-derived MET (duration-only, or a non-distance modality). The honest
+# "activity type -> ACSM MET value" basis (cardio-stat-plan §2.5). Never
+# user-declared; RPE is NOT used for MET. Moderate-effort table averages.
+CARDIO_DEFAULT_MET = {
+    "run": 9.8, "treadmill": 9.8, "bike": 7.0, "row": 8.5,
+    "swim": 8.0, "elliptical": 7.0, "walk": 3.8, "hiit": 11.0,
+}
+
+# cardio exercise slug -> sim modality. The 5 default cardio slugs (00014):
+# treadmill / rowing_machine / stationary_bike / jump_rope / elliptical.
+# Unknown / user-created slugs resolve to the NON-distance default 'other'
+# (.get(slug, "other")) so a custom slug with a distance is NOT pace-scored by
+# the ACSM running equation — it falls to the table-average MET path
+# (CARDIO_DEFAULT_MET.get(modality, MET_REST)). Mirrors the SQL
+# rpg_cardio_slug_to_modality ELSE branch + Dart EstVo2max.unknownModality.
+CARDIO_SLUG_TO_MODALITY = {
+    "treadmill": "treadmill",
+    "rowing_machine": "row",
+    "stationary_bike": "bike",
+    "jump_rope": "hiit",
+    "elliptical": "elliptical",
+}
+
+
+def best_effort_vo2_from_pace(distance_m, duration_s, modality):
+    """A1 best-effort est-VO2max from a logged run/treadmill session.
+
+    velocity -> ACSM horizontal-running VO2 (grade=0) -> back-project via the
+    sim's sustainable_fraction. Returns None for non-distance modalities or
+    missing inputs (the standing estimate is left unchanged that session).
+
+    This is EXACTLY demonstrated_vo2(acsm_vo2/MET_REST, dur) — one code path,
+    reused — but with abs_met derived from MEASURED pace, not an estimate.
+    """
+    if modality not in DISTANCE_MODALITIES:
+        return None
+    if distance_m is None or duration_s is None or distance_m <= 0 or duration_s <= 0:
+        return None
+    duration_min = duration_s / 60.0
+    v_m_per_min = distance_m / duration_min
+    acsm_vo2 = 0.2 * v_m_per_min + MET_REST              # ACSM running eq, grade=0
+    return min(VO2_CEILING_CAP, acsm_vo2 / sustainable_fraction(duration_min))
+
+
+def nonexercise_seed_vo2(age, female):
+    """A3 cold-start seed: the p25 ("below-median untrained") anchor of the
+    user's (sex, age_band) VO2 norm. Conservative prior — first real efforts
+    can only raise it. age None -> AGE_FALLBACK; female None handled by caller
+    (norms table keyed on sex)."""
+    a = AGE_FALLBACK if age is None else age
+    sex = "F" if female else "M"
+    return _VO2_NORMS[(sex, _age_band(a))][1]            # index 1 == p25 anchor
+
+
+def session_met_from_cardio_log(modality, distance_m, duration_s):
+    """D6 session resolution: a logged cardio session -> absolute MET.
+
+    run/treadmill WITH distance -> pace-derived MET (acsm_vo2 / MET_REST).
+    otherwise -> per-modality ACSM table-average MET (CARDIO_DEFAULT_MET).
+    Always kind='abs' for a logged session. Never user-declared."""
+    if (modality in DISTANCE_MODALITIES
+            and distance_m is not None and distance_m > 0
+            and duration_s is not None and duration_s > 0):
+        v_m_per_min = distance_m / (duration_s / 60.0)
+        acsm_vo2 = 0.2 * v_m_per_min + MET_REST
+        return acsm_vo2 / MET_REST
+    return CARDIO_DEFAULT_MET.get(modality, MET_REST)
+
+
+def est_met_from_density(completed_sets, session_seconds, avg_rest):
+    """§B cross-credit: strength work-density -> ACSM RT MET band.
+
+    Returns one of {3.5, 5.0, 6.0, 8.0}, evaluated top-down (first match
+    wins), using the CORRECTED §B decision function (the 8.0 band gates on
+    rest+cadence, NOT density, so a wall-clock-bound metcon isn't under-shot).
+    All thresholds are on estimated/planned signals — never user-declared.
+
+      sets_per_min = completed_sets / (session_seconds / 60)
+    """
+    if completed_sets <= 0 or session_seconds <= 0:
+        return 3.5
+    sets_per_min = completed_sets / (session_seconds / 60.0)
+    if avg_rest <= 35 and sets_per_min >= 0.50:
+        return 8.0      # dense circuit / metcon (ACSM 02040)
+    if avg_rest <= 75 and sets_per_min >= 0.40:
+        return 6.0      # vigorous PL/BB (~02054 high)
+    if avg_rest <= 120:
+        return 5.0      # vigorous free-weight (02054)
+    return 3.5          # light/moderate, long rest (02050)
+
+
+# ============================================================================
 # Per-session cardio XP
 # ============================================================================
 def session_met_and_intensity(vo2max, kind, value):

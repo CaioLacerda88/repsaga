@@ -3,21 +3,32 @@
 /// Requires local Supabase running: `npx supabase start`
 ///
 /// Contract under test (docs/cardio-stat-plan.md §1 / §2.6 — the latent
-/// cardio mis-attribution bug):
+/// cardio mis-attribution bug, migration 00077 — the STRENGTH gate):
 ///
-/// A completed cardio set (exercise with `muscle_group='cardio'` and
-/// `xp_attribution={"cardio":1.0}`) must be CLEANLY IGNORED by every
-/// strength-XP writer, pre-feature:
+/// A completed cardio SET (exercise with `muscle_group='cardio'` logged as
+/// weight×reps — treadmill/sled) must be CLEANLY IGNORED by every STRENGTH-XP
+/// writer:
 ///
-///   * ZERO `body_part_progress` rows with `body_part='cardio'`
-///   * ZERO `xp_events` rows for the cardio set
+///   * ZERO STRENGTH `set` `xp_events` rows for the cardio set
 ///   * ZERO strength peak bookkeeping for the cardio exercise (the
 ///     weighted-sled case — the "running logged with reps farms a
 ///     strength rank" vector, sealed structurally)
+///   * ZERO STRENGTH body_part_progress contribution from the cardio set
 ///
 /// AND a strength set saved through the same path is unaffected — it
-/// earns exactly the same XP it would earn in a workout with no cardio
-/// sets at all (control-user equality).
+/// earns exactly the same STRENGTH XP it would earn in a workout with no
+/// cardio sets at all (control-user equality).
+///
+/// Phase 38c note: `body_part_progress['cardio']` and a
+/// `cardio_session` xp_events row ARE now written for the mixed/strength
+/// workout — but via the STRENGTH-DENSITY cross-credit (attribution derived
+/// from the completed working bench set), NOT from the treadmill/sled cardio
+/// sets. The 38a gate still seals the cardio-set→strength-path leak; the
+/// cross-credit is a separate, legitimate strength→cardio derivation. These
+/// tests assert the gate by scoping to `event_type='set'` and to the strength
+/// body parts; they additionally pin that the cardio cross-credit comes from
+/// the strength density (present iff the workout has working strength sets),
+/// not the cardio sets.
 ///
 /// All three writers are covered: `record_session_xp_batch` (via
 /// save_workout, the hot path), `record_set_xp` (per-set diagnostic),
@@ -60,145 +71,187 @@ void main() {
   });
 
   group('cardio save gate — record_session_xp_batch (save_workout path)', () {
-    test('completed cardio sets (weight=0 treadmill AND weighted sled) produce '
-        'no cardio body_part_progress, no cardio xp_events, no strength peak '
-        'rows; the strength set in the same workout earns exactly what a '
-        'cardio-free workout earns', () async {
-      final adminClient = serviceRoleClient();
+    test(
+      'completed cardio sets (weight=0 treadmill AND weighted sled) produce '
+      'no strength `set` xp_events and no strength peak rows; the strength '
+      'set earns exactly what a cardio-free workout earns; the cardio '
+      'body_part_progress comes from the strength-density cross-credit',
+      () async {
+        final adminClient = serviceRoleClient();
 
-      // --- User A: mixed workout (bench + treadmill + weighted sled). ---
-      final userA = await freshUser();
-      final clientA = authenticatedClient(userA);
-      final mixed = await _seedWorkout(
-        adminClient: adminClient,
-        userId: userA.userId,
-        exercises: const [
-          _Ex(slug: 'barbell_bench_press', weight: 60.0, reps: 8),
-          // The exact latent-bug shape: cardio with weight=0, reps>=1
-          // passes the reps gate pre-00077.
-          _Ex(slug: 'treadmill', weight: 0.0, reps: 10),
-          // The farming vector: cardio WITH real weight — pre-00077 this
-          // would also write strength peak rows.
-          _Ex(slug: 'sled_push', weight: 40.0, reps: 10),
-        ],
-      );
-      await _saveWorkoutRpc(
-        userClient: clientA,
-        userId: userA.userId,
-        seeded: mixed,
-      );
-
-      // 1. ZERO body_part_progress rows for cardio.
-      final cardioBpp = await clientA
-          .from('body_part_progress')
-          .select('body_part, total_xp')
-          .eq('body_part', 'cardio');
-      expect(
-        cardioBpp as List,
-        isEmpty,
-        reason:
-            'A completed cardio set must NOT write a body_part_progress '
-            'row for cardio (latent mis-attribution bug, migration 00077). '
-            'Got: $cardioBpp',
-      );
-
-      // 2. ZERO xp_events for the cardio sets; exactly ONE for the
-      //    session (the bench set).
-      final treadmillSetId = mixed.exercises[1].setId;
-      final sledSetId = mixed.exercises[2].setId;
-      final cardioEvents = await clientA
-          .from('xp_events')
-          .select('id, set_id')
-          .inFilter('set_id', [treadmillSetId, sledSetId]);
-      expect(
-        cardioEvents as List,
-        isEmpty,
-        reason:
-            'Cardio sets must produce NO xp_events rows — not even '
-            'zero-XP ones. Got: $cardioEvents',
-      );
-      final sessionEvents = await clientA
-          .from('xp_events')
-          .select('id, set_id, total_xp')
-          .eq('session_id', mixed.workoutId);
-      expect(
-        sessionEvents as List,
-        hasLength(1),
-        reason:
-            'Only the bench set may produce an xp_events row. '
-            'Got: $sessionEvents',
-      );
-      expect(
-        sessionEvents.first['set_id'],
-        equals(mixed.exercises[0].setId),
-        reason: 'The single xp_events row must belong to the bench set.',
-      );
-
-      // 3. ZERO strength peak bookkeeping for the weighted cardio set.
-      final sledPeaks = await clientA
-          .from('exercise_peak_loads')
-          .select('peak_weight')
-          .eq('exercise_id', mixed.exercises[2].exerciseId);
-      expect(
-        sledPeaks as List,
-        isEmpty,
-        reason:
-            'A weighted cardio set (sled_push 40kg) must not write '
-            'exercise_peak_loads — strength peak tracking is part of the '
-            'weight×reps machinery the gate excludes.',
-      );
-      final sledBandPeaks = await clientA
-          .from('exercise_peak_loads_by_rep_range')
-          .select('best_weight')
-          .eq('exercise_slug', 'sled_push');
-      expect(
-        sledBandPeaks as List,
-        isEmpty,
-        reason:
-            'A weighted cardio set must not write '
-            'exercise_peak_loads_by_rep_range either.',
-      );
-
-      // 4. Strength regression guard — control-user equality. User B
-      //    saves an identical workout WITHOUT the cardio sets. Both
-      //    users are fresh (no history), so every multiplier in the
-      //    chain resolves identically; the strength XP must match
-      //    exactly (within the batch RPC's 4-decimal rounding).
-      final userB = await freshUser();
-      final clientB = authenticatedClient(userB);
-      final control = await _seedWorkout(
-        adminClient: adminClient,
-        userId: userB.userId,
-        exercises: const [
-          _Ex(slug: 'barbell_bench_press', weight: 60.0, reps: 8),
-        ],
-      );
-      await _saveWorkoutRpc(
-        userClient: clientB,
-        userId: userB.userId,
-        seeded: control,
-      );
-
-      // Bench attribution: chest 0.70 / shoulders 0.20 / arms 0.10.
-      for (final bp in ['chest', 'shoulders', 'arms']) {
-        final a = await _readBodyPartXp(clientA, bp);
-        final b = await _readBodyPartXp(clientB, bp);
-        expect(
-          a,
-          greaterThan(0),
-          reason: 'Bench must still earn $bp XP with the gate in place.',
+        // --- User A: mixed workout (bench + treadmill + weighted sled). ---
+        final userA = await freshUser();
+        final clientA = authenticatedClient(userA);
+        final mixed = await _seedWorkout(
+          adminClient: adminClient,
+          userId: userA.userId,
+          exercises: const [
+            _Ex(slug: 'barbell_bench_press', weight: 60.0, reps: 8),
+            // The exact latent-bug shape: cardio with weight=0, reps>=1
+            // passes the reps gate pre-00077.
+            _Ex(slug: 'treadmill', weight: 0.0, reps: 10),
+            // The farming vector: cardio WITH real weight — pre-00077 this
+            // would also write strength peak rows.
+            _Ex(slug: 'sled_push', weight: 40.0, reps: 10),
+          ],
         );
+        await _saveWorkoutRpc(
+          userClient: clientA,
+          userId: userA.userId,
+          seeded: mixed,
+        );
+
+        // 1. The cardio body_part_progress row exists, but it is the
+        //    STRENGTH-DENSITY cross-credit — derived from the completed working
+        //    bench set, NOT from the treadmill/sled cardio sets. It is backed by
+        //    exactly one cardio_session xp_events row whose attribution carries
+        //    the cardio key (cross-credit), with NO set_id.
+        final cardioBpp = await clientA
+            .from('body_part_progress')
+            .select('total_xp')
+            .eq('body_part', 'cardio')
+            .maybeSingle();
         expect(
-          (a - b).abs(),
-          lessThanOrEqualTo(_kTol),
+          cardioBpp,
+          isNotNull,
           reason:
-              'Strength XP must be IDENTICAL whether or not cardio sets '
-              'were in the workout. $bp: with-cardio=$a control=$b '
-              '(delta ${(a - b).abs()}). A nonzero delta means cardio '
-              'sets leaked into the novelty/weekly accumulation.',
+              'Phase 38c cross-credit: the bench working set produces a cardio '
+              'body_part_progress row via work-density derivation.',
         );
-      }
-    });
+        expect(
+          ((cardioBpp as Map<String, dynamic>)['total_xp'] as num).toDouble(),
+          greaterThan(0),
+        );
+
+        // 2. The 38a gate: ZERO STRENGTH `set` xp_events for the cardio sets;
+        //    exactly ONE strength `set` event (the bench set). The cardio sets
+        //    must produce no strength scoring of any kind.
+        final treadmillSetId = mixed.exercises[1].setId;
+        final sledSetId = mixed.exercises[2].setId;
+        final cardioSetEvents = await clientA
+            .from('xp_events')
+            .select('id, set_id')
+            .inFilter('set_id', [treadmillSetId, sledSetId]);
+        expect(
+          cardioSetEvents as List,
+          isEmpty,
+          reason:
+              'Cardio sets must produce NO `set` xp_events rows — not even '
+              'zero-XP ones. Got: $cardioSetEvents',
+        );
+        final strengthSetEvents = await clientA
+            .from('xp_events')
+            .select('id, set_id, total_xp')
+            .eq('session_id', mixed.workoutId)
+            .eq('event_type', 'set');
+        expect(
+          strengthSetEvents as List,
+          hasLength(1),
+          reason:
+              'Only the bench set may produce a strength `set` xp_events row. '
+              'Got: $strengthSetEvents',
+        );
+        expect(
+          strengthSetEvents.first['set_id'],
+          equals(mixed.exercises[0].setId),
+          reason:
+              'The single strength `set` xp_events row must be the bench set.',
+        );
+
+        // The cardio cross-credit row is separate + legitimate: exactly one
+        // cardio_session event, no set_id, attributed via the strength density.
+        final cardioCrossCreditEvents = await clientA
+            .from('xp_events')
+            .select('id, set_id, attribution')
+            .eq('session_id', mixed.workoutId)
+            .eq('event_type', 'cardio_session');
+        expect(
+          cardioCrossCreditEvents as List,
+          hasLength(1),
+          reason:
+              'Exactly one cardio_session cross-credit row per workout '
+              '(derived from the strength sets, not the cardio sets).',
+        );
+        final ccEvent = cardioCrossCreditEvents.single;
+        expect(
+          ccEvent['set_id'],
+          isNull,
+          reason: 'cross-credit carries no set_id',
+        );
+        expect(
+          (ccEvent['attribution'] as Map<String, dynamic>).containsKey(
+            'cardio',
+          ),
+          isTrue,
+          reason: 'cross-credit attribution must carry the cardio key',
+        );
+
+        // 3. ZERO strength peak bookkeeping for the weighted cardio set.
+        final sledPeaks = await clientA
+            .from('exercise_peak_loads')
+            .select('peak_weight')
+            .eq('exercise_id', mixed.exercises[2].exerciseId);
+        expect(
+          sledPeaks as List,
+          isEmpty,
+          reason:
+              'A weighted cardio set (sled_push 40kg) must not write '
+              'exercise_peak_loads — strength peak tracking is part of the '
+              'weight×reps machinery the gate excludes.',
+        );
+        final sledBandPeaks = await clientA
+            .from('exercise_peak_loads_by_rep_range')
+            .select('best_weight')
+            .eq('exercise_slug', 'sled_push');
+        expect(
+          sledBandPeaks as List,
+          isEmpty,
+          reason:
+              'A weighted cardio set must not write '
+              'exercise_peak_loads_by_rep_range either.',
+        );
+
+        // 4. Strength regression guard — control-user equality. User B
+        //    saves an identical workout WITHOUT the cardio sets. Both
+        //    users are fresh (no history), so every multiplier in the
+        //    chain resolves identically; the strength XP must match
+        //    exactly (within the batch RPC's 4-decimal rounding).
+        final userB = await freshUser();
+        final clientB = authenticatedClient(userB);
+        final control = await _seedWorkout(
+          adminClient: adminClient,
+          userId: userB.userId,
+          exercises: const [
+            _Ex(slug: 'barbell_bench_press', weight: 60.0, reps: 8),
+          ],
+        );
+        await _saveWorkoutRpc(
+          userClient: clientB,
+          userId: userB.userId,
+          seeded: control,
+        );
+
+        // Bench attribution: chest 0.70 / shoulders 0.20 / arms 0.10.
+        for (final bp in ['chest', 'shoulders', 'arms']) {
+          final a = await _readBodyPartXp(clientA, bp);
+          final b = await _readBodyPartXp(clientB, bp);
+          expect(
+            a,
+            greaterThan(0),
+            reason: 'Bench must still earn $bp XP with the gate in place.',
+          );
+          expect(
+            (a - b).abs(),
+            lessThanOrEqualTo(_kTol),
+            reason:
+                'Strength XP must be IDENTICAL whether or not cardio sets '
+                'were in the workout. $bp: with-cardio=$a control=$b '
+                '(delta ${(a - b).abs()}). A nonzero delta means cardio '
+                'sets leaked into the novelty/weekly accumulation.',
+          );
+        }
+      },
+    );
   });
 
   group('cardio save gate — record_set_xp (per-set diagnostic path)', () {

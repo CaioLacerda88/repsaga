@@ -92,6 +92,122 @@ void main() {
     });
   });
 
+  // Phase 38c — cardio oracle sections. Same discoverability invariant: a
+  // future regen that drops a cardio section or shrinks a matrix fails fast
+  // here, before the cardio helper parity test passes vacuously over an empty
+  // list.
+  //
+  // Counts pinned:
+  //   cardio_session_xp:        18  (14 personas + 4 edge rows)
+  //   cross_credit_met_bands:    8
+  //   cardio_components sub-lists: intensity_mult 13, sustainable_fraction 15,
+  //     demonstrated_vo2 7, implied_cardio_tier 7, modality_mult 10,
+  //     cardio_base_xp 7, cardio_weekly_cap 6
+  //   est_vo2max_cases sub-lists: best_effort 6, seed 8, session_met 7
+  group('Phase 38c cardio fixture — section row counts', () {
+    test('all cardio sections present in regenerated fixture', () {
+      const requiredSections = {
+        'cardio_session_xp',
+        'cardio_cross_week',
+        'cardio_components',
+        'est_vo2max_cases',
+        'cross_credit_met_bands',
+      };
+      for (final section in requiredSections) {
+        expect(
+          fixtures.containsKey(section),
+          isTrue,
+          reason:
+              'fixture missing Phase 38c cardio section "$section" — '
+              'regenerate with '
+              '`python test/fixtures/generate_rpg_fixtures.py`',
+        );
+      }
+    });
+
+    test('cardio_session_xp has exactly 18 rows', () {
+      expect((fixtures['cardio_session_xp'] as List).length, 18);
+    });
+
+    test('cardio_cross_week has exactly 4 carried-cap sessions', () {
+      final cw = fixtures['cardio_cross_week'] as Map<String, dynamic>;
+      expect((cw['sessions'] as List).length, 4);
+      expect(cw['weekly_cap_metmin'], 2500.0);
+    });
+
+    test('cross_credit_met_bands has exactly 8 rows', () {
+      expect((fixtures['cross_credit_met_bands'] as List).length, 8);
+    });
+
+    test('cardio_components sub-lists have the locked row counts', () {
+      final cc = fixtures['cardio_components'] as Map<String, dynamic>;
+      expect((cc['intensity_mult'] as List).length, 13);
+      expect((cc['sustainable_fraction'] as List).length, 15);
+      expect((cc['demonstrated_vo2'] as List).length, 7);
+      expect((cc['implied_cardio_tier'] as List).length, 7);
+      expect((cc['modality_mult'] as List).length, 10);
+      expect((cc['cardio_base_xp'] as List).length, 7);
+      expect((cc['cardio_weekly_cap'] as List).length, 6);
+    });
+
+    test('est_vo2max_cases sub-lists have the locked row counts', () {
+      final ev = fixtures['est_vo2max_cases'] as Map<String, dynamic>;
+      expect((ev['best_effort'] as List).length, 6);
+      expect((ev['seed'] as List).length, 8);
+      expect((ev['session_met'] as List).length, 7);
+    });
+  });
+
+  group('Phase 38c cardio fixture — meta keys', () {
+    test('meta.cardio carries the locked cardio constants', () {
+      final meta = fixtures['meta'] as Map<String, dynamic>;
+      expect(meta.containsKey('cardio'), isTrue);
+      final cardio = meta['cardio'] as Map<String, dynamic>;
+      const requiredKeys = {
+        'met_rest',
+        'volume_exponent',
+        'cardio_xp_scale',
+        'weekly_cardio_cap_metmin',
+        'over_cap_mult',
+        'vo2_ceiling_cap',
+        'set_work_seconds',
+        'rest_default',
+        'age_fallback',
+        'vo2_rolling_window_days',
+        'distance_modalities',
+        'cardio_default_met',
+        'cardio_slug_to_modality',
+        'modality_mult',
+        'intensity_anchors',
+        'sustain_anchors',
+        'tier_anchors',
+      };
+      for (final key in requiredKeys) {
+        expect(
+          cardio.containsKey(key),
+          isTrue,
+          reason: 'meta.cardio key "$key" missing — regenerate fixture',
+        );
+      }
+    });
+
+    test('locked cardio literal values', () {
+      final cardio =
+          (fixtures['meta'] as Map<String, dynamic>)['cardio']
+              as Map<String, dynamic>;
+      expect(cardio['met_rest'], 3.5);
+      expect(cardio['volume_exponent'], 0.60);
+      expect(cardio['cardio_xp_scale'], 3.5);
+      expect(cardio['weekly_cardio_cap_metmin'], 2500.0);
+      expect(cardio['over_cap_mult'], 0.30);
+      expect(cardio['vo2_ceiling_cap'], 90.0);
+      expect(cardio['set_work_seconds'], 30);
+      expect(cardio['rest_default'], 90);
+      expect(cardio['age_fallback'], 35);
+      expect(cardio['vo2_rolling_window_days'], 42);
+    });
+  });
+
   group('Phase 29 v2 fixture — meta keys', () {
     test('meta carries Phase 29 v2 constants', () {
       final meta = fixtures['meta'] as Map<String, dynamic>;

@@ -585,11 +585,15 @@ void main() {
       // Must also be positive and > single-set (at least 1 set counted).
       expect(pgChestTotal, greaterThan(singleChestXp * 0.9));
 
-      // 5 xp_events rows.
+      // 5 strength `set` xp_events rows. Scoped to event_type='set' because
+      // Phase 38c's strength→cardio cross-credit adds one extra
+      // 'cardio_session' row per save (derived from these strength sets) — a
+      // legitimate, separate event that the original "5 sets" intent excludes.
       final events = await userClient
           .from('xp_events')
           .select('id')
-          .eq('session_id', seed.workoutId);
+          .eq('session_id', seed.workoutId)
+          .eq('event_type', 'set');
       expect(events, hasLength(5));
     });
   });
@@ -833,12 +837,17 @@ void main() {
           reps: reps,
           numSets: 2,
         );
+        // Scope to event_type='set': Phase 38c's strength→cardio cross-credit
+        // adds one separate 'cardio_session' row per save (also deleted + freshly
+        // re-inserted on re-save). The original intent here is the STRENGTH `set`
+        // event cascade — two sets → two `set` rows whose IDs change on re-save.
         final ids1 = {
           for (final row
               in (await userClient
                       .from('xp_events')
                       .select('id')
-                      .eq('session_id', seed.workoutId))
+                      .eq('session_id', seed.workoutId)
+                      .eq('event_type', 'set'))
                   as List)
             (row as Map<String, dynamic>)['id'] as String,
         };
@@ -857,7 +866,8 @@ void main() {
               in (await userClient
                       .from('xp_events')
                       .select('id')
-                      .eq('session_id', seed.workoutId))
+                      .eq('session_id', seed.workoutId)
+                      .eq('event_type', 'set'))
                   as List)
             (row as Map<String, dynamic>)['id'] as String,
         };
