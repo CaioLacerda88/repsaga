@@ -40,16 +40,31 @@ formula (Phase-29-v2 unit fixture parity is green — production is correct).
    oracle drift) and fix.
 
 ### Checklist (TDD / systematic-debugging — root cause, not symptom)
-- [ ] Establish baseline: `npx supabase db reset` (≤00078), edge-runtime up
-      (`docker start supabase_edge_runtime_repsaga`), run FULL `flutter test --tags
-      integration`, capture the exact failing set (the "18"). Separate real code
-      failures from edge-runtime infra flakes (vitality 503).
-- [ ] Fix [1] record_set_xp parity oracle (root cause; assert exact PG==Dart, no widened tol).
-- [ ] Fix [2] peak_load exercises.name seed.
-- [ ] Fix [3] backfill suite (diagnose first).
-- [ ] Any other failures in the captured set — root-cause each.
-- [ ] FULL `flutter test --tags integration` GREEN (infra flakes excepted + documented).
-- [ ] `dart format` + `dart analyze --fatal-infos` + `flutter test --exclude-tags "integration || golden"` still green.
+- [x] Establish baseline: `npx supabase db reset` (≤00078), edge-runtime up,
+      ran FULL `flutter test --tags integration` → baseline `+48 -18`. The 18
+      failures were 4 clusters (NO edge-runtime/vitality 503 flakes this run):
+      6× `peak_load_per_body_part` (removed `exercises.name` seed), 6×
+      `rpg_record_set_xp` (stale Phase-29-v2 oracle), 2×+2× `rpg_backfill` /
+      `rpg_backfill_resume` (shared stale `computeDartReference`), 2×
+      `rpg_backfill_zero_weight` (admin-client GRANT).
+- [x] Fix [1] record_set_xp parity oracle — thread the SQL-derived
+      `impliedTier` (NULL-bw fallback = 15.0 via `impliedTier(bodyweightKg:0)`)
+      + `currentRank` (fresh user = 1) into all 6 `computeSetXp` call sites.
+      Reworked the BUG-RPG-001 "different weights" oracle to seed the residual
+      band-peak ladder (overload_mult=1.15) → asserts EXACT PG==Dart at `_kTol`.
+- [x] Fix [2] peak_load `exercises.name` seed — drop `name`, supply explicit
+      unique `slug` (post-15f join key; trigger RAISEs without it). No
+      translation rows needed (RPC reads only `xp_attribution`; rows are
+      `is_default=false`).
+- [x] Fix [3] backfill suite — rewrote `computeDartReference` to mirror the
+      full Phase-29-v2 `_rpg_backfill_chunk` chain (share-count session/weekly
+      accumulators, implied_tier 15.0, evolving current_rank via RankCurve,
+      overload + frequency mults). Fixed `rpg_backfill_zero_weight` to call
+      `backfill_rpg_v1` as the authenticated user (production path; the RPC is
+      GRANTed to `authenticated` only, not `service_role`).
+- [x] FULL `flutter test --tags integration` GREEN → `+66 -0` (EXIT 0).
+- [x] `dart format .` (0 changed) + `dart analyze --fatal-infos` (0 issues) +
+      `flutter test --exclude-tags "integration || golden"` (`+3613 ~1`) green.
 - [ ] reviewer → fixes → PR → merge.
 - [ ] (Optional follow-up, separate task) devops: a CI integration job against a CI Supabase so this can't rot again — note in PROJECT.md §2 if not done here.
 

@@ -26,6 +26,9 @@ import 'rpg_integration_setup.dart';
 void main() {
   final runId = DateTime.now().millisecondsSinceEpoch;
   var testIdx = 0;
+  // Monotonic per-process counter so every seeded custom exercise gets a
+  // globally-unique slug even within a single test.
+  var customExSeq = 0;
   TestUser? currentUser;
 
   Future<TestUser> freshUser() async {
@@ -69,16 +72,27 @@ void main() {
   ///
   /// `xp_attribution = null` represents the unmapped-fallback case (the same
   /// shape that user-created exercises ship with pre-attribution-fallback).
+  ///
+  /// Post-Phase-15f the `exercises.name` column no longer exists — display
+  /// text lives in `exercise_translations`. `exercises.slug` (NOT NULL) is the
+  /// join key, and the `exercises_derive_slug` trigger (migration 00034)
+  /// RAISEs unless the caller supplies it explicitly. The
+  /// `peak_load_per_body_part` RPC reads only `xp_attribution` (joined through
+  /// workouts → workout_exercises → sets), never `name` or any translation, so
+  /// these non-default (`is_default = false`) rows need a unique slug but NO
+  /// translation rows. We derive a unique slug per call from [slugSeed] +
+  /// runId so concurrent reruns don't collide.
   Future<String> seedCustomExercise({
     required supabase.SupabaseClient adminClient,
     required String userId,
-    required String name,
+    required String slugSeed,
     Map<String, double>? xpAttribution,
   }) async {
+    final slug = 'itest_${slugSeed}_${runId}_${testIdx}_${customExSeq++}';
     final inserted = await adminClient
         .from('exercises')
         .insert({
-          'name': name,
+          'slug': slug,
           'muscle_group': 'chest', // arbitrary — never read by this RPC
           'equipment_type': 'barbell', // arbitrary — never read by this RPC
           'is_default': false,
@@ -148,7 +162,7 @@ void main() {
         final shoulderPressId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Shoulder Press 32j',
+          slugSeed: 'shoulder_press',
           xpAttribution: {'shoulders': 0.7, 'arms': 0.3},
         );
         await seedSetForExercise(
@@ -164,7 +178,7 @@ void main() {
         final armsOnlyId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Arms Only 32j',
+          slugSeed: 'arms_only',
           xpAttribution: {'arms': 1.0},
         );
         await seedSetForExercise(
@@ -202,7 +216,7 @@ void main() {
         final tiedId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Tied Primary 32j',
+          slugSeed: 'tied_primary',
           xpAttribution: {'chest': 0.5, 'back': 0.5},
         );
         await seedSetForExercise(
@@ -234,7 +248,7 @@ void main() {
         final unmappedId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Unmapped 32j',
+          slugSeed: 'unmapped',
           // null attribution — falls through jsonb_each_text as 0 rows.
         );
         await seedSetForExercise(
@@ -266,7 +280,7 @@ void main() {
         final exId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Window 32j',
+          slugSeed: 'window',
           xpAttribution: {'chest': 1.0},
         );
 
@@ -310,7 +324,7 @@ void main() {
           final otherEx = await seedCustomExercise(
             adminClient: admin,
             userId: other.userId,
-            name: 'Integration Isolation Other 32j',
+            slugSeed: 'isolation_other',
             xpAttribution: {'chest': 1.0},
           );
           await seedSetForExercise(
@@ -324,7 +338,7 @@ void main() {
           final ourEx = await seedCustomExercise(
             adminClient: admin,
             userId: user.userId,
-            name: 'Integration Isolation Self 32j',
+            slugSeed: 'isolation_self',
             xpAttribution: {'chest': 1.0},
           );
           await seedSetForExercise(
@@ -353,7 +367,7 @@ void main() {
         final exId = await seedCustomExercise(
           adminClient: admin,
           userId: user.userId,
-          name: 'Integration Zero Weight 32j',
+          slugSeed: 'zero_weight',
           xpAttribution: {'chest': 1.0},
         );
         await seedSetForExercise(
