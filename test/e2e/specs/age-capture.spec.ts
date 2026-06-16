@@ -44,7 +44,7 @@
  * `e2e-spec-state-leak-across-tests`).
  */
 import { test, expect } from '@playwright/test';
-import { dismissCelebrationIfPresent, navigateToTab } from '../helpers/app';
+import { navigateToTab } from '../helpers/app';
 import { login } from '../helpers/auth';
 import {
   startEmptyWorkout,
@@ -363,8 +363,13 @@ test.describe('Age capture — post-session prompt', { tag: '@smoke' }, () => {
     await expect(page.locator(POST_SESSION.continueCta).first()).toBeVisible({
       timeout: 10_000,
     });
+    // Tapping CONTINUAR here drives the summary → /home transition directly.
+    // Do NOT call dismissCelebrationIfPresent afterwards: the summary is
+    // already being torn down, so the helper re-races the in-flight
+    // navigation — it sees the still-matching /workout/finish/ URL, then
+    // waits 15s for a post-session-continue-cta that's already gone.
+    // (TEST-INFRA double-drive race; the helper is for a fresh cinematic.)
     await page.locator(POST_SESSION.continueCta).first().click();
-    await dismissCelebrationIfPresent(page);
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 });
