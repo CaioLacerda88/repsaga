@@ -603,7 +603,7 @@
   "equippedLabel": "EQUIPADO",
   "prChipLabel": "PR",
   "finishButtonLabel": "FINALIZAR",
-  "finishWorkoutDisabledHint": "Complete pelo menos uma série para finalizar.",
+  "finishWorkoutDisabledHint": "Complete pelo menos uma série ou registro de cardio para finalizar.",
   "addExerciseFabLabel": "Adicionar exercício",
   "celebrationOverflowLabel": "{count, plural, one{Mais 1 rank — abrir Saga} other{Mais {count} ranks — abrir Saga}}",
   "celebrationOverflowTapHint": "Toque para continuar",

@@ -23,6 +23,7 @@ import 'package:repsaga/features/personal_records/providers/pr_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
+import 'package:repsaga/features/workouts/models/cardio_session.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
 import 'package:repsaga/features/workouts/models/workout.dart';
@@ -92,6 +93,45 @@ ActiveWorkoutState _makeStateWithSets(List<ExerciseSet> sets) {
 
 ActiveWorkoutState _makeEmptyState() {
   return ActiveWorkoutState(workout: _testWorkout, exercises: const []);
+}
+
+final _testCardioExercise = Exercise(
+  id: 'exercise-cardio-001',
+  name: 'Running',
+  muscleGroup: MuscleGroup.cardio,
+  equipmentType: EquipmentType.bodyweight,
+  isDefault: true,
+  createdAt: DateTime(2026),
+);
+
+/// Builds a cardio-ONLY session: one cardio entry (`sets: const []`,
+/// completion carried on `cardioSession.isCompleted`) and zero strength sets.
+/// This is the exact shape that left FINISH dead pre-fix (Phase 38b) — the
+/// gate walked `sets[*].isCompleted`, never reading `cardioSession`.
+ActiveWorkoutState _makeCardioOnlyState({required bool isCompleted}) {
+  return ActiveWorkoutState(
+    workout: _testWorkout,
+    exercises: [
+      ActiveWorkoutExercise(
+        workoutExercise: WorkoutExercise(
+          id: 'we-cardio-001',
+          workoutId: 'workout-001',
+          exerciseId: 'exercise-cardio-001',
+          order: 1,
+          exercise: _testCardioExercise,
+        ),
+        sets: const [],
+        cardioSession: CardioSession(
+          id: 'cardio-001',
+          workoutId: 'workout-001',
+          exerciseId: 'exercise-cardio-001',
+          durationSeconds: 1800,
+          isCompleted: isCompleted,
+          createdAt: DateTime.now().toUtc(),
+        ),
+      ),
+    ],
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -633,5 +673,136 @@ void main() {
         );
       },
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 38b cardio-only finish gate.
+  //
+  // Bug (QA, Phase 38d gate): a cardio-only workout could never be finished —
+  // FINISH stayed disabled with "Complete at least one set to finish" even
+  // after a cardio entry was completed. Root cause: the screen's gate was
+  // STRENGTH-ONLY (`exercises.any(sets.any(isCompleted))`). A cardio entry
+  // carries `sets: const []` and stores completion in
+  // `cardioSession.isCompleted`, so the gate read false forever. The notifier's
+  // `totalSetsCount` already counted cardio (`completedSets + completedCardio`)
+  // — the two sources of truth diverged. The gate now reads `_hasProgress`,
+  // which mirrors the notifier: a completed strength set OR a completed cardio
+  // entry satisfies it.
+  //
+  // These pin the user-perceptible outcome: the enabled/disabled FilledButton
+  // state and the presence of the `finish-disabled-hint` text — not the
+  // existence of a getter.
+  // ---------------------------------------------------------------------------
+  group('Phase 38b: cardio-only finish gate', () {
+    Finder finishButtonFinder() => find.descendant(
+      of: find.byWidgetPredicate(
+        (w) =>
+            w is Semantics && w.properties.identifier == 'workout-finish-btn',
+      ),
+      matching: find.byType(FilledButton),
+    );
+
+    final disabledHintFinder = find.byWidgetPredicate(
+      (w) =>
+          w is Semantics && w.properties.identifier == 'finish-disabled-hint',
+    );
+
+    testWidgets(
+      'completed cardio entry with no strength sets enables FINISH and hides the disabled hint',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(360, 780));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final state = _makeCardioOnlyState(isCompleted: true);
+
+        await tester.pumpWidget(_buildScreen(state));
+        await tester.pump();
+        await tester.pump();
+
+        final btn = tester.widget<FilledButton>(finishButtonFinder());
+        expect(
+          btn.onPressed,
+          isNotNull,
+          reason:
+              'A completed cardio entry IS committable work — FINISH must be '
+              'enabled (FilledButton.onPressed non-null) for a cardio-only '
+              'session. Pre-fix the strength-only gate left this null and the '
+              'workout could never be finished.',
+        );
+
+        expect(
+          disabledHintFinder,
+          findsNothing,
+          reason:
+              'With FINISH enabled the "Complete at least one set or cardio '
+              'entry" hint must not render — it only appears while the gate is '
+              'closed.',
+        );
+      },
+    );
+
+    testWidgets(
+      'incomplete cardio entry only keeps FINISH disabled and shows the hint',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(360, 780));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final state = _makeCardioOnlyState(isCompleted: false);
+
+        await tester.pumpWidget(_buildScreen(state));
+        await tester.pump();
+        await tester.pump();
+
+        final btn = tester.widget<FilledButton>(finishButtonFinder());
+        expect(
+          btn.onPressed,
+          isNull,
+          reason:
+              'An in-progress (not yet completed) cardio entry is not yet '
+              'committable work — FINISH must stay disabled until the user '
+              'taps "Concluir cardio".',
+        );
+
+        expect(
+          disabledHintFinder,
+          findsOneWidget,
+          reason:
+              'While the gate is closed the disabled hint must guide the user '
+              'on how to unblock — for a cardio-only session that means '
+              'completing the cardio entry.',
+        );
+      },
+    );
+
+    testWidgets('completed strength set still enables FINISH (no regression)', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(360, 780));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final state = _makeStateWithSets([
+        _makeSet(setNumber: 1, isCompleted: true),
+      ]);
+
+      await tester.pumpWidget(_buildScreen(state));
+      await tester.pump();
+      await tester.pump();
+
+      final btn = tester.widget<FilledButton>(finishButtonFinder());
+      expect(
+        btn.onPressed,
+        isNotNull,
+        reason:
+            'Regression guard: generalizing the gate to count cardio must '
+            'NOT break the strength path — a completed strength set still '
+            'enables FINISH.',
+      );
+
+      expect(
+        disabledHintFinder,
+        findsNothing,
+        reason: 'Enabled FINISH means no disabled hint on the strength path.',
+      );
+    });
   });
 }

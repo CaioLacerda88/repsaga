@@ -1901,7 +1901,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get finishWorkoutDisabledHint =>
-      'Complete at least one set to finish.';
+      'Complete at least one set or cardio entry to finish.';
 
   @override
   String get addExerciseFabLabel => 'Add exercise';

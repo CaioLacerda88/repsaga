@@ -3312,10 +3312,10 @@ abstract class AppLocalizations {
   /// **'FINISH'**
   String get finishButtonLabel;
 
-  /// PR-5 H6 — helper text shown beneath the disabled FINISH button explaining why it cannot be tapped. Hidden once the button becomes enabled.
+  /// Helper text shown beneath the disabled FINISH button explaining why it cannot be tapped. Hidden once the button becomes enabled. Phase 38b: generalized to cover cardio-only sessions (a completed cardio entry, not just a strength set, satisfies the finish gate).
   ///
   /// In en, this message translates to:
-  /// **'Complete at least one set to finish.'**
+  /// **'Complete at least one set or cardio entry to finish.'**
   String get finishWorkoutDisabledHint;
 
   /// Phase 18c active-workout FAB label (replaces the Finish-FAB, freed by moving Finish to the AppBar).

@@ -311,8 +311,20 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
     setState(() => _isEditingName = true);
   }
 
-  bool get _hasCompletedSet =>
-      widget.state.exercises.any((e) => e.sets.any((s) => s.isCompleted));
+  /// True iff the session has any committable work — a completed strength set
+  /// OR a completed cardio entry. This is the FINISH enable-gate and MUST stay
+  /// in lock-step with `ActiveWorkoutNotifier.totalSetsCount` (the
+  /// empty-session finish guard). Phase 38b: a cardio-only entry carries
+  /// `sets: const []` and stores completion in `cardioSession.isCompleted`, so
+  /// a strength-only check (`e.sets.any(...)`) reported false for a finished
+  /// cardio session and left FINISH dead — a cardio-only workout could never be
+  /// finished. Counting cardio here restores the two sources of truth to one
+  /// definition of "did the user do anything worth saving".
+  bool get _hasProgress => widget.state.exercises.any(
+    (e) =>
+        e.sets.any((s) => s.isCompleted) ||
+        (e.cardioSession?.isCompleted ?? false),
+  );
 
   Future<void> _onBackPressed() {
     return widget.discardCoordinator.show(context, ref, widget.state);
@@ -559,7 +571,7 @@ class _ActiveWorkoutBodyState extends ConsumerState<_ActiveWorkoutBody> {
       // owns its own CTA and a Finish bar with no logged sets is dead chrome.
       // Full BUG-020 narrative on FinishBottomBar's class doc.
       bottomNavigationBar: chromeVisible
-          ? FinishBottomBar(enabled: _hasCompletedSet, onPressed: _onFinish)
+          ? FinishBottomBar(enabled: _hasProgress, onPressed: _onFinish)
           : null,
       floatingActionButton: chromeVisible
           ? AddExerciseFab(onPressed: _onAddExercise)
