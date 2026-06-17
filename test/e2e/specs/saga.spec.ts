@@ -52,6 +52,45 @@ async function loginFoundationAndGoToCharacterSheet(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Materialize a lazily-built ListView child by wheel-scrolling until it mounts.
+//
+// The /saga/stats deep-dive is an outer ListView; children far below the fold
+// are not instantiated into the DOM/AOM until they enter the lazy build's
+// cacheExtent. Playwright's `scrollIntoViewIfNeeded` cannot scroll TO an
+// element that does not yet exist, so it times out on a not-yet-built child.
+// Phase 38e added a 7th vitality row + a 7th trend line, growing the content
+// above the VOLUME & PEAK section enough to push its blocks out of the initial
+// build window — exposing this latent assumption (cluster
+// `listview-lazy-build-breaks-e2e`). A real wheel scroll builds the child the
+// same way a user's scroll would. Polls the element COUNT (the real "is it
+// mounted" condition) — no blind waitForTimeout as the assertion.
+// ---------------------------------------------------------------------------
+// Polls element VISIBILITY, not just mount count. A virtualized ListView child
+// can be present in the AOM (count > 0) while still below the fold, and
+// Playwright's `scrollIntoViewIfNeeded` is unreliable against a recycled Flutter
+// list node — it timed out on CI shard 3 after 38e's taller deep-dive pushed the
+// VOLUME & PEAK blocks further down. Wheel-scrolling until the element is
+// actually VISIBLE both mounts AND positions it, so callers assert visibility
+// directly with no fragile `scrollIntoViewIfNeeded` follow-up. Generous step
+// budget for a short CI viewport; 250ms settle per step.
+async function wheelScrollUntilVisible(
+  page: Page,
+  selector: string,
+  { maxSteps = 30, deltaY = 600 }: { maxSteps?: number; deltaY?: number } = {},
+): Promise<void> {
+  const locator = page.locator(selector).first();
+  for (let i = 0; i < maxSteps; i++) {
+    if (await locator.isVisible().catch(() => false)) return;
+    await page.mouse.wheel(0, deltaY);
+    await page.waitForTimeout(250);
+  }
+  if (await locator.isVisible().catch(() => false)) return;
+  throw new Error(
+    `wheelScrollUntilVisible: ${selector} never became visible after ${maxSteps} wheel steps`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // S1–S2: Character sheet renders (smoke)
 // Uses separate describe blocks for user isolation.
 // ---------------------------------------------------------------------------
@@ -331,14 +370,18 @@ test.describe('Saga — stats deep-dive', { tag: '@smoke' }, () => {
     await expect(page.locator(SAGA.vitalityTrendChart).first()).toBeVisible({
       timeout: 10_000,
     });
-    // The volume-peak blocks sit below the fold on small viewports. Scroll
-    // the chest block into view before asserting visibility — the
-    // identifier is emitted regardless, but visibility requires layout
-    // overlap with the viewport.
-    await page
-      .locator(SAGA.volumePeakBlock('chest'))
-      .first()
-      .scrollIntoViewIfNeeded();
+    // The volume-peak blocks sit below the fold AND are lazily built by the
+    // outer ListView — Phase 38e's 7th vitality row + trend line pushed them
+    // past the initial build window, so the chest block is not in the DOM/AOM
+    // until a real scroll mounts it (cluster listview-lazy-build-breaks-e2e).
+    // `scrollIntoViewIfNeeded` can't scroll to a not-yet-built child; wheel-
+    // scroll until it mounts, THEN scroll it into view + assert visibility.
+    // Wheel-scroll until the chest block is VISIBLE (mounts + positions it in
+    // one step). Avoids `scrollIntoViewIfNeeded` on a recycled virtualized list
+    // node, which timed out on CI shard 3 once 38e's 7th vitality row + trend
+    // line grew the content above VOLUME & PEAK (cluster
+    // listview-lazy-build-breaks-e2e).
+    await wheelScrollUntilVisible(page, SAGA.volumePeakBlock('chest'));
     await expect(
       page.locator(SAGA.volumePeakBlock('chest')).first(),
     ).toBeVisible({ timeout: 10_000 });
@@ -624,6 +667,109 @@ test.describe('Saga — body-part row tap routes to stats deep-dive', () => {
     // selector so the attribute value is matched (not the locator).
     await expect(
       page.locator(SAGA.vitalityRow('back')).first(),
+    ).toHaveAttribute('aria-current', 'true', { timeout: 10_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S14: Cardio is a visible 7th progression track on the Saga rail (Phase 38e)
+//
+// 38e flips cardio from silent (computed but excluded) to a visible 7th track.
+// The provider auto-emits a BodyPartSheetEntry for BodyPart.cardio (it is now
+// in activeBodyParts), and CharacterSheetScreen renders it as the banded
+// CardioProgressRow — grouped apart below the six strength rows by a surface2
+// divider — replacing the retired DormantCardioRow.
+//
+// User: rpgCardioActiveUser — cardio seeded TRAINED (rank 5 / 168 XP) so the
+// alive row variant renders (pulsing dot, rank numeral, teal bar). Both the
+// trained _TrainedCardioRow and the untrained _UntrainedCardioRow expose the
+// SAME Semantics identifier `body-part-row-cardio` (SAGA.cardioProgressRow),
+// so the selector covers both states; this test pins the trained-active state.
+//
+// Behavior asserted (not wiring): the cardio row is visible on the rail AND
+// tapping it routes to the cardio stats deep-dive (/saga/stats?body_part=
+// cardio) — pinned via the destination screen's Semantics identifier, since
+// Flutter web hash-routing makes URL assertions flaky (cluster
+// flutter-web-url-assertion).
+//
+// Not tagged @smoke: the 7th-track render + route is a Phase-38e regression
+// guard; the smoke gate already covers the six-strength sheet (S2) and the
+// codex-nav route to /saga/stats (S5).
+// ---------------------------------------------------------------------------
+
+test.describe('Saga — cardio is a visible 7th track', () => {
+  // Serial: read-only navigation, but the describe shares one user; serial mode
+  // keeps the seeded cardio row deterministic across the two tests.
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    // Re-apply the trained-cardio seed so the row is alive regardless of any
+    // prior-run mutation (cluster e2e-spec-state-leak-across-tests). vitality
+    // values keep the entry out of the untrained branch.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('rpgCardioActiveUser').email,
+    );
+    if (userId) {
+      await admin.from('body_part_progress').upsert(
+        {
+          user_id: userId,
+          body_part: 'cardio',
+          total_xp: 168,
+          rank: 5,
+          vitality_ewma: 0.58,
+          vitality_peak: 0.92,
+        },
+        { onConflict: 'user_id,body_part' },
+      );
+    }
+
+    await login(
+      page,
+      getUser('rpgCardioActiveUser').email,
+      getUser('rpgCardioActiveUser').password,
+    );
+    await navigateToTab(page, 'Profile');
+    await page
+      .locator(SAGA.characterSheet)
+      .first()
+      .waitFor({ state: 'visible', timeout: 20_000 });
+  });
+
+  test('should render the 7th cardio progression row on the Saga rail', async ({
+    page,
+  }) => {
+    // The cardio row sits below the six strength rows (after the surface2
+    // divider) so it is below the fold on small viewports — scroll it in.
+    const cardioRow = page.locator(SAGA.cardioProgressRow).first();
+    await cardioRow.scrollIntoViewIfNeeded();
+    await expect(cardioRow).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('should open the cardio stats deep-dive when the cardio row is tapped', async ({
+    page,
+  }) => {
+    const cardioRow = page.locator(SAGA.cardioProgressRow).first();
+    await cardioRow.scrollIntoViewIfNeeded();
+    await expect(cardioRow).toBeVisible({ timeout: 10_000 });
+    await cardioRow.click();
+
+    // Destination-content assertion (NOT a URL assertion — cluster
+    // flutter-web-url-assertion). The cardio row's InkWell pushes
+    // /saga/stats?body_part=cardio; the deep-dive screen's Semantics
+    // identifier is the durable signal that the route resolved.
+    await expect(page.locator(SAGA.statsDeepDiveScreen).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Pre-selection proof: the cardio vitality row must be marked selected,
+    // confirming the body_part=cardio query param reached the screen (else
+    // chest — the default — would be selected). Flutter web emits
+    // aria-current (NOT aria-selected) for Semantics(selected:) on a
+    // button-role node (cluster flutter-web-aom-selectable-attribute).
+    await expect(
+      page.locator(SAGA.vitalityRow('cardio')).first(),
     ).toHaveAttribute('aria-current', 'true', { timeout: 10_000 });
   });
 });

@@ -1494,8 +1494,18 @@ export const SAGA = {
    * Each row is wrapped in Semantics(identifier: 'vitality-row-{slug}'),
    * where slug is the BodyPart.dbValue ('chest', 'back', 'legs', etc.).
    */
-  vitalityRow: (slug: 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core') =>
-    `[flt-semantics-identifier="vitality-row-${slug}"]`,
+  vitalityRow: (
+    slug:
+      | 'chest'
+      | 'back'
+      | 'legs'
+      | 'shoulders'
+      | 'arms'
+      | 'core'
+      // Phase 38e — cardio is now a 7th active track; the stats provider
+      // iterates activeBodyParts so the VitalityTable emits a cardio row.
+      | 'cardio',
+  ) => `[flt-semantics-identifier="vitality-row-${slug}"]`,
   /** VitalityTrendChart container — Semantics(identifier: 'vitality-trend-chart') */
   vitalityTrendChart: '[flt-semantics-identifier="vitality-trend-chart"]',
   /**
@@ -1847,6 +1857,20 @@ export const POST_SESSION = {
    * Semantics(identifier: 'mission-debrief-xp-bar').
    */
   missionDebriefXpBar: '[flt-semantics-identifier="mission-debrief-xp-bar"]',
+
+  /**
+   * Phase 38e — per-row cardio entry selector pattern in the Mission Debrief
+   * ledger. Index is 0-based; cardio rows render AFTER the strength lift rows
+   * so a mixed session reads as one coherent ledger. Sourced from
+   * `state.cardioEntries` (completed cardio entries), NOT from `topLifts`.
+   * The CardioEntryRow shows the duration as the right-aligned teal hero.
+   * Semantics(identifier: 'mission-debrief-cardio-row-{i}', container: true,
+   * explicitChildNodes: true) — explicitChildNodes blocks name-merge, so match
+   * on the identifier selector (cluster: aom-explicit-children-block-name-merge).
+   * Use as `${POST_SESSION.missionDebriefCardioRow}-0` for the first cardio row.
+   */
+  missionDebriefCardioRow:
+    '[flt-semantics-identifier^="mission-debrief-cardio-row-"]',
 
   /**
    * Phase 38d — one-time post-session "set your age" nudge banner
