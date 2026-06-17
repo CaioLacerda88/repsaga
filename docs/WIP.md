@@ -49,6 +49,21 @@ BEFORE build, + visual-verification gate before merge.**
   fast-follow 38e-bis, but the minimum coherent flip — Saga row + hue + char-level +
   classes + summary row — stays ATOMIC in this PR.)*
 
+### ⚠ SCOPE CHANGE (user, 2026-06-17) — NO cardio class; cardio counts toward level
+- **NO separate cardio class.** DROP the Wayfarer variant + `dominantClass[cardio]` +
+  the `[Strength]·[Cardio]` compound label + `class_wayfarer` l10n + mockup Surface 4.
+  Cardio recognition is via **TITLES (38f cardio ladder)**, not a class.
+- **Class identity stays pure 6-strength.** Because cardio now lives in `activeBodyParts`
+  (for level/Saga/stats), the class system must NOT read `activeBodyParts` anymore — pin
+  `class_resolver.dart` + `class_provider.dart` to a **strength-6 subset** (new
+  `strengthBodyParts` const, or filter out cardio) so cardio never leaks into class /
+  Ascendant. (Simpler than the old "carve cardio out of Ascendant but keep in dominant" —
+  cardio is now ENTIRELY out of class.) `b3_class_change_cut` stays violet; cardio
+  rank-ups never trigger a class change.
+- **Cardio DOES count toward character LEVEL** (user): keep 6→7 in BOTH `_activeKeys`,
+  `character_state` view + in-RPC recompute (migration 00080), denominator stays 4, max
+  148→172 (computed; title cap 148 → 38f). The never-regress proof stands.
+
 ### Decisions locked (user + agents, 2026-06-17)
 - **Vitality decay = FULL two-speed in 38e** (user): add cardio to `vitality-nightly` job
   + cardio-specific **τ_down = 21d (3wk)** in BOTH `VitalityCalculator` (Dart) +
@@ -75,7 +90,7 @@ BEFORE build, + visual-verification gate before merge.**
 2. `lib/features/rpg/domain/rank_curve.dart:179-186` `_activeKeys` (+`'cardio'`); denominator `~/4` stays.
 3. `lib/features/rpg/domain/character_xp_calculator.dart:7` `_activeKeys` (SEPARATE — +`'cardio'`).
 4. **SQL migration 00080:** `character_state` view filter `00040:321` (current def, never redefined) + in-RPC recompute filters in **00077** (current; NOT 00065): `record_set_xp` `00077:224,507`, `record_session_xp_batch` `00077:734,1102`, `_rpg_backfill_chunk` (~`00077:1226` block). All `WHERE body_part IN (6)` → 7.
-5. **Classes:** `character_class.dart:21-46` (+`wayfarer` variant+slug+l10nKey); `class_resolver.dart:64-71` `dominantClass` (+`cardio→wayfarer`) AND `:85-106` carve cardio OUT of Ascendant spread while keeping it in the dominant lookup; `class_wayfarer` ARB. Compound `[Strength]·[Cardio]` label render sites: `saga_header.dart:146-175` (10sp, maxWidth 120 — two-tone single line, day-zero = strength alone no trailing middot) + `class_badge.dart`.
+5. **Classes (REVISED — pin to strength-6, NO Wayfarer):** `class_resolver.dart:85-106` + `class_provider.dart:40` currently project onto `activeBodyParts` — change to a **strength-6 subset** (`BodyPart.values` minus cardio, or a new `strengthBodyParts` const) so cardio (now in `activeBodyParts`) does NOT enter class resolution / Ascendant spread. NO `character_class.dart` change, NO `dominantClass[cardio]`, NO compound label (`saga_header.dart`/`class_badge.dart` untouched), NO `class_wayfarer` l10n. Rewrite `class_resolver_test.dart:209` to assert cardio is excluded from class via the strength-6 subset (not via activeBodyParts).
 6. `lib/features/rpg/domain/body_part_hues.dart:62` `cardio: hair` → `bodyPartCardio` (ONE line → teal flows to rows + B2 floods + chart line + table for free). `bodyPartCardio` already `#22D3EE` (`app_theme.dart:93`).
 7. Saga: `character_sheet_screen.dart:127-135` — remove `DormantCardioRow` block (else double-cardio: provider auto-adds a 7th `BodyPartRankRow` + dormant still renders) → new `CardioProgressRow` (alive: `AmbientPulseDot`, rank numeral, teal bar, tap→`/saga/stats?body_part=cardio`; + untrained-cardio day-zero state). Delete/retire `dormant_cardio_row.dart`. Skeleton to borrow: `body_part_rank_row.dart:41`.
 8. **Vitality two-speed (net-new):** `vitality_calculator.dart:23-41` (single τ today) → per-bp τ (cardio 21d); `vitality-nightly/index.ts:104-110` (TAU + cardio-excluded set) → include cardio + cardio τ; parity (the EWMA closed-form integration tests).
