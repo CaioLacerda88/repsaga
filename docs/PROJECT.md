@@ -92,6 +92,7 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | — | Integration-suite repair (38c-discovered prerequisite) — fixed **18 pre-existing stale integration failures on main** (record_set_xp parity oracle missing the Phase-29-v2 implied-tier chain → ~2.94× under-compute; peak_load seeding the Phase-15f-removed `exercises.name`; backfill `computeDartReference` staleness; backfill_zero_weight calling a service_role-forbidden RPC). All test-side, zero production changes; suite `+48 -18`→`+66 -0`. CI excludes integration so the rot was invisible — see memory `project_integration_suite_red_on_main`. | DONE | #339 |
 | 38b | Cardio / Conditioning Track — **data model + logging surface.** Net-new `cardio_sessions` table (migration **00078**: `duration_seconds>0` NOT NULL, `distance_m>=0?`, `rpe 1–10?`; computed met columns deferred to 38c) + owner-scoped RLS via parent workout + explicit grants (`supabase-cli-latest-grant-drift`); `save_workout` 3→4-arg (`p_cardio jsonb DEFAULT '[]'`, atomic finish, legacy clients resolve via default, idempotent DELETE+INSERT). `CardioSession` Freezed model threaded as `ActiveWorkoutExercise.cardioSession?` (discriminated by `muscleGroup==cardio`, Hive crash-recovery). `CardioEntryCard` (4 user-approved states, `docs/phase-38-mockups.html`) + `DurationStepper` (mm:ss, 48dp floor) + distance tap-to-type + RPE sheet; shared `ExerciseCardHeader` extracted. Teal `bodyPartCardio` retuned orange→`#22D3EE` (dead token; hue wiring is 38d). New `Exercise.slug` keys the eyebrow (Hive cache v4→v5 wipe). Cardio entries persist but **earn nothing yet** (still out of `activeBodyParts`; earning = 38c). Integration test `cardio_save_roundtrip_test.dart` (persist + no XP + idempotency + legacy 3-arg + RLS) green; migrations 00077+00078 pushed to hosted. | DONE | #337 |
 | 38d | Cardio / Conditioning Track — **age capture (birth-year).** Populates 38c's nullable `profiles.date_of_birth` so cardio scores on real age-decade norms instead of the age-35 fallback (no migration). `Profile.dateOfBirth` with date-only `@JsonKey` converters (`YYYY-MM-DD`, not `timestamptz`); `upsertProfile(dateOfBirth:)` + explicit `clearDateOfBirth` (omit-on-null upsert can't write NULL). **`AgeRow` + `AgeEditorSheet`** clone the gender row+sheet grammar: branded birth-year `ListWheelScrollView` (years `currentYear−18..−100`, default rests on `currentYear−35`, **structural ≥18 floor**, `itemExtent` scales off `textScaler`), violet selection band, derived-age display, point-of-collection disclosure (**no consent toggle** — DOB is LGPD Art. 6, not Art. 11), "Prefer not to say"→NULL. Post-session one-time prompt gated on `hadCardio && dateOfBirth==null && !dismissed` (Hive flag; `hadCardio` from the exercise snapshot since completed cardio emits no `BodyPart.cardio` XP delta). l10n en+pt; privacy-policy §2/§3 DOB rows + "Last updated" bump; data-export auto-includes. **QA caught + fixed a latent 38b defect:** a cardio-only workout couldn't be finished (the screen FINISH enable-gate was strength-only) — `_hasCompletedSet`→`_hasProgress` counts cardio + generalized hint copy + regression tests. Visual gate matched the mockup; 28 narrow-width (320/360/412 × en/pt + textScaler 1.3) overflow guards added. NOTE: cardio-flavored post-session summary row (`CardioEntryRow`) is 38e, so a cardio-only session still shows the generic debrief. | DONE | #342 |
+| 38e | Cardio / Conditioning Track — **activation (atomic boundary flip).** Cardio goes silent→visible 7th track. **Level = the whole** (cardio counts; denominator stays 4, computed max 148→172) via both `_activeKeys` + migration **00080** (`rpg_active_body_part_level` helper + `character_state` view + in-RPC level snapshots 6→7; `saga_eternal` title stays 148, 172 title is 38f). Dart↔SQL char-level parity live-verified byte-identical; **never-regress** proof (pure-strength level never drops) pinned Dart+SQL. **NO cardio class** (titles-only, 38f): `class_resolver`/`class_provider` pinned to a new `strengthBodyParts` const so cardio never enters class/Ascendant; home dominant-identity chip also strength-pure. **Two-speed vitality:** cardio `τ_down=21d` vs strength `42d` in `VitalityCalculator` (per-bp) + `vitality-nightly` (cardio added to active set + cardio τ; edge fn redeployed to hosted). `body_part_hues` cardio→`bodyPartCardio` (teal flows to rows/B2 floods/chart/table). `CardioProgressRow` (banded, alive+untrained) replaces deleted `DormantCardioRow`; `CardioEntryRow` in the debrief. Reviewer (live parity verify) + QA + visual gate (mockup-matched) all signed off; CI green. Stats decay COPY split to **38e-bis**. | DONE | #344 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -260,17 +261,19 @@ Items in (d) move to the "v2-park" sub-list and don't get worked on without new 
 
 ### Phase 38 — Cardio / Conditioning Track: remaining stages (sequential)
 
-38a (#335) + 38b (#337) + 38c (#340) + 38d (#342) shipped; migrations 00077–00079
-on hosted. Full per-stage spec in the plan `~/.claude/plans/noble-stirring-scroll.md`.
-Cardio XP is computed but **silent** (out of `activeBodyParts`/`character_state`)
-until 38e; real ages now flow (38d).
+38a (#335) + 38b (#337) + 38c (#340) + 38d (#342) + 38e (#344) shipped; migrations
+00077–00080 + the `vitality-nightly` edge function on hosted. Cardio is now a **visible
+7th track** (rank, char-level, Saga row, two-speed vitality). Full per-stage spec in
+the plan `~/.claude/plans/noble-stirring-scroll.md`.
 
-- **38e — Activation (atomic boundary flip + coherent UI) ⚠ largest.** Add cardio to
-  `activeBodyParts` + both `_activeKeys` + `character_state`/in-RPC char-level (7 parts,
-  denominator stays 4; max level 148→172); `Wayfarer` class (Ascendant stays
-  6-strength-only); teal hue retune; `CardioProgressRow` on Saga + vitality table/chart;
-  `CardioEntryRow` in the post-session summary. Visual-verification gate.
-- **38f — Titles:** cardio ladder + cross-build + level-cap title at 172 (90→106).
+- **38e-bis — Cardio stats decay COPY (deferred from 38e split-valve).** The cardio
+  vitality table row + 7th trend-chart line auto-extend and ship in 38e, but the
+  EXPLANATORY copy is deferred: the per-row decay subtitle ("Conditioning fades in ~3
+  weeks"/pt), the one-time stats decay explainer banner, and the chart-legend cardio
+  chip. Small, copy-only (l10n en+pt + the row subtitle slot + the banner widget). The
+  faster decay is already live; this just explains it.
+- **38f — Titles:** cardio ladder + cross-build + level-cap title at **172** (the 172
+  char-level title `saga_eternal` is still at 148 — 38f adds the 172 rung) (90→106).
 - **38g — E2E + QA + calibration sign-off:** new `cardio.spec.ts`, affected-spec
   regression, calibration sign-off (tier bands vs ACSM on real data).
 
