@@ -37,9 +37,13 @@ import '../models/character_class.dart';
 /// snapshot (live, optimistic, simulated) without conditioning on the call
 /// site. No `ref`, no async, no IO.
 ///
-/// **Cardio:** the resolver only operates over [activeBodyParts] (six v1
-/// strength tracks). If the caller passes a [BodyPart.cardio] entry it is
-/// silently ignored — the v2 Wayfarer class is not implemented here.
+/// **Cardio (Phase 38e):** the resolver operates ONLY over
+/// [strengthBodyParts] (the six strength tracks). Cardio now lives in
+/// [activeBodyParts] (it counts toward Character Level) but is deliberately
+/// kept OUT of class resolution — cardio recognition ships as cardio titles,
+/// not a class. A [BodyPart.cardio] entry in the input map is silently
+/// ignored; there is no Wayfarer class and cardio can never perturb the
+/// Ascendant balance check.
 class ClassResolver {
   const ClassResolver._();
 
@@ -74,16 +78,17 @@ class ClassResolver {
   ///
   /// [ranks] is keyed by [BodyPart]; missing entries default to rank 1 (the
   /// SQL default-row shape). Cardio entries are ignored — the resolver only
-  /// considers v1 strength tracks ([activeBodyParts]).
+  /// considers the six strength tracks ([strengthBodyParts]).
   ///
   /// Returns [CharacterClass.initiate] when the input is empty or every rank
   /// is below [initiateCeiling].
   static CharacterClass resolve(Map<BodyPart, int> ranks) {
-    // Project to active body parts only, defaulting missing entries to
+    // Project to the strength tracks only, defaulting missing entries to
     // rank 1 (matches the SQL default-row + RpgProgressSnapshot.progressFor
-    // contract).
+    // contract). Cardio is excluded here even though it is in
+    // `activeBodyParts` for Character Level — it never feeds class/Ascendant.
     final activeRanks = <BodyPart, int>{
-      for (final bp in activeBodyParts) bp: ranks[bp] ?? 1,
+      for (final bp in strengthBodyParts) bp: ranks[bp] ?? 1,
     };
 
     final values = activeRanks.values.toList(growable: false);

@@ -28,8 +28,8 @@ import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/character_sheet_screen.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
+import 'package:repsaga/features/rpg/ui/widgets/cardio_progress_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/codex_nav_row.dart';
-import 'package:repsaga/features/rpg/ui/widgets/dormant_cardio_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/saga_header.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
@@ -149,6 +149,15 @@ CharacterSheetState _highRankState() {
         rank: 8,
         totalXp: 500,
         vitalityEwma: 73,
+        vitalityPeak: 80,
+      ),
+      // Phase 38e — the provider emits a 7th cardio entry; a trained
+      // high-rank user has a real cardio rank too.
+      _entry(
+        bp: BodyPart.cardio,
+        rank: 5,
+        totalXp: 300,
+        vitalityEwma: 60,
         vitalityPeak: 80,
       ),
     ],
@@ -335,11 +344,13 @@ void main() {
     });
 
     testWidgets(
-      'composition is SagaHeader + CharacterXpBar + 6 rows + DormantCardioRow + 3 CodexNavRows',
+      'composition is SagaHeader + CharacterXpBar + 6 strength rows + '
+      'CardioProgressRow + 3 CodexNavRows',
       (tester) async {
-        // Phase 26b Option B v4 pins the post-refactor composition:
-        // SagaHeader + CharacterXpBar at the top, six body-part rows,
-        // a dormant cardio row, and three codex nav rows.
+        // Phase 38e composition: SagaHeader + CharacterXpBar at the top, six
+        // strength body-part rows, the banded CardioProgressRow (the 7th
+        // track — replaces the retired DormantCardioRow), and three codex
+        // nav rows.
         tester.view.physicalSize = const Size(800, 2400);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
@@ -351,8 +362,9 @@ void main() {
 
         expect(find.byType(SagaHeader), findsOneWidget);
         expect(find.byType(CharacterXpBar), findsOneWidget);
+        // Cardio renders as CardioProgressRow, NOT a 7th BodyPartRankRow.
         expect(find.byType(BodyPartRankRow), findsNWidgets(6));
-        expect(find.byType(DormantCardioRow), findsOneWidget);
+        expect(find.byType(CardioProgressRow), findsOneWidget);
         expect(find.byType(CodexNavRow), findsNWidgets(3));
       },
     );

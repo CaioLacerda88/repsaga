@@ -95,24 +95,25 @@ void main() {
       }
     });
 
-    test('all 6 active (v1) body parts have distinct colors', () {
-      // The trend chart in §13.3 puts six body-part lines on the same
-      // canvas — they must be visually distinguishable. We don't assert
-      // contrast metrics here (UX-critic / design pass), but at minimum
-      // no two body parts can share an identical color.
-      final v1Colors = activeBodyParts
+    test('all 7 active body parts have distinct colors', () {
+      // The trend chart in §13.3 puts every active body-part line on the same
+      // canvas — they must be visually distinguishable. Phase 38e adds the
+      // 7th (cardio, teal). We don't assert contrast metrics here (UX-critic
+      // / design pass), but at minimum no two body parts can share a color.
+      final colors = activeBodyParts
           .map((bp) => VitalityStateStyles.bodyPartColor[bp])
           .whereType<Color>()
           .toSet();
-      expect(v1Colors.length, activeBodyParts.length);
+      expect(colors.length, activeBodyParts.length);
     });
 
-    test('cardio uses a desaturated tone (v2 placeholder)', () {
-      // Cardio is intentionally muted until earnable in v2 — same `hair`
-      // hairline tone as the dormant cardio row.
+    test('cardio uses the teal identity hue (Phase 38e)', () {
+      // Cardio is now a live track — its identity hue is the locked teal
+      // bodyPartCardio (#22D3EE), flowing to the Saga rail row, B2 flood,
+      // trend-chart line, and vitality table cell.
       expect(
         VitalityStateStyles.bodyPartColor[BodyPart.cardio],
-        AppColors.hair,
+        AppColors.bodyPartCardio,
       );
     });
 

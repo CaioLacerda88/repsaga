@@ -581,9 +581,11 @@ void main() {
       expect(titleSlugs, contains('path_trodden'));
       expect(titleSlugs, contains('iron_bound'));
 
-      // Class on the post distribution — Ascendant.
+      // Class on the post distribution — Ascendant. Class resolution reads
+      // the six strength tracks (Phase 38e: cardio is excluded from class /
+      // Ascendant), so build the rank map over strengthBodyParts.
       final postRanks = <BodyPart, int>{
-        for (final bp in activeBodyParts) bp: postRows[bp]!.rank,
+        for (final bp in strengthBodyParts) bp: postRows[bp]!.rank,
       };
       expect(ClassResolver.resolve(postRanks), CharacterClass.ascendant);
     });

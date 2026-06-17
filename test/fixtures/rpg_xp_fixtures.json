@@ -1101,6 +1101,7 @@
       "ranks": {
         "arms": 1,
         "back": 1,
+        "cardio": 1,
         "chest": 1,
         "core": 1,
         "legs": 1,
@@ -1108,10 +1109,11 @@
       }
     },
     {
-      "character_level": 7,
+      "character_level": 8,
       "ranks": {
         "arms": 5,
         "back": 5,
+        "cardio": 5,
         "chest": 5,
         "core": 5,
         "legs": 5,
@@ -1119,10 +1121,11 @@
       }
     },
     {
-      "character_level": 29,
+      "character_level": 34,
       "ranks": {
         "arms": 20,
         "back": 20,
+        "cardio": 20,
         "chest": 20,
         "core": 20,
         "legs": 20,
@@ -1130,10 +1133,11 @@
       }
     },
     {
-      "character_level": 74,
+      "character_level": 86,
       "ranks": {
         "arms": 50,
         "back": 50,
+        "cardio": 50,
         "chest": 50,
         "core": 50,
         "legs": 50,
@@ -1141,14 +1145,27 @@
       }
     },
     {
-      "character_level": 148,
+      "character_level": 172,
       "ranks": {
         "arms": 99,
         "back": 99,
+        "cardio": 99,
         "chest": 99,
         "core": 99,
         "legs": 99,
         "shoulders": 99
+      }
+    },
+    {
+      "character_level": 29,
+      "ranks": {
+        "arms": 20,
+        "back": 20,
+        "cardio": 1,
+        "chest": 20,
+        "core": 20,
+        "legs": 20,
+        "shoulders": 20
       }
     }
   ],

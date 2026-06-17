@@ -62,19 +62,22 @@ Future<CharacterSheetState> _read(ProviderContainer c) async {
 
 void main() {
   group('characterSheetProvider — composition', () {
-    test('day-0 user: six untested entries, isZeroHistory=true', () async {
+    test('day-0 user: seven untested entries, isZeroHistory=true', () async {
       // 2026-05-04 untested patch: a brand-new account has peak == 0 on
       // every body part, so per-entry state collapses to untested (the
       // ratio is undefined). The character-sheet halo state mirrors this —
       // the visual treatment is identical to dormant (silent rune) but the
       // semantic separation matters at the stats deep-dive layer where
       // untested renders `—` instead of `0%`.
+      //
+      // Phase 38e: the provider projects activeBodyParts, which now includes
+      // cardio (the 7th track) — so day-0 emits SEVEN untested entries.
       final c = _container(snapshot: RpgProgressSnapshot.empty);
       addTearDown(c.dispose);
 
       final sheet = await _read(c);
 
-      expect(sheet.bodyPartProgress.length, 6);
+      expect(sheet.bodyPartProgress.length, 7);
       expect(sheet.lifetimeXp, 0);
       expect(sheet.isZeroHistory, true);
       for (final e in sheet.bodyPartProgress) {

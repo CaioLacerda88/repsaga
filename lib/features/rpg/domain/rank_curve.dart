@@ -158,7 +158,12 @@ class RankCurve {
 ///
 /// `character_level = max(1, floor((Σ active_ranks - N_active) / 4) + 1)`
 ///
-/// v1: `N_active = 6` (chest, back, legs, shoulders, arms, core).
+/// Phase 38e: `N_active = 7` (chest, back, legs, shoulders, arms, core,
+/// cardio). The denominator stays 4. Adding cardio increases both Σ ranks
+/// and N_active by the SAME amount when cardio is at rank 1 (`+1` to the
+/// sum, `+1` to N), so the numerator `Σ ranks − N` is unchanged for a
+/// pure-strength user — their level never regresses. Computed max rises
+/// 148 → 172 (all seven at rank 99).
 int characterLevel(
   Map<String, int> ranks, {
   List<String> activeKeys = _activeKeys,
@@ -183,4 +188,5 @@ const List<String> _activeKeys = [
   'shoulders',
   'arms',
   'core',
+  'cardio',
 ];

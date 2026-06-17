@@ -395,14 +395,28 @@ def fx_vitality() -> dict:
 
 
 def fx_character_level() -> list[dict]:
-    """Character level = max(1, floor((Σranks - 6) / 4) + 1) for v1 (6 active)."""
+    """Character level = max(1, floor((Σranks - N) / 4) + 1).
+
+    Phase 38e: N = 7 active tracks (six strength + cardio). The denominator
+    stays 4 — only the active SET grows. A cardio rank of 1 adds +1 to both
+    Σranks and N, so the numerator (Σranks - N) is unchanged vs a 6-track
+    pure-strength user (the never-regress invariant). Computed max rises
+    148 → 172 (all seven at rank 99). The `saga_eternal` title threshold
+    stays 148 (the 172-cap title is Phase 38f) — that's a title-table
+    concern, not a computed-level one.
+    """
     cases = []
     scenarios = [
-        ({'chest': 1, 'back': 1, 'legs': 1, 'shoulders': 1, 'arms': 1, 'core': 1}, 1),
-        ({'chest': 5, 'back': 5, 'legs': 5, 'shoulders': 5, 'arms': 5, 'core': 5}, 7),
-        ({'chest': 20, 'back': 20, 'legs': 20, 'shoulders': 20, 'arms': 20, 'core': 20}, 29),
-        ({'chest': 50, 'back': 50, 'legs': 50, 'shoulders': 50, 'arms': 50, 'core': 50}, 74),
-        ({'chest': 99, 'back': 99, 'legs': 99, 'shoulders': 99, 'arms': 99, 'core': 99}, 148),
+        ({'chest': 1, 'back': 1, 'legs': 1, 'shoulders': 1, 'arms': 1, 'core': 1, 'cardio': 1}, 1),
+        ({'chest': 5, 'back': 5, 'legs': 5, 'shoulders': 5, 'arms': 5, 'core': 5, 'cardio': 5}, 8),
+        ({'chest': 20, 'back': 20, 'legs': 20, 'shoulders': 20, 'arms': 20, 'core': 20, 'cardio': 20}, 34),
+        ({'chest': 50, 'back': 50, 'legs': 50, 'shoulders': 50, 'arms': 50, 'core': 50, 'cardio': 50}, 86),
+        ({'chest': 99, 'back': 99, 'legs': 99, 'shoulders': 99, 'arms': 99, 'core': 99, 'cardio': 99}, 172),
+        # Never-regress proof: a pure-strength user (cardio still at rank 1)
+        # lands on the SAME level as the pre-38e 6-track computation.
+        # Σ=6×20+1=121, N=7 → floor((121-7)/4)+1 = floor(114/4)+1 = 28+1 = 29
+        # (identical to the old 6-track all-20 → 29).
+        ({'chest': 20, 'back': 20, 'legs': 20, 'shoulders': 20, 'arms': 20, 'core': 20, 'cardio': 1}, 29),
     ]
     for ranks, expected in scenarios:
         cases.append({'ranks': ranks, 'character_level': expected})

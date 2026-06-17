@@ -649,9 +649,9 @@
   <hr class="e38-rule">
   <div class="e38">
   <h1 class="e38">Phase 38e — Cardio activation</h1>
-  <div class="sub">Cardio goes live as a visible <b style="color:var(--cardio)">7th progression track</b> · separate-but-equal, never homogenized onto the strength hexagon · teal identity <span class="swatch" style="background:#22D3EE"></span><code style="color:#22D3EE">#22D3EE</code> · class descriptor <b style="color:var(--cardio)">WAYFARER</b></div>
-  <div class="note">38a–38d already compute + store cardio XP and capture age silently. 38e flips the leverage: cardio surfaces on the Saga sheet,
-    contributes to character level (<b>denominator stays 4</b>, max level 148→172), and earns a compound class descriptor.
+  <div class="sub">Cardio goes live as a visible <b style="color:var(--cardio)">7th progression track</b> · separate-but-equal, never homogenized onto the strength hexagon · teal identity <span class="swatch" style="background:#22D3EE"></span><code style="color:#22D3EE">#22D3EE</code> · <b style="color:var(--cream)">no cardio class</b> (recognition via cardio titles, Phase 38f)</div>
+  <div class="note">38a–38d already compute + store cardio XP and capture age silently. 38e flips the leverage: cardio surfaces on the Saga sheet
+    and contributes to character level (<b>denominator stays 4</b>, max level 148→172). <b style="color:var(--cream)">No cardio class</b> — the class system is pinned to the six strength tracks.
     The locked UI direction is <b>grouped-apart, not merged</b>: a <code style="color:var(--cardio)">surface2</code> divider + small gap, then the cardio row/line/cell lives inside a
     <b>faintly teal-tinted band</b> with a tiny <b>CARDIO</b> eyebrow. Two-speed Vitality decay (cardio τ=3wk vs strength τ=6wk) is carried by
     <b>words</b> — a per-row decay subtitle + a one-time stats explainer — not by color or pulse alone. Every string below is real en + pt-BR copy.</div>
@@ -890,121 +890,19 @@
     </div>
   </div>
 
-  <!-- ═══════════  SURFACE 4 · Compound class label  ═══════════ -->
-  <div class="e38-sectlabel">4 · Compound class label — SagaHeader</div>
-  <div class="e38-sectsub">The class meta column renders <code style="color:var(--cardio)">[StrengthClass]·[CardioDescriptor]</code>: strength class in violet (<code style="color:var(--cardio)">classTextColor</code>), then <code style="color:var(--cardio)">·WAYFARER</code> in teal-dim, <b style="color:var(--cream)">smaller</b>, wider tracking. <b style="color:var(--cream)">The dashed box below is the TRUE 120dp cap</b> (<code>saga_header.dart:138</code>, <code>maxWidth:120</code>) — strength half is <b>10sp</b> (<code>saga_header.dart:165</code>), cardio half <b>9sp</b> so the subordinate reads smaller. At those sizes <code style="color:var(--cardio)">ASCENDANT·WAYFARER</code> / <code style="color:var(--cardio)">ASCENDENTE·ANDARILHO</code> <b style="color:#FF6B6B">overflow 120dp</b>. Two candidate fixes below — <b>pick one</b>.</div>
-  <div class="grid">
-
-    <!-- 4a · THE CLIP (honest 120dp box, no fix) -->
-    <div class="panel">
-      <h2>4a · The real clip — single line at TRUE 120dp (EN)</h2>
-      <div class="device">
-        <div class="lvlcol">
-          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
-          <div class="clshell">
-            <div class="cllabel"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
-            <div class="cltitle">Saga Eternal</div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote"><b style="color:#FF6B6B">This is the problem, shown honestly.</b> Inside the real <code>maxWidth:120</code> box (dashed edge), <b style="color:var(--violet)">ASCENDANT</b> (10sp) + <b style="color:var(--cardio-dim)">·WAYFARER</b> (9sp) does NOT fit on one line — the cardio descriptor ellipsis-clips. The earlier 160dp frame hid this. Sizes now match the shipping widget: strength 10sp, cardio 9sp (subordinate is smaller, inversion fixed).</div>
-    </div>
-
-    <!-- 4b · day-zero, strength alone PT (true 120dp) -->
-    <div class="panel">
-      <h2>4b · Day-zero — strength class alone, TRUE 120dp (PT)</h2>
-      <div class="device">
-        <div class="lvlcol">
-          <div><div class="lvlnum">17</div><div class="lvllbl">Nível</div></div>
-          <div class="clshell">
-            <!-- cardio untrained → NO trailing middot, NO ·WAYFARER -->
-            <div class="cllabel"><span class="strength">SENTINELA</span></div>
-            <div class="cltitle">Guardião do Ferro</div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote">Day-zero (cardio <b>untrained</b>): the compound collapses to the strength class <b>alone</b> — <b style="color:var(--violet)">SENTINELA</b> (10sp), <b>no trailing <code>·</code></b>, no teal half. Fits 120dp comfortably. This variant is identical under <b>either</b> Option A or B — the middot + cardio half only appears once cardio has a rank.</div>
-    </div>
-
-    <!-- ─── OPTION A — widen + single line ─── -->
-    <div class="panel">
-      <h2>4c · OPTION A — widen meta column to 160dp, single line (EN)</h2>
-      <div class="device">
-        <div class="lvlcol">
-          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
-          <div class="clshell w160">
-            <div class="cllabel"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
-            <div class="cltitle">Saga Eternal</div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote"><b style="color:var(--cardio)">Option A:</b> bump the meta column cap <code>maxWidth:120 → 160</code>. Two-tone single line now fits (box edge widened to 160dp above). Strength 10sp violet, cardio 9sp teal-dim. <b style="color:#FF6B6B">Cost:</b> the wider column eats horizontal room on the narrowest screen — proven below at 320dp.</div>
-    </div>
-
-    <!-- 4c-proof · full SagaHeader at 320dp with the 160dp meta -->
-    <div class="panel">
-      <h2>4c-proof · Full SagaHeader @ 320dp with the 160dp meta (PT)</h2>
-      <div class="device">
-        <div class="frame320">
-          <div class="sagahdr">
-            <div class="lvl"><div class="n">56</div><div class="l">Nível</div></div>
-            <div class="ctr">
-              <div class="xpbar"><i></i></div>
-              <div class="xpsub">12 480 / 20 000 XP</div>
-            </div>
-            <div class="meta">
-              <div class="clshell w160">
-                <div class="cllabel"><span class="strength">ASCENDENTE</span><span class="cardio">&middot;ANDARILHO</span></div>
-                <div class="cltitle">Saga Eterna</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote"><b>Horizontal-room proof for Option A.</b> Full 3-column header on a <b>320dp</b> frame: LVL 56sp Rajdhani numeral · center XP bar (<code>Flexible</code>, shrinks) · 160dp meta with the longest PT compound <b style="color:var(--violet)">ASCENDENTE</b><b style="color:var(--cardio-dim)">·ANDARILHO</b>. It fits because the center column is <code>Flexible</code> and yields width — but the XP bar is now visibly tighter. <b style="color:#FF6B6B">If LVL goes 3 digits (≥100) the squeeze worsens; 160dp is the practical ceiling.</b></div>
-    </div>
-
-    <!-- ─── OPTION B — two-line stack at TRUE 120dp ─── -->
-    <div class="panel">
-      <h2>4d · OPTION B — two-line stack, TRUE 120dp (EN)</h2>
-      <div class="device">
-        <div class="lvlcol">
-          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
-          <div class="clshell">
-            <div class="cllabel stack"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
-            <div class="cltitle">Saga Eternal</div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote"><b style="color:var(--cardio)">Option B:</b> keep <code>maxWidth:120</code>; stack the halves — strength class on line 1 (<b style="color:var(--violet)">ASCENDANT</b>, violet, 10sp), <b style="color:var(--cardio-dim)">·WAYFARER</b> on line 2 (teal-dim, 9sp). Both fit 120dp with room. <b style="color:#FF6B6B">Cost:</b> a second line in the ~80dp-tall header — see height note below.</div>
-    </div>
-
-    <!-- 4d-proof · two-line stack PT at TRUE 120dp -->
-    <div class="panel">
-      <h2>4d-proof · OPTION B — longest PT compound, TRUE 120dp (PT)</h2>
-      <div class="device">
-        <div class="lvlcol">
-          <div><div class="lvlnum">56</div><div class="lvllbl">Nível</div></div>
-          <div class="clshell">
-            <div class="cllabel stack"><span class="strength">ASCENDENTE</span><span class="cardio">&middot;ANDARILHO</span></div>
-            <div class="cltitle">Saga Eterna</div>
-          </div>
-        </div>
-      </div>
-      <div class="smallnote"><b>Vertical-cost proof for Option B.</b> Longest PT compound <b style="color:var(--violet)">ASCENDENTE</b> / <b style="color:var(--cardio-dim)">·ANDARILHO</b> both clear 120dp stacked. <b style="color:#FF6B6B">Cost:</b> meta column is now class-line + descriptor-line + title-line ≈ 3 text rows. In the ~80dp header that's tight against the 56sp LVL numeral height — acceptable, but no vertical slack left for a future 4th meta row.</div>
-    </div>
-  </div>
-
-  <!-- ─── A/B decision note ─── -->
-  <div class="legend" style="margin-bottom:18px">
-    <b style="color:var(--cream)">Surface 4 — A vs B, decide on evidence:</b><br>
-    • <b style="color:var(--cardio)">Option A (widen to 160dp, single line):</b> reads cleanest, keeps the one-line two-tone rhythm. <b style="color:#FF6B6B">Risk = horizontal room</b> — proven to fit at 320dp only because the center XP column is <code>Flexible</code>; a 3-digit LVL or a longer future title tightens it further. 160dp is the ceiling.<br>
-    • <b style="color:var(--cardio)">Option B (two-line stack, keep 120dp):</b> never touches the column cap, zero horizontal risk on any device. <b style="color:#FF6B6B">Risk = vertical room</b> — adds a third text row to a ~80dp header, leaving no slack for future meta content.<br>
-    • <b style="color:var(--cream)">Trade in one line:</b> A spends horizontal budget (worst at 320dp / 3-digit levels); B spends vertical budget (worst in the fixed-height header). Day-zero strength-alone (4b) is unaffected either way.
+  <!-- ═══════════  SURFACE 4 · Cardio rank-up B2 cut  ═══════════ -->
+  <div class="note e38" style="border-left:3px solid var(--cardio);margin-top:22px">
+    <b style="color:var(--cardio)">Scope change (user, 2026-06-17): NO cardio class.</b> The original Surface 4
+    (compound <code>[StrengthClass]·WAYFARER</code> label + the A/B overflow study) is
+    <b style="color:var(--cream)">retired</b>. Cardio recognition ships as <b>cardio titles (Phase 38f)</b>, not a
+    class. The class system is pinned to the <b>six strength tracks</b> (<code>strengthBodyParts</code>) so
+    cardio — now in <code>activeBodyParts</code> for Character Level — never enters class / Ascendant
+    resolution. <code>saga_header.dart</code> is untouched; there is no Wayfarer variant, no
+    <code>dominantClass[cardio]</code>, no <code>class_wayfarer</code> l10n.
   </div>
 
   <!-- ═══════════  SURFACE 5 · Cardio rank-up B2 cut  ═══════════ -->
-  <div class="e38-sectlabel">5 · Cardio rank-up cut (B2) — teal flood</div>
+  <div class="e38-sectlabel">4 · Cardio rank-up cut (B2) — teal flood</div>
   <div class="e38-sectsub">The cardio rank-up celebration floods <b style="color:var(--cardio)">teal</b> (the cardio identity hue) — distinct from a strength body-part-hue cut and from a class-change cut (which stays <code style="color:var(--cardio)">hotViolet</code>). Contrast check on cream text over bright teal below.</div>
   <div class="grid">
 
@@ -1034,17 +932,17 @@
       <div class="smallnote"><b>Contrast risk flagged:</b> cream (<code>#F2EEF7</code>) over bright teal (<code>#22D3EE</code>) is only ≈1.5:1 — fails AA badly. If the cut copy must be cream for celebration-family consistency, it <b>needs a text-shadow / scrim</b> (shown here) or a darkened teal base. <b>tech-lead decision needed:</b> prefer the dark-ink treatment (5a) for the cardio flood; reserve cream-on-flood for the violet class-change cut where contrast holds.</div>
     </div>
 
-    <!-- 5c · violet class-change cut, for contrast -->
+    <!-- 5c · violet class-change cut, for contrast (strength class) -->
     <div class="panel">
       <h2>5c · Class-change cut stays violet (for contrast)</h2>
       <div class="device">
         <div class="cut violet cream">
           <div class="ceyebrow">New class</div>
-          <div class="cbig">WAYFARER</div>
-          <div class="csub">The road has named you.</div>
+          <div class="cbig">SENTINEL</div>
+          <div class="csub">The iron has named you.</div>
         </div>
       </div>
-      <div class="smallnote">Class-change cuts keep <code>hotViolet</code> — they are NOT recolored teal even when the new class is the cardio descriptor WAYFARER. Cream-on-violet (<code>#F2EEF7</code> on <code>#B36DFF</code>) holds AA. The teal flood is reserved for the <b>rank-up</b> cut; the violet flood for the <b>class-change</b> cut.</div>
+      <div class="smallnote">Class-change cuts keep <code>hotViolet</code> with cream copy — the cardio teal flood is reserved for the <b>rank-up</b> cut only. Class changes are STRENGTH-only (cardio is excluded from class resolution), so the new-class cut always names a strength class (e.g. <b style="color:var(--violet)">SENTINEL</b>). Cream-on-violet (<code>#F2EEF7</code> on <code>#B36DFF</code>) holds AA.</div>
     </div>
   </div>
 
@@ -1055,7 +953,7 @@
     • <b style="color:var(--cream)">Saga rail</b>: delete <code>dormant_cardio_row.dart</code> + the <code>dormant-cardio-row</code> block in <code>character_sheet_screen.dart:127-135</code>. The provider auto-emits a 7th <code>BodyPartSheetEntry</code> for cardio; group it apart with a <code>Divider(surface2)</code> + 8dp gap + a teal-tint band wrapper (<code>bodyPartCardio@0.05</code> bg, <code>@0.16</code> top/bottom hairlines) carrying a <code>CARDIO</code> eyebrow. Reuse <code>BodyPartRankRow</code> verbatim inside the band — trained = pulsing dot + rank + bar + XP/XP; untrained = dimmed dot + <code>—</code> + no bar (its existing <code>_UntrainedRow</code> branch already does this once <code>isUntrained</code> is true).<br>
     • <b style="color:var(--cream)">Vitality two-speed</b>: per-bp τ (cardio 21d / strength 42d) in <code>VitalityCalculator</code> + <code>vitality-nightly</code> + parity. Cardio table row = same banded language, decay subtitle <b>"Conditioning fades in ~3 weeks" / "Condicionamento cai em ~3 semanas"</b>. Chart = 7th teal line (brighter, steeper). One-time stats explainer (slim teal hairline) — <b>"Cardio conditioning decays faster than strength — train it weekly to hold the line."</b> / <b>"O condicionamento cardio decai mais rápido que a força — treine semanalmente para manter o ritmo."</b><br>
     • <b style="color:var(--cream)">CardioEntryRow</b> (new sibling of <code>lift_row.dart</code>): teal dot, activity name (Expanded ellipsis), duration as the right-aligned Rajdhani-700 teal hero, distance/pace dim suffix via <code>CardioFormat</code> only when present, <code>FittedBox(scaleDown)</code> on the value group for the 320dp crowded case. <b>No PR param, no heroGold.</b> Insert in <code>mission_debrief_section.dart</code> alongside the strength <code>topLifts</code> loop (the controller must surface cardio entries; today it loops strength-only).<br>
-    • <b style="color:var(--cream)">Compound class</b>: <code>+wayfarer</code> on <code>CharacterClass</code> (+slug +l10n) · <code>dominantClass[cardio]=wayfarer</code> · <b>carve cardio OUT of the Ascendant spread</b> while keeping it in the dominant lookup. Render in <code>saga_header.dart</code> as a two-tone single line: strength in <code>classTextColor</code> (violet), <code>·WAYFARER</code> in <code>bodyPartCardio@0.72</code> smaller + wider tracking. <b>Day-zero (cardio untrained) = strength alone, no trailing middot.</b><br>
+    • <b style="color:var(--cream)">Class pin (NO cardio class)</b>: pin <code>class_resolver.dart</code> + <code>class_provider.dart</code> to <code>strengthBodyParts</code> (the six strength tracks) so cardio — now in <code>activeBodyParts</code> for Character Level — never enters class / Ascendant resolution. <b>No Wayfarer variant, no <code>dominantClass[cardio]</code>, no compound label, no <code>class_wayfarer</code> l10n; <code>saga_header.dart</code> untouched.</b> Cardio recognition ships as cardio titles (Phase 38f).<br>
     • <b style="color:var(--cream)">Celebrations</b>: cardio rank-up B2 floods <code>bodyPartCardio</code> (teal) — <b>use dark-ink (<code>abyss</code>) cut copy</b>, NOT cream (cream-on-teal fails AA). Class-change cut stays <code>hotViolet</code> with cream copy (holds AA).<br>
     • <b style="color:var(--cream)">Thesis guard</b>: a pure-strength user's character level must NEVER regress post-flip — denominator-stays-4 named test required. char-level computed-max → 172; the <code>saga_eternal</code> title threshold stays 148 (the 172-cap title is 38f).
   </div>

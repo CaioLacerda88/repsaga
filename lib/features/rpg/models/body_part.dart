@@ -6,9 +6,11 @@
 /// SQL means a backfill replay produces different rows than a live save.
 ///
 /// `cardio` is in the enum so the schema, repositories, and UI plumbing all
-/// accept it day one. v1 earns no XP from cardio; the constant
-/// [activeBodyParts] excludes it from Character Level computation. Phase 18b+
-/// flips `cardio` into `activeBodyParts` without a schema rework.
+/// accept it day one. As of Phase 38e it is a fully active progression track:
+/// [activeBodyParts] includes it (it contributes to Character Level) while
+/// [strengthBodyParts] keeps the six-track strength-only set for the class
+/// resolver / Ascendant spread (cardio earns recognition via cardio titles,
+/// not a class).
 enum BodyPart {
   chest,
   back,
@@ -43,11 +45,31 @@ enum BodyPart {
   }
 }
 
-/// The body parts that contribute to Character Level in v1 (six strength
-/// tracks). Cardio (v2) is intentionally excluded — when v2 ships, this list
-/// gains `BodyPart.cardio` and the denominator in
-/// `characterLevel(...)` is unchanged.
+/// The body parts that contribute to Character Level (Phase 38e: the six
+/// strength tracks PLUS cardio — seven active tracks). The denominator in
+/// `characterLevel(...)` stays 4; only the per-part rank SUM grows, so a
+/// pure-strength user's level never regresses (cardio at rank 1 contributes
+/// `rank - 1 = 0` to the numerator). `cardio` is appended LAST so the six
+/// strength tracks keep their original order across every consumer that
+/// iterates this list (the Saga rail, the provider projection, etc.).
 const List<BodyPart> activeBodyParts = [
+  BodyPart.chest,
+  BodyPart.back,
+  BodyPart.legs,
+  BodyPart.shoulders,
+  BodyPart.arms,
+  BodyPart.core,
+  BodyPart.cardio,
+];
+
+/// The six strength tracks ONLY — the input set for class resolution
+/// ([ClassResolver] / Ascendant spread). Cardio lives in [activeBodyParts]
+/// (it counts toward Character Level) but is deliberately EXCLUDED from the
+/// class system: cardio recognition ships as cardio titles, not a class, so
+/// a cardio-dominant distribution must never resolve to or perturb the
+/// strength class / Ascendant balance check. Keep this list in strength
+/// order; do not add cardio.
+const List<BodyPart> strengthBodyParts = [
   BodyPart.chest,
   BodyPart.back,
   BodyPart.legs,

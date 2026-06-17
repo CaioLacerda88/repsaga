@@ -48,6 +48,113 @@ void main() {
     });
   });
 
+  group('Two-speed decay — cardio τ_down = 21d (Phase 38e)', () {
+    test('strength τ_down = 42d, cardio τ_down = 21d', () {
+      expect(VitalityCalculator.tauDownStrengthDays, 42.0);
+      expect(VitalityCalculator.tauDownCardioDays, 21.0);
+      // Legacy alias keeps the strength value.
+      expect(VitalityCalculator.tauDownDays, 42.0);
+    });
+
+    test('tauDownForBodyPart: cardio → 21d, strength tracks → 42d', () {
+      expect(VitalityCalculator.tauDownForBodyPart('cardio'), 21.0);
+      for (final bp in const [
+        'chest',
+        'back',
+        'legs',
+        'shoulders',
+        'arms',
+        'core',
+      ]) {
+        expect(VitalityCalculator.tauDownForBodyPart(bp), 42.0);
+      }
+    });
+
+    test('cardio α_down ≈ 0.2835 (1 - exp(-7/21)) — faster than strength', () {
+      // Closed-form: 1 - e^(-7/21) = 1 - e^(-1/3) ≈ 0.2834687.
+      expect(
+        VitalityCalculator.alphaDownFor(VitalityCalculator.tauDownCardioDays),
+        closeTo(0.2834687, 1e-6),
+      );
+      // The faster cardio clock yields a LARGER α_down than strength's
+      // 0.1535 — more of the (lower) weekly volume is mixed in each decay
+      // step, so conditioning falls quicker.
+      expect(
+        VitalityCalculator.alphaDownFor(VitalityCalculator.tauDownCardioDays),
+        greaterThan(VitalityCalculator.alphaDown),
+      );
+    });
+
+    test(
+      'step(cardio τ) decays faster than step(strength τ) from same prior',
+      () {
+        // Same prior EWMA + a weekly volume BELOW it (decay branch). Cardio's
+        // larger α_down pulls the EWMA closer to the (lower) weekly volume, so
+        // the resulting EWMA is strictly LOWER than the strength decay — a
+        // faster fall. Closed-form EWMA: α·vol + (1-α)·prior.
+        const priorEwma = 100.0;
+        const weeklyVolume = 0.0; // a fully-skipped week
+        final strengthStep = VitalityCalculator.step(
+          priorEwma: priorEwma,
+          priorPeak: priorEwma,
+          weeklyVolume: weeklyVolume,
+          tauDownDays: VitalityCalculator.tauDownStrengthDays,
+        );
+        final cardioStep = VitalityCalculator.step(
+          priorEwma: priorEwma,
+          priorPeak: priorEwma,
+          weeklyVolume: weeklyVolume,
+          tauDownDays: VitalityCalculator.tauDownCardioDays,
+        );
+        // Strength: (1-0.1535)·100 ≈ 84.65. Cardio: (1-0.2835)·100 ≈ 71.65.
+        expect(strengthStep.ewma, closeTo(84.6481725, 1e-5));
+        expect(cardioStep.ewma, closeTo(71.6531311, 1e-5));
+        expect(cardioStep.ewma, lessThan(strengthStep.ewma));
+        // Peak is permanent — unchanged by a decay step for both.
+        expect(strengthStep.peak, priorEwma);
+        expect(cardioStep.peak, priorEwma);
+      },
+    );
+
+    test('step defaults to strength τ when tauDownDays omitted', () {
+      // Back-compat: existing call sites that don't pass tauDownDays keep the
+      // 42d strength decay exactly.
+      final defaulted = VitalityCalculator.step(
+        priorEwma: 100,
+        priorPeak: 100,
+        weeklyVolume: 0,
+      );
+      final explicit = VitalityCalculator.step(
+        priorEwma: 100,
+        priorPeak: 100,
+        weeklyVolume: 0,
+        tauDownDays: VitalityCalculator.tauDownStrengthDays,
+      );
+      expect(defaulted.ewma, explicit.ewma);
+    });
+
+    test(
+      'rebuild (volume ≥ prior) uses the SHARED α_up for cardio + strength',
+      () {
+        // τ_up is shared — retraining speed is identical for both stats; only
+        // the DECAY clock differs. A rebuilding step ignores tauDownDays.
+        final cardioRebuild = VitalityCalculator.step(
+          priorEwma: 50,
+          priorPeak: 50,
+          weeklyVolume: 100,
+          tauDownDays: VitalityCalculator.tauDownCardioDays,
+        );
+        final strengthRebuild = VitalityCalculator.step(
+          priorEwma: 50,
+          priorPeak: 50,
+          weeklyVolume: 100,
+          tauDownDays: VitalityCalculator.tauDownStrengthDays,
+        );
+        expect(cardioRebuild.ewma, strengthRebuild.ewma);
+      },
+    );
+  });
+
   group('step — single update', () {
     test('starting from zero, weeklyVolume=100 ramps up via α_up', () {
       final s = VitalityCalculator.step(

@@ -40,8 +40,10 @@ import '../models/body_part.dart';
 ///                   the visible specialist rank (§9.1 Berserker).
 ///   * `core`      → [AppColors.textDim]      — neutral spine tone; core
 ///                   stabilises but doesn't lead the eye.
-///   * `cardio`    → [AppColors.hair]         — muted hairline; v2 track,
-///                   intentionally desaturated until earnable.
+///   * `cardio`    → [AppColors.bodyPartCardio] — teal (#22D3EE); the cardio
+///                   identity hue (Phase 38e). Flows to the Saga rail row,
+///                   the B2 rank-up flood, the vitality trend-chart line,
+///                   and the vitality table cell for free via this map.
 ///
 /// `heroGold` is intentionally NOT in this map — it stays scarce as the
 /// reward token reserved for the `radiant` state and §13.2 rank-up
@@ -59,7 +61,7 @@ class BodyPartHues {
     BodyPart.shoulders: AppColors.warning,
     BodyPart.arms: AppColors.error,
     BodyPart.core: AppColors.textDim,
-    BodyPart.cardio: AppColors.hair,
+    BodyPart.cardio: AppColors.bodyPartCardio,
   };
 
   /// Convenience accessor with a fallback to `hotViolet` (the defensive

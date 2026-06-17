@@ -182,11 +182,11 @@ abstract class AppLocalizations {
   /// **'Ascendant'**
   String get classAscendant;
 
-  /// Subtitle on the dormant Cardio row of the character sheet — communicates that cardio is intentionally not yet active.
+  /// Display name of the cardio progression track (Phase 38e) — the conditioning STAT, shown on the Saga rail cardio row, the vitality table cardio cell, and the cardio rank-up celebration eyebrow. Distinct from muscleGroupCardio ('Cardio'), which labels the exercise muscle group in the picker.
   ///
   /// In en, this message translates to:
-  /// **'Cardio runes awaken in a future chapter.'**
-  String get dormantCardioCopy;
+  /// **'Conditioning'**
+  String get cardioTrackLabel;
 
   /// Inline banner shown on the character sheet when the user has zero lifetime XP (Phase 18b onboarding gate).
   ///

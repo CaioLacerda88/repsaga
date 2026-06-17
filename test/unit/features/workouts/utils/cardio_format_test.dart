@@ -99,4 +99,46 @@ void main() {
       expect(CardioFormat.parseDistanceToMeters('abc', 'km'), isNull);
     });
   });
+
+  group('CardioFormat.paceSecondsPerKm (Phase 38e)', () {
+    test('derives canonical seconds-per-km from duration + distance', () {
+      // 28:45 (1725s) over 5.2 km → 331.7 s/km.
+      expect(
+        CardioFormat.paceSecondsPerKm(durationSeconds: 1725, distanceM: 5200),
+        closeTo(331.73, 0.01),
+      );
+    });
+
+    test('null when distance is absent / zero / negative', () {
+      expect(
+        CardioFormat.paceSecondsPerKm(durationSeconds: 1725, distanceM: null),
+        isNull,
+      );
+      expect(
+        CardioFormat.paceSecondsPerKm(durationSeconds: 1725, distanceM: 0),
+        isNull,
+      );
+      expect(
+        CardioFormat.paceSecondsPerKm(durationSeconds: 0, distanceM: 5200),
+        isNull,
+      );
+    });
+  });
+
+  group('CardioFormat.pace (display m:ss/unit)', () {
+    test('km pace formats as m:ss/km', () {
+      // 331.73 s/km → 5:32/km (rounded).
+      expect(CardioFormat.pace(331.73, distanceUnit: 'km'), '5:32/km');
+    });
+
+    test('mi pace scales canonical per-km to per-mile', () {
+      // 300 s/km × (1609.344/1000) ≈ 482.8 s/mi → 8:03/mi.
+      expect(CardioFormat.pace(300, distanceUnit: 'mi'), '8:03/mi');
+    });
+
+    test('null for non-positive pace', () {
+      expect(CardioFormat.pace(0, distanceUnit: 'km'), isNull);
+      expect(CardioFormat.pace(-10, distanceUnit: 'km'), isNull);
+    });
+  });
 }

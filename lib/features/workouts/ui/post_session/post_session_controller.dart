@@ -13,9 +13,11 @@ import '../../../rpg/providers/rpg_progress_provider.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
+import '../../domain/session_cardio_summary.dart';
 import '../../domain/session_lift_summary.dart';
 import '../../models/active_workout_state.dart';
 import '../../providers/workout_history_providers.dart';
+import '../../utils/cardio_format.dart';
 import '../../utils/set_filters.dart';
 import 'post_session_state.dart';
 
@@ -235,6 +237,14 @@ class PostSessionController extends ChangeNotifier {
       (e) => e.cardioSession?.isCompleted ?? false,
     );
 
+    // Phase 38e — project completed cardio entries for the S2 Mission Debrief
+    // ledger. Unit-agnostic (raw meters / seconds + canonical per-km pace);
+    // the section/screen format to the profile distance unit at paint time.
+    final cardioEntries = _projectCardioEntries(
+      exercises: params.exercises,
+      exerciseNames: params.exerciseNames,
+    );
+
     // Defensive: for any BP that earned XP but is missing from
     // `params.bpRankBefore` (e.g. legacy fixtures, pre-Blocker-1 callers),
     // fall back to `bpRankAfter - 1` clamped to 1. The fallback only ever
@@ -262,6 +272,7 @@ class PostSessionController extends ChangeNotifier {
       bpRankAfter: Map.unmodifiable(bpRankAfter),
       bpRankBefore: Map.unmodifiable(bpRankBeforeResolved),
       topLifts: List.unmodifiable(topLifts),
+      cardioEntries: List.unmodifiable(cardioEntries),
       totalExercisesTrained: totalExercisesTrained,
       totalXpEarned: params.totalXpEarned,
       priorFinishedWorkoutCount: params.priorFinishedWorkoutCount,
@@ -378,6 +389,40 @@ class PostSessionController extends ChangeNotifier {
 
     if (rows.length <= _maxTopLifts) return rows;
     return rows.sublist(0, _maxTopLifts);
+  }
+
+  /// Project the session's COMPLETED cardio entries into
+  /// [SessionCardioSummary] rows for the S2 Mission Debrief ledger (Phase
+  /// 38e). Preserves the workout's exercise order. Drops incomplete entries
+  /// (only "Concluir cardio"-tapped sessions persist + surface). Pace is
+  /// derived canonically (seconds-per-km) only when a positive distance is
+  /// present; the widget layer converts to the display unit.
+  static List<SessionCardioSummary> _projectCardioEntries({
+    required List<ActiveWorkoutExercise> exercises,
+    required Map<String, String> exerciseNames,
+  }) {
+    final rows = <SessionCardioSummary>[];
+    for (final entry in exercises) {
+      final cardio = entry.cardioSession;
+      if (cardio == null || !cardio.isCompleted) continue;
+      final exerciseId = entry.workoutExercise.exerciseId;
+      rows.add(
+        SessionCardioSummary(
+          exerciseId: exerciseId,
+          activityName:
+              exerciseNames[exerciseId] ??
+              entry.workoutExercise.exercise?.name ??
+              exerciseId,
+          durationSeconds: cardio.durationSeconds,
+          distanceM: cardio.distanceM,
+          paceSecondsPerKm: CardioFormat.paceSecondsPerKm(
+            durationSeconds: cardio.durationSeconds,
+            distanceM: cardio.distanceM,
+          ),
+        ),
+      );
+    }
+    return rows;
   }
 
   /// Resolve an exercise to its dominant body part for debrief grouping.

@@ -101,6 +101,35 @@ BEFORE build, + visual-verification gate before merge.**
 
 **Tests to rewrite (assert old 6/148/cardio-excluded):** `attribution_test.dart:212-215` (length==6, !contains cardio), `class_resolver_test.dart:209` (Ascendant excludes cardio), `vitality_state_styles_test.dart:103`, `vitality_trend_chart_test.dart:99,132,229`, `vitality_table_test.dart:45`, `character_sheet_screen_test.dart:254,303,338,354-355` (findsNWidgets(6) + DormantCardioRow), `character_card_test.dart:752,759,839`, `rank_curve_test.dart:274,284`, fixtures. E2E: `selectors.ts:1468-1469` (`dormantCardioRow`→cardio row), `saga.spec.ts` class/level, `rank-up-celebration.spec.ts` parity levels, `rpg-foundation.spec.ts` levels.
 
+### Implementation checklist (tech-lead, 2026-06-17) — branch `feature/phase38e-cardio-activation`
+**Layer 1 — Vitality two-speed (net-new):**
+- [x] `vitality_calculator.dart`: per-bp τ_down (cardio 21d, strength 42d); `alphaDownFor` + `step({tauDownDays})` + `tauDownForBodyPart`.
+- [x] `vitality-nightly/index.ts`: `stepEwma({tauDownDays})`; loop 7-part `ACTIVE_BODY_PARTS`; cardio τ=21d; `aggregateAttribution` +cardio key.
+- [x] Parity: EWMA closed-form cardio decay (Dart unit — cardio α_down ≈ 0.2835, faster fall than strength).
+
+**Layer 2 — The flip (atomic):**
+- [x] `body_part.dart` `activeBodyParts` +cardio; new `strengthBodyParts` const.
+- [x] `rank_curve.dart` `_activeKeys` +`'cardio'`; denom `~/4` stays.
+- [x] `character_xp_calculator.dart` `_activeKeys` +`'cardio'`.
+- [x] Migration `00080`: `character_state` view + the 4 in-RPC level snapshots → new `rpg_active_body_part_level(uuid)` helper (7-part list in ONE place). Backfill chunk has NO level filter — confirmed + unchanged. Applied to LOCAL via `db reset`.
+- [x] `class_resolver.dart` + `class_provider.dart` → `strengthBodyParts` subset (cardio OUT of class/Ascendant). NO Wayfarer.
+
+**Layer 3 — Hue:**
+- [x] `body_part_hues.dart` cardio `hair`→`bodyPartCardio` (flows to rows/flood/chart/table via the shim).
+
+**Layer 4 — Widgets (LOCKED mockup 38e Surfaces 1/2/3):**
+- [x] Mockup: deleted dead Surface 4 (+A/B note), fixed 5c (SENTINEL not Wayfarer), trimmed build-notes compound-class bullet, updated header.
+- [x] `CardioProgressRow` (banded; alive + untrained dimmed-teal variant); wired into `character_sheet_screen.dart` AND `character_card.dart` (home); retired `dormant_cardio_row.dart` + its Semantics block.
+- [x] `CardioEntryRow` (post-session debrief; teal dot, duration hero, dim suffix, FittedBox 320dp, NO PR/gold); `SessionCardioSummary` model + controller projection + `mission_debrief_section.dart` insert + screen passes distanceUnit/locale.
+- [x] l10n: `cardioTrackLabel` (CONDITIONING/CONDICIONAMENTO) en+pt; dead `dormantCardioCopy` removed.
+- [x] **SPLIT VALVE — DEFERRED → 38e-bis:** vitality table per-row cardio decay subtitle ("Conditioning fades in ~3 weeks") + one-time stats explainer note + chart legend cardio-chip label. NOTE: the table cardio ROW + the trend-chart 7th teal LINE already auto-extend (stats surfaces iterate activeBodyParts + read the hue map) — only the decay-subtitle COPY + explainer banner are deferred. Minimum coherent flip is fully atomic in this PR.
+
+**Layer 5 — Fixtures + tests:**
+- [x] `generate_rpg_fixtures.py` 7-key (+ never-regress 6×20+cardio-1=29 case); regen `rpg_xp_fixtures.json` (all-99→172).
+- [x] Rewrote 6/148/cardio-excluded tests (attribution, rank_curve, class_resolver, character_sheet_provider, stats_provider, vitality_state_styles, character_card, character_sheet_screen, rpg_acceptance). Added: never-regress (named thesis test), char-level-with-cardio, class-strength-only + Wayfarer-absent + Ascendant-cardio-noise, CardioProgressRow/CardioEntryRow states (incl untrained + 320dp), vitality cardio τ two-speed, CardioFormat.pace.
+- [x] l10n en+pt + `@key`; `gen-l10n`; `arb_completeness` green.
+- [x] Non-integration suite: 3727 pass / 0 fail / 1 skip. Cardio sim 14/14. Integration: running.
+
 ### Pipeline checklist
 - [ ] Boundary Explore → fill the inventory (the load-bearing step — nothing builds until filled).
 - [ ] product-owner thesis gut-check (cardio = separate-but-equal 7th track; Wayfarer; Ascendant stays strength-only) — plan-locked, quick confirm.

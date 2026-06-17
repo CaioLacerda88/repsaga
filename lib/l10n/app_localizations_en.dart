@@ -51,7 +51,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get classAscendant => 'Ascendant';
 
   @override
-  String get dormantCardioCopy => 'Cardio runes awaken in a future chapter.';
+  String get cardioTrackLabel => 'Conditioning';
 
   @override
   String get firstSetAwakensCopy => 'Your first set awakens this path.';

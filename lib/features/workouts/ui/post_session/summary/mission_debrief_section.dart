@@ -4,8 +4,10 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/domain/body_part_hues.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/models/celebration_event.dart';
+import '../../../utils/cardio_format.dart';
 import '../post_session_state.dart';
 import 'mission_debrief_localizations.dart';
+import 'widgets/cardio_entry_row.dart';
 import 'widgets/lift_row.dart';
 import 'widgets/xp_segmented_bar.dart';
 
@@ -46,7 +48,16 @@ class MissionDebriefSection extends StatelessWidget {
     required this.localizations,
     required this.state,
     this.classLabel,
+    this.distanceUnit = 'km',
+    this.locale = 'en',
   });
+
+  /// Display distance unit ("km" / "mi") derived from the profile weight
+  /// unit. Drives cardio-row distance + pace formatting via [CardioFormat].
+  final String distanceUnit;
+
+  /// Language code for locale-aware cardio distance decimal separators.
+  final String locale;
 
   /// Pre-localized string bundle from the screen layer.
   final MissionDebriefLocalizations localizations;
@@ -192,6 +203,34 @@ class MissionDebriefSection extends StatelessWidget {
                 peakWeightKg: state.topLifts[i].peakWeightKg,
                 prLabel: state.topLifts[i].isPR ? localizations.prFlag : null,
                 weightUnitLabel: localizations.weightUnit,
+              ),
+            ),
+          ],
+
+          // Cardio rows (Phase 38e) — rendered in the SAME ledger, after the
+          // strength lift rows, so a mixed session reads coherent. Sourced
+          // from `state.cardioEntries` (completed cardio entries), NOT from
+          // `topLifts` (cardio earns no strength-XP delta). No PR / heroGold.
+          for (var i = 0; i < state.cardioEntries.length; i++) ...[
+            if (i > 0 || state.topLifts.isNotEmpty) const SizedBox(height: 8),
+            Semantics(
+              container: true,
+              explicitChildNodes: true,
+              identifier: 'mission-debrief-cardio-row-$i',
+              child: CardioEntryRow(
+                activityName: state.cardioEntries[i].activityName,
+                durationLabel: CardioFormat.duration(
+                  state.cardioEntries[i].durationSeconds,
+                ),
+                distanceSuffix: state.cardioEntries[i].distanceM == null
+                    ? null
+                    : '${CardioFormat.distanceValue(state.cardioEntries[i].distanceM!, distanceUnit: distanceUnit, locale: locale)} $distanceUnit',
+                paceSuffix: state.cardioEntries[i].paceSecondsPerKm == null
+                    ? null
+                    : CardioFormat.pace(
+                        state.cardioEntries[i].paceSecondsPerKm!,
+                        distanceUnit: distanceUnit,
+                      ),
               ),
             ),
           ],
