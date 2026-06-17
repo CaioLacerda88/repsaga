@@ -14,9 +14,11 @@
 ///   2. **Re-save idempotency (BUG-RPG-001)** — saving the same workout twice
 ///      does NOT double the cardio XP. The reversal reverts the cardio
 ///      attribution; record_cardio_session re-adds from scratch.
-///   3. **Cardio is invisible to character level** — a cardio-only workout
-///      leaves `character_state.character_level` at 1 (cardio is NOT an active
-///      body part; that's Phase 38d).
+///   3. **Cardio counts toward character level (Phase 38e)** — cardio is now
+///      an active track in `character_state`, so earning cardio XP raises the
+///      established character level once cardio crosses rank 1. (The
+///      never-regress invariant still holds: cardio at rank 1 leaves the
+///      level unchanged because Σ ranks and N_active both gain 1.)
 ///   4. **est-VO₂max writeback** — a run WITH distance updates
 ///      `profiles.cardio_vo2max` to the pace-derived rolling best-of.
 ///
@@ -132,17 +134,18 @@ void main() {
       expect(liveXp, greaterThan(0));
     });
 
-    test('cardio XP does NOT change an ESTABLISHED character level (stays out '
-        'of character_state — Phase 38d gate)', () async {
+    test('cardio XP DOES raise the established character level '
+        '(Phase 38e — cardio is now an active track)', () async {
       final adminClient = serviceRoleClient();
       final user = await freshUser();
       final client = authenticatedClient(user);
 
       // Establish a NON-trivial character level via the 6 strength parts first.
-      // Level = GREATEST(1, FLOOR((SUM(rank) - COUNT(*)) / 4) + 1). Six parts
-      // at rank 5 → FLOOR((30-6)/4)+1 = 7. (A cardio-only workout would leave
-      // level at the floor of 1 regardless, making the assertion vacuous — this
-      // is the load-bearing version that actually pins the 38d gate.)
+      // Level = GREATEST(1, FLOOR((SUM(rank) - COUNT(*)) / 4) + 1). Phase 38e
+      // counts SEVEN active parts (cardio joined), but with cardio still at
+      // rank 1 the numerator is unchanged: six parts at rank 5 + cardio rank 1
+      // → FLOOR((31-7)/4)+1 = 7 (the never-regress invariant — same level the
+      // pre-38e 6-part math produced).
       for (final bp in const [
         'chest',
         'back',
@@ -168,7 +171,9 @@ void main() {
       expect(
         levelBefore,
         7,
-        reason: 'six strength parts at rank 5 must establish character level 7',
+        reason:
+            'six strength parts at rank 5 (+ cardio rank 1) must establish '
+            'character level 7 — never-regress invariant holds',
       );
 
       // Now save a cardio workout (earns cardio body_part_progress).
@@ -198,32 +203,56 @@ void main() {
         },
       );
 
-      // Cardio body_part_progress grew...
+      // Cardio body_part_progress grew + reached a real rank...
       final cardio = await client
           .from('body_part_progress')
-          .select('total_xp')
+          .select('total_xp, rank')
           .eq('body_part', 'cardio')
           .single();
+      final cardioMap = cardio as Map;
+      final cardioXp = (cardioMap['total_xp'] as num).toDouble();
+      final cardioRank = (cardioMap['rank'] as num).toInt();
       expect(
-        ((cardio as Map)['total_xp'] as num).toDouble(),
+        cardioXp,
         greaterThan(0),
         reason: 'the cardio save must have written body_part_progress[cardio]',
       );
+      expect(
+        cardioRank,
+        greaterThan(1),
+        reason:
+            'a 40-min treadmill must push cardio past rank 1 so the '
+            'level delta is observable',
+      );
 
-      // ...but the established character level is UNCHANGED — character_state
-      // filters to the 6 strength parts, so cardio rank never enters the math.
+      // ...and the established character level NOW rises — Phase 38e flipped
+      // cardio into the active set, so character_state includes it. Pin the
+      // EXACT new level from the deterministic formula over the SEVEN active
+      // parts (six strength at rank 5 + cardio at its earned rank).
       final csAfter = await client
           .from('character_state')
           .select('character_level')
           .single();
       final levelAfter = ((csAfter as Map)['character_level'] as num).toInt();
+      // GREATEST(1, FLOOR((SUM(rank) - COUNT(*)) / 4) + 1) over 7 parts:
+      // SUM = 6*5 + cardioRank, COUNT = 7.
+      final sumRanks = 6 * 5 + cardioRank;
+      final expectedLevel = (((sumRanks - 7) / 4).floor() + 1).clamp(
+        1,
+        1 << 30,
+      );
       expect(
         levelAfter,
-        levelBefore,
+        expectedLevel,
         reason:
-            'cardio XP must NOT change the established character level until '
-            'Phase 38d flips cardio into the active set '
+            'Phase 38e: cardio now contributes to character level — '
+            'six strength@5 + cardio@$cardioRank → level $expectedLevel '
             '(before=$levelBefore, after=$levelAfter)',
+      );
+      expect(
+        levelAfter,
+        greaterThan(levelBefore),
+        reason: 'cardio reaching rank $cardioRank (>1) must raise the level',
       );
     });
 

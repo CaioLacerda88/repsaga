@@ -73,6 +73,37 @@ abstract final class CardioFormat {
     );
   }
 
+  /// Pace in the display unit as `m:ss/unit` (e.g. `5:31/km`, `8:53/mi`).
+  ///
+  /// [paceSecondsPerKm] is canonical seconds-per-kilometer; for imperial
+  /// lifters it is scaled to seconds-per-mile ([metersPerMile] / 1000) so
+  /// the value reads in the same distance unit the rest of the row uses.
+  /// Returns null when pace is non-positive (no meaningful pace).
+  static String? pace(double paceSecondsPerKm, {required String distanceUnit}) {
+    if (paceSecondsPerKm <= 0) return null;
+    final perUnit = distanceUnit == 'mi'
+        ? paceSecondsPerKm * (metersPerMile / metersPerKm)
+        : paceSecondsPerKm;
+    final total = perUnit.round();
+    final minutes = total ~/ 60;
+    final seconds = total % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}/$distanceUnit';
+  }
+
+  /// Canonical pace (seconds per km) for a completed cardio entry, or null
+  /// when distance is absent / non-positive (pace is undefined). Pure
+  /// derivation reused by the post-session debrief projection.
+  static double? paceSecondsPerKm({
+    required int durationSeconds,
+    required double? distanceM,
+  }) {
+    if (distanceM == null || distanceM <= 0 || durationSeconds <= 0) {
+      return null;
+    }
+    final km = distanceM / metersPerKm;
+    return durationSeconds / km;
+  }
+
   /// Parses a user-entered distance (display unit) accepting `.` or `,` as
   /// the decimal separator, returning canonical METERS. Null for invalid /
   /// negative input.

@@ -1214,6 +1214,94 @@ async function seedRpgOverflowQueueUser(
 }
 
 
+/**
+ * Seed rpgCardioActiveUser (Phase 38e): cardio is a TRAINED 7th track so the
+ * Saga rail renders the alive CardioProgressRow (pulsing teal dot, rank
+ * numeral, teal within-rank bar) grouped apart below the strength rows.
+ *
+ * Pre-state (deterministic, written directly to body_part_progress — no
+ * workout/backfill needed since the sheet reads body_part_progress):
+ *   * cardio: rank 5 / 168 XP  → trained → pulsing alive row + bar
+ *   * chest:  rank 3 / 157 XP  → a couple of strength rows so the rail reads
+ *   * legs:   rank 3 / 157 XP    as a real multi-track sheet (not cardio-only)
+ *
+ * Character level over the SEVEN active tracks (denominator 4):
+ *   sum = 5 + 3 + 3 = 11 over N = 3 present rows → floor((11-3)/4)+1 = 3.
+ * (The level math is incidental here; the test asserts the cardio row renders
+ * + routes, not a specific level — the never-regress thesis is pinned by the
+ * named Dart unit test, not this E2E seed.)
+ *
+ * Reseeds fully on every run for determinism.
+ */
+async function seedRpgCardioActiveUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  await supabase.from('workouts').delete().eq('user_id', userId);
+  await supabase.from('xp_events').delete().eq('user_id', userId);
+  await supabase.from('body_part_progress').delete().eq('user_id', userId);
+  await supabase.from('exercise_peak_loads').delete().eq('user_id', userId);
+  await supabase.from('backfill_progress').delete().eq('user_id', userId);
+  await supabase.from('earned_titles').delete().eq('user_id', userId);
+
+  // Mark backfill complete so SagaIntroGate doesn't re-run it (the seeded
+  // body_part_progress is the source of truth for the sheet).
+  await supabase.from('backfill_progress').upsert(
+    {
+      user_id: userId,
+      sets_processed: 0,
+      started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
+
+  await supabase.from('profiles').upsert(
+    {
+      id: userId,
+      display_name: 'Cardio Active User',
+      fitness_level: 'intermediate',
+      onboarded_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+
+  // cardio trained (rank 5 / 168 XP) + two strength tracks so the rail reads
+  // as a real multi-track sheet. vitality_peak > 0 keeps the cardio entry out
+  // of the untrained branch (isUntrained requires rank 1 + 0 XP + 0 peak).
+  const seed: Array<{ bp: string; xp: number; rank: number }> = [
+    { bp: 'cardio', xp: 168, rank: 5 },
+    { bp: 'chest', xp: 157, rank: 3 },
+    { bp: 'legs', xp: 157, rank: 3 },
+  ];
+  for (const { bp, xp, rank } of seed) {
+    const { error } = await supabase.from('body_part_progress').upsert(
+      {
+        user_id: userId,
+        body_part: bp,
+        total_xp: xp,
+        rank,
+        vitality_ewma: 0.58,
+        vitality_peak: 0.92,
+      },
+      { onConflict: 'user_id,body_part' },
+    );
+    if (error) {
+      console.log(
+        `[global-setup] Warning: body_part_progress seed error (${bp}) for rpgCardioActiveUser: ${error.message}`,
+      );
+    }
+  }
+
+  // Prior minimal workout so the app lands in lapsed state (not the day-0 CTA).
+  await seedMinimalWorkout(supabase, userId);
+
+  console.log(
+    '[global-setup] Seeded rpgCardioActiveUser (cardio rank 5 / 168 XP — trained CardioProgressRow on the Saga rail)',
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Per-role seed helpers extracted for the per-worker orchestration loop.
 // Each helper takes a `supabase` admin client + a `userId` and applies the
@@ -1850,6 +1938,11 @@ function buildRoleSeedRunners(): Record<
     rpgTitleEquipUser: async (supabase, userId) => {
       await cleanFreshStateUser(supabase, userId);
       await seedRpgTitleEquipUser(supabase, userId);
+    },
+
+    // ── Phase 38e cardio activation (visible 7th track) ──────────────────
+    rpgCardioActiveUser: async (supabase, userId) => {
+      await seedRpgCardioActiveUser(supabase, userId);
     },
   };
 }

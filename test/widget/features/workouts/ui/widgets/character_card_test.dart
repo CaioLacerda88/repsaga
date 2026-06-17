@@ -39,6 +39,7 @@ import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
+import 'package:repsaga/features/rpg/ui/widgets/cardio_progress_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
 import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
@@ -121,6 +122,10 @@ CharacterSheetState _trainedSheet() {
       _untrained(BodyPart.shoulders),
       _untrained(BodyPart.arms),
       _untrained(BodyPart.core),
+      // Phase 38e — the provider emits a 7th cardio entry; render it as the
+      // banded CardioProgressRow. Trained here so the card shows a real
+      // cardio rank.
+      _trained(BodyPart.cardio, rank: 5, xpInRank: 40, xpForNextRank: 100),
     ],
     activeTitle: 'chest_r5_initiate_of_the_forge',
     characterClass: CharacterClass.bulwark,
@@ -478,6 +483,76 @@ void main() {
     });
 
     testWidgets(
+      'dominant identity chip stays strength-pure even when cardio out-ranks '
+      'every strength part',
+      (tester) async {
+        // Scope decision (locked): class/identity stays pure 6-strength;
+        // cardio is a separate track recognized via titles, NOT an identity.
+        // `_dominantTrainedEntry` must skip BodyPart.cardio so the headline
+        // dominant chip is always a strength part — never the teal "Cardio"
+        // identity — consistent with the class-pin.
+        //
+        // Fixture inverts the usual ordering: cardio is the single
+        // highest-ranked entry (rank 40) while every strength part is at or
+        // below rank 20. The strength-pure rule means the chip must show the
+        // top STRENGTH part (chest @ 20), NOT cardio.
+        final sheet = CharacterSheetState(
+          characterLevel: 14,
+          lifetimeXp: 8420,
+          xpForNextLevel: 12000,
+          bodyPartProgress: [
+            _trained(
+              BodyPart.chest,
+              rank: 20,
+              xpInRank: 50,
+              xpForNextRank: 100,
+            ),
+            _trained(BodyPart.back, rank: 12, xpInRank: 20, xpForNextRank: 100),
+            _trained(BodyPart.legs, rank: 9, xpInRank: 18, xpForNextRank: 100),
+            _untrained(BodyPart.shoulders),
+            _untrained(BodyPart.arms),
+            _untrained(BodyPart.core),
+            // Cardio out-ranks every strength part — but identity excludes it.
+            _trained(
+              BodyPart.cardio,
+              rank: 40,
+              xpInRank: 10,
+              xpForNextRank: 100,
+            ),
+          ],
+          activeTitle: null,
+          characterClass: CharacterClass.bulwark,
+        );
+
+        await tester.pumpWidget(_harness(sheet: sheet));
+        await tester.pump();
+
+        final rankNumFinder = find.byKey(
+          const ValueKey('character-card-dominant-rank'),
+        );
+        expect(rankNumFinder, findsOneWidget);
+
+        final rankText = tester.widget<Text>(rankNumFinder);
+        // Chest (top strength part) — NOT cardio (rank 40).
+        expect(
+          rankText.data,
+          '20',
+          reason:
+              'Dominant identity chip must show the top STRENGTH rank (chest '
+              '@ 20), never the higher-ranked cardio @ 40. Identity = '
+              'strength-only (locked scope decision).',
+        );
+        expect(
+          rankText.style?.color,
+          AppColors.bodyPartChest,
+          reason:
+              'Dominant chip hue must be the chest hue, not the teal cardio '
+              'hue — cardio is excluded from identity.',
+        );
+      },
+    );
+
+    testWidgets(
       'dominant column absent for day-0 user (no trained entries) (CH2)',
       (tester) async {
         // Pins the rendering contract that the right-side dominant rank
@@ -761,19 +836,23 @@ void main() {
       await tester.tap(find.byType(InkWell).first);
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 6 rows — one per active body part.
+      // 6 strength rows — one per strength track. Phase 38e: cardio is
+      // excluded from the BodyPartRankRow loop and rendered as the banded
+      // CardioProgressRow instead, mirroring the Saga sheet.
       final rows = tester
           .widgetList<BodyPartRankRow>(find.byType(BodyPartRankRow))
           .toList();
       expect(rows, hasLength(6));
-      // Canonical order: chest → back → legs → shoulders → arms → core.
-      // `bodyPartProgress` is built in `activeBodyParts` order by the
-      // character_sheet_provider, so the rendered rows match without
-      // any client-side sort.
+      // Canonical strength order: chest → back → legs → shoulders → arms →
+      // core. `bodyPartProgress` is built in `activeBodyParts` order, but the
+      // card filters cardio out of this loop, so the strength rows match
+      // `strengthBodyParts`.
       expect(
         rows.map((r) => r.entry.bodyPart).toList(),
-        equals(activeBodyParts),
+        equals(strengthBodyParts),
       );
+      // The cardio track renders as the banded CardioProgressRow.
+      expect(find.byType(CardioProgressRow), findsOneWidget);
     });
 
     testWidgets(

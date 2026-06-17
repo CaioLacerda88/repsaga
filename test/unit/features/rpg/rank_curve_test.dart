@@ -238,10 +238,11 @@ void main() {
     });
 
     test(
-      'cardio is excluded in v1 (high cardio rank does not bump character level)',
+      'cardio contributes to character level (Phase 38e — 7 active tracks)',
       () {
-        // 6 strength tracks at rank 1, plus cardio at rank 50: lvl computed
-        // only from the 6 active tracks, so still rank-1 → lvl 1.
+        // 6 strength tracks at rank 1 + cardio at rank 50: cardio is now in
+        // the active set, so it DOES bump the level. Σ=55, n=7 →
+        // floor((55-7)/4)+1 = floor(48/4)+1 = 13.
         expect(
           characterLevel({
             'chest': 1,
@@ -252,7 +253,7 @@ void main() {
             'core': 1,
             'cardio': 50,
           }),
-          1,
+          13,
         );
       },
     );
@@ -271,7 +272,11 @@ void main() {
       );
     });
 
-    test('all-99 ranks → theoretical max level 148', () {
+    test('all-99 across seven active tracks → max level 172 (Phase 38e)', () {
+      // Phase 38e: cardio joins the active set, so the all-maxed computed
+      // ceiling rises 148 → 172. Denominator stays 4. (The saga_eternal
+      // TITLE threshold stays 148 — that's a title-table concern; the
+      // 172-cap title is Phase 38f.)
       expect(
         characterLevel({
           'chest': 99,
@@ -280,9 +285,76 @@ void main() {
           'shoulders': 99,
           'arms': 99,
           'core': 99,
+          'cardio': 99,
         }),
-        148,
+        172,
       );
+    });
+
+    test('thesis — pure-strength level never regresses post-38e '
+        '(denominator-stays-4 proof)', () {
+      // The never-regress invariant: a user who has trained ONLY the six
+      // strength tracks (cardio absent from the map, i.e. untrained / rank
+      // 1) must land on the EXACT same Character Level the pre-38e 6-track
+      // formula produced. Because cardio at rank 1 adds +1 to both Σ ranks
+      // and N_active, the numerator (Σ − N) is unchanged.
+      //
+      // For every strength-rank combination, the level computed over the
+      // six present keys (cardio absent → skipped) equals the level
+      // computed when cardio is explicitly rank 1 (present, contributes 0
+      // to the numerator). Both equal the legacy 6-track value.
+      const combos = <Map<String, int>>[
+        {
+          'chest': 1,
+          'back': 1,
+          'legs': 1,
+          'shoulders': 1,
+          'arms': 1,
+          'core': 1,
+        },
+        {
+          'chest': 5,
+          'back': 5,
+          'legs': 5,
+          'shoulders': 5,
+          'arms': 5,
+          'core': 5,
+        },
+        {
+          'chest': 20,
+          'back': 18,
+          'legs': 22,
+          'shoulders': 15,
+          'arms': 19,
+          'core': 12,
+        },
+        {
+          'chest': 50,
+          'back': 50,
+          'legs': 50,
+          'shoulders': 50,
+          'arms': 50,
+          'core': 50,
+        },
+        {
+          'chest': 99,
+          'back': 99,
+          'legs': 99,
+          'shoulders': 99,
+          'arms': 99,
+          'core': 99,
+        },
+      ];
+      for (final strengthRanks in combos) {
+        final sixKeyLevel = characterLevel(strengthRanks);
+        final withCardioRank1 = characterLevel({...strengthRanks, 'cardio': 1});
+        expect(
+          withCardioRank1,
+          sixKeyLevel,
+          reason:
+              'pure-strength user (cardio rank 1) regressed for $strengthRanks',
+        );
+      }
     });
 
     // ---------------------------------------------------------------------------

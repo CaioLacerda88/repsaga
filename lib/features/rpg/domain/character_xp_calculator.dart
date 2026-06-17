@@ -1,10 +1,19 @@
 import 'rank_curve.dart';
 
-/// Active body parts contributing to character level. v1 = the 6 strength
-/// tracks (cardio excluded — matches `activeBodyParts` in
+/// Active body parts contributing to character level. Phase 38e = the 6
+/// strength tracks PLUS cardio (matches `activeBodyParts` in
 /// `models/body_part.dart` but kept as `List<String>` here so the helper is
-/// model-import-free and testable in pure Dart).
-const _activeKeys = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+/// model-import-free and testable in pure Dart). Cardio appended last to
+/// preserve strength order.
+const _activeKeys = [
+  'chest',
+  'back',
+  'legs',
+  'shoulders',
+  'arms',
+  'core',
+  'cardio',
+];
 
 /// Denominator for the Phase 26b character XP bar.
 ///

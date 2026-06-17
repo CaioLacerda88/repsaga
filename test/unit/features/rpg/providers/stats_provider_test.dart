@@ -76,7 +76,10 @@ void main() {
         events: const [],
       );
 
-      expect(state.vitalityRows.length, 6);
+      // Phase 38e: activeBodyParts is now 7 (cardio joined). The stats
+      // surfaces iterate activeBodyParts, so the vitality table auto-extends
+      // to a 7th cardio row.
+      expect(state.vitalityRows.length, 7);
       expect(
         state.vitalityRows.map((r) => r.bodyPart).toList(),
         activeBodyParts,
@@ -618,9 +621,11 @@ void main() {
   group('StatsDeepDiveState.empty', () {
     test('produces a renderable laid-out state with no nulls', () {
       final empty = StatsDeepDiveState.empty();
-      expect(empty.vitalityRows.length, 6);
-      expect(empty.trendByBodyPart.length, 6);
-      expect(empty.volumePeakByBodyPart.length, 6);
+      // Phase 38e: cardio joined activeBodyParts → 7 rows/lines across the
+      // stats deep-dive empty state.
+      expect(empty.vitalityRows.length, 7);
+      expect(empty.trendByBodyPart.length, 7);
+      expect(empty.volumePeakByBodyPart.length, 7);
       expect(empty.earliestActivity, isNull);
     });
   });

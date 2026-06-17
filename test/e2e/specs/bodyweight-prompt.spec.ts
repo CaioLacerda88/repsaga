@@ -127,10 +127,23 @@ test.describe('Bodyweight prompt', { tag: '@smoke' }, () => {
       //    covers both paths.
       await saveButton.click();
 
-      // Check for the consent dialog and dismiss if present.
-      const consentButton = page.locator(BODYWEIGHT_CONSENT.saveWithConsentButton).first();
+      // Dismiss the consent dialog. On a fresh browser session (the only path
+      // this test exercises — the Hive `bodyweight_consent_enabled` flag
+      // defaults false) the barrierDismissible:false consent dialog ALWAYS
+      // surfaces on the first save. The earlier `isVisible({timeout:3_000})`
+      // probe raced the dialog's CanvasKit mount: when the dialog mounted just
+      // after the 3 s window, the conditional click was skipped and the still-
+      // open dialog then obscured the finish button → finishWorkout timed out
+      // (deterministic on slower builds). Wait deterministically for the
+      // consent button (it is guaranteed on first save), click it, then wait
+      // for the sheet to close before proceeding. The `.catch` keeps the
+      // theoretical already-consented path (flag true → no dialog) non-fatal.
+      const consentButton = page
+        .locator(BODYWEIGHT_CONSENT.saveWithConsentButton)
+        .first();
       const consentVisible = await consentButton
-        .isVisible({ timeout: 3_000 })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+        .then(() => true)
         .catch(() => false);
       if (consentVisible) {
         await consentButton.click();

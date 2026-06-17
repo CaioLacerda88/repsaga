@@ -51,8 +51,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get classAscendant => 'Ascendente';
 
   @override
-  String get dormantCardioCopy =>
-      'As runas de cardio despertam em um capítulo futuro.';
+  String get cardioTrackLabel => 'Condicionamento';
 
   @override
   String get firstSetAwakensCopy => 'Sua primeira série desperta este caminho.';

@@ -6,21 +6,22 @@ import '../../../core/theme/app_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../l10n/app_localizations.dart';
+import '../models/body_part.dart';
 import '../models/character_sheet_state.dart';
 import '../models/vitality_state.dart';
 import '../providers/character_sheet_provider.dart';
 import 'utils/vitality_state_styles.dart';
 import 'widgets/body_part_rank_row.dart';
+import 'widgets/cardio_progress_row.dart';
 import 'widgets/character_xp_bar.dart';
 import 'widgets/codex_nav_row.dart';
-import 'widgets/dormant_cardio_row.dart';
 import 'widgets/saga_header.dart';
 
 /// `/profile` (the "Saga" tab) character sheet.
 ///
 /// Phase 26b Option B v4 composition: a tight three-column header plus a
 /// 6dp character XP bar collapse the rune face into ~80dp of chrome, freeing
-/// the screen for six trainable body-part rows + a dormant cardio row.
+/// the screen for six trainable body-part rows + the cardio progression row.
 /// Account/preferences settings move to `/profile/settings`, reachable via
 /// the gear icon in the app bar.
 ///
@@ -29,8 +30,10 @@ import 'widgets/saga_header.dart';
 ///   2. [SagaHeader] — rune halo (36dp) · LVL numeral · class + title meta.
 ///   3. [CharacterXpBar] — 6dp violet gradient track + remaining-to-LVL+1.
 ///   4. Onboarding hint — first-set-awakens banner when `isZeroHistory`.
-///   5. Six [BodyPartRankRow]s — Option B v4 inline rank + mini XP bar.
-///   6. [DormantCardioRow] — single distinct row.
+///   5. Six strength [BodyPartRankRow]s — Option B v4 inline rank + mini bar.
+///   6. `surface2` divider + gap, then the banded [CardioProgressRow] —
+///      the 7th progression track (Phase 38e), grouped apart, never merged
+///      onto the strength hexagon.
 ///   7. Three [CodexNavRow]s — Stats / Titles / History.
 ///
 /// AsyncValue handling:
@@ -83,6 +86,7 @@ class _CharacterSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SingleChildScrollView(
       child: Semantics(
         container: true,
@@ -125,13 +129,30 @@ class _CharacterSheetBody extends StatelessWidget {
             // the Semantics + InkWell in one build method. Cluster:
             // semantics-identifier-pair-rule.
             for (final entry in sheet.bodyPartProgress)
-              BodyPartRankRow(entry: entry),
-            const SizedBox(height: 16),
-            Semantics(
-              container: true,
-              identifier: 'dormant-cardio-row',
-              child: const DormantCardioRow(),
+              if (entry.bodyPart != BodyPart.cardio)
+                BodyPartRankRow(entry: entry),
+            // Phase 38e — group the cardio track apart: a surface2 divider +
+            // 8dp gap, then the banded CardioProgressRow. The provider emits
+            // a 7th entry for BodyPart.cardio (it is now in activeBodyParts);
+            // we render it here instead of as a 7th strength row so the
+            // "separate-but-equal" framing reads. Replaces the retired
+            // DormantCardioRow.
+            const SizedBox(height: 8),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.surface2,
+              indent: 24,
+              endIndent: 24,
             ),
+            const SizedBox(height: 8),
+            for (final entry in sheet.bodyPartProgress)
+              if (entry.bodyPart == BodyPart.cardio)
+                CardioProgressRow(
+                  entry: entry,
+                  trackLabel: l10n.cardioTrackLabel,
+                  eyebrowLabel: l10n.muscleGroupCardio,
+                ),
             const SizedBox(height: 24),
             const _CodexNavSection(),
             const SizedBox(height: 32),

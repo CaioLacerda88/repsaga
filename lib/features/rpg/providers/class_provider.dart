@@ -8,8 +8,9 @@ import 'rpg_progress_provider.dart';
 /// Currently-derived [CharacterClass] for the authenticated user.
 ///
 /// Watches [rpgProgressProvider], projects the per-body-part rank map onto
-/// [activeBodyParts] (cardio filtered — Wayfarer is v2), and returns the
-/// resolver result via [ClassResolver.resolve]. The resolver is pure, so this
+/// [strengthBodyParts] (cardio excluded — cardio is recognised via cardio
+/// titles, not a class), and returns the resolver result via
+/// [ClassResolver.resolve]. The resolver is pure, so this
 /// provider rebuilds in lockstep with the upstream snapshot — there is no
 /// secondary state to invalidate.
 ///
@@ -37,7 +38,7 @@ final characterClassProvider = Provider<CharacterClass?>((ref) {
   return progressAsync.when(
     data: (snapshot) {
       final ranks = <BodyPart, int>{
-        for (final bp in activeBodyParts) bp: snapshot.progressFor(bp).rank,
+        for (final bp in strengthBodyParts) bp: snapshot.progressFor(bp).rank,
       };
       return ClassResolver.resolve(ranks);
     },

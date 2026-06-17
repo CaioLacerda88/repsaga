@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/radii.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/character_sheet_state.dart';
 import '../../../rpg/providers/character_sheet_provider.dart';
 import '../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
 import '../../../rpg/ui/widgets/body_part_rank_row.dart';
+import '../../../rpg/ui/widgets/cardio_progress_row.dart';
 import '../../../rpg/ui/widgets/character_xp_bar.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/rune_halo.dart';
@@ -330,13 +332,17 @@ class _HeaderRow extends StatelessWidget {
     );
   }
 
-  /// Dominant = the highest-ranked trained body part. Tie-break by canonical
-  /// [activeBodyParts] order (chest → back → legs → shoulders → arms → core),
-  /// matching the determinism contract on [closestRankUp]. Returns null when
-  /// every active body part is untrained (day-0 user).
+  /// Dominant = the highest-ranked trained STRENGTH body part. Cardio is
+  /// excluded: identity (dominant-chip + class-pin) stays pure 6-strength —
+  /// cardio is a separate track recognized via titles, not an identity
+  /// (locked scope decision). Tie-break by canonical [strengthBodyParts]
+  /// order (chest → back → legs → shoulders → arms → core), matching the
+  /// determinism contract on [closestRankUp]. Returns null when every
+  /// strength body part is untrained (day-0 user).
   BodyPartSheetEntry? _dominantTrainedEntry(CharacterSheetState sheet) {
     BodyPartSheetEntry? best;
     for (final e in sheet.bodyPartProgress) {
+      if (e.bodyPart == BodyPart.cardio) continue; // identity = strength-only
       if (e.isUntrained) continue;
       if (best == null || e.rank > best.rank) best = e;
     }
@@ -605,14 +611,30 @@ class _ExpandedBody extends StatelessWidget {
           characterLevel: sheet.characterLevel,
         ),
         const SizedBox(height: 16),
+        // Six strength rows (Phase 38e: cardio is excluded here and rendered
+        // as the banded CardioProgressRow below — mirrors the Saga sheet's
+        // separate-but-equal grouping so both surfaces read identically).
         for (final entry in sheet.bodyPartProgress)
-          Padding(
-            // 4dp inter-row gap — `BodyPartRankRow` already owns a 48dp
-            // min-height tap target and its own 8dp/12dp vertical padding,
-            // so this is purely visual breathing room between rows.
-            padding: const EdgeInsets.only(bottom: 4),
-            child: BodyPartRankRow(entry: entry),
-          ),
+          if (entry.bodyPart != BodyPart.cardio)
+            Padding(
+              // 4dp inter-row gap — `BodyPartRankRow` already owns a 48dp
+              // min-height tap target and its own 8dp/12dp vertical padding,
+              // so this is purely visual breathing room between rows.
+              padding: const EdgeInsets.only(bottom: 4),
+              child: BodyPartRankRow(entry: entry),
+            ),
+        // Grouped-apart cardio track.
+        for (final entry in sheet.bodyPartProgress)
+          if (entry.bodyPart == BodyPart.cardio) ...[
+            const SizedBox(height: 4),
+            const Divider(height: 1, thickness: 1, color: AppColors.surface2),
+            const SizedBox(height: 8),
+            CardioProgressRow(
+              entry: entry,
+              trackLabel: AppLocalizations.of(context).cardioTrackLabel,
+              eyebrowLabel: AppLocalizations.of(context).muscleGroupCardio,
+            ),
+          ],
       ],
     );
   }

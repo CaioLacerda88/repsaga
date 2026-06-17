@@ -204,13 +204,41 @@ void main() {
     );
   });
 
-  group('ClassResolver — cardio is silently ignored (v2)', () {
-    test('cardio entry does not affect classification', () {
-      // BodyPart.cardio is not in activeBodyParts. The resolver projects
-      // only over the six v1 strength tracks; cardio rank is dropped.
+  group('ClassResolver — cardio excluded from class/Ascendant (Phase 38e)', () {
+    test('cardio entry does not affect dominant classification', () {
+      // Phase 38e: cardio IS in activeBodyParts (it counts toward Character
+      // Level) but the resolver projects only over strengthBodyParts, so a
+      // huge cardio rank is dropped — chest still dominates → Bulwark.
       final ranks = _ranks(chest: 30, arms: 10);
       ranks[BodyPart.cardio] = 99;
       expect(ClassResolver.resolve(ranks), CharacterClass.bulwark);
+    });
+
+    test('cardio cannot break the Ascendant balance check', () {
+      // Six strength tracks perfectly balanced at rank 10 → Ascendant
+      // (min≥5, spread 0). A cardio rank of 99 would, if it leaked into the
+      // spread, blow (max−min)/max past 0.30 and demote to a dominant class.
+      // Because cardio is excluded from the resolver input, Ascendant holds.
+      final ranks = _ranks(
+        chest: 10,
+        back: 10,
+        legs: 10,
+        shoulders: 10,
+        arms: 10,
+        core: 10,
+      );
+      ranks[BodyPart.cardio] = 99;
+      expect(ClassResolver.resolve(ranks), CharacterClass.ascendant);
+    });
+
+    test('no Wayfarer / cardio class exists', () {
+      // Scope lock (Phase 38e): cardio recognition is via cardio TITLES, not
+      // a class. There is no Wayfarer variant; a cardio-only "distribution"
+      // (all strength at rank 1) resolves to Initiate, never a cardio class.
+      expect(CharacterClass.values.any((c) => c.slug == 'wayfarer'), isFalse);
+      final cardioOnly = _ranks();
+      cardioOnly[BodyPart.cardio] = 80;
+      expect(ClassResolver.resolve(cardioOnly), CharacterClass.initiate);
     });
   });
 

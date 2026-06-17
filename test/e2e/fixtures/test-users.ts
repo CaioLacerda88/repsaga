@@ -469,4 +469,20 @@ export const TEST_USERS = {
     email: 'e2e-smoke-age-capture@test.local',
     password: 'TestPassword123!',
   },
+
+  // -------------------------------------------------------------------------
+  // Phase 38e — cardio activation (visible 7th progression track)
+  // -------------------------------------------------------------------------
+  // rpgCardioActiveUser: cardio is trained (body_part_progress['cardio'] at
+  // rank 5 / 168 XP) alongside two strength tracks (chest, legs at rank 3),
+  // so the Saga rail renders the TRAINED CardioProgressRow — pulsing teal dot,
+  // rank numeral, teal within-rank bar — grouped apart below the strength
+  // rows. Backfill is marked complete so SagaIntroGate is a no-op and the
+  // seeded body_part_progress drives the sheet directly. Used by saga.spec.ts
+  // (7th cardio row visible + tappable → /saga/stats?body_part=cardio) and the
+  // visual-verification gate (trained cardio variant).
+  rpgCardioActiveUser: {
+    email: 'e2e-rpg-cardio-active@test.local',
+    password: 'TestPassword123!',
+  },
 } as const;

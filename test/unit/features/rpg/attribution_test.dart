@@ -209,10 +209,29 @@ void main() {
       expect(() => BodyPart.fromDbValue('mystery'), throwsArgumentError);
     });
 
-    test('activeBodyParts is the six v1 strength tracks (cardio excluded)', () {
-      expect(activeBodyParts.length, 6);
-      expect(activeBodyParts.contains(BodyPart.cardio), isFalse);
+    test('activeBodyParts is the seven tracks incl. cardio (Phase 38e)', () {
+      // Phase 38e flip: cardio now contributes to Character Level, so it
+      // joins activeBodyParts (appended LAST to preserve strength order).
+      expect(activeBodyParts.length, 7);
+      expect(activeBodyParts.contains(BodyPart.cardio), isTrue);
       expect(activeBodyParts, [
+        BodyPart.chest,
+        BodyPart.back,
+        BodyPart.legs,
+        BodyPart.shoulders,
+        BodyPart.arms,
+        BodyPart.core,
+        BodyPart.cardio,
+      ]);
+    });
+
+    test('strengthBodyParts is the six strength tracks (cardio excluded)', () {
+      // Class resolution / Ascendant spread reads strengthBodyParts, NOT
+      // activeBodyParts — cardio is recognised via cardio titles, never a
+      // class, so it must never enter the class system.
+      expect(strengthBodyParts.length, 6);
+      expect(strengthBodyParts.contains(BodyPart.cardio), isFalse);
+      expect(strengthBodyParts, [
         BodyPart.chest,
         BodyPart.back,
         BodyPart.legs,

@@ -142,7 +142,15 @@ Widget _harness({
 }
 
 /// Long-press fast-forwards the cinematic straight to the summary panel.
+///
+/// Uses a realistic portrait phone viewport (412×915 — large Android). The
+/// non-scrolling summary panel is sized to fit a phone screen; the default
+/// 800×600 test surface is shorter than any real device and overflows once
+/// the debrief carries a cardio row (Phase 38e). Caller resets via the
+/// addTearDown registered here.
 Future<void> _skipToSummary(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(412, 915));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pump();
   await tester.longPress(find.byType(PostSessionScreen));
   await tester.pumpAndSettle();

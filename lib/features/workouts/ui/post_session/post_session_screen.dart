@@ -24,6 +24,7 @@ import '../../../rpg/ui/widgets/title_localization.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/post_session_timing.dart';
 import '../../domain/reward_tier.dart';
+import '../../utils/cardio_format.dart';
 import 'post_session_controller.dart';
 import 'cuts/b1_xp_cut.dart';
 import 'cuts/b2_bp_tally_cut.dart';
@@ -774,10 +775,16 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         : (classForDebrief == CharacterClass.initiate
               ? null
               : localizedClassCopy(classForDebrief, l10n).name);
+    // Phase 38e — distance unit for the cardio ledger rows, derived from the
+    // profile weight unit (kg → km, lbs → mi). Falls back to km when the
+    // profile hasn't loaded.
+    final weightUnit = ref.watch(profileProvider).value?.weightUnit ?? 'kg';
     final debriefSection = MissionDebriefSection(
       state: state,
       localizations: MissionDebriefLocalizations.from(l10n),
       classLabel: classLabel,
+      distanceUnit: CardioFormat.distanceUnitFor(weightUnit),
+      locale: Localizations.localeOf(context).languageCode,
     );
 
     // Phase 38d — one-time "set your age" nudge. Gated to: this session had

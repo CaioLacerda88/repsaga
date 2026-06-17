@@ -102,22 +102,42 @@ function json(body: Record<string, unknown>, status: number): Response {
 // integration test (`test/integration/rpg_vitality_nightly_test.dart`)
 // pins both producers to the same trajectory.
 export const TAU_UP_DAYS = 14.0;
-export const TAU_DOWN_DAYS = 42.0;
+// Two-speed decay (Phase 38e): strength tracks decay slow (~6wk), cardio
+// conditioning decays ~2× faster (~3wk). VO2max detrains within weeks
+// (Coyle 1984; Mujika & Padilla 2000) vs the myonuclear-retention floor for
+// hypertrophy. τ_down is therefore PER-BODY-PART — mirrors Dart
+// `VitalityCalculator.tauDownStrengthDays` / `tauDownCardioDays`. Never copy
+// a τ between stats.
+export const TAU_DOWN_STRENGTH_DAYS = 42.0;
+export const TAU_DOWN_CARDIO_DAYS = 21.0;
+/** Back-compat alias — the strength τ_down (the constants-parity fixture
+ * reads `tau_down_days`). */
+export const TAU_DOWN_DAYS = TAU_DOWN_STRENGTH_DAYS;
 export const SAMPLE_PERIOD_DAYS = 7.0;
 export const ALPHA_UP = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / TAU_UP_DAYS);
-export const ALPHA_DOWN = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / TAU_DOWN_DAYS);
+export const ALPHA_DOWN = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / TAU_DOWN_STRENGTH_DAYS);
 
-/** v1 strength body-parts. Cardio (v2) is intentionally excluded — same
- * `activeBodyParts` set as Dart `lib/features/rpg/models/body_part.dart`. */
-export const V1_BODY_PARTS = [
+/** Active body-parts contributing to Vitality (Phase 38e — cardio now live).
+ * Mirrors Dart `activeBodyParts` in `lib/features/rpg/models/body_part.dart`.
+ * `cardio` is last so the strength rows keep their original order. */
+export const ACTIVE_BODY_PARTS = [
   'chest',
   'back',
   'legs',
   'shoulders',
   'arms',
   'core',
+  'cardio',
 ] as const;
-export type BodyPart = (typeof V1_BODY_PARTS)[number];
+export type BodyPart = (typeof ACTIVE_BODY_PARTS)[number];
+
+/** Legacy alias for callers/tests referencing the pre-38e 6-part set. */
+export const V1_BODY_PARTS = ACTIVE_BODY_PARTS;
+
+/** τ_down for a body part — cardio 21d, strength 42d (two-speed decay). */
+export function tauDownForBodyPart(bp: string): number {
+  return bp === 'cardio' ? TAU_DOWN_CARDIO_DAYS : TAU_DOWN_STRENGTH_DAYS;
+}
 
 // --- Pure math (testable in isolation) ------------------------------------
 
@@ -125,6 +145,9 @@ export interface EwmaInput {
   priorEwma: number;
   priorPeak: number;
   weeklyVolume: number;
+  /** Decay time constant (days). Defaults to the strength τ_down; cardio
+   * callers pass `TAU_DOWN_CARDIO_DAYS` (Phase 38e two-speed decay). */
+  tauDownDays?: number;
 }
 
 export interface EwmaOutput {
@@ -135,11 +158,19 @@ export interface EwmaOutput {
 /**
  * Single-step asymmetric EWMA update. Pure function — no side-effects, no
  * I/O. `priorPeak` is monotone non-decreasing per spec §8.3 (peak is
- * permanent and never decays).
+ * permanent and never decays). The decay α is derived from the supplied
+ * `tauDownDays` so cardio decays on its own faster clock — mirrors Dart
+ * `VitalityCalculator.step(tauDownDays:)`.
  */
 export function stepEwma(input: EwmaInput): EwmaOutput {
-  const { priorEwma, priorPeak, weeklyVolume } = input;
-  const alpha = weeklyVolume >= priorEwma ? ALPHA_UP : ALPHA_DOWN;
+  const {
+    priorEwma,
+    priorPeak,
+    weeklyVolume,
+    tauDownDays = TAU_DOWN_STRENGTH_DAYS,
+  } = input;
+  const alphaDown = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / tauDownDays);
+  const alpha = weeklyVolume >= priorEwma ? ALPHA_UP : alphaDown;
   const newEwma = alpha * weeklyVolume + (1 - alpha) * priorEwma;
   const newPeak = newEwma > priorPeak ? newEwma : priorPeak;
   return { ewma: newEwma, peak: newPeak };
@@ -211,7 +242,7 @@ export async function processUser(
     .from('body_part_progress')
     .select('body_part, vitality_ewma, vitality_peak')
     .eq('user_id', userId)
-    .in('body_part', V1_BODY_PARTS as unknown as string[]);
+    .in('body_part', ACTIVE_BODY_PARTS as unknown as string[]);
   if (prErr) {
     throw new Error(`body_part_progress fetch failed: ${prErr.message}`);
   }
@@ -229,12 +260,14 @@ export async function processUser(
     BodyPart,
     EwmaOutput
   >;
-  for (const bp of V1_BODY_PARTS) {
+  for (const bp of ACTIVE_BODY_PARTS) {
     const p = prior.get(bp) ?? { ewma: 0, peak: 0 };
     const out = stepEwma({
       priorEwma: p.ewma,
       priorPeak: p.peak,
       weeklyVolume: weeklyVolume[bp] ?? 0,
+      // Two-speed decay: cardio τ_down=21d, strength τ_down=42d (Phase 38e).
+      tauDownDays: tauDownForBodyPart(bp),
     });
     updates[bp] = out;
 
@@ -278,11 +311,11 @@ export function aggregateAttribution(
   events: { attribution: Record<string, unknown> | null }[],
 ): Record<BodyPart, number> {
   const out: Record<BodyPart, number> = {
-    chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
+    chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0, cardio: 0,
   };
   for (const ev of events) {
     const attr = ev.attribution ?? {};
-    for (const bp of V1_BODY_PARTS) {
+    for (const bp of ACTIVE_BODY_PARTS) {
       const v = (attr as Record<string, unknown>)[bp];
       if (typeof v === 'number') {
         out[bp] += v;

@@ -7,6 +7,7 @@ import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
+import '../../domain/session_cardio_summary.dart';
 import '../../domain/session_lift_summary.dart';
 
 part 'post_session_state.freezed.dart';
@@ -88,6 +89,15 @@ abstract class PostSessionState with _$PostSessionState {
     /// Mission Debrief to compute the "+N more exercises" footer:
     /// `more = totalExercisesTrained - topLifts.length`. Phase 31 Pass 3.
     required int totalExercisesTrained,
+
+    /// Completed cardio entries this session, projected for the S2 Mission
+    /// Debrief ledger (Phase 38e). Rendered as [CardioEntryRow]s alongside
+    /// the strength [topLifts] so a mixed session reads as one ledger.
+    /// Cardio earns no `BodyPart.cardio` strength-XP delta, so these are
+    /// sourced from the pre-finish exercise snapshot's completed
+    /// [CardioSession]s, NOT from `bpXpDeltas` / `topLifts`. Empty for a
+    /// strength-only session.
+    @Default(<SessionCardioSummary>[]) List<SessionCardioSummary> cardioEntries,
 
     /// Post-finish total XP earned.
     required int totalXpEarned,
