@@ -482,5 +482,583 @@
     • <b style="color:var(--cream)">Post-session prompt</b>: one-shot in <code>post_session_screen.dart</code> (analog of <code>_fireMountAnalytics</code>); gate to <code>bp == BodyPart.cardio</code> sessions with null DOB. Dismissal via a <code>Notifier&lt;bool&gt;</code> over Hive <code>userPrefs</code> (clone <code>bodyweight_prompt_dismissal_provider</code>); "Set age" opens the same <code>AgeEditorSheet</code>.<br>
     • No Material <code>showDatePicker</code>, no calendar, no month/day collection, no gradient, no <code>heroGold</code> (reward-scarcity).
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- ════════════════  PHASE 38e — CARDIO ACTIVATION  ═════════════════ -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <style>
+    /* ---- 38e-only styles; scoped under .e38 so they never bleed into 38b/38d ---- */
+    .e38-rule{border:0;border-top:1px solid var(--hair);margin:64px 0 36px}
+    h1.e38{margin-top:6px}
+    .e38 .note b{color:var(--cardio)}
+    .e38-sectlabel{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+                   letter-spacing:1.8px;font-size:13px;color:var(--cardio-dim);margin:38px 0 4px}
+    .e38-sectsub{color:var(--dim);font-size:12.5px;max-width:760px;line-height:1.5;margin-bottom:18px}
+
+    /* ── shared Saga-rail row geometry (clone of BodyPartRankRow) ── */
+    .rail{padding:6px 0}
+    .railrow{padding:8px 24px}
+    .railrow .top{display:flex;align-items:center}
+    .railrow .dot{width:6px;height:6px;border-radius:50%;flex:none}
+    /* ambient pulse glow approximation for the trained/pulsing dot */
+    .railrow .dot.pulse{box-shadow:0 0 0 3px rgba(34,211,238,.18),0 0 7px 1px rgba(34,211,238,.5)}
+    .railrow .nm{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+                 letter-spacing:1.2px;font-size:10px;color:var(--cream);margin-left:8px}
+    .railrow .rk{margin-left:auto;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;
+                 color:var(--cream);font-variant-numeric:tabular-nums;line-height:1}
+    .railrow .bar{height:4px;border-radius:2px;background:#241F2E;margin-top:6px;overflow:hidden}
+    .railrow .bar > i{display:block;height:100%}
+    .railrow .xpsub{margin-top:4px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;
+                    color:var(--dim);font-variant-numeric:tabular-nums}
+    .railrow .xpsub b{color:var(--cream);font-weight:600}
+    /* strength rows take their body-part hue from an inline --hue var */
+    .railrow .dot.s{background:var(--hue)} .railrow .bar > i.s{background:var(--hue);width:var(--w)}
+
+    /* ── the grouped-apart cardio band ── */
+    .cardio-sep{height:1px;background:var(--surface2);margin:10px 24px 0}
+    .cardio-band{background:rgba(34,211,238,.05);border-top:1px solid rgba(34,211,238,.16);
+                 border-bottom:1px solid rgba(34,211,238,.16);margin-top:8px;padding:6px 0 8px}
+    .cardio-band .eyebrow{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+                          letter-spacing:1.6px;font-size:10px;color:var(--cardio-dim);padding:6px 24px 2px}
+    .cardio-band .dot.c{background:var(--cardio)}
+    /* DELIBERATE OVERRIDE: the verbatim _UntrainedRow dims its dot to
+       AppColors.textDim @ 0.4 (grey). We keep a dimmed-TEAL tint instead so the
+       untrained cardio row still reads as cardio identity, not generic grey.
+       This is a knowing one-line override — see build note on 1b. */
+    .cardio-band .dot.c.dim{background:rgba(34,211,238,.32);box-shadow:none}
+    .cardio-band .bar > i.c{background:var(--cardio);width:var(--w)}
+    .cardio-band .nm.dim{color:rgba(242,238,247,.42)}
+    .cardio-band .rk.dim{color:rgba(242,238,247,.42)}
+
+    /* ── vitality table row (clone of VitalityTable) ── */
+    .vt{background:var(--bg)}
+    .vtrow{display:flex;align-items:center;padding:12px 16px}
+    .vtrow + .vtrow, .vt .vtdiv + .vtrow{border:0}
+    .vtdiv{height:1px;background:var(--surface2)}
+    .vtrow .ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+                font-size:17px;flex:none}
+    .vtrow .mid{flex:1;min-width:0;margin-left:14px}
+    .vtrow .mid .t{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;color:var(--cream);
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vtrow .mid .s{font-family:'Barlow',sans-serif;font-size:12.5px;color:var(--dim);margin-top:2px;
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vtrow .pct{margin-left:12px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;
+                font-variant-numeric:tabular-nums;line-height:1}
+    .vt-cardioband{background:rgba(34,211,238,.05);border-top:1px solid rgba(34,211,238,.16);
+                   border-bottom:1px solid rgba(34,211,238,.16)}
+    .vt-cardioband .s{color:var(--cardio-dim)}
+
+    /* ── vitality trend chart (7-line approximation) ── */
+    .chart{position:relative;height:150px;background:var(--surface);border:1px solid var(--hair);
+           border-radius:var(--radius);overflow:hidden;margin-top:4px}
+    .chart svg{display:block;width:100%;height:100%}
+    .chart .yaxis{position:absolute;left:6px;top:6px;font-family:'Barlow Semi Condensed';font-size:9px;
+                  color:rgba(242,238,247,.3);letter-spacing:.5px}
+    .chart-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px}
+    .chart-legend span{display:inline-flex;align-items:center;gap:5px;font-family:'Barlow Semi Condensed';
+                       text-transform:uppercase;letter-spacing:.8px;font-size:9.5px;color:var(--dim)}
+    .chart-legend i{width:14px;height:2.5px;border-radius:2px;display:inline-block}
+    .chart-legend .cardiochip{color:var(--cardio-dim)}
+    /* the slim teal-hairline stats explainer */
+    .stats-explainer{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:11px 13px;
+                     background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.28);border-radius:var(--radius)}
+    .stats-explainer .si{color:var(--cardio);font-size:15px;line-height:1.2}
+    .stats-explainer .stxt{font-family:'Barlow',sans-serif;font-size:12.5px;line-height:1.45;color:rgba(242,238,247,.84)}
+
+    /* ── post-session mixed debrief ledger (clone of MissionDebriefSection + LiftRow) ── */
+    .debrief{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);padding:16px 14px}
+    .debrief .deyebrow{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:2.4px;
+                       font-size:11px;color:var(--dim);margin-bottom:12px}
+    .lrow{display:flex;align-items:center;min-height:32px;padding:4px 0}
+    .lrow .ld{width:8px;height:8px;border-radius:50%;flex:none}
+    .lrow .lname{flex:1;min-width:0;font-family:'Barlow',sans-serif;font-size:14px;color:var(--cream);
+                 margin-left:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .lrow .lval{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:-0.32px;
+                color:var(--cream);font-variant-numeric:tabular-nums;margin-left:8px;white-space:nowrap}
+    .lrow .pr{margin-left:6px;font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:.44px;color:var(--heroGold,#FFB800)}
+    /* cardio ledger row: teal dot, duration hero numeral, dim suffix */
+    .lrow.c .ld{background:var(--cardio)}
+    .lrow.c .lval{color:var(--cardio)}
+    .lrow.c .lsuffix{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--dim);
+                     font-variant-numeric:tabular-nums;margin-left:7px;white-space:nowrap}
+    /* crowded-segments scale-down look (FittedBox) */
+    .lrow.c.tight .valwrap{display:inline-flex;align-items:baseline;transform:scale(.84);transform-origin:right center}
+
+    /* ── compound class label (clone of SagaHeader meta column) ──
+       The REAL widget caps the meta column at maxWidth:120 (saga_header.dart:138)
+       and renders the strength class at fontSize:10 (saga_header.dart:165). We render
+       the shell at the TRUE 120dp width with a visible edge so the clip is honest. */
+    .clshell{display:inline-block;width:120px;box-sizing:border-box;
+             border:1px dashed rgba(242,238,247,.22);border-radius:3px;padding:2px 0 2px 3px}
+    /* A widened column variant for Option A (state the new cap) */
+    .clshell.w160{width:160px}
+    .cllabel{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase;
+             font-size:10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* strength half = 10sp, matching the real widget */
+    .cllabel .strength{color:var(--violet);letter-spacing:1.8px;font-size:10px}
+    /* cardio descriptor is SUBORDINATE → must be SMALLER than 10sp (9sp), wider tracking */
+    .cllabel .cardio{color:var(--cardio-dim);letter-spacing:1.6px;font-size:9px}
+    /* Option B: two-line stack — strength line then ·WAYFARER line, both ≤10sp */
+    .cllabel.stack{white-space:normal;line-height:1.18}
+    .cllabel.stack .strength{display:block}
+    .cllabel.stack .cardio{display:block;font-size:9px}
+    .cltitle{font-family:'Barlow',sans-serif;font-size:11px;color:var(--dim);margin-top:2px;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* full 3-column SagaHeader proof at 320dp (Option A) */
+    .sagahdr{display:flex;align-items:center;background:var(--surface);border:1px solid var(--hair);
+             border-radius:var(--radius);padding:14px 16px}
+    .sagahdr .lvl{display:flex;flex-direction:column;align-items:center;flex:none}
+    .sagahdr .lvl .n{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:56px;line-height:.85;
+                     color:var(--cream);font-variant-numeric:tabular-nums}
+    .sagahdr .lvl .l{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:2px;
+                     font-size:9px;color:var(--dim);margin-top:1px}
+    .sagahdr .ctr{flex:1;min-width:0;margin:0 12px}
+    .sagahdr .ctr .xpbar{height:5px;border-radius:2px;background:#241F2E;overflow:hidden}
+    .sagahdr .ctr .xpbar > i{display:block;height:100%;width:62%;background:var(--violet)}
+    .sagahdr .ctr .xpsub{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;color:var(--dim);
+                         margin-top:5px;font-variant-numeric:tabular-nums}
+    .sagahdr .meta{flex:none}
+    .lvlcol{display:flex;align-items:center;gap:18px;background:var(--surface);border:1px solid var(--hair);
+            border-radius:var(--radius);padding:16px 18px}
+    .lvlcol .lvlnum{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:52px;line-height:.9;color:var(--cream);
+                    font-variant-numeric:tabular-nums}
+    .lvlcol .lvllbl{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:2px;font-size:10px;
+                    color:var(--dim);margin-top:2px}
+
+    /* ── B2 rank-up cut (full-bleed flood) ── */
+    .cut{height:260px;border-radius:var(--radius);position:relative;overflow:hidden;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 18px}
+    .cut.teal{background:radial-gradient(120% 90% at 50% 38%, #2BE0F5 0%, #18B6D4 48%, #0E8FAd 100%)}
+    .cut.violet{background:radial-gradient(120% 90% at 50% 38%, #B36DFF 0%, #7A33C9 52%, #4A1E86 100%)}
+    .cut .ceyebrow{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:3px;font-size:12px;
+                   color:rgba(14,13,19,.62);font-weight:600}
+    .cut .cbig{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:46px;line-height:1;letter-spacing:1px;
+               color:#0B0A0F;margin-top:8px}
+    .cut .csub{font-family:'Barlow',sans-serif;font-size:14px;color:rgba(11,10,15,.7);margin-top:10px}
+    .cut.teal.cream .cbig{color:var(--cream);text-shadow:0 1px 8px rgba(11,10,15,.35)}
+    .cut.teal.cream .ceyebrow{color:rgba(242,238,247,.78)}
+    .cut.teal.cream .csub{color:rgba(242,238,247,.85)}
+
+    .e38 .panel{width:360px}
+    .e38 .smallnote{color:var(--dim);font-size:12px;margin-top:8px;line-height:1.55}
+    .e38 .smallnote b{color:var(--cream)}
+    .e38 .smallnote code{color:var(--cardio);font-family:ui-monospace,monospace;font-size:11px}
+    .frame320{width:320px}
+  </style>
+
+  <hr class="e38-rule">
+  <div class="e38">
+  <h1 class="e38">Phase 38e — Cardio activation</h1>
+  <div class="sub">Cardio goes live as a visible <b style="color:var(--cardio)">7th progression track</b> · separate-but-equal, never homogenized onto the strength hexagon · teal identity <span class="swatch" style="background:#22D3EE"></span><code style="color:#22D3EE">#22D3EE</code> · class descriptor <b style="color:var(--cardio)">WAYFARER</b></div>
+  <div class="note">38a–38d already compute + store cardio XP and capture age silently. 38e flips the leverage: cardio surfaces on the Saga sheet,
+    contributes to character level (<b>denominator stays 4</b>, max level 148→172), and earns a compound class descriptor.
+    The locked UI direction is <b>grouped-apart, not merged</b>: a <code style="color:var(--cardio)">surface2</code> divider + small gap, then the cardio row/line/cell lives inside a
+    <b>faintly teal-tinted band</b> with a tiny <b>CARDIO</b> eyebrow. Two-speed Vitality decay (cardio τ=3wk vs strength τ=6wk) is carried by
+    <b>words</b> — a per-row decay subtitle + a one-time stats explainer — not by color or pulse alone. Every string below is real en + pt-BR copy.</div>
+
+  <!-- ═══════════  SURFACE 1 · CardioProgressRow on the Saga rail  ═══════════ -->
+  <div class="e38-sectlabel">1 · CardioProgressRow — the Saga rail</div>
+  <div class="e38-sectsub">Six strength <code style="color:var(--cardio)">BodyPartRankRow</code>s, then a <b style="color:var(--cream)">surface2 divider + 8dp gap</b>, then the cardio row inside the teal-tint band. The cardio row <b style="color:var(--cream)">borrows the strength row skeleton</b> verbatim — pulsing teal dot, UPPERCASE name, Rajdhani rank numeral, 4dp teal within-rank bar, <code style="color:var(--cardio)">XP/XP</code> sub-line — so it reads as a peer, not a bolt-on. The band + eyebrow are the only "this is a different track" cues. This <b style="color:var(--cream)">replaces the dead <code style="color:var(--cardio)">DormantCardioRow</code></b> ("coming soon", 30%-opacity sigil, no progression).</div>
+  <div class="grid">
+
+    <!-- 1a · trained cardio -->
+    <div class="panel">
+      <h2>1a · Trained cardio (real rank, pulsing) — PT</h2>
+      <div class="device">
+        <div class="rail">
+          <!-- six strength rows -->
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#FF6B6B"></span><span class="nm">PEITO</span><span class="rk">7</span></div>
+            <div class="bar"><i class="s" style="--hue:#FF6B6B;--w:62%"></i></div>
+            <div class="xpsub"><b>320</b>/512 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#5B8DEF"></span><span class="nm">COSTAS</span><span class="rk">6</span></div>
+            <div class="bar"><i class="s" style="--hue:#5B8DEF;--w:40%"></i></div>
+            <div class="xpsub"><b>180</b>/448 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#6EE7B7"></span><span class="nm">PERNAS</span><span class="rk">8</span></div>
+            <div class="bar"><i class="s" style="--hue:#6EE7B7;--w:78%"></i></div>
+            <div class="xpsub"><b>470</b>/600 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#FBBF24"></span><span class="nm">OMBROS</span><span class="rk">5</span></div>
+            <div class="bar"><i class="s" style="--hue:#FBBF24;--w:28%"></i></div>
+            <div class="xpsub"><b>96</b>/384 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#F472B6"></span><span class="nm">BRAÇOS</span><span class="rk">6</span></div>
+            <div class="bar"><i class="s" style="--hue:#F472B6;--w:55%"></i></div>
+            <div class="xpsub"><b>248</b>/448 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#C084FC"></span><span class="nm">CORE</span><span class="rk">4</span></div>
+            <div class="bar"><i class="s" style="--hue:#C084FC;--w:18%"></i></div>
+            <div class="xpsub"><b>52</b>/320 XP</div>
+          </div>
+          <!-- divider + gap, then the teal band -->
+          <div class="cardio-sep"></div>
+          <div class="cardio-band">
+            <div class="eyebrow">Cardio</div>
+            <div class="railrow">
+              <div class="top"><span class="dot c pulse"></span><span class="nm">CONDICIONAMENTO</span><span class="rk">5</span></div>
+              <div class="bar"><i class="c" style="--w:44%"></i></div>
+              <div class="xpsub"><b>168</b>/384 XP</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote">The cardio row is <b>alive</b>: ambient pulse on the teal dot (<code>AmbientPulseDot</code>), a real rank numeral (Rajdhani-700), a teal within-rank bar, and the same <code>XP/XP</code> sub-line as strength. Name = <b>CONDICIONAMENTO</b> (EN "CONDITIONING") — the cardio body-part label. Tap → <code>/saga/stats?body_part=cardio</code>.</div>
+    </div>
+
+    <!-- 1b · untrained day-zero cardio -->
+    <div class="panel">
+      <h2>1b · Untrained cardio — day-zero (band present, dimmed) — EN</h2>
+      <div class="device">
+        <div class="rail">
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#FF6B6B"></span><span class="nm">CHEST</span><span class="rk">3</span></div>
+            <div class="bar"><i class="s" style="--hue:#FF6B6B;--w:34%"></i></div>
+            <div class="xpsub"><b>72</b>/256 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#5B8DEF"></span><span class="nm">BACK</span><span class="rk">2</span></div>
+            <div class="bar"><i class="s" style="--hue:#5B8DEF;--w:50%"></i></div>
+            <div class="xpsub"><b>96</b>/192 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#6EE7B7"></span><span class="nm">LEGS</span><span class="rk">2</span></div>
+            <div class="bar"><i class="s" style="--hue:#6EE7B7;--w:22%"></i></div>
+            <div class="xpsub"><b>42</b>/192 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#FBBF24"></span><span class="nm">SHOULDERS</span><span class="rk">1</span></div>
+            <div class="bar"><i class="s" style="--hue:#FBBF24;--w:30%"></i></div>
+            <div class="xpsub"><b>38</b>/128 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#F472B6"></span><span class="nm">ARMS</span><span class="rk">2</span></div>
+            <div class="bar"><i class="s" style="--hue:#F472B6;--w:12%"></i></div>
+            <div class="xpsub"><b>22</b>/192 XP</div>
+          </div>
+          <div class="railrow">
+            <div class="top"><span class="dot s" style="--hue:#C084FC"></span><span class="nm">CORE</span><span class="rk">1</span></div>
+            <div class="bar"><i class="s" style="--hue:#C084FC;--w:8%"></i></div>
+            <div class="xpsub"><b>9</b>/128 XP</div>
+          </div>
+          <div class="cardio-sep"></div>
+          <div class="cardio-band">
+            <div class="eyebrow">Cardio</div>
+            <!-- untrained: dimmed dot, em-dash rank, NO bar, NO xp sub-line -->
+            <div class="railrow">
+              <div class="top"><span class="dot c dim"></span><span class="nm dim">CONDITIONING</span><span class="rk dim">&mdash;</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote">Day-zero cardio: the <b>band is still present</b> (so the track is visibly there and invites a first cardio session), but the dot is dimmed, the rank is <code>&mdash;</code>, and there is <b>no bar / no XP sub-line</b> — the same untrained skeleton the strength rows use, NOT the old "coming soon" copy. <b>Distinct from the dead <code>DormantCardioRow</code></b>: that row said the path was asleep; this one says "log a run to wake it".<br><br><b style="color:var(--cream)">Build note — intentional dot override:</b> the verbatim <code>_UntrainedRow</code> dims its dot to <code>AppColors.textDim.withValues(alpha:0.4)</code> (grey, <code>body_part_rank_row.dart:222</code>). For the untrained <b>cardio</b> row, override that single line to a <b style="color:var(--cardio-dim)">dimmed-teal tint</b> (<code>bodyPartCardio @ ~0.32</code>) so the row keeps cardio identity while dormant. Everything else (em-dash, no bar, no XP line, 0.4 alpha on the text) stays verbatim. <b>This is a deliberate one-line divergence — implement it knowingly, not by reusing <code>_UntrainedRow</code> unchanged.</b></div>
+    </div>
+
+    <!-- 1c · the dead row being replaced (for contrast) -->
+    <div class="panel">
+      <h2>1c · OLD DormantCardioRow (replaced — for contrast)</h2>
+      <div class="device">
+        <div class="rail" style="opacity:.5">
+          <div class="railrow"><div class="top"><span class="dot s" style="--hue:#FF6B6B"></span><span class="nm">CHEST</span><span class="rk">3</span></div><div class="bar"><i class="s" style="--hue:#FF6B6B;--w:34%"></i></div><div class="xpsub"><b>72</b>/256 XP</div></div>
+          <div class="railrow"><div class="top"><span class="dot s" style="--hue:#C084FC"></span><span class="nm">CORE</span><span class="rk">1</span></div><div class="bar"><i class="s" style="--hue:#C084FC;--w:8%"></i></div><div class="xpsub"><b>9</b>/128 XP</div></div>
+        </div>
+        <!-- the dead dormant row: surface tint, 30%-opacity sigil, italic "coming soon", no rank, hairline top+bottom -->
+        <div style="background:rgba(23,21,30,.4);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);
+                    padding:0 16px;height:56px;display:flex;align-items:center;gap:14px;margin-top:16px">
+          <span style="opacity:.3;font-size:20px;color:var(--dim)">&#10227;</span>
+          <div>
+            <div style="font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:1.2px;font-size:10px;color:var(--dim)">CARDIO</div>
+            <div style="font-family:'Barlow';font-style:italic;font-size:13px;color:var(--dim);margin-top:2px">Em breve · uma nova jornada</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote">The state 38e <b>retires</b>. No dot pulse, no rank, no bar — a passive "coming soon" placeholder. 38e deletes <code>dormant_cardio_row.dart</code> and the <code>dormant-cardio-row</code> Semantics block; the provider auto-emits a 7th row so the new banded row renders in its place.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════  SURFACE 2 · Vitality table + trend chart  ═══════════ -->
+  <div class="e38-sectlabel">2 · Vitality table + trend chart</div>
+  <div class="e38-sectsub">Same divider+tint language as the rail. The six strength rows keep their normal state copy; the <b style="color:var(--cream)">banded cardio row</b> carries a <b style="color:var(--cream)">cardio-specific decay subtitle naming the faster window</b>. The trend chart gains a <b style="color:var(--cream)">7th teal line</b>; a one-time slim teal-hairline explainer states the two-speed rule in words.</div>
+  <div class="grid">
+
+    <!-- 2a · vitality table PT -->
+    <div class="panel">
+      <h2>2a · VitalityTable — banded cardio row (PT)</h2>
+      <div class="device">
+        <div class="vt">
+          <div class="vtrow"><div class="ico" style="color:#FF6B6B;background:rgba(255,107,107,.1)">&#9650;</div><div class="mid"><div class="t">Peito</div><div class="s">Em forma</div></div><div class="pct" style="color:var(--success)">86%</div></div>
+          <div class="vtdiv"></div>
+          <div class="vtrow"><div class="ico" style="color:#5B8DEF;background:rgba(91,141,239,.1)">&#9650;</div><div class="mid"><div class="t">Costas</div><div class="s">Enfraquecendo</div></div><div class="pct" style="color:#FBBF24">61%</div></div>
+          <div class="vtdiv"></div>
+          <div class="vtrow"><div class="ico" style="color:#6EE7B7;background:rgba(110,231,183,.1)">&#9650;</div><div class="mid"><div class="t">Pernas</div><div class="s">Em forma</div></div><div class="pct" style="color:var(--success)">92%</div></div>
+          <div class="vtdiv"></div>
+          <div class="vtrow"><div class="ico" style="color:#FBBF24;background:rgba(251,191,36,.1)">&#9650;</div><div class="mid"><div class="t">Ombros</div><div class="s">Desvanecendo</div></div><div class="pct" style="color:#F87171">38%</div></div>
+          <div class="vtdiv"></div>
+          <div class="vtrow"><div class="ico" style="color:#F472B6;background:rgba(244,114,182,.1)">&#9650;</div><div class="mid"><div class="t">Braços</div><div class="s">Em forma</div></div><div class="pct" style="color:var(--success)">79%</div></div>
+          <div class="vtdiv"></div>
+          <div class="vtrow"><div class="ico" style="color:#C084FC;background:rgba(192,132,252,.1)">&#9650;</div><div class="mid"><div class="t">Core</div><div class="s">Enfraquecendo</div></div><div class="pct" style="color:#FBBF24">54%</div></div>
+          <!-- divider + tinted band for cardio -->
+          <div class="vtdiv"></div>
+          <div class="vtrow vt-cardioband"><div class="ico" style="color:var(--cardio);background:rgba(34,211,238,.12)">&#10227;</div><div class="mid"><div class="t">Condicionamento</div><div class="s">Condicionamento cai em ~3 semanas</div></div><div class="pct" style="color:#FBBF24">58%</div></div>
+        </div>
+      </div>
+      <div class="smallnote">The cardio cell sits inside the teal band with its <b>own decay subtitle</b> — <b>"Condicionamento cai em ~3 semanas"</b> (EN "Conditioning fades in ~3 weeks") — naming the faster τ=21d window. Strength rows keep the normal §8.4 state copy ("Em forma" / "Enfraquecendo" / "Desvanecendo"). The % numeral still colors by the HP-drain ramp; identity color stays on the icon/dot.</div>
+    </div>
+
+    <!-- 2b · trend chart + explainer EN -->
+    <div class="panel">
+      <h2>2b · Trend chart — 7th teal line + stats explainer (EN)</h2>
+      <div class="device">
+        <div class="chart">
+          <div class="yaxis">100%</div>
+          <svg viewBox="0 0 320 150" preserveAspectRatio="none">
+            <!-- gridlines -->
+            <line x1="0" y1="38" x2="320" y2="38" stroke="#241F2E" stroke-width="1"/>
+            <line x1="0" y1="75" x2="320" y2="75" stroke="#241F2E" stroke-width="1"/>
+            <line x1="0" y1="112" x2="320" y2="112" stroke="#241F2E" stroke-width="1"/>
+            <!-- six strength lines (dim, body-part hues) -->
+            <polyline fill="none" stroke="#FF6B6B" stroke-width="1.5" opacity=".45" points="0,40 64,46 128,40 192,52 256,44 320,30"/>
+            <polyline fill="none" stroke="#5B8DEF" stroke-width="1.5" opacity=".45" points="0,70 64,64 128,72 192,66 256,74 320,68"/>
+            <polyline fill="none" stroke="#6EE7B7" stroke-width="1.5" opacity=".45" points="0,34 64,38 128,30 192,36 256,28 320,24"/>
+            <polyline fill="none" stroke="#FBBF24" stroke-width="1.5" opacity=".45" points="0,96 64,90 128,100 192,94 256,104 320,98"/>
+            <polyline fill="none" stroke="#F472B6" stroke-width="1.5" opacity=".45" points="0,56 64,60 128,52 192,58 256,50 320,46"/>
+            <polyline fill="none" stroke="#C084FC" stroke-width="1.5" opacity=".45" points="0,80 64,84 128,78 192,86 256,82 320,88"/>
+            <!-- the 7th cardio line: teal, brighter, steeper sawtooth (faster decay then re-trained) -->
+            <polyline fill="none" stroke="#22D3EE" stroke-width="2.5" points="0,30 53,78 64,40 117,92 128,46 181,100 192,52 245,104 256,58 309,108 320,62"/>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <span><i style="background:#FF6B6B"></i>Chest</span>
+          <span><i style="background:#5B8DEF"></i>Back</span>
+          <span><i style="background:#6EE7B7"></i>Legs</span>
+          <span><i style="background:#FBBF24"></i>Shoulders</span>
+          <span><i style="background:#F472B6"></i>Arms</span>
+          <span><i style="background:#C084FC"></i>Core</span>
+          <span class="cardiochip"><i style="background:#22D3EE;height:3px"></i>Conditioning</span>
+        </div>
+        <!-- one-time slim teal-hairline stats explainer -->
+        <div class="stats-explainer">
+          <span class="si">&#10227;</span>
+          <span class="stxt">Cardio conditioning decays faster than strength — train it weekly to hold the line.</span>
+        </div>
+      </div>
+      <div class="smallnote">The cardio line is the <b>brighter, steeper sawtooth</b>: it climbs on a session then falls faster (τ=3wk) than the gently-sloping strength lines (τ=6wk). The two-speed difference is reinforced in <b>words</b> by the explainer (PT: <b>"O condicionamento cardio decai mais rápido que a força — treine semanalmente para manter o ritmo."</b>), shown once. No second color/halo trick — words carry the legibility.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════  SURFACE 3 · CardioEntryRow in the post-session summary  ═══════════ -->
+  <div class="e38-sectlabel">3 · CardioEntryRow — post-session mission debrief</div>
+  <div class="e38-sectsub">A mixed debrief ledger reads coherent with both strength <code style="color:var(--cardio)">LiftRow</code>s (kg × reps) and cardio rows. The cardio row = teal leading dot, activity name, <b style="color:var(--cream)">duration as the right-aligned hero numeral</b> (Rajdhani, teal), with <code style="color:var(--cardio)">· 5.2 km · 5:31/km</code> as a dim suffix when present. <b style="color:var(--cream)">No PR, no heroGold on cardio</b> — gold stays the strength-PR scarcity token.</div>
+  <div class="grid">
+
+    <!-- 3a · mixed debrief PT -->
+    <div class="panel">
+      <h2>3a · Mixed strength + cardio ledger (PT)</h2>
+      <div class="device">
+        <div class="debrief">
+          <div class="deyebrow">Resumo do treino</div>
+          <div class="lrow"><span class="ld" style="background:#FF6B6B"></span><span class="lname">Supino Reto</span><span class="lval">100 kg × 5</span><span class="pr">RECORDE</span></div>
+          <div class="lrow"><span class="ld" style="background:#6EE7B7"></span><span class="lname">Agachamento</span><span class="lval">140 kg × 3</span></div>
+          <div class="lrow"><span class="ld" style="background:#5B8DEF"></span><span class="lname">Remada Curvada</span><span class="lval">80 kg × 8</span></div>
+          <!-- cardio row: teal dot, duration hero, distance+pace dim suffix -->
+          <div class="lrow c"><span class="ld"></span><span class="lname">Esteira</span><span class="valwrap"><span class="lval">28:45</span><span class="lsuffix">· 5,2 km · 5:31/km</span></span></div>
+        </div>
+      </div>
+      <div class="smallnote">Same ledger shell, same row geometry — siblings. Cardio diverges only by <b>teal dot + duration-as-hero</b> (where strength shows kg × reps). Distance + pace are a <b>dim Rajdhani suffix</b>, present only when logged. The strength PR keeps <b style="color:#FFB800">RECORDE</b>/heroGold; cardio never borrows it.</div>
+    </div>
+
+    <!-- 3b · crowded all-segments 320dp EN -->
+    <div class="panel">
+      <h2>3b · Crowded all-segments @ 320dp — scale-down (EN)</h2>
+      <div class="device frame320">
+        <div class="debrief">
+          <div class="deyebrow">Workout summary</div>
+          <div class="lrow"><span class="ld" style="background:#FBBF24"></span><span class="lname">Overhead Press</span><span class="lval">60 kg × 6</span></div>
+          <!-- cardio with ALL segments present → FittedBox scaleDown look -->
+          <div class="lrow c tight"><span class="ld"></span><span class="lname">Treadmill</span><span class="valwrap"><span class="lval">1:02:30</span><span class="lsuffix">· 12.4 km · 5:02/km</span></span></div>
+          <div class="lrow c"><span class="ld"></span><span class="lname">Rowing Machine</span><span class="valwrap"><span class="lval">24:00</span><span class="lsuffix">· 5.0 km</span></span></div>
+          <div class="lrow c"><span class="ld"></span><span class="lname">Jump Rope</span><span class="valwrap"><span class="lval">12:00</span></span></div>
+        </div>
+      </div>
+      <div class="smallnote">The crowded case (long activity name + <code>1:02:30</code> + distance + pace) on the 320dp frame: the value group <b>scales down via FittedBox</b> rather than overflowing — same guard <code>_CompletedSummary</code> / <code>_RpePips</code> already use in <code>cardio_entry_card.dart</code>. Rows with fewer segments (no pace, no distance) render at full size. <b>The duration hero never wraps.</b></div>
+    </div>
+  </div>
+
+  <!-- ═══════════  SURFACE 4 · Compound class label  ═══════════ -->
+  <div class="e38-sectlabel">4 · Compound class label — SagaHeader</div>
+  <div class="e38-sectsub">The class meta column renders <code style="color:var(--cardio)">[StrengthClass]·[CardioDescriptor]</code>: strength class in violet (<code style="color:var(--cardio)">classTextColor</code>), then <code style="color:var(--cardio)">·WAYFARER</code> in teal-dim, <b style="color:var(--cream)">smaller</b>, wider tracking. <b style="color:var(--cream)">The dashed box below is the TRUE 120dp cap</b> (<code>saga_header.dart:138</code>, <code>maxWidth:120</code>) — strength half is <b>10sp</b> (<code>saga_header.dart:165</code>), cardio half <b>9sp</b> so the subordinate reads smaller. At those sizes <code style="color:var(--cardio)">ASCENDANT·WAYFARER</code> / <code style="color:var(--cardio)">ASCENDENTE·ANDARILHO</code> <b style="color:#FF6B6B">overflow 120dp</b>. Two candidate fixes below — <b>pick one</b>.</div>
+  <div class="grid">
+
+    <!-- 4a · THE CLIP (honest 120dp box, no fix) -->
+    <div class="panel">
+      <h2>4a · The real clip — single line at TRUE 120dp (EN)</h2>
+      <div class="device">
+        <div class="lvlcol">
+          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
+          <div class="clshell">
+            <div class="cllabel"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
+            <div class="cltitle">Saga Eternal</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote"><b style="color:#FF6B6B">This is the problem, shown honestly.</b> Inside the real <code>maxWidth:120</code> box (dashed edge), <b style="color:var(--violet)">ASCENDANT</b> (10sp) + <b style="color:var(--cardio-dim)">·WAYFARER</b> (9sp) does NOT fit on one line — the cardio descriptor ellipsis-clips. The earlier 160dp frame hid this. Sizes now match the shipping widget: strength 10sp, cardio 9sp (subordinate is smaller, inversion fixed).</div>
+    </div>
+
+    <!-- 4b · day-zero, strength alone PT (true 120dp) -->
+    <div class="panel">
+      <h2>4b · Day-zero — strength class alone, TRUE 120dp (PT)</h2>
+      <div class="device">
+        <div class="lvlcol">
+          <div><div class="lvlnum">17</div><div class="lvllbl">Nível</div></div>
+          <div class="clshell">
+            <!-- cardio untrained → NO trailing middot, NO ·WAYFARER -->
+            <div class="cllabel"><span class="strength">SENTINELA</span></div>
+            <div class="cltitle">Guardião do Ferro</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote">Day-zero (cardio <b>untrained</b>): the compound collapses to the strength class <b>alone</b> — <b style="color:var(--violet)">SENTINELA</b> (10sp), <b>no trailing <code>·</code></b>, no teal half. Fits 120dp comfortably. This variant is identical under <b>either</b> Option A or B — the middot + cardio half only appears once cardio has a rank.</div>
+    </div>
+
+    <!-- ─── OPTION A — widen + single line ─── -->
+    <div class="panel">
+      <h2>4c · OPTION A — widen meta column to 160dp, single line (EN)</h2>
+      <div class="device">
+        <div class="lvlcol">
+          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
+          <div class="clshell w160">
+            <div class="cllabel"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
+            <div class="cltitle">Saga Eternal</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote"><b style="color:var(--cardio)">Option A:</b> bump the meta column cap <code>maxWidth:120 → 160</code>. Two-tone single line now fits (box edge widened to 160dp above). Strength 10sp violet, cardio 9sp teal-dim. <b style="color:#FF6B6B">Cost:</b> the wider column eats horizontal room on the narrowest screen — proven below at 320dp.</div>
+    </div>
+
+    <!-- 4c-proof · full SagaHeader at 320dp with the 160dp meta -->
+    <div class="panel">
+      <h2>4c-proof · Full SagaHeader @ 320dp with the 160dp meta (PT)</h2>
+      <div class="device">
+        <div class="frame320">
+          <div class="sagahdr">
+            <div class="lvl"><div class="n">56</div><div class="l">Nível</div></div>
+            <div class="ctr">
+              <div class="xpbar"><i></i></div>
+              <div class="xpsub">12 480 / 20 000 XP</div>
+            </div>
+            <div class="meta">
+              <div class="clshell w160">
+                <div class="cllabel"><span class="strength">ASCENDENTE</span><span class="cardio">&middot;ANDARILHO</span></div>
+                <div class="cltitle">Saga Eterna</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote"><b>Horizontal-room proof for Option A.</b> Full 3-column header on a <b>320dp</b> frame: LVL 56sp Rajdhani numeral · center XP bar (<code>Flexible</code>, shrinks) · 160dp meta with the longest PT compound <b style="color:var(--violet)">ASCENDENTE</b><b style="color:var(--cardio-dim)">·ANDARILHO</b>. It fits because the center column is <code>Flexible</code> and yields width — but the XP bar is now visibly tighter. <b style="color:#FF6B6B">If LVL goes 3 digits (≥100) the squeeze worsens; 160dp is the practical ceiling.</b></div>
+    </div>
+
+    <!-- ─── OPTION B — two-line stack at TRUE 120dp ─── -->
+    <div class="panel">
+      <h2>4d · OPTION B — two-line stack, TRUE 120dp (EN)</h2>
+      <div class="device">
+        <div class="lvlcol">
+          <div><div class="lvlnum">42</div><div class="lvllbl">Level</div></div>
+          <div class="clshell">
+            <div class="cllabel stack"><span class="strength">ASCENDANT</span><span class="cardio">&middot;WAYFARER</span></div>
+            <div class="cltitle">Saga Eternal</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote"><b style="color:var(--cardio)">Option B:</b> keep <code>maxWidth:120</code>; stack the halves — strength class on line 1 (<b style="color:var(--violet)">ASCENDANT</b>, violet, 10sp), <b style="color:var(--cardio-dim)">·WAYFARER</b> on line 2 (teal-dim, 9sp). Both fit 120dp with room. <b style="color:#FF6B6B">Cost:</b> a second line in the ~80dp-tall header — see height note below.</div>
+    </div>
+
+    <!-- 4d-proof · two-line stack PT at TRUE 120dp -->
+    <div class="panel">
+      <h2>4d-proof · OPTION B — longest PT compound, TRUE 120dp (PT)</h2>
+      <div class="device">
+        <div class="lvlcol">
+          <div><div class="lvlnum">56</div><div class="lvllbl">Nível</div></div>
+          <div class="clshell">
+            <div class="cllabel stack"><span class="strength">ASCENDENTE</span><span class="cardio">&middot;ANDARILHO</span></div>
+            <div class="cltitle">Saga Eterna</div>
+          </div>
+        </div>
+      </div>
+      <div class="smallnote"><b>Vertical-cost proof for Option B.</b> Longest PT compound <b style="color:var(--violet)">ASCENDENTE</b> / <b style="color:var(--cardio-dim)">·ANDARILHO</b> both clear 120dp stacked. <b style="color:#FF6B6B">Cost:</b> meta column is now class-line + descriptor-line + title-line ≈ 3 text rows. In the ~80dp header that's tight against the 56sp LVL numeral height — acceptable, but no vertical slack left for a future 4th meta row.</div>
+    </div>
+  </div>
+
+  <!-- ─── A/B decision note ─── -->
+  <div class="legend" style="margin-bottom:18px">
+    <b style="color:var(--cream)">Surface 4 — A vs B, decide on evidence:</b><br>
+    • <b style="color:var(--cardio)">Option A (widen to 160dp, single line):</b> reads cleanest, keeps the one-line two-tone rhythm. <b style="color:#FF6B6B">Risk = horizontal room</b> — proven to fit at 320dp only because the center XP column is <code>Flexible</code>; a 3-digit LVL or a longer future title tightens it further. 160dp is the ceiling.<br>
+    • <b style="color:var(--cardio)">Option B (two-line stack, keep 120dp):</b> never touches the column cap, zero horizontal risk on any device. <b style="color:#FF6B6B">Risk = vertical room</b> — adds a third text row to a ~80dp header, leaving no slack for future meta content.<br>
+    • <b style="color:var(--cream)">Trade in one line:</b> A spends horizontal budget (worst at 320dp / 3-digit levels); B spends vertical budget (worst in the fixed-height header). Day-zero strength-alone (4b) is unaffected either way.
+  </div>
+
+  <!-- ═══════════  SURFACE 5 · Cardio rank-up B2 cut  ═══════════ -->
+  <div class="e38-sectlabel">5 · Cardio rank-up cut (B2) — teal flood</div>
+  <div class="e38-sectsub">The cardio rank-up celebration floods <b style="color:var(--cardio)">teal</b> (the cardio identity hue) — distinct from a strength body-part-hue cut and from a class-change cut (which stays <code style="color:var(--cardio)">hotViolet</code>). Contrast check on cream text over bright teal below.</div>
+  <div class="grid">
+
+    <!-- 5a · cardio teal flood, dark text -->
+    <div class="panel">
+      <h2>5a · Cardio B2 — teal flood (PT)</h2>
+      <div class="device">
+        <div class="cut teal">
+          <div class="ceyebrow">Condicionamento</div>
+          <div class="cbig">RANK 5</div>
+          <div class="csub">Seu fôlego subiu de patamar.</div>
+        </div>
+      </div>
+      <div class="smallnote">Cardio B2 = a full teal flood, parallel to a strength body-part-hue cut. <b>Dark ink (<code>abyss</code>) on bright teal</b> clears WCAG AA (#0B0A0F on #22D3EE ≈ 11:1) — the default treatment.</div>
+    </div>
+
+    <!-- 5b · cream-on-teal contrast check -->
+    <div class="panel">
+      <h2>5b · Contrast check — cream-on-teal (EN)</h2>
+      <div class="device">
+        <div class="cut teal cream">
+          <div class="ceyebrow">Conditioning</div>
+          <div class="cbig">RANK 5</div>
+          <div class="csub">Your wind reached a new tier.</div>
+        </div>
+      </div>
+      <div class="smallnote"><b>Contrast risk flagged:</b> cream (<code>#F2EEF7</code>) over bright teal (<code>#22D3EE</code>) is only ≈1.5:1 — fails AA badly. If the cut copy must be cream for celebration-family consistency, it <b>needs a text-shadow / scrim</b> (shown here) or a darkened teal base. <b>tech-lead decision needed:</b> prefer the dark-ink treatment (5a) for the cardio flood; reserve cream-on-flood for the violet class-change cut where contrast holds.</div>
+    </div>
+
+    <!-- 5c · violet class-change cut, for contrast -->
+    <div class="panel">
+      <h2>5c · Class-change cut stays violet (for contrast)</h2>
+      <div class="device">
+        <div class="cut violet cream">
+          <div class="ceyebrow">New class</div>
+          <div class="cbig">WAYFARER</div>
+          <div class="csub">The road has named you.</div>
+        </div>
+      </div>
+      <div class="smallnote">Class-change cuts keep <code>hotViolet</code> — they are NOT recolored teal even when the new class is the cardio descriptor WAYFARER. Cream-on-violet (<code>#F2EEF7</code> on <code>#B36DFF</code>) holds AA. The teal flood is reserved for the <b>rank-up</b> cut; the violet flood for the <b>class-change</b> cut.</div>
+    </div>
+  </div>
+
+  <!-- ─────────────  38e build notes  ───────────── -->
+  <div class="legend" style="border-top:1px solid var(--hair);padding-top:22px">
+    <b style="color:var(--cream)">Notes for build (tech-lead) — 38e:</b><br>
+    • <b style="color:var(--cream)">Atomic flip</b> (move together): <code>activeBodyParts</code> +cardio · both <code>_activeKeys</code> (rank_curve + character_xp_calculator) · SQL migration 00080 (<code>character_state</code> view + in-RPC char-level recompute, 6→7 parts, <b>denominator stays 4</b>) · <code>BodyPartHues[cardio]</code> hair→<code>bodyPartCardio</code> (one line → teal flows to rail row, B2 flood, chart line, table cell for free).<br>
+    • <b style="color:var(--cream)">Saga rail</b>: delete <code>dormant_cardio_row.dart</code> + the <code>dormant-cardio-row</code> block in <code>character_sheet_screen.dart:127-135</code>. The provider auto-emits a 7th <code>BodyPartSheetEntry</code> for cardio; group it apart with a <code>Divider(surface2)</code> + 8dp gap + a teal-tint band wrapper (<code>bodyPartCardio@0.05</code> bg, <code>@0.16</code> top/bottom hairlines) carrying a <code>CARDIO</code> eyebrow. Reuse <code>BodyPartRankRow</code> verbatim inside the band — trained = pulsing dot + rank + bar + XP/XP; untrained = dimmed dot + <code>—</code> + no bar (its existing <code>_UntrainedRow</code> branch already does this once <code>isUntrained</code> is true).<br>
+    • <b style="color:var(--cream)">Vitality two-speed</b>: per-bp τ (cardio 21d / strength 42d) in <code>VitalityCalculator</code> + <code>vitality-nightly</code> + parity. Cardio table row = same banded language, decay subtitle <b>"Conditioning fades in ~3 weeks" / "Condicionamento cai em ~3 semanas"</b>. Chart = 7th teal line (brighter, steeper). One-time stats explainer (slim teal hairline) — <b>"Cardio conditioning decays faster than strength — train it weekly to hold the line."</b> / <b>"O condicionamento cardio decai mais rápido que a força — treine semanalmente para manter o ritmo."</b><br>
+    • <b style="color:var(--cream)">CardioEntryRow</b> (new sibling of <code>lift_row.dart</code>): teal dot, activity name (Expanded ellipsis), duration as the right-aligned Rajdhani-700 teal hero, distance/pace dim suffix via <code>CardioFormat</code> only when present, <code>FittedBox(scaleDown)</code> on the value group for the 320dp crowded case. <b>No PR param, no heroGold.</b> Insert in <code>mission_debrief_section.dart</code> alongside the strength <code>topLifts</code> loop (the controller must surface cardio entries; today it loops strength-only).<br>
+    • <b style="color:var(--cream)">Compound class</b>: <code>+wayfarer</code> on <code>CharacterClass</code> (+slug +l10n) · <code>dominantClass[cardio]=wayfarer</code> · <b>carve cardio OUT of the Ascendant spread</b> while keeping it in the dominant lookup. Render in <code>saga_header.dart</code> as a two-tone single line: strength in <code>classTextColor</code> (violet), <code>·WAYFARER</code> in <code>bodyPartCardio@0.72</code> smaller + wider tracking. <b>Day-zero (cardio untrained) = strength alone, no trailing middot.</b><br>
+    • <b style="color:var(--cream)">Celebrations</b>: cardio rank-up B2 floods <code>bodyPartCardio</code> (teal) — <b>use dark-ink (<code>abyss</code>) cut copy</b>, NOT cream (cream-on-teal fails AA). Class-change cut stays <code>hotViolet</code> with cream copy (holds AA).<br>
+    • <b style="color:var(--cream)">Thesis guard</b>: a pure-strength user's character level must NEVER regress post-flip — denominator-stays-4 named test required. char-level computed-max → 172; the <code>saga_eternal</code> title threshold stays 148 (the 172-cap title is 38f).
+  </div>
+  </div>
 </body>
 </html>
