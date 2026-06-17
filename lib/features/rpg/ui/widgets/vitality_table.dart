@@ -104,12 +104,20 @@ class _VitalityTableRow extends StatelessWidget {
     final pctText = row.state == VitalityState.untested
         ? '—'
         : '${(row.pct * 100).round()}%';
-    final localizedName = localizedBodyPartName(row.bodyPart, l10n);
     // Phase 38e-bis: the cardio row carries a fixed decay subtitle naming its
     // faster (τ=21d / ~3 weeks) decay window, regardless of conditioning
     // state — the words carry the two-speed signal that color/pulse alone
     // can't. Strength rows keep their normal §8.4 state copy below.
     final isCardio = row.bodyPart == BodyPart.cardio;
+    // The cardio row TITLE is the conditioning STAT label (`cardioTrackLabel`
+    // = "Conditioning"), per the `cardioTrackLabel` dartdoc — NOT the
+    // muscle-group name `muscleGroupCardio` = "Cardio" (that label is the
+    // exercise-picker group, not this stat). Strength rows render their
+    // muscle-group name. Cluster: slug-rendered-as-display-name (a generic
+    // resolver rendered the wrong-register string for a special row).
+    final localizedName = isCardio
+        ? l10n.cardioTrackLabel
+        : localizedBodyPartName(row.bodyPart, l10n);
     // Phase 26c (Task 10): untested rows use a short "No data" / "Sem dados"
     // subtitle in this compact table register. The long-form
     // `vitalityCopyUntested` stays in `VitalityStateStyles.localizedCopy` for

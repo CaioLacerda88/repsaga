@@ -205,9 +205,18 @@ class PostSessionController extends ChangeNotifier {
       nextLevel = newCharacterLevel + 1;
     }
 
+    // The cardio entry uses the conditioning STAT label (`cardioTrackLabel`
+    // = "Conditioning") so the cardio rank-up celebration eyebrow reads
+    // "CONDITIONING", matching the Saga rail + vitality table. The generic
+    // `localizedBodyPartName(cardio)` returns "Cardio" (the exercise-picker
+    // muscle-group name), which is the wrong register for this stat surface.
+    // Per the `cardioTrackLabel` dartdoc. Strength parts keep their
+    // muscle-group name. Cluster: slug-rendered-as-display-name.
     final bodyPartLabels = <BodyPart, String>{
       for (final bp in BodyPart.values)
-        bp: localizedBodyPartName(bp, params.l10n),
+        bp: bp == BodyPart.cardio
+            ? params.l10n.cardioTrackLabel
+            : localizedBodyPartName(bp, params.l10n),
     };
 
     final sagaNumber = params.priorFinishedWorkoutCount + 1;

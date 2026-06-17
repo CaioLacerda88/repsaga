@@ -590,6 +590,53 @@ void main() {
     // decay window, regardless of conditioning state. Strength rows keep their
     // normal §8.4 state copy — they must never show the cardio decay line.
     group('cardio decay subtitle (Phase 38e-bis)', () {
+      // The cardio row TITLE is the conditioning STAT label (`cardioTrackLabel`
+      // = "Conditioning"), NOT the muscle-group name (`muscleGroupCardio` =
+      // "Cardio"). The muscle-group name belongs to the exercise picker; the
+      // Saga/stats surfaces all read the track label. Regression pin for the
+      // QA-found drift where the cardio row rendered "Cardio".
+      testWidgets('cardio row title renders "Conditioning", not "Cardio"', (
+        tester,
+      ) async {
+        const cardio = VitalityTableRow(
+          bodyPart: BodyPart.cardio,
+          pct: 0.58,
+          state: VitalityState.active,
+          rank: 3,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [cardio],
+            selected: BodyPart.cardio,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Conditioning'), findsOneWidget);
+        expect(find.text('Cardio'), findsNothing);
+      });
+
+      testWidgets(
+        'strength rows still render their muscle-group name as title',
+        (tester) async {
+          await tester.pumpWidget(
+            _wrap(
+              rows: _sixCanonicalRows(),
+              selected: BodyPart.chest,
+              onSelect: (_) {},
+            ),
+          );
+          await tester.pump();
+
+          // Strength titles are unaffected by the cardio-title fix.
+          expect(find.text('Chest'), findsOneWidget);
+          expect(find.text('Legs'), findsOneWidget);
+          // And no strength row ever borrows the cardio track label.
+          expect(find.text('Conditioning'), findsNothing);
+        },
+      );
+
       testWidgets('cardio row shows the decay subtitle', (tester) async {
         const cardio = VitalityTableRow(
           bodyPart: BodyPart.cardio,

@@ -45,3 +45,21 @@ the EXPLANATORY copy for cardio's faster (3-wk) decay. Design already approved i
       no-overflow (subtitle + banner); legend cardio chip present.
 - [x] `make gen-l10n` + `dart format` + `dart analyze --fatal-infos` + `make test` green.
 - [ ] reviewer → QA (selector-impact only; stats surface) → ship. No migration.
+
+### QA follow-up: cardio TITLE drift (renders "Cardio", should be "Conditioning")
+The `cardioTrackLabel` dartdoc names 3 title sites: Saga rail cardio row, vitality
+table cardio cell, cardio rank-up celebration eyebrow. Several rendered the generic
+`localizedBodyPartName(cardio)` = "Cardio" instead. Fix every cardio TITLE site;
+leave muscle-group/picker/exercise-name renders ("Cardio"/"Treadmill") as-is.
+- [x] `vitality_table.dart` — cardio row TITLE → `cardioTrackLabel` (the 38e-bis miss).
+      Extend the existing `isCardio` branch from the subtitle to the title.
+- [x] Saga rail (`character_card.dart` + `character_sheet_screen.dart`) — RESOLVED:
+      cardio is filtered OUT of the `BodyPartRankRow` loop and rendered via
+      `CardioProgressRow(trackLabel: cardioTrackLabel)` → already "CONDITIONING".
+      `body_part_rank_row.dart` never receives cardio → no change needed (38e claim correct).
+- [x] Rank-up celebration eyebrow — `post_session_controller.dart` `bodyPartLabels`
+      map resolved cardio via `localizedBodyPartName` = "Cardio"; now special-cases
+      cardio → `cardioTrackLabel`. Feeds every B2 rank-up/cascade/elevated cut eyebrow.
+- [x] Tests pin the regression: vitality table cardio title = "Conditioning" (+ strength
+      row keeps muscle-group name); rail row stays correct via CardioProgressRow.
+- [x] `dart format` + `dart analyze --fatal-infos` (0) + `flutter test` green.
