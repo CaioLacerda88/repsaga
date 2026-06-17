@@ -105,13 +105,26 @@ class _VitalityTableRow extends StatelessWidget {
         ? '—'
         : '${(row.pct * 100).round()}%';
     final localizedName = localizedBodyPartName(row.bodyPart, l10n);
+    // Phase 38e-bis: the cardio row carries a fixed decay subtitle naming its
+    // faster (τ=21d / ~3 weeks) decay window, regardless of conditioning
+    // state — the words carry the two-speed signal that color/pulse alone
+    // can't. Strength rows keep their normal §8.4 state copy below.
+    final isCardio = row.bodyPart == BodyPart.cardio;
     // Phase 26c (Task 10): untested rows use a short "No data" / "Sem dados"
     // subtitle in this compact table register. The long-form
     // `vitalityCopyUntested` stays in `VitalityStateStyles.localizedCopy` for
     // any other surface that reads it.
-    final stateCopy = row.state == VitalityState.untested
+    final stateCopy = isCardio
+        ? l10n.vitalityCardioDecaySubtitle
+        : row.state == VitalityState.untested
         ? l10n.vitalityRowUntestedSubtitle
         : VitalityStateStyles.localizedCopy(row.state, l10n);
+    // The cardio decay subtitle reads in the teal-dim register (cardio
+    // identity at 72% alpha — matches the mockup's `--cardio-dim`). Strength
+    // subtitles keep the default `bodySmall` dim color.
+    final subtitleColor = isCardio
+        ? AppColors.bodyPartCardio.withValues(alpha: 0.72)
+        : null;
 
     return Semantics(
       container: true,
@@ -153,7 +166,11 @@ class _VitalityTableRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           stateCopy,
-                          style: AppTextStyles.bodySmall,
+                          style: subtitleColor == null
+                              ? AppTextStyles.bodySmall
+                              : AppTextStyles.bodySmall.copyWith(
+                                  color: subtitleColor,
+                                ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

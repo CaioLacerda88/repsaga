@@ -236,6 +236,24 @@ abstract class AppLocalizations {
   /// **'No data'**
   String get vitalityRowUntestedSubtitle;
 
+  /// Cardio-only subtitle on the vitality table cardio row (Phase 38e-bis). Names the faster cardio decay window (τ=21d / ~3 weeks) in words. Strength rows keep their §8.4 state copy (Active/Waning/Dormant); only the cardio row shows this fixed decay subtitle regardless of state. Teal-dim register; must ellipsis at 320dp.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning fades in ~3 weeks'**
+  String get vitalityCardioDecaySubtitle;
+
+  /// One-time slim teal-hairline explainer banner near the vitality table on the stats deep-dive screen (Phase 38e-bis). States the two-speed decay rule (cardio τ=3wk vs strength τ=6wk) in words. Dismissible with an X; never re-shown after dismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Cardio conditioning decays faster than strength — train it weekly to hold the line.'**
+  String get statsCardioDecayExplainer;
+
+  /// Accessibility label for the X button that dismisses the one-time cardio decay explainer banner on the stats deep-dive screen (Phase 38e-bis).
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get statsCardioDecayExplainerDismiss;
+
   /// Label for the high band (66–100%) on the vitality HP-drain ramp. Shown inside the vitality explainer bottom sheet (Phase 26c).
   ///
   /// In en, this message translates to:

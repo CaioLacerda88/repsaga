@@ -31,9 +31,17 @@ the EXPLANATORY copy for cardio's faster (3-wk) decay. Design already approved i
 - l10n en+pt (+ `@key` descriptions); `make gen-l10n`; keep `arb_completeness_test` green.
 
 ### Checklist
-- [ ] tech-lead TDD: subtitle slot (cardio-only) + explainer banner (one-time dismissal
-      provider) + chart legend chip; l10n en+pt.
-- [ ] Widget tests: cardio row shows subtitle (strength rows don't); explainer one-time/
-      dismiss logic; 320dp no-overflow (subtitle is longer than strength state copy).
-- [ ] `make gen-l10n` + `dart format` + `dart analyze --fatal-infos` + `make test` green.
+- [x] l10n en+pt: `vitalityCardioDecaySubtitle`, `statsCardioDecayExplainer`,
+      `statsCardioDecayExplainerDismiss` (+ `@key` descriptions). Legend reuses
+      existing `muscleGroup*` + `cardioTrackLabel`.
+- [x] Subtitle slot: cardio-only decay subtitle in `vitality_table.dart` (teal-dim,
+      ellipsis, 320dp fit). Strength rows keep §8.4 state copy.
+- [x] One-time explainer: `cardio_decay_explainer_dismissal_provider.dart` (Hive
+      `userPrefs`, presence==dismissed; clone of age-prompt provider) +
+      `CardioDecayExplainerBanner` widget + wire into `stats_deep_dive_screen.dart`.
+- [x] Chart legend: `VitalityTrendChartLegend` below the chart — 7 chips, cardio teal.
+- [x] Widget tests: cardio row shows subtitle (strength rows don't); explainer
+      shows when not-dismissed, hides+persists after dismiss (one-time); 320dp
+      no-overflow (subtitle + banner); legend cardio chip present.
+- [x] `make gen-l10n` + `dart format` + `dart analyze --fatal-infos` + `make test` green.
 - [ ] reviewer → QA (selector-impact only; stats surface) → ship. No migration.
