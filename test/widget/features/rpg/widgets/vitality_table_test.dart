@@ -581,5 +581,182 @@ void main() {
         );
       });
     });
+
+    // -------------------------------------------------------------------------
+    // Phase 38e-bis — cardio decay subtitle (cardio row only)
+    // -------------------------------------------------------------------------
+    //
+    // The cardio row carries a fixed decay subtitle naming its faster (~3wk)
+    // decay window, regardless of conditioning state. Strength rows keep their
+    // normal §8.4 state copy — they must never show the cardio decay line.
+    group('cardio decay subtitle (Phase 38e-bis)', () {
+      // The cardio row TITLE is the conditioning STAT label (`cardioTrackLabel`
+      // = "Conditioning"), NOT the muscle-group name (`muscleGroupCardio` =
+      // "Cardio"). The muscle-group name belongs to the exercise picker; the
+      // Saga/stats surfaces all read the track label. Regression pin for the
+      // QA-found drift where the cardio row rendered "Cardio".
+      testWidgets('cardio row title renders "Conditioning", not "Cardio"', (
+        tester,
+      ) async {
+        const cardio = VitalityTableRow(
+          bodyPart: BodyPart.cardio,
+          pct: 0.58,
+          state: VitalityState.active,
+          rank: 3,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [cardio],
+            selected: BodyPart.cardio,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Conditioning'), findsOneWidget);
+        expect(find.text('Cardio'), findsNothing);
+      });
+
+      testWidgets(
+        'strength rows still render their muscle-group name as title',
+        (tester) async {
+          await tester.pumpWidget(
+            _wrap(
+              rows: _sixCanonicalRows(),
+              selected: BodyPart.chest,
+              onSelect: (_) {},
+            ),
+          );
+          await tester.pump();
+
+          // Strength titles are unaffected by the cardio-title fix.
+          expect(find.text('Chest'), findsOneWidget);
+          expect(find.text('Legs'), findsOneWidget);
+          // And no strength row ever borrows the cardio track label.
+          expect(find.text('Conditioning'), findsNothing);
+        },
+      );
+
+      testWidgets('cardio row shows the decay subtitle', (tester) async {
+        const cardio = VitalityTableRow(
+          bodyPart: BodyPart.cardio,
+          pct: 0.58,
+          state: VitalityState.active,
+          rank: 3,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [cardio],
+            selected: BodyPart.cardio,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Conditioning fades in ~3 weeks'), findsOneWidget);
+      });
+
+      testWidgets('cardio row shows the decay subtitle even when untested '
+          '(state-independent)', (tester) async {
+        // An untested STRENGTH row shows "No data"; the cardio row must show
+        // its decay subtitle instead — the cardio branch wins over the
+        // untested branch so the two-speed teaching copy is always present.
+        const cardioUntested = VitalityTableRow(
+          bodyPart: BodyPart.cardio,
+          pct: 0,
+          state: VitalityState.untested,
+          rank: 1,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [cardioUntested],
+            selected: BodyPart.cardio,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Conditioning fades in ~3 weeks'), findsOneWidget);
+        expect(find.text('No data'), findsNothing);
+      });
+
+      testWidgets('strength rows do NOT show the cardio decay subtitle', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrap(
+            rows: _sixCanonicalRows(),
+            selected: BodyPart.chest,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        // None of the six strength rows render the cardio decay line.
+        expect(find.text('Conditioning fades in ~3 weeks'), findsNothing);
+      });
+
+      testWidgets('cardio decay subtitle renders in the teal-dim register', (
+        tester,
+      ) async {
+        const cardio = VitalityTableRow(
+          bodyPart: BodyPart.cardio,
+          pct: 0.58,
+          state: VitalityState.active,
+          rank: 3,
+        );
+        await tester.pumpWidget(
+          _wrap(
+            rows: const [cardio],
+            selected: BodyPart.cardio,
+            onSelect: (_) {},
+          ),
+        );
+        await tester.pump();
+
+        final subtitle = tester.widget<Text>(
+          find.text('Conditioning fades in ~3 weeks'),
+        );
+        // Teal identity at 72% alpha — distinct from the default bodySmall
+        // dim color the strength subtitles use.
+        expect(
+          subtitle.style?.color,
+          AppColors.bodyPartCardio.withValues(alpha: 0.72),
+        );
+      });
+
+      testWidgets(
+        'cardio decay subtitle ellipsizes without overflow at 320dp',
+        (tester) async {
+          // The decay subtitle is longer than the strength state copy; pin
+          // that it lays out inside the 320dp narrowest target without a
+          // RenderFlex overflow.
+          await tester.binding.setSurfaceSize(const Size(320, 800));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          const cardio = VitalityTableRow(
+            bodyPart: BodyPart.cardio,
+            pct: 0.58,
+            state: VitalityState.active,
+            rank: 3,
+          );
+          await tester.pumpWidget(
+            _wrap(
+              rows: const [cardio],
+              selected: BodyPart.cardio,
+              onSelect: (_) {},
+            ),
+          );
+          await tester.pump();
+
+          expect(tester.takeException(), isNull);
+          final subtitle = tester.widget<Text>(
+            find.text('Conditioning fades in ~3 weeks'),
+          );
+          expect(subtitle.maxLines, 1);
+          expect(subtitle.overflow, TextOverflow.ellipsis);
+        },
+      );
+    });
   });
 }

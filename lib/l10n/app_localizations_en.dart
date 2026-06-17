@@ -79,6 +79,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vitalityRowUntestedSubtitle => 'No data';
 
   @override
+  String get vitalityCardioDecaySubtitle => 'Conditioning fades in ~3 weeks';
+
+  @override
+  String get statsCardioDecayExplainer =>
+      'Cardio conditioning decays faster than strength — train it weekly to hold the line.';
+
+  @override
+  String get statsCardioDecayExplainerDismiss => 'Dismiss';
+
+  @override
   String get vitalityStateBandActive => 'Active';
 
   @override

@@ -5,10 +5,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../models/body_part.dart';
 import '../models/stats_deep_dive_state.dart';
+import '../providers/cardio_decay_explainer_dismissal_provider.dart';
 import '../providers/stats_provider.dart';
+import 'widgets/cardio_decay_explainer_banner.dart';
 import 'widgets/vitality_explainer_sheet.dart';
 import 'widgets/vitality_table.dart';
 import 'widgets/vitality_trend_chart.dart';
+import 'widgets/vitality_trend_chart_legend.dart';
 import 'widgets/volume_peak_block.dart';
 
 /// `/saga/stats` deep-dive screen.
@@ -98,7 +101,7 @@ class _StatsDeepDiveScreenState extends ConsumerState<StatsDeepDiveScreen> {
   }
 }
 
-class _Body extends StatelessWidget {
+class _Body extends ConsumerWidget {
   const _Body({
     required this.state,
     required this.selectedBodyPart,
@@ -110,8 +113,13 @@ class _Body extends StatelessWidget {
   final ValueChanged<BodyPart> onSelectBodyPart;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // Phase 38e-bis: the one-time cardio stats-decay explainer shows only
+    // while the dismissal flag is absent. Watching the Hive-backed provider
+    // means tapping the X (which calls markDismissed) rebuilds without the
+    // banner; the flag survives every cache wipe so it never re-shows.
+    final explainerDismissed = ref.watch(cardioDecayExplainerDismissalProvider);
     final trendHeading = state.useNarrowWindow
         ? l10n.vitalityTrendHeadingShort
         : l10n.vitalityTrendHeading;
@@ -143,6 +151,24 @@ class _Body extends StatelessWidget {
             useNarrowWindow: state.useNarrowWindow,
           ),
         ),
+        const SizedBox(height: 12),
+        // ─── Trend chart legend ──────────────────────────────────────────
+        // Phase 38e-bis: a 7-chip legend disambiguates the chart's lines —
+        // the 7th teal chip ("Conditioning") ties the bright teal cardio line
+        // to the cardio track.
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: VitalityTrendChartLegend(),
+        ),
+        // ─── One-time cardio decay explainer ─────────────────────────────
+        if (!explainerDismissed)
+          CardioDecayExplainerBanner(
+            message: l10n.statsCardioDecayExplainer,
+            dismissLabel: l10n.statsCardioDecayExplainerDismiss,
+            onDismiss: () => ref
+                .read(cardioDecayExplainerDismissalProvider.notifier)
+                .markDismissed(),
+          ),
         const SizedBox(height: 24),
 
         // ─── Live Vitality table ──────────────────────────────────────────

@@ -20,12 +20,15 @@ import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/stats_deep_dive_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
+import 'package:repsaga/features/rpg/providers/cardio_decay_explainer_dismissal_provider.dart';
 import 'package:repsaga/features/rpg/providers/stats_provider.dart';
 import 'package:repsaga/features/rpg/ui/stats_deep_dive_screen.dart';
 import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
+import 'package:repsaga/features/rpg/ui/widgets/cardio_decay_explainer_banner.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_explainer_sheet.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_table.dart';
 import 'package:repsaga/features/rpg/ui/widgets/vitality_trend_chart.dart';
+import 'package:repsaga/features/rpg/ui/widgets/vitality_trend_chart_legend.dart';
 import 'package:repsaga/features/rpg/ui/widgets/volume_peak_block.dart';
 
 import '../../../../helpers/test_material_app.dart';
@@ -35,6 +38,20 @@ class _StubProfileNotifier extends ProfileNotifier {
   final Profile _profile;
   @override
   Future<Profile?> build() async => _profile;
+}
+
+/// Hive-free stub for the one-time cardio-decay explainer dismissal flag.
+/// Mirrors the production notifier's API without touching Hive so the screen
+/// tests stay backend-free.
+class _StubCardioDecayDismissal extends CardioDecayExplainerDismissalNotifier {
+  _StubCardioDecayDismissal(this._initial);
+  final bool _initial;
+  @override
+  bool build() => _initial;
+  @override
+  Future<void> markDismissed() async {
+    state = true;
+  }
 }
 
 /// A canonical "user with 90 days of activity" state — six body parts trained
@@ -83,6 +100,14 @@ StatsDeepDiveState _canonicalState({
         state: VitalityState.radiant,
         rank: 5,
       ),
+      // Phase 38e: the provider emits a 7th cardio row alongside the six
+      // strength tracks.
+      VitalityTableRow(
+        bodyPart: BodyPart.cardio,
+        pct: 0.58,
+        state: VitalityState.active,
+        rank: 3,
+      ),
     ],
     trendByBodyPart: {
       for (final bp in activeBodyParts)
@@ -105,6 +130,7 @@ Widget _wrap({
   required StatsDeepDiveState state,
   String weightUnit = 'kg',
   BodyPart? initialBodyPart,
+  bool explainerDismissed = false,
 }) {
   final stubProfile = Profile(
     id: 'test-user',
@@ -116,6 +142,11 @@ Widget _wrap({
     overrides: [
       statsProvider.overrideWith((ref) async => state),
       profileProvider.overrideWith(() => _StubProfileNotifier(stubProfile)),
+      // Hive-free dismissal stub: defaults to NOT-dismissed so the explainer
+      // shows; flip per-test to assert the dismissed branch.
+      cardioDecayExplainerDismissalProvider.overrideWith(
+        () => _StubCardioDecayDismissal(explainerDismissed),
+      ),
     ],
     child: TestMaterialApp(
       home: StatsDeepDiveScreen(initialBodyPart: initialBodyPart),
@@ -193,6 +224,12 @@ void main() {
     testWidgets('tapping a vitality row drives the trend chart selected line', (
       tester,
     ) async {
+      // Tall surface so the Legs row is on-screen for the tap (the chart
+      // legend + decay explainer banner added below the chart push the table
+      // down past the default 600dp fold).
+      await tester.binding.setSurfaceSize(const Size(400, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       await tester.pumpWidget(_wrap(state: _canonicalState()));
       await tester.pumpAndSettle();
 
@@ -205,8 +242,14 @@ void main() {
           .length;
       expect(chestVivid, 1);
 
-      // Tap the Legs row.
-      await tester.tap(find.text('Legs'));
+      // Tap the Legs row in the vitality table (the VolumePeakBlock further
+      // down also renders a "Legs" label, so scope the finder to the table).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(VitalityTable),
+          matching: find.text('Legs'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       chart = tester.widget<LineChart>(find.byType(LineChart));
@@ -355,6 +398,94 @@ void main() {
             find.byKey(const ValueKey('volume-peak-info-icon')),
             findsNothing,
           );
+        },
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // Phase 38e-bis — trend legend + one-time cardio decay explainer
+    // -------------------------------------------------------------------------
+    group('cardio decay explainer + legend (Phase 38e-bis)', () {
+      testWidgets('renders the trend chart legend', (tester) async {
+        await tester.binding.setSurfaceSize(const Size(400, 1600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(_wrap(state: _canonicalState()));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(VitalityTrendChartLegend), findsOneWidget);
+        // The 7th chip reads as the cardio track in teal.
+        expect(find.text('CONDITIONING'), findsOneWidget);
+      });
+
+      testWidgets('shows the explainer banner when not dismissed', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(const Size(400, 1600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          _wrap(state: _canonicalState(), explainerDismissed: false),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(CardioDecayExplainerBanner), findsOneWidget);
+        expect(
+          find.text(
+            'Cardio conditioning decays faster than strength — '
+            'train it weekly to hold the line.',
+          ),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('hides the explainer banner when already dismissed', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(const Size(400, 1600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          _wrap(state: _canonicalState(), explainerDismissed: true),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(CardioDecayExplainerBanner), findsNothing);
+      });
+
+      testWidgets(
+        'tapping the X dismisses the banner and it stays gone (one-time)',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 1600));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(
+            _wrap(state: _canonicalState(), explainerDismissed: false),
+          );
+          await tester.pumpAndSettle();
+
+          // Visible to start.
+          expect(find.byType(CardioDecayExplainerBanner), findsOneWidget);
+
+          // Tap the X → markDismissed flips the watched flag → rebuild omits
+          // the banner.
+          await tester.tap(find.byIcon(Icons.close));
+          await tester.pumpAndSettle();
+
+          expect(find.byType(CardioDecayExplainerBanner), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'cardio vitality row shows the decay subtitle on the screen',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(400, 2000));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+
+          await tester.pumpWidget(_wrap(state: _canonicalState()));
+          await tester.pumpAndSettle();
+
+          expect(find.text('Conditioning fades in ~3 weeks'), findsOneWidget);
         },
       );
     });
