@@ -332,13 +332,17 @@ class _HeaderRow extends StatelessWidget {
     );
   }
 
-  /// Dominant = the highest-ranked trained body part. Tie-break by canonical
-  /// [activeBodyParts] order (chest → back → legs → shoulders → arms → core),
-  /// matching the determinism contract on [closestRankUp]. Returns null when
-  /// every active body part is untrained (day-0 user).
+  /// Dominant = the highest-ranked trained STRENGTH body part. Cardio is
+  /// excluded: identity (dominant-chip + class-pin) stays pure 6-strength —
+  /// cardio is a separate track recognized via titles, not an identity
+  /// (locked scope decision). Tie-break by canonical [strengthBodyParts]
+  /// order (chest → back → legs → shoulders → arms → core), matching the
+  /// determinism contract on [closestRankUp]. Returns null when every
+  /// strength body part is untrained (day-0 user).
   BodyPartSheetEntry? _dominantTrainedEntry(CharacterSheetState sheet) {
     BodyPartSheetEntry? best;
     for (final e in sheet.bodyPartProgress) {
+      if (e.bodyPart == BodyPart.cardio) continue; // identity = strength-only
       if (e.isUntrained) continue;
       if (best == null || e.rank > best.rank) best = e;
     }

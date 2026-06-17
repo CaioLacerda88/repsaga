@@ -1447,6 +1447,8 @@ export const SAGA = {
   /** Per-body-part rank row — Semantics(identifier: 'body-part-row-{slug}') */
   bodyPartRow: (slug: 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core') =>
     `[flt-semantics-identifier="body-part-row-${slug}"]`,
+  /** CardioProgressRow — Semantics(identifier: 'body-part-row-cardio') */
+  cardioProgressRow: '[flt-semantics-identifier="body-part-row-cardio"]',
   /**
    * Phase 26b SagaHeader class-label Text — Semantics(identifier: 'saga-header-class').
    * Replaces the legacy ClassBadge selector ('class-badge'). The class label
@@ -1465,8 +1467,6 @@ export const SAGA = {
    * The XP progress bar shown beneath the SagaHeader on the character sheet.
    */
   characterXpBar: '[flt-semantics-identifier="character-xp-bar"]',
-  /** DormantCardioRow — Semantics(identifier: 'dormant-cardio-row') */
-  dormantCardioRow: '[flt-semantics-identifier="dormant-cardio-row"]',
   /** First-set-awakens onboarding banner — Semantics(identifier: 'first-set-awakens-banner') */
   firstSetAwakensBanner: '[flt-semantics-identifier="first-set-awakens-banner"]',
   /** Codex nav rows — Semantics(identifier: 'codex-nav-{section}') */
