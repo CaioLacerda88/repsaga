@@ -49,13 +49,42 @@ BEFORE build, + visual-verification gate before merge.**
   fast-follow 38e-bis, but the minimum coherent flip — Saga row + hue + char-level +
   classes + summary row — stays ATOMIC in this PR.)*
 
-### Boundary inventory — TO FILL via Explore before implementation
-_(Every `activeBodyParts` consumer (~40 sites: 21 lib + 16 test per the plan); both
-`_activeKeys` defaults; `character_state` view + in-RPC recompute; `CharacterClass` +
-`class_resolver` + `dominantClass`; `DormantCardioRow` → `CardioProgressRow` call site;
-vitality table/chart row/line wiring; post-session `LiftRow` → `CardioEntryRow`; B2/B3
-cut widgets; the max-level 148→172 consumers (title cap, level-up); E2E selectors that
-assume 6 rows.)_
+### Decisions locked (user + agents, 2026-06-17)
+- **Vitality decay = FULL two-speed in 38e** (user): add cardio to `vitality-nightly` job
+  + cardio-specific **τ_down = 21d (3wk)** in BOTH `VitalityCalculator` (Dart) +
+  `vitality-nightly` (TS) + parity; ship the "conditioning fades in ~3 weeks" copy.
+  (Strength stays τ_down=42d; "never copy τ between stats".)
+- **No literal heptagon** (ui-ux): cardio is a **banded** 7th row/line (`surface2` divider
+  + teal-tint band + `CARDIO` eyebrow), NOT homogenized onto the strength hexagon. Vitality
+  chart = 7th teal line + decay-window copy when selected (split valve: separate strip only
+  if 320dp crowds).
+- **Two-speed legibility carried by WORDS** (per-row decay subtitle + one-time stats
+  explainer), not color/pulse alone.
+- **char-level max → 172 (computed)**; the top *title* `saga_eternal` STAYS at 148 +
+  the new 172 level-cap title is **38f**. 38e updates the COMPUTED-max in fixtures/tests
+  (all-99 7-key → 172) but leaves the title threshold at 148.
+- **Stays 6 (do NOT let the flip leak in):** weekly-plan engagement (`weekly_engagement.dart`
+  cardio-skip + `engajamento_section`), cross-build title SQL evaluators (`00043/00045/00049`),
+  Ascendant spread, class-change cut `hotViolet`.
+- **Acceptance criterion (thesis):** a pure-strength user's character level must NEVER
+  regress post-38e (denominator-stays-4 proof) — named test required.
+
+### Boundary inventory (filled via Explore — implementation may start)
+**Atomic-flip sites (MUST move together):**
+1. `lib/features/rpg/models/body_part.dart:50-57` `activeBodyParts` (+`cardio`) — the trigger.
+2. `lib/features/rpg/domain/rank_curve.dart:179-186` `_activeKeys` (+`'cardio'`); denominator `~/4` stays.
+3. `lib/features/rpg/domain/character_xp_calculator.dart:7` `_activeKeys` (SEPARATE — +`'cardio'`).
+4. **SQL migration 00080:** `character_state` view filter `00040:321` (current def, never redefined) + in-RPC recompute filters in **00077** (current; NOT 00065): `record_set_xp` `00077:224,507`, `record_session_xp_batch` `00077:734,1102`, `_rpg_backfill_chunk` (~`00077:1226` block). All `WHERE body_part IN (6)` → 7.
+5. **Classes:** `character_class.dart:21-46` (+`wayfarer` variant+slug+l10nKey); `class_resolver.dart:64-71` `dominantClass` (+`cardio→wayfarer`) AND `:85-106` carve cardio OUT of Ascendant spread while keeping it in the dominant lookup; `class_wayfarer` ARB. Compound `[Strength]·[Cardio]` label render sites: `saga_header.dart:146-175` (10sp, maxWidth 120 — two-tone single line, day-zero = strength alone no trailing middot) + `class_badge.dart`.
+6. `lib/features/rpg/domain/body_part_hues.dart:62` `cardio: hair` → `bodyPartCardio` (ONE line → teal flows to rows + B2 floods + chart line + table for free). `bodyPartCardio` already `#22D3EE` (`app_theme.dart:93`).
+7. Saga: `character_sheet_screen.dart:127-135` — remove `DormantCardioRow` block (else double-cardio: provider auto-adds a 7th `BodyPartRankRow` + dormant still renders) → new `CardioProgressRow` (alive: `AmbientPulseDot`, rank numeral, teal bar, tap→`/saga/stats?body_part=cardio`; + untrained-cardio day-zero state). Delete/retire `dormant_cardio_row.dart`. Skeleton to borrow: `body_part_rank_row.dart:41`.
+8. **Vitality two-speed (net-new):** `vitality_calculator.dart:23-41` (single τ today) → per-bp τ (cardio 21d); `vitality-nightly/index.ts:104-110` (TAU + cardio-excluded set) → include cardio + cardio τ; parity (the EWMA closed-form integration tests).
+9. **CardioEntryRow (post-session):** new sibling of `lift_row.dart` (teal dot, duration hero, distance/pace dim suffix via `CardioFormat`, `FittedBox` 320dp guard, NO PR/heroGold); insert in `mission_debrief_section.dart:182-193` (today loops strength-only `topLifts` from `post_session_controller.dart:213`). Mixed strength+cardio ledger must read coherent.
+10. **148→172 computed-max:** fixtures `generate_rpg_fixtures.py:405` (7-key all-99→172) + regen `rpg_xp_fixtures.json:1144`; tests `rank_curve_test.dart:274,284`, `titles_repository_test.dart:392`. (Title threshold 148 untouched — 38f.)
+
+**Auto-extends on flip (verify, no change):** all providers (`character_sheet_provider:59`, `class_provider:40`, `rpg_progress_provider:43,69`, `stats_provider:119,168,299,310`), `StatsDeepDiveState.empty`, `celebration_event_builder` (rank-up/level-up/class-change/first-awakening loops — auto-fires cardio cuts), `vitality_trend_chart:106` (7th line), `vitality_table` (7th row — add the band), B2 cut floods (teal via hue map), `post_session_controller:194` ranksToNextLevel (will include cardio — must match SQL char-level).
+
+**Tests to rewrite (assert old 6/148/cardio-excluded):** `attribution_test.dart:212-215` (length==6, !contains cardio), `class_resolver_test.dart:209` (Ascendant excludes cardio), `vitality_state_styles_test.dart:103`, `vitality_trend_chart_test.dart:99,132,229`, `vitality_table_test.dart:45`, `character_sheet_screen_test.dart:254,303,338,354-355` (findsNWidgets(6) + DormantCardioRow), `character_card_test.dart:752,759,839`, `rank_curve_test.dart:274,284`, fixtures. E2E: `selectors.ts:1468-1469` (`dormantCardioRow`→cardio row), `saga.spec.ts` class/level, `rank-up-celebration.spec.ts` parity levels, `rpg-foundation.spec.ts` levels.
 
 ### Pipeline checklist
 - [ ] Boundary Explore → fill the inventory (the load-bearing step — nothing builds until filled).
