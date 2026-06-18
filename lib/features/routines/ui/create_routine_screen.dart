@@ -392,10 +392,6 @@ class _ExerciseCard extends StatelessWidget {
 
   static const _restOptions = [30, 60, 90, 120, 180, 240];
 
-  /// Default cardio target duration when the user hasn't set one (mirrors the
-  /// active card's 30:00 empty-state default).
-  static const _defaultTargetDurationSeconds = 30 * 60;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -471,7 +467,7 @@ class _ExerciseCard extends StatelessWidget {
                     context,
                     initialSeconds:
                         entry.targetDurationSeconds ??
-                        _defaultTargetDurationSeconds,
+                        kDefaultCardioDurationSeconds,
                   );
                   if (seconds != null) onTargetDurationChanged(seconds);
                 },

@@ -41,16 +41,11 @@ import '../../models/routine_start_config.dart';
 import '../../models/set_type.dart';
 import '../../models/weight_unit.dart';
 import '../../models/workout_exercise.dart';
+import '../../utils/cardio_format.dart';
 import '../../utils/set_defaults.dart';
 import '../workout_providers.dart';
 
 const _uuid = Uuid();
-
-/// Default duration seeded onto a fresh cardio entry (Phase 38b) — the
-/// locked mockup's "Empty (default)" state shows 30:00. Lives here (not in
-/// the widget) because the notifier owns entry creation; the card only
-/// renders whatever the state carries.
-const _defaultCardioDurationSeconds = 30 * 60;
 
 /// Locales we currently ship ARBs for. Kept local to this file rather than
 /// centralized — `lookupAppLocalizations` throws on unrecognized codes, and
@@ -640,7 +635,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       id: _uuid.v4(),
       workoutId: workoutId,
       exerciseId: exerciseId,
-      durationSeconds: durationSeconds ?? _defaultCardioDurationSeconds,
+      durationSeconds: durationSeconds ?? kDefaultCardioDurationSeconds,
       distanceM: distanceM,
       isCompleted: false,
       createdAt: DateTime.now().toUtc(),

@@ -1,5 +1,6 @@
 import '../../exercises/models/exercise.dart';
 import '../../routines/models/routine.dart';
+import '../../workouts/utils/cardio_format.dart';
 
 /// Rough estimate of the work time spent on a single set (seconds).
 ///
@@ -15,11 +16,6 @@ const int _workSecondsPerSet = 30;
 /// set_configs never got migrated — a 6 min per-exercise floor lines up with
 /// a typical accessory lift and keeps the CTA stats line believable.
 const int _fallbackSecondsPerExercise = 3 * (90 + _workSecondsPerSet);
-
-/// Contribution (seconds) of a cardio entry whose target duration is unset —
-/// the same 30:00 the active card defaults to. A cardio entry has no rest×sets
-/// shape, so rest×sets would over- or under-count it.
-const int _defaultCardioSeconds = 30 * 60;
 
 /// Estimates a routine's total duration in minutes.
 ///
@@ -45,7 +41,7 @@ int estimateRoutineDurationMinutes(Routine routine) {
       final target = ex.setConfigs.isNotEmpty
           ? ex.setConfigs.first.targetDurationSeconds
           : null;
-      totalSeconds += target ?? _defaultCardioSeconds;
+      totalSeconds += target ?? kDefaultCardioDurationSeconds;
       continue;
     }
     if (ex.setConfigs.isEmpty) {
