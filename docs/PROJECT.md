@@ -95,6 +95,7 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | 38e | Cardio / Conditioning Track — **activation (atomic boundary flip).** Cardio goes silent→visible 7th track. **Level = the whole** (cardio counts; denominator stays 4, computed max 148→172) via both `_activeKeys` + migration **00080** (`rpg_active_body_part_level` helper + `character_state` view + in-RPC level snapshots 6→7; `saga_eternal` title stays 148, 172 title is 38f). Dart↔SQL char-level parity live-verified byte-identical; **never-regress** proof (pure-strength level never drops) pinned Dart+SQL. **NO cardio class** (titles-only, 38f): `class_resolver`/`class_provider` pinned to a new `strengthBodyParts` const so cardio never enters class/Ascendant; home dominant-identity chip also strength-pure. **Two-speed vitality:** cardio `τ_down=21d` vs strength `42d` in `VitalityCalculator` (per-bp) + `vitality-nightly` (cardio added to active set + cardio τ; edge fn redeployed to hosted). `body_part_hues` cardio→`bodyPartCardio` (teal flows to rows/B2 floods/chart/table). `CardioProgressRow` (banded, alive+untrained) replaces deleted `DormantCardioRow`; `CardioEntryRow` in the debrief. Reviewer (live parity verify) + QA + visual gate (mockup-matched) all signed off; CI green. Stats decay COPY split to **38e-bis**. | DONE | #344 |
 | 38f | Cardio / Conditioning Track — **titles + vitality XP-gate.** 13-rung cardio title ladder (First Stride@5 → The Stride@99, wind/stride totem, teal) + `saga_unending`@172 char-level title + 2 cross-build (`the_forged_wind` all≥60 incl cardio; `storm_tempered` cardio≥60 + strength≥30); `iron_bound` tightened (+`cardio≤10`, future-awards-only/append-only). Titles 90→106. Dart cross-build evaluator bit-identical to the SQL mirror; migration **00081** extends the award VALUES (00080) + `evaluate_cross_build_titles_for_user` (00049). **Also wired the cardio vitality XP-gate** (the plan's missed 38c item): `record_cardio_session` applies `vmult=0.40+0.60×vpct` (cardio vitality_ewma/peak) as the final XP factor + Dart mirror + 4-site parity regen (matches the calibrated sim; strength untouched). Reviewer (Dart↔SQL parity + gate verified) + QA/visual (cardio rungs teal+named, new cross-build cards live, /106) signed off; CI green. | DONE | #348 |
 | 38e-bis | Cardio / Conditioning Track — **stats decay copy** (deferred from the 38e split-valve). Explains cardio's already-live faster (3-wk) vitality decay: cardio-only **decay subtitle** on the vitality table row ("Conditioning fades in ~3 weeks"/pt; teal-dim, 320dp ellipsis); one-time dismissible **decay explainer banner** (`CardioDecayExplainerBanner` + Hive `cardio_decay_explainer_dismissal_provider`); new **`VitalityTrendChartLegend`** (7 chips, cardio "Conditioning" teal — no chart legend existed before). QA caught + fixed a title drift: cardio row title was "Cardio" not the contract `cardioTrackLabel` "Conditioning" — fixed at the vitality table + the post-session rank-up eyebrow (latent since 38e), unit-pinned. Copy-only, no migration. | DONE | #346 |
+| 38g | Cardio / Conditioning Track — **E2E + QA + calibration sign-off (closes Phase 38).** Consolidated `specs/cardio.spec.ts` — the end-to-end cardio journey in one feature file (log → post-session debrief cardio row → Saga teal `CardioProgressRow` → tap→`/saga/stats?body_part=cardio` → **character level reflects cardio**: `Lvl 3` vs strength-only `Lvl 2`, pinning never-regress at the user surface); removed the now-duplicate post_session cardio block; 29/29 affected specs + 9/9 at `--repeat-each=3`. **Calibration sign-off (user, 2026-06-18):** cardio balance locked **v1-final** — removed the "v1 DRAFT" markers from `cardio-xp-simulation.py` + `cardio-balance-baseline.md` (14/14 persona panel + ACSM tier bands; marker-only, no constant changed); post-launch real-data recalibration is a future phase. Test+docs only, no migration. **Phase 38 (Cardio / Conditioning Track) COMPLETE** — 38a–38g + 38e-bis; migrations 00077–00081 + the `vitality-nightly` edge fn on hosted. | DONE | #350 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -261,20 +262,15 @@ Single source of truth for **deferred work that is not yet a phase but is on the
 
 Items in (d) move to the "v2-park" sub-list and don't get worked on without new product input.
 
-### Phase 38 — Cardio / Conditioning Track: remaining stages (sequential)
+### Phase 38 — Cardio / Conditioning Track: ✅ COMPLETE (2026-06-18)
 
-38a (#335) + 38b (#337) + 38c (#340) + 38d (#342) + 38e (#344) shipped; migrations
-00077–00080 + the `vitality-nightly` edge function on hosted. Cardio is now a **visible
-7th track** (rank, char-level, Saga row, two-speed vitality). Full per-stage spec in
-the plan `~/.claude/plans/noble-stirring-scroll.md`.
-
-- **38g — E2E + QA + calibration sign-off (final cardio stage):** consolidated
-  `cardio.spec.ts` (full earn → cardio rank-up → Saga cardio row flow), affected-spec
-  regression, final `make ci` + full E2E green; calibration sign-off = lock the cardio
-  formula constants from "v1 DRAFT" → v1-final (the 14-persona panel + tier bands;
-  no real user data pre-launch). Incremental cardio E2E already landed in 38e
-  (`saga.spec.ts` cardio rows, `post_session.spec.ts` cardio debrief) + 38f
-  (`titles.spec.ts` /106).
+All stages shipped — 38a (#335) · 38b (#337) · 38c (#340) · 38d (#342) · 38e (#344) ·
+38e-bis (#346) · 38f (#348) · 38g (#350); migrations 00077–00081 + the `vitality-nightly`
+edge fn on hosted; cardio balance locked v1-final. Cardio is a full visible 7th
+progression track (rank, character level, Saga row, two-speed vitality, titles). Plan
+`~/.claude/plans/noble-stirring-scroll.md` can be archived. Per-stage detail in the §
+Progress-snapshot table rows + the PRs. Post-launch follow-up (deferred, not parked work):
+real-user-data recalibration of the cardio tier bands.
 
 ### CI integration-test job (follow-up from #339)
 
@@ -283,7 +279,9 @@ because it needs a live Supabase — so it rotted to 18 failures undetected unti
 review (#339 repaired it; memory `project_integration_suite_red_on_main`). **devops
 follow-up:** stand up a CI job running `flutter test --tags integration` against a CI
 Supabase service so this can't silently rot again. Until then, the integration gate is
-manual ("no new failures vs main", run the FULL suite locally).
+manual ("no new failures vs main", run the FULL suite locally). NOTE (38e-bis QA): the
+e2e shard 2 brushes the 30-min `timeout-minutes` ceiling and intermittently times out —
+rebalance the shard split when standing up the CI integration job.
 
 ### Architectural follow-ups (parked, no urgency)
 
