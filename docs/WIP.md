@@ -27,18 +27,62 @@ rank track (38e) it earns titles like the 6 strength parts.
   future decision — would need a fresh 13-persona re-tune).
 - **Tests:** title evaluation with cardio active; the 3 cross-build predicates.
 
-### Decisions for the USER (permanent user-facing names → surface before build)
-- The full **13-rung cardio title-ladder names + flavor** (en+pt) + the **172
-  level-cap title** name. These are permanent (awarded into the DB), so get the
-  user's sign-off on the names before implementing.
+### Decisions locked (user, 2026-06-17)
+- **Title names APPROVED as-is** (ladder + Saga-Unending@172 + cross-build triangle — table below).
+- **VITALITY_XP_GATE: WIRE IN 38f.** The plan/old-WIP wrongly assumed cardio's
+  `VITALITY_XP_FLOOR=0.40` gate was applied in 38c — it is NOT (only in the Python sim;
+  `record_cardio_session` (00079) earns `base×tdm×mod×3.5` with NO vitality mult). 38f
+  adds the cardio vitality XP-multiplier `mult = FLOOR + (1−FLOOR)×vpct` (vpct =
+  clamp(cardio vitality_ewma/peak,0,1)) to `record_cardio_session` (SQL) + mirror in
+  `cardio_xp_calculator.dart`; regen the 4-site parity (the sim applies it caller-side at
+  `cardio-xp-simulation.py:412`, so add a vitality-gated fixture section + update the
+  earning parity test). **Strength NOT retrofitted.**
 
-### Boundary inventory — TO FILL via Explore (the title system)
-_(Title data: `title_thresholds_table.dart`, `titles_repository.dart`, `title.dart`,
-`assets/rpg/titles_*.json`; the SQL award VALUES lists in `record_set_xp` +
-`record_session_xp_batch` (00077) + the cross-build evaluators `00043/00045/00049`;
-l10n title keys + `title_localization.dart`; titles screen + `titles_view_model`;
-how a body-part title ladder is defined for the 6 strength parts (the pattern to
-mirror for cardio); the 148→172 character-level title rung.)_
+### Boundary inventory (filled via Explore) — ⚠ migration-number corrections
+- **Current XP RPC def = `00080`** (NOT 00077); cross-build evaluator current = **`00049`**.
+  New migration **00081** does `CREATE OR REPLACE` from 00080/00049 bodies.
+- **Title data pattern (mirror for cardio):** `title_thresholds_table.dart` flat const
+  list, `TitleThresholdKind{bodyPart,characterLevel,crossBuild}`, sorted by slug per kind.
+  Each strength part = **13 rungs @ thresholds 5,10,15,20,25,30,40,50,60,70,80,90,99**;
+  slug `<part>_r<thr>_<name>`. Char-level ladder 7 rungs ending `saga_eternal@148`
+  (`assets/rpg/titles_character_level.json`). Cross-build 5 entries; predicate in Dart
+  (`cross_build_title_evaluator.dart`) — MUST stay bit-identical to the SQL mirror.
+- **Add for cardio:** 13 `cardio_r*` bodyPart entries (in `titles_v1.json` + the table —
+  loader injects `kind:body_part`), 1 char-level `saga_unending@172`, 2 cross-build.
+  ⚠ `BodyPart.cardio` is now a real enum value (38e) — confirm.
+- **l10n:** keys `title_<slug>_name` / `_flavor` in `app_en.arb`+`app_pt.arb`; EXHAUSTIVE
+  switch `title_localization.dart` needs a CASE per new slug (else raw slug shows).
+- **SQL award:** body-part VALUES + char-level VALUES lists in BOTH `record_set_xp` +
+  `record_session_xp_batch` (`00080`); cross-build delegated to
+  `evaluate_cross_build_titles_for_user` (`00049`) — extend all. Add `('saga_unending',172)`
+  to char-level VALUES; add 13 cardio `(slug,'cardio',thr)` to body-part VALUES.
+- **Titles screen auto-wires** (iterates `activeBodyParts`) — BUT `VitalityStateStyles.bodyPartColor`
+  needs a **teal cardio entry** or cardio rungs render grey; new cross-build slugs need
+  `crossBuildStatsFor` + `gapHintFor` cases.
+- **Count guard:** `titles_repository_test.dart` asserts **90 → 106** (+13 cardio +1 char +2 cross);
+  add `perBodyPart[cardio]==13`. Title-table↔JSON drift test + e2e `titles.spec.ts`.
+- ⚠ **iron_bound tightening must NOT revoke** already-earned titles (`earned_titles` append-only;
+  future awards only — the backfill must not DELETE).
+
+### LOCKED title spec (user-approved 2026-06-17)
+**Cardio ladder** (`cardio_r<thr>_<name>`, kind=bodyPart, BodyPart.cardio):
+`5 first_stride` (First Stride) · `10 breath_found` (Breath-Found) · `15 wind_touched`
+(Wind-Touched) · `20 pace_keeper` (Pace-Keeper) · `25 long_strider` (Long-Strider) ·
+`30 wind_drawn` (Wind-Drawn) · `40 tempo_sworn` (Tempo-Sworn) · `50 wind_crowned`
+(Wind-Crowned) · `60 breath_forged` (Breath-Forged) · `70 wind_runner` (Wind-Runner) ·
+`80 stride_of_storms` (Stride of Storms) · `90 wind_untouched` (Wind-Untouched) ·
+`99 the_stride` (The Stride).
+**Char-level @172:** `saga_unending` (Saga-Unending) — "One seventy-two. Nothing left to
+forge — only the legend, going on without end." / pt "Saga-Sem-Fim".
+**Cross-build (predicates — keep Dart↔SQL bit-identical; cardioRank defaults to 1):**
+- `iron_bound` AMEND: `chest≥60 AND back≥60 AND legs≥60 AND cardioRank≤10` (flavor unchanged).
+- `the_forged_wind` NEW: all 6 strength ≥60 AND cardioRank≥60 ("The Forged Wind" /
+  "O Vento Forjado" — "Every track at sixty, the lungs among them. Iron that runs.").
+- `storm_tempered` NEW: cardioRank≥60 AND all 6 strength ≥30 ("Storm-Tempered" /
+  "Temperado-na-Tempestade" — "The lungs of a gale, hands that still know iron.
+  Tempered, not narrowed.").
+> Full en+pt name+flavor for all 16 = the ui-ux-critic proposal (this session). The
+> tech-lead fills the ARB from that table; the slugs/thresholds/predicates above are authoritative.
 
 ### Pipeline checklist
 - [ ] Boundary Explore → fill the inventory.
