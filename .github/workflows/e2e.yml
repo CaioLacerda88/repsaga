@@ -20,7 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # 4 shards instead of 3: shard 2 was brushing the 30-min ceiling
+        # intermittently. Splitting to 4 lowers per-shard test count and
+        # wall-clock while keeping the safety ceiling at 30 min.
+        shard: [1, 2, 3, 4]
 
     steps:
       - uses: actions/checkout@v6
@@ -112,9 +115,9 @@ jobs:
             echo "Waiting for auth endpoint... (attempt $i/30)"
             sleep 2
             # Hard-fail rather than fall through to a cryptic global-setup auth
-            # error. Newly load-bearing under sharding: 3 parallel runners each
-            # boot their own Supabase, so a Docker resource-pressure failure on
-            # one shard must fail fast with a clear cause, not a 30-min timeout.
+            # error. Load-bearing under sharding: each sharded runner boots its
+            # own Supabase, so a Docker resource-pressure failure on one shard
+            # must fail fast with a clear cause, not a 30-min timeout.
             if [ "$i" -eq 30 ]; then echo "ERROR: Supabase auth endpoint never became ready"; exit 1; fi
           done
           # Verify Supabase REST API is also reachable (PostgREST).
@@ -175,7 +178,7 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: test/e2e
-        run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line
+        run: npx playwright test --shard=${{ matrix.shard }}/4 --reporter=line
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7
