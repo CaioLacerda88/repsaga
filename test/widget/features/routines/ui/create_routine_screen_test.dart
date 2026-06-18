@@ -517,6 +517,52 @@ void main() {
       );
 
       testWidgets(
+        'editing a cardio routine with a populated target rehydrates the '
+        'formatted values and hides the + add ghost on filled slots',
+        (tester) async {
+          // initState rehydration path: a SAVED cardio routine whose single
+          // config carries a 28:00 / 5 km target must render those values, not
+          // the empty "+ add" invite. Pins the editing-a-saved-cardio-routine
+          // contract — the empty-target case above doesn't exercise rehydrate.
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(
+                    targetDurationSeconds: 1680, // 28:00
+                    targetDistanceM: 5000, // 5 km (kg profile → km)
+                  ),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Both target slots still exist (their field labels).
+          expect(find.text('Target time'), findsOneWidget);
+          expect(find.text('Target distance'), findsOneWidget);
+
+          // The persisted values render in place of the ghost.
+          expect(find.text('28:00'), findsOneWidget);
+          // Distance renders as a Text.rich whose plain text is "5 km"
+          // (kg → km; 5000m → 5.0 km, integer-formatted to "5" + " km").
+          expect(find.text('5 km'), findsOneWidget);
+
+          // No "+ add" ghost on EITHER slot — both are filled.
+          expect(
+            find.text('+ add'),
+            findsNothing,
+            reason: 'both target slots carry a value, so no invite ghost shows',
+          );
+
+          // Still cardio: no strength affordances leaked in.
+          expect(find.text('Sets'), findsNothing);
+          expect(find.text('Rest'), findsNothing);
+        },
+      );
+
+      testWidgets(
         'a bodyweight exercise shows the BODYWEIGHT tag and KEEPS the set '
         'stepper + rest chips',
         (tester) async {

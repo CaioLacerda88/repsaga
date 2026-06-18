@@ -643,10 +643,36 @@ export const CREATE_ROUTINE = {
   addExerciseButton: '[flt-semantics-identifier="create-routine-add-exercise"]',
   /** "Save" button — Semantics(identifier: 'create-routine-save') */
   saveButton: '[flt-semantics-identifier="create-routine-save"]',
-  /** Sets label in set configuration row — Semantics(identifier: 'create-routine-sets') */
+  /**
+   * Sets label in set configuration row — Semantics(identifier:
+   * 'create-routine-sets'). Renders ONLY on strength/bodyweight cards; a cardio
+   * card has no set count. Use `.count() === 0` to assert a card is cardio.
+   */
   setsLabel: '[flt-semantics-identifier="create-routine-sets"]',
-  /** Rest label in set configuration row — Semantics(identifier: 'create-routine-rest') */
+  /**
+   * Rest label in set configuration row — Semantics(identifier:
+   * 'create-routine-rest'). Renders ONLY on strength/bodyweight cards (cardio
+   * has no inter-set rest).
+   */
   restLabel: '[flt-semantics-identifier="create-routine-rest"]',
+  /**
+   * Cardio TARGET TIME slot — Semantics(identifier:
+   * 'create-routine-target-time', container: true, explicitChildNodes: true,
+   * button: true). Renders ONLY on a cardio card (muscleGroup == cardio).
+   * `explicitChildNodes` + ExcludeSemantics on the inner Column mean the slot's
+   * accessible name is the FIXED label ("Target time") — the formatted value
+   * ("28:00") and the "+ add" ghost are canvas-drawn and NOT in the AOM, so
+   * assert the VALUE's persistence at the DB layer, not via this selector.
+   * Tapping opens the duration dialog; use `.click({ force: true })`.
+   */
+  targetTime: '[flt-semantics-identifier="create-routine-target-time"]',
+  /**
+   * Cardio TARGET DISTANCE slot — Semantics(identifier:
+   * 'create-routine-target-distance', …). Same AOM caveat as targetTime: the
+   * value ("5 km") is canvas-drawn inside ExcludeSemantics, so the slot's
+   * accessible name is the fixed "Target distance" label only.
+   */
+  targetDistance: '[flt-semantics-identifier="create-routine-target-distance"]',
 } as const;
 
 // ---------------------------------------------------------------------------
