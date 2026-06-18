@@ -12,6 +12,12 @@ abstract class RoutineStartExercise with _$RoutineStartExercise {
     required int setCount,
     int? targetReps,
     int? restSeconds,
+    // Cardio target threaded from the routine builder's single cardio config.
+    // Honored by `_seedCardioSession` at start time so a routine's
+    // "28:00 / 5km" target prefills the active CardioSession (falling back to
+    // the 30:00 default when null). Both null for strength/bodyweight entries.
+    int? targetDurationSeconds,
+    double? targetDistanceM,
   }) = _RoutineStartExercise;
 }
 

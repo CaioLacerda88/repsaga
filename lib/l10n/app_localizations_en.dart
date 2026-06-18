@@ -3308,6 +3308,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cardioAddValue => '+ add';
 
   @override
+  String get routineTargetTimeLabel => 'Target time';
+
+  @override
+  String get routineTargetDistanceLabel => 'Target distance';
+
+  @override
+  String get routineBodyweightTag => 'Bodyweight';
+
+  @override
   String get completeCardio => 'Complete cardio';
 
   @override

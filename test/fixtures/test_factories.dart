@@ -159,11 +159,34 @@ class TestRoutineSetConfigFactory {
     int? targetReps,
     double? targetWeight,
     int? restSeconds,
+    int? targetDurationSeconds,
+    double? targetDistanceM,
   }) {
     return {
       'target_reps': targetReps ?? 10,
       'target_weight': targetWeight,
       'rest_seconds': restSeconds ?? 90,
+      // ignore: use_null_aware_elements
+      if (targetDurationSeconds != null)
+        'target_duration_seconds': targetDurationSeconds,
+      // ignore: use_null_aware_elements
+      if (targetDistanceM != null) 'target_distance_m': targetDistanceM,
+    };
+  }
+
+  /// A cardio routine-entry config: ONLY the optional duration/distance
+  /// targets, with the strength scalars (reps / weight / rest) explicitly
+  /// null. Mirrors what `_save` writes for a cardio `_ExerciseCard`.
+  static Map<String, dynamic> cardio({
+    int? targetDurationSeconds,
+    double? targetDistanceM,
+  }) {
+    return {
+      'target_reps': null,
+      'target_weight': null,
+      'rest_seconds': null,
+      'target_duration_seconds': targetDurationSeconds,
+      'target_distance_m': targetDistanceM,
     };
   }
 }

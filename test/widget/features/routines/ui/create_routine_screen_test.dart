@@ -3,28 +3,91 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/exercises/models/exercise.dart';
+import 'package:repsaga/features/profile/models/profile.dart';
+import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/ui/create_routine_screen.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
 
+/// Profile stub so the screen's `ref.watch(profileProvider)` (for the cardio
+/// distance unit) resolves without Supabase. kg → km distance unit.
+class _StubProfileNotifier extends AsyncNotifier<Profile?>
+    implements ProfileNotifier {
+  @override
+  Future<Profile?> build() async =>
+      const Profile(id: 'user-001', weightUnit: 'kg');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 Exercise _makeExercise({
   String id = 'exercise-001',
   String name = 'Bench Press',
   String muscleGroup = 'chest',
+  String equipmentType = 'barbell',
+  String slug = 'bench_press',
 }) {
   return Exercise.fromJson(
-    TestExerciseFactory.create(id: id, name: name, muscleGroup: muscleGroup),
+    TestExerciseFactory.create(
+      id: id,
+      name: name,
+      muscleGroup: muscleGroup,
+      equipmentType: equipmentType,
+      slug: slug,
+    ),
   );
 }
 
+Exercise _makeCardio({
+  String id = 'exercise-treadmill',
+  String name = 'Treadmill',
+}) => _makeExercise(
+  id: id,
+  name: name,
+  muscleGroup: 'cardio',
+  equipmentType: 'machine',
+  slug: 'treadmill',
+);
+
+Exercise _makeBodyweight({
+  String id = 'exercise-pullup',
+  String name = 'Pull-up',
+}) => _makeExercise(
+  id: id,
+  name: name,
+  muscleGroup: 'back',
+  equipmentType: 'bodyweight',
+  slug: 'pull_up',
+);
+
 Widget _buildScreen({Routine? routine}) {
   return ProviderScope(
+    overrides: [profileProvider.overrideWith(() => _StubProfileNotifier())],
     child: TestMaterialApp(
       theme: AppTheme.dark,
       home: CreateRoutineScreen(routine: routine),
     ),
+  );
+}
+
+/// A single-exercise editing routine — the on-screen card reflects the
+/// exercise's type (cardio / bodyweight / strength).
+Routine _routineWith(Exercise exercise, {List<RoutineSetConfig>? setConfigs}) {
+  return Routine(
+    id: 'routine-001',
+    name: 'My Routine',
+    isDefault: false,
+    exercises: [
+      RoutineExercise(
+        exerciseId: exercise.id,
+        setConfigs: setConfigs ?? const [RoutineSetConfig(restSeconds: 90)],
+        exercise: exercise,
+      ),
+    ],
+    createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
   );
 }
 
@@ -414,6 +477,105 @@ void main() {
 
       expect(find.text('Bench Press'), findsNothing);
       expect(find.text('OHP'), findsOneWidget);
+    });
+
+    group('type-aware exercise cards', () {
+      testWidgets(
+        'a cardio exercise shows the target slots and NO set stepper / rest '
+        'chips',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [RoutineSetConfig()],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // The two cardio target slots are present (their field labels).
+          expect(find.text('Target time'), findsOneWidget);
+          expect(find.text('Target distance'), findsOneWidget);
+          // Both empty → the invite-not-nag ghost on each slot.
+          expect(find.text('+ add'), findsNWidgets(2));
+
+          // The strength affordances must NOT render for cardio.
+          expect(
+            find.text('Sets'),
+            findsNothing,
+            reason: 'cardio has no set count',
+          );
+          expect(
+            find.text('Rest'),
+            findsNothing,
+            reason: 'cardio has no inter-set rest',
+          );
+          // A rest chip label that the strength card would render.
+          expect(find.text('1m 30s'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'a bodyweight exercise shows the BODYWEIGHT tag and KEEPS the set '
+        'stepper + rest chips',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeBodyweight(),
+                setConfigs: const [
+                  RoutineSetConfig(restSeconds: 90),
+                  RoutineSetConfig(restSeconds: 90),
+                  RoutineSetConfig(restSeconds: 90),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Neutral BODYWEIGHT tag (uppercased) instead of a muscle chip.
+          expect(find.text('BODYWEIGHT'), findsOneWidget);
+
+          // The strength layout is UNCHANGED for bodyweight.
+          expect(find.text('Sets'), findsOneWidget);
+          expect(find.text('3'), findsOneWidget); // set count
+          expect(find.text('Rest'), findsOneWidget);
+          expect(find.text('1m 30s'), findsOneWidget); // 90s chip selected
+
+          // No cardio target slots.
+          expect(find.text('Target time'), findsNothing);
+          expect(find.text('Target distance'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'a strength exercise is unchanged (muscle chip + set stepper + rest '
+        'chips, no BODYWEIGHT tag, no target slots)',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeExercise(name: 'Bench Press', muscleGroup: 'chest'),
+                setConfigs: const [
+                  RoutineSetConfig(restSeconds: 90),
+                  RoutineSetConfig(restSeconds: 90),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('Bench Press'), findsOneWidget);
+          expect(find.text('Chest'), findsOneWidget); // muscle-group chip
+          expect(find.text('Sets'), findsOneWidget);
+          expect(find.text('Rest'), findsOneWidget);
+
+          expect(find.text('BODYWEIGHT'), findsNothing);
+          expect(find.text('Target time'), findsNothing);
+          expect(find.text('Target distance'), findsNothing);
+        },
+      );
     });
 
     // Keyboard behavior contract. Tapping the name / notes field must OVERLAY

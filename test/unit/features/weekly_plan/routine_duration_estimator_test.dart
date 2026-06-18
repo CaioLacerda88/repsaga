@@ -6,8 +6,11 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/weekly_plan/utils/routine_duration_estimator.dart';
+
+import '../../../fixtures/test_factories.dart';
 
 void main() {
   group('estimateRoutineDurationMinutes', () {
@@ -110,7 +113,56 @@ void main() {
       );
       expect(estimateRoutineDurationMinutes(routine), 5);
     });
+
+    test('a cardio entry contributes its target duration, not rest×sets', () {
+      // 28:00 target = 1680s = 28 min → nearest 5 = 30. If the estimator
+      // mistakenly used the rest×sets path (one config, rest 90 + work 30 =
+      // 120s = 2 min → 5) it would read FAR too low.
+      final routine = Routine(
+        id: 'r-cardio',
+        name: 'Conditioning',
+        isDefault: false,
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'treadmill',
+            exercise: _cardioExercise(),
+            setConfigs: const [RoutineSetConfig(targetDurationSeconds: 1680)],
+          ),
+        ],
+        createdAt: DateTime(2026, 1, 1),
+      );
+      expect(estimateRoutineDurationMinutes(routine), 30);
+    });
+
+    test('a cardio entry with no target falls back to 30 min', () {
+      final routine = Routine(
+        id: 'r-cardio-empty',
+        name: 'Conditioning',
+        isDefault: false,
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'treadmill',
+            exercise: _cardioExercise(),
+            setConfigs: const [RoutineSetConfig()],
+          ),
+        ],
+        createdAt: DateTime(2026, 1, 1),
+      );
+      expect(estimateRoutineDurationMinutes(routine), 30);
+    });
   });
+}
+
+Exercise _cardioExercise() {
+  return Exercise.fromJson(
+    TestExerciseFactory.create(
+      id: 'treadmill',
+      name: 'Treadmill',
+      muscleGroup: 'cardio',
+      equipmentType: 'machine',
+      slug: 'treadmill',
+    ),
+  );
 }
 
 /// Helper: one exercise with N identical set_configs at the given rest.

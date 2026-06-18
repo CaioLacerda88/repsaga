@@ -958,5 +958,119 @@
     • <b style="color:var(--cream)">Thesis guard</b>: a pure-strength user's character level must NEVER regress post-flip — denominator-stays-4 named test required. char-level computed-max → 172; the <code>saga_eternal</code> title threshold stays 148 (the 172-cap title is 38f).
   </div>
   </div>
+
+  <!-- ============================================================= -->
+  <!-- Phase 38h — Type-aware routine builder cards                   -->
+  <!-- ============================================================= -->
+  <style>
+    .h38h{margin-top:60px}
+    .h38h .h38h-teal{color:var(--cardio)}
+    /* builder strength/bodyweight card chrome (mirrors create_routine_screen _ExerciseCard) */
+    .bcard{position:relative;background:var(--surface);border:1px solid var(--hair);
+           border-radius:var(--radius);margin:8px 0;padding:16px;overflow:hidden}
+    .bcard.cardio::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cardio)}
+    .bhdr{display:flex;align-items:flex-start;gap:8px}
+    .bhdr .col{flex:1}
+    .bhdr .bname{font-family:'Barlow';font-weight:600;font-size:16px;color:var(--cream)}
+    .bhdr .x{color:#F87171;font-size:18px;line-height:1;padding:2px 4px}
+    .mgchip{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:6px;
+            background:rgba(167,139,250,.15);color:var(--violet);
+            font-family:'Barlow Semi Condensed';font-weight:600;font-size:11px;letter-spacing:.6px}
+    .bweyebrow{margin-top:6px;display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:6px;
+               background:var(--surface2);border:1px solid var(--hair);color:var(--dim);
+               font-family:'Barlow Semi Condensed';font-weight:600;text-transform:uppercase;
+               letter-spacing:1.1px;font-size:10.5px}
+    .beyebrow{font-family:'Barlow Semi Condensed';font-weight:600;text-transform:uppercase;
+              letter-spacing:1.4px;font-size:11px;color:var(--cardio-dim);margin-top:6px}
+    .lblrow{display:flex;align-items:center;margin-top:14px}
+    .lblrow .t{font-family:'Barlow';font-size:14px;color:var(--cream);flex:1}
+    .stepper{display:flex;align-items:center;gap:14px}
+    .stepper .b{width:26px;height:26px;border-radius:50%;color:var(--dim);font-size:20px;line-height:22px;
+                text-align:center;border:1px solid var(--hair)}
+    .stepper .b.off{opacity:.35}
+    .stepper .n{font-family:'Rajdhani';font-weight:600;font-size:18px;color:var(--cream);
+                font-variant-numeric:tabular-nums;min-width:24px;text-align:center}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .chip{padding:6px 12px;border-radius:8px;border:1px solid var(--hair);background:transparent;
+          color:var(--dim);font-family:'Barlow';font-size:13px}
+    .chip.sel{background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.5);color:var(--cream)}
+    .tslots{display:flex;gap:10px;margin-top:14px}
+  </style>
+
+  <h1 class="h38h">Phase 38h — Routine builder <span class="h38h-teal">type-aware cards</span></h1>
+  <div class="sub">create/edit routine · same shell, three honest variants · cardio teal <span class="swatch" style="background:#22D3EE"></span><code style="color:#22D3EE">#22D3EE</code></div>
+  <div class="note">Bug: the builder rendered the strength card (set-count stepper + rest chips) for <i>every</i> exercise — cardio got a meaningless "Sets" stepper.
+    Fix: branch on <code>muscleGroup == cardio</code> and <code>equipmentType == bodyweight</code> (the same discriminators active-logging uses).
+    <b>Cardio</b> → teal stripe + eyebrow + two optional <b>target slots</b> (time / distance) reusing the locked <code>_CardioField</code> "<i>+ add</i>" grammar, no sets, no rest.
+    <b>Bodyweight</b> → strength layout unchanged (you still plan sets + rest for pull-ups) + one neutral <b>BODYWEIGHT</b> tag (no color — brand-vs-identity rule). Target is <b>optional</b>: a bare "Treadmill" with no target saves fine.</div>
+
+  <div class="grid">
+    <!-- CARDIO — empty -->
+    <div class="panel">
+      <h2>1 · Cardio — no target (PT)</h2>
+      <div class="device">
+        <div class="bcard cardio">
+          <div class="bhdr"><div class="col"><div class="bname">Esteira</div><div class="beyebrow">Corrida · Cardio</div></div><div class="x">&times;</div></div>
+          <div class="tslots">
+            <div class="field"><div class="lbl">Tempo alvo</div><div class="ghost">+ adicionar</div></div>
+            <div class="field"><div class="lbl">Distância alvo</div><div class="ghost">+ adicionar</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">No sets stepper, no rest chips. Both slots optional — saves with neither.</div>
+    </div>
+
+    <!-- CARDIO — filled -->
+    <div class="panel">
+      <h2>2 · Cardio — target set (EN)</h2>
+      <div class="device">
+        <div class="bcard cardio">
+          <div class="bhdr"><div class="col"><div class="bname">Treadmill</div><div class="beyebrow">Running · Cardio</div></div><div class="x">&times;</div></div>
+          <div class="tslots">
+            <div class="field"><div class="lbl">Target time</div><span class="edit">&#9998;</span><div class="val">28:00</div></div>
+            <div class="field"><div class="lbl">Target distance</div><span class="edit">&#9998;</span><div class="val">5.0<span class="unit">km</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">Duration via <code>CardioFormat.duration</code> (mm:ss), distance in profile unit (km/mi) → stored as seconds + meters.</div>
+    </div>
+
+    <!-- STRENGTH — reference -->
+    <div class="panel">
+      <h2>3 · Strength — reference (EN)</h2>
+      <div class="device">
+        <div class="bcard">
+          <div class="bhdr"><div class="col"><div class="bname">Bench Press</div><div class="mgchip">CHEST</div></div><div class="x">&times;</div></div>
+          <div class="lblrow"><div class="t">Sets</div><div class="stepper"><div class="b">&minus;</div><div class="n">3</div><div class="b">+</div></div></div>
+          <div class="t" style="margin-top:14px;font-family:'Barlow';font-size:14px;color:var(--cream)">Rest</div>
+          <div class="chips"><div class="chip">30s</div><div class="chip">60s</div><div class="chip sel">90s</div><div class="chip">2m</div><div class="chip">3m</div><div class="chip">4m</div></div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">Unchanged. Shown for family coherence — same shell + header + ✕.</div>
+    </div>
+
+    <!-- BODYWEIGHT -->
+    <div class="panel">
+      <h2>4 · Bodyweight — neutral tag (EN)</h2>
+      <div class="device">
+        <div class="bcard">
+          <div class="bhdr"><div class="col"><div class="bname">Pull-ups</div><div class="bweyebrow">&#9899; Bodyweight</div></div><div class="x">&times;</div></div>
+          <div class="lblrow"><div class="t">Sets</div><div class="stepper"><div class="b">&minus;</div><div class="n">4</div><div class="b">+</div></div></div>
+          <div class="t" style="margin-top:14px;font-family:'Barlow';font-size:14px;color:var(--cream)">Rest</div>
+          <div class="chips"><div class="chip">30s</div><div class="chip">60s</div><div class="chip sel">90s</div><div class="chip">2m</div><div class="chip">3m</div><div class="chip">4m</div></div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">Same controls as strength (you still program sets + rest) — only the muscle chip becomes a neutral <b>BODYWEIGHT</b> tag. No color, no invented weight field.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b style="color:var(--cream)">Decisions &amp; build notes</b><br>
+    • <b style="color:var(--cream)">Reuse, don't clone</b>: cardio slots reuse <code>_CardioField</code>/<code>_GhostValue</code>/<code>_CardioEyebrow</code> + <code>CardioFormat.*</code> + the existing duration &amp; distance tap-to-type dialogs (extracted to shared helpers) — keeps builder + active-logging in lockstep.<br>
+    • <b style="color:var(--cream)">Data model</b>: cardio entry = exactly ONE <code>RoutineSetConfig</code> row carrying <code>targetDurationSeconds?</code> + <code>targetDistanceM?</code> (no set count). Additive optional JSONB keys → <b>no migration</b> (the <code>workout_templates.exercises</code> CHECK only validates "is an array").<br>
+    • <b style="color:var(--cream)">Honors the target on start</b>: <code>start_routine_action</code> → <code>RoutineStartExercise</code> → <code>_seedCardioSession</code> threads duration/distance so a planned "Treadmill 28:00" seeds that, not the hardcoded 30:00 default.<br>
+    • <b style="color:var(--cream)">Chrome bug to avoid</b>: the builder card uses <code>Material</code> directly — add <code>clipBehavior: Clip.antiAlias</code> so the 3px teal stripe clips to the 12dp corner.<br>
+    • <b style="color:var(--cream)">Bodyweight honesty</b>: the builder never had a weight field, so there's nothing to "suppress" — the only honest change is the neutral tag. Don't manufacture a difference the data model doesn't back.
+  </div>
 </body>
 </html>

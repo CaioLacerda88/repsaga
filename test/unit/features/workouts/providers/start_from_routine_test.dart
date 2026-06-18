@@ -78,6 +78,21 @@ Exercise makeExercise({
   return Exercise.fromJson(TestExerciseFactory.create(id: id, name: name));
 }
 
+Exercise makeCardioExercise({
+  String id = 'exercise-treadmill',
+  String name = 'Treadmill',
+}) {
+  return Exercise.fromJson(
+    TestExerciseFactory.create(
+      id: id,
+      name: name,
+      muscleGroup: 'cardio',
+      equipmentType: 'machine',
+      slug: 'treadmill',
+    ),
+  );
+}
+
 ({
   ProviderContainer container,
   MockWorkoutRepository mockRepo,
@@ -431,6 +446,104 @@ void main() {
               'here would mean addExercise (or a stray helper) was invoked '
               'during start, breaking the call-site separation contract.',
         );
+      },
+    );
+
+    test('a cardio routine entry seeds a CardioSession with the routine target '
+        '(28:00 / 5km), not the 30:00 default', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
+
+      final createdWorkout = makeWorkout(id: 'workout-cardio-target');
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => createdWorkout);
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {});
+
+      final config = RoutineStartConfig(
+        routineName: 'Conditioning',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: 'exercise-treadmill',
+            exercise: makeCardioExercise(),
+            setCount: 1,
+            targetDurationSeconds: 1680, // 28:00
+            targetDistanceM: 5000.0, // 5 km
+          ),
+        ],
+      );
+
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
+
+      final entry = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises
+          .single;
+      expect(entry.sets, isEmpty, reason: 'cardio carries no weight×reps');
+      final session = entry.cardioSession!;
+      expect(
+        session.durationSeconds,
+        1680,
+        reason: 'the routine 28:00 target must override the 30:00 default',
+      );
+      expect(session.distanceM, 5000.0);
+      expect(session.rpe, isNull, reason: 'RPE is logged live, not targeted');
+      expect(session.isCompleted, isFalse);
+    });
+
+    test(
+      'a cardio routine entry with no target falls back to the 30:00 default',
+      () async {
+        final (:container, :mockRepo, :mockStorage, :mockAuth) =
+            _makeContainer();
+        addTearDown(container.dispose);
+
+        final createdWorkout = makeWorkout(id: 'workout-cardio-default');
+        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () => mockRepo.createActiveWorkout(
+            userId: any(named: 'userId'),
+            name: any(named: 'name'),
+          ),
+        ).thenAnswer((_) async => createdWorkout);
+        when(
+          () => mockRepo.getLastWorkoutSets(any()),
+        ).thenAnswer((_) async => {});
+
+        final config = RoutineStartConfig(
+          routineName: 'Conditioning',
+          exercises: [
+            RoutineStartExercise(
+              exerciseId: 'exercise-treadmill',
+              exercise: makeCardioExercise(),
+              setCount: 1,
+            ),
+          ],
+        );
+
+        await container.read(activeWorkoutProvider.future);
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .startFromRoutine(config);
+
+        final session = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .single
+            .cardioSession!;
+        expect(session.durationSeconds, 30 * 60);
+        expect(session.distanceM, isNull);
       },
     );
   });

@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/radii.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../exercises/models/exercise.dart';
+import '../../profile/providers/profile_providers.dart';
+import '../../workouts/ui/widgets/cardio_field.dart';
+import '../../workouts/ui/widgets/cardio_target_dialogs.dart';
 import '../../workouts/ui/widgets/exercise_picker_sheet.dart';
+import '../../workouts/utils/cardio_format.dart';
 import '../models/routine.dart';
 import '../providers/notifiers/routine_list_notifier.dart';
 
@@ -47,14 +52,21 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
 
     if (widget.routine != null) {
       for (final re in widget.routine!.exercises) {
+        // A cardio entry persists EXACTLY ONE config carrying the target —
+        // `setConfigs.length` is NOT a set count for it, so read the target
+        // off the single config instead of treating the list as a set list.
+        final isCardio = re.exercise?.muscleGroup == MuscleGroup.cardio;
+        final firstCfg = re.setConfigs.isNotEmpty ? re.setConfigs.first : null;
         _exercises.add(
           _RoutineExerciseEntry(
             exerciseId: re.exerciseId,
             exercise: re.exercise,
             setCount: re.setConfigs.isNotEmpty ? re.setConfigs.length : 3,
-            restSeconds: re.setConfigs.isNotEmpty
-                ? re.setConfigs.first.restSeconds ?? 90
-                : 90,
+            restSeconds: firstCfg?.restSeconds ?? 90,
+            targetDurationSeconds: isCardio
+                ? firstCfg?.targetDurationSeconds
+                : null,
+            targetDistanceM: isCardio ? firstCfg?.targetDistanceM : null,
           ),
         );
       }
@@ -80,10 +92,20 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
         .map(
           (e) => RoutineExercise(
             exerciseId: e.exerciseId,
-            setConfigs: List.generate(
-              e.setCount,
-              (_) => RoutineSetConfig(restSeconds: e.restSeconds),
-            ),
+            // A cardio entry persists EXACTLY ONE config carrying its optional
+            // duration/distance target (no set count / reps / weight / rest).
+            // Strength + bodyweight keep the per-set rest×count shape.
+            setConfigs: e.isCardio
+                ? [
+                    RoutineSetConfig(
+                      targetDurationSeconds: e.targetDurationSeconds,
+                      targetDistanceM: e.targetDistanceM,
+                    ),
+                  ]
+                : List.generate(
+                    e.setCount,
+                    (_) => RoutineSetConfig(restSeconds: e.restSeconds),
+                  ),
             exercise: e.exercise,
           ),
         )
@@ -172,6 +194,9 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    // Distance target slot follows the same one unit-system toggle the active
+    // cardio card uses — kg → km, lbs → mi (CardioFormat.distanceUnitFor).
+    final weightUnit = ref.watch(profileProvider).value?.weightUnit ?? 'kg';
 
     return Scaffold(
       // The keyboard OVERLAYS the form instead of resizing/reflowing it: tapping
@@ -263,11 +288,18 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
               ..._exercises.asMap().entries.map(
                 (entry) => _ExerciseCard(
                   entry: entry.value,
+                  weightUnit: weightUnit,
                   onSetCountChanged: (count) {
                     setState(() => entry.value.setCount = count);
                   },
                   onRestChanged: (rest) {
                     setState(() => entry.value.restSeconds = rest);
+                  },
+                  onTargetDurationChanged: (seconds) {
+                    setState(() => entry.value.targetDurationSeconds = seconds);
+                  },
+                  onTargetDistanceChanged: (meters) {
+                    setState(() => entry.value.targetDistanceM = meters);
                   },
                   onRemove: () {
                     setState(() => _exercises.removeAt(entry.key));
@@ -307,158 +339,343 @@ class _RoutineExerciseEntry {
     this.exercise,
     required this.setCount,
     required this.restSeconds,
+    this.targetDurationSeconds,
+    this.targetDistanceM,
   });
 
   final String exerciseId;
   final Exercise? exercise;
+
+  // Strength / bodyweight shape — ignored on a cardio entry.
   int setCount;
   int restSeconds;
+
+  // Cardio target — both null until the user fills a slot. Persisted as the
+  // single RoutineSetConfig of a cardio routine entry.
+  int? targetDurationSeconds;
+  double? targetDistanceM;
+
+  /// Cardio wins over bodyweight (precedence per the type-aware-card spec).
+  bool get isCardio => exercise?.muscleGroup == MuscleGroup.cardio;
+
+  /// Only meaningful when [isCardio] is false.
+  bool get isBodyweight => exercise?.equipmentType == EquipmentType.bodyweight;
 }
 
+/// Type-aware routine-builder exercise card. Branches on the entry's
+/// exercise (detection is free — the [Exercise] rides on the entry):
+///   * **Cardio** (`muscleGroup == cardio`, wins over bodyweight) — teal
+///     identity stripe + CARDIO eyebrow + two optional duration/distance
+///     TARGET slots. NO set stepper, NO rest chips.
+///   * **Bodyweight** (`equipmentType == bodyweight`) — the strength layout
+///     UNCHANGED (set stepper + rest chips) but a neutral BODYWEIGHT tag in
+///     place of the violet muscle-group chip (brand-vs-identity rule).
+///   * **Strength** (else) — unchanged.
 class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard({
     required this.entry,
+    required this.weightUnit,
     required this.onSetCountChanged,
     required this.onRestChanged,
+    required this.onTargetDurationChanged,
+    required this.onTargetDistanceChanged,
     required this.onRemove,
   });
 
   final _RoutineExerciseEntry entry;
+  final String weightUnit;
   final ValueChanged<int> onSetCountChanged;
   final ValueChanged<int> onRestChanged;
+  final ValueChanged<int> onTargetDurationChanged;
+  final ValueChanged<double> onTargetDistanceChanged;
   final VoidCallback onRemove;
 
   static const _restOptions = [30, 60, 90, 120, 180, 240];
 
+  /// Default cardio target duration when the user hasn't set one (mirrors the
+  /// active card's 30:00 empty-state default).
+  static const _defaultTargetDurationSeconds = 30 * 60;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final exerciseName = entry.exercise?.name ?? l10n.unknownExercise;
-    final muscleGroup = entry.exercise?.muscleGroup.localizedName(l10n);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+
+    if (entry.isCardio) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12),
+          // Clip so the 3dp left stripe (a full-bleed child of the Stack)
+          // is trimmed to the 12dp rounded corner instead of squaring it off.
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              // 3dp teal identity stripe — the at-a-glance "this is cardio"
+              // cue (matches the active CardioEntryCard).
+              const Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: ExcludeSemantics(
+                  child: SizedBox(
+                    width: 3,
+                    child: ColoredBox(color: AppColors.bodyPartCardio),
+                  ),
+                ),
+              ),
+              Padding(
+                // +3 left for the stripe; otherwise mirrors the 16 chrome.
+                padding: const EdgeInsets.fromLTRB(19, 16, 16, 16),
+                child: _buildCardioBody(context),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: theme.cardTheme.color ?? theme.colorScheme.surface,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
+          child: _buildStrengthBody(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardioBody(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).languageCode;
+    final distanceUnit = CardioFormat.distanceUnitFor(weightUnit);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _header(context, child: CardioEyebrow(slug: entry.exercise?.slug)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: CardioField(
+                identifier: 'create-routine-target-time',
+                semanticsLabel: l10n.routineTargetTimeLabel,
+                label: l10n.routineTargetTimeLabel,
+                onTap: () async {
+                  final seconds = await showCardioDurationDialog(
+                    context,
+                    initialSeconds:
+                        entry.targetDurationSeconds ??
+                        _defaultTargetDurationSeconds,
+                  );
+                  if (seconds != null) onTargetDurationChanged(seconds);
+                },
+                child: entry.targetDurationSeconds == null
+                    ? GhostValue(text: l10n.cardioAddValue)
+                    : Text(
+                        CardioFormat.duration(entry.targetDurationSeconds!),
+                        style: AppTextStyles.numeric.copyWith(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: CardioField(
+                identifier: 'create-routine-target-distance',
+                semanticsLabel: l10n.routineTargetDistanceLabel,
+                label: l10n.routineTargetDistanceLabel,
+                onTap: () async {
+                  final meters = await showCardioDistanceDialog(
+                    context,
+                    initialMeters: entry.targetDistanceM,
+                    distanceUnit: distanceUnit,
+                    locale: locale,
+                  );
+                  if (meters != null) onTargetDistanceChanged(meters);
+                },
+                child: entry.targetDistanceM == null
+                    ? GhostValue(text: l10n.cardioAddValue)
+                    : Text.rich(
+                        TextSpan(
+                          text: CardioFormat.distanceValue(
+                            entry.targetDistanceM!,
+                            distanceUnit: distanceUnit,
+                            locale: locale,
+                          ),
+                          style: AppTextStyles.numeric.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: ' $distanceUnit',
+                              style: AppTextStyles.label.copyWith(
+                                color: AppColors.textDim,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStrengthBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _header(context, child: _typeTag(context)),
+        const SizedBox(height: 12),
+
+        // Set count stepper
+        Row(
+          children: [
+            Semantics(
+              container: true,
+              identifier: 'create-routine-sets',
+              child: Text(l10n.setsLabel, style: AppTextStyles.body),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.remove, size: 20),
+              onPressed: entry.setCount > 1
+                  ? () => onSetCountChanged(entry.setCount - 1)
+                  : null,
+              visualDensity: VisualDensity.compact,
+            ),
+            SizedBox(
+              width: 32,
+              child: Text(
+                '${entry.setCount}',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.numeric.copyWith(fontSize: 18),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add, size: 20),
+              onPressed: entry.setCount < 10
+                  ? () => onSetCountChanged(entry.setCount + 1)
+                  : null,
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Rest time chips
+        Semantics(
+          container: true,
+          identifier: 'create-routine-rest',
+          child: Text(l10n.restLabel, style: AppTextStyles.body),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: _restOptions.map((seconds) {
+            final isSelected = entry.restSeconds == seconds;
+            final label = seconds >= 60
+                ? '${seconds ~/ 60}m${seconds % 60 > 0 ? ' ${seconds % 60}s' : ''}'
+                : '${seconds}s';
+            return ChoiceChip(
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) => onRestChanged(seconds),
+              selectedColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+              materialTapTargetSize: MaterialTapTargetSize.padded,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  /// Shared header row: exercise name + an exercise-specific [child] sub-line
+  /// (muscle-group / bodyweight tag for strength; CARDIO eyebrow for cardio)
+  /// + the remove button.
+  Widget _header(BuildContext context, {required Widget child}) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final exerciseName = entry.exercise?.name ?? l10n.unknownExercise;
+
+    return Row(
+      children: [
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(exerciseName, style: AppTextStyles.title),
-                        if (muscleGroup != null) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: 0.15,
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              muscleGroup,
-                              style: AppTextStyles.label.copyWith(
-                                fontSize: 11,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close,
-                      color: theme.colorScheme.error,
-                      size: 20,
-                    ),
-                    onPressed: onRemove,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Set count stepper
-              Row(
-                children: [
-                  Semantics(
-                    container: true,
-                    identifier: 'create-routine-sets',
-                    child: Text(l10n.setsLabel, style: AppTextStyles.body),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.remove, size: 20),
-                    onPressed: entry.setCount > 1
-                        ? () => onSetCountChanged(entry.setCount - 1)
-                        : null,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  SizedBox(
-                    width: 32,
-                    child: Text(
-                      '${entry.setCount}',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.numeric.copyWith(fontSize: 18),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 20),
-                    onPressed: entry.setCount < 10
-                        ? () => onSetCountChanged(entry.setCount + 1)
-                        : null,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Rest time chips
-              Semantics(
-                container: true,
-                identifier: 'create-routine-rest',
-                child: Text(l10n.restLabel, style: AppTextStyles.body),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: _restOptions.map((seconds) {
-                  final isSelected = entry.restSeconds == seconds;
-                  final label = seconds >= 60
-                      ? '${seconds ~/ 60}m${seconds % 60 > 0 ? ' ${seconds % 60}s' : ''}'
-                      : '${seconds}s';
-                  return ChoiceChip(
-                    label: Text(label),
-                    selected: isSelected,
-                    onSelected: (_) => onRestChanged(seconds),
-                    selectedColor: theme.colorScheme.primary.withValues(
-                      alpha: 0.15,
-                    ),
-                    materialTapTargetSize: MaterialTapTargetSize.padded,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  );
-                }).toList(),
-              ),
+              Text(exerciseName, style: AppTextStyles.title),
+              const SizedBox(height: 4),
+              child,
             ],
           ),
+        ),
+        IconButton(
+          icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
+          onPressed: onRemove,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+
+  /// Strength/bodyweight sub-line tag. Bodyweight gets a NEUTRAL tag (cream on
+  /// surface2, hair border, no identity color — brand-vs-identity rule);
+  /// every other muscle group keeps the violet muscle-group chip.
+  Widget _typeTag(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+
+    if (entry.isBodyweight) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          border: Border.all(color: AppColors.hair),
+          borderRadius: BorderRadius.circular(kRadiusSm),
+        ),
+        child: Text(
+          l10n.routineBodyweightTag.toUpperCase(),
+          style: AppTextStyles.label.copyWith(
+            fontSize: 11,
+            color: AppColors.textDim,
+          ),
+        ),
+      );
+    }
+
+    final muscleGroup = entry.exercise?.muscleGroup.localizedName(l10n);
+    if (muscleGroup == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        muscleGroup,
+        style: AppTextStyles.label.copyWith(
+          fontSize: 11,
+          color: theme.colorScheme.primary,
         ),
       ),
     );
