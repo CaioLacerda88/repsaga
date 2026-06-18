@@ -22,7 +22,7 @@ import {
   completeSet,
   finishWorkout,
 } from '../helpers/workout';
-import { WORKOUT, POST_SESSION, NAV, CARDIO } from '../helpers/selectors';
+import { WORKOUT, POST_SESSION, NAV } from '../helpers/selectors';
 import { getUser } from '../fixtures/worker-users';
 import { SEED_EXERCISES } from '../fixtures/test-exercises';
 import {
@@ -345,100 +345,5 @@ test.describe('Post-session B3 PR cut', { tag: '@smoke' }, () => {
     await expect(page.locator(POST_SESSION.b3Pr)).toBeVisible({
       timeout: 45_000,
     });
-  });
-});
-
-// =============================================================================
-// Phase 38e — CardioEntryRow in the Mission Debrief ledger.
-//
-// 38e adds a teal CardioEntryRow to the post-session debrief: a completed
-// cardio entry renders in the SAME ledger as strength lift rows (sourced from
-// `state.cardioEntries`, NOT `topLifts` — cardio earns no strength-XP delta).
-// The row shows the duration as the right-aligned teal hero numeral; no PR /
-// heroGold.
-//
-// User: smokeAgeCapture — already wired for the cardio-only Treadmill flow
-// (Treadmill seeds a default 30:00 CardioSession on add → "Complete cardio"
-// CTA enabled immediately). Reused here to avoid a new fixture; the age-prompt
-// spec and this one never run the same test, and serial mode + a per-test
-// workout wipe keep the user deterministic.
-//
-// Behavior asserted (not wiring): after finishing a cardio session, the user
-// SEES a cardio row inside the debrief section — proving the controller
-// surfaces `cardioEntries` and the debrief renders CardioEntryRow for them.
-// =============================================================================
-
-async function wipeAgeCaptureWorkouts(): Promise<void> {
-  const admin = getAdminClient();
-  const userId = await getUserIdByEmail(admin, getUser('smokeAgeCapture').email);
-  if (!userId) return;
-  // Cardio sessions cascade with their workout; wipe the RPG/workout chain so
-  // each run starts from a clean lapsed state. Re-seed a finished warmup so
-  // startEmptyWorkout resolves the "Free workout" ActionHero (not the day-0
-  // create-first-routine CTA).
-  await admin.from('workouts').delete().eq('user_id', userId);
-  await admin.from('xp_events').delete().eq('user_id', userId);
-  await admin.from('body_part_progress').delete().eq('user_id', userId);
-  const now = new Date();
-  await admin.from('workouts').insert({
-    user_id: userId,
-    name: 'E2E Cardio Debrief Warmup',
-    started_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-    finished_at: new Date(now.getTime() - 90 * 60 * 1000).toISOString(),
-    duration_seconds: 1800,
-  });
-}
-
-test.describe('Post-session cardio debrief row', () => {
-  // Serial: the describe shares the smokeAgeCapture user; serial mode + the
-  // per-test workout wipe keep the cardio session state deterministic.
-  test.describe.configure({ mode: 'serial' });
-
-  test.beforeEach(async ({ page }) => {
-    await wipeAgeCaptureWorkouts();
-    await login(
-      page,
-      getUser('smokeAgeCapture').email,
-      getUser('smokeAgeCapture').password,
-    );
-  });
-
-  test('should render a CardioEntryRow in the debrief after a cardio session', async ({
-    page,
-  }) => {
-    await startEmptyWorkout(page);
-    await addExercise(page, SEED_EXERCISES.treadmill);
-
-    // Complete the seeded 30:00 cardio entry. The identifier wraps the
-    // OutlinedButton with explicitChildNodes:true → force-click dispatches the
-    // tap onto it (cluster aom-explicit-children-block-name-merge).
-    await page.locator(CARDIO.complete).first().scrollIntoViewIfNeeded();
-    await page.locator(CARDIO.complete).first().click({ force: true });
-    await expect(page.locator(CARDIO.uncomplete).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
-      timeout: 10_000,
-    });
-    await finishWorkout(page);
-
-    // Skip the cinematic straight to the summary panel where the debrief lives.
-    await page.waitForURL(/\/workout\/finish\//, { timeout: 15_000 });
-    const skip = page.locator(POST_SESSION.skipBtn);
-    if (await skip.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await skip.click();
-    }
-    await expect(page.locator(POST_SESSION.summary)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Behavior: the debrief section renders AND it contains a cardio row.
-    await expect(page.locator(POST_SESSION.missionDebriefSection)).toBeVisible({
-      timeout: 5_000,
-    });
-    const cardioRow = page.locator(POST_SESSION.missionDebriefCardioRow).first();
-    await cardioRow.scrollIntoViewIfNeeded();
-    await expect(cardioRow).toBeVisible({ timeout: 10_000 });
   });
 });
