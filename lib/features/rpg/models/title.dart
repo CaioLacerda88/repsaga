@@ -97,15 +97,21 @@ sealed class Title with _$Title {
 ///   * `pillar_walker` — Legs >= 40 AND Legs >= 2x Arms
 ///   * `broad_shouldered` — Chest+Back+Shoulders >= 2x(Legs+Core), all upper >= 30
 ///   * `even_handed` — All 6 within 30% of max at Rank 30+
-///   * `iron_bound` — Chest >= 60 AND Back >= 60 AND Legs >= 60 (cardio is v2)
+///   * `iron_bound` — Chest >= 60 AND Back >= 60 AND Legs >= 60 AND cardio <= 10
+///     (Phase 38f tightened the predicate with a low-cardio condition — future
+///     awards only; already-earned `iron_bound` rows are never revoked)
 ///   * `saga_forged` — All 6 ranks >= 60
+///   * `the_forged_wind` — All 6 strength ranks >= 60 AND cardio >= 60 (38f)
+///   * `storm_tempered` — Cardio >= 60 AND all 6 strength ranks >= 30 (38f)
 @JsonEnum(fieldRename: FieldRename.snake)
 enum CrossBuildTriggerId {
   pillarWalker,
   broadShouldered,
   evenHanded,
   ironBound,
-  sagaForged;
+  sagaForged,
+  theForgedWind,
+  stormTempered;
 
   /// Token used in JSON catalogs and (when needed) the SQL backfill payload.
   /// snake_case to mirror the body-part dbValues and `earned_titles.title_id`
@@ -116,6 +122,8 @@ enum CrossBuildTriggerId {
     CrossBuildTriggerId.evenHanded => 'even_handed',
     CrossBuildTriggerId.ironBound => 'iron_bound',
     CrossBuildTriggerId.sagaForged => 'saga_forged',
+    CrossBuildTriggerId.theForgedWind => 'the_forged_wind',
+    CrossBuildTriggerId.stormTempered => 'storm_tempered',
   };
 
   /// Reverse lookup. Throws on unknown tokens — a JSON typo is a build-time

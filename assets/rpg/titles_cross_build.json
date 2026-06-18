@@ -1,11 +1,13 @@
 {
   "version": 1,
-  "description": "RepSaga RPG v1 cross-build distinction titles (5 entries). Spec §10.3. Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. The `trigger_id` enum bridges the catalog to the Dart predicate in `lib/features/rpg/domain/cross_build_title_evaluator.dart` — the structural AND/OR/threshold logic cannot be expressed in JSON cleanly, so the catalog stores the trigger token and the predicate body lives in version-controlled Dart.",
+  "description": "RepSaga RPG cross-build distinction titles (7 entries: 5 v1 strength + 2 Phase 38f cardio cross-build). Spec §10.3. Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. The `trigger_id` enum bridges the catalog to the Dart predicate in `lib/features/rpg/domain/cross_build_title_evaluator.dart` — the structural AND/OR/threshold logic cannot be expressed in JSON cleanly, so the catalog stores the trigger token and the predicate body lives in version-controlled Dart.",
   "titles": [
     { "kind": "cross_build", "slug": "pillar_walker", "trigger_id": "pillar_walker" },
     { "kind": "cross_build", "slug": "broad_shouldered", "trigger_id": "broad_shouldered" },
     { "kind": "cross_build", "slug": "even_handed", "trigger_id": "even_handed" },
     { "kind": "cross_build", "slug": "iron_bound", "trigger_id": "iron_bound" },
-    { "kind": "cross_build", "slug": "saga_forged", "trigger_id": "saga_forged" }
+    { "kind": "cross_build", "slug": "saga_forged", "trigger_id": "saga_forged" },
+    { "kind": "cross_build", "slug": "the_forged_wind", "trigger_id": "the_forged_wind" },
+    { "kind": "cross_build", "slug": "storm_tempered", "trigger_id": "storm_tempered" }
   ]
 }

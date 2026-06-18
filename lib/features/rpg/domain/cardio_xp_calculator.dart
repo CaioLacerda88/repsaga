@@ -75,6 +75,39 @@ class CardioXpCalculator {
   /// Multiplier on the portion of weekly MET-min above [weeklyCardioCapMetMin].
   static const double overCapMult = 0.30;
 
+  /// Phase 38f — cardio Vitality XP-gate floor. A fully-lapsed user (vpct = 0)
+  /// still earns `FLOOR ×` the session XP so a returning user isn't stuck at
+  /// ~0 for weeks; full conditioning (vpct = 1) earns `1.0 ×`. Mirrors the
+  /// sim's `VITALITY_XP_FLOOR` (`cardio-xp-simulation.py:172`) and the SQL
+  /// `record_cardio_session` gate (migration 00081).
+  static const double vitalityXpFloor = 0.40;
+
+  /// Vitality XP multiplier for a conditioning fraction [vpct] in `[0, 1]`.
+  /// `mult = FLOOR + (1 - FLOOR) × vpct`. Mirrors the sim's `vitality_xp_mult`
+  /// and the SQL gate. The caller computes `vpct = clamp(ewma / peak, 0, 1)`
+  /// (peak ≤ 0 → vpct = 1.0, the un-conditioned prior).
+  static double vitalityXpMult(double vpct) {
+    final clamped = vpct < 0.0
+        ? 0.0
+        : vpct > 1.0
+        ? 1.0
+        : vpct;
+    return vitalityXpFloor + (1.0 - vitalityXpFloor) * clamped;
+  }
+
+  /// Vitality conditioning fraction from the cardio EWMA + permanent peak.
+  /// `peak ≤ 0 → 1.0` (a user with no conditioning history earns full XP, the
+  /// gate is a no-op). Mirrors the sim's `vitality_pct`.
+  static double vitalityPct({required double ewma, required double peak}) {
+    if (peak <= 0) return 1.0;
+    final v = ewma / peak;
+    return v < 0.0
+        ? 0.0
+        : v > 1.0
+        ? 1.0
+        : v;
+  }
+
   /// Genetic ceiling for VO₂max (practical human max ~90). Caps demonstrated
   /// VO₂ and best-effort estimates.
   static const double vo2CeilingCap = 90.0;
@@ -246,9 +279,15 @@ class CardioXpCalculator {
   ///
   /// [weekUsedMetMin] is the intensity-weighted MET-min already accrued this
   /// week (for the cap split); [CardioXpComponents.weekUsedAfter] reports the
-  /// post-session total the caller persists. The Vitality XP multiplier is
-  /// applied by the caller (computed once per week), exactly as the sim's
-  /// `simulate_cardio` applies `vmult` outside `compute_session_xp`.
+  /// post-session total the caller persists.
+  ///
+  /// [vitalityMult] is the Phase 38f Vitality XP-gate factor (`FLOOR + (1 -
+  /// FLOOR) × vpct`, computed once per save via [vitalityXpMult]). It scales
+  /// the FINAL session XP, exactly as the SQL `record_cardio_session` gate
+  /// (migration 00081) and the sim's `xp *= vmult` after `compute_session_xp`.
+  /// Defaults to 1.0 (un-gated) so the ungated `compute_session_xp` oracle
+  /// rows still match. A fresh user (no cardio conditioning) computes vpct =
+  /// 1.0 → mult = 1.0 → full XP.
   static CardioXpComponents computeSessionXp({
     required double vo2max,
     required int age,
@@ -259,6 +298,7 @@ class CardioXpCalculator {
     required double value,
     required double currentRank,
     double weekUsedMetMin = 0.0,
+    double vitalityMult = 1.0,
   }) {
     final (absMet, rel) = sessionMetAndIntensity(vo2max, kind, value);
     final metMin = absMet * durationMin;
@@ -277,7 +317,9 @@ class CardioXpCalculator {
     final tier = impliedCardioTier(dvo2, age, female);
     final tdm = tierDiffMult(impliedTier: tier, currentRank: currentRank);
     final mod = modalityMultFor(modality);
-    final xp = baseXp * tdm * mod * cardioXpScale;
+    // Phase 38f — the Vitality XP-gate is the final factor (mirrors the SQL
+    // `v_xp = base × tdm × mod × 3.5 × v_vmult` and the sim's `xp *= vmult`).
+    final xp = baseXp * tdm * mod * cardioXpScale * vitalityMult;
 
     return CardioXpComponents(
       absMet: absMet,
@@ -292,6 +334,7 @@ class CardioXpCalculator {
       impliedTier: tier,
       tierDiffMult: tdm,
       modalityMult: mod,
+      vitalityMult: vitalityMult,
       sessionXp: xp,
     );
   }
@@ -333,6 +376,7 @@ class CardioXpComponents {
     required this.impliedTier,
     required this.tierDiffMult,
     required this.modalityMult,
+    this.vitalityMult = 1.0,
     required this.sessionXp,
   });
 
@@ -373,8 +417,13 @@ class CardioXpComponents {
   /// Modality normalization multiplier.
   final double modalityMult;
 
-  /// The total XP for this session, **before** the caller-applied Vitality
-  /// multiplier.
+  /// Phase 38f — the Vitality XP-gate factor applied to this session
+  /// (`FLOOR + (1 - FLOOR) × vpct`). 1.0 when un-gated (fresh / fully
+  /// conditioned).
+  final double vitalityMult;
+
+  /// The total XP for this session, **including** the Vitality multiplier
+  /// ([vitalityMult]). When [vitalityMult] is 1.0 this is the ungated total.
   final double sessionXp;
 
   /// Serialized for the cardio `xp_events.payload`. Keys in formula-chain
@@ -391,6 +440,7 @@ class CardioXpComponents {
     'implied_tier': impliedTier,
     'tier_diff_mult': tierDiffMult,
     'modality_mult': modalityMult,
+    'vitality_mult': vitalityMult,
     'session_xp': sessionXp,
   };
 }

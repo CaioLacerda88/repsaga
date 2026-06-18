@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "RepSaga RPG v1 character-level title ladder (7 entries). Spec §10.2. Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. Awarded when `character_state.character_level` crosses `level_threshold` in the half-open interval `(oldLevel, newLevel]`.",
+  "description": "RepSaga RPG character-level title ladder (8 entries: 7 v1 strength-era + Phase 38f saga_unending@172, the cardio-inclusive level cap). Spec §10.2. Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. Awarded when `character_state.character_level` crosses `level_threshold` in the half-open interval `(oldLevel, newLevel]`.",
   "titles": [
     { "kind": "character_level", "slug": "wanderer", "level_threshold": 10 },
     { "kind": "character_level", "slug": "path_trodden", "level_threshold": 25 },
@@ -8,6 +8,7 @@
     { "kind": "character_level", "slug": "path_forged", "level_threshold": 75 },
     { "kind": "character_level", "slug": "saga_scribed", "level_threshold": 100 },
     { "kind": "character_level", "slug": "saga_bound", "level_threshold": 125 },
-    { "kind": "character_level", "slug": "saga_eternal", "level_threshold": 148 }
+    { "kind": "character_level", "slug": "saga_eternal", "level_threshold": 148 },
+    { "kind": "character_level", "slug": "saga_unending", "level_threshold": 172 }
   ]
 }

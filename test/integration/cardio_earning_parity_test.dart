@@ -21,6 +21,10 @@
 ///      level unchanged because Σ ranks and N_active both gain 1.)
 ///   4. **est-VO₂max writeback** — a run WITH distance updates
 ///      `profiles.cardio_vo2max` to the pace-derived rolling best-of.
+///   5. **Vitality XP-gate (Phase 38f)** — a lapsed cardio user (vitality
+///      ewma 0 vs a real peak → vpct 0 → vmult 0.40) earns the ungated Dart
+///      value × 0.40, strictly less than ungated. The live cardio_session
+///      payload records the applied `vitality_mult`.
 ///
 /// Run: flutter test --tags integration test/integration/cardio_earning_parity_test.dart
 @Tags(['integration'])
@@ -132,6 +136,120 @@ void main() {
             '(${expected.sessionXp}) within 0.01',
       );
       expect(liveXp, greaterThan(0));
+    });
+
+    test('Vitality XP-gate: a lapsed cardio user earns gated (lower) XP '
+        '(Phase 38f)', () async {
+      // Seed a cardio body_part_progress row whose vitality has fully lapsed
+      // (ewma 0 against a real peak) → vpct 0 → vmult = VITALITY_XP_FLOOR
+      // (0.40). The live cardio XP this save earns must equal the ungated
+      // CardioXpCalculator value × 0.40 (within 0.01), AND be strictly less
+      // than the ungated value. This is the un-farmable property: a one-off
+      // post-layoff burst can't bank full XP.
+      final adminClient = serviceRoleClient();
+      final user = await freshUser();
+      final client = authenticatedClient(user);
+
+      // Seed cardio at a known total_xp + rank with FULLY-LAPSED vitality.
+      // rank stays at the seeded value (the SQL reads body_part_progress.rank
+      // via rpg_rank_for_xp(total_xp); seed both consistently). total_xp 0,
+      // rank 1 keeps the tier_diff_mult identical to a fresh user so the ONLY
+      // difference vs the fresh-user parity test is the vitality gate.
+      await seedBodyPartProgress(
+        adminClient: adminClient,
+        userId: user.userId,
+        bodyPart: 'cardio',
+        totalXp: 0.0,
+        rank: 1,
+        peakEwma: 0.0, // ewma 0 → vpct 0 → fully lapsed
+        peakValue: 1000.0, // a real peak (permanent conditioning ceiling)
+      );
+
+      final seeded = await _seedActiveCardioWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+      );
+      final treadmillId = await exerciseIdForSlug(adminClient, 'treadmill');
+
+      const durationSeconds = 1800; // 30 min duration-only treadmill
+      await client.rpc(
+        'save_workout',
+        params: {
+          'p_workout': seeded.workoutJson,
+          'p_exercises': <Map<String, dynamic>>[],
+          'p_sets': <Map<String, dynamic>>[],
+          'p_cardio': [
+            {
+              'id': _uuid.v4(),
+              'workout_id': seeded.workoutId,
+              'exercise_id': treadmillId,
+              'duration_seconds': durationSeconds,
+              'distance_m': null,
+              'rpe': null,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            },
+          ],
+        },
+      );
+
+      // Reconstruct the ungated Dart value (vmult defaults to 1.0).
+      final seedVo2 = EstVo2max.nonexerciseSeedVo2(age: 35, female: false);
+      final absMet = EstVo2max.sessionMetFromCardioLog(
+        modality: 'treadmill',
+        distanceM: null,
+        durationS: durationSeconds.toDouble(),
+      );
+      final ungated = CardioXpCalculator.computeSessionXp(
+        vo2max: seedVo2,
+        age: 35,
+        female: false,
+        modality: 'treadmill',
+        durationMin: durationSeconds / 60.0,
+        kind: 'abs',
+        value: absMet,
+        currentRank: 1,
+      );
+      // The live save started cardio total at 0, so the post total IS the
+      // gated session XP. vpct 0 → vmult 0.40.
+      final expectedGated = ungated.sessionXp * 0.40;
+
+      final cardio = await client
+          .from('body_part_progress')
+          .select('total_xp')
+          .eq('body_part', 'cardio')
+          .single();
+      final liveXp = ((cardio as Map)['total_xp'] as num).toDouble();
+      expect(
+        liveXp,
+        closeTo(expectedGated, 0.01),
+        reason:
+            'live gated cardio XP ($liveXp) must equal ungated '
+            '(${ungated.sessionXp}) × 0.40 = $expectedGated within 0.01',
+      );
+      expect(
+        liveXp,
+        lessThan(ungated.sessionXp),
+        reason:
+            'a fully-lapsed user must earn STRICTLY LESS than the ungated XP '
+            '(the Vitality gate engaged)',
+      );
+
+      // The xp_events payload records the applied vitality_mult for audit.
+      final event = await client
+          .from('xp_events')
+          .select('payload')
+          .eq('session_id', seeded.workoutId)
+          .eq('event_type', 'cardio_session')
+          .single();
+      final vmult =
+          (((event as Map)['payload'] as Map<String, dynamic>)['vitality_mult']
+                  as num)
+              .toDouble();
+      expect(
+        vmult,
+        closeTo(0.40, 0.01),
+        reason: 'the cardio_session payload must record vitality_mult = 0.40',
+      );
     });
 
     test('cardio XP DOES raise the established character level '

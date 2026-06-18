@@ -113,8 +113,8 @@ class TitlesRepository extends BaseRepository {
   // Catalog
   // ---------------------------------------------------------------------------
 
-  /// Load the merged v1 title catalog (90 entries: 78 body-part + 7
-  /// character-level + 5 cross-build) from the shipped assets. Cached after
+  /// Load the merged title catalog (106 entries: 91 body-part + 8
+  /// character-level + 7 cross-build) from the shipped assets. Cached after
   /// the first call. Throws [FlutterError] from `rootBundle` if any asset
   /// is missing — that would be a build-time bug (catalog not in pubspec.yaml).
   ///

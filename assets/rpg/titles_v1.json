@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "RepSaga RPG v1 per-body-part title ladder (78 entries). Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. See spec §10.1.",
+  "description": "RepSaga RPG per-body-part title ladder (91 entries: 6 strength tracks × 13 + Phase 38f cardio track × 13). Slugs are stable join keys — `earned_titles.title_id` references this list. Display copy lives in `lib/l10n/app_en.arb` + `app_pt.arb` keyed by `title_{slug}_name` and `title_{slug}_flavor`. See spec §10.1.",
   "titles": [
     { "slug": "chest_r5_initiate_of_the_forge", "body_part": "chest", "rank_threshold": 5 },
     { "slug": "chest_r10_plate_bearer", "body_part": "chest", "rank_threshold": 10 },
@@ -84,6 +84,20 @@
     { "slug": "core_r70_stone_spined", "body_part": "core", "rank_threshold": 70 },
     { "slug": "core_r80_spine_of_storms", "body_part": "core", "rank_threshold": 80 },
     { "slug": "core_r90_marrow_untouched", "body_part": "core", "rank_threshold": 90 },
-    { "slug": "core_r99_the_spine", "body_part": "core", "rank_threshold": 99 }
+    { "slug": "core_r99_the_spine", "body_part": "core", "rank_threshold": 99 },
+
+    { "slug": "cardio_r5_first_stride", "body_part": "cardio", "rank_threshold": 5 },
+    { "slug": "cardio_r10_breath_found", "body_part": "cardio", "rank_threshold": 10 },
+    { "slug": "cardio_r15_wind_touched", "body_part": "cardio", "rank_threshold": 15 },
+    { "slug": "cardio_r20_pace_keeper", "body_part": "cardio", "rank_threshold": 20 },
+    { "slug": "cardio_r25_long_strider", "body_part": "cardio", "rank_threshold": 25 },
+    { "slug": "cardio_r30_wind_drawn", "body_part": "cardio", "rank_threshold": 30 },
+    { "slug": "cardio_r40_tempo_sworn", "body_part": "cardio", "rank_threshold": 40 },
+    { "slug": "cardio_r50_wind_crowned", "body_part": "cardio", "rank_threshold": 50 },
+    { "slug": "cardio_r60_breath_forged", "body_part": "cardio", "rank_threshold": 60 },
+    { "slug": "cardio_r70_wind_runner", "body_part": "cardio", "rank_threshold": 70 },
+    { "slug": "cardio_r80_stride_of_storms", "body_part": "cardio", "rank_threshold": 80 },
+    { "slug": "cardio_r90_wind_untouched", "body_part": "cardio", "rank_threshold": 90 },
+    { "slug": "cardio_r99_the_stride", "body_part": "cardio", "rank_threshold": 99 }
   ]
 }

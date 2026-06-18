@@ -27,8 +27,10 @@ class TitleThresholdEntry {
   final int? threshold;
 }
 
-/// Canonical Dart-side mirror of the v1 title catalog (90 entries:
-/// 78 body-part + 7 character-level + 5 cross-build).
+/// Canonical Dart-side mirror of the title catalog (106 entries:
+/// 91 body-part + 8 character-level + 7 cross-build). Phase 38f added the
+/// cardio track (13 body-part rungs), `saga_unending`@172, and the cardio
+/// cross-build triangle (`the_forged_wind`, `storm_tempered`).
 ///
 /// This table is the source of truth the XP RPC migrations reflect into the
 /// `title_catalog_v1` VALUES list embedded inside `record_set_xp` and
@@ -196,6 +198,85 @@ abstract final class TitleThresholdsTable {
       slug: 'back_r99_the_lattice',
       kind: TitleThresholdKind.bodyPart,
       bodyPart: BodyPart.back,
+      threshold: 99,
+    ),
+    // Phase 38f — cardio body-part ladder (13 rungs, sorted by slug).
+    TitleThresholdEntry(
+      slug: 'cardio_r10_breath_found',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 10,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r15_wind_touched',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 15,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r20_pace_keeper',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 20,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r25_long_strider',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 25,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r30_wind_drawn',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 30,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r40_tempo_sworn',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 40,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r50_wind_crowned',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 50,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r5_first_stride',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 5,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r60_breath_forged',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 60,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r70_wind_runner',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 70,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r80_stride_of_storms',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 80,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r90_wind_untouched',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
+      threshold: 90,
+    ),
+    TitleThresholdEntry(
+      slug: 'cardio_r99_the_stride',
+      kind: TitleThresholdKind.bodyPart,
+      bodyPart: BodyPart.cardio,
       threshold: 99,
     ),
     TitleThresholdEntry(
@@ -542,6 +623,12 @@ abstract final class TitleThresholdsTable {
       kind: TitleThresholdKind.characterLevel,
       threshold: 100,
     ),
+    // Phase 38f — the cardio-inclusive level cap (max computed level is now 172).
+    TitleThresholdEntry(
+      slug: 'saga_unending',
+      kind: TitleThresholdKind.characterLevel,
+      threshold: 172,
+    ),
     TitleThresholdEntry(
       slug: 'wanderer',
       kind: TitleThresholdKind.characterLevel,
@@ -567,6 +654,16 @@ abstract final class TitleThresholdsTable {
     ),
     TitleThresholdEntry(
       slug: 'saga_forged',
+      kind: TitleThresholdKind.crossBuild,
+    ),
+    // Phase 38f — cardio cross-build triangle (predicates in
+    // cross_build_title_evaluator.dart; kept Dart↔SQL bit-identical).
+    TitleThresholdEntry(
+      slug: 'storm_tempered',
+      kind: TitleThresholdKind.crossBuild,
+    ),
+    TitleThresholdEntry(
+      slug: 'the_forged_wind',
       kind: TitleThresholdKind.crossBuild,
     ),
   ];

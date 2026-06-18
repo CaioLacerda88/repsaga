@@ -16,11 +16,13 @@ import '../models/title.dart';
 /// container, and the celebration-event builder can call this from any
 /// snapshot pair without conditioning on the call site.
 ///
-/// **Cardio in v1:** the `iron_bound` predicate per the spec is "Chest ≥ 60
-/// AND Back ≥ 60 AND Legs ≥ 60 AND cardio is low" — but in v1 cardio doesn't
-/// earn XP, so the cardio condition is dropped. The trigger fires on the
-/// strength condition alone. When v2 ships cardio XP, add the cardio
-/// condition here without touching consumers.
+/// **Cardio (Phase 38f):** cardio is now a real earning track, so the cardio
+/// cross-build conditions are live. `iron_bound` regained its low-cardio
+/// condition (`cardio ≤ 10`) and two new cardio cross-build titles ship:
+/// `the_forged_wind` (all six strength ≥ 60 AND cardio ≥ 60) and
+/// `storm_tempered` (cardio ≥ 60 AND all six strength ≥ 30). All cardio
+/// conditions use integer arithmetic so the Dart predicate stays bit-identical
+/// to the SQL `evaluate_cross_build_titles_for_user` mirror (migration 00081).
 class CrossBuildTitleEvaluator {
   const CrossBuildTitleEvaluator._();
 
@@ -45,12 +47,14 @@ class CrossBuildTitleEvaluator {
   ///
   /// [ranks] is keyed by [BodyPart]; missing entries default to rank 1
   /// (matches the SQL default-row + [`RpgProgressSnapshot.progressFor`]
-  /// contract). Cardio entries are ignored — v1 cardio is a v2 concern.
+  /// contract). The cardio entry feeds the cardio cross-build conditions
+  /// (Phase 38f): `iron_bound` (cardio ≤ 10), `the_forged_wind` /
+  /// `storm_tempered` (cardio ≥ 60).
   ///
   /// Returns slugs in catalog order ([CrossBuildTriggerId.values] order):
-  /// `pillar_walker, broad_shouldered, even_handed, iron_bound, saga_forged`.
-  /// The detector's idempotency guard (`alreadyEarnedSlugs`) deduplicates
-  /// against the persisted record set.
+  /// `pillar_walker, broad_shouldered, even_handed, iron_bound, saga_forged,
+  /// the_forged_wind, storm_tempered`. The detector's idempotency guard
+  /// (`alreadyEarnedSlugs`) deduplicates against the persisted record set.
   static List<String> evaluate(Map<BodyPart, int> ranks) {
     // Project to active body parts only, defaulting missing entries to
     // rank 1 (matches the resolver convention).
@@ -62,6 +66,7 @@ class CrossBuildTitleEvaluator {
     final shoulders = rank(BodyPart.shoulders);
     final arms = rank(BodyPart.arms);
     final core = rank(BodyPart.core);
+    final cardio = rank(BodyPart.cardio);
 
     final fired = <String>[];
 
@@ -87,7 +92,7 @@ class CrossBuildTitleEvaluator {
     )) {
       fired.add(CrossBuildTriggerId.evenHanded.dbValue);
     }
-    if (_ironBound(chest: chest, back: back, legs: legs)) {
+    if (_ironBound(chest: chest, back: back, legs: legs, cardio: cardio)) {
       fired.add(CrossBuildTriggerId.ironBound.dbValue);
     }
     if (_sagaForged(
@@ -99,6 +104,28 @@ class CrossBuildTitleEvaluator {
       core: core,
     )) {
       fired.add(CrossBuildTriggerId.sagaForged.dbValue);
+    }
+    if (_theForgedWind(
+      chest: chest,
+      back: back,
+      legs: legs,
+      shoulders: shoulders,
+      arms: arms,
+      core: core,
+      cardio: cardio,
+    )) {
+      fired.add(CrossBuildTriggerId.theForgedWind.dbValue);
+    }
+    if (_stormTempered(
+      chest: chest,
+      back: back,
+      legs: legs,
+      shoulders: shoulders,
+      arms: arms,
+      core: core,
+      cardio: cardio,
+    )) {
+      fired.add(CrossBuildTriggerId.stormTempered.dbValue);
     }
 
     return fired;
@@ -171,20 +198,27 @@ class CrossBuildTitleEvaluator {
     return spread <= evenHandedSpreadFraction;
   }
 
-  /// `iron_bound` — Chest ≥ 60 AND Back ≥ 60 AND Legs ≥ 60.
+  /// `iron_bound` — Chest ≥ 60 AND Back ≥ 60 AND Legs ≥ 60 AND cardio ≤ 10.
   ///
   /// "The big-three of strength training" — the powerlifter heuristic. Each
   /// of the three big lifts must independently clear rank 60; this is a
   /// per-track threshold, not a sum (a chest-90/back-30/legs-60 lifter is
-  /// not iron-bound). Cardio condition (low cardio) is v2 — v1 ignores
-  /// cardio entirely so the trigger fires on the per-track strength
-  /// condition alone.
+  /// not iron-bound).
+  ///
+  /// **Phase 38f — low-cardio condition restored.** With cardio now a real
+  /// earning track, `iron_bound` regains its spec condition that the lifter's
+  /// cardio is low (rank ≤ 10): the title is the strength-pure powerlifter
+  /// distinction, so a runner who also benches/squats/deadlifts heavy routes
+  /// to `the_forged_wind` instead. This tightening is FUTURE-awards-only —
+  /// `earned_titles` is append-only and the SQL backfill never revokes an
+  /// already-earned `iron_bound`.
   static bool _ironBound({
     required int chest,
     required int back,
     required int legs,
+    required int cardio,
   }) {
-    return chest >= 60 && back >= 60 && legs >= 60;
+    return chest >= 60 && back >= 60 && legs >= 60 && cardio <= 10;
   }
 
   /// `saga_forged` — Every active rank ≥ 60.
@@ -206,6 +240,55 @@ class CrossBuildTitleEvaluator {
         shoulders >= 60 &&
         arms >= 60 &&
         core >= 60;
+  }
+
+  /// `the_forged_wind` — All six strength tracks ≥ 60 AND cardio ≥ 60
+  /// (Phase 38f).
+  ///
+  /// The complete-athlete apex: `saga_forged` (every strength track has done
+  /// the work) PLUS a fully-forged cardio engine. "Iron that runs" — the
+  /// lifter who never traded the lungs for the bar.
+  static bool _theForgedWind({
+    required int chest,
+    required int back,
+    required int legs,
+    required int shoulders,
+    required int arms,
+    required int core,
+    required int cardio,
+  }) {
+    return chest >= 60 &&
+        back >= 60 &&
+        legs >= 60 &&
+        shoulders >= 60 &&
+        arms >= 60 &&
+        core >= 60 &&
+        cardio >= 60;
+  }
+
+  /// `storm_tempered` — Cardio ≥ 60 AND all six strength tracks ≥ 30
+  /// (Phase 38f).
+  ///
+  /// The cardio-led counterpart to `iron_bound`: a fully-forged cardio engine
+  /// with broad-but-not-elite strength across every track. "Tempered, not
+  /// narrowed" — the endurance athlete who kept the iron in the mix rather
+  /// than letting strength wither.
+  static bool _stormTempered({
+    required int chest,
+    required int back,
+    required int legs,
+    required int shoulders,
+    required int arms,
+    required int core,
+    required int cardio,
+  }) {
+    return cardio >= 60 &&
+        chest >= 30 &&
+        back >= 30 &&
+        legs >= 30 &&
+        shoulders >= 30 &&
+        arms >= 30 &&
+        core >= 30;
   }
 
   /// Compute the cross-build progress hint for [slug] from the current rank
@@ -276,7 +359,10 @@ class CrossBuildTitleEvaluator {
         );
 
       case 'iron_bound':
-        // Smallest gap among the big three to the floor 60.
+        // Smallest gap among the big three to the floor 60. The cardio ≤ 10
+        // condition is a ceiling, not a grind-toward floor — it isn't
+        // surfaced as a "X more rank" hint (the user earns iron_bound by
+        // NOT building cardio, which has no positive gap to close).
         return _smallestGapAmong(
           ranks: ranks,
           parts: const [BodyPart.chest, BodyPart.back, BodyPart.legs],
@@ -296,6 +382,39 @@ class CrossBuildTitleEvaluator {
             BodyPart.core,
           ],
           floor: 60,
+        );
+
+      case 'the_forged_wind':
+        // Single body part (incl. cardio) furthest from floor 60.
+        return _largestGapAmong(
+          ranks: ranks,
+          parts: const [
+            BodyPart.chest,
+            BodyPart.back,
+            BodyPart.legs,
+            BodyPart.shoulders,
+            BodyPart.arms,
+            BodyPart.core,
+            BodyPart.cardio,
+          ],
+          floor: 60,
+        );
+
+      case 'storm_tempered':
+        // Cardio gates at floor 60; the six strength tracks at floor 30.
+        // Surface the single worst gap, weighting cardio's higher floor by
+        // comparing each part against its own floor.
+        return _largestGapToMixedFloor(
+          ranks: ranks,
+          partFloors: const {
+            BodyPart.cardio: 60,
+            BodyPart.chest: 30,
+            BodyPart.back: 30,
+            BodyPart.legs: 30,
+            BodyPart.shoulders: 30,
+            BodyPart.arms: 30,
+            BodyPart.core: 30,
+          },
         );
 
       default:
@@ -342,6 +461,29 @@ class CrossBuildTitleEvaluator {
       if (worstGap == null || gap > worstGap) {
         worstGap = gap;
         worst = bp;
+      }
+    }
+    if (worst == null || worstGap == null) return null;
+    return CrossBuildHint(bodyPart: worst, gap: worstGap);
+  }
+
+  /// Largest positive gap across [partFloors] where each body part has its
+  /// OWN floor (Phase 38f — `storm_tempered` mixes cardio's floor 60 with the
+  /// strength tracks' floor 30). Returns null if every part already clears
+  /// its respective floor.
+  static CrossBuildHint? _largestGapToMixedFloor({
+    required Map<BodyPart, int> ranks,
+    required Map<BodyPart, int> partFloors,
+  }) {
+    BodyPart? worst;
+    int? worstGap;
+    for (final entry in partFloors.entries) {
+      final r = ranks[entry.key] ?? 1;
+      if (r >= entry.value) continue;
+      final gap = entry.value - r;
+      if (worstGap == null || gap > worstGap) {
+        worstGap = gap;
+        worst = entry.key;
       }
     }
     if (worst == null || worstGap == null) return null;
@@ -407,6 +549,34 @@ List<CrossBuildStat> crossBuildStatsFor(String slug, Map<BodyPart, int> ranks) {
           BodyPart.core,
         ])
           stat(bp, 60),
+      ];
+    case 'the_forged_wind':
+      // Phase 38f — all seven active tracks (six strength + cardio) vs 60.
+      return [
+        for (final bp in const [
+          BodyPart.chest,
+          BodyPart.back,
+          BodyPart.legs,
+          BodyPart.shoulders,
+          BodyPart.arms,
+          BodyPart.core,
+          BodyPart.cardio,
+        ])
+          stat(bp, 60),
+      ];
+    case 'storm_tempered':
+      // Phase 38f — cardio vs 60, the six strength tracks vs 30.
+      return [
+        stat(BodyPart.cardio, 60),
+        for (final bp in const [
+          BodyPart.chest,
+          BodyPart.back,
+          BodyPart.legs,
+          BodyPart.shoulders,
+          BodyPart.arms,
+          BodyPart.core,
+        ])
+          stat(bp, 30),
       ];
     default:
       return const <CrossBuildStat>[];
