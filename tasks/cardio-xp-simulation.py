@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cardio XP / progression simulation — calibration source of truth (v1 DRAFT).
+"""Cardio XP / progression simulation — calibration source of truth (v1, locked Phase 38g 2026-06-18).
 
 Mirror of `tasks/rpg-xp-simulation.py` (the strength formula) for the proposed
 CARDIO stat. Cardio is dimensionally distinct from strength (rate × time, not
@@ -87,7 +87,7 @@ VOLUME_EXPONENT = 0.60  # base_xp = met_minutes ^ this (mirrors volume_load^0.60
 CARDIO_XP_SCALE = 3.5
 
 # ============================================================================
-# CARDIO-specific constants (v1 DRAFT — these are what the panel calibrates)
+# CARDIO-specific constants (v1, locked Phase 38g — calibrated on the panel)
 # ============================================================================
 MET_REST = 3.5  # 1 MET = 3.5 mL O2 / kg / min (ACSM)
 
@@ -546,7 +546,7 @@ def simulate_cardio(persona: CardioPersona, weeks=12):
 
 
 # ============================================================================
-# Persona panel (cardio calibration ground truth — v1 DRAFT bands)
+# Persona panel (cardio calibration ground truth — v1 locked bands)
 # ============================================================================
 # Self-paced endurance: a chosen RELATIVE effort (abs MET scales with fitness —
 # a fitter athlete runs faster at the same "easy").
@@ -670,7 +670,7 @@ PERSONAS = {
 
 
 def print_persona_panel(weeks=12):
-    print(f"\n=== CARDIO persona panel ({weeks} wk) — v1 DRAFT ===\n")
+    print(f"\n=== CARDIO persona panel ({weeks} wk) — v1 (locked) ===\n")
     header = f"{'Persona':<42} {'wk12 VO2':>8} {'tier':>5} {'rank':>5} {'band':>9} {'verdict':>8}"
     print(header)
     print("-" * len(header))
