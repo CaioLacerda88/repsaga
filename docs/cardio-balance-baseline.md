@@ -1,6 +1,8 @@
-# Cardio Balance Baseline — v1 DRAFT
+# Cardio Balance Baseline — v1 (LOCKED)
 
-> **Status: v1 DRAFT calibration (not yet shipped, not yet 4-site-wired).**
+> **Status: v1 LOCKED — Phase 38g calibration sign-off (2026-06-18). Shipped +
+> 4-site-wired (Python sim → fixture → Dart → SQL); vitality XP-gate live (38f).
+> Post-launch real-data recalibration would be a future phase.**
 > Companion to `docs/xp-balance-baseline.md` (strength) and the design analysis
 > in `docs/cardio-stat-plan.md`. This is the *formula refinement + balance
 > simulation* the cardio stat needs before it becomes an implementation phase —
@@ -67,7 +69,7 @@ This resolves the cardio thesis the way the physiology demands:
 
 ---
 
-## 2. The cardio formula (v1 DRAFT)
+## 2. The cardio formula (v1 — locked)
 
 A logged session = `(activity, duration, intensity)`. `intensity` is the chosen
 relative effort for self-paced work (run/bike/swim — abs MET scales with fitness)
@@ -191,7 +193,7 @@ training still beats RT for VO₂max at equal effort). Validated by the Powerlif
 
 ---
 
-## 3. Constants snapshot (v1 DRAFT — tuned on the panel)
+## 3. Constants snapshot (v1 — locked; tuned on the panel)
 
 | Constant | Value | Notes |
 |---|---|---|
@@ -258,7 +260,7 @@ from Wenger & Bell's qualitative findings, not a single published cutoff).
 
 ---
 
-## 5. 14-persona balance panel — v1 DRAFT (14/14 PASS)
+## 5. 14-persona balance panel — v1 locked (14/14 PASS)
 
 `python tasks/cardio-xp-simulation.py --persona-panel`. Bands are an independent
 product/design call on "what rank this profile *should* be," derived from the
