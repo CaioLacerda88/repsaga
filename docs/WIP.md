@@ -85,8 +85,24 @@ forge — only the legend, going on without end." / pt "Saga-Sem-Fim".
 > tech-lead fills the ARB from that table; the slugs/thresholds/predicates above are authoritative.
 
 ### Pipeline checklist
-- [ ] Boundary Explore → fill the inventory.
-- [ ] Draft the cardio ladder names (ui-ux-critic/product-owner, plan register) → **USER APPROVAL**.
-- [ ] tech-lead TDD: title data (cardio 13-rung ladder + 172 rung) + SQL migration (award VALUES + cross-build) + l10n en+pt + cross-build (iron_bound + Forged Wind + Storm-Tempered).
-- [ ] Tests: cardio title evaluation/award, the 3 cross-build predicates, 172 char-level title, title count 90→106.
-- [ ] `make ci` + full integration green (title award SQL); reviewer → QA → ship → push migration to hosted.
+- [x] Boundary Explore → fill the inventory.
+- [x] Draft the cardio ladder names → **USER APPROVAL** (locked 2026-06-17).
+
+#### Workstream A — cardio titles (content + award)
+- [x] A1 title data: table + 3 JSON assets.
+- [x] A1b `CrossBuildTriggerId` enum: +theForgedWind +stormTempered.
+- [x] A2 l10n en+pt: 16 slugs × name+flavor + @-desc on en; gen-l10n.
+- [x] A3 `title_localization.dart`: CASE per new slug.
+- [x] A4 `cross_build_title_evaluator.dart`: iron_bound + 2 new + gapHint/stats.
+- [x] A5 cardio bodyPartColor teal — already landed in 38e (verified).
+- [x] A6 SQL 00081 PART B/C (writers) + PART A (evaluator).
+- [x] A7 counts: titles_repository_test 106; drift test; evaluator test; rpg_acceptance (3 fixed); pill widget + e2e titles.spec.
+
+#### Workstream B — cardio vitality XP-gate
+- [x] B1 SQL record_cardio_session (00081 PART D): vmult applied to v_xp.
+- [x] B2 Dart `cardio_xp_calculator.dart`: vitalityXpMult/vitalityPct + vitalityMult param.
+- [x] B3 fixture cardio_vitality_gate (6 rows) + Dart parity test + integration gate test; sim 14/14.
+
+#### Verify — ALL GREEN
+- [x] gen + gen-l10n; format; analyze 0; unit/widget 3758 pass / 1 skip;
+      integration 72 pass; cardio sim 14/14; fixture byte-deterministic.

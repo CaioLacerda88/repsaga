@@ -16,10 +16,10 @@ class TitleCopy {
 ///     codegen output to expose every getter as a static field.
 ///   * A switch is exhaustively maintained: when a new title slug ships in
 ///     `titles_v1.json`, the integration test in
-///     `titles_repository_test.dart` locks the catalog count at 78. Any
+///     `titles_repository_test.dart` locks the catalog count at 106. Any
 ///     missing case here would surface immediately as a runtime fallback,
 ///     and during dev as a missing arb key (build-time error).
-///   * Performance: O(n) on a hot path is fine because the catalog is 78
+///   * Performance: O(n) on a hot path is fine because the catalog is 106
 ///     entries and the post-workout half-sheet is rendered at most once
 ///     per finish.
 ///
@@ -423,6 +423,73 @@ TitleCopy? localizedTitleCopy(String slug, AppLocalizations l10n) {
         flavor: l10n.title_core_r99_the_spine_flavor,
       );
 
+    // Phase 38f — cardio body-part ladder (13 rungs).
+    case 'cardio_r5_first_stride':
+      return TitleCopy(
+        name: l10n.title_cardio_r5_first_stride_name,
+        flavor: l10n.title_cardio_r5_first_stride_flavor,
+      );
+    case 'cardio_r10_breath_found':
+      return TitleCopy(
+        name: l10n.title_cardio_r10_breath_found_name,
+        flavor: l10n.title_cardio_r10_breath_found_flavor,
+      );
+    case 'cardio_r15_wind_touched':
+      return TitleCopy(
+        name: l10n.title_cardio_r15_wind_touched_name,
+        flavor: l10n.title_cardio_r15_wind_touched_flavor,
+      );
+    case 'cardio_r20_pace_keeper':
+      return TitleCopy(
+        name: l10n.title_cardio_r20_pace_keeper_name,
+        flavor: l10n.title_cardio_r20_pace_keeper_flavor,
+      );
+    case 'cardio_r25_long_strider':
+      return TitleCopy(
+        name: l10n.title_cardio_r25_long_strider_name,
+        flavor: l10n.title_cardio_r25_long_strider_flavor,
+      );
+    case 'cardio_r30_wind_drawn':
+      return TitleCopy(
+        name: l10n.title_cardio_r30_wind_drawn_name,
+        flavor: l10n.title_cardio_r30_wind_drawn_flavor,
+      );
+    case 'cardio_r40_tempo_sworn':
+      return TitleCopy(
+        name: l10n.title_cardio_r40_tempo_sworn_name,
+        flavor: l10n.title_cardio_r40_tempo_sworn_flavor,
+      );
+    case 'cardio_r50_wind_crowned':
+      return TitleCopy(
+        name: l10n.title_cardio_r50_wind_crowned_name,
+        flavor: l10n.title_cardio_r50_wind_crowned_flavor,
+      );
+    case 'cardio_r60_breath_forged':
+      return TitleCopy(
+        name: l10n.title_cardio_r60_breath_forged_name,
+        flavor: l10n.title_cardio_r60_breath_forged_flavor,
+      );
+    case 'cardio_r70_wind_runner':
+      return TitleCopy(
+        name: l10n.title_cardio_r70_wind_runner_name,
+        flavor: l10n.title_cardio_r70_wind_runner_flavor,
+      );
+    case 'cardio_r80_stride_of_storms':
+      return TitleCopy(
+        name: l10n.title_cardio_r80_stride_of_storms_name,
+        flavor: l10n.title_cardio_r80_stride_of_storms_flavor,
+      );
+    case 'cardio_r90_wind_untouched':
+      return TitleCopy(
+        name: l10n.title_cardio_r90_wind_untouched_name,
+        flavor: l10n.title_cardio_r90_wind_untouched_flavor,
+      );
+    case 'cardio_r99_the_stride':
+      return TitleCopy(
+        name: l10n.title_cardio_r99_the_stride_name,
+        flavor: l10n.title_cardio_r99_the_stride_flavor,
+      );
+
     // Phase 18e — character-level titles (7 entries: lvl 10..148).
     case 'wanderer':
       return TitleCopy(
@@ -459,6 +526,12 @@ TitleCopy? localizedTitleCopy(String slug, AppLocalizations l10n) {
         name: l10n.title_saga_eternal_name,
         flavor: l10n.title_saga_eternal_flavor,
       );
+    // Phase 38f — the cardio-inclusive level cap (level 172).
+    case 'saga_unending':
+      return TitleCopy(
+        name: l10n.title_saga_unending_name,
+        flavor: l10n.title_saga_unending_flavor,
+      );
 
     // Phase 18e — cross-build distinction titles (5 entries).
     case 'pillar_walker':
@@ -485,6 +558,17 @@ TitleCopy? localizedTitleCopy(String slug, AppLocalizations l10n) {
       return TitleCopy(
         name: l10n.title_saga_forged_name,
         flavor: l10n.title_saga_forged_flavor,
+      );
+    // Phase 38f — cardio cross-build triangle.
+    case 'the_forged_wind':
+      return TitleCopy(
+        name: l10n.title_the_forged_wind_name,
+        flavor: l10n.title_the_forged_wind_flavor,
+      );
+    case 'storm_tempered':
+      return TitleCopy(
+        name: l10n.title_storm_tempered_name,
+        flavor: l10n.title_storm_tempered_flavor,
       );
   }
   return null;

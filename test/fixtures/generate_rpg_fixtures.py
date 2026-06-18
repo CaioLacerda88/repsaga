@@ -1039,6 +1039,65 @@ def fx_cardio_cross_week() -> dict:
     }
 
 
+def fx_cardio_vitality_gate() -> list[dict]:
+    """Phase 38f — cardio Vitality XP-gate oracle.
+
+    The gate scales the FINAL session XP by
+        vmult = VITALITY_XP_FLOOR + (1 - VITALITY_XP_FLOOR) × vpct
+        vpct  = clamp(ewma / peak, 0, 1)   (peak <= 0 -> 1.0)
+    exactly as the sim's caller-side `xp *= vmult` (cardio-xp-simulation.py:526)
+    and the SQL `record_cardio_session` gate (migration 00081).
+
+    Each row carries the cardio conditioning (ewma/peak) that produces vpct, the
+    derived vmult, and BOTH the ungated session XP (`xp_ungated`) and the gated
+    session XP (`xp_gated = xp_ungated × vmult`). The Dart `CardioXpCalculator`
+    parity test replays each row through `vitalityPct` / `vitalityXpMult` and
+    `computeSessionXp(vitalityMult: ...)` to pin the gate end-to-end.
+
+    Cases span: fully-lapsed (vpct 0 -> floor 0.40), partial conditioning
+    (vpct 0.5 / 0.75), fully-conditioned (vpct 1.0 -> full XP), and the
+    fresh-user no-history case (peak 0 -> vpct 1.0 -> full XP, gate is a no-op).
+    """
+    cases: list[dict] = []
+    # Fixed session shape so the ONLY moving part is the conditioning -> vmult.
+    vo2max, age, female, modality, dur, kind, value, rank = (
+        52.0, 32, False, 'run', 45, 'rel', 0.85, 10)
+
+    def row(name, ewma, peak):
+        state = {'used': 0.0}
+        xp_ungated, met_min, rel = csim.compute_session_xp(
+            vo2max, age, female, modality, dur, kind, value, rank, state)
+        vpct = csim.vitality_pct(ewma, peak)
+        vmult = csim.vitality_xp_mult(vpct)
+        cases.append({
+            'name': name,
+            'inputs': {
+                'vo2max': vo2max, 'age': age, 'female': female,
+                'modality': modality, 'duration_min': dur,
+                'kind': kind, 'value': value, 'current_rank': rank,
+                'vitality_ewma': ewma, 'vitality_peak': peak,
+            },
+            'vpct': vpct,
+            'vitality_mult': vmult,
+            'xp_ungated': xp_ungated,
+            'xp_gated': xp_ungated * vmult,
+        })
+
+    # Fully-lapsed: ewma 0 against a real peak -> vpct 0 -> vmult = FLOOR (0.40).
+    row('fully_lapsed', 0.0, 1000.0)
+    # Partial conditioning: vpct 0.5 -> vmult = 0.40 + 0.60×0.5 = 0.70.
+    row('half_conditioned', 500.0, 1000.0)
+    # Three-quarters: vpct 0.75 -> vmult = 0.85.
+    row('three_quarter_conditioned', 750.0, 1000.0)
+    # Fully conditioned: ewma == peak -> vpct 1.0 -> vmult 1.0 (full XP).
+    row('fully_conditioned', 1000.0, 1000.0)
+    # Fresh user / no history: peak 0 -> vpct 1.0 -> vmult 1.0 (gate no-op).
+    row('fresh_no_history', 0.0, 0.0)
+    # ewma above peak (defensive — should never happen, but clamps to 1.0).
+    row('ewma_above_peak_clamps', 1200.0, 1000.0)
+    return cases
+
+
 def fx_cardio_components() -> dict:
     """Component lists mirroring the strength fixture style — pins each pure
     sub-function Dart must replay @1e-4."""
@@ -1263,6 +1322,7 @@ def main() -> None:
         # Phase 38c cardio oracle sections.
         'cardio_session_xp': fx_cardio_session_xp(),
         'cardio_cross_week': fx_cardio_cross_week(),
+        'cardio_vitality_gate': fx_cardio_vitality_gate(),
         'cardio_components': fx_cardio_components(),
         'est_vo2max_cases': fx_est_vo2max_cases(),
         'cross_credit_met_bands': fx_cross_credit_met_bands(),
@@ -1290,6 +1350,7 @@ def main() -> None:
     print(f'  backfill_replay:         {fixtures["backfill_replay"]["total_sets"]} sets')
     print(f'  cardio_session_xp:       {len(fixtures["cardio_session_xp"])} cases')
     print(f'  cardio_cross_week:       {len(fixtures["cardio_cross_week"]["sessions"])} sessions')
+    print(f'  cardio_vitality_gate:    {len(fixtures["cardio_vitality_gate"])} cases')
     print(f'  cross_credit_met_bands:  {len(fixtures["cross_credit_met_bands"])} cases')
 
 

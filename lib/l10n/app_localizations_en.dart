@@ -2701,6 +2701,118 @@ class AppLocalizationsEn extends AppLocalizations {
       'Every track at sixty. The saga is forged, and you forged it.';
 
   @override
+  String get title_cardio_r5_first_stride_name => 'First Stride';
+
+  @override
+  String get title_cardio_r5_first_stride_flavor =>
+      'The lungs just learned there\'s a second gear.';
+
+  @override
+  String get title_cardio_r10_breath_found_name => 'Breath-Found';
+
+  @override
+  String get title_cardio_r10_breath_found_flavor =>
+      'The burn comes later than it used to.';
+
+  @override
+  String get title_cardio_r15_wind_touched_name => 'Wind-Touched';
+
+  @override
+  String get title_cardio_r15_wind_touched_flavor =>
+      'The air stops fighting you back.';
+
+  @override
+  String get title_cardio_r20_pace_keeper_name => 'Pace-Keeper';
+
+  @override
+  String get title_cardio_r20_pace_keeper_flavor =>
+      'The clock runs at your speed now.';
+
+  @override
+  String get title_cardio_r25_long_strider_name => 'Long-Strider';
+
+  @override
+  String get title_cardio_r25_long_strider_flavor =>
+      'Distance is just where you start.';
+
+  @override
+  String get title_cardio_r30_wind_drawn_name => 'Wind-Drawn';
+
+  @override
+  String get title_cardio_r30_wind_drawn_flavor =>
+      'You pull air the way others pull iron.';
+
+  @override
+  String get title_cardio_r40_tempo_sworn_name => 'Tempo-Sworn';
+
+  @override
+  String get title_cardio_r40_tempo_sworn_flavor =>
+      'The pace never breaks before you do.';
+
+  @override
+  String get title_cardio_r50_wind_crowned_name => 'Wind-Crowned';
+
+  @override
+  String get title_cardio_r50_wind_crowned_flavor =>
+      'Headwinds bow. The pace rises.';
+
+  @override
+  String get title_cardio_r60_breath_forged_name => 'Breath-Forged';
+
+  @override
+  String get title_cardio_r60_breath_forged_flavor =>
+      'Ten thousand strides, one rhythm.';
+
+  @override
+  String get title_cardio_r70_wind_runner_name => 'Wind-Runner';
+
+  @override
+  String get title_cardio_r70_wind_runner_flavor =>
+      'The weather struggles to keep up.';
+
+  @override
+  String get title_cardio_r80_stride_of_storms_name => 'Stride of Storms';
+
+  @override
+  String get title_cardio_r80_stride_of_storms_flavor =>
+      'The kind of pace gales form around.';
+
+  @override
+  String get title_cardio_r90_wind_untouched_name => 'Wind-Untouched';
+
+  @override
+  String get title_cardio_r90_wind_untouched_flavor =>
+      'The storm passes through. Your pace never breaks.';
+
+  @override
+  String get title_cardio_r99_the_stride_name => 'The Stride';
+
+  @override
+  String get title_cardio_r99_the_stride_flavor =>
+      'Every road in this city already knows your pace.';
+
+  @override
+  String get title_saga_unending_name => 'Saga-Unending';
+
+  @override
+  String get title_saga_unending_flavor =>
+      'One seventy-two. Nothing left to forge — only the legend, going on without end.';
+
+  @override
+  String get title_the_forged_wind_name => 'The Forged Wind';
+
+  @override
+  String get title_the_forged_wind_flavor =>
+      'Every track at sixty, the lungs among them. Iron that runs.';
+
+  @override
+  String get title_storm_tempered_name => 'Storm-Tempered';
+
+  @override
+  String get title_storm_tempered_flavor =>
+      'The lungs of a gale, hands that still know iron. Tempered, not narrowed.';
+
+  @override
   String get decrementWeight => 'Decrease weight';
 
   @override

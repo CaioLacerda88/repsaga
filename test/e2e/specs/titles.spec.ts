@@ -8,7 +8,7 @@
  *   T2 — No EquippedTitleCard is present when no title is active
  *         (rpgTitleEquipUser seeds is_active=false).
  *   T3 — The TitlesCounterPill in the AppBar renders the correct
- *         "{earned} / 90" copy.
+ *         "{earned} / 106" copy.
  *
  * User isolation:
  *   rpgTitleEquipUser — chest at rank 5 with 'chest_r5_initiate_of_the_forge'
@@ -123,20 +123,21 @@ test.describe('Titles screen', () => {
     await expect(page.locator(TITLES.equippedCard)).toHaveCount(0);
   });
 
-  // T3: Counter pill renders "{earned} / 90" in the AppBar.
+  // T3: Counter pill renders "{earned} / 106" in the AppBar.
   //
-  // Total catalog: 78 body-part + 7 character-level + 5 cross-build = 90.
-  // rpgTitleEquipUser has 1 earned title (seeded by global-setup), so the
-  // pill reads "1 / 90". We assert the regex rather than the exact "1"
-  // numerator so the test stays locale-independent and tolerates any
-  // future seeding tweak that adds rows for this user.
-  test('should render the counter pill with a numerator and the total of 90', async ({
+  // Total catalog (Phase 38f): 91 body-part (incl. the cardio track) +
+  // 8 character-level (incl. saga_unending@172) + 7 cross-build (incl. the
+  // cardio triangle) = 106. rpgTitleEquipUser has 1 earned title (seeded by
+  // global-setup), so the pill reads "1 / 106". We assert the regex rather
+  // than the exact "1" numerator so the test stays locale-independent and
+  // tolerates any future seeding tweak that adds rows for this user.
+  test('should render the counter pill with a numerator and the total of 106', async ({
     page,
   }) => {
     const pill = page.locator(TITLES.counterPill).first();
     await expect(pill).toBeVisible({ timeout: 10_000 });
-    // Locale-independent: "1 / 90 earned" (en) or "1 / 90 conquistados" (pt-BR).
-    // The regex matches the fraction regardless of locale suffix.
-    await expect(pill).toContainText(/\d+\s*\/\s*90/);
+    // Locale-independent: "1 / 106 earned" (en) or "1 / 106 conquistados"
+    // (pt-BR). The regex matches the fraction regardless of locale suffix.
+    await expect(pill).toContainText(/\d+\s*\/\s*106/);
   });
 });

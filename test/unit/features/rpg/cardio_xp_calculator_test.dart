@@ -148,6 +148,86 @@ void main() {
       );
     });
 
+    test('cardio_vitality_gate — Vitality XP-gate scales the final session XP '
+        '(Phase 38f)', () {
+      final cases = fixtures['cardio_vitality_gate'] as List<dynamic>;
+      expect(cases, hasLength(6), reason: 'expected 6 vitality-gate rows');
+
+      for (final raw in cases) {
+        final c = raw as Map<String, dynamic>;
+        final name = c['name'] as String;
+        final inputs = c['inputs'] as Map<String, dynamic>;
+
+        // vpct + vmult pure cores match the oracle.
+        final vpct = CardioXpCalculator.vitalityPct(
+          ewma: (inputs['vitality_ewma'] as num).toDouble(),
+          peak: (inputs['vitality_peak'] as num).toDouble(),
+        );
+        expect(
+          vpct,
+          closeTo((c['vpct'] as num).toDouble(), eps),
+          reason: 'vpct mismatch for $name',
+        );
+        final vmult = CardioXpCalculator.vitalityXpMult(vpct);
+        expect(
+          vmult,
+          closeTo((c['vitality_mult'] as num).toDouble(), eps),
+          reason: 'vitality_mult mismatch for $name',
+        );
+
+        // computeSessionXp with vitalityMult = 1.0 reproduces the ungated XP.
+        final ungated = CardioXpCalculator.computeSessionXp(
+          vo2max: (inputs['vo2max'] as num).toDouble(),
+          age: inputs['age'] as int,
+          female: inputs['female'] as bool,
+          modality: inputs['modality'] as String,
+          durationMin: (inputs['duration_min'] as num).toDouble(),
+          kind: inputs['kind'] as String,
+          value: (inputs['value'] as num).toDouble(),
+          currentRank: (inputs['current_rank'] as num).toDouble(),
+        );
+        expect(
+          ungated.sessionXp,
+          closeTo((c['xp_ungated'] as num).toDouble(), eps),
+          reason: 'xp_ungated mismatch for $name',
+        );
+
+        // computeSessionXp with the gate applied reproduces the gated XP.
+        final gated = CardioXpCalculator.computeSessionXp(
+          vo2max: (inputs['vo2max'] as num).toDouble(),
+          age: inputs['age'] as int,
+          female: inputs['female'] as bool,
+          modality: inputs['modality'] as String,
+          durationMin: (inputs['duration_min'] as num).toDouble(),
+          kind: inputs['kind'] as String,
+          value: (inputs['value'] as num).toDouble(),
+          currentRank: (inputs['current_rank'] as num).toDouble(),
+          vitalityMult: vmult,
+        );
+        expect(
+          gated.sessionXp,
+          closeTo((c['xp_gated'] as num).toDouble(), eps),
+          reason: 'xp_gated mismatch for $name',
+        );
+
+        // Behavior: a lapsed user (vpct < 1) earns strictly LESS than ungated;
+        // a fully-conditioned / fresh user earns the SAME.
+        if (vpct < 1.0) {
+          expect(
+            gated.sessionXp,
+            lessThan(ungated.sessionXp),
+            reason: '$name: gated XP must be lower when vpct < 1',
+          );
+        } else {
+          expect(
+            gated.sessionXp,
+            closeTo(ungated.sessionXp, eps),
+            reason: '$name: full conditioning earns the full ungated XP',
+          );
+        }
+      }
+    });
+
     test('walk-when-fit edge demonstrates ~0 reward (thesis gate)', () {
       // The reformed-runner walk row: a VO₂-54 athlete walking earns trivial
       // XP — the un-farmable property, asserted on the actual value.

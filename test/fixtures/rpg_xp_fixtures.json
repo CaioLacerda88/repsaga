@@ -1095,6 +1095,122 @@
       "xp": 298.75552975189805
     }
   ],
+  "cardio_vitality_gate": [
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 0.0,
+        "vitality_peak": 1000.0,
+        "vo2max": 52.0
+      },
+      "name": "fully_lapsed",
+      "vitality_mult": 0.4,
+      "vpct": 0.0,
+      "xp_gated": 185.94537194538916,
+      "xp_ungated": 464.86342986347285
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 500.0,
+        "vitality_peak": 1000.0,
+        "vo2max": 52.0
+      },
+      "name": "half_conditioned",
+      "vitality_mult": 0.7,
+      "vpct": 0.5,
+      "xp_gated": 325.404400904431,
+      "xp_ungated": 464.86342986347285
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 750.0,
+        "vitality_peak": 1000.0,
+        "vo2max": 52.0
+      },
+      "name": "three_quarter_conditioned",
+      "vitality_mult": 0.85,
+      "vpct": 0.75,
+      "xp_gated": 395.1339153839519,
+      "xp_ungated": 464.86342986347285
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 1000.0,
+        "vitality_peak": 1000.0,
+        "vo2max": 52.0
+      },
+      "name": "fully_conditioned",
+      "vitality_mult": 1.0,
+      "vpct": 1.0,
+      "xp_gated": 464.86342986347285,
+      "xp_ungated": 464.86342986347285
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 0.0,
+        "vitality_peak": 0.0,
+        "vo2max": 52.0
+      },
+      "name": "fresh_no_history",
+      "vitality_mult": 1.0,
+      "vpct": 1.0,
+      "xp_gated": 464.86342986347285,
+      "xp_ungated": 464.86342986347285
+    },
+    {
+      "inputs": {
+        "age": 32,
+        "current_rank": 10,
+        "duration_min": 45,
+        "female": false,
+        "kind": "rel",
+        "modality": "run",
+        "value": 0.85,
+        "vitality_ewma": 1200.0,
+        "vitality_peak": 1000.0,
+        "vo2max": 52.0
+      },
+      "name": "ewma_above_peak_clamps",
+      "vitality_mult": 1.0,
+      "vpct": 1.0,
+      "xp_gated": 464.86342986347285,
+      "xp_ungated": 464.86342986347285
+    }
+  ],
   "character_level": [
     {
       "character_level": 1,

@@ -4662,6 +4662,198 @@ abstract class AppLocalizations {
   /// **'Every track at sixty. The saga is forged, and you forged it.'**
   String get title_saga_forged_flavor;
 
+  /// Phase 38f cardio R5 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'First Stride'**
+  String get title_cardio_r5_first_stride_name;
+
+  /// Phase 38f cardio R5 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The lungs just learned there\'s a second gear.'**
+  String get title_cardio_r5_first_stride_flavor;
+
+  /// Phase 38f cardio R10 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Breath-Found'**
+  String get title_cardio_r10_breath_found_name;
+
+  /// Phase 38f cardio R10 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The burn comes later than it used to.'**
+  String get title_cardio_r10_breath_found_flavor;
+
+  /// Phase 38f cardio R15 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Touched'**
+  String get title_cardio_r15_wind_touched_name;
+
+  /// Phase 38f cardio R15 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The air stops fighting you back.'**
+  String get title_cardio_r15_wind_touched_flavor;
+
+  /// Phase 38f cardio R20 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Pace-Keeper'**
+  String get title_cardio_r20_pace_keeper_name;
+
+  /// Phase 38f cardio R20 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock runs at your speed now.'**
+  String get title_cardio_r20_pace_keeper_flavor;
+
+  /// Phase 38f cardio R25 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-Strider'**
+  String get title_cardio_r25_long_strider_name;
+
+  /// Phase 38f cardio R25 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance is just where you start.'**
+  String get title_cardio_r25_long_strider_flavor;
+
+  /// Phase 38f cardio R30 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Drawn'**
+  String get title_cardio_r30_wind_drawn_name;
+
+  /// Phase 38f cardio R30 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'You pull air the way others pull iron.'**
+  String get title_cardio_r30_wind_drawn_flavor;
+
+  /// Phase 38f cardio R40 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Tempo-Sworn'**
+  String get title_cardio_r40_tempo_sworn_name;
+
+  /// Phase 38f cardio R40 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The pace never breaks before you do.'**
+  String get title_cardio_r40_tempo_sworn_flavor;
+
+  /// Phase 38f cardio R50 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Crowned'**
+  String get title_cardio_r50_wind_crowned_name;
+
+  /// Phase 38f cardio R50 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'Headwinds bow. The pace rises.'**
+  String get title_cardio_r50_wind_crowned_flavor;
+
+  /// Phase 38f cardio R60 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Breath-Forged'**
+  String get title_cardio_r60_breath_forged_name;
+
+  /// Phase 38f cardio R60 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'Ten thousand strides, one rhythm.'**
+  String get title_cardio_r60_breath_forged_flavor;
+
+  /// Phase 38f cardio R70 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Runner'**
+  String get title_cardio_r70_wind_runner_name;
+
+  /// Phase 38f cardio R70 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The weather struggles to keep up.'**
+  String get title_cardio_r70_wind_runner_flavor;
+
+  /// Phase 38f cardio R80 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Stride of Storms'**
+  String get title_cardio_r80_stride_of_storms_name;
+
+  /// Phase 38f cardio R80 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The kind of pace gales form around.'**
+  String get title_cardio_r80_stride_of_storms_flavor;
+
+  /// Phase 38f cardio R90 title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Untouched'**
+  String get title_cardio_r90_wind_untouched_name;
+
+  /// Phase 38f cardio R90 title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The storm passes through. Your pace never breaks.'**
+  String get title_cardio_r90_wind_untouched_flavor;
+
+  /// Phase 38f cardio R99 terminal title display name.
+  ///
+  /// In en, this message translates to:
+  /// **'The Stride'**
+  String get title_cardio_r99_the_stride_name;
+
+  /// Phase 38f cardio R99 terminal title flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'Every road in this city already knows your pace.'**
+  String get title_cardio_r99_the_stride_flavor;
+
+  /// Phase 38f character-level title (level 172, the cardio-inclusive cap) display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Saga-Unending'**
+  String get title_saga_unending_name;
+
+  /// Phase 38f character-level title (level 172) flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'One seventy-two. Nothing left to forge — only the legend, going on without end.'**
+  String get title_saga_unending_flavor;
+
+  /// Phase 38f cross-build title (the_forged_wind) display name.
+  ///
+  /// In en, this message translates to:
+  /// **'The Forged Wind'**
+  String get title_the_forged_wind_name;
+
+  /// Phase 38f cross-build title (the_forged_wind) flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'Every track at sixty, the lungs among them. Iron that runs.'**
+  String get title_the_forged_wind_flavor;
+
+  /// Phase 38f cross-build title (storm_tempered) display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Storm-Tempered'**
+  String get title_storm_tempered_name;
+
+  /// Phase 38f cross-build title (storm_tempered) flavor line.
+  ///
+  /// In en, this message translates to:
+  /// **'The lungs of a gale, hands that still know iron. Tempered, not narrowed.'**
+  String get title_storm_tempered_flavor;
+
   /// Accessibility/tooltip: WeightStepper minus button.
   ///
   /// In en, this message translates to:

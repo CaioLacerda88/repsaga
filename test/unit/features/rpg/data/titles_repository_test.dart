@@ -248,7 +248,9 @@ void main() {
           bundle: _FakeBundle(bodyPart: _validCatalog()),
         );
 
-        // Cardio has no entries in v1.
+        // The fake `_validCatalog()` has no cardio entries, so the filter
+        // returns empty here (the shipped catalog's cardio ladder is pinned
+        // by the "Shipped catalogs" group below).
         expect(await repo.forBodyPart(BodyPart.cardio), isEmpty);
       },
     );
@@ -337,16 +339,18 @@ void main() {
   });
 
   group('Shipped catalogs (integration with rootBundle)', () {
-    test('loads, parses, and contains all 90 v1 entries (78 body-part + 7 '
-        'character-level + 5 cross-build)', () async {
+    test('loads, parses, and contains all 106 entries (91 body-part + 8 '
+        'character-level + 7 cross-build)', () async {
       // Locks the shipped assets against accidental edits — slug count
-      // is a structural invariant of the v1 contract.
+      // is a structural invariant of the catalog contract. Phase 38f added
+      // the cardio track (13 body-part rungs), saga_unending@172, and the
+      // cardio cross-build triangle (the_forged_wind, storm_tempered).
       TestWidgetsFlutterBinding.ensureInitialized();
       // Not faking — read the actual assets registered in pubspec.yaml.
       // If any asset is missing or malformed, this fails.
       final repo = TitlesRepository(_UnusedClient());
       final catalog = await repo.loadCatalog();
-      expect(catalog, hasLength(90));
+      expect(catalog, hasLength(106));
 
       final bodyPartTitles = catalog.whereType<BodyPartTitle>().toList();
       final characterLevelTitles = catalog
@@ -354,11 +358,11 @@ void main() {
           .toList();
       final crossBuildTitles = catalog.whereType<CrossBuildTitle>().toList();
 
-      expect(bodyPartTitles, hasLength(78));
-      expect(characterLevelTitles, hasLength(7));
-      expect(crossBuildTitles, hasLength(5));
+      expect(bodyPartTitles, hasLength(91));
+      expect(characterLevelTitles, hasLength(8));
+      expect(crossBuildTitles, hasLength(7));
 
-      // Body-part bucket: six body parts × 13 thresholds
+      // Body-part bucket: seven body parts × 13 thresholds
       // (5,10,15,20,25,30,40,50,60,70,80,90,99).
       final perBodyPart = <BodyPart, int>{};
       for (final t in bodyPartTitles) {
@@ -370,8 +374,10 @@ void main() {
       expect(perBodyPart[BodyPart.shoulders], 13);
       expect(perBodyPart[BodyPart.arms], 13);
       expect(perBodyPart[BodyPart.core], 13);
+      // Phase 38f — cardio is now a full title track.
+      expect(perBodyPart[BodyPart.cardio], 13);
 
-      // Terminal Rank 99 entry exists for every body part.
+      // Terminal Rank 99 entry exists for every body part (incl. cardio).
       for (final bp in [
         BodyPart.chest,
         BodyPart.back,
@@ -379,6 +385,7 @@ void main() {
         BodyPart.shoulders,
         BodyPart.arms,
         BodyPart.core,
+        BodyPart.cardio,
       ]) {
         final terminal = bodyPartTitles.where(
           (t) => t.bodyPart == bp && t.rankThreshold == 99,
@@ -386,12 +393,12 @@ void main() {
         expect(terminal, hasLength(1), reason: '${bp.dbValue} R99 missing');
       }
 
-      // Character-level thresholds — exact set per spec §10.2.
+      // Character-level thresholds — exact set (Phase 38f adds 172).
       final levels = characterLevelTitles.map((t) => t.levelThreshold).toList()
         ..sort();
-      expect(levels, [10, 25, 50, 75, 100, 125, 148]);
+      expect(levels, [10, 25, 50, 75, 100, 125, 148, 172]);
 
-      // Cross-build trigger ids — exact set per spec §10.3.
+      // Cross-build trigger ids — exact set (Phase 38f adds the cardio pair).
       final triggers = crossBuildTitles.map((t) => t.triggerId).toSet();
       expect(triggers, {
         CrossBuildTriggerId.pillarWalker,
@@ -399,6 +406,8 @@ void main() {
         CrossBuildTriggerId.evenHanded,
         CrossBuildTriggerId.ironBound,
         CrossBuildTriggerId.sagaForged,
+        CrossBuildTriggerId.theForgedWind,
+        CrossBuildTriggerId.stormTempered,
       });
     });
   });

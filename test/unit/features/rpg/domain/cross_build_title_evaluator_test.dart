@@ -29,6 +29,7 @@ Map<BodyPart, int> _ranks({
   int shoulders = 1,
   int arms = 1,
   int core = 1,
+  int cardio = 1,
 }) => {
   BodyPart.chest: chest,
   BodyPart.back: back,
@@ -36,6 +37,7 @@ Map<BodyPart, int> _ranks({
   BodyPart.shoulders: shoulders,
   BodyPart.arms: arms,
   BodyPart.core: core,
+  BodyPart.cardio: cardio,
 };
 
 void main() {
@@ -208,14 +210,38 @@ void main() {
   });
 
   group('CrossBuildTitleEvaluator — iron_bound', () {
-    test('chest, back, legs all 60 (boundary) → fires', () {
-      // Boundary: every track at the inclusive floor (60). Cardio-low
-      // condition is deferred to v2 — the strength predicate fires alone.
+    test('chest, back, legs all 60 + cardio default (low) → fires', () {
+      // Boundary: every big-three track at the inclusive floor (60) AND cardio
+      // at the default rank 1 (≤ 10). Phase 38f restored the low-cardio
+      // condition — a strength-pure powerlifter still fires.
       final result = CrossBuildTitleEvaluator.evaluate(
         _ranks(chest: 60, back: 60, legs: 60),
       );
       expect(result, contains('iron_bound'));
     });
+
+    test('cardio == 10 (boundary, inclusive) → still fires', () {
+      // The low-cardio condition is `cardio <= 10` — rank 10 is the inclusive
+      // ceiling.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(chest: 60, back: 60, legs: 60, cardio: 10),
+      );
+      expect(result, contains('iron_bound'));
+    });
+
+    test(
+      'cardio == 11 (one above the ceiling) → does not fire (Phase 38f)',
+      () {
+        // A powerlifter who also built cardio past rank 10 is no longer
+        // strength-pure — they route to the_forged_wind / storm_tempered
+        // instead. iron_bound's low-cardio condition gates them out of FUTURE
+        // awards (already-earned rows are never revoked — SQL-side concern).
+        final result = CrossBuildTitleEvaluator.evaluate(
+          _ranks(chest: 60, back: 60, legs: 60, cardio: 11),
+        );
+        expect(result, isNot(contains('iron_bound')));
+      },
+    );
 
     test('one of (chest, back, legs) at 59 → does not fire', () {
       // The predicate is AND-of-three; a single track below the floor
@@ -296,6 +322,130 @@ void main() {
     });
   });
 
+  group('CrossBuildTitleEvaluator — the_forged_wind (Phase 38f)', () {
+    test('all six strength tracks 60 AND cardio 60 (boundary) → fires', () {
+      // The complete-athlete apex: saga_forged PLUS a fully-forged cardio
+      // engine. Every track (incl. cardio) at the inclusive floor 60.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 60,
+          back: 60,
+          legs: 60,
+          shoulders: 60,
+          arms: 60,
+          core: 60,
+          cardio: 60,
+        ),
+      );
+      expect(result, contains('the_forged_wind'));
+    });
+
+    test('all six strength 60 but cardio 59 → does not fire', () {
+      // One below the cardio floor breaks the predicate even with a complete
+      // strength build. saga_forged still fires (cardio is not its concern).
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 60,
+          back: 60,
+          legs: 60,
+          shoulders: 60,
+          arms: 60,
+          core: 60,
+          cardio: 59,
+        ),
+      );
+      expect(result, isNot(contains('the_forged_wind')));
+      expect(result, contains('saga_forged'));
+    });
+
+    test('cardio 60 but one strength track 59 → does not fire', () {
+      // A fully-forged cardio engine without complete strength is
+      // storm_tempered territory, not the_forged_wind.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 60,
+          back: 60,
+          legs: 60,
+          shoulders: 60,
+          arms: 59,
+          core: 60,
+          cardio: 60,
+        ),
+      );
+      expect(result, isNot(contains('the_forged_wind')));
+    });
+  });
+
+  group('CrossBuildTitleEvaluator — storm_tempered (Phase 38f)', () {
+    test('cardio 60 AND all six strength tracks 30 (boundary) → fires', () {
+      // The cardio-led counterpart to iron_bound: a fully-forged cardio engine
+      // with broad-but-not-elite strength. Cardio at floor 60, strength at
+      // the inclusive floor 30.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 30,
+          back: 30,
+          legs: 30,
+          shoulders: 30,
+          arms: 30,
+          core: 30,
+          cardio: 60,
+        ),
+      );
+      expect(result, contains('storm_tempered'));
+    });
+
+    test('cardio 59 (below floor) → does not fire', () {
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 30,
+          back: 30,
+          legs: 30,
+          shoulders: 30,
+          arms: 30,
+          core: 30,
+          cardio: 59,
+        ),
+      );
+      expect(result, isNot(contains('storm_tempered')));
+    });
+
+    test('cardio 60 but one strength track 29 → does not fire', () {
+      // "Tempered, not narrowed" — letting a single strength track wither
+      // below rank 30 disqualifies the title.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 30,
+          back: 30,
+          legs: 30,
+          shoulders: 30,
+          arms: 29,
+          core: 30,
+          cardio: 60,
+        ),
+      );
+      expect(result, isNot(contains('storm_tempered')));
+    });
+
+    test('complete athlete (all 60 incl. cardio) fires BOTH cardio titles', () {
+      // At all-60 the_forged_wind fires (strength ≥ 60 + cardio ≥ 60) AND
+      // storm_tempered fires (cardio ≥ 60 + strength ≥ 30). Both are valid
+      // structural distinctions at the apex.
+      final result = CrossBuildTitleEvaluator.evaluate(
+        _ranks(
+          chest: 60,
+          back: 60,
+          legs: 60,
+          shoulders: 60,
+          arms: 60,
+          core: 60,
+          cardio: 60,
+        ),
+      );
+      expect(result, containsAll(['the_forged_wind', 'storm_tempered']));
+    });
+  });
+
   group('CrossBuildTitleEvaluator — multi-fire & catalog order', () {
     test('every track at 60 fires every predicate in catalog order', () {
       // Saturation point — every predicate is structurally satisfied.
@@ -326,9 +476,12 @@ void main() {
       expect(CrossBuildTitleEvaluator.evaluate(_ranks()), isEmpty);
     });
 
-    test('cardio entry is silently ignored', () {
-      // BodyPart.cardio is not part of any predicate. A massive cardio
-      // value cannot accidentally trip a strength predicate.
+    test('high cardio does not perturb the strength-only predicates', () {
+      // saga_forged + the strength predicates are cardio-independent: a huge
+      // cardio value cannot disqualify saga_forged. (Phase 38f: high cardio
+      // DOES gate iron_bound out and turns the_forged_wind on — pinned in the
+      // dedicated groups above; here we only assert the strength-only
+      // distinctions are unaffected.)
       final ranks = _ranks(
         chest: 60,
         back: 60,
@@ -336,9 +489,13 @@ void main() {
         shoulders: 60,
         arms: 60,
         core: 60,
+        cardio: 99,
       );
-      ranks[BodyPart.cardio] = 99;
-      expect(CrossBuildTitleEvaluator.evaluate(ranks), contains('saga_forged'));
+      final result = CrossBuildTitleEvaluator.evaluate(ranks);
+      expect(result, contains('saga_forged'));
+      // cardio 99 > 10 → iron_bound no longer fires; the_forged_wind does.
+      expect(result, isNot(contains('iron_bound')));
+      expect(result, contains('the_forged_wind'));
     });
 
     // -------------------------------------------------------------------------

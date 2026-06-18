@@ -9,19 +9,23 @@ void main() {
     await tester.pumpWidget(
       const TestMaterialApp(
         locale: Locale('pt'),
-        home: Scaffold(body: TitlesCounterPill(earnedCount: 8, totalCount: 90)),
+        home: Scaffold(
+          body: TitlesCounterPill(earnedCount: 8, totalCount: 106),
+        ),
       ),
     );
-    expect(find.text('8 / 90 conquistados'), findsOneWidget);
+    expect(find.text('8 / 106 conquistados'), findsOneWidget);
   });
 
   testWidgets('should render counter copy in en locale', (tester) async {
     await tester.pumpWidget(
       const TestMaterialApp(
         locale: Locale('en'),
-        home: Scaffold(body: TitlesCounterPill(earnedCount: 8, totalCount: 90)),
+        home: Scaffold(
+          body: TitlesCounterPill(earnedCount: 8, totalCount: 106),
+        ),
       ),
     );
-    expect(find.text('8 / 90 earned'), findsOneWidget);
+    expect(find.text('8 / 106 earned'), findsOneWidget);
   });
 }

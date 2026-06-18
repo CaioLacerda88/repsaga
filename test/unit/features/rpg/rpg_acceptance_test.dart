@@ -357,12 +357,16 @@ void main() {
             .whereType<TitleUnlockEvent>()
             .map((e) => e.slug)
             .toSet();
-        // Both iron_bound (chest/back/legs >= 60) and saga_forged (every track
-        // >= 60) fire on this distribution. The detector emits both when both
-        // predicates pass — there's no precedence, the catalog enumerates them
-        // independently.
-        expect(titleSlugs, contains('iron_bound'));
+        // Every active track (incl. cardio) is at rank 60. saga_forged (every
+        // strength track >= 60) fires. Phase 38f: iron_bound does NOT fire
+        // here — its low-cardio condition (cardio <= 10) is violated by the
+        // cardio-60 distribution. The two cardio cross-build apex titles fire
+        // instead: the_forged_wind (all six strength >= 60 AND cardio >= 60)
+        // and storm_tempered (cardio >= 60 AND all six strength >= 30).
         expect(titleSlugs, contains('saga_forged'));
+        expect(titleSlugs, isNot(contains('iron_bound')));
+        expect(titleSlugs, contains('the_forged_wind'));
+        expect(titleSlugs, contains('storm_tempered'));
       },
     );
 
@@ -385,15 +389,23 @@ void main() {
       final pre = _snapshot(rows: fullSet, level: 89);
       final post = _snapshot(rows: fullSet, level: 89);
 
-      // Every rank=60 distribution actually fires THREE cross-build
-      // predicates: iron_bound (chest+back+legs >= 60), saga_forged (every
-      // active rank >= 60), and even_handed (every active rank >= 30 with
-      // zero spread). The guard must suppress all three.
+      // Every active track (incl. cardio) at rank 60 fires FOUR cross-build
+      // predicates (Phase 38f): saga_forged (every active rank >= 60),
+      // even_handed (every active rank >= 30 with zero spread), the_forged_wind
+      // (all six strength >= 60 AND cardio >= 60), and storm_tempered (cardio
+      // >= 60 AND all six strength >= 30). iron_bound does NOT fire (cardio 60
+      // violates its <= 10 condition). The guard must suppress all four
+      // candidates the distribution produces.
       final events = CelebrationEventBuilder.build(
         pre: pre,
         post: post,
         catalog: catalog,
-        alreadyEarnedSlugs: const {'iron_bound', 'saga_forged', 'even_handed'},
+        alreadyEarnedSlugs: const {
+          'saga_forged',
+          'even_handed',
+          'the_forged_wind',
+          'storm_tempered',
+        },
         suppressFirstAwakening: false,
       );
 
@@ -612,20 +624,25 @@ void main() {
     });
 
     test('CrossBuildTitleEvaluator.evaluate is consistent with the catalog '
-        'on a known iron_bound + saga_forged distribution', () {
+        'on a known complete-athlete distribution', () {
       // Direct evaluator call — mirrors the seam the builder uses internally
       // but with no pre/post diff. Pins that a pure rank distribution
-      // produces the expected slug set.
+      // produces the expected slug set. Every active track (incl. cardio) at
+      // rank 60.
       final ranks = <BodyPart, int>{for (final bp in activeBodyParts) bp: 60};
       final fired = CrossBuildTitleEvaluator.evaluate(ranks).toSet();
-      // saga_forged fires (every active rank >= 60).
-      // iron_bound fires (chest+back+legs all >= 60).
+      // saga_forged fires (every active strength rank >= 60).
       // even_handed fires (every active rank >= 30 and spread = 0/60 = 0).
+      // the_forged_wind fires (all six strength >= 60 AND cardio >= 60).
+      // storm_tempered fires (cardio >= 60 AND all six strength >= 30).
+      // iron_bound does NOT fire (Phase 38f: cardio 60 > 10 ceiling).
       // pillar_walker: legs=60 < 2×arms (2×60=120) → FALSE.
       // broad_shouldered: upper=180, lower=120 → 180 >= 240 is FALSE.
-      expect(fired, contains('iron_bound'));
       expect(fired, contains('saga_forged'));
       expect(fired, contains('even_handed'));
+      expect(fired, contains('the_forged_wind'));
+      expect(fired, contains('storm_tempered'));
+      expect(fired, isNot(contains('iron_bound')));
       expect(fired, isNot(contains('pillar_walker')));
       expect(fired, isNot(contains('broad_shouldered')));
     });
