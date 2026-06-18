@@ -96,6 +96,8 @@ v1.1 opt-in (see §2). Next after Phase 33: **Launch Phase** (subscription
 | 38f | Cardio / Conditioning Track — **titles + vitality XP-gate.** 13-rung cardio title ladder (First Stride@5 → The Stride@99, wind/stride totem, teal) + `saga_unending`@172 char-level title + 2 cross-build (`the_forged_wind` all≥60 incl cardio; `storm_tempered` cardio≥60 + strength≥30); `iron_bound` tightened (+`cardio≤10`, future-awards-only/append-only). Titles 90→106. Dart cross-build evaluator bit-identical to the SQL mirror; migration **00081** extends the award VALUES (00080) + `evaluate_cross_build_titles_for_user` (00049). **Also wired the cardio vitality XP-gate** (the plan's missed 38c item): `record_cardio_session` applies `vmult=0.40+0.60×vpct` (cardio vitality_ewma/peak) as the final XP factor + Dart mirror + 4-site parity regen (matches the calibrated sim; strength untouched). Reviewer (Dart↔SQL parity + gate verified) + QA/visual (cardio rungs teal+named, new cross-build cards live, /106) signed off; CI green. | DONE | #348 |
 | 38e-bis | Cardio / Conditioning Track — **stats decay copy** (deferred from the 38e split-valve). Explains cardio's already-live faster (3-wk) vitality decay: cardio-only **decay subtitle** on the vitality table row ("Conditioning fades in ~3 weeks"/pt; teal-dim, 320dp ellipsis); one-time dismissible **decay explainer banner** (`CardioDecayExplainerBanner` + Hive `cardio_decay_explainer_dismissal_provider`); new **`VitalityTrendChartLegend`** (7 chips, cardio "Conditioning" teal — no chart legend existed before). QA caught + fixed a title drift: cardio row title was "Cardio" not the contract `cardioTrackLabel` "Conditioning" — fixed at the vitality table + the post-session rank-up eyebrow (latent since 38e), unit-pinned. Copy-only, no migration. | DONE | #346 |
 | 38g | Cardio / Conditioning Track — **E2E + QA + calibration sign-off (closes Phase 38).** Consolidated `specs/cardio.spec.ts` — the end-to-end cardio journey in one feature file (log → post-session debrief cardio row → Saga teal `CardioProgressRow` → tap→`/saga/stats?body_part=cardio` → **character level reflects cardio**: `Lvl 3` vs strength-only `Lvl 2`, pinning never-regress at the user surface); removed the now-duplicate post_session cardio block; 29/29 affected specs + 9/9 at `--repeat-each=3`. **Calibration sign-off (user, 2026-06-18):** cardio balance locked **v1-final** — removed the "v1 DRAFT" markers from `cardio-xp-simulation.py` + `cardio-balance-baseline.md` (14/14 persona panel + ACSM tier bands; marker-only, no constant changed); post-launch real-data recalibration is a future phase. Test+docs only, no migration. **Phase 38 (Cardio / Conditioning Track) COMPLETE** — 38a–38g + 38e-bis; migrations 00077–00081 + the `vitality-nightly` edge fn on hosted. | DONE | #350 |
+| — | CI integration-test job (§2 follow-up from #339) — stands up an `integration-test` CI job that boots a live local Supabase (`supabase/setup-cli` + `supabase start` auto-applies migrations) and runs `flutter test --tags integration`, wired into the `ci` aggregator so the suite can't silently rot again. Rebalanced e2e shards 3→4 (`--shard=N/4`) — shard 2 was brushing the 30-min ceiling (now slowest shard ~20m cold, well under). CI-only; reviewer read, QA skipped. | DONE | #352 |
+| 38h | Cardio / Conditioning Track — **type-aware routine builder cards.** The routine create/edit builder rendered the strength card (set-count stepper + rest chips) for EVERY exercise, so cardio got a meaningless "Sets" stepper (active logging was cardio-aware since 38b; the builder never was). `_ExerciseCard` now branches: **cardio** (`muscleGroup==cardio`) → teal-striped card + `CardioEyebrow` + two optional duration/distance **target slots** (no sets/rest); **bodyweight** (`equipmentType==bodyweight`) → strength layout + neutral `BODYWEIGHT` tag (no color, brand-vs-identity); **strength** → unchanged. Target persists as ONE `RoutineSetConfig` row (new optional `targetDurationSeconds`/`targetDistanceM` — additive JSONB, **no migration**) and threads `start_routine_action → RoutineStartExercise → _seedCardioSession` so a planned "Treadmill 28:00/5km" seeds that instead of the 30:00 default. Shared cardio UI extracted (`CardioField`/dialogs) so builder + active card share one impl; estimator uses cardio target duration; weekly engagement gives cardio 0 muscle credits. Reviewer + QA + visual gate (320/360/412dp matched mockup) signed off. | DONE | #353 |
 
 ### Cluster Ledger — named bug patterns
 
@@ -272,16 +274,17 @@ progression track (rank, character level, Saga row, two-speed vitality, titles).
 Progress-snapshot table rows + the PRs. Post-launch follow-up (deferred, not parked work):
 real-user-data recalibration of the cardio tier bands.
 
-### CI integration-test job (follow-up from #339)
+### CI integration-test job (follow-up from #339) — ✅ DONE (#352)
 
-The integration-tagged suite is NOT run in CI (`--exclude-tags "integration || golden"`)
-because it needs a live Supabase — so it rotted to 18 failures undetected until the 38c
-review (#339 repaired it; memory `project_integration_suite_red_on_main`). **devops
-follow-up:** stand up a CI job running `flutter test --tags integration` against a CI
-Supabase service so this can't silently rot again. Until then, the integration gate is
-manual ("no new failures vs main", run the FULL suite locally). NOTE (38e-bis QA): the
-e2e shard 2 brushes the 30-min `timeout-minutes` ceiling and intermittently times out —
-rebalance the shard split when standing up the CI integration job.
+Stood up an `integration-test` CI job that boots a live local Supabase (`supabase/setup-cli`
++ `supabase start`, which auto-applies migrations) and runs `flutter test --tags integration`,
+wired into the `ci` aggregator — so the integration suite can no longer silently rot
+(it had drifted to 18 failures undetected until the 38c review; memory
+`project_integration_suite_red_on_main`). Also rebalanced e2e shards 3→4 (`--shard=N/4`)
+since shard 2 was brushing the 30-min ceiling. **Residual note (not blocking):** on the
+first 4-shard run the slowest shard was ~20m cold (well under 30m) but the split is uneven
+because Playwright shards by file count, not duration — if a shard stays an outlier on warm
+runs, group specs explicitly or go to 5 shards.
 
 ### Architectural follow-ups (parked, no urgency)
 
