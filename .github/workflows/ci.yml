@@ -240,6 +240,110 @@ jobs:
       - name: Build web
         run: flutter build web
 
+  integration-test:
+    # Integration tests require a live local Supabase instance. They were
+    # excluded from the `test` job (--exclude-tags integration) and only ran
+    # locally, so the suite rotted to 18 failures undetected until the 38c
+    # review (#339 repaired it). This job closes that gap: every PR now boots
+    # Supabase, applies all migrations, and runs the tagged suite so a broken
+    # integration path fails the pipeline immediately.
+    #
+    # Follows the e2e.yml Supabase-boot pattern (setup-cli → start → status →
+    # write .env → wait-for-ready probes) but needs LESS than e2e: no
+    # service-role key, no test/e2e/.env.local, no web build/serve. `supabase
+    # start` auto-applies supabase/migrations/ so the explicit GRANT migration
+    # that fixed the supabase-cli-latest-grant-drift cluster is always in
+    # place; no redundant grants needed here.
+    #
+    # NOTE on creds: the integration suite does NOT read this .env at runtime —
+    # test/integration/rpg_integration_setup.dart hardcodes the local-demo URL +
+    # anon + service-role keys (the deterministic keys `supabase start` always
+    # produces) and talks to 127.0.0.1:54321 directly. We still write .env below
+    # for two unrelated reasons: pubspec.yaml declares `.env` as a Flutter asset
+    # (so `flutter test` errors if the file is absent), and the REST
+    # wait-for-ready probe authenticates with the real local anon key.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.41.6'
+          cache: true
+          cache-key: flutter-${{ runner.os }}-3.41.6
+
+      - name: Cache Flutter pub packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Extract Supabase keys and write .env
+        run: |
+          supabase status -o env > /tmp/sb_status.env
+          # `tr -d '"'` defensively strips surrounding quotes. Newer Supabase
+          # CLIs quote `status -o env` values (`API_URL="http://..."`);
+          # stripping keeps the .env clean and version-proof regardless of
+          # the CLI's quoting behavior.
+          SB_URL=$(grep '^API_URL=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+          SB_ANON=$(grep '^ANON_KEY=' /tmp/sb_status.env | cut -d= -f2- | tr -d '"')
+
+          echo "--- Supabase API URL: $SB_URL ---"
+
+          # Written for the declared Flutter `.env` asset + the REST probe's
+          # apikey — NOT consumed by the tests themselves (see job header note).
+          printf "SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n" "$SB_URL" "$SB_ANON" > .env
+
+      - name: Wait for Supabase to be fully ready
+        run: |
+          echo "Waiting for Supabase services to be fully ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:54321/auth/v1/settings > /dev/null 2>&1; then
+              echo "Auth endpoint ready on attempt $i"
+              break
+            fi
+            echo "Waiting for auth endpoint... (attempt $i/30)"
+            sleep 2
+            if [ "$i" -eq 30 ]; then echo "ERROR: Supabase auth endpoint never became ready"; exit 1; fi
+          done
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:54321/rest/v1/ -H "apikey: $(grep SUPABASE_ANON_KEY .env | cut -d= -f2-)" > /dev/null 2>&1; then
+              echo "REST API ready on attempt $i"
+              break
+            fi
+            echo "Waiting for REST API... (attempt $i/15)"
+            sleep 2
+            if [ "$i" -eq 15 ]; then echo "ERROR: Supabase REST API never became ready"; exit 1; fi
+          done
+          echo "Supabase URL: $(head -1 .env)"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run build_runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Run integration tests
+        # No --coverage: the integration suite is I/O-heavy against a real
+        # Supabase stack; coverage instrumentation adds overhead with no
+        # benefit here (unit/widget coverage lives in the `test` job).
+        run: flutter test --tags integration
+
   deno-tests:
     # Edge Function unit tests (Deno). The handlers under
     # supabase/functions/**/ ship with self-contained `*.test.ts` files
@@ -312,7 +416,7 @@ jobs:
     name: ci
     runs-on: ubuntu-latest
     if: always()
-    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests]
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests, integration-test]
     steps:
       - name: Check all jobs passed
         run: |
@@ -322,7 +426,8 @@ jobs:
                 "${{ needs.analyze.result }}" != "success" || \
                 "${{ needs.test.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
-                "${{ needs.deno-tests.result }}" != "success" ]]; then
+                "${{ needs.deno-tests.result }}" != "success" || \
+                "${{ needs.integration-test.result }}" != "success" ]]; then
             echo "One or more required jobs failed or were skipped"
             echo "  exercise-translation-coverage-check:        ${{ needs.exercise-translation-coverage-check.result }}"
             echo "  exercise-difficulty-mult-coverage-check:    ${{ needs.exercise-difficulty-mult-coverage-check.result }}"
@@ -331,6 +436,7 @@ jobs:
             echo "  test:                                       ${{ needs.test.result }}"
             echo "  build:                                      ${{ needs.build.result }}"
             echo "  deno-tests:                                 ${{ needs.deno-tests.result }}"
+            echo "  integration-test:                           ${{ needs.integration-test.result }}"
             exit 1
           fi
           echo "All required jobs passed"

@@ -62,6 +62,6 @@ the `workout_templates.exercises` JSONB column + its array-only CHECK, all save_
 - [x] `routine_duration_estimator` (target duration, 30:00 fallback) + `weekly_engagement_provider` (skip cardio → 0 muscle credits)
 - [x] l10n keys en+pt (`routineTargetTimeLabel`/`routineTargetDistanceLabel`/`routineBodyweightTag`); test factories cardio variant
 - [x] Tests: model round-trip + back-compat, estimator (target + fallback), start-bridge seed (28:00/5km + default) [unit] + 3 card variants [widget] — full suite 3843 pass / 1 skip / 0 fail
-- [ ] E2E: cardio routine flow + selector audit (`create-routine-target-time`/`-distance`) — QA gate
-- [ ] Visual gate: 320/360/412dp, all variants, empty+filled; teal stripe clips to corner
-- [ ] PROJECT.md: add phase row + condense on merge
+- [x] E2E: cardio routine flow + selector audit (`create-routine-target-time`/`-distance`) — QA gate ✅ (25 pass, 0 flakes; persistence verified via DB read)
+- [x] Visual gate: 320/360/412dp, all variants, empty+filled; teal stripe clips to corner ✅ MATCH all viewports
+- [ ] PROJECT.md: add phase row + condense on merge (also fold in the CI integration-test job §2 close — merged via #352)
