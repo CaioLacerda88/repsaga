@@ -11,6 +11,8 @@ import '../../models/active_workout_state.dart';
 import '../../models/cardio_session.dart';
 import '../../providers/workout_providers.dart';
 import '../../utils/cardio_format.dart';
+import 'cardio_field.dart';
+import 'cardio_target_dialogs.dart';
 import 'duration_stepper.dart';
 import 'exercise_card.dart';
 import 'exercise_card_header.dart';
@@ -124,56 +126,19 @@ class CardioEntryCard extends ConsumerWidget {
     String distanceUnit,
     String locale,
   ) async {
-    final controller = TextEditingController(
-      text: session.distanceM != null
-          ? CardioFormat.distanceValue(
-              session.distanceM!,
-              distanceUnit: distanceUnit,
-              locale: locale,
-            )
-          : '',
+    final meters = await showCardioDistanceDialog(
+      context,
+      initialMeters: session.distanceM,
+      distanceUnit: distanceUnit,
+      locale: locale,
     );
-    await showDialog<void>(
-      context: context,
-      builder: (dialogCtx) {
-        final l10n = AppLocalizations.of(dialogCtx);
-        void submit(String text) {
-          final meters = CardioFormat.parseDistanceToMeters(text, distanceUnit);
-          if (meters != null) {
-            ref
-                .read(activeWorkoutProvider.notifier)
-                .updateCardioSession(
-                  activeExercise.workoutExercise.id,
-                  distanceM: meters,
-                );
-          }
-          Navigator.of(dialogCtx).pop();
-        }
-
-        return AlertDialog(
-          title: Text(l10n.enterDistance),
-          content: TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            autofocus: true,
-            decoration: InputDecoration(suffixText: distanceUnit),
-            onSubmitted: submit,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              style: dialogTextButtonStyle,
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () => submit(controller.text),
-              style: dialogTextButtonStyle,
-              child: Text(l10n.ok),
-            ),
-          ],
+    if (meters == null) return;
+    await ref
+        .read(activeWorkoutProvider.notifier)
+        .updateCardioSession(
+          activeExercise.workoutExercise.id,
+          distanceM: meters,
         );
-      },
-    );
   }
 
   Future<void> _editRpe(
@@ -265,7 +230,7 @@ class CardioEntryCard extends ConsumerWidget {
                         )
                       : null,
                 ),
-                _CardioEyebrow(slug: exercise?.slug),
+                CardioEyebrow(slug: exercise?.slug),
                 if (completed)
                   _CompletedSummary(
                     session: session,
@@ -287,7 +252,7 @@ class CardioEntryCard extends ConsumerWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _CardioField(
+                        child: CardioField(
                           identifier: 'cardio-distance',
                           semanticsLabel: l10n.cardioDistanceSemantics,
                           label: l10n.cardioDistanceLabel,
@@ -299,7 +264,7 @@ class CardioEntryCard extends ConsumerWidget {
                             locale,
                           ),
                           child: session.distanceM == null
-                              ? _GhostValue(text: l10n.cardioAddValue)
+                              ? GhostValue(text: l10n.cardioAddValue)
                               : Text.rich(
                                   TextSpan(
                                     text: CardioFormat.distanceValue(
@@ -326,7 +291,7 @@ class CardioEntryCard extends ConsumerWidget {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _CardioField(
+                        child: CardioField(
                           identifier: 'cardio-rpe',
                           semanticsLabel: l10n.cardioEffortSemantics,
                           label: session.rpe == null
@@ -334,7 +299,7 @@ class CardioEntryCard extends ConsumerWidget {
                               : l10n.cardioEffortShortLabel,
                           onTap: () => _editRpe(context, ref, session),
                           child: session.rpe == null
-                              ? _GhostValue(text: l10n.cardioAddValue)
+                              ? GhostValue(text: l10n.cardioAddValue)
                               : _RpePips(value: session.rpe!),
                         ),
                       ),
@@ -372,45 +337,6 @@ class CardioEntryCard extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// `<ACTIVITY> · CARDIO` eyebrow line — teal-dim label register, mapped
-/// from the exercise slug. Unknown / user-created cardio slugs fall back to
-/// the bare "CARDIO" eyebrow (never a raw slug — cluster:
-/// slug-rendered-as-display-name).
-class _CardioEyebrow extends StatelessWidget {
-  const _CardioEyebrow({required this.slug});
-
-  final String? slug;
-
-  static String? _activityLabel(String? slug, AppLocalizations l10n) {
-    return switch (slug) {
-      'treadmill' => l10n.cardioActivityRunning,
-      'rowing_machine' => l10n.cardioActivityRowing,
-      'stationary_bike' || 'assault_bike' => l10n.cardioActivityCycling,
-      'jump_rope' => l10n.cardioActivityJumpRope,
-      'elliptical' => l10n.cardioActivityElliptical,
-      'sled_push' || 'sled_drag' => l10n.cardioActivitySled,
-      _ => null,
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final activity = _activityLabel(slug, l10n);
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Text(
-        activity != null
-            ? l10n.cardioEyebrow(activity)
-            : l10n.cardioEyebrowGeneric,
-        style: AppTextStyles.label.copyWith(
-          color: AppColors.bodyPartCardio.withValues(alpha: 0.72),
-        ),
       ),
     );
   }
@@ -462,83 +388,6 @@ class _CompletedSummary extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Shared chrome for the two optional-input fields (distance / RPE):
-/// surface2 fill, hair border, small uppercase label, ≥52dp tap target.
-class _CardioField extends StatelessWidget {
-  const _CardioField({
-    required this.identifier,
-    required this.semanticsLabel,
-    required this.label,
-    required this.onTap,
-    required this.child,
-  });
-
-  final String identifier;
-  final String semanticsLabel;
-  final String label;
-  final VoidCallback onTap;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // Pair-rule Semantics (cluster: semantics-identifier-pair-rule +
-    // semantics-button-missing) on the actual tap target.
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      identifier: identifier,
-      label: semanticsLabel,
-      button: true,
-      child: Material(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(kRadiusSm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kRadiusSm),
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 52),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.hair),
-              borderRadius: BorderRadius.circular(kRadiusSm),
-            ),
-            child: ExcludeSemantics(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: AppTextStyles.label.copyWith(
-                      fontSize: 10,
-                      color: AppColors.textCream.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  child,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// `+ adicionar` ghost — the invite-not-nag affordance for an empty
-/// optional field.
-class _GhostValue extends StatelessWidget {
-  const _GhostValue({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text, style: AppTextStyles.bodySmall.copyWith(fontSize: 13));
   }
 }
 

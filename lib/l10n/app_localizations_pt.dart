@@ -3321,6 +3321,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cardioAddValue => '+ adicionar';
 
   @override
+  String get routineTargetTimeLabel => 'Tempo alvo';
+
+  @override
+  String get routineTargetDistanceLabel => 'Distância alvo';
+
+  @override
+  String get routineBodyweightTag => 'Peso corporal';
+
+  @override
   String get completeCardio => 'Concluir cardio';
 
   @override

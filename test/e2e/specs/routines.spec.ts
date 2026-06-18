@@ -229,6 +229,178 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
 });
 
 // =============================================================================
+// SMOKE — Routine builder cardio target (smokeRoutineManagement user)
+// =============================================================================
+//
+// Phase 38b cardio-routine-builder: the builder is type-aware. Adding a CARDIO
+// exercise (Treadmill, a default since 00014) renders the two duration/distance
+// TARGET slots (create-routine-target-time / -distance) and NO set stepper
+// (create-routine-sets is absent). This journey proves a user can set a cardio
+// target, save, reopen, and the target PERSISTS.
+//
+// AOM caveat (cluster aom-explicit-children-block-name-merge + the locked
+// CardioField design): the formatted value ("28:00") is canvas-drawn inside an
+// ExcludeSemantics, so the slot's accessible name is the FIXED "Target time"
+// label — Playwright cannot read the value off the slot. We therefore verify
+// the user-visible round-trip two ways:
+//   1. UI: after reopen, the cardio target slots ARE present and the strength
+//      `create-routine-sets` control is ABSENT — the card rehydrated type-aware.
+//   2. Data: the saved workout_templates row carries target_duration_seconds in
+//      its set_configs (the value the user typed round-tripped through save).
+//
+// Shares the smokeRoutineManagement user but in its own SERIAL describe with a
+// per-test reseed that deletes only this block's own routines by name prefix
+// (cluster e2e-spec-state-leak-across-tests) — never touches the CRUD block's
+// "Smoke Test Routine" rows.
+
+const CARDIO_ROUTINE_PREFIX = 'Cardio Target Routine';
+
+/** Delete this block's own routines (by name prefix) so each test starts clean. */
+async function reseedRoutineBuilderCardioUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(
+    admin,
+    getUser('smokeRoutineManagement').email,
+  );
+  if (!userId) return;
+  await admin
+    .from('workout_templates')
+    .delete()
+    .eq('user_id', userId)
+    .like('name', `${CARDIO_ROUTINE_PREFIX}%`);
+}
+
+test.describe('Routine builder cardio target', { tag: '@smoke' }, () => {
+  // Serial + per-test reseed: shares the smokeRoutineManagement user and the
+  // single test mutates routines, so reseed-before-each keeps it deterministic
+  // under --workers>1 / --repeat-each (cluster e2e-spec-state-leak-across-tests).
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await reseedRoutineBuilderCardioUser();
+    await login(
+      page,
+      getUser('smokeRoutineManagement').email,
+      getUser('smokeRoutineManagement').password,
+    );
+    await navigateToTab(page, 'Routines');
+  });
+
+  test('should persist a cardio duration target across save and reopen, with no set stepper', async ({
+    page,
+  }) => {
+    const routineName = `${CARDIO_ROUTINE_PREFIX} ${Date.now()}`;
+
+    // --- Open the builder and add a CARDIO exercise (Treadmill) ---
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', SEED_EXERCISES.treadmill);
+    const addTreadmill = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.treadmill))
+      .first();
+    await expect(addTreadmill).toBeVisible({ timeout: 10_000 });
+    await addTreadmill.click();
+
+    // --- The card renders type-aware: cardio target slots, NO set stepper ---
+    await expect(page.locator(CREATE_ROUTINE.targetTime)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator(CREATE_ROUTINE.targetDistance)).toBeVisible({
+      timeout: 5_000,
+    });
+    // Cardio has no set count — the strength sets control must be absent.
+    await expect(page.locator(CREATE_ROUTINE.setsLabel)).toHaveCount(0);
+
+    // --- Set the duration target via the tap-to-type dialog ---
+    // The slot uses explicitChildNodes — force-click forwards the tap onto the
+    // InkWell (cluster aom-explicit-children-block-name-merge).
+    await page.locator(CREATE_ROUTINE.targetTime).click({ force: true });
+
+    // The duration dialog focuses its TextField (pre-filled with the 30:00
+    // default). Clear it and type 28:00. Flutter CanvasKit injects a hidden
+    // <input> proxy for the focused field; real key events drive it.
+    const okButton = page.locator('text="OK"');
+    await expect(okButton).toBeVisible({ timeout: 5_000 });
+    const durationInput = page.locator('input').last();
+    await durationInput.click({ timeout: 5_000 });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type('28:00', { delay: 10 });
+    await okButton.click();
+    await expect(okButton).not.toBeVisible({ timeout: 5_000 });
+
+    // --- Save → back on the routines list with the new routine ---
+    await page.locator(CREATE_ROUTINE.saveButton).click();
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(ROUTINE.routineName(routineName)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // --- Data round-trip: the saved template carries the duration target ---
+    // (1680s = 28:00). The value is canvas-drawn inside ExcludeSemantics on
+    // reopen, so the DB read is the authoritative persistence check.
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('smokeRoutineManagement').email,
+    );
+    expect(userId).toBeTruthy();
+    const { data: template, error } = await admin
+      .from('workout_templates')
+      .select('exercises')
+      .eq('user_id', userId!)
+      .eq('name', routineName)
+      .single();
+    expect(error).toBeNull();
+    const savedConfigs = (template?.exercises?.[0]?.set_configs ?? []) as Array<
+      Record<string, unknown>
+    >;
+    // Exactly ONE config for a cardio entry (no set count), carrying the target.
+    expect(savedConfigs).toHaveLength(1);
+    expect(savedConfigs[0]?.['target_duration_seconds']).toBe(1680);
+
+    // --- Reopen the routine → the cardio card rehydrates type-aware ---
+    await flutterLongPress(page, ROUTINE.routineName(routineName));
+    await expect(page.locator(ROUTINE.editOption)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE.editOption).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.editRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The cardio target slots are present again and the set stepper stays
+    // absent — the saved cardio routine reopened as a cardio card, not a
+    // strength card. (The "28:00" value itself is canvas-drawn / excluded from
+    // the AOM, already verified at the DB layer above.)
+    await expect(page.locator(CREATE_ROUTINE.targetTime)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator(CREATE_ROUTINE.targetDistance)).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(CREATE_ROUTINE.setsLabel)).toHaveCount(0);
+
+    // --- Cleanup so the list doesn't accumulate across runs ---
+    await reseedRoutineBuilderCardioUser();
+  });
+});
+
+// =============================================================================
 // SMOKE — Routine start (smokeRoutineStart user, BUG-001/003/004/005)
 // =============================================================================
 

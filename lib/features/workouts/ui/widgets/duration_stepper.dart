@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/theme/dialog_button_style.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../utils/cardio_format.dart';
+import 'cardio_target_dialogs.dart';
 
 /// The duration hero of the cardio logging card (Phase 38b).
 ///
@@ -75,48 +75,12 @@ class _DurationStepperState extends State<DurationStepper> {
     super.dispose();
   }
 
-  void _showNumberInput() {
-    final controller = TextEditingController(
-      text: CardioFormat.duration(widget.value),
+  Future<void> _showNumberInput() async {
+    final parsed = await showCardioDurationDialog(
+      context,
+      initialSeconds: widget.value,
     );
-    showDialog<void>(
-      context: context,
-      builder: (dialogCtx) {
-        final l10n = AppLocalizations.of(dialogCtx);
-        void submit(String text) {
-          final parsed = CardioFormat.parseDuration(text);
-          if (parsed != null) {
-            widget.onChanged(parsed);
-          }
-          Navigator.of(dialogCtx).pop();
-        }
-
-        return AlertDialog(
-          title: Text(l10n.enterDuration),
-          content: TextField(
-            controller: controller,
-            // Plain datetime keyboard exposes the `:` key on both
-            // platforms; bare minutes also parse (e.g. `28` → 28:00).
-            keyboardType: TextInputType.datetime,
-            autofocus: true,
-            decoration: InputDecoration(hintText: l10n.enterDurationHint),
-            onSubmitted: submit,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              style: dialogTextButtonStyle,
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () => submit(controller.text),
-              style: dialogTextButtonStyle,
-              child: Text(l10n.ok),
-            ),
-          ],
-        );
-      },
-    );
+    if (parsed != null) widget.onChanged(parsed);
   }
 
   @override

@@ -1,5 +1,11 @@
 import '../../../core/format/number_format.dart';
 
+/// Default cardio target duration (30:00) used wherever a cardio entry has no
+/// explicit target: the notifier's empty-state seed, the routine builder's
+/// empty target slot, and the duration estimator's contribution for a
+/// target-less cardio entry. Single source so the three surfaces never drift.
+const int kDefaultCardioDurationSeconds = 30 * 60;
+
 /// Pure formatting / conversion helpers for the cardio logging surface
 /// (Phase 38b). Kept widget-free so unit tests run without a pump and the
 /// Phase 38c earning pipeline can reuse the same conversions.

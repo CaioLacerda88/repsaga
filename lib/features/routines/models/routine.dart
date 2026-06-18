@@ -13,6 +13,16 @@ abstract class RoutineSetConfig with _$RoutineSetConfig {
     int? targetReps,
     double? targetWeight,
     int? restSeconds,
+    // Cardio target (routine builder, "type-aware exercise cards"). A cardio
+    // routine entry persists EXACTLY ONE RoutineSetConfig carrying these two
+    // optional targets and no rep/weight/rest scalars. Both null for every
+    // strength/bodyweight row — they serialize as `target_duration_seconds` /
+    // `target_distance_m` and ride free in the existing
+    // `workout_templates.exercises` JSONB (no migration; the only CHECK is
+    // array-typeof). Threaded into the active workout's CardioSession seed at
+    // start time so a routine's "28:00 / 5km" target prefills the run.
+    int? targetDurationSeconds,
+    double? targetDistanceM,
   }) = _RoutineSetConfig;
 
   factory RoutineSetConfig.fromJson(Map<String, dynamic> json) =>

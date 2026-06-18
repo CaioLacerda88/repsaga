@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/providers/auth_providers.dart';
+import '../../exercises/models/exercise.dart';
 import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../rpg/models/body_part.dart';
@@ -82,6 +83,11 @@ Map<BodyPart, int> computePlannedCounts({
     for (final routineExercise in routine.exercises) {
       final exercise = routineExercise.exercise;
       if (exercise == null) continue;
+      // Cardio entries carry no muscle sets — their single config is a
+      // duration/distance target, NOT a set count — so they contribute zero
+      // strength muscle-engagement credits. `setConfigs.length` (== 1 for a
+      // cardio entry) must not be credited as a planned set.
+      if (exercise.muscleGroup == MuscleGroup.cardio) continue;
       final attrJson = exercise.xpAttribution;
       // `MuscleGroup.name` matches `BodyPart.dbValue` token-for-token
       // (both are lowercase enum names). Fallback when no xp_attribution

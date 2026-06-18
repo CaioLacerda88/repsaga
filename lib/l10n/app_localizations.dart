@@ -5658,6 +5658,24 @@ abstract class AppLocalizations {
   /// **'+ add'**
   String get cardioAddValue;
 
+  /// Routine builder — field label above the optional cardio target duration slot on a cardio exercise card.
+  ///
+  /// In en, this message translates to:
+  /// **'Target time'**
+  String get routineTargetTimeLabel;
+
+  /// Routine builder — field label above the optional cardio target distance slot on a cardio exercise card.
+  ///
+  /// In en, this message translates to:
+  /// **'Target distance'**
+  String get routineTargetDistanceLabel;
+
+  /// Routine builder — neutral tag on a bodyweight exercise card (no muscle-group identity color), replacing the violet muscle-group chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Bodyweight'**
+  String get routineBodyweightTag;
+
   /// Phase 38b — done CTA at the bottom of the CardioEntryCard. Collapses the card to the summary line.
   ///
   /// In en, this message translates to:

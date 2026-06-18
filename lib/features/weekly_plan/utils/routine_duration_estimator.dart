@@ -1,4 +1,6 @@
+import '../../exercises/models/exercise.dart';
 import '../../routines/models/routine.dart';
+import '../../workouts/utils/cardio_format.dart';
 
 /// Rough estimate of the work time spent on a single set (seconds).
 ///
@@ -33,6 +35,15 @@ int estimateRoutineDurationMinutes(Routine routine) {
 
   var totalSeconds = 0;
   for (final ex in routine.exercises) {
+    // Cardio entries carry no rest×sets shape — their single config holds a
+    // duration TARGET. Use it (fallback 30:00) as the whole contribution.
+    if (ex.exercise?.muscleGroup == MuscleGroup.cardio) {
+      final target = ex.setConfigs.isNotEmpty
+          ? ex.setConfigs.first.targetDurationSeconds
+          : null;
+      totalSeconds += target ?? kDefaultCardioDurationSeconds;
+      continue;
+    }
     if (ex.setConfigs.isEmpty) {
       totalSeconds += _fallbackSecondsPerExercise;
       continue;

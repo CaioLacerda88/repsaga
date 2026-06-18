@@ -39,6 +39,43 @@ void main() {
 
       expect(roundTripped, original);
     });
+
+    test('cardio target round-trips through fromJson/toJson', () {
+      final config = RoutineSetConfig.fromJson(
+        TestRoutineSetConfigFactory.cardio(
+          targetDurationSeconds: 1680,
+          targetDistanceM: 5000.0,
+        ),
+      );
+
+      expect(config.targetDurationSeconds, 1680);
+      expect(config.targetDistanceM, 5000.0);
+      // A cardio config carries no strength scalars.
+      expect(config.targetReps, isNull);
+      expect(config.targetWeight, isNull);
+      expect(config.restSeconds, isNull);
+
+      final json = config.toJson();
+      expect(json['target_duration_seconds'], 1680);
+      expect(json['target_distance_m'], 5000.0);
+
+      final roundTripped = RoutineSetConfig.fromJson(json);
+      expect(roundTripped, config);
+    });
+
+    test(
+      'omitting cardio target yields null (back-compat with strength rows)',
+      () {
+        // A legacy strength row that never carried the new keys must still
+        // deserialize with null targets — the JSONB shape is additive.
+        final config = RoutineSetConfig.fromJson(
+          TestRoutineSetConfigFactory.create(targetReps: 10, restSeconds: 90),
+        );
+
+        expect(config.targetDurationSeconds, isNull);
+        expect(config.targetDistanceM, isNull);
+      },
+    );
   });
 
   group('RoutineExercise', () {

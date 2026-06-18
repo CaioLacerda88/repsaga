@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../exercises/models/exercise.dart';
 import '../../workouts/models/routine_start_config.dart';
 import '../../workouts/providers/workout_providers.dart';
 import '../../workouts/ui/widgets/resume_workout_dialog.dart';
@@ -57,19 +58,24 @@ Future<void> startRoutineWorkout(
 
   final exercises = routine.exercises
       .where((re) => re.exercise != null && re.exercise!.deletedAt == null)
-      .map(
-        (re) => RoutineStartExercise(
+      .map((re) {
+        final firstCfg = re.setConfigs.isNotEmpty ? re.setConfigs.first : null;
+        // A cardio entry persists EXACTLY ONE config carrying its target —
+        // pass the duration/distance through so the seed honors it instead of
+        // the 30:00 default. `setConfigs.length` is NOT a set count for it.
+        final isCardio = re.exercise!.muscleGroup == MuscleGroup.cardio;
+        return RoutineStartExercise(
           exerciseId: re.exerciseId,
           exercise: re.exercise!,
           setCount: re.setConfigs.isNotEmpty ? re.setConfigs.length : 3,
-          targetReps: re.setConfigs.isNotEmpty
-              ? re.setConfigs.first.targetReps
+          targetReps: firstCfg?.targetReps,
+          restSeconds: firstCfg?.restSeconds,
+          targetDurationSeconds: isCardio
+              ? firstCfg?.targetDurationSeconds
               : null,
-          restSeconds: re.setConfigs.isNotEmpty
-              ? re.setConfigs.first.restSeconds
-              : null,
-        ),
-      )
+          targetDistanceM: isCardio ? firstCfg?.targetDistanceM : null,
+        );
+      })
       .toList();
 
   if (exercises.isEmpty) {

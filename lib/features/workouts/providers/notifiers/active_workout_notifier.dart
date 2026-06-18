@@ -41,16 +41,11 @@ import '../../models/routine_start_config.dart';
 import '../../models/set_type.dart';
 import '../../models/weight_unit.dart';
 import '../../models/workout_exercise.dart';
+import '../../utils/cardio_format.dart';
 import '../../utils/set_defaults.dart';
 import '../workout_providers.dart';
 
 const _uuid = Uuid();
-
-/// Default duration seeded onto a fresh cardio entry (Phase 38b) — the
-/// locked mockup's "Empty (default)" state shows 30:00. Lives here (not in
-/// the widget) because the notifier owns entry creation; the card only
-/// renders whatever the state carries.
-const _defaultCardioDurationSeconds = 30 * 60;
 
 /// Locales we currently ship ARBs for. Kept local to this file rather than
 /// centralized — `lookupAppLocalizations` throws on unrecognized codes, and
@@ -420,6 +415,8 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
               cardioSession: _seedCardioSession(
                 workoutId: workout.id,
                 exerciseId: re.exerciseId,
+                durationSeconds: re.targetDurationSeconds,
+                distanceM: re.targetDistanceM,
               ),
             ),
           );
@@ -620,17 +617,26 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     await _saveToHive(newState);
   }
 
-  /// Fresh default cardio entry (Phase 38b): the mandatory duration starts
-  /// at 30:00; distance and RPE start empty (`+ adicionar` ghosts).
+  /// Fresh cardio entry (Phase 38b): the mandatory duration starts at
+  /// [durationSeconds] (defaults to 30:00 — the locked empty-state); distance
+  /// seeds from [distanceM] (null → empty `+ adicionar` ghost), RPE always
+  /// starts empty.
+  ///
+  /// The start-from-routine path passes the routine's cardio target so a
+  /// "28:00 / 5km" routine prefills the run; the add-from-picker and
+  /// swap paths pass nothing and get the 30:00 default + empty distance.
   CardioSession _seedCardioSession({
     required String workoutId,
     required String exerciseId,
+    int? durationSeconds,
+    double? distanceM,
   }) {
     return CardioSession(
       id: _uuid.v4(),
       workoutId: workoutId,
       exerciseId: exerciseId,
-      durationSeconds: _defaultCardioDurationSeconds,
+      durationSeconds: durationSeconds ?? kDefaultCardioDurationSeconds,
+      distanceM: distanceM,
       isCompleted: false,
       createdAt: DateTime.now().toUtc(),
     );
