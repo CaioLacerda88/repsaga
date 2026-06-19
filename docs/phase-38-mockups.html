@@ -1072,5 +1072,151 @@
     • <b style="color:var(--cream)">Chrome bug to avoid</b>: the builder card uses <code>Material</code> directly — add <code>clipBehavior: Clip.antiAlias</code> so the 3px teal stripe clips to the 12dp corner.<br>
     • <b style="color:var(--cream)">Bodyweight honesty</b>: the builder never had a weight field, so there's nothing to "suppress" — the only honest change is the neutral tag. Don't manufacture a difference the data model doesn't back.
   </div>
+
+  <!-- ============================================================= -->
+  <!-- Phase 38h-polish — routine builder visual + functional pass    -->
+  <!-- ============================================================= -->
+  <style>
+    .h38p{margin-top:64px}
+    .h38p .t{color:var(--cardio)}
+    /* unified identity pill — ONE grammar, color varies */
+    .idpill{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:3px 9px;border-radius:6px;
+            font-family:'Barlow Semi Condensed';font-weight:600;text-transform:uppercase;
+            letter-spacing:1.2px;font-size:11px}
+    .idpill.cardio{background:rgba(34,211,238,.15);color:var(--cardio-dim)}
+    .idpill.strength{background:rgba(167,139,250,.15);color:var(--violet)}
+    .idpill.bodyweight{background:var(--surface2);border:1px solid var(--hair);color:var(--dim)}
+    /* taller cardio target slot + hero value + edit glyph (builder-only size) */
+    .tslot{flex:1;background:var(--surface2);border:1px solid var(--hair);border-radius:9px;
+           padding:9px 11px;min-height:64px;position:relative;display:flex;flex-direction:column;justify-content:center}
+    .tslot .lbl{font-family:'Barlow Semi Condensed';text-transform:uppercase;letter-spacing:1.3px;
+                font-size:10px;color:rgba(242,238,247,.5);margin-bottom:5px}
+    .tslot .val{font-family:'Rajdhani';font-weight:700;font-size:22px;color:var(--cream);font-variant-numeric:tabular-nums}
+    .tslot .val .u{font-family:'Barlow Semi Condensed';font-size:12px;color:var(--dim);margin-left:4px;letter-spacing:.5px}
+    .tslot .ghost{color:var(--dim);font-size:14px}
+    .tslot .pen{position:absolute;top:8px;right:9px;color:var(--dim);font-size:13px}
+    /* section eyebrow above form fields */
+    .seclbl{font-family:'Barlow Semi Condensed';font-weight:600;text-transform:uppercase;letter-spacing:1.6px;
+            font-size:11px;color:var(--violet);margin:0 0 7px 2px}
+    .ffield{background:var(--surface2);border:1px solid var(--hair);border-radius:10px;padding:13px 14px;
+            color:var(--dim);font-size:15px}
+    /* bottom save bar */
+    .savebar{margin-top:18px;border-top:1px solid var(--hair);padding-top:14px}
+    .savecta{height:50px;border-radius:11px;background:var(--violet);color:#160E27;
+             display:flex;align-items:center;justify-content:center;gap:8px;
+             font-family:'Barlow';font-weight:700;font-size:15px;letter-spacing:.3px}
+    /* dialog */
+    .dlg{width:300px;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px}
+    .dlg h3{font-family:'Rajdhani';font-weight:600;font-size:18px;color:var(--cream);margin-bottom:14px}
+    .dlg .inp{background:var(--surface2);border:1px solid var(--hair);border-radius:9px;padding:11px 12px;
+              font-family:'Rajdhani';font-weight:600;font-size:20px;color:var(--cream);font-variant-numeric:tabular-nums}
+    .dlg .inp.err{border-color:#F87171}
+    .dlg .help{font-size:12px;color:var(--dim);margin-top:6px}
+    .dlg .help.err{color:#F87171}
+    .dlg .acts{display:flex;justify-content:flex-end;gap:14px;margin-top:18px;
+               font-family:'Barlow';font-weight:600;font-size:14px}
+    .dlg .acts .cancel{color:var(--dim)} .dlg .acts .ok{color:var(--violet)}
+    .empty{text-align:center;padding:30px 16px;color:var(--dim)}
+    .empty .ico{font-size:30px;opacity:.5}
+    .empty .ln{font-family:'Barlow';font-size:14px;margin-top:8px;line-height:1.5}
+  </style>
+
+  <h1 class="h38p">Phase 38h-polish — routine builder <span class="t">visual + functional pass</span></h1>
+  <div class="sub">addresses "looks a bit off" + the cardio time-input guidance gap · review by ui-ux-critic</div>
+  <div class="note">Fixes the two dialog bugs (dead hint + silent invalid-input no-op) and the five "off" issues: card density mismatch,
+    three mismatched identity tags → <b>one pill grammar</b>, generic name/notes region → eyebrow-labelled, no bottom Save → <b>anchored CTA</b>,
+    flat target slots → <b>taller hero value + edit glyph</b>. No model/migration change.</div>
+
+  <div class="grid">
+    <!-- FULL SCREEN (360dp) -->
+    <div class="panel">
+      <h2>1 · Full screen — polished (360dp)</h2>
+      <div class="device">
+        <div class="seclbl">Routine</div>
+        <div class="ffield" style="color:var(--cream)">Push Day A</div>
+        <div class="seclbl" style="margin-top:14px">Notes</div>
+        <div class="ffield">Add notes…</div>
+
+        <div style="height:20px"></div>
+
+        <!-- cardio: unified teal pill + taller hero slots + edit glyph -->
+        <div class="bcard cardio">
+          <div class="bhdr"><div class="col"><div class="bname">Treadmill</div><div class="idpill cardio">Running · Cardio</div></div><div class="x">&times;</div></div>
+          <div class="tslots" style="margin-top:14px">
+            <div class="tslot"><span class="pen">&#9998;</span><div class="lbl">Target time</div><div class="val">28:00</div></div>
+            <div class="tslot"><span class="pen">&#9998;</span><div class="lbl">Target distance</div><div class="val">5<span class="u">km</span></div></div>
+          </div>
+        </div>
+
+        <!-- bodyweight: unified neutral pill -->
+        <div class="bcard">
+          <div class="bhdr"><div class="col"><div class="bname">Pull-ups</div><div class="idpill bodyweight">&#9899; Bodyweight</div></div><div class="x">&times;</div></div>
+          <div class="lblrow"><div class="t">Sets</div><div class="stepper"><div class="b">&minus;</div><div class="n">4</div><div class="b">+</div></div></div>
+          <div class="t" style="margin-top:14px;font-family:'Barlow';font-size:14px;color:var(--cream)">Rest</div>
+          <div class="chips"><div class="chip">60s</div><div class="chip sel">90s</div><div class="chip">2m</div></div>
+        </div>
+
+        <!-- strength: unified violet pill -->
+        <div class="bcard">
+          <div class="bhdr"><div class="col"><div class="bname">Bench Press</div><div class="idpill strength">Chest</div></div><div class="x">&times;</div></div>
+          <div class="lblrow"><div class="t">Sets</div><div class="stepper"><div class="b">&minus;</div><div class="n">3</div><div class="b">+</div></div></div>
+          <div class="t" style="margin-top:14px;font-family:'Barlow';font-size:14px;color:var(--cream)">Rest</div>
+          <div class="chips"><div class="chip">60s</div><div class="chip sel">90s</div><div class="chip">2m</div></div>
+        </div>
+
+        <div class="addset" style="margin-top:16px">+ Add exercise</div>
+
+        <div class="savebar"><div class="savecta">&#10003; Save routine</div></div>
+      </div>
+      <div class="sub" style="margin-top:8px">Unified pills (teal/violet/neutral, one shape). Taller cardio slots w/ 22sp hero + ✎. Section eyebrows. Bottom Save.</div>
+    </div>
+
+    <!-- DURATION DIALOG -->
+    <div class="panel">
+      <h2>2 · Duration dialog — guided + validated</h2>
+      <div class="device" style="padding:20px">
+        <div class="dlg">
+          <h3>Target time</h3>
+          <div class="inp">28:00</div>
+          <div class="help">mm:ss or minutes — e.g. 28:00</div>
+          <div class="acts"><span class="cancel">Cancel</span><span class="ok">OK</span></div>
+        </div>
+        <div style="height:18px"></div>
+        <div class="dlg">
+          <h3>Target time</h3>
+          <div class="inp err">28:90</div>
+          <div class="help err">Use mm:ss — e.g. 28:00</div>
+          <div class="acts"><span class="cancel">Cancel</span><span class="ok">OK</span></div>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:8px">Top: always-visible helper (the old hint was masked by the pre-fill). Bottom: invalid input now blocks + shows error instead of silently closing.</div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="panel">
+      <h2>3 · Empty state (create, no exercises)</h2>
+      <div class="device">
+        <div class="seclbl">Routine</div>
+        <div class="ffield">Name your routine…</div>
+        <div class="seclbl" style="margin-top:14px">Notes</div>
+        <div class="ffield">Add notes…</div>
+        <div class="empty">
+          <div class="ico">&#9881;</div>
+          <div class="ln">No exercises yet —<br>add your first to forge this routine.</div>
+        </div>
+        <div class="addset">+ Add exercise</div>
+      </div>
+      <div class="sub" style="margin-top:8px">Was a cold blank gap before — now a center of gravity (RPG-voiced) between notes and the add button.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b style="color:var(--cream)">Build notes</b><br>
+    • <b style="color:var(--cream)">Dialog fixes (blockers)</b>: <code>helperText</code> always renders (unlike <code>hintText</code>, which the pre-fill masked); both dialogs validate before <code>Navigator.pop</code> and show <code>errorText</code> on unparseable input instead of popping <code>null</code> (which the caller treats as Cancel → silent no-op). New ARB keys <code>enterDurationHelper</code> / <code>enterDistanceHelper</code> (en+pt). Helper copy must match what <code>CardioFormat.parseDuration</code>/<code>parseDistanceToMeters</code> accept.<br>
+    • <b style="color:var(--cream)">Shared <code>CardioField</code></b>: the 52→64 height + 18→22sp value is an <b>opt-in size param defaulting to the active-card size</b> — the active <code>CardioEntryCard</code> must NOT change (blast-radius rule).<br>
+    • <b style="color:var(--cream)">Unified pills</b>: one shape (filled, <code>kRadiusSm</code>, <code>AppTextStyles.label</code> uppercase), color varies — cardio teal-dim, strength <code>BodyPartHues</code>, bodyweight neutral (no identity color). Promote the literal <code>6</code> radius + <code>fontSize:11</code>.<br>
+    • <b style="color:var(--cream)">Bottom Save</b>: full-width CTA in a <code>SafeArea</code>-floored bottom bar; AppBar Save stays as secondary affordance.<br>
+    • <b style="color:var(--cream)">Verify on device</b>: remove <code>×</code> hit-box ≥48dp (<code>tester.getSize</code>, not icon size); filled slot reads tappable via the ✎ glyph.
+  </div>
 </body>
 </html>

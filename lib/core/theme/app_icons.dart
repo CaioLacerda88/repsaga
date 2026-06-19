@@ -147,6 +147,17 @@ class AppIcons {
   /// [Icon]'s behaviour: no [semanticsLabel] → no semantic node. Pass
   /// [semanticsLabel] (or explicitly set [excludeFromSemantics] to false)
   /// for icons that carry meaning on their own.
+  /// Stable per-(asset, color) identity key for the rendered [SvgPicture].
+  ///
+  /// Keying by BOTH the asset path and the resolved color guarantees Flutter's
+  /// element reconciler matches an icon element only against another icon of
+  /// the SAME asset AND color. Two icons that differ in either dimension get
+  /// distinct keys, so the reconciler mounts a fresh `RenderWebVectorGraphic`
+  /// instead of recycling one with a retained color-filter layer (cluster:
+  /// flutter-web-identifier-transition-stale).
+  static ValueKey<String> _identityKey(String assetPath, Color color) =>
+      ValueKey<String>('appicon:$assetPath:${color.toARGB32()}');
+
   static Widget render(
     String assetPath, {
     Color? color,
@@ -158,6 +169,17 @@ class AppIcons {
     if (color != null) {
       return SvgPicture.asset(
         assetPath,
+        // cluster: flutter-web-identifier-transition-stale — a stable
+        // identity key keyed on (asset, color) so Flutter's reconciler can
+        // never recycle one icon's `RenderWebVectorGraphic` element (with its
+        // RETAINED ColorFilterLayer + globally-cached `ui.Picture`) onto a
+        // different asset/color slot. On CanvasKit web, vector_graphics'
+        // `RenderWebVectorGraphic.assetKey` setter deliberately skips
+        // `markNeedsPaint`, so a recycled SVG render object keeps painting the
+        // PREVIOUS asset's color-filtered layer at its new offset (the violet
+        // nav `plan` glyph leaking into the cardio card header). Distinct keys
+        // force a fresh element mount → fresh layer handles → no stale paint.
+        key: _identityKey(assetPath, color),
         width: size,
         height: size,
         colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
@@ -170,6 +192,8 @@ class AppIcons {
         final resolved = IconTheme.of(context).color ?? const Color(0xFF000000);
         return SvgPicture.asset(
           assetPath,
+          // cluster: flutter-web-identifier-transition-stale (see above).
+          key: _identityKey(assetPath, resolved),
           width: size,
           height: size,
           colorFilter: ColorFilter.mode(resolved, BlendMode.srcIn),

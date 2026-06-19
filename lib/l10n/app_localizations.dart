@@ -5676,6 +5676,30 @@ abstract class AppLocalizations {
   /// **'Bodyweight'**
   String get routineBodyweightTag;
 
+  /// Phase 38h — uppercase section eyebrow above the routine name field on the builder.
+  ///
+  /// In en, this message translates to:
+  /// **'Routine'**
+  String get routineSectionLabel;
+
+  /// Phase 38h — uppercase section eyebrow above the routine notes field on the builder.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get notesSectionLabel;
+
+  /// Phase 38h — RPG-voiced empty-state beat shown between the notes field and the add-exercise button when a routine has no exercises yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No exercises yet — add your first to forge this routine.'**
+  String get routineEmptyExercises;
+
+  /// Phase 38h — full-width bottom-anchored Save CTA label on the routine builder (the AppBar 'Save' stays as a secondary affordance).
+  ///
+  /// In en, this message translates to:
+  /// **'Save routine'**
+  String get saveRoutineCta;
+
   /// Phase 38b — done CTA at the bottom of the CardioEntryCard. Collapses the card to the summary line.
   ///
   /// In en, this message translates to:
@@ -5712,11 +5736,35 @@ abstract class AppLocalizations {
   /// **'mm:ss'**
   String get enterDurationHint;
 
+  /// Phase 38h — always-visible helper under the duration dialog field (the pre-filled value masks the hint). Copy must match what CardioFormat.parseDuration accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'mm:ss or minutes — e.g. 28:00'**
+  String get enterDurationHelper;
+
+  /// Phase 38h — inline errorText shown in the duration dialog when a non-empty entry fails to parse; the dialog stays open instead of silently closing.
+  ///
+  /// In en, this message translates to:
+  /// **'Use mm:ss — e.g. 28:00'**
+  String get enterDurationError;
+
   /// Phase 38b — distance tap-to-type dialog title.
   ///
   /// In en, this message translates to:
   /// **'Enter distance'**
   String get enterDistance;
+
+  /// Phase 38h — always-visible helper under the distance dialog field showing an example value in the locale decimal separator.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 5.2'**
+  String get enterDistanceHelper;
+
+  /// Phase 38h — inline errorText shown in the distance dialog when a non-empty entry fails to parse; the dialog stays open instead of silently closing.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid distance'**
+  String get enterDistanceError;
 
   /// Phase 38b — accessibility label: DurationStepper minus button (30s step).
   ///

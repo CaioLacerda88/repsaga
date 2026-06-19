@@ -3317,6 +3317,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routineBodyweightTag => 'Bodyweight';
 
   @override
+  String get routineSectionLabel => 'Routine';
+
+  @override
+  String get notesSectionLabel => 'Notes';
+
+  @override
+  String get routineEmptyExercises =>
+      'No exercises yet — add your first to forge this routine.';
+
+  @override
+  String get saveRoutineCta => 'Save routine';
+
+  @override
   String get completeCardio => 'Complete cardio';
 
   @override
@@ -3339,7 +3352,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get enterDurationHint => 'mm:ss';
 
   @override
+  String get enterDurationHelper => 'mm:ss or minutes — e.g. 28:00';
+
+  @override
+  String get enterDurationError => 'Use mm:ss — e.g. 28:00';
+
+  @override
   String get enterDistance => 'Enter distance';
+
+  @override
+  String get enterDistanceHelper => 'e.g. 5.2';
+
+  @override
+  String get enterDistanceError => 'Enter a valid distance';
 
   @override
   String get decrementDuration => 'Decrease duration';

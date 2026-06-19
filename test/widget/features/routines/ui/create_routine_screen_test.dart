@@ -7,6 +7,9 @@ import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
 import 'package:repsaga/features/routines/ui/create_routine_screen.dart';
+import 'package:repsaga/features/rpg/domain/body_part_hues.dart';
+import 'package:repsaga/features/rpg/models/body_part.dart';
+import 'package:repsaga/features/workouts/ui/widgets/cardio_field.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
@@ -613,7 +616,9 @@ void main() {
           await tester.pumpAndSettle();
 
           expect(find.text('Bench Press'), findsOneWidget);
-          expect(find.text('Chest'), findsOneWidget); // muscle-group chip
+          // Unified pill grammar (Phase 38h 2b): the muscle group is uppercased
+          // via AppTextStyles.label, matching the cardio/bodyweight pills.
+          expect(find.text('CHEST'), findsOneWidget); // muscle-group pill
           expect(find.text('Sets'), findsOneWidget);
           expect(find.text('Rest'), findsOneWidget);
 
@@ -694,6 +699,340 @@ void main() {
         // Both seeded exercise cards are in the tree, not just the on-screen one.
         expect(find.text('Bench Press'), findsOneWidget);
         expect(find.text('OHP'), findsOneWidget);
+      });
+    });
+
+    group('Phase 38h — unified identity pills (2b)', () {
+      Color pillLabelColor(WidgetTester tester, String text) {
+        final widget = tester.widget<Text>(find.text(text));
+        return widget.style!.color!;
+      }
+
+      testWidgets('strength pill renders the muscle group in its BodyPartHues '
+          'identity color (chest → pink)', (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(
+            routine: _routineWith(
+              _makeExercise(name: 'Bench Press', muscleGroup: 'chest'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('CHEST'), findsOneWidget);
+        expect(
+          pillLabelColor(tester, 'CHEST'),
+          BodyPartHues.hueFor(BodyPart.chest),
+          reason: 'strength pill label uses the muscle identity hue',
+        );
+      });
+
+      testWidgets('bodyweight pill is NEUTRAL (textDim label, no identity '
+          'color — brand-vs-identity rule)', (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(routine: _routineWith(_makeBodyweight())),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('BODYWEIGHT'), findsOneWidget);
+        expect(pillLabelColor(tester, 'BODYWEIGHT'), AppColors.textDim);
+      });
+
+      testWidgets('cardio pill renders the resolved activity label (Running · '
+          'Cardio), never a raw slug', (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(
+            routine: _routineWith(
+              _makeCardio(),
+              setConfigs: const [RoutineSetConfig()],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // treadmill → "RUNNING · CARDIO" (en eyebrow), teal-dim label.
+        expect(find.text('RUNNING · CARDIO'), findsOneWidget);
+        expect(find.textContaining('treadmill'), findsNothing);
+        expect(
+          pillLabelColor(tester, 'RUNNING · CARDIO'),
+          AppColors.bodyPartCardio.withValues(alpha: 0.72),
+        );
+      });
+    });
+
+    group('Phase 38h — builder cardio slot density (2a)', () {
+      testWidgets('the builder opts into the LARGE CardioField + shows the '
+          'edit glyph on a FILLED slot', (tester) async {
+        await tester.pumpWidget(
+          _buildScreen(
+            routine: _routineWith(
+              _makeCardio(),
+              setConfigs: const [
+                RoutineSetConfig(targetDurationSeconds: 1680), // 28:00 filled
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final fields = tester.widgetList<CardioField>(find.byType(CardioField));
+        expect(fields, hasLength(2));
+        for (final f in fields) {
+          expect(
+            f.size,
+            CardioFieldSize.large,
+            reason: 'the routine builder uses the taller hero slot',
+          );
+        }
+        // The filled duration slot carries the pencil; the empty distance
+        // slot keeps the ghost (no pencil).
+        expect(find.byIcon(Icons.edit), findsOneWidget);
+        expect(find.text('+ add'), findsOneWidget);
+      });
+    });
+
+    // Zero target = no target. A `0:00` time / `0` distance entered in the
+    // builder's target dialog must clear the slot to null (the `+ add` ghost),
+    // NOT persist a literal 0. The shared `CardioFormat` parsers still return 0
+    // (that layer is correct for the active logging card) — the builder folds
+    // the zero into null at the `onTap` boundary. Persistence is asserted via
+    // the rehydrate path: a slot cleared to null shows the ghost, so a saved
+    // null reopens as the ghost (matching the empty-target case exactly).
+    group('zero cardio target is treated as no target (null)', () {
+      Future<void> enterDurationDialog(WidgetTester tester, String text) async {
+        // The filled duration slot is tappable (edit affordance). Tap it to
+        // open the duration dialog, type, confirm.
+        await tester.tap(find.text('28:00'));
+        await tester.pumpAndSettle();
+        expect(find.text('Enter duration'), findsOneWidget);
+        await tester.enterText(find.byType(TextField).last, text);
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets(
+        'entering 0:00 on a filled time slot reverts it to the + add ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680), // 28:00
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Precondition: the value is filled, no ghost on the time slot.
+          expect(find.text('28:00'), findsOneWidget);
+
+          await enterDurationDialog(tester, '0:00');
+
+          // The slot reverts to the invite ghost — zero is NOT stored as 0:00.
+          expect(find.text('28:00'), findsNothing);
+          // Both slots now empty (time cleared, distance never set) → two ghosts.
+          expect(find.text('+ add'), findsNWidgets(2));
+          // The edit pencil only shows on a FILLED slot; with both empty there
+          // is none — confirms the cleared slot is genuinely treated as empty.
+          expect(find.byIcon(Icons.edit), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'entering bare 0 on a filled time slot also reverts to the ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await enterDurationDialog(tester, '0');
+
+          expect(find.text('28:00'), findsNothing);
+          expect(find.text('+ add'), findsNWidgets(2));
+        },
+      );
+
+      testWidgets(
+        'a real non-zero value (28:45) still persists — zero-guard does not '
+        'eat valid targets',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await enterDurationDialog(tester, '28:45');
+
+          // 28:45 is a real target → it renders, no ghost on the time slot.
+          expect(find.text('28:45'), findsOneWidget);
+          expect(find.text('28:00'), findsNothing);
+          // Only the distance slot (never set) shows the ghost.
+          expect(find.text('+ add'), findsOneWidget);
+          // The filled time slot keeps its edit pencil.
+          expect(find.byIcon(Icons.edit), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'entering 0 on a filled distance slot reverts it to the + add ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDistanceM: 5000), // 5 km
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Precondition: 5 km filled.
+          expect(find.text('5 km'), findsOneWidget);
+
+          // Open the distance dialog by tapping the filled distance value.
+          await tester.tap(find.text('5 km'));
+          await tester.pumpAndSettle();
+          expect(find.text('Enter distance'), findsOneWidget);
+          await tester.enterText(find.byType(TextField).last, '0');
+          await tester.tap(find.text('OK'));
+          await tester.pumpAndSettle();
+
+          // Cleared to the ghost — zero distance is no target, not 0 m.
+          expect(find.text('5 km'), findsNothing);
+          expect(find.text('+ add'), findsNWidgets(2));
+          expect(find.byIcon(Icons.edit), findsNothing);
+        },
+      );
+    });
+
+    group('Phase 38h — section eyebrows + name counter (2c)', () {
+      testWidgets(
+        'ROUTINE and NOTES section eyebrows render above the fields',
+        (tester) async {
+          await tester.pumpWidget(_buildScreen());
+          await tester.pumpAndSettle();
+
+          expect(find.text('ROUTINE'), findsOneWidget);
+          expect(find.text('NOTES'), findsOneWidget);
+        },
+      );
+
+      testWidgets('name counter is hidden at low length', (tester) async {
+        await tester.pumpWidget(_buildScreen());
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField).first, 'Push Day');
+        await tester.pump();
+        expect(find.textContaining('/ 80'), findsNothing);
+      });
+
+      testWidgets('name counter appears near the 80-char cap', (tester) async {
+        await tester.pumpWidget(_buildScreen());
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField).first, 'x' * 75);
+        await tester.pump();
+        expect(find.text('75 / 80'), findsOneWidget);
+      });
+    });
+
+    group('Phase 38h — empty state (3d)', () {
+      testWidgets('shows the RPG-voiced beat when there are no exercises', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen());
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('No exercises yet — add your first to forge this routine.'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('the empty beat disappears once an exercise exists', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _buildScreen(routine: _routineWith(_makeExercise())),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('No exercises yet — add your first to forge this routine.'),
+          findsNothing,
+        );
+      });
+    });
+
+    group('Phase 38h — bottom Save CTA (2e)', () {
+      testWidgets('the bottom Save CTA is present and disabled when invalid', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen());
+        await tester.pumpAndSettle();
+
+        expect(find.text('Save routine'), findsOneWidget);
+        final button = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Save routine'),
+        );
+        expect(
+          button.onPressed,
+          isNull,
+          reason: 'empty name + no exercises → disabled, mirroring AppBar Save',
+        );
+      });
+
+      testWidgets('the bottom Save CTA enables with a name + an exercise', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _buildScreen(routine: _routineWith(_makeExercise())),
+        );
+        await tester.pumpAndSettle();
+
+        final button = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Save routine'),
+        );
+        expect(button.onPressed, isNotNull);
+      });
+    });
+
+    group('Phase 38h — remove × hit-box (3c)', () {
+      testWidgets('the remove × rendered hit-box is at least 48×48', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _buildScreen(routine: _routineWith(_makeExercise())),
+        );
+        await tester.pumpAndSettle();
+
+        final size = tester.getSize(
+          find.ancestor(
+            of: find.byIcon(Icons.close),
+            matching: find.byType(IconButton),
+          ),
+        );
+        expect(size.width, greaterThanOrEqualTo(48));
+        expect(size.height, greaterThanOrEqualTo(48));
       });
     });
   });
