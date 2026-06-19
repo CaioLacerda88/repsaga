@@ -225,7 +225,18 @@ BEGIN
   SET vitality_ewma      = EXCLUDED.vitality_ewma,
       vitality_peak      = EXCLUDED.vitality_peak,
       last_vitality_date = EXCLUDED.last_vitality_date,
-      updated_at         = EXCLUDED.updated_at;
+      updated_at         = EXCLUDED.updated_at
+  -- Write-time double-count guard (reviewer nit): the targets/stepped snapshot
+  -- already filters out bps stamped today, but two concurrent same-(user,bp)
+  -- recomputes can BOTH read last_vitality_date as not-today, both pass the
+  -- snapshot filter, and the second DO UPDATE would overwrite → a same-day
+  -- double-step window. Enforcing the guard at the conflict row closes it:
+  -- EXCLUDED.last_vitality_date is the proposed v_today; if the existing row
+  -- (bpp) is already stamped today, IS DISTINCT FROM is false → the UPDATE is
+  -- suppressed (first-writer-wins). Day-0 insert and the normal first-write-of-
+  -- the-day path don't hit DO UPDATE / have last_vitality_date NULL→today, so
+  -- they are unaffected.
+  WHERE bpp.last_vitality_date IS DISTINCT FROM EXCLUDED.last_vitality_date;
 END;
 $$;
 
