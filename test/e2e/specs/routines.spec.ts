@@ -18,6 +18,7 @@ import {
   flutterFill,
   flutterFillByInput,
   flutterLongPress,
+  flutterDragReorder,
   scrollToVisible,
 } from '../helpers/app';
 import {
@@ -845,28 +846,18 @@ test.describe('Routine builder targets and reorder', { tag: '@smoke' }, () => {
     await expect(dragHandles.first()).toBeVisible({ timeout: 10_000 });
     await expect(dragHandles).toHaveCount(2);
 
-    // Drag the FIRST collapsed card down past the second to swap the order.
-    // Synthesize a real pointer drag (a single jump-and-up reads as a tap, not
-    // a drag) — grab the first card's drag glyph and move it below the second
-    // card's center, then drop. Mirrors the multi-step mouse-drag pattern used
-    // for the workout swipe-delete gesture.
-    const firstBox = await dragHandles.nth(0).boundingBox();
-    const secondBox = await dragHandles.nth(1).boundingBox();
-    if (!firstBox || !secondBox) {
-      throw new Error('reorder drag: a collapsed card has no bounding box');
-    }
-    const startX = firstBox.x + firstBox.width / 2;
-    const startY = firstBox.y + firstBox.height / 2;
-    const endY = secondBox.y + secondBox.height + 8;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    const steps = 12;
-    for (let i = 1; i <= steps; i++) {
-      const y = startY + ((endY - startY) * i) / steps;
-      await page.mouse.move(startX, y, { steps: 2 });
-    }
-    await page.mouse.up();
+    // Drag the FIRST collapsed card down PAST the second to swap the order.
+    // The whole collapsed card is the drag target (ReorderableDragStartListener),
+    // and its drag glyph marks a reliable grab point inside it. A naive
+    // down→micro-moves→up gesture flakes ~1/3 of CanvasKit runs because the
+    // ImmediateMultiDragGestureRecognizer never wins the gesture arena (the card
+    // is never lifted → order never changes). flutterDragReorder synthesizes the
+    // settled, slop-exceeding gesture the recognizer needs — see its doc comment.
+    await flutterDragReorder(
+      page,
+      CREATE_ROUTINE.dragHandle, // grab the first collapsed card (handle .first())
+      CREATE_ROUTINE.dragHandle, // drop past the second collapsed card (.nth(1))
+    );
 
     // Exit reorder mode + save.
     await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });

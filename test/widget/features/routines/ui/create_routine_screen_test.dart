@@ -1310,6 +1310,49 @@ void main() {
       );
 
       testWidgets(
+        'the reorder toggle disappears when a removal drops the routine to a '
+        'single exercise',
+        (tester) async {
+          // Gating is reactive, not just initial: starting with two cards the
+          // toggle is present; removing one (in normal view) leaves a lone card
+          // that can't be reordered, so the toggle must vanish — otherwise the
+          // user could enter a reorder mode with nothing to reorder.
+          final routine = Routine(
+            id: 'routine-gate',
+            name: 'Push Day',
+            isDefault: false,
+            exercises: [
+              RoutineExercise(
+                exerciseId: 'ex-1',
+                setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+                exercise: _makeExercise(id: 'ex-1', name: 'Bench Press'),
+              ),
+              RoutineExercise(
+                exerciseId: 'ex-2',
+                setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+                exercise: _makeExercise(id: 'ex-2', name: 'OHP'),
+              ),
+            ],
+            createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+          );
+
+          await tester.pumpWidget(_buildScreen(routine: routine));
+          await tester.pumpAndSettle();
+
+          // Two cards → toggle present.
+          expect(find.byIcon(Icons.reorder), findsOneWidget);
+
+          // Remove one card (normal view → the remove × is available).
+          await tester.tap(find.byIcon(Icons.close).first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+
+          // One card left → the toggle is gated off.
+          expect(find.byIcon(Icons.reorder), findsNothing);
+        },
+      );
+
+      testWidgets(
         'the cards live in a SliverReorderableList inside the CustomScrollView',
         (tester) async {
           await tester.pumpWidget(

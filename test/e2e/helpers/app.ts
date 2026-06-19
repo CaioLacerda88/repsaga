@@ -486,6 +486,87 @@ export async function flutterLongPress(
 }
 
 /**
+ * Synthesize a vertical drag-to-reorder gesture on a Flutter
+ * `SliverReorderableList` / `ReorderableListView` running in CanvasKit web.
+ *
+ * Why this exists (and why a naive `down → moves → up` flakes ~1/3 of runs):
+ * the draggable card is wrapped in a `ReorderableDragStartListener`, which
+ * drives an `ImmediateMultiDragGestureRecognizer`. For that recognizer to WIN
+ * the gesture arena (and actually pick the card up), CanvasKit needs to see, in
+ * order:
+ *   1. a settled pointer-down (the pointer registered before any move), then
+ *   2. an initial movement that clearly exceeds the touch slop WITH a frame to
+ *      process it — a single `mouse.down()` immediately followed by tiny
+ *      `steps:2` micro-moves often gets coalesced/processed before the arena
+ *      resolves, so the recognizer never claims the pointer and the whole
+ *      gesture degrades to a no-op tap (the card is never lifted → order never
+ *      changes → the persisted-order assertion fails),
+ *   3. incremental travel to the target with per-step settles so the
+ *      reorderable's drop-index tracking keeps up, then
+ *   4. a hold at the destination + a settle AFTER `mouse.up()` so the drop
+ *      frame (list mutation) commits before the test reads state.
+ *
+ * The waits here are gesture-arena settling (the legitimate use, mirroring
+ * `flutterLongPress`), NOT a band-aid masking a race in production code — the
+ * production `_onReorder` + Save path is pinned deterministically at the widget
+ * tier. This helper only makes the *input synthesis* reliable.
+ *
+ * @param page    - Playwright page.
+ * @param fromSel - selector for the card (or its grab affordance) to pick up.
+ * @param toSel   - selector for the card to drop PAST (drops just below its
+ *                  bottom edge — i.e. moves `fromSel` to after `toSel`).
+ */
+export async function flutterDragReorder(
+  page: Page,
+  fromSel: string,
+  toSel: string,
+): Promise<void> {
+  const fromBox = await page.locator(fromSel).first().boundingBox();
+  const toBox = await page.locator(toSel).nth(1).boundingBox();
+  if (!fromBox || !toBox) {
+    throw new Error(
+      `flutterDragReorder: missing bounding box (from=${!!fromBox} ` +
+        `to=${!!toBox}) — a collapsed card may be detached or zero-sized.`,
+    );
+  }
+
+  const startX = fromBox.x + fromBox.width / 2;
+  const startY = fromBox.y + fromBox.height / 2;
+  // Drop just past the bottom edge of the destination card so the reorderable
+  // resolves the insertion to AFTER it.
+  const endY = toBox.y + toBox.height + 8;
+
+  // 1. Settle the pointer at the grab point BEFORE pressing.
+  await page.mouse.move(startX, startY, { steps: 3 });
+  await page.waitForTimeout(120);
+  await page.mouse.down();
+  await page.waitForTimeout(120);
+
+  // 2. Kick beyond the touch slop (~18px default) in ONE deliberate move, then
+  //    give the gesture arena a frame to hand the pointer to the drag
+  //    recognizer (the card lifts here). This is the step the naive version
+  //    skipped — without it the recognizer never claims the gesture.
+  await page.mouse.move(startX, startY + 24, { steps: 6 });
+  await page.waitForTimeout(150);
+
+  // 3. Travel to the destination in incremental steps with per-step settles so
+  //    the drop-index tracking follows the card down the list.
+  const travelSteps = 10;
+  for (let i = 1; i <= travelSteps; i++) {
+    const y = startY + 24 + ((endY - (startY + 24)) * i) / travelSteps;
+    await page.mouse.move(startX, y, { steps: 4 });
+    await page.waitForTimeout(40);
+  }
+
+  // 4. Hold at the destination so the insertion index settles, drop, then let
+  //    the drop frame (list mutation) commit before the caller reads state.
+  await page.mouse.move(startX, endY, { steps: 2 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+
+/**
  * Scroll a Flutter `CustomScrollView`/`SliverList.builder` until the element
  * matched by `selector` is in the viewport, then return the located element.
  *
