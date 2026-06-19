@@ -18,6 +18,7 @@ import {
   flutterFill,
   flutterFillByInput,
   flutterLongPress,
+  flutterDragReorder,
   scrollToVisible,
 } from '../helpers/app';
 import {
@@ -839,13 +840,24 @@ test.describe('Routine builder targets and reorder', { tag: '@smoke' }, () => {
     });
     await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });
 
-    // In reorder mode the × is replaced by up/down arrows. Move the first card
-    // DOWN (its "Move down" arrow is the first one in document order). The first
-    // card's "Move up" is disabled, so the first ENABLED "Move down" is index 0.
-    await expect(page.locator(CREATE_ROUTINE.moveExerciseDown).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.locator(CREATE_ROUTINE.moveExerciseDown).first().click();
+    // Reorder mode collapses each card to its header + a trailing drag glyph;
+    // the WHOLE collapsed card is the drag target. Two collapsed cards appear.
+    const dragHandles = page.locator(CREATE_ROUTINE.dragHandle);
+    await expect(dragHandles.first()).toBeVisible({ timeout: 10_000 });
+    await expect(dragHandles).toHaveCount(2);
+
+    // Drag the FIRST collapsed card down PAST the second to swap the order.
+    // The whole collapsed card is the drag target (ReorderableDragStartListener),
+    // and its drag glyph marks a reliable grab point inside it. A naive
+    // down→micro-moves→up gesture flakes ~1/3 of CanvasKit runs because the
+    // ImmediateMultiDragGestureRecognizer never wins the gesture arena (the card
+    // is never lifted → order never changes). flutterDragReorder synthesizes the
+    // settled, slop-exceeding gesture the recognizer needs — see its doc comment.
+    await flutterDragReorder(
+      page,
+      CREATE_ROUTINE.dragHandle, // grab the first collapsed card (handle .first())
+      CREATE_ROUTINE.dragHandle, // drop past the second collapsed card (.nth(1))
+    );
 
     // Exit reorder mode + save.
     await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });

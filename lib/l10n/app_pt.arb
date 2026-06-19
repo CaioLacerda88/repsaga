@@ -503,6 +503,7 @@
   "discardWorkout": "Descartar sessão",
   "moveUp": "Mover para cima",
   "moveDown": "Mover para baixo",
+  "dragToReorder": "Arraste para reordenar",
   "swapExercise": "Trocar exercício",
   "removeExercise": "Remover exercício",
   "swapExerciseConfirmTitle": "Trocar para {newExercise}?",

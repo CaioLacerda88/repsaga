@@ -1609,6 +1609,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moveDown => 'Move down';
 
   @override
+  String get dragToReorder => 'Drag to reorder';
+
+  @override
   String get swapExercise => 'Swap exercise';
 
   @override

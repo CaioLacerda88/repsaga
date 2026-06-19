@@ -6,6 +6,7 @@ import 'package:repsaga/features/exercises/models/exercise.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
+import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
 import 'package:repsaga/features/routines/ui/create_routine_screen.dart';
 import 'package:repsaga/features/rpg/domain/body_part_hues.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
@@ -22,6 +23,30 @@ class _StubProfileNotifier extends AsyncNotifier<Profile?>
   @override
   Future<Profile?> build() async =>
       const Profile(id: 'user-001', weightUnit: 'kg');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Capturing stub for the routine list notifier — records the [exercises] list
+/// passed to `updateRoutine` (the edit-mode Save path) so a test can assert the
+/// drag-reordered order is what actually persists, not just the on-screen order.
+class _CapturingRoutineListNotifier extends AsyncNotifier<List<Routine>>
+    implements RoutineListNotifier {
+  List<RoutineExercise>? capturedExercises;
+
+  @override
+  Future<List<Routine>> build() async => [];
+
+  @override
+  Future<void> updateRoutine({
+    required String id,
+    required String name,
+    required List<RoutineExercise> exercises,
+    String? notes,
+  }) async {
+    capturedExercises = exercises;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -495,14 +520,20 @@ void main() {
       await tester.pumpWidget(_buildScreen(routine: routine));
       await tester.pumpAndSettle();
 
+      // OHP is the SECOND tall card — built in the cacheExtent region but
+      // scrolled below the 600dp test viewport, so it's offstage. The generous
+      // cacheExtent keeps it in the tree (the E2E/a11y reach guarantee), so we
+      // locate it with skipOffstage:false. The default-finder failure here was
+      // the offstage-not-removed distinction, not a regression.
       expect(find.text('Bench Press'), findsOneWidget);
-      expect(find.text('OHP'), findsOneWidget);
+      expect(find.text('OHP', skipOffstage: false), findsOneWidget);
 
-      // Tap the first close button to remove Bench Press
+      // Tap the first close button to remove Bench Press (card 0 is onstage).
       await tester.tap(find.byIcon(Icons.close).first);
       await tester.pump();
 
       expect(find.text('Bench Press'), findsNothing);
+      // OHP is now the sole card → onstage.
       expect(find.text('OHP'), findsOneWidget);
     });
 
@@ -674,16 +705,18 @@ void main() {
     // the keyboard over the form — the screen behind stays untouched — instead
     // of resizing the body and reflowing the list (which shoved the exercises
     // under a rising empty band, AND left the cards unpainted because the
-    // SingleChildScrollView mis-repaints on resize). `resizeToAvoidBottomInset:
-    // false` is the single fix: no resize → no reflow → no mis-repaint. The
-    // on-device rendering itself was verified manually because a widget test
-    // cannot raise a real soft keyboard (see
-    // feedback_visual_verification_physical_device).
+    // scroll view mis-repaints on resize). `resizeToAvoidBottomInset: false` is
+    // the single fix: no resize → no reflow → no mis-repaint. The on-device
+    // rendering itself was verified manually because a widget test cannot raise
+    // a real soft keyboard (see feedback_visual_verification_physical_device).
     //
-    // The body stays a SingleChildScrollView (NOT a ListView) on purpose: it
-    // builds every exercise card eagerly, so all cards are in the widget tree /
-    // AOM for E2E + screen readers even when scrolled off. A lazy ListView
-    // dropped off-viewport cards from the DOM and broke the routine-create E2E.
+    // The body is a single CustomScrollView (the ONE scroll authority) hosting a
+    // SliverReorderableList for the cards. That structure lets the reorder
+    // sliver's auto-scroll resolve to the page itself (drag-to-edge scrolls), and
+    // a generous cacheExtent keeps every card built eagerly so all cards are in
+    // the widget tree / AOM for E2E + screen readers even when scrolled off. A
+    // lazy ListView with the default cacheExtent dropped off-viewport cards from
+    // the DOM and broke the routine-create E2E.
     group('keyboard overlays the form (does not reflow)', () {
       Routine routineWithExercises() => Routine(
         id: 'routine-kbd',
@@ -722,24 +755,44 @@ void main() {
         );
       });
 
-      testWidgets('form body eagerly builds all exercise cards (no lazy viewport)', (
+      testWidgets('form body is the single CustomScrollView scroll authority', (
         tester,
       ) async {
         await tester.pumpWidget(_buildScreen(routine: routineWithExercises()));
         await tester.pumpAndSettle();
 
+        // The body is the SINGLE scroll authority — a CustomScrollView. This is
+        // what lets the SliverReorderableList's drag auto-scroll resolve to the
+        // page itself (Scrollable.of(context) finds THIS scroll view), so
+        // dragging a card to the viewport edge scrolls the page. The old nested
+        // ReorderableListView(NeverScrollableScrollPhysics) broke that.
         final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-        expect(
-          scaffold.body,
-          isA<SingleChildScrollView>(),
-          reason:
-              'the body must build every exercise card eagerly so all cards are '
-              'in the tree/AOM for E2E + screen readers even when scrolled off; '
-              'a lazy ListView dropped off-viewport cards and broke E2E',
-        );
-        // Both seeded exercise cards are in the tree, not just the on-screen one.
+        expect(scaffold.body, isA<CustomScrollView>());
+
+        // Both seeded exercise cards are in the TREE, not just the on-screen
+        // one — the generous cacheExtent keeps every card built/in the AOM even
+        // when the second tall card is scrolled into the cache region (offstage
+        // in the 600dp test viewport, but present for E2E + screen readers).
+        // skipOffstage:false pins exactly that reach guarantee.
         expect(find.text('Bench Press'), findsOneWidget);
-        expect(find.text('OHP'), findsOneWidget);
+        expect(find.text('OHP', skipOffstage: false), findsOneWidget);
+      });
+
+      testWidgets('a generous cacheExtent keeps off-viewport cards in the tree', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen(routine: routineWithExercises()));
+        await tester.pumpAndSettle();
+
+        // Pin the cacheExtent that preserves eager-render reach (cluster:
+        // listview-lazy-build-breaks-e2e). The normal-mode SliverList is lazy at
+        // the sliver level; the generous cacheExtent keeps realistic routines
+        // (≤~12 tall cards) fully built so every card stays reachable for E2E +
+        // a11y, even those below the fold.
+        final scrollView = tester.widget<CustomScrollView>(
+          find.byType(CustomScrollView),
+        );
+        expect(scrollView.cacheExtent, greaterThanOrEqualTo(3000));
       });
     });
 
@@ -1200,7 +1253,7 @@ void main() {
       );
     });
 
-    group('reorder mode', () {
+    group('reorder mode (collapse + drag)', () {
       Routine threeExerciseRoutine() => Routine(
         id: 'routine-reorder',
         name: 'Push Day',
@@ -1225,100 +1278,297 @@ void main() {
         createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
       );
 
-      testWidgets('the reorder toggle is hidden with a single exercise', (
-        tester,
-      ) async {
-        await tester.pumpWidget(
-          _buildScreen(routine: _routineWith(_makeExercise())),
-        );
+      Future<void> enterReorderMode(WidgetTester tester) async {
+        await tester.tap(find.byIcon(Icons.reorder));
         await tester.pumpAndSettle();
+      }
 
-        expect(find.byIcon(Icons.reorder), findsNothing);
-      });
-
-      testWidgets('the reorder toggle appears with more than one exercise', (
+      testWidgets('the AppBar reorder toggle is PRESENT with >1 exercise', (
         tester,
       ) async {
         await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
         await tester.pumpAndSettle();
 
+        // The hamburger (Icons.reorder) enters reorder mode; Icons.done exits.
+        // At rest (normal view) only the enter glyph shows.
         expect(find.byIcon(Icons.reorder), findsOneWidget);
+        expect(find.byIcon(Icons.done), findsNothing);
       });
 
-      testWidgets('entering reorder mode replaces × with up/down arrows; '
-          'ends are disabled', (tester) async {
-        await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
-        await tester.pumpAndSettle();
+      testWidgets(
+        'the AppBar reorder toggle is ABSENT with a single exercise',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: _routineWith(_makeExercise())),
+          );
+          await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(Icons.reorder));
-        await tester.pumpAndSettle();
+          // Nothing to reorder with one card → the toggle is gated off.
+          expect(find.byIcon(Icons.reorder), findsNothing);
+          // The remove × is still present, even at one exercise.
+          expect(find.byIcon(Icons.close), findsOneWidget);
+        },
+      );
 
-        // × is gone; arrows are present (one pair per card).
-        expect(find.byIcon(Icons.close), findsNothing);
-        expect(find.byIcon(Icons.arrow_upward), findsNWidgets(3));
-        expect(find.byIcon(Icons.arrow_downward), findsNWidgets(3));
-
-        // First card's up arrow is disabled; last card's down arrow too.
-        final upButtons = tester
-            .widgetList<IconButton>(
-              find.ancestor(
-                of: find.byIcon(Icons.arrow_upward),
-                matching: find.byType(IconButton),
+      testWidgets(
+        'the reorder toggle disappears when a removal drops the routine to a '
+        'single exercise',
+        (tester) async {
+          // Gating is reactive, not just initial: starting with two cards the
+          // toggle is present; removing one (in normal view) leaves a lone card
+          // that can't be reordered, so the toggle must vanish — otherwise the
+          // user could enter a reorder mode with nothing to reorder.
+          final routine = Routine(
+            id: 'routine-gate',
+            name: 'Push Day',
+            isDefault: false,
+            exercises: [
+              RoutineExercise(
+                exerciseId: 'ex-1',
+                setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+                exercise: _makeExercise(id: 'ex-1', name: 'Bench Press'),
               ),
-            )
-            .toList();
-        final downButtons = tester
-            .widgetList<IconButton>(
-              find.ancestor(
-                of: find.byIcon(Icons.arrow_downward),
-                matching: find.byType(IconButton),
+              RoutineExercise(
+                exerciseId: 'ex-2',
+                setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+                exercise: _makeExercise(id: 'ex-2', name: 'OHP'),
               ),
-            )
-            .toList();
-        expect(
-          upButtons.first.onPressed,
-          isNull,
-          reason: 'first cannot move up',
-        );
-        expect(
-          downButtons.last.onPressed,
-          isNull,
-          reason: 'last cannot move down',
-        );
-      });
+            ],
+            createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+          );
 
-      testWidgets('moving the first exercise down reorders the list', (
+          await tester.pumpWidget(_buildScreen(routine: routine));
+          await tester.pumpAndSettle();
+
+          // Two cards → toggle present.
+          expect(find.byIcon(Icons.reorder), findsOneWidget);
+
+          // Remove one card (normal view → the remove × is available).
+          await tester.tap(find.byIcon(Icons.close).first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+
+          // One card left → the toggle is gated off.
+          expect(find.byIcon(Icons.reorder), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'reorder mode swaps the eager SliverList for a SliverReorderableList '
+        'inside the CustomScrollView',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: threeExerciseRoutine()),
+          );
+          await tester.pumpAndSettle();
+
+          // NORMAL mode: the cards live in an EAGER SliverList — NO per-item
+          // reorder-semantics wrapper, so each exercise name stays its own
+          // reachable AOM/DOM leaf under parallel render load (cluster:
+          // listview-lazy-build-breaks-e2e — the SliverReorderableList wrapper
+          // merged the name into a single group label, dropping the leaf under
+          // parallel CI workers). The lazy reorder list must be ABSENT here.
+          expect(
+            find.descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(SliverList),
+            ),
+            findsOneWidget,
+          );
+          expect(find.byType(SliverReorderableList), findsNothing);
+
+          // REORDER mode: the cards move into a SliverReorderableList — still a
+          // bare sliver inside the page's single CustomScrollView (NOT a nested
+          // ReorderableListView with NeverScrollableScrollPhysics), which is the
+          // structure that lets drag auto-scroll resolve to the page. A widget
+          // test can't assert auto-scroll itself (needs a real viewport drag),
+          // so we pin the structure that makes it work.
+          await enterReorderMode(tester);
+
+          expect(
+            find.descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(SliverReorderableList),
+            ),
+            findsOneWidget,
+          );
+          // The old nested high-level list must never appear.
+          expect(find.byType(ReorderableListView), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'normal mode: cards are FULL (Sets/Rest visible) and NOT draggable',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: threeExerciseRoutine()),
+          );
+          await tester.pumpAndSettle();
+
+          // Full body renders for every card (Sets/Rest never collapsed in
+          // normal view). Cards 2 + 3 sit in the cacheExtent region (offstage
+          // in the 600dp viewport) but are fully built — skipOffstage:false
+          // counts all 3.
+          expect(find.text('Sets', skipOffstage: false), findsNWidgets(3));
+          expect(find.text('Rest', skipOffstage: false), findsNWidgets(3));
+
+          // No drag affordance and no per-card drag listener in normal mode.
+          expect(
+            find.byIcon(Icons.drag_handle, skipOffstage: false),
+            findsNothing,
+          );
+          expect(
+            find.byType(ReorderableDragStartListener, skipOffstage: false),
+            findsNothing,
+          );
+        },
+      );
+
+      testWidgets(
+        'entering reorder mode COLLAPSES the cards: Sets/Rest hidden, title + '
+        'pill remain; done restores them',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: threeExerciseRoutine()),
+          );
+          await tester.pumpAndSettle();
+
+          // Precondition — full cards.
+          expect(find.text('Sets', skipOffstage: false), findsNWidgets(3));
+
+          await enterReorderMode(tester);
+
+          // Collapsed: the Sets stepper + Rest chips + remove × are gone.
+          expect(find.text('Sets', skipOffstage: false), findsNothing);
+          expect(find.text('Rest', skipOffstage: false), findsNothing);
+          expect(find.byIcon(Icons.close, skipOffstage: false), findsNothing);
+
+          // Only the header survives — title + identity pill per card.
+          expect(find.text('Alpha', skipOffstage: false), findsOneWidget);
+          expect(find.text('CHEST', skipOffstage: false), findsNWidgets(3));
+
+          // A drag affordance glyph per collapsed card, and the whole card is
+          // wrapped in a drag listener.
+          expect(
+            find.byIcon(Icons.drag_handle, skipOffstage: false),
+            findsNWidgets(3),
+          );
+          expect(
+            find.byType(ReorderableDragStartListener, skipOffstage: false),
+            findsNWidgets(3),
+          );
+
+          // The toggle now offers EXIT (Icons.done).
+          expect(find.byIcon(Icons.done), findsOneWidget);
+          expect(find.byIcon(Icons.reorder), findsNothing);
+
+          // Exiting restores the full cards.
+          await tester.tap(find.byIcon(Icons.done));
+          await tester.pumpAndSettle();
+
+          expect(find.text('Sets', skipOffstage: false), findsNWidgets(3));
+          expect(find.text('Rest', skipOffstage: false), findsNWidgets(3));
+          expect(
+            find.byIcon(Icons.drag_handle, skipOffstage: false),
+            findsNothing,
+          );
+        },
+      );
+
+      testWidgets(
+        'the collapsed drag affordance carries the Drag to reorder semantics '
+        'label',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: threeExerciseRoutine()),
+          );
+          await tester.pumpAndSettle();
+
+          await enterReorderMode(tester);
+
+          // skipOffstage:false — cards 2 + 3 are built in the cacheExtent
+          // region (offstage in the 600dp viewport) but their semantics nodes
+          // are present, which is exactly the screen-reader reach guarantee.
+          expect(
+            find.bySemanticsLabel('Drag to reorder', skipOffstage: false),
+            findsNWidgets(3),
+            reason: 'each collapsed card carries the drag-reorder label',
+          );
+        },
+      );
+
+      testWidgets(
+        'reordering via onReorder moves an exercise and persists the new order',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: threeExerciseRoutine()),
+          );
+          await tester.pumpAndSettle();
+
+          await enterReorderMode(tester);
+
+          // Initial top-to-bottom order: Alpha, Bravo, Charlie. The lower cards
+          // are built in the cacheExtent region but offstage in the 600dp test
+          // viewport — skipOffstage:false still resolves their layout geometry
+          // (offstage cache children ARE laid out, just not painted), so the
+          // top-to-bottom order assertions hold.
+          double y(String name) =>
+              tester.getTopLeft(find.text(name, skipOffstage: false)).dy;
+          expect(y('Alpha') < y('Bravo'), isTrue);
+          expect(y('Bravo') < y('Charlie'), isTrue);
+
+          // Drive the SliverReorderableList's onReorder directly: move index 0
+          // (Alpha) to the end. The reorder list passes a newIndex that is one
+          // PAST the target when moving down, so 3 == "after Charlie".
+          final reorderable = tester.widget<SliverReorderableList>(
+            find.byType(SliverReorderableList),
+          );
+          reorderable.onReorder(0, 3);
+          await tester.pumpAndSettle();
+
+          // New order: Bravo, Charlie, Alpha — Alpha is now last.
+          expect(y('Bravo') < y('Charlie'), isTrue);
+          expect(y('Charlie') < y('Alpha'), isTrue);
+        },
+      );
+
+      testWidgets('the drag-reordered order is what persists through Save', (
         tester,
       ) async {
-        await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
+        final notifier = _CapturingRoutineListNotifier();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              profileProvider.overrideWith(() => _StubProfileNotifier()),
+              routineListProvider.overrideWith(() => notifier),
+            ],
+            child: TestMaterialApp(
+              theme: AppTheme.dark,
+              home: CreateRoutineScreen(routine: threeExerciseRoutine()),
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
 
         await tester.tap(find.byIcon(Icons.reorder));
         await tester.pumpAndSettle();
 
-        // Initial order: Alpha, Bravo, Charlie (top-to-bottom by y).
-        double y(String name) => tester.getTopLeft(find.text(name)).dy;
-        expect(y('Alpha') < y('Bravo'), isTrue);
-
-        // Tap Alpha's down arrow (the first card's down arrow).
-        final alphaCard = find.ancestor(
-          of: find.text('Alpha'),
-          matching: find.byType(Row),
-        );
-        final alphaDown = find.descendant(
-          of: alphaCard.first,
-          matching: find.widgetWithIcon(IconButton, Icons.arrow_downward),
-        );
-        await tester.tap(alphaDown);
+        // Move index 0 (Alpha) past the end → order becomes B, C, A.
+        tester
+            .widget<SliverReorderableList>(find.byType(SliverReorderableList))
+            .onReorder(0, 3);
         await tester.pumpAndSettle();
 
-        // New order: Bravo, Alpha, Charlie — Alpha now sits below Bravo.
+        // Tap the bottom Save CTA (edit mode → updateRoutine).
+        await tester.tap(find.byType(FilledButton));
+        await tester.pumpAndSettle();
+
+        // The persisted exercise order reflects the drag, NOT the original.
         expect(
-          y('Bravo') < y('Alpha'),
-          isTrue,
-          reason: 'Alpha moved down past Bravo',
+          notifier.capturedExercises?.map((e) => e.exerciseId).toList(),
+          ['ex-b', 'ex-c', 'ex-a'],
+          reason: 'reorder must persist to updateRoutine in the new order',
         );
-        expect(y('Alpha') < y('Charlie'), isTrue);
       });
     });
 
@@ -1366,7 +1616,12 @@ void main() {
 
           expect(find.text('Bench Press'), findsOneWidget);
           final benchY = tester.getTopLeft(find.text('Bench Press')).dy;
-          final ohpY = tester.getTopLeft(find.text('OHP')).dy;
+          // After undo OHP is card 1 again — built but offstage below the 600dp
+          // viewport. getTopLeft still resolves its layout geometry, so the
+          // original-index ordering assertion holds.
+          final ohpY = tester
+              .getTopLeft(find.text('OHP', skipOffstage: false))
+              .dy;
           expect(
             benchY < ohpY,
             isTrue,
@@ -1419,10 +1674,15 @@ void main() {
           await tester.pumpWidget(_buildScreen(routine: routine));
           await tester.pumpAndSettle();
 
-          // Precondition: the pull-up auto-reveals its Added-weight stepper;
-          // the dip shows the collapsed "+ Add weight" CTA.
+          // Precondition: the pull-up (card 0, onstage) auto-reveals its
+          // Added-weight stepper; the dip (card 1, built but offstage below the
+          // 600dp viewport) shows the collapsed "+ Add weight" CTA —
+          // skipOffstage:false resolves it.
           expect(find.text('Added weight'), findsOneWidget);
-          expect(find.text('+ Add weight'), findsOneWidget);
+          expect(
+            find.text('+ Add weight', skipOffstage: false),
+            findsOneWidget,
+          );
 
           // Remove the pull-up (first card).
           await tester.tap(find.byIcon(Icons.close).first);
