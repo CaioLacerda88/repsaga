@@ -237,7 +237,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
       color: Colors.transparent,
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
-      shadowColor: Colors.black.withValues(alpha: 0.5),
+      shadowColor: AppColors.abyss.withValues(alpha: 0.5),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
