@@ -51,6 +51,20 @@ import '../../shared/widgets/legal_doc_screen.dart';
 import '../../shared/widgets/offline_banner.dart';
 import '../theme/app_theme.dart';
 
+/// Safely reads a [Routine] from a GoRouter `extra` payload.
+///
+/// Returns null when `extra` is null OR any non-[Routine] type. The non-Routine
+/// case happens on **process-death restoration**: GoRouter's `extra` is not
+/// serialized, so when Android kills the app while the user sits on
+/// `/routines/create` and later restores it, the route rebuilds with `extra` as
+/// a non-Routine value. A bare `state.extra as Routine?` then throws a
+/// `_TypeError`, which in a RELEASE build paints a grey `ErrorWidget` (the whole
+/// Routines tab goes blank). The `is` guard degrades that to "create a new
+/// routine" instead of crashing — mirroring the post-session route's
+/// `state.extra is! PostSessionParams` guard.
+@visibleForTesting
+Routine? routineFromExtra(Object? extra) => extra is Routine ? extra : null;
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
@@ -259,8 +273,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'create',
+                // `routineFromExtra` guards against a non-Routine `extra` on
+                // process-death restoration (a bare `as Routine?` cast would
+                // throw → grey ErrorWidget in release). See its doc comment.
                 builder: (context, state) =>
-                    CreateRoutineScreen(routine: state.extra as Routine?),
+                    CreateRoutineScreen(routine: routineFromExtra(state.extra)),
               ),
             ],
           ),
