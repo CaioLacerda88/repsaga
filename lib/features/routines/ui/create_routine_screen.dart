@@ -280,9 +280,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
             label: l10n.undoCta,
             onPressed: () {
               setState(() {
-                final insertAt = index <= _exercises.length
-                    ? index
-                    : _exercises.length;
+                final insertAt = index.clamp(0, _exercises.length);
                 _exercises.insert(insertAt, removed);
               });
             },
