@@ -68,9 +68,17 @@ import 'rpg_integration_setup.dart';
 // test fails and forces a deliberate update on both sides.
 const double kTauUpDays = 14.0;
 const double kTauDownDays = 42.0;
+// Two-speed decay (Phase 38e): cardio detrains ~2× faster than strength.
+// Mirrors `recompute_vitality_for_user` (00082) `c_tau_down_cardio := 21.0`
+// and the Edge Function's `TAU_DOWN_CARDIO_DAYS`. Inlined (not imported) so
+// this integration test is the contract pin — a wrong τ branch in the RPC's
+// `CASE WHEN t.body_part = 'cardio'` selection fails here.
+const double kTauDownCardioDays = 21.0;
 const double kSamplePeriodDays = 7.0;
 final double kAlphaUp = 1 - math.exp(-kSamplePeriodDays / kTauUpDays);
 final double kAlphaDown = 1 - math.exp(-kSamplePeriodDays / kTauDownDays);
+final double kAlphaDownCardio =
+    1 - math.exp(-kSamplePeriodDays / kTauDownCardioDays);
 
 /// Edge Function URL on the local Supabase stack. `npx supabase start`
 /// auto-serves all functions under this prefix.
@@ -690,6 +698,90 @@ void main() {
           greaterThan(0),
           reason:
               'back was NOT stepped at save time → nightly must step it now',
+        );
+      },
+    );
+
+    test(
+      'recompute decays cardio on its faster τ_down (21d) — faster than strength (42d)',
+      () async {
+        // Phase 38e two-speed decay contract, pinned end-to-end through the
+        // `recompute_vitality_for_user` RPC's `CASE WHEN t.body_part = 'cardio'`
+        // τ-selection branch. A wrong branch (cardio falling through to the
+        // strength τ_down=42d) would pass every strength-only test in this file
+        // but is caught here.
+        //
+        // Pure decay step: seed a cardio body_part_progress row with a known
+        // prior EWMA and ZERO cardio xp_events in the 7-day window, so the only
+        // motion is one α_down_cardio decay step.
+        final user = await freshUser();
+        final adminClient = serviceRoleClient();
+
+        const priorEwma = 100.0;
+        const priorPeak = 100.0;
+        await adminClient.from('body_part_progress').upsert({
+          'user_id': user.userId,
+          'body_part': 'cardio',
+          'vitality_ewma': priorEwma,
+          'vitality_peak': priorPeak,
+          'total_xp': 0,
+          'rank': 1,
+        }, onConflict: 'user_id,body_part');
+
+        // No cardio xp_events seeded → weekly_volume = 0 → pure decay branch.
+        // Save path recomputes only the cardio bp (the session's touched part).
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': user.userId,
+            'p_body_parts': ['cardio'],
+          },
+        );
+
+        final actualEwma = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'cardio',
+        );
+        final actualPeak = await _readVitalityPeak(
+          adminClient,
+          user.userId,
+          'cardio',
+        );
+
+        // Closed-form single decay step on the CARDIO clock:
+        //   new = α_down_cardio * 0 + (1 - α_down_cardio) * prior
+        //       = exp(-7/21) * prior ≈ 0.7165 * 100 = 71.65
+        final expectedEwma = (1 - kAlphaDownCardio) * priorEwma;
+        expect(
+          (actualEwma - expectedEwma).abs() / expectedEwma,
+          lessThan(kRelTol),
+          reason:
+              'Cardio decay must use τ_down=21d. '
+              'expected≈$expectedEwma got=$actualEwma',
+        );
+
+        // Contrast: a strength row with the SAME prior would decay on τ_down=42d
+        // to exp(-7/42)*100 ≈ 84.65. Cardio (≈71.65) must drop FARTHER in one
+        // step — i.e. the cardio result is strictly below the strength result.
+        final strengthEquivalent = (1 - kAlphaDown) * priorEwma;
+        expect(
+          actualEwma,
+          lessThan(strengthEquivalent),
+          reason:
+              'Cardio τ_down (21d) must decay faster than strength τ_down (42d): '
+              'cardio ewma=$actualEwma must be below the strength-equivalent '
+              'decay $strengthEquivalent. If they are equal, the RPC routed '
+              'cardio through the strength τ branch.',
+        );
+
+        // Peak must not regress on a pure decay step.
+        expect(
+          (actualPeak - priorPeak).abs(),
+          lessThan(0.01),
+          reason:
+              'Peak must be preserved on decay. '
+              'expected $priorPeak got $actualPeak',
         );
       },
     );
