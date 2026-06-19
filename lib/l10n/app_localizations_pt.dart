@@ -1619,6 +1619,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get moveDown => 'Mover para baixo';
 
   @override
+  String get dragToReorder => 'Arraste para reordenar';
+
+  @override
   String get swapExercise => 'Trocar exercício';
 
   @override

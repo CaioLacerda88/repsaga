@@ -2840,6 +2840,12 @@ abstract class AppLocalizations {
   /// **'Move down'**
   String get moveDown;
 
+  /// Accessibility label + tooltip for the drag handle that reorders a list item (routine-builder exercise cards)
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get dragToReorder;
+
   /// Swap exercise tooltip
   ///
   /// In en, this message translates to:

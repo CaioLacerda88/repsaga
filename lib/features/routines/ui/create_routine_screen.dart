@@ -47,6 +47,11 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   late final TextEditingController _notesController;
   final _exercises = <_RoutineExerciseEntry>[];
   bool _saving = false;
+
+  /// Reorder MODE — toggled from the AppBar hamburger. In this mode every card
+  /// COLLAPSES to its header (title + identity pill[s]) and becomes draggable by
+  /// grabbing anywhere on it; the full Sets/Rest/target body is hidden so many
+  /// cards fit on screen while ordering. Normal mode → full cards, not draggable.
   bool _reorderMode = false;
 
   bool get _isEditing => widget.routine != null;
@@ -199,20 +204,48 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     }
   }
 
+  /// Toggle reorder MODE on/off. Entering collapses every card to its header and
+  /// makes the whole card draggable; exiting expands them back to full cards.
   void _toggleReorderMode() {
     setState(() => _reorderMode = !_reorderMode);
   }
 
-  /// Index swap on the in-memory list (ports the active-workout reorder
-  /// pattern). [delta] is -1 (up) or +1 (down). Order persists via the JSONB
-  /// array order through the existing `_save` — no model / migration change.
-  void _moveExercise(int index, int delta) {
-    final target = index + delta;
-    if (target < 0 || target >= _exercises.length) return;
+  /// Drag-reorder the in-memory exercise list. Mirrors the Weekly Plan editor's
+  /// `_onReorder` VERBATIM (incl. the `newIndex--` adjustment ReorderableListView
+  /// requires when an item moves DOWN). Order persists via the JSONB array order
+  /// through the existing `_save` — no model / migration change.
+  void _onReorder(int oldIndex, int newIndex) {
+    if (oldIndex >= _exercises.length || newIndex > _exercises.length) {
+      return;
+    }
     setState(() {
-      final entry = _exercises.removeAt(index);
-      _exercises.insert(target, entry);
+      if (newIndex > oldIndex) newIndex--;
+      final entry = _exercises.removeAt(oldIndex);
+      _exercises.insert(newIndex, entry);
     });
+  }
+
+  /// Lift feedback for the dragged card — Material elevation + a subtle
+  /// `hotViolet @ 0.4` edge so the picked-up card reads as detached from the
+  /// list without any decorative motion. Mirrors the dark-palette card chrome.
+  Widget _reorderProxyDecorator(
+    Widget child,
+    int index,
+    Animation<double> animation,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      elevation: 8,
+      borderRadius: BorderRadius.circular(12),
+      shadowColor: Colors.black.withValues(alpha: 0.5),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.hotViolet.withValues(alpha: 0.4)),
+        ),
+        child: child,
+      ),
+    );
   }
 
   /// Removes an exercise but keeps it undoable: capture the entry + its index,
@@ -226,8 +259,10 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
 
     setState(() {
       _exercises.removeAt(index);
-      // Leaving reorder mode with ≤1 exercise would strand the toggle in an
-      // active state with nothing to reorder — exit it defensively.
+      // Reorder mode is only meaningful with >1 card; if a removal drops us to
+      // a single exercise (or none), fall back to normal view so the lone card
+      // expands and the toggle (now hidden) can't strand the user in a
+      // collapsed, undraggable state.
       if (_reorderMode && _exercises.length <= 1) _reorderMode = false;
     });
 
@@ -351,9 +386,10 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           child: Text(_isEditing ? l10n.editRoutine : l10n.createRoutine),
         ),
         actions: [
-          // Reorder toggle — ported from the active-workout AppBar. Only
-          // meaningful with >1 exercise, so it's gated on that. Toggles
-          // Icons.reorder ↔ Icons.done; reuses the active-workout l10n.
+          // Reorder MODE toggle — collapses the cards to draggable headers
+          // (Icons.reorder) and back (Icons.done). Only meaningful with >1
+          // exercise, so it's gated on that (a single card can't reorder).
+          // Reuses the active-workout reorder l10n.
           if (_exercises.length > 1)
             Semantics(
               container: true,
@@ -372,71 +408,103 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
             ),
         ],
       ),
-      // The exercise cards below the focused notes field used to stop painting
-      // while the keyboard was up — an empty card-shaped void tracking the IME.
-      // That was triggered by the keyboard RESIZING the Scaffold body; with
-      // `resizeToAvoidBottomInset: false` (above) the body never resizes, so a
-      // plain SingleChildScrollView repaints correctly. SingleChildScrollView
-      // (not ListView) is deliberate: it builds ALL children eagerly, so every
-      // exercise card is in the tree/AOM for E2E + screen readers even when
-      // scrolled off — a lazy ListView dropped off-viewport cards from the DOM
-      // and broke the routine-create E2E flow.
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _sectionEyebrow(l10n.routineSectionLabel),
-            TextField(
-              controller: _nameController,
-              autofocus: !_isEditing,
-              maxLength: _kRoutineNameMaxLength,
-              // Custom counter (see _buildNameCounter): hidden until near cap.
-              buildCounter:
-                  (
-                    context, {
-                    required currentLength,
-                    required isFocused,
-                    maxLength,
-                  }) => _buildNameCounter(context, currentLength),
-              decoration: InputDecoration(hintText: l10n.routineName),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 16),
-            _sectionEyebrow(l10n.notesSectionLabel),
-            // Q2 routine notes — optional, multiline, flat field on surface2
-            // (no Card chrome). Lives below name, above the exercise list.
-            Semantics(
-              container: true,
-              identifier: 'create-routine-notes',
-              child: TextField(
-                controller: _notesController,
-                minLines: 2,
-                maxLines: 4,
-                maxLength: _kRoutineNotesMaxLength,
-                // Custom counter (see _buildNotesCounter): hide Material's
-                // default by returning an empty widget when below threshold.
-                buildCounter:
-                    (
-                      context, {
-                      required currentLength,
-                      required isFocused,
-                      maxLength,
-                    }) => _buildNotesCounter(context, currentLength),
-                decoration: InputDecoration(
-                  hintText: l10n.routineNotesHint,
-                  filled: true,
-                  fillColor: AppColors.surface2,
-                ),
-                onChanged: (_) => setState(() {}),
+      // The body is a SINGLE CustomScrollView — the one and only scroll
+      // authority on this screen. That is load-bearing for drag auto-scroll:
+      // the exercise cards live in a bare SliverReorderableList, whose
+      // EdgeDraggingAutoScroller resolves its target via `Scrollable.of(context)`
+      // → this CustomScrollView. So dragging a card to the viewport edge scrolls
+      // the PAGE. The previous nested `ReorderableListView(shrinkWrap, physics:
+      // NeverScrollableScrollPhysics)` inside a SingleChildScrollView broke
+      // this: `Scrollable.of(context)` found the inner (non-scrolling) list, so
+      // drag-to-edge never scrolled (cards are tall — TARGET + sets + rest — so
+      // even 5-6 exercises overflow the viewport).
+      //
+      // Keyboard contract preserved: `resizeToAvoidBottomInset: false` (above)
+      // means the body never resizes for the IME, so the scroll view does not
+      // reflow/mis-repaint when the name/notes fields are focused. The keyboard
+      // just overlays the content; the CustomScrollView can still scroll a
+      // focused field into view if needed.
+      //
+      // cluster: listview-lazy-build-breaks-e2e — a SliverReorderableList is
+      // lazy (it culls off-viewport children, dropping them from the DOM/AOM and
+      // breaking E2E text/identifier lookups + screen readers). The generous
+      // `cacheExtent: 3500` keeps realistic routines (≤~12 of these tall cards)
+      // fully built/in the AOM — preserving the reach the old eager `Column`
+      // gave. Routines longer than ~3500px of cards will lazy-cull the far end;
+      // E2E uses small routines so it's unaffected (and QA can
+      // `scrollIntoViewIfNeeded` if a very long routine is ever tested).
+      body: CustomScrollView(
+        cacheExtent: 3500,
+        slivers: [
+          // Header region — ROUTINE/NOTES eyebrows + name + notes fields,
+          // hosted unchanged in a sliver. Top + horizontal 16 chrome matches the
+          // old SingleChildScrollView padding.
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _sectionEyebrow(l10n.routineSectionLabel),
+                  TextField(
+                    controller: _nameController,
+                    autofocus: !_isEditing,
+                    maxLength: _kRoutineNameMaxLength,
+                    // Custom counter (see _buildNameCounter): hidden until cap.
+                    buildCounter:
+                        (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          maxLength,
+                        }) => _buildNameCounter(context, currentLength),
+                    decoration: InputDecoration(hintText: l10n.routineName),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  _sectionEyebrow(l10n.notesSectionLabel),
+                  // Q2 routine notes — optional, multiline, flat field on
+                  // surface2 (no Card chrome). Below name, above the list.
+                  Semantics(
+                    container: true,
+                    identifier: 'create-routine-notes',
+                    child: TextField(
+                      controller: _notesController,
+                      minLines: 2,
+                      maxLines: 4,
+                      maxLength: _kRoutineNotesMaxLength,
+                      // Custom counter (see _buildNotesCounter): hide Material's
+                      // default by returning null when below threshold.
+                      buildCounter:
+                          (
+                            context, {
+                            required currentLength,
+                            required isFocused,
+                            maxLength,
+                          }) => _buildNotesCounter(context, currentLength),
+                      decoration: InputDecoration(
+                        hintText: l10n.routineNotesHint,
+                        filled: true,
+                        fillColor: AppColors.surface2,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            if (_exercises.isEmpty)
+          ),
+
+          // Exercise cards — the reorderable sliver (drag-to-edge auto-scrolls
+          // the page; see the body comment). Empty-state beat renders as its own
+          // adapter instead. Horizontal 16 chrome matches the header.
+          if (_exercises.isEmpty)
+            SliverToBoxAdapter(
               // RPG-voiced empty-state beat — a center of gravity between the
               // notes field and the add button (Phase 38h 3d) instead of a
               // cold blank gap.
-              Padding(
+              child: Padding(
                 padding: const EdgeInsets.symmetric(
                   vertical: 30,
                   horizontal: 16,
@@ -458,67 +526,110 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
                     ),
                   ],
                 ),
-              )
-            else ...[
-              ..._exercises.asMap().entries.map(
-                (entry) => _ExerciseCard(
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              // The lower-level SliverReorderableList. In reorder mode each card
+              // supplies its OWN ReorderableDragStartListener wrapping the whole
+              // collapsed card (no buildDefaultDragHandles). In normal mode the
+              // item is just the full card with no drag listener → not
+              // draggable. Because the list is a direct sliver of the page's
+              // CustomScrollView, drag auto-scroll resolves to that scroll view
+              // → drag-to-edge scrolls the page.
+              sliver: SliverReorderableList(
+                itemCount: _exercises.length,
+                onReorder: _onReorder,
+                proxyDecorator: _reorderProxyDecorator,
+                itemBuilder: (context, index) {
+                  final entry = _exercises[index];
                   // Key by the entry's object identity so each card's State
                   // stays bound to ITS entry across remove / undo / reorder
                   // (index shifts otherwise reuse a sibling's State, leaking
                   // the stateful `_showAddedWeight` reveal flag onto the wrong
-                  // exercise — cluster: missing-key-state-reuse).
-                  key: ObjectKey(entry.value),
-                  entry: entry.value,
-                  weightUnit: weightUnit,
-                  reorderMode: _reorderMode,
-                  isFirst: entry.key == 0,
-                  isLast: entry.key == _exercises.length - 1,
-                  onMoveUp: () => _moveExercise(entry.key, -1),
-                  onMoveDown: () => _moveExercise(entry.key, 1),
-                  onSetCountChanged: (count) {
-                    setState(() => entry.value.setCount = count);
-                  },
-                  onRestChanged: (rest) {
-                    setState(() => entry.value.restSeconds = rest);
-                  },
-                  onTargetRepsChanged: (reps) {
-                    setState(() => entry.value.targetReps = reps);
-                  },
-                  onTargetWeightChanged: (weight) {
-                    setState(() => entry.value.targetWeight = weight);
-                  },
-                  onTargetDurationChanged: (seconds) {
-                    setState(() => entry.value.targetDurationSeconds = seconds);
-                  },
-                  onTargetDistanceChanged: (meters) {
-                    setState(() => entry.value.targetDistanceM = meters);
-                  },
-                  onRemove: () => _removeExercise(entry.key),
-                ),
+                  // exercise — cluster: missing-key-state-reuse). ObjectKey is
+                  // also the per-child key the reorder list REQUIRES, and stays
+                  // unique even with duplicate exercises. The key lives on the
+                  // OUTERMOST per-item widget (the listener wrapper in reorder
+                  // mode, else the card itself).
+                  final card = _ExerciseCard(
+                    key: _reorderMode ? null : ObjectKey(entry),
+                    entry: entry,
+                    weightUnit: weightUnit,
+                    reorderMode: _reorderMode,
+                    onSetCountChanged: (count) {
+                      setState(() => entry.setCount = count);
+                    },
+                    onRestChanged: (rest) {
+                      setState(() => entry.restSeconds = rest);
+                    },
+                    onTargetRepsChanged: (reps) {
+                      setState(() => entry.targetReps = reps);
+                    },
+                    onTargetWeightChanged: (weight) {
+                      setState(() => entry.targetWeight = weight);
+                    },
+                    onTargetDurationChanged: (seconds) {
+                      setState(() => entry.targetDurationSeconds = seconds);
+                    },
+                    onTargetDistanceChanged: (meters) {
+                      setState(() => entry.targetDistanceM = meters);
+                    },
+                    onRemove: () => _removeExercise(index),
+                  );
+
+                  // Normal mode: the bare full card, not draggable.
+                  if (!_reorderMode) return card;
+
+                  // Reorder mode: the whole COLLAPSED card is the drag handle —
+                  // grabbing anywhere on it starts an immediate drag (the user
+                  // already declared intent by entering reorder mode, so no
+                  // long-press delay). The ObjectKey rides the OUTERMOST widget
+                  // here (the listener), preserving per-entry identity across
+                  // the reorder. The SliverReorderableList resolves its
+                  // EdgeDraggingAutoScroller via the enclosing CustomScrollView,
+                  // so drag-to-edge auto-scrolls the page.
+                  return ReorderableDragStartListener(
+                    key: ObjectKey(entry),
+                    index: index,
+                    child: card,
+                  );
+                },
               ),
-              // 16dp separation from the last card (Phase 38h 2d).
-              const SizedBox(height: 16),
-            ],
-            Semantics(
-              container: true,
-              identifier: 'create-routine-add-exercise',
-              child: OutlinedButton.icon(
-                onPressed: _addExercise,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addExercise),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  side: BorderSide(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+            ),
+
+          // Add-exercise button (+ the 16dp separation from the last card and
+          // the bottom 16 chrome). Hosted in its own adapter below the list.
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              _exercises.isEmpty ? 0 : 16,
+              16,
+              16,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Semantics(
+                container: true,
+                identifier: 'create-routine-add-exercise',
+                child: OutlinedButton.icon(
+                  onPressed: _addExercise,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.addExercise),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                    ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       // Bottom-anchored full-width Save CTA — the SOLE Save affordance (the
       // redundant AppBar Save was dropped). Thumb-reachable, gated by
@@ -641,10 +752,6 @@ class _ExerciseCard extends StatefulWidget {
     required this.entry,
     required this.weightUnit,
     required this.reorderMode,
-    required this.isFirst,
-    required this.isLast,
-    required this.onMoveUp,
-    required this.onMoveDown,
     required this.onSetCountChanged,
     required this.onRestChanged,
     required this.onTargetRepsChanged,
@@ -655,12 +762,13 @@ class _ExerciseCard extends StatefulWidget {
   });
 
   final _RoutineExerciseEntry entry;
+
   final String weightUnit;
+
+  /// Reorder MODE: true → collapse to a header-only draggable variant (title +
+  /// identity pill[s] + a trailing drag affordance, violet border tint); false
+  /// → the full card (steppers / rest / target slots / remove ×).
   final bool reorderMode;
-  final bool isFirst;
-  final bool isLast;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final ValueChanged<int> onSetCountChanged;
   final ValueChanged<int> onRestChanged;
   final ValueChanged<int> onTargetRepsChanged;
@@ -719,14 +827,58 @@ class _ExerciseCardState extends State<_ExerciseCard> {
     final theme = Theme.of(context);
     final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
 
-    // Reorder mode tints the card border violet (matches the mockup) — the
-    // affordance reads "this list is rearrangeable" at a glance.
+    // Reorder mode tints the card border a faint violet so the rearrangeable
+    // state reads at a glance; normal mode is borderless (the picked-up lift
+    // feedback is the list's `proxyDecorator`, not a resting border).
     final ShapeBorder cardShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
       side: widget.reorderMode
-          ? BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.5))
+          ? BorderSide(color: AppColors.hotViolet.withValues(alpha: 0.4))
           : BorderSide.none,
     );
+
+    // In reorder mode every card — cardio or strength — collapses to the SAME
+    // header-only shape: title + identity pill(s) + a trailing drag affordance.
+    // The full body (steppers / rest / target slots / remove ×) is hidden so
+    // many short cards fit on screen while the user orders the list.
+    if (widget.reorderMode) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: cardColor,
+          shape: cardShape,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              if (entry.isCardio)
+                // 3dp teal identity stripe — kept in the collapsed cardio card
+                // so the type cue survives reorder mode.
+                const Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: ExcludeSemantics(
+                    child: SizedBox(
+                      width: 3,
+                      child: ColoredBox(color: AppColors.bodyPartCardio),
+                    ),
+                  ),
+                ),
+              Padding(
+                // +3 left for the cardio stripe; otherwise the 16 chrome.
+                padding: EdgeInsets.fromLTRB(
+                  entry.isCardio ? 19 : 16,
+                  16,
+                  16,
+                  16,
+                ),
+                child: _collapsedHeader(context),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (entry.isCardio) {
       return Padding(
@@ -755,14 +907,7 @@ class _ExerciseCardState extends State<_ExerciseCard> {
               Padding(
                 // +3 left for the stripe; otherwise mirrors the 16 chrome.
                 padding: const EdgeInsets.fromLTRB(19, 16, 16, 16),
-                // In reorder mode the body collapses to just the header (the
-                // arrows live there) — shorter cards = more fit while ordering.
-                child: widget.reorderMode
-                    ? _header(
-                        context,
-                        child: _IdentityPill.cardio(slug: entry.exercise?.slug),
-                      )
-                    : _buildCardioBody(context),
+                child: _buildCardioBody(context),
               ),
             ],
           ),
@@ -777,11 +922,51 @@ class _ExerciseCardState extends State<_ExerciseCard> {
         shape: cardShape,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: widget.reorderMode
-              ? _header(context, child: _strengthPills(context))
-              : _buildStrengthBody(context),
+          child: _buildStrengthBody(context),
         ),
       ),
+    );
+  }
+
+  /// The collapsed reorder-mode header — exercise title + identity pill(s) on
+  /// the left, a [Icons.drag_handle] affordance glyph on the right. The glyph
+  /// is purely a visual cue: the WHOLE card is the drag target (the screen
+  /// wraps it in a [ReorderableDragStartListener]), so the glyph carries the
+  /// "Drag to reorder" semantics but no tap/drag of its own. No Sets stepper,
+  /// no rest chips, no cardio target slots, no remove ×.
+  Widget _collapsedHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final exerciseName = entry.exercise?.name ?? l10n.unknownExercise;
+    final pills = entry.isCardio
+        ? _IdentityPill.cardio(slug: entry.exercise?.slug)
+        : _strengthPills(context);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(exerciseName, style: AppTextStyles.title),
+              const SizedBox(height: 4),
+              pills,
+            ],
+          ),
+        ),
+        // Drag affordance glyph — the visual cue that the card is draggable.
+        // The drag itself is started by the enclosing ReorderableDragStartListener
+        // (whole-card), so this is a passive, semantics-labelled cue only.
+        Semantics(
+          container: true,
+          identifier: 'create-routine-drag-handle',
+          label: l10n.dragToReorder,
+          child: const SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(Icons.drag_handle, color: AppColors.textDim, size: 20),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1105,9 +1290,10 @@ class _ExerciseCardState extends State<_ExerciseCard> {
     );
   }
 
-  /// Shared header row: exercise name + an exercise-specific [child] sub-line
-  /// (muscle-group / bodyweight tag for strength; CARDIO eyebrow for cardio)
-  /// + the remove button.
+  /// Shared full-card header row: exercise name + an exercise-specific [child]
+  /// sub-line (muscle-group / bodyweight tag for strength; CARDIO eyebrow for
+  /// cardio) + the remove button. Full cards are NOT draggable — reordering is
+  /// a distinct MODE (see [_collapsedHeader]), so no drag handle here.
   Widget _header(BuildContext context, {required Widget child}) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
@@ -1125,41 +1311,20 @@ class _ExerciseCardState extends State<_ExerciseCard> {
             ],
           ),
         ),
-        // In reorder mode the × is REPLACED by up/down arrows (ends disabled
-        // via isFirst/isLast). Ported from the active-workout header pattern.
-        if (widget.reorderMode) ...[
-          Semantics(
-            label: l10n.moveUp,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_upward, size: 20),
-              onPressed: widget.isFirst ? null : widget.onMoveUp,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              tooltip: l10n.moveUp,
-            ),
+        // Remove ×. Always present, even at a single exercise. Drops
+        // `visualDensity: compact` (which silently shrank the rendered hit-box
+        // below the 48dp floor — feedback: tap-target-measurement) and pins
+        // explicit 48×48 constraints.
+        Semantics(
+          container: true,
+          identifier: 'create-routine-remove-exercise',
+          label: l10n.removeExercise,
+          child: IconButton(
+            icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
+            onPressed: widget.onRemove,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
-          Semantics(
-            label: l10n.moveDown,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_downward, size: 20),
-              onPressed: widget.isLast ? null : widget.onMoveDown,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              tooltip: l10n.moveDown,
-            ),
-          ),
-        ] else
-          // Remove ×. Drops `visualDensity: compact` (which silently shrank the
-          // rendered hit-box below the 48dp floor — feedback:
-          // tap-target-measurement) and pins explicit 48×48 constraints.
-          Semantics(
-            container: true,
-            identifier: 'create-routine-remove-exercise',
-            label: l10n.removeExercise,
-            child: IconButton(
-              icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
-              onPressed: widget.onRemove,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            ),
-          ),
+        ),
       ],
     );
   }

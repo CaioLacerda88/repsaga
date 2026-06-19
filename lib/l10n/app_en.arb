@@ -1242,6 +1242,8 @@
   "@moveUp": { "description": "Move exercise up tooltip" },
   "moveDown": "Move down",
   "@moveDown": { "description": "Move exercise down tooltip" },
+  "dragToReorder": "Drag to reorder",
+  "@dragToReorder": { "description": "Accessibility label + tooltip for the drag handle that reorders a list item (routine-builder exercise cards)" },
   "swapExercise": "Swap exercise",
   "@swapExercise": { "description": "Swap exercise tooltip" },
   "removeExercise": "Remove exercise",

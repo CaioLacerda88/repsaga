@@ -1298,25 +1298,24 @@
       <div class="sub" style="margin-top:8px">Two pills: neutral grey <b>Bodyweight</b> + the muscle pill (<b>Back</b>) beside it — keeps identity, no glyph. Reps is the hero; weight hidden behind "+ Add weight" (expands to a stepper labelled "Added weight" for belt/assist).</div>
     </div>
 
-    <!-- REORDER MODE -->
+    <!-- REORDER MODE: hamburger toggle → collapse to title+pills → drag (user-refined) -->
+    <style>
+      .grip{color:var(--dim);font-size:18px;padding:4px}
+      .ccard{position:relative;background:var(--surface);border:1px solid rgba(167,139,250,.45);border-radius:var(--radius);
+             margin:7px 0;padding:11px 12px;display:flex;align-items:center;gap:10px}
+      .ccard.lifted{border-color:rgba(167,139,250,.8);box-shadow:0 8px 22px rgba(0,0,0,.5);transform:translateY(-2px)}
+      .ccard .cn{font-family:'Barlow';font-weight:600;font-size:15px;color:var(--cream)}
+      .ccard.cardio::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cardio);border-radius:12px 0 0 12px}
+    </style>
     <div class="panel">
-      <h2>3 · Reorder mode (AppBar toggle)</h2>
+      <h2>3 · Reorder mode (hamburger → collapse → drag)</h2>
       <div class="device">
-        <div class="appbar"><span style="font-size:18px">&#10003;</span><span class="ttl">Edit routine</span><span class="act on">&#9776;</span></div>
-        <div class="bcard reorder">
-          <div class="bhdr"><div class="col"><div class="bname">Bench Press</div><div class="idpill strength">Chest</div></div>
-            <div class="arrows"><div class="a off">&#9650;</div><div class="a">&#9660;</div></div></div>
-        </div>
-        <div class="bcard cardio reorder">
-          <div class="bhdr"><div class="col"><div class="bname">Treadmill</div><div class="idpill cardio">Running · Cardio</div></div>
-            <div class="arrows"><div class="a">&#9650;</div><div class="a">&#9660;</div></div></div>
-        </div>
-        <div class="bcard reorder">
-          <div class="bhdr"><div class="col"><div class="bname">Pull-ups</div><div style="display:flex;gap:6px;margin-top:6px"><span class="idpill bodyweight" style="margin-top:0">Bodyweight</span><span class="idpill strength" style="margin-top:0;background:rgba(56,189,248,.15);color:#7DD3FC">Back</span></div></div>
-            <div class="arrows"><div class="a">&#9650;</div><div class="a off">&#9660;</div></div></div>
-        </div>
+        <div class="appbar"><span class="ttl">Edit routine</span><span class="act on" title="done">&#10003;</span></div>
+        <div class="ccard"><span class="grip">&#9776;</span><span class="cn">Bench Press</span><span class="idpill strength" style="margin-top:0">Chest</span></div>
+        <div class="ccard cardio lifted"><span class="grip" style="color:var(--violet)">&#9776;</span><span class="cn">Treadmill</span><span class="idpill cardio" style="margin-top:0">Running · Cardio</span></div>
+        <div class="ccard"><span class="grip">&#9776;</span><span class="cn">Pull-ups</span><span class="idpill bodyweight" style="margin-top:0">Bodyweight</span><span class="idpill strength" style="margin-top:0;background:rgba(56,189,248,.15);color:#7DD3FC">Back</span></div>
       </div>
-      <div class="sub" style="margin-top:8px">AppBar `≡ ↔ ✓` toggle (gated on >1 exercise). In mode: × → up/down arrows (ends disabled), card body COLLAPSES to header (shorter cards = more fit while ordering), violet border tint. Ported from active-workout; no drag (keeps eager render for E2E).</div>
+      <div class="sub" style="margin-top:8px">Tap the AppBar <b>≡ hamburger</b> (gated &gt;1 exercise) → reorder mode. Cards <b>collapse to title + pill(s) only</b> (Sets/Rest/targets/× hidden) → short, many fit. <b>Drag the whole collapsed card</b> (grab anywhere; ≡ glyph is the cue) → it lifts (violet edge), others slide. Auto-scroll at the edges (CustomScrollView + SliverReorderableList foundation). Tap <b>✓</b> to exit → full cards return. Normal view: no drag, not reorderable.</div>
     </div>
 
     <!-- MISC: undo + dedupe + optional helper -->

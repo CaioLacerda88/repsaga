@@ -839,13 +839,34 @@ test.describe('Routine builder targets and reorder', { tag: '@smoke' }, () => {
     });
     await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });
 
-    // In reorder mode the × is replaced by up/down arrows. Move the first card
-    // DOWN (its "Move down" arrow is the first one in document order). The first
-    // card's "Move up" is disabled, so the first ENABLED "Move down" is index 0.
-    await expect(page.locator(CREATE_ROUTINE.moveExerciseDown).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await page.locator(CREATE_ROUTINE.moveExerciseDown).first().click();
+    // Reorder mode collapses each card to its header + a trailing drag glyph;
+    // the WHOLE collapsed card is the drag target. Two collapsed cards appear.
+    const dragHandles = page.locator(CREATE_ROUTINE.dragHandle);
+    await expect(dragHandles.first()).toBeVisible({ timeout: 10_000 });
+    await expect(dragHandles).toHaveCount(2);
+
+    // Drag the FIRST collapsed card down past the second to swap the order.
+    // Synthesize a real pointer drag (a single jump-and-up reads as a tap, not
+    // a drag) — grab the first card's drag glyph and move it below the second
+    // card's center, then drop. Mirrors the multi-step mouse-drag pattern used
+    // for the workout swipe-delete gesture.
+    const firstBox = await dragHandles.nth(0).boundingBox();
+    const secondBox = await dragHandles.nth(1).boundingBox();
+    if (!firstBox || !secondBox) {
+      throw new Error('reorder drag: a collapsed card has no bounding box');
+    }
+    const startX = firstBox.x + firstBox.width / 2;
+    const startY = firstBox.y + firstBox.height / 2;
+    const endY = secondBox.y + secondBox.height + 8;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    const steps = 12;
+    for (let i = 1; i <= steps; i++) {
+      const y = startY + ((endY - startY) * i) / steps;
+      await page.mouse.move(startX, y, { steps: 2 });
+    }
+    await page.mouse.up();
 
     // Exit reorder mode + save.
     await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });
