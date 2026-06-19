@@ -273,6 +273,130 @@ void main() {
       expect(sets[2].weight, 82.5);
     });
 
+    test(
+      'a strength entry targetWeight seeds every set with the target weight, '
+      'overriding both previous-session and equipment defaults',
+      () async {
+        final (:container, :mockRepo, :mockStorage, :mockAuth) =
+            _makeContainer();
+        addTearDown(container.dispose);
+
+        final createdWorkout = makeWorkout(id: 'workout-target-weight');
+        when(() => mockAuth.currentUser).thenReturn(fakeUser());
+        when(
+          () => mockRepo.createActiveWorkout(
+            userId: any(named: 'userId'),
+            name: any(named: 'name'),
+          ),
+        ).thenAnswer((_) async => createdWorkout);
+        // A previous session exists at 100kg — the target must still win.
+        final previousSets = [
+          ExerciseSet.fromJson(
+            TestSetFactory.create(
+              id: 'prev-1',
+              setNumber: 1,
+              weight: 100.0,
+              reps: 5,
+            ),
+          ),
+        ];
+        when(
+          () => mockRepo.getLastWorkoutSets(any()),
+        ).thenAnswer((_) async => {'ex-bench': previousSets});
+
+        final bench = makeExercise(id: 'ex-bench', name: 'Bench Press');
+        final config = RoutineStartConfig(
+          routineName: 'Push Day',
+          exercises: [
+            RoutineStartExercise(
+              exerciseId: 'ex-bench',
+              exercise: bench,
+              setCount: 3,
+              targetReps: 8,
+              targetWeight: 60.0,
+            ),
+          ],
+        );
+
+        await container.read(activeWorkoutProvider.future);
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .startFromRoutine(config);
+
+        final sets = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises[0]
+            .sets;
+        // Every generated set carries the uniform target (60kg × 8), NOT the
+        // 100kg previous session nor the barbell 20kg equipment default.
+        expect(sets, hasLength(3));
+        for (final s in sets) {
+          expect(
+            s.weight,
+            60.0,
+            reason: 'targetWeight must win over prev/equip',
+          );
+          expect(s.reps, 8, reason: 'targetReps must win over prev/equip');
+        }
+      },
+    );
+
+    test('a null-target strength entry still falls back to previous/equipment '
+        '(backward-compat for legacy routines)', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
+
+      final createdWorkout = makeWorkout(id: 'workout-null-target');
+      when(() => mockAuth.currentUser).thenReturn(fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => createdWorkout);
+      final previousSets = [
+        ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'prev-1',
+            setNumber: 1,
+            weight: 77.5,
+            reps: 6,
+          ),
+        ),
+      ];
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {'ex-bench': previousSets});
+
+      final bench = makeExercise(id: 'ex-bench', name: 'Bench Press');
+      final config = RoutineStartConfig(
+        routineName: 'Legacy',
+        exercises: [
+          // No targetWeight / targetReps — exactly a pre-feature routine.
+          RoutineStartExercise(
+            exerciseId: 'ex-bench',
+            exercise: bench,
+            setCount: 2,
+          ),
+        ],
+      );
+
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
+
+      final sets = container
+          .read(activeWorkoutProvider)
+          .value!
+          .exercises[0]
+          .sets;
+      // Falls back to previous-session weight + reps, exactly as today.
+      expect(sets[0].weight, 77.5);
+      expect(sets[0].reps, 6);
+    });
+
     test('handles missing last-session data gracefully', () async {
       final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
       addTearDown(container.dispose);

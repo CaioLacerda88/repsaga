@@ -1115,6 +1115,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get restLabel => 'Descanso';
 
   @override
+  String get weightLabel => 'Peso';
+
+  @override
+  String get repsLabel => 'Reps';
+
+  @override
+  String get addedWeightLabel => 'Peso adicional';
+
+  @override
+  String get addWeightCta => '+ Adicionar peso';
+
+  @override
+  String exerciseRemovedUndo(String name) {
+    return '$name removido';
+  }
+
+  @override
+  String get undoCta => 'Desfazer';
+
+  @override
+  String exerciseAlreadyInRoutine(String name) {
+    return '$name já está neste treino';
+  }
+
+  @override
+  String get targetsOptional => 'Metas são opcionais';
+
+  @override
   String get duplicateAndEdit => 'Duplicar e Editar';
 
   @override

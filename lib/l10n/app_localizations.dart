@@ -2000,6 +2000,54 @@ abstract class AppLocalizations {
   /// **'Rest'**
   String get restLabel;
 
+  /// Target weight label in the routine exercise card's TARGET block
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get weightLabel;
+
+  /// Target reps label in the routine exercise card's TARGET block
+  ///
+  /// In en, this message translates to:
+  /// **'Reps'**
+  String get repsLabel;
+
+  /// Label for the optional added-weight (belt/assist) stepper on a bodyweight routine exercise card
+  ///
+  /// In en, this message translates to:
+  /// **'Added weight'**
+  String get addedWeightLabel;
+
+  /// Reveal CTA that expands the optional added-weight stepper on a bodyweight routine exercise card
+  ///
+  /// In en, this message translates to:
+  /// **'+ Add weight'**
+  String get addWeightCta;
+
+  /// Snackbar shown after removing an exercise from the routine builder, paired with an Undo action
+  ///
+  /// In en, this message translates to:
+  /// **'{name} removed'**
+  String exerciseRemovedUndo(String name);
+
+  /// Snackbar action that reverses the last exercise removal in the routine builder
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoCta;
+
+  /// Soft hint snackbar when adding an exercise the routine already contains (still added)
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is already in this routine'**
+  String exerciseAlreadyInRoutine(String name);
+
+  /// Muted helper line under the cardio target slots in the routine builder
+  ///
+  /// In en, this message translates to:
+  /// **'Targets are optional'**
+  String get targetsOptional;
+
   /// Routine action: duplicate and edit
   ///
   /// In en, this message translates to:

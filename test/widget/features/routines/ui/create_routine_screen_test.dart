@@ -10,6 +10,7 @@ import 'package:repsaga/features/routines/ui/create_routine_screen.dart';
 import 'package:repsaga/features/rpg/domain/body_part_hues.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/ui/widgets/cardio_field.dart';
+import 'package:repsaga/shared/widgets/weight_stepper.dart';
 
 import '../../../../fixtures/test_factories.dart';
 import '../../../../helpers/test_material_app.dart';
@@ -96,36 +97,34 @@ Routine _routineWith(Exercise exercise, {List<RoutineSetConfig>? setConfigs}) {
 
 void main() {
   group('CreateRoutineScreen', () {
-    testWidgets('Save button disabled when name is empty and no exercises', (
+    // The bottom-anchored FilledButton is the SOLE Save affordance (the
+    // redundant AppBar Save was dropped in the usability pass). These pin its
+    // enabled/disabled gating.
+    Finder bottomSaveButton() => find.byType(FilledButton);
+
+    testWidgets('Save CTA disabled when name is empty and no exercises', (
       tester,
     ) async {
       await tester.pumpWidget(_buildScreen());
       await tester.pumpAndSettle();
 
-      // Find the Save TextButton
-      final saveButton = find.widgetWithText(TextButton, 'Save');
-      expect(saveButton, findsOneWidget);
-
-      // It should be disabled (onPressed is null)
-      final button = tester.widget<TextButton>(saveButton);
+      final button = tester.widget<FilledButton>(bottomSaveButton());
       expect(button.onPressed, isNull);
     });
 
-    testWidgets(
-      'Save button still disabled when name entered but no exercises',
-      (tester) async {
-        await tester.pumpWidget(_buildScreen());
-        await tester.pumpAndSettle();
+    testWidgets('Save CTA still disabled when name entered but no exercises', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildScreen());
+      await tester.pumpAndSettle();
 
-        // Enter a name (first TextField — the notes field is second)
-        await tester.enterText(find.byType(TextField).first, 'My Routine');
-        await tester.pump();
+      // Enter a name (first TextField — the notes field is second)
+      await tester.enterText(find.byType(TextField).first, 'My Routine');
+      await tester.pump();
 
-        final saveButton = find.widgetWithText(TextButton, 'Save');
-        final button = tester.widget<TextButton>(saveButton);
-        expect(button.onPressed, isNull);
-      },
-    );
+      final button = tester.widget<FilledButton>(bottomSaveButton());
+      expect(button.onPressed, isNull);
+    });
 
     testWidgets('shows Add Exercise button', (tester) async {
       await tester.pumpWidget(_buildScreen());
@@ -251,18 +250,28 @@ void main() {
       await tester.pumpWidget(_buildScreen(routine: routine));
       await tester.pumpAndSettle();
 
-      // Initially 3 sets
-      expect(find.text('3'), findsOneWidget);
-
-      // Find the IconButton with Icons.add (stepper +), not the OutlinedButton
-      final stepperAdd = find.ancestor(
-        of: find.byIcon(Icons.add),
-        matching: find.byType(IconButton),
+      // Initially 3 sets (the Sets-row value); the Reps row defaults to 8.
+      final setsRow = find.ancestor(
+        of: find.text('Sets'),
+        matching: find.byType(Row),
       );
-      await tester.tap(stepperAdd.first);
+      expect(
+        find.descendant(of: setsRow.first, matching: find.text('3')),
+        findsOneWidget,
+      );
+
+      // Tap the + inside the Sets row (scoped — the Reps row has its own +).
+      final setsAdd = find.descendant(
+        of: setsRow.first,
+        matching: find.widgetWithIcon(IconButton, Icons.add),
+      );
+      await tester.tap(setsAdd);
       await tester.pump();
 
-      expect(find.text('4'), findsOneWidget);
+      expect(
+        find.descendant(of: setsRow.first, matching: find.text('4')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('set count stepper decrements on - tap', (tester) async {
@@ -287,14 +296,28 @@ void main() {
       await tester.pumpWidget(_buildScreen(routine: routine));
       await tester.pumpAndSettle();
 
-      // Initially 3 sets
-      expect(find.text('3'), findsOneWidget);
+      final setsRow = find.ancestor(
+        of: find.text('Sets'),
+        matching: find.byType(Row),
+      );
+      expect(
+        find.descendant(of: setsRow.first, matching: find.text('3')),
+        findsOneWidget,
+      );
 
-      // Tap the - button
-      await tester.tap(find.byIcon(Icons.remove));
+      // Tap the - inside the Sets row (scoped — Reps + WeightStepper also use
+      // Icons.remove).
+      final setsRemove = find.descendant(
+        of: setsRow.first,
+        matching: find.widgetWithIcon(IconButton, Icons.remove),
+      );
+      await tester.tap(setsRemove);
       await tester.pump();
 
-      expect(find.text('2'), findsOneWidget);
+      expect(
+        find.descendant(of: setsRow.first, matching: find.text('2')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('rest time chips are visible with default 1m 30s selected', (
@@ -345,7 +368,10 @@ void main() {
       await tester.pumpWidget(_buildScreen(routine: routine));
       await tester.pumpAndSettle();
 
-      // Tap 2m chip
+      // The TARGET block makes the card taller, so the 2m chip can sit below
+      // the fold — scroll it into view before tapping.
+      await tester.ensureVisible(find.text('2m'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('2m'));
       await tester.pump();
 
@@ -414,10 +440,8 @@ void main() {
         await tester.pumpWidget(_buildScreen(routine: routine));
         await tester.pumpAndSettle();
 
-        // Notes left blank — Save must still be enabled.
-        final button = tester.widget<TextButton>(
-          find.widgetWithText(TextButton, 'Save'),
-        );
+        // Notes left blank — the bottom Save CTA must still be enabled.
+        final button = tester.widget<FilledButton>(bottomSaveButton());
         expect(button.onPressed, isNotNull);
       },
     );
@@ -566,13 +590,13 @@ void main() {
       );
 
       testWidgets(
-        'a bodyweight exercise shows the BODYWEIGHT tag and KEEPS the set '
-        'stepper + rest chips',
+        'a bodyweight exercise shows BOTH the BODYWEIGHT tag AND its muscle '
+        'pill, reps as the hero, and weight behind the + Add weight reveal',
         (tester) async {
           await tester.pumpWidget(
             _buildScreen(
               routine: _routineWith(
-                _makeBodyweight(),
+                _makeBodyweight(), // muscleGroup: back
                 setConfigs: const [
                   RoutineSetConfig(restSeconds: 90),
                   RoutineSetConfig(restSeconds: 90),
@@ -583,12 +607,23 @@ void main() {
           );
           await tester.pumpAndSettle();
 
-          // Neutral BODYWEIGHT tag (uppercased) instead of a muscle chip.
+          // TWO pills: neutral BODYWEIGHT tag AND the muscle identity pill —
+          // a pull-up is still a Back exercise (info preserved, no glyph).
           expect(find.text('BODYWEIGHT'), findsOneWidget);
+          expect(find.text('BACK'), findsOneWidget);
 
-          // The strength layout is UNCHANGED for bodyweight.
+          // Reps is the hero target; the Weight stepper is hidden behind the
+          // "+ Add weight" reveal until the user opts in (lean by default).
+          expect(find.text('Reps'), findsOneWidget);
+          expect(find.text('+ Add weight'), findsOneWidget);
+          expect(
+            find.text('Added weight'),
+            findsNothing,
+            reason: 'the added-weight stepper is hidden until + Add weight tap',
+          );
+
+          // The strength layout is otherwise UNCHANGED for bodyweight.
           expect(find.text('Sets'), findsOneWidget);
-          expect(find.text('3'), findsOneWidget); // set count
           expect(find.text('Rest'), findsOneWidget);
           expect(find.text('1m 30s'), findsOneWidget); // 90s chip selected
 
@@ -599,8 +634,8 @@ void main() {
       );
 
       testWidgets(
-        'a strength exercise is unchanged (muscle chip + set stepper + rest '
-        'chips, no BODYWEIGHT tag, no target slots)',
+        'a strength exercise shows the muscle chip + Weight/Reps TARGET block '
+        '+ set stepper + rest chips (no BODYWEIGHT tag, no cardio slots)',
         (tester) async {
           await tester.pumpWidget(
             _buildScreen(
@@ -619,10 +654,16 @@ void main() {
           // Unified pill grammar (Phase 38h 2b): the muscle group is uppercased
           // via AppTextStyles.label, matching the cardio/bodyweight pills.
           expect(find.text('CHEST'), findsOneWidget); // muscle-group pill
+          // TARGET block — Weight + Reps shown inline for a strength exercise.
+          expect(find.text('Weight'), findsOneWidget);
+          expect(find.text('Reps'), findsOneWidget);
           expect(find.text('Sets'), findsOneWidget);
           expect(find.text('Rest'), findsOneWidget);
 
           expect(find.text('BODYWEIGHT'), findsNothing);
+          // Bodyweight-only "+ Add weight" reveal is absent on strength.
+          expect(find.text('+ Add weight'), findsNothing);
+          // Cardio-only target slots are absent on strength.
           expect(find.text('Target time'), findsNothing);
           expect(find.text('Target distance'), findsNothing);
         },
@@ -1034,6 +1075,305 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(48));
         expect(size.height, greaterThanOrEqualTo(48));
       });
+    });
+
+    group('per-exercise target weight + reps', () {
+      testWidgets(
+        'rehydrates the saved Weight + Reps target onto the steppers',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeExercise(name: 'Bench Press', muscleGroup: 'chest'),
+                setConfigs: const [
+                  RoutineSetConfig(
+                    restSeconds: 90,
+                    targetReps: 5,
+                    targetWeight: 60,
+                  ),
+                  RoutineSetConfig(
+                    restSeconds: 90,
+                    targetReps: 5,
+                    targetWeight: 60,
+                  ),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Reps stepper shows the rehydrated 5 (NOT the fresh-add default 8).
+          final repsRow = find.ancestor(
+            of: find.text('Reps'),
+            matching: find.byType(Row),
+          );
+          expect(
+            find.descendant(of: repsRow.first, matching: find.text('5')),
+            findsOneWidget,
+          );
+
+          // The WeightStepper shows the rehydrated 60.
+          final weightStepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          expect(weightStepper.value, 60);
+        },
+      );
+
+      testWidgets('tapping the Reps + updates the stepper value', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _buildScreen(
+            routine: _routineWith(
+              _makeExercise(),
+              setConfigs: const [
+                RoutineSetConfig(restSeconds: 90, targetReps: 8),
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final repsRow = find.ancestor(
+          of: find.text('Reps'),
+          matching: find.byType(Row),
+        );
+        final repsAdd = find.descendant(
+          of: repsRow.first,
+          matching: find.widgetWithIcon(IconButton, Icons.add),
+        );
+        await tester.tap(repsAdd);
+        await tester.pump();
+
+        expect(
+          find.descendant(of: repsRow.first, matching: find.text('9')),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets(
+        'bodyweight: the + Add weight reveal expands the Added weight stepper',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(routine: _routineWith(_makeBodyweight())),
+          );
+          await tester.pumpAndSettle();
+
+          // Hidden by default.
+          expect(find.text('Added weight'), findsNothing);
+          expect(find.byType(WeightStepper), findsNothing);
+
+          await tester.tap(find.text('+ Add weight'));
+          await tester.pumpAndSettle();
+
+          // Revealed: the Added weight label + the stepper appear, CTA gone.
+          expect(find.text('Added weight'), findsOneWidget);
+          expect(find.byType(WeightStepper), findsOneWidget);
+          expect(find.text('+ Add weight'), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'bodyweight: an existing added-weight target auto-reveals the stepper',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeBodyweight(),
+                setConfigs: const [
+                  RoutineSetConfig(restSeconds: 90, targetWeight: 20),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // No reveal CTA — the stepper is shown directly with the value.
+          expect(find.text('+ Add weight'), findsNothing);
+          expect(find.text('Added weight'), findsOneWidget);
+          final stepper = tester.widget<WeightStepper>(
+            find.byType(WeightStepper),
+          );
+          expect(stepper.value, 20);
+        },
+      );
+    });
+
+    group('reorder mode', () {
+      Routine threeExerciseRoutine() => Routine(
+        id: 'routine-reorder',
+        name: 'Push Day',
+        isDefault: false,
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'ex-a',
+            setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(id: 'ex-a', name: 'Alpha'),
+          ),
+          RoutineExercise(
+            exerciseId: 'ex-b',
+            setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(id: 'ex-b', name: 'Bravo'),
+          ),
+          RoutineExercise(
+            exerciseId: 'ex-c',
+            setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(id: 'ex-c', name: 'Charlie'),
+          ),
+        ],
+        createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+      );
+
+      testWidgets('the reorder toggle is hidden with a single exercise', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _buildScreen(routine: _routineWith(_makeExercise())),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.reorder), findsNothing);
+      });
+
+      testWidgets('the reorder toggle appears with more than one exercise', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.reorder), findsOneWidget);
+      });
+
+      testWidgets('entering reorder mode replaces × with up/down arrows; '
+          'ends are disabled', (tester) async {
+        await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.reorder));
+        await tester.pumpAndSettle();
+
+        // × is gone; arrows are present (one pair per card).
+        expect(find.byIcon(Icons.close), findsNothing);
+        expect(find.byIcon(Icons.arrow_upward), findsNWidgets(3));
+        expect(find.byIcon(Icons.arrow_downward), findsNWidgets(3));
+
+        // First card's up arrow is disabled; last card's down arrow too.
+        final upButtons = tester
+            .widgetList<IconButton>(
+              find.ancestor(
+                of: find.byIcon(Icons.arrow_upward),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .toList();
+        final downButtons = tester
+            .widgetList<IconButton>(
+              find.ancestor(
+                of: find.byIcon(Icons.arrow_downward),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .toList();
+        expect(
+          upButtons.first.onPressed,
+          isNull,
+          reason: 'first cannot move up',
+        );
+        expect(
+          downButtons.last.onPressed,
+          isNull,
+          reason: 'last cannot move down',
+        );
+      });
+
+      testWidgets('moving the first exercise down reorders the list', (
+        tester,
+      ) async {
+        await tester.pumpWidget(_buildScreen(routine: threeExerciseRoutine()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.reorder));
+        await tester.pumpAndSettle();
+
+        // Initial order: Alpha, Bravo, Charlie (top-to-bottom by y).
+        double y(String name) => tester.getTopLeft(find.text(name)).dy;
+        expect(y('Alpha') < y('Bravo'), isTrue);
+
+        // Tap Alpha's down arrow (the first card's down arrow).
+        final alphaCard = find.ancestor(
+          of: find.text('Alpha'),
+          matching: find.byType(Row),
+        );
+        final alphaDown = find.descendant(
+          of: alphaCard.first,
+          matching: find.widgetWithIcon(IconButton, Icons.arrow_downward),
+        );
+        await tester.tap(alphaDown);
+        await tester.pumpAndSettle();
+
+        // New order: Bravo, Alpha, Charlie — Alpha now sits below Bravo.
+        expect(
+          y('Bravo') < y('Alpha'),
+          isTrue,
+          reason: 'Alpha moved down past Bravo',
+        );
+        expect(y('Alpha') < y('Charlie'), isTrue);
+      });
+    });
+
+    group('undo on remove', () {
+      Routine twoExerciseRoutine() => Routine(
+        id: 'routine-undo',
+        name: 'Push Day',
+        isDefault: false,
+        exercises: [
+          RoutineExercise(
+            exerciseId: 'ex-1',
+            setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(id: 'ex-1', name: 'Bench Press'),
+          ),
+          RoutineExercise(
+            exerciseId: 'ex-2',
+            setConfigs: const [RoutineSetConfig(restSeconds: 90)],
+            exercise: _makeExercise(id: 'ex-2', name: 'OHP'),
+          ),
+        ],
+        createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+      );
+
+      testWidgets(
+        'removing shows a "removed" SnackBar; Undo restores the exercise '
+        'at its original index',
+        (tester) async {
+          await tester.pumpWidget(_buildScreen(routine: twoExerciseRoutine()));
+          await tester.pumpAndSettle();
+
+          // Remove the FIRST card (Bench Press).
+          await tester.tap(find.byIcon(Icons.close).first);
+          await tester.pump(); // process the removal setState
+          await tester.pump(
+            const Duration(milliseconds: 300),
+          ); // snack slide-in
+
+          expect(find.text('Bench Press'), findsNothing);
+          expect(find.text('Bench Press removed'), findsOneWidget);
+          expect(find.text('Undo'), findsOneWidget);
+
+          // Tap Undo — Bench Press returns ABOVE OHP (original index 0).
+          await tester.tap(find.text('Undo'));
+          await tester.pump(); // process the restore setState
+
+          expect(find.text('Bench Press'), findsOneWidget);
+          final benchY = tester.getTopLeft(find.text('Bench Press')).dy;
+          final ohpY = tester.getTopLeft(find.text('OHP')).dy;
+          expect(
+            benchY < ohpY,
+            isTrue,
+            reason: 'undo reinserts Bench Press at its original index (0)',
+          );
+        },
+      );
     });
   });
 }

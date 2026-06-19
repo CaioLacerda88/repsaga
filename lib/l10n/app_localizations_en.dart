@@ -1109,6 +1109,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get restLabel => 'Rest';
 
   @override
+  String get weightLabel => 'Weight';
+
+  @override
+  String get repsLabel => 'Reps';
+
+  @override
+  String get addedWeightLabel => 'Added weight';
+
+  @override
+  String get addWeightCta => '+ Add weight';
+
+  @override
+  String exerciseRemovedUndo(String name) {
+    return '$name removed';
+  }
+
+  @override
+  String get undoCta => 'Undo';
+
+  @override
+  String exerciseAlreadyInRoutine(String name) {
+    return '$name is already in this routine';
+  }
+
+  @override
+  String get targetsOptional => 'Targets are optional';
+
+  @override
   String get duplicateAndEdit => 'Duplicate and Edit';
 
   @override

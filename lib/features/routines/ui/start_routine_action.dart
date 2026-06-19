@@ -69,6 +69,10 @@ Future<void> startRoutineWorkout(
           exercise: re.exercise!,
           setCount: re.setConfigs.isNotEmpty ? re.setConfigs.length : 3,
           targetReps: firstCfg?.targetReps,
+          // Per-exercise target load from the builder — honored by the seed
+          // (`re.targetWeight ?? prev ?? equipDefaults`). Null on legacy
+          // routines + cardio, where the seed falls back exactly as before.
+          targetWeight: firstCfg?.targetWeight,
           restSeconds: firstCfg?.restSeconds,
           targetDurationSeconds: isCardio
               ? firstCfg?.targetDurationSeconds

@@ -11,6 +11,14 @@ abstract class RoutineStartExercise with _$RoutineStartExercise {
     required Exercise exercise,
     required int setCount,
     int? targetReps,
+    // Per-exercise target weight set in the routine builder. Honored by the
+    // active-workout seed at start time: a strength/bodyweight set's weight is
+    // `targetWeight ?? prev?.weight ?? equipDefaults.weight` (mirrors the
+    // targetReps precedence). Null on legacy routines + cardio entries —
+    // those fall back to previous-session / equipment defaults exactly as
+    // before. Carried in-memory only; the routine itself round-trips
+    // `target_weight` through the existing JSONB (no migration).
+    double? targetWeight,
     int? restSeconds,
     // Cardio target threaded from the routine builder's single cardio config.
     // Honored by `_seedCardioSession` at start time so a routine's
