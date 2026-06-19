@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/radii.dart';
 import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/weight_stepper.dart';
 import '../../exercises/models/exercise.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../../rpg/domain/body_part_hues.dart';
@@ -46,6 +47,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   late final TextEditingController _notesController;
   final _exercises = <_RoutineExerciseEntry>[];
   bool _saving = false;
+  bool _reorderMode = false;
 
   bool get _isEditing => widget.routine != null;
 
@@ -72,6 +74,11 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
             exercise: re.exercise,
             setCount: re.setConfigs.isNotEmpty ? re.setConfigs.length : 3,
             restSeconds: firstCfg?.restSeconds ?? 90,
+            // Strength/bodyweight target rehydration — read the per-exercise
+            // uniform target off the first config (the builder writes the same
+            // target into every config). Null for cardio + legacy routines.
+            targetReps: isCardio ? null : firstCfg?.targetReps,
+            targetWeight: isCardio ? null : firstCfg?.targetWeight,
             targetDurationSeconds: isCardio
                 ? firstCfg?.targetDurationSeconds
                 : null,
@@ -113,7 +120,14 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
                   ]
                 : List.generate(
                     e.setCount,
-                    (_) => RoutineSetConfig(restSeconds: e.restSeconds),
+                    // Per-exercise UNIFORM target: the same targetReps /
+                    // targetWeight is written into every generated config so
+                    // the start seed prefills each set identically.
+                    (_) => RoutineSetConfig(
+                      restSeconds: e.restSeconds,
+                      targetReps: e.targetReps,
+                      targetWeight: e.targetWeight,
+                    ),
                   ),
             exercise: e.exercise,
           ),
@@ -157,6 +171,10 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     final exercise = await ExercisePickerSheet.show(context);
     if (exercise == null || !mounted) return;
 
+    // Duplicates are ALLOWED (a program may legitimately repeat a lift) — but
+    // we surface a one-shot soft hint so an accidental re-add is noticed.
+    final isDuplicate = _exercises.any((e) => e.exerciseId == exercise.id);
+
     setState(() {
       _exercises.add(
         _RoutineExerciseEntry(
@@ -164,9 +182,78 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           exercise: exercise,
           setCount: 3,
           restSeconds: 90,
+          // Default rep target so the TARGET block reads sensibly on a fresh
+          // add; weight stays null until the user dials one in.
+          targetReps: 8,
         ),
       );
     });
+
+    if (isDuplicate && mounted) {
+      final l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.exerciseAlreadyInRoutine(exercise.name))),
+        );
+    }
+  }
+
+  void _toggleReorderMode() {
+    setState(() => _reorderMode = !_reorderMode);
+  }
+
+  /// Index swap on the in-memory list (ports the active-workout reorder
+  /// pattern). [delta] is -1 (up) or +1 (down). Order persists via the JSONB
+  /// array order through the existing `_save` — no model / migration change.
+  void _moveExercise(int index, int delta) {
+    final target = index + delta;
+    if (target < 0 || target >= _exercises.length) return;
+    setState(() {
+      final entry = _exercises.removeAt(index);
+      _exercises.insert(target, entry);
+    });
+  }
+
+  /// Removes an exercise but keeps it undoable: capture the entry + its index,
+  /// then offer an Undo SnackBar that reinserts at the ORIGINAL position.
+  /// Cluster-aware: explicit `persist: false` (persist-eats-duration) + a real
+  /// [SnackBarAction] (action-not-snackbaraction).
+  void _removeExercise(int index) {
+    final l10n = AppLocalizations.of(context);
+    final removed = _exercises[index];
+    final name = removed.exercise?.name ?? l10n.unknownExercise;
+
+    setState(() {
+      _exercises.removeAt(index);
+      // Leaving reorder mode with ≤1 exercise would strand the toggle in an
+      // active state with nothing to reorder — exit it defensively.
+      if (_reorderMode && _exercises.length <= 1) _reorderMode = false;
+    });
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.exerciseRemovedUndo(name)),
+          duration: const Duration(seconds: 4),
+          // cluster: persist-eats-duration — SnackBar defaults persist to
+          // `action != null`, so with an Undo action it would silently flip
+          // persist→true and never auto-dismiss at the 4s duration. Pin false.
+          persist: false,
+          action: SnackBarAction(
+            label: l10n.undoCta,
+            onPressed: () {
+              setState(() {
+                final insertAt = index <= _exercises.length
+                    ? index
+                    : _exercises.length;
+                _exercises.insert(insertAt, removed);
+              });
+            },
+          ),
+        ),
+      );
   }
 
   /// Custom notes counter. Returns `null` (fully collapsing the counter
@@ -264,20 +351,25 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           child: Text(_isEditing ? l10n.editRoutine : l10n.createRoutine),
         ),
         actions: [
-          Semantics(
-            container: true,
-            identifier: 'create-routine-save',
-            child: TextButton(
-              onPressed: _canSave && !_saving ? _save : null,
-              child: _saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(l10n.save),
+          // Reorder toggle — ported from the active-workout AppBar. Only
+          // meaningful with >1 exercise, so it's gated on that. Toggles
+          // Icons.reorder ↔ Icons.done; reuses the active-workout l10n.
+          if (_exercises.length > 1)
+            Semantics(
+              container: true,
+              explicitChildNodes: true,
+              identifier: 'create-routine-reorder-toggle',
+              label: _reorderMode
+                  ? l10n.exitReorderModeTooltip
+                  : l10n.reorderExercisesTooltip,
+              child: IconButton(
+                onPressed: _toggleReorderMode,
+                icon: Icon(_reorderMode ? Icons.done : Icons.reorder),
+                tooltip: _reorderMode
+                    ? l10n.exitReorderModeTooltip
+                    : l10n.reorderExercisesTooltip,
+              ),
             ),
-          ),
         ],
       ),
       // The exercise cards below the focused notes field used to stop painting
@@ -370,13 +462,30 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
             else ...[
               ..._exercises.asMap().entries.map(
                 (entry) => _ExerciseCard(
+                  // Key by the entry's object identity so each card's State
+                  // stays bound to ITS entry across remove / undo / reorder
+                  // (index shifts otherwise reuse a sibling's State, leaking
+                  // the stateful `_showAddedWeight` reveal flag onto the wrong
+                  // exercise — cluster: missing-key-state-reuse).
+                  key: ObjectKey(entry.value),
                   entry: entry.value,
                   weightUnit: weightUnit,
+                  reorderMode: _reorderMode,
+                  isFirst: entry.key == 0,
+                  isLast: entry.key == _exercises.length - 1,
+                  onMoveUp: () => _moveExercise(entry.key, -1),
+                  onMoveDown: () => _moveExercise(entry.key, 1),
                   onSetCountChanged: (count) {
                     setState(() => entry.value.setCount = count);
                   },
                   onRestChanged: (rest) {
                     setState(() => entry.value.restSeconds = rest);
+                  },
+                  onTargetRepsChanged: (reps) {
+                    setState(() => entry.value.targetReps = reps);
+                  },
+                  onTargetWeightChanged: (weight) {
+                    setState(() => entry.value.targetWeight = weight);
                   },
                   onTargetDurationChanged: (seconds) {
                     setState(() => entry.value.targetDurationSeconds = seconds);
@@ -384,9 +493,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
                   onTargetDistanceChanged: (meters) {
                     setState(() => entry.value.targetDistanceM = meters);
                   },
-                  onRemove: () {
-                    setState(() => _exercises.removeAt(entry.key));
-                  },
+                  onRemove: () => _removeExercise(entry.key),
                 ),
               ),
               // 16dp separation from the last card (Phase 38h 2d).
@@ -413,12 +520,11 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           ],
         ),
       ),
-      // Bottom-anchored full-width Save CTA (Phase 38h 2e). The AppBar Save
-      // stays as a secondary affordance; this is the primary, thumb-reachable
-      // one. SafeArea-floored so it clears the gesture nav bar. Mirrors the
-      // AppBar's enabled/disabled gating (_canSave && !_saving). Coexists with
-      // `resizeToAvoidBottomInset: false`: the only editable fields sit above
-      // the keyboard, so the bar never needs to ride the IME — it stays put.
+      // Bottom-anchored full-width Save CTA — the SOLE Save affordance (the
+      // redundant AppBar Save was dropped). Thumb-reachable, gated by
+      // `_canSave && !_saving`. SafeArea-floored so it clears the gesture nav
+      // bar. Coexists with `resizeToAvoidBottomInset: false`: the only editable
+      // fields sit above the keyboard, so the bar never needs to ride the IME.
       bottomNavigationBar: _BottomSaveBar(
         enabled: _canSave && !_saving,
         saving: _saving,
@@ -429,9 +535,9 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   }
 }
 
-/// Bottom Save bar — a full-width primary CTA floored by [SafeArea] so it
-/// clears the Android gesture pill. Disabled state mirrors the AppBar Save's
-/// gating exactly so the two affordances never disagree.
+/// Bottom Save bar — the full-width primary (and only) Save CTA, floored by
+/// [SafeArea] so it clears the Android gesture pill. Disabled when the routine
+/// can't be saved (no name / no exercises) or a save is in flight.
 class _BottomSaveBar extends StatelessWidget {
   const _BottomSaveBar({
     required this.enabled,
@@ -488,6 +594,8 @@ class _RoutineExerciseEntry {
     this.exercise,
     required this.setCount,
     required this.restSeconds,
+    this.targetReps,
+    this.targetWeight,
     this.targetDurationSeconds,
     this.targetDistanceM,
   });
@@ -498,6 +606,13 @@ class _RoutineExerciseEntry {
   // Strength / bodyweight shape — ignored on a cardio entry.
   int setCount;
   int restSeconds;
+
+  // Per-exercise strength/bodyweight TARGET. One uniform target → written into
+  // every generated RoutineSetConfig at save time. `targetReps` defaults to a
+  // sensible 8 on a fresh add; `targetWeight` stays null until the user dials
+  // one in (null → the start seed falls back to previous/equipment defaults).
+  int? targetReps;
+  double? targetWeight;
 
   // Cardio target — both null until the user fills a slot. Persisted as the
   // single RoutineSetConfig of a cardio routine entry.
@@ -520,12 +635,20 @@ class _RoutineExerciseEntry {
 ///     UNCHANGED (set stepper + rest chips) but a neutral BODYWEIGHT tag in
 ///     place of the violet muscle-group chip (brand-vs-identity rule).
 ///   * **Strength** (else) — unchanged.
-class _ExerciseCard extends StatelessWidget {
+class _ExerciseCard extends StatefulWidget {
   const _ExerciseCard({
+    super.key,
     required this.entry,
     required this.weightUnit,
+    required this.reorderMode,
+    required this.isFirst,
+    required this.isLast,
+    required this.onMoveUp,
+    required this.onMoveDown,
     required this.onSetCountChanged,
     required this.onRestChanged,
+    required this.onTargetRepsChanged,
+    required this.onTargetWeightChanged,
     required this.onTargetDurationChanged,
     required this.onTargetDistanceChanged,
     required this.onRemove,
@@ -533,8 +656,17 @@ class _ExerciseCard extends StatelessWidget {
 
   final _RoutineExerciseEntry entry;
   final String weightUnit;
+  final bool reorderMode;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
   final ValueChanged<int> onSetCountChanged;
   final ValueChanged<int> onRestChanged;
+  final ValueChanged<int> onTargetRepsChanged;
+  // Nullable: a cleared / zero weight target is treated as NO target (null) so
+  // the start seed falls back to previous/equipment defaults.
+  final ValueChanged<double?> onTargetWeightChanged;
   // Nullable: a cleared / zero target (`0:00` time, `0` distance) is treated
   // as NO target (null), identical to leaving the slot empty — never stored as
   // a literal 0. The builder's `onTap` handlers fold the zero case into null
@@ -544,19 +676,64 @@ class _ExerciseCard extends StatelessWidget {
   final ValueChanged<double?> onTargetDistanceChanged;
   final VoidCallback onRemove;
 
+  @override
+  State<_ExerciseCard> createState() => _ExerciseCardState();
+}
+
+class _ExerciseCardState extends State<_ExerciseCard> {
   static const _restOptions = [30, 60, 90, 120, 180, 240];
+
+  // Bodyweight "+ Add weight" reveal — defaults hidden so a pure-bodyweight
+  // card stays lean. Auto-revealed when rehydrating an entry that already has
+  // a non-null added-weight target (see initState).
+  bool _showAddedWeight = false;
+
+  _RoutineExerciseEntry get entry => widget.entry;
+
+  // A bodyweight entry that already carries an added-weight target shows the
+  // stepper immediately (not behind the reveal CTA).
+  bool get _entryWantsAddedWeight =>
+      entry.isBodyweight && (entry.targetWeight ?? 0) > 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_entryWantsAddedWeight) _showAddedWeight = true;
+  }
+
+  @override
+  void didUpdateWidget(_ExerciseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If this State got re-associated with a DIFFERENT entry, re-derive the
+    // reveal from the new entry so a stale flag can't bleed across (cluster:
+    // missing-key-state-reuse). The ObjectKey on the card should prevent reuse;
+    // this is the belt-and-suspenders half of the fix template. Same-entry
+    // rebuilds (reorder toggle, unit change) preserve a manual reveal.
+    if (!identical(oldWidget.entry, widget.entry)) {
+      _showAddedWeight = _entryWantsAddedWeight;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
 
+    // Reorder mode tints the card border violet (matches the mockup) — the
+    // affordance reads "this list is rearrangeable" at a glance.
+    final ShapeBorder cardShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: widget.reorderMode
+          ? BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.5))
+          : BorderSide.none,
+    );
+
     if (entry.isCardio) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Material(
           color: cardColor,
-          borderRadius: BorderRadius.circular(12),
+          shape: cardShape,
           // Clip so the 3dp left stripe (a full-bleed child of the Stack)
           // is trimmed to the 12dp rounded corner instead of squaring it off.
           clipBehavior: Clip.antiAlias,
@@ -578,7 +755,14 @@ class _ExerciseCard extends StatelessWidget {
               Padding(
                 // +3 left for the stripe; otherwise mirrors the 16 chrome.
                 padding: const EdgeInsets.fromLTRB(19, 16, 16, 16),
-                child: _buildCardioBody(context),
+                // In reorder mode the body collapses to just the header (the
+                // arrows live there) — shorter cards = more fit while ordering.
+                child: widget.reorderMode
+                    ? _header(
+                        context,
+                        child: _IdentityPill.cardio(slug: entry.exercise?.slug),
+                      )
+                    : _buildCardioBody(context),
               ),
             ],
           ),
@@ -590,19 +774,42 @@ class _ExerciseCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: cardColor,
-        borderRadius: BorderRadius.circular(12),
+        shape: cardShape,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: _buildStrengthBody(context),
+          child: widget.reorderMode
+              ? _header(context, child: _strengthPills(context))
+              : _buildStrengthBody(context),
         ),
       ),
+    );
+  }
+
+  /// The strength/bodyweight identity pill(s): a single muscle pill for a
+  /// strength exercise, OR two pills (neutral "Bodyweight" + the muscle pill)
+  /// for a bodyweight exercise. Shared by the full body and the collapsed
+  /// reorder-mode header so the two never drift.
+  Widget _strengthPills(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (!entry.isBodyweight) {
+      return _IdentityPill.strength(muscleGroup: entry.exercise?.muscleGroup);
+    }
+    // Two pills side by side: neutral grey "Bodyweight" + the muscle pill.
+    // A pull-up is still a Back exercise — the muscle identity is preserved.
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        _IdentityPill.bodyweight(label: l10n.routineBodyweightTag),
+        _IdentityPill.strength(muscleGroup: entry.exercise?.muscleGroup),
+      ],
     );
   }
 
   Widget _buildCardioBody(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
-    final distanceUnit = CardioFormat.distanceUnitFor(weightUnit);
+    final distanceUnit = CardioFormat.distanceUnitFor(widget.weightUnit);
 
     final hasDuration = entry.targetDurationSeconds != null;
     final hasDistance = entry.targetDistanceM != null;
@@ -639,7 +846,9 @@ class _ExerciseCard extends StatelessWidget {
                   // it to null so the slot reverts to the `+ add` ghost rather
                   // than persisting a meaningless 0s target.
                   if (seconds != null) {
-                    onTargetDurationChanged(seconds == 0 ? null : seconds);
+                    widget.onTargetDurationChanged(
+                      seconds == 0 ? null : seconds,
+                    );
                   }
                 },
                 child: !hasDuration
@@ -672,7 +881,7 @@ class _ExerciseCard extends StatelessWidget {
                   // distance clears the target to null (→ `+ add` ghost), not a
                   // stored 0 m.
                   if (meters != null) {
-                    onTargetDistanceChanged(meters == 0 ? null : meters);
+                    widget.onTargetDistanceChanged(meters == 0 ? null : meters);
                   }
                 },
                 child: !hasDistance
@@ -703,6 +912,13 @@ class _ExerciseCard extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        // One muted line — cardio targets prefill the run but are never
+        // required to save the routine.
+        Text(
+          l10n.targetsOptional,
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textDim),
+        ),
       ],
     );
   }
@@ -710,52 +926,37 @@ class _ExerciseCard extends StatelessWidget {
   Widget _buildStrengthBody(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final isBodyweight = entry.isBodyweight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(
-          context,
-          child: entry.isBodyweight
-              ? _IdentityPill.bodyweight(label: l10n.routineBodyweightTag)
-              : _IdentityPill.strength(
-                  muscleGroup: entry.exercise?.muscleGroup,
-                ),
-        ),
+        _header(context, child: _strengthPills(context)),
         const SizedBox(height: 12),
 
+        // TARGET block — the per-exercise uniform target that prefills every
+        // started set. Bodyweight leads with reps (the hero) and tucks weight
+        // behind a "+ Add weight" reveal; strength shows both inline.
+        if (!isBodyweight) ...[
+          _targetWeightRow(context, l10n.weightLabel),
+          const SizedBox(height: 8),
+        ],
+        _targetRepsRow(context),
+        const SizedBox(height: 8),
+        if (isBodyweight) _addedWeightSection(context),
+
         // Set count stepper
-        Row(
-          children: [
-            Semantics(
-              container: true,
-              identifier: 'create-routine-sets',
-              child: Text(l10n.setsLabel, style: AppTextStyles.body),
-            ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.remove, size: 20),
-              onPressed: entry.setCount > 1
-                  ? () => onSetCountChanged(entry.setCount - 1)
-                  : null,
-              visualDensity: VisualDensity.compact,
-            ),
-            SizedBox(
-              width: 32,
-              child: Text(
-                '${entry.setCount}',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.numeric.copyWith(fontSize: 18),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add, size: 20),
-              onPressed: entry.setCount < 10
-                  ? () => onSetCountChanged(entry.setCount + 1)
-                  : null,
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
+        _stepperRow(
+          context,
+          identifier: 'create-routine-sets',
+          label: l10n.setsLabel,
+          value: entry.setCount,
+          onDecrement: entry.setCount > 1
+              ? () => widget.onSetCountChanged(entry.setCount - 1)
+              : null,
+          onIncrement: entry.setCount < 10
+              ? () => widget.onSetCountChanged(entry.setCount + 1)
+              : null,
         ),
         const SizedBox(height: 8),
 
@@ -777,7 +978,7 @@ class _ExerciseCard extends StatelessWidget {
             return ChoiceChip(
               label: Text(label),
               selected: isSelected,
-              onSelected: (_) => onRestChanged(seconds),
+              onSelected: (_) => widget.onRestChanged(seconds),
               selectedColor: theme.colorScheme.primary.withValues(alpha: 0.15),
               materialTapTargetSize: MaterialTapTargetSize.padded,
               shape: RoundedRectangleBorder(
@@ -787,6 +988,120 @@ class _ExerciseCard extends StatelessWidget {
           }).toList(),
         ),
       ],
+    );
+  }
+
+  /// A `label … −/+ value` stepper row matching the existing set-count idiom.
+  /// Used for both Reps and Sets so the two read identically.
+  Widget _stepperRow(
+    BuildContext context, {
+    required String identifier,
+    required String label,
+    required int value,
+    required VoidCallback? onDecrement,
+    required VoidCallback? onIncrement,
+  }) {
+    return Row(
+      children: [
+        Semantics(
+          container: true,
+          identifier: identifier,
+          child: Text(label, style: AppTextStyles.body),
+        ),
+        const Spacer(),
+        IconButton(
+          icon: const Icon(Icons.remove, size: 20),
+          onPressed: onDecrement,
+          visualDensity: VisualDensity.compact,
+        ),
+        SizedBox(
+          width: 32,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.numeric.copyWith(fontSize: 18),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add, size: 20),
+          onPressed: onIncrement,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+
+  /// Target reps row (bounds 1-50), mirroring the set-count stepper idiom.
+  Widget _targetRepsRow(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final reps = entry.targetReps ?? 8;
+    return _stepperRow(
+      context,
+      identifier: 'create-routine-target-reps',
+      label: l10n.repsLabel,
+      value: reps,
+      onDecrement: reps > 1 ? () => widget.onTargetRepsChanged(reps - 1) : null,
+      onIncrement: reps < 50
+          ? () => widget.onTargetRepsChanged(reps + 1)
+          : null,
+    );
+  }
+
+  /// Target weight row — a keyboard-safe [WeightStepper] (exact entry is its
+  /// own modal dialog, so the screen's `resizeToAvoidBottomInset:false` holds).
+  /// A 0 value is treated as "no target" → null at the entry, so the start
+  /// seed falls back to previous/equipment defaults.
+  Widget _targetWeightRow(BuildContext context, String label) {
+    return Row(
+      children: [
+        Semantics(
+          container: true,
+          identifier: 'create-routine-target-weight',
+          child: Text(label, style: AppTextStyles.body),
+        ),
+        const Spacer(),
+        SizedBox(
+          width: 150,
+          child: WeightStepper(
+            value: entry.targetWeight ?? 0,
+            unit: widget.weightUnit,
+            onChanged: (w) => widget.onTargetWeightChanged(w == 0 ? null : w),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Bodyweight added-weight section — a "+ Add weight" reveal (default
+  /// hidden so a pure-bodyweight card stays lean) that expands the weight
+  /// stepper labelled "Added weight" (belt / assist).
+  Widget _addedWeightSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (!_showAddedWeight) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Semantics(
+            container: true,
+            identifier: 'create-routine-add-weight-cta',
+            button: true,
+            child: TextButton(
+              onPressed: () => setState(() => _showAddedWeight = true),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 40),
+                tapTargetSize: MaterialTapTargetSize.padded,
+              ),
+              child: Text(l10n.addWeightCta),
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _targetWeightRow(context, l10n.addedWeightLabel),
     );
   }
 
@@ -810,14 +1125,41 @@ class _ExerciseCard extends StatelessWidget {
             ],
           ),
         ),
-        // Remove ×. Drops `visualDensity: compact` (which silently shrank the
-        // rendered hit-box below the 48dp floor — feedback:
-        // tap-target-measurement) and pins explicit 48×48 constraints.
-        IconButton(
-          icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
-          onPressed: onRemove,
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        ),
+        // In reorder mode the × is REPLACED by up/down arrows (ends disabled
+        // via isFirst/isLast). Ported from the active-workout header pattern.
+        if (widget.reorderMode) ...[
+          Semantics(
+            label: l10n.moveUp,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_upward, size: 20),
+              onPressed: widget.isFirst ? null : widget.onMoveUp,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              tooltip: l10n.moveUp,
+            ),
+          ),
+          Semantics(
+            label: l10n.moveDown,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_downward, size: 20),
+              onPressed: widget.isLast ? null : widget.onMoveDown,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              tooltip: l10n.moveDown,
+            ),
+          ),
+        ] else
+          // Remove ×. Drops `visualDensity: compact` (which silently shrank the
+          // rendered hit-box below the 48dp floor — feedback:
+          // tap-target-measurement) and pins explicit 48×48 constraints.
+          Semantics(
+            container: true,
+            identifier: 'create-routine-remove-exercise',
+            label: l10n.removeExercise,
+            child: IconButton(
+              icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
+              onPressed: widget.onRemove,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            ),
+          ),
       ],
     );
   }

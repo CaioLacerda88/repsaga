@@ -455,7 +455,7 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
             id: _uuid.v4(),
             workoutExerciseId: workoutExerciseId,
             setNumber: setIndex + 1,
-            weight: prev?.weight ?? equipDefaults.weight,
+            weight: re.targetWeight ?? prev?.weight ?? equipDefaults.weight,
             reps: re.targetReps ?? prev?.reps ?? equipDefaults.reps,
             setType: SetType.working,
             isCompleted: false,

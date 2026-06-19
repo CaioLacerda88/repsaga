@@ -641,18 +641,104 @@ export const CREATE_ROUTINE = {
   nameInput: 'input[data-semantics-role="text-field"]',
   /** "Add Exercise" button — Semantics(identifier: 'create-routine-add-exercise') */
   addExerciseButton: '[flt-semantics-identifier="create-routine-add-exercise"]',
-  /** "Save" button in the AppBar (secondary) — Semantics(identifier: 'create-routine-save') */
-  saveButton: '[flt-semantics-identifier="create-routine-save"]',
   /**
-   * Bottom-anchored full-width "Save routine" CTA (Phase 38h 2e) — the PRIMARY
-   * save affordance. `_BottomSaveBar` wraps a FilledButton.icon in
-   * Semantics(container: true, identifier: 'create-routine-save-cta'). The
-   * AppBar `saveButton` remains as the secondary affordance. Both share the
-   * same enable gate (name + >=1 exercise) and the same save handler. Match by
-   * identifier for locale-independence; tap with `.click({ force: true })`
-   * since the Semantics container may block child-name merge.
+   * Bottom-anchored full-width "Save routine" CTA — the SOLE save affordance.
+   * The redundant AppBar Save (formerly `create-routine-save`) was REMOVED in
+   * the usability-v2 pass; this bottom CTA is now the only way to save a
+   * routine. `_BottomSaveBar` wraps a FilledButton.icon in
+   * Semantics(container: true, identifier: 'create-routine-save-cta'). Enable
+   * gate: name non-empty + >=1 exercise (and not mid-save). Match by identifier
+   * for locale-independence; tap with `.click({ force: true })` since the
+   * Semantics container blocks child-name merge.
    */
   saveCtaButton: '[flt-semantics-identifier="create-routine-save-cta"]',
+  /**
+   * Reorder-mode toggle in the AppBar — Semantics(container: true,
+   * explicitChildNodes: true, identifier: 'create-routine-reorder-toggle').
+   * Rendered ONLY when the routine has >1 exercise. Tapping toggles
+   * Icons.reorder ↔ Icons.done; the identifier is stable across both states.
+   * Ported from the active-workout reorder pattern. Tap with
+   * `.click({ force: true })` (explicitChildNodes blocks the name merge).
+   */
+  reorderToggle: '[flt-semantics-identifier="create-routine-reorder-toggle"]',
+  /**
+   * "Reps" TARGET stepper LABEL — Semantics(identifier:
+   * 'create-routine-target-reps') on the row's Text label only (NOT the −/+
+   * tap targets, which are unlabeled IconButtons). Renders on strength AND
+   * bodyweight cards (reps is the bodyweight hero). The numeric value is
+   * canvas-drawn, so assert the typed/default reps target at the DB layer
+   * (set_configs[0].target_reps), not via this selector. Use for presence
+   * assertions (e.g. card is strength/bodyweight, not cardio).
+   */
+  targetReps: '[flt-semantics-identifier="create-routine-target-reps"]',
+  /**
+   * "Weight" TARGET row LABEL — Semantics(identifier:
+   * 'create-routine-target-weight') on the row's Text label only (NOT the
+   * WeightStepper tap target). Renders inline on a STRENGTH card; on a
+   * BODYWEIGHT card it appears only AFTER the "+ Add weight" reveal is tapped
+   * (addWeightCta). The stepper value itself is canvas-drawn — to SET a value
+   * tap the WeightStepper value zone (weightStepperValue) which opens the
+   * Enter-weight dialog; to ASSERT persistence read set_configs[0].target_weight
+   * at the DB layer.
+   */
+  targetWeight: '[flt-semantics-identifier="create-routine-target-weight"]',
+  /**
+   * Bodyweight "+ Add weight" reveal CTA — Semantics(identifier:
+   * 'create-routine-add-weight-cta', button: true). Rendered ONLY on a
+   * bodyweight card while the added-weight stepper is hidden. Tapping reveals
+   * the targetWeight row. Disappears once revealed (or when rehydrating an
+   * entry that already carries an added-weight target).
+   */
+  addWeightCta: '[flt-semantics-identifier="create-routine-add-weight-cta"]',
+  /**
+   * Remove-exercise × IconButton in the card header — Semantics(container:
+   * true, identifier: 'create-routine-remove-exercise', label: "Remove
+   * exercise"). Rendered ONLY when NOT in reorder mode (reorder mode swaps the
+   * × for up/down arrows). Tapping removes the card and fires the
+   * "{name} removed" Undo SnackBar.
+   */
+  removeExercise:
+    '[flt-semantics-identifier="create-routine-remove-exercise"]',
+  /**
+   * WeightStepper value-zone tap target (opens the Enter-weight dialog). The
+   * stepper wraps its value in Semantics(button: true, label: "Weight value:
+   * {n} {unit}. Tap to enter weight."). Used in the routine builder TARGET
+   * weight row AND the active-workout set rows. Match by accessible name; the
+   * value substring varies, so callers pass the expected formatted value or
+   * a prefix. A fresh strength card's weight defaults to 0 → "Weight value:
+   * 0 kg".
+   */
+  weightStepperValue: (value: string) =>
+    `role=button[name*="Weight value: ${value}"]`,
+  /**
+   * Reorder-mode "Move up" / "Move down" arrows that replace the × in the card
+   * header. Each is an IconButton wrapped in Semantics(label: "Move up" /
+   * "Move down") → role=button. End cards disable the unavailable direction
+   * (isFirst → Move up disabled; isLast → Move down disabled). Locale-sensitive
+   * (en default for E2E).
+   */
+  moveExerciseUp: 'role=button[name="Move up"]',
+  moveExerciseDown: 'role=button[name="Move down"]',
+  /**
+   * "{name} is already in this routine" soft-dedupe hint SnackBar. Fired when
+   * adding an exercise already present (the add still succeeds — duplicates are
+   * allowed). Unlike the active-workout SnackBars, this one does NOT surface as
+   * a role=group; Flutter exposes its content as a plain flt-semantics leaf
+   * whose text node carries the localized string (and mirrors it in the
+   * aria-live announcement region). Match on the stable, name-independent
+   * suffix substring via `text=`. Use `.last()` — the same substring also
+   * appears merged into the closing picker-sheet's parent label for a frame, so
+   * `.last()` targets the clean SnackBar leaf. The SnackBar is default-duration
+   * (~4s) — assert it immediately after the duplicate add, before it dismisses.
+   */
+  alreadyInRoutineSnackBar: 'text=is already in this routine',
+  /**
+   * "{name} removed" Undo SnackBar fired after tapping the remove ×. Same AOM
+   * shape as alreadyInRoutineSnackBar (plain text leaf, not a role=group). The
+   * Undo action is a role=button[name="Undo"] inside it (4s auto-dismiss;
+   * persist:false — cluster persist-eats-duration).
+   */
+  exerciseRemovedSnackBar: 'text=removed',
   /**
    * Sets label in set configuration row — Semantics(identifier:
    * 'create-routine-sets'). Renders ONLY on strength/bodyweight cards; a cardio

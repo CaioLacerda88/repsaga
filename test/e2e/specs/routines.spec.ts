@@ -97,7 +97,7 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
     });
 
     // Save — the Save TextButton in the AppBar.
-    await page.locator(CREATE_ROUTINE.saveButton).click();
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
 
     // After save, pop back to RoutineListScreen.
     await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
@@ -132,7 +132,7 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
       });
       await flutterFillByInput(page, 'Search exercises', EXERCISE_NAME);
       await page.locator(EXERCISE_PICKER.addExerciseButton(EXERCISE_NAME)).first().click();
-      await page.locator(CREATE_ROUTINE.saveButton).click();
+      await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
       await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
         timeout: 15_000,
       });
@@ -154,7 +154,7 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
     await flutterFill(page, CREATE_ROUTINE.nameInput, ROUTINE_NAME_EDITED);
 
     // Save.
-    await page.locator(CREATE_ROUTINE.saveButton).click();
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
 
     // Back on list — edited name must appear.
     await expect(page.locator(ROUTINE.routineName(ROUTINE_NAME_EDITED)).first()).toBeVisible({
@@ -201,7 +201,7 @@ test.describe('Routine management', { tag: '@smoke' }, () => {
       });
       await flutterFillByInput(page, 'Search exercises', EXERCISE_NAME);
       await page.locator(EXERCISE_PICKER.addExerciseButton(EXERCISE_NAME)).first().click();
-      await page.locator(CREATE_ROUTINE.saveButton).click();
+      await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
       await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
         timeout: 15_000,
       });
@@ -342,7 +342,7 @@ test.describe('Routine builder cardio target', { tag: '@smoke' }, () => {
     await expect(okButton).not.toBeVisible({ timeout: 5_000 });
 
     // --- Save → back on the routines list with the new routine ---
-    await page.locator(CREATE_ROUTINE.saveButton).click();
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
     await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
       timeout: 15_000,
     });
@@ -587,6 +587,335 @@ test.describe('Routine builder polish', { tag: '@smoke' }, () => {
     expect(savedConfigs).toHaveLength(1);
     // The valid 28:00 = 1680s persisted; the rejected 28:90 never made it.
     expect(savedConfigs[0]?.['target_duration_seconds']).toBe(1680);
+  });
+});
+
+// =============================================================================
+// Routine builder targets + reorder + dedupe (smokeRoutineManagement user)
+// =============================================================================
+//
+// Usability-v2 pass — three NEW user flows:
+//   1. TARGET weight/reps persistence + seed (the headline fix): the builder
+//      now writes a per-exercise uniform target_weight/target_reps into every
+//      generated set_config, so a started routine prefills the prescribed
+//      numbers instead of a generic equipment default. The stepper values are
+//      canvas-drawn, so persistence is asserted at the DB layer (set_configs[0]
+//      .target_weight / .target_reps) — same authoritative approach the
+//      cardio-target E2E uses. The BONUS leg starts the routine and asserts the
+//      first set's weight button seeds with the prescribed value.
+//   2. REORDER: enter reorder mode, move an exercise, save, reopen → the new
+//      order persists (DB read of the exercises[] array order).
+//   3. DEDUPE hint: re-adding an exercise already in the routine still adds it
+//      (count +1) AND surfaces the "already in this routine" soft hint.
+//
+// Shares the smokeRoutineManagement user but runs SERIAL with a per-test reseed
+// scoped to this block's OWN name prefix (cluster e2e-spec-state-leak-across-
+// tests) — never touches the CRUD block's "Smoke Test Routine" rows, the
+// cardio-target block's "Cardio Target Routine" rows, nor the polish block's
+// "Polish Routine" rows.
+
+const TARGETS_ROUTINE_PREFIX = 'Targets Routine';
+
+/** Delete this block's own routines (by name prefix) so each test starts clean. */
+async function reseedRoutineBuilderTargetsUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(
+    admin,
+    getUser('smokeRoutineManagement').email,
+  );
+  if (!userId) return;
+  await admin
+    .from('workout_templates')
+    .delete()
+    .eq('user_id', userId)
+    .like('name', `${TARGETS_ROUTINE_PREFIX}%`);
+}
+
+/** Read the saved JSONB `exercises` array for a routine by name. */
+async function readSavedExercises(
+  routineName: string,
+): Promise<Array<Record<string, unknown>>> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(
+    admin,
+    getUser('smokeRoutineManagement').email,
+  );
+  expect(userId).toBeTruthy();
+  const { data: template, error } = await admin
+    .from('workout_templates')
+    .select('exercises')
+    .eq('user_id', userId!)
+    .eq('name', routineName)
+    .single();
+  expect(error).toBeNull();
+  return (template?.exercises ?? []) as Array<Record<string, unknown>>;
+}
+
+test.describe('Routine builder targets and reorder', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await reseedRoutineBuilderTargetsUser();
+    await login(
+      page,
+      getUser('smokeRoutineManagement').email,
+      getUser('smokeRoutineManagement').password,
+    );
+    await navigateToTab(page, 'Routines');
+  });
+
+  test.afterEach(async () => {
+    await reseedRoutineBuilderTargetsUser();
+  });
+
+  test('should persist a per-exercise target weight and reps, and seed the started workout with them', async ({
+    page,
+  }) => {
+    const routineName = `${TARGETS_ROUTINE_PREFIX} W ${Date.now()}`;
+
+    // --- Open the builder and add a STRENGTH exercise (Barbell Bench Press) ---
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', SEED_EXERCISES.benchPress);
+    const addTile = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.benchPress))
+      .first();
+    await expect(addTile).toBeVisible({ timeout: 10_000 });
+    await addTile.click();
+
+    // The strength card renders the TARGET block: weight row + reps row +
+    // set stepper (NOT a cardio card).
+    await expect(page.locator(CREATE_ROUTINE.targetWeight)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator(CREATE_ROUTINE.targetReps)).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.locator(CREATE_ROUTINE.setsLabel)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // --- Set the target WEIGHT to 60 kg via the WeightStepper value dialog. ---
+    // A fresh strength card defaults weight to 0 ("Weight value: 0 kg"). Tap
+    // the value zone to open the Enter-weight dialog, type 60, confirm. (The
+    // rendered stepper value is canvas-drawn, so we drive it through the dialog
+    // and verify the result at the DB layer.)
+    await page
+      .locator(CREATE_ROUTINE.weightStepperValue('0'))
+      .first()
+      .click({ force: true });
+    const enterWeightOk = page.locator('text="OK"');
+    await expect(enterWeightOk).toBeVisible({ timeout: 5_000 });
+    const weightInput = page.locator('input').last();
+    await weightInput.click({ timeout: 5_000 });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type('60', { delay: 10 });
+    await enterWeightOk.click();
+    await expect(enterWeightOk).not.toBeVisible({ timeout: 5_000 });
+
+    // --- Save → back on the routines list with the new routine. ---
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(ROUTINE.routineName(routineName)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // --- Data round-trip: every set_config carries the uniform target. The
+    // weight is the typed 60; the reps default to the builder's 8 (the reps
+    // stepper was left at its fresh-add default). The default set count is 3. ---
+    const savedExercises = await readSavedExercises(routineName);
+    expect(savedExercises).toHaveLength(1);
+    const savedConfigs = (savedExercises[0]?.['set_configs'] ?? []) as Array<
+      Record<string, unknown>
+    >;
+    expect(savedConfigs).toHaveLength(3);
+    for (const cfg of savedConfigs) {
+      expect(cfg['target_weight']).toBe(60);
+      expect(cfg['target_reps']).toBe(8);
+    }
+
+    // --- BONUS: start the routine → the first set seeds with the prescribed
+    // weight (60 kg), not the barbell equipment default (20 kg). This is the
+    // whole point of the headline fix. ---
+    const routineCard = await scrollToVisible(
+      page,
+      ROUTINE.routineName(routineName),
+    );
+    await routineCard.click();
+    await expect(page.locator(WORKOUT.finishButton)).toBeVisible({
+      timeout: 20_000,
+    });
+    // The seeded weight button must read 60 kg (the prescribed target), and the
+    // 20 kg equipment default must be absent for this single-exercise routine.
+    await expect(
+      page.locator(CREATE_ROUTINE.weightStepperValue('60 kg')).first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.locator(CREATE_ROUTINE.weightStepperValue('20 kg')),
+    ).toHaveCount(0);
+
+    // Clean up the active workout so the suite leaves no dangling session.
+    await page.locator(WORKOUT.discardButton).click();
+    await expect(page.locator(WORKOUT.discardConfirmButton)).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator(WORKOUT.discardConfirmButton).click();
+    await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('should persist a reordered exercise order across save and reopen', async ({
+    page,
+  }) => {
+    const routineName = `${TARGETS_ROUTINE_PREFIX} Order ${Date.now()}`;
+
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    // Add TWO distinct exercises: Bench Press (index 0) then Squat (index 1).
+    for (const name of [SEED_EXERCISES.benchPress, SEED_EXERCISES.squat]) {
+      await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+      await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+        timeout: 10_000,
+      });
+      await flutterFillByInput(page, 'Search exercises', name);
+      const tile = page
+        .locator(EXERCISE_PICKER.addExerciseButton(name))
+        .first();
+      await expect(tile).toBeVisible({ timeout: 10_000 });
+      await tile.click();
+      await expect(page.locator(`text=${name}`).first()).toBeVisible({
+        timeout: 10_000,
+      });
+    }
+
+    // Capture the saved order BEFORE reorder so we can prove the swap actually
+    // changed it (rather than asserting against a hardcoded expectation).
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+    const before = await readSavedExercises(routineName);
+    expect(before).toHaveLength(2);
+    const firstIdBefore = before[0]?.['exercise_id'] as string;
+    const secondIdBefore = before[1]?.['exercise_id'] as string;
+    expect(firstIdBefore).toBeTruthy();
+    expect(secondIdBefore).not.toBe(firstIdBefore);
+
+    // --- Reopen, enter reorder mode, move the FIRST exercise down. ---
+    await flutterLongPress(page, ROUTINE.routineName(routineName));
+    await expect(page.locator(ROUTINE.editOption)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE.editOption).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.editRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The reorder toggle is gated on >1 exercise — it must be present here.
+    await expect(page.locator(CREATE_ROUTINE.reorderToggle)).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });
+
+    // In reorder mode the × is replaced by up/down arrows. Move the first card
+    // DOWN (its "Move down" arrow is the first one in document order). The first
+    // card's "Move up" is disabled, so the first ENABLED "Move down" is index 0.
+    await expect(page.locator(CREATE_ROUTINE.moveExerciseDown).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(CREATE_ROUTINE.moveExerciseDown).first().click();
+
+    // Exit reorder mode + save.
+    await page.locator(CREATE_ROUTINE.reorderToggle).click({ force: true });
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // --- The persisted order must now be swapped. ---
+    const after = await readSavedExercises(routineName);
+    expect(after).toHaveLength(2);
+    expect(after[0]?.['exercise_id']).toBe(secondIdBefore);
+    expect(after[1]?.['exercise_id']).toBe(firstIdBefore);
+  });
+
+  test('should still add a duplicate exercise and show the already-in-routine hint', async ({
+    page,
+  }) => {
+    const routineName = `${TARGETS_ROUTINE_PREFIX} Dup ${Date.now()}`;
+
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    // Add Barbell Bench Press once.
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', SEED_EXERCISES.benchPress);
+    await page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.benchPress))
+      .first()
+      .click();
+    // One card now present — its remove × is the per-card affordance, so the
+    // count of remove buttons is a reliable card counter.
+    await expect(page.locator(CREATE_ROUTINE.removeExercise)).toHaveCount(1, {
+      timeout: 10_000,
+    });
+
+    // Add the SAME exercise again.
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', SEED_EXERCISES.benchPress);
+    await page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.benchPress))
+      .first()
+      .click();
+
+    // The soft "already in this routine" hint surfaces. Assert THIS first — the
+    // hint is a default-duration (~4s) SnackBar that auto-dismisses, whereas the
+    // card-count assertion below is on permanent UI, so checking the transient
+    // SnackBar before the durable count avoids racing the dismissal.
+    await expect(
+      page.locator(CREATE_ROUTINE.alreadyInRoutineSnackBar).last(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // AND the duplicate IS added — duplicates are allowed (a program may repeat
+    // a lift). The card count goes to 2 (two per-card remove × affordances).
+    await expect(page.locator(CREATE_ROUTINE.removeExercise)).toHaveCount(2, {
+      timeout: 10_000,
+    });
   });
 });
 

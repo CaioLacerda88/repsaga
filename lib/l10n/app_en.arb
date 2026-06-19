@@ -820,6 +820,32 @@
   "@setsLabel": { "description": "Sets label in routine exercise card" },
   "restLabel": "Rest",
   "@restLabel": { "description": "Rest label in routine exercise card" },
+  "weightLabel": "Weight",
+  "@weightLabel": { "description": "Target weight label in the routine exercise card's TARGET block" },
+  "repsLabel": "Reps",
+  "@repsLabel": { "description": "Target reps label in the routine exercise card's TARGET block" },
+  "addedWeightLabel": "Added weight",
+  "@addedWeightLabel": { "description": "Label for the optional added-weight (belt/assist) stepper on a bodyweight routine exercise card" },
+  "addWeightCta": "+ Add weight",
+  "@addWeightCta": { "description": "Reveal CTA that expands the optional added-weight stepper on a bodyweight routine exercise card" },
+  "exerciseRemovedUndo": "{name} removed",
+  "@exerciseRemovedUndo": {
+    "description": "Snackbar shown after removing an exercise from the routine builder, paired with an Undo action",
+    "placeholders": {
+      "name": { "type": "String", "example": "Bench Press" }
+    }
+  },
+  "undoCta": "Undo",
+  "@undoCta": { "description": "Snackbar action that reverses the last exercise removal in the routine builder" },
+  "exerciseAlreadyInRoutine": "{name} is already in this routine",
+  "@exerciseAlreadyInRoutine": {
+    "description": "Soft hint snackbar when adding an exercise the routine already contains (still added)",
+    "placeholders": {
+      "name": { "type": "String", "example": "Bench Press" }
+    }
+  },
+  "targetsOptional": "Targets are optional",
+  "@targetsOptional": { "description": "Muted helper line under the cardio target slots in the routine builder" },
 
   "duplicateAndEdit": "Duplicate and Edit",
   "@duplicateAndEdit": { "description": "Routine action: duplicate and edit" },

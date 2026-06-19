@@ -85,8 +85,10 @@ test.describe('Routine localization pt locale', () => {
       page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Save the routine.
-    await page.click(CREATE_ROUTINE.saveButton);
+    // Save the routine via the sole bottom Save CTA (the AppBar Save was
+    // removed in the usability-v2 pass). force-click forwards the tap onto the
+    // FilledButton inside the Semantics container.
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
 
     // Should navigate back to the routines list.
     await expect(page.locator(ROUTINE.heading)).toBeVisible({ timeout: 15_000 });

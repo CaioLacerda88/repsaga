@@ -44,7 +44,7 @@
  */
 
 import { test, expect, Page } from '@playwright/test';
-import { WORKOUT, HOME, NAV, PR, AUTH } from '../helpers/selectors';
+import { WORKOUT, HOME, NAV, PR, AUTH, CREATE_ROUTINE } from '../helpers/selectors';
 import { waitForAppReady, flutterFill, scrollToVisible } from '../helpers/app';
 import { startEmptyWorkout, addExercise, setWeight, setReps, completeSet } from '../helpers/workout';
 
@@ -455,10 +455,14 @@ test.describe.skip('Charter D — Finish-flow happy + sad paths — US-1 [SUPERS
       }
     }
 
-    // Save routine
-    const saveBtn = page.locator('[flt-semantics-identifier="create-routine-save"]');
+    // Save routine via the sole bottom Save CTA (the AppBar Save —
+    // create-routine-save — was removed in the usability-v2 pass; the old
+    // selector silently no-op'd here, leaving the routine unsaved so the B4 leg
+    // below operated on a non-existent routine). force-click forwards the tap
+    // onto the FilledButton inside the Semantics container.
+    const saveBtn = page.locator(CREATE_ROUTINE.saveCtaButton);
     if (await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await saveBtn.click();
+      await saveBtn.click({ force: true });
       await page.waitForTimeout(2_000);
     }
 
