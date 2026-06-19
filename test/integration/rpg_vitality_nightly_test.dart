@@ -11,9 +11,12 @@
 ///    `vitality_ewma`. A late-cycle deload (low weekly volume) must NOT
 ///    regress peak.
 ///
-/// 3. **Idempotency** — calling the Edge Function twice for the same UTC
-///    `run_date` is a no-op the second time. The dedup is enforced by the
-///    `vitality_runs (user_id, run_date)` PRIMARY KEY (migration 00042).
+/// 3. **Idempotency** — calling the recompute twice for the same UTC day is a
+///    no-op the second time. As of migration 00082 the dedup authority is
+///    `body_part_progress.last_vitality_date` (per-body-part, first-writer-
+///    wins), NOT the `vitality_runs (user_id, run_date)` PK — `vitality_runs`
+///    survives only as an advisory audit log. The contract pinned here is that
+///    a second same-day step does NOT advance `vitality_ewma`.
 ///
 /// 4. **Service-role auth gate** — anonymous and end-user JWTs are rejected
 ///    with 401. Only the project's service-role key is accepted.
@@ -205,9 +208,15 @@ void main() {
         var expectedPeak = 0.0;
 
         for (var week = 1; week <= 4; week++) {
-          // Wipe vitality_runs so the upcoming invocation isn't deduped as
-          // "already ran today" (we're driving 4 simulated runs in real
-          // time, all on the same calendar day).
+          // Clear the per-bp guard (00082) so the upcoming invocation isn't
+          // deduped as "already stepped today". We drive 4 simulated weekly
+          // runs back-to-back on the same real calendar day; the production
+          // guard is `body_part_progress.last_vitality_date`, so we reset it
+          // each iteration to advance the trajectory. (vitality_runs is now
+          // an advisory audit log, not the dedup authority — wiping it is no
+          // longer what unblocks a re-step, but we clear it too to keep the
+          // audit table clean across simulated days.)
+          await _clearVitalityGuard(adminClient, user.userId);
           await adminClient
               .from('vitality_runs')
               .delete()
@@ -300,6 +309,9 @@ void main() {
         for (var i = 0; i < weeklyVolumes.length; i++) {
           final volume = weeklyVolumes[i];
 
+          // Reset the per-bp guard (00082) to advance to the next simulated
+          // day; clear the advisory audit log too.
+          await _clearVitalityGuard(adminClient, user.userId);
           await adminClient
               .from('vitality_runs')
               .delete()
@@ -471,8 +483,13 @@ void main() {
 
   group('vitality-nightly idempotency', () {
     test(
-      'second invocation on same UTC day is a no-op (vitality_runs PK conflict)',
+      'second same-day recompute does NOT double-step vitality_ewma',
       () async {
+        // The 00082 contract: the per-body-part `last_vitality_date` guard
+        // makes a second same-UTC-day step a no-op. This pins the EWMA-stable
+        // behavior directly (NOT the old "one vitality_runs row" proxy) —
+        // exactly what a save-then-nightly collision on the same day must
+        // guarantee.
         final user = await freshUser();
         final adminClient = serviceRoleClient();
 
@@ -484,7 +501,7 @@ void main() {
           attribution: {'chest': 500.0},
         );
 
-        // First invocation — processes the user.
+        // First invocation — steps chest.
         final r1 = await _invokeNightly();
         expect(r1.statusCode, 200);
         final body1 = jsonDecode(r1.body) as Map<String, dynamic>;
@@ -501,21 +518,12 @@ void main() {
           reason: 'First invocation must populate ewma',
         );
 
-        // Second invocation immediately — same UTC date.
+        // Second invocation immediately — same UTC date, guard NOT cleared.
         final r2 = await _invokeNightly();
         expect(r2.statusCode, 200);
-        final body2 = jsonDecode(r2.body) as Map<String, dynamic>;
-        // The user should now be in the `skipped` bucket: a vitality_runs
-        // row already exists for this UTC date.
-        expect(
-          body2['skipped'],
-          greaterThanOrEqualTo(1),
-          reason:
-              'Second invocation on same UTC date must skip the user. '
-              'Got: ${r2.body}',
-        );
 
-        // EWMA must be identical (no double-application).
+        // EWMA must be identical (no double-application) — the per-bp guard
+        // short-circuited the second step.
         final ewmaAfterSecond = await _readVitalityEwma(
           adminClient,
           user.userId,
@@ -525,15 +533,19 @@ void main() {
           (ewmaAfterSecond - ewmaAfterFirst).abs(),
           lessThan(0.001),
           reason:
-              'Idempotent run must not change ewma. '
-              'first=$ewmaAfterFirst second=$ewmaAfterSecond',
+              'Same-day re-step must not change ewma (per-bp last_vitality_date '
+              'guard). first=$ewmaAfterFirst second=$ewmaAfterSecond',
         );
       },
     );
 
     test(
-      'vitality_runs row is keyed by (user_id, run_date) — exactly one per day',
+      'vitality_runs survives as an advisory audit log — one row per (user, day)',
       () async {
+        // vitality_runs is no longer the dedup authority (00082), but the
+        // nightly job still records ONE advisory audit row per user per UTC
+        // day (ON CONFLICT DO NOTHING). This pins that the audit log is still
+        // written and de-duplicated by its PK.
         final user = await freshUser();
         final adminClient = serviceRoleClient();
 
@@ -557,12 +569,142 @@ void main() {
           (rows as List).length,
           1,
           reason:
-              'Exactly one vitality_runs row per (user, day). Got '
+              'Exactly one advisory vitality_runs row per (user, day). Got '
               '${rows.length}.',
         );
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // 5. Save-time recompute (00082) — vitality moves IMMEDIATELY at save, and
+  //    the nightly job then SKIPS the parts the save already stepped today
+  //    (first-writer-wins at body-part granularity).
+  // -------------------------------------------------------------------------
+
+  group('vitality save-time recompute', () {
+    test(
+      'recompute_vitality_for_user moves vitality immediately for touched bps',
+      () async {
+        final user = await freshUser();
+        final adminClient = serviceRoleClient();
+
+        // Day-0 user, no body_part_progress rows. Seed this session's volume.
+        await _seedXpEvent(
+          adminClient: adminClient,
+          userId: user.userId,
+          occurredAt: DateTime.now().toUtc().subtract(const Duration(days: 1)),
+          attribution: {'chest': 600.0},
+        );
+
+        final before = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        expect(before, 0.0, reason: 'no chest row yet → ewma reads 0');
+
+        // The save path PERFORMs exactly this with the session-touched bps.
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': user.userId,
+            'p_body_parts': ['chest'],
+          },
+        );
+
+        final after = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        final expected = kAlphaUp * 600.0; // prior 0 → α_up rebuild
+        expect(
+          after,
+          greaterThan(0),
+          reason: 'save-time recompute must move chest vitality immediately',
+        );
+        expect(
+          (after - expected).abs() / expected,
+          lessThan(kRelTol),
+          reason:
+              'save-time ewma must match closed-form: '
+              'expected≈$expected got=$after',
+        );
+      },
+    );
+
+    test(
+      'nightly skips a bp already stepped today by a save (first-writer-wins)',
+      () async {
+        final user = await freshUser();
+        final adminClient = serviceRoleClient();
+
+        await _seedXpEvent(
+          adminClient: adminClient,
+          userId: user.userId,
+          occurredAt: DateTime.now().toUtc().subtract(const Duration(days: 1)),
+          attribution: {'chest': 600.0, 'back': 300.0},
+        );
+
+        // Save path steps ONLY chest (the session's touched bp).
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': user.userId,
+            'p_body_parts': ['chest'],
+          },
+        );
+        final chestAfterSave = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        expect(chestAfterSave, greaterThan(0));
+
+        // Nightly runs (NULL bps → all active parts). It must SKIP chest
+        // (last_vitality_date already today) but still step back.
+        final res = await _invokeNightly();
+        expect(res.statusCode, 200, reason: res.body);
+
+        final chestAfterNightly = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        expect(
+          (chestAfterNightly - chestAfterSave).abs(),
+          lessThan(0.001),
+          reason:
+              'chest already stepped at save time → nightly must not '
+              'double-step it. save=$chestAfterSave nightly=$chestAfterNightly',
+        );
+
+        final backAfterNightly = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'back',
+        );
+        expect(
+          backAfterNightly,
+          greaterThan(0),
+          reason:
+              'back was NOT stepped at save time → nightly must step it now',
+        );
+      },
+    );
+  });
+}
+
+/// Nulls `body_part_progress.last_vitality_date` for every row of [userId] so
+/// the next recompute treats each bp as "not yet stepped today". The 00082
+/// guard is per-bp UTC-date; the trajectory tests drive several simulated
+/// days within one real day, so we reset the guard between them.
+Future<void> _clearVitalityGuard(dynamic adminClient, String userId) async {
+  await (adminClient as dynamic)
+      .from('body_part_progress')
+      .update({'last_vitality_date': null})
+      .eq('user_id', userId);
 }
 
 // ---------------------------------------------------------------------------

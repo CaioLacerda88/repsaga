@@ -12,38 +12,38 @@
 // `isServiceRoleJwt` below for the rationale).
 //
 // Behavior per user (spec §8.1, §12.2):
-//   1. INSERT INTO vitality_runs (user_id, run_date) FIRST.
-//      A duplicate (PRIMARY KEY conflict) means we already ran this user
-//      for the current UTC day — short-circuit, no further work.
-//   2. For each of the six v1 strength body parts compute
-//        weekly_volume[bp] = SUM((attribution ->> bp)::numeric)
-//                            FROM xp_events
-//                            WHERE user_id = ? AND occurred_at > now() - 7d
-//      The `attribution` jsonb already stores the post-multiplier per-bp
-//      XP contribution — that IS the volume measure the EWMA tracks
-//      (spec §8.1: "weekly_volume[bp] = SUM(attribution[bp] × volume_load)";
-//      our `attribution[bp]` field is the per-bp set_xp share which is
-//      proportional to volume_load × proportion, so it's the same signal).
-//   3. Apply asymmetric EWMA:
-//        α_up   = 1 - exp(-7/14) ≈ 0.3935  when weekly_volume >= prior_ewma
-//        α_down = 1 - exp(-7/42) ≈ 0.1535  otherwise
-//        new_ewma = α × weekly_volume + (1-α) × prior_ewma
-//        new_peak = max(prior_peak, new_ewma)
-//   4. UPSERT body_part_progress {vitality_ewma, vitality_peak, updated_at}.
+//   1. INSERT INTO vitality_runs (user_id, run_date) as an ADVISORY AUDIT LOG
+//      (ON CONFLICT DO NOTHING). As of migration 00082 this row is NO LONGER
+//      the dedup authority — it answers the forensic "did the nightly job run
+//      for user X on day Y?" question, nothing more. A pre-existing row is NOT
+//      a short-circuit: the user may have saved a workout earlier today (which
+//      stepped SOME body parts at save time + wrote a vitality_runs row via a
+//      separate path? no — the save path doesn't write vitality_runs), and the
+//      nightly job still needs to decay the user's OTHER, untouched body parts.
+//   2. Call the SQL RPC `recompute_vitality_for_user(user, null)`. Passing
+//      NULL for the body-parts array means "process ALL of this user's active
+//      body parts". The RPC ports the EWMA math (relocated from this function
+//      in 00082) and is the single writer of body_part_progress.vitality_*.
 //
-// Idempotency:
-//   * vitality_runs PRIMARY KEY (user_id, run_date) is the dedup gate.
-//   * The per-user transaction is small enough to retry as a unit; if it
-//     fails halfway, the next nightly run finds no vitality_runs row and
-//     re-attempts.
+// Dedup / double-count guard (00082):
+//   * The authority is `body_part_progress.last_vitality_date` — a per-body-
+//     part UTC date. The RPC steps a body part ONLY IF its last_vitality_date
+//     is not already today, then stamps it. So if a save earlier today already
+//     stepped (say) chest + cardio, the nightly RPC steps only the user's
+//     remaining strength parts and leaves chest/cardio untouched. This is
+//     first-writer-wins at body-part granularity — strictly finer than the old
+//     per-user vitality_runs PK could express.
+//   * The per-user transaction is small enough to retry as a unit; the per-bp
+//     date guard makes re-attempts idempotent (an already-stepped bp is a
+//     no-op on retry).
 //
 // Performance (spec §12.3 budget: <10min for 100k users):
 //   * Optional `{ chunk: number (0-9) }` body param shards by `user_id % 10`.
 //     Cron submits a single un-chunked invocation today; chunking is wired
 //     for future operator-driven scale-out.
-//   * Per-user work is one SELECT (xp_events aggregation), one INSERT
-//     (vitality_runs), and 1-6 UPSERTs (body_part_progress). All
-//     index-backed.
+//   * Per-user work is now ONE RPC round-trip (the RPC does the 7d aggregation
+//     + the guarded UPSERT set-based in a single statement) plus the advisory
+//     vitality_runs insert. Cheaper than the old per-bp UPSERT fan-out.
 //
 // Env vars (Supabase sets the first two automatically):
 //   SUPABASE_URL
@@ -210,93 +210,47 @@ export async function processUser(
   const now = deps.now ? deps.now() : new Date();
   const runDate = utcDateString(now);
 
-  // 1. Claim the idempotency row. PRIMARY KEY conflict ⇒ already ran today.
+  // 1. Advisory audit log (00082). The (user_id, run_date) row is NO LONGER
+  //    the dedup authority — `body_part_progress.last_vitality_date` is, at
+  //    per-body-part granularity, enforced inside the RPC. A pre-existing row
+  //    here is therefore NOT a short-circuit: the user may have saved a
+  //    workout earlier today (stepping SOME parts at save time) and the
+  //    nightly job must still decay the user's OTHER, untouched parts. We
+  //    record the row best-effort (ON CONFLICT DO NOTHING via the unique
+  //    PK → insert no-ops on a second run) purely so the forensic "did the
+  //    cron touch user X on day Y?" question stays answerable.
   const { error: insErr } = await deps.client
     .from('vitality_runs')
-    .insert({ user_id: userId, run_date: runDate });
-  if (insErr) {
-    if (isUniqueViolation(insErr)) {
-      return { processed: false, skipped: true, updates: null };
-    }
-    throw new Error(`vitality_runs insert failed: ${insErr.message}`);
-  }
-
-  // 2. Compute weekly_volume[bp] from xp_events past 7d. Single round-trip:
-  //    pull all xp_events.attribution rows for the window and aggregate
-  //    in TS. At 50 events/user this is cheaper than 6 server-side SQL
-  //    aggregations (one per body part).
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const { data: events, error: evErr } = await deps.client
-    .from('xp_events')
-    .select('attribution')
-    .eq('user_id', userId)
-    .gte('occurred_at', sevenDaysAgo.toISOString());
-  if (evErr) {
-    throw new Error(`xp_events fetch failed: ${evErr.message}`);
-  }
-
-  const weeklyVolume = aggregateAttribution(events ?? []);
-
-  // 3. Read prior (ewma, peak) for each v1 body part.
-  const { data: priorRows, error: prErr } = await deps.client
-    .from('body_part_progress')
-    .select('body_part, vitality_ewma, vitality_peak')
-    .eq('user_id', userId)
-    .in('body_part', ACTIVE_BODY_PARTS as unknown as string[]);
-  if (prErr) {
-    throw new Error(`body_part_progress fetch failed: ${prErr.message}`);
-  }
-
-  const prior = new Map<string, { ewma: number; peak: number }>();
-  for (const row of priorRows ?? []) {
-    prior.set(row.body_part as string, {
-      ewma: Number(row.vitality_ewma ?? 0),
-      peak: Number(row.vitality_peak ?? 0),
+    .upsert({ user_id: userId, run_date: runDate }, {
+      onConflict: 'user_id,run_date',
+      ignoreDuplicates: true,
     });
+  // A conflict is expected and ignored; any OTHER error is a real failure.
+  if (insErr && !isUniqueViolation(insErr)) {
+    throw new Error(`vitality_runs audit insert failed: ${insErr.message}`);
   }
 
-  // 4. Apply EWMA per body part and UPSERT.
-  const updates: Record<BodyPart, EwmaOutput> = {} as Record<
-    BodyPart,
-    EwmaOutput
-  >;
-  for (const bp of ACTIVE_BODY_PARTS) {
-    const p = prior.get(bp) ?? { ewma: 0, peak: 0 };
-    const out = stepEwma({
-      priorEwma: p.ewma,
-      priorPeak: p.peak,
-      weeklyVolume: weeklyVolume[bp] ?? 0,
-      // Two-speed decay: cardio τ_down=21d, strength τ_down=42d (Phase 38e).
-      tauDownDays: tauDownForBodyPart(bp),
-    });
-    updates[bp] = out;
-
-    // UPSERT — leave total_xp/rank untouched. The DO UPDATE only writes
-    // vitality_* columns. We use upsert() with onConflict='user_id,body_part'
-    // and ignoreDuplicates=false so the row is updated when it exists.
-    const { error: upErr } = await deps.client.from('body_part_progress').upsert(
-      {
-        user_id: userId,
-        body_part: bp,
-        // numeric(14,4) precision — see 00040 column comment.
-        vitality_ewma: out.ewma,
-        vitality_peak: out.peak,
-        // total_xp and rank are unchanged for an UPSERT against an
-        // existing row — supabase-js merges only the supplied keys when
-        // ON CONFLICT matches. For a brand-new row (no prior progress)
-        // total_xp defaults to 0 and rank to 1 from the schema.
-        updated_at: now.toISOString(),
-      },
-      { onConflict: 'user_id,body_part' },
+  // 2. Relocate the EWMA math (00082): one RPC round-trip computes the 7-day
+  //    weekly volume per body part, applies the asymmetric step, and UPSERTs
+  //    body_part_progress.vitality_* — all set-based, under the per-bp
+  //    last_vitality_date guard. NULL p_body_parts → process ALL the user's
+  //    active body parts (the nightly contract). The RPC is the single writer;
+  //    this function no longer touches the EWMA itself.
+  const { error: rpcErr } = await deps.client.rpc(
+    'recompute_vitality_for_user',
+    { p_user: userId, p_body_parts: null },
+  );
+  if (rpcErr) {
+    throw new Error(
+      `recompute_vitality_for_user failed for ${userId}: ${rpcErr.message}`,
     );
-    if (upErr) {
-      throw new Error(
-        `body_part_progress upsert failed for ${bp}: ${upErr.message}`,
-      );
-    }
   }
 
-  return { processed: true, skipped: false, updates };
+  // The nightly result no longer surfaces per-bp EWMA values — the RPC writes
+  // them directly and the integration test reads body_part_progress to verify.
+  // `processed` stays true for the per-run counters; `skipped` is retired (the
+  // per-bp guard means there is no whole-user skip anymore).
+  return { processed: true, skipped: false, updates: null };
 }
 
 // --- Helpers --------------------------------------------------------------
