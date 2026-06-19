@@ -785,9 +785,10 @@ void main() {
         await tester.pumpAndSettle();
 
         // Pin the cacheExtent that preserves eager-render reach (cluster:
-        // listview-lazy-build-breaks-e2e). A SliverReorderableList is lazy by
-        // default; the generous cacheExtent keeps realistic routines (≤~12 tall
-        // cards) fully built so every card stays reachable for E2E + a11y.
+        // listview-lazy-build-breaks-e2e). The normal-mode SliverList is lazy at
+        // the sliver level; the generous cacheExtent keeps realistic routines
+        // (≤~12 tall cards) fully built so every card stays reachable for E2E +
+        // a11y, even those below the fold.
         final scrollView = tester.widget<CustomScrollView>(
           find.byType(CustomScrollView),
         );
@@ -1353,19 +1354,37 @@ void main() {
       );
 
       testWidgets(
-        'the cards live in a SliverReorderableList inside the CustomScrollView',
+        'reorder mode swaps the eager SliverList for a SliverReorderableList '
+        'inside the CustomScrollView',
         (tester) async {
           await tester.pumpWidget(
             _buildScreen(routine: threeExerciseRoutine()),
           );
           await tester.pumpAndSettle();
 
-          // Pins the scroll-authority structure: the cards are a sliver inside
-          // the page's single CustomScrollView (NOT a nested
-          // ReorderableListView with NeverScrollableScrollPhysics). This is the
+          // NORMAL mode: the cards live in an EAGER SliverList — NO per-item
+          // reorder-semantics wrapper, so each exercise name stays its own
+          // reachable AOM/DOM leaf under parallel render load (cluster:
+          // listview-lazy-build-breaks-e2e — the SliverReorderableList wrapper
+          // merged the name into a single group label, dropping the leaf under
+          // parallel CI workers). The lazy reorder list must be ABSENT here.
+          expect(
+            find.descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(SliverList),
+            ),
+            findsOneWidget,
+          );
+          expect(find.byType(SliverReorderableList), findsNothing);
+
+          // REORDER mode: the cards move into a SliverReorderableList — still a
+          // bare sliver inside the page's single CustomScrollView (NOT a nested
+          // ReorderableListView with NeverScrollableScrollPhysics), which is the
           // structure that lets drag auto-scroll resolve to the page. A widget
           // test can't assert auto-scroll itself (needs a real viewport drag),
           // so we pin the structure that makes it work.
+          await enterReorderMode(tester);
+
           expect(
             find.descendant(
               of: find.byType(CustomScrollView),
@@ -1373,7 +1392,7 @@ void main() {
             ),
             findsOneWidget,
           );
-          // The old nested high-level list must be gone.
+          // The old nested high-level list must never appear.
           expect(find.byType(ReorderableListView), findsNothing);
         },
       );

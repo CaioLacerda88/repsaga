@@ -356,6 +356,45 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     );
   }
 
+  /// Builds one exercise card with all its edit callbacks wired. Shared by the
+  /// eager normal-mode [SliverList] and the reorder-mode [SliverReorderableList]
+  /// so the two never drift. The [key] rides the card directly in normal mode;
+  /// in reorder mode it rides the enclosing [ReorderableDragStartListener] (the
+  /// reorder list requires the key on the OUTERMOST per-item widget), so the
+  /// card itself is built keyless there.
+  Widget _buildExerciseCard(
+    _RoutineExerciseEntry entry,
+    int index,
+    String weightUnit, {
+    Key? key,
+  }) {
+    return _ExerciseCard(
+      key: key,
+      entry: entry,
+      weightUnit: weightUnit,
+      reorderMode: _reorderMode,
+      onSetCountChanged: (count) {
+        setState(() => entry.setCount = count);
+      },
+      onRestChanged: (rest) {
+        setState(() => entry.restSeconds = rest);
+      },
+      onTargetRepsChanged: (reps) {
+        setState(() => entry.targetReps = reps);
+      },
+      onTargetWeightChanged: (weight) {
+        setState(() => entry.targetWeight = weight);
+      },
+      onTargetDurationChanged: (seconds) {
+        setState(() => entry.targetDurationSeconds = seconds);
+      },
+      onTargetDistanceChanged: (meters) {
+        setState(() => entry.targetDistanceM = meters);
+      },
+      onRemove: () => _removeExercise(index),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -423,14 +462,36 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
       // just overlays the content; the CustomScrollView can still scroll a
       // focused field into view if needed.
       //
-      // cluster: listview-lazy-build-breaks-e2e — a SliverReorderableList is
-      // lazy (it culls off-viewport children, dropping them from the DOM/AOM and
-      // breaking E2E text/identifier lookups + screen readers). The generous
-      // `cacheExtent: 3500` keeps realistic routines (≤~12 of these tall cards)
-      // fully built/in the AOM — preserving the reach the old eager `Column`
-      // gave. Routines longer than ~3500px of cards will lazy-cull the far end;
-      // E2E uses small routines so it's unaffected (and QA can
-      // `scrollIntoViewIfNeeded` if a very long routine is ever tested).
+      // cluster: listview-lazy-build-breaks-e2e — a SliverReorderableList wraps
+      // EACH item in its own reorder-semantics container. On Flutter web that
+      // container MERGES the card's descendant Text leaves into a single group
+      // aria-label (`group "Barbell Bench Press CHEST 8 3"`) — it does NOT
+      // reliably emit the standalone `flt-semantics` text leaf for "Barbell
+      // Bench Press". Under parallel CanvasKit load (CI runs 4 Playwright
+      // workers) the semantics bridge coalesces and drops the leaf entirely, so
+      // `page.locator('text=Barbell Bench Press')` finds 0 matches even though
+      // the card is fully painted. A serial local run is light enough that the
+      // leaf survives — which is exactly why this regression was parallel-ONLY.
+      // The old eager `Column` on main never wrapped each card in reorder
+      // semantics, so the name was always its own reachable leaf node.
+      //
+      // Fix: render the cards EAGERLY (plain SliverList, no per-item reorder
+      // semantics) in NORMAL mode — every name is a load-independent AOM leaf —
+      // and only switch to SliverReorderableList while _reorderMode is true.
+      // Add / edit / save E2E flows all read in normal mode; reorder is a
+      // transient interaction with no text/identifier lookups during it, so the
+      // reorder list is harmless there. The drag auto-scroll + collapse-to-drag
+      // UX is fully preserved: the reorder list (when active) is still a bare
+      // sliver of THIS CustomScrollView, so the page stays the scroll authority
+      // for drag-to-edge auto-scroll.
+      //
+      // `cacheExtent: 3500` keeps the normal-mode SliverList (still lazy at the
+      // sliver level) building realistic routines (≤~12 tall cards) up front, so
+      // EVERY card — not just the on-screen ones — stays in the tree/AOM for
+      // screen readers and any multi-card E2E reach. The real parallel-CI fix is
+      // dropping the per-item reorder-semantics wrapper in normal mode (above);
+      // the cacheExtent is the secondary reach guarantee for cards below the
+      // fold.
       body: CustomScrollView(
         cacheExtent: 3500,
         slivers: [
@@ -526,74 +587,65 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
                 ),
               ),
             )
-          else
+          else if (_reorderMode)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              // The lower-level SliverReorderableList. In reorder mode each card
+              // REORDER MODE ONLY — the lazy SliverReorderableList. Each card
               // supplies its OWN ReorderableDragStartListener wrapping the whole
-              // collapsed card (no buildDefaultDragHandles). In normal mode the
-              // item is just the full card with no drag listener → not
-              // draggable. Because the list is a direct sliver of the page's
-              // CustomScrollView, drag auto-scroll resolves to that scroll view
-              // → drag-to-edge scrolls the page.
+              // collapsed card (no buildDefaultDragHandles). Because the list is
+              // a direct sliver of the page's CustomScrollView, drag auto-scroll
+              // resolves to that scroll view → drag-to-edge scrolls the page.
+              // Lazy build is acceptable here: no E2E text/identifier lookups
+              // run during the transient reorder interaction (see the body
+              // comment / listview-lazy-build-breaks-e2e cluster note above).
               sliver: SliverReorderableList(
                 itemCount: _exercises.length,
                 onReorder: _onReorder,
                 proxyDecorator: _reorderProxyDecorator,
                 itemBuilder: (context, index) {
                   final entry = _exercises[index];
-                  // Key by the entry's object identity so each card's State
-                  // stays bound to ITS entry across remove / undo / reorder
-                  // (index shifts otherwise reuse a sibling's State, leaking
-                  // the stateful `_showAddedWeight` reveal flag onto the wrong
-                  // exercise — cluster: missing-key-state-reuse). ObjectKey is
-                  // also the per-child key the reorder list REQUIRES, and stays
-                  // unique even with duplicate exercises. The key lives on the
-                  // OUTERMOST per-item widget (the listener wrapper in reorder
-                  // mode, else the card itself).
-                  final card = _ExerciseCard(
-                    key: _reorderMode ? null : ObjectKey(entry),
-                    entry: entry,
-                    weightUnit: weightUnit,
-                    reorderMode: _reorderMode,
-                    onSetCountChanged: (count) {
-                      setState(() => entry.setCount = count);
-                    },
-                    onRestChanged: (rest) {
-                      setState(() => entry.restSeconds = rest);
-                    },
-                    onTargetRepsChanged: (reps) {
-                      setState(() => entry.targetReps = reps);
-                    },
-                    onTargetWeightChanged: (weight) {
-                      setState(() => entry.targetWeight = weight);
-                    },
-                    onTargetDurationChanged: (seconds) {
-                      setState(() => entry.targetDurationSeconds = seconds);
-                    },
-                    onTargetDistanceChanged: (meters) {
-                      setState(() => entry.targetDistanceM = meters);
-                    },
-                    onRemove: () => _removeExercise(index),
-                  );
-
-                  // Normal mode: the bare full card, not draggable.
-                  if (!_reorderMode) return card;
-
                   // Reorder mode: the whole COLLAPSED card is the drag handle —
                   // grabbing anywhere on it starts an immediate drag (the user
                   // already declared intent by entering reorder mode, so no
                   // long-press delay). The ObjectKey rides the OUTERMOST widget
                   // here (the listener), preserving per-entry identity across
-                  // the reorder. The SliverReorderableList resolves its
-                  // EdgeDraggingAutoScroller via the enclosing CustomScrollView,
-                  // so drag-to-edge auto-scrolls the page.
+                  // the reorder (cluster: missing-key-state-reuse) and serving
+                  // as the per-child key the reorder list REQUIRES. The
+                  // SliverReorderableList resolves its EdgeDraggingAutoScroller
+                  // via the enclosing CustomScrollView, so drag-to-edge
+                  // auto-scrolls the page.
                   return ReorderableDragStartListener(
                     key: ObjectKey(entry),
                     index: index,
-                    child: card,
+                    child: _buildExerciseCard(entry, index, weightUnit),
                   );
                 },
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              // NORMAL MODE — eager SliverList: every card is built up front
+              // with NO per-item reorder-semantics wrapper, so each exercise
+              // name is its own reachable AOM/DOM text leaf regardless of render
+              // load. This is the load-independent reach the old eager `Column`
+              // on main gave (cluster: listview-lazy-build-breaks-e2e — see the
+              // body comment for why the reorder list dropped the leaf under
+              // parallel CI workers). Not draggable in this mode.
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final entry = _exercises[index];
+                  // Key by the entry's object identity so each card's State
+                  // stays bound to ITS entry across remove / undo / reorder
+                  // (cluster: missing-key-state-reuse). ObjectKey stays unique
+                  // even with duplicate exercises.
+                  return _buildExerciseCard(
+                    entry,
+                    index,
+                    weightUnit,
+                    key: ObjectKey(entry),
+                  );
+                }, childCount: _exercises.length),
               ),
             ),
 
@@ -932,6 +984,27 @@ class _ExerciseCardState extends State<_ExerciseCard> {
   /// wraps it in a [ReorderableDragStartListener]), so the glyph carries the
   /// "Drag to reorder" semantics but no tap/drag of its own. No Sets stepper,
   /// no rest chips, no cardio target slots, no remove ×.
+  /// The exercise-name title, wrapped in an EXPLICIT [Semantics] leaf.
+  ///
+  /// cluster: aom-label-text-merge / listview-lazy-build-breaks-e2e — a bare
+  /// `Text` inside the card's larger semantics subtree is emitted as its own
+  /// `flt-semantics` leaf only when Flutter web's semantics bridge has spare
+  /// time; under parallel CanvasKit load (CI runs 4 Playwright workers) the
+  /// bridge coalesces updates and MERGES the name into the card's group label
+  /// (`group "Barbell Bench Press CHEST 8 3"`), dropping the standalone leaf —
+  /// so `page.locator('text=Barbell Bench Press')` finds 0 matches even though
+  /// the card is fully painted. A serial run is light enough that the leaf
+  /// survives, which is why this was parallel-ONLY. An explicit `label:` forces
+  /// the AOM to emit a stable, addressable node for the name regardless of
+  /// render load — the load-independent guarantee a bare Text can't give.
+  Widget _nameTitle(String exerciseName) {
+    return Semantics(
+      container: true,
+      label: exerciseName,
+      child: Text(exerciseName, style: AppTextStyles.title),
+    );
+  }
+
   Widget _collapsedHeader(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final exerciseName = entry.exercise?.name ?? l10n.unknownExercise;
@@ -945,7 +1018,7 @@ class _ExerciseCardState extends State<_ExerciseCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(exerciseName, style: AppTextStyles.title),
+              _nameTitle(exerciseName),
               const SizedBox(height: 4),
               pills,
             ],
@@ -1303,7 +1376,7 @@ class _ExerciseCardState extends State<_ExerciseCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(exerciseName, style: AppTextStyles.title),
+              _nameTitle(exerciseName),
               const SizedBox(height: 4),
               child,
             ],
