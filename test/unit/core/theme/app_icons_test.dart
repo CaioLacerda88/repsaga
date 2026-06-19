@@ -222,6 +222,93 @@ void main() {
     });
   });
 
+  // Regression: the rendered SvgPicture MUST carry a stable identity key keyed
+  // on BOTH the asset path AND the resolved color. Without it, Flutter's
+  // element reconciler can recycle one icon's `RenderWebVectorGraphic` element
+  // — which on CanvasKit web retains a ColorFilterLayer + globally-cached
+  // `ui.Picture` and deliberately skips `markNeedsPaint` on an assetKey change
+  // — onto a DIFFERENT asset/color slot, leaking the previous icon's
+  // color-filtered glyph at the new position (the violet nav `plan` scroll
+  // bleeding into the cardio card header). Distinct keys force a fresh element
+  // mount → fresh layer handles → no stale paint. Cluster:
+  // flutter-web-identifier-transition-stale.
+  group('AppIcons.render — stable per-(asset, color) identity key', () {
+    Key keyOf(WidgetTester tester) =>
+        tester.widget<SvgPicture>(find.byType(SvgPicture)).key!;
+
+    Future<Key> renderKey(
+      WidgetTester tester,
+      String asset,
+      Color color,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(child: AppIcons.render(asset, color: color, size: 24)),
+          ),
+        ),
+      );
+      return keyOf(tester);
+    }
+
+    testWidgets('the SvgPicture carries a non-null key', (tester) async {
+      final key = await renderKey(tester, AppIcons.plan, AppColors.hotViolet);
+      expect(key, isNotNull);
+    });
+
+    testWidgets('same asset + same color → identical key (stable across '
+        'rebuilds — no needless remount)', (tester) async {
+      final a = await renderKey(tester, AppIcons.plan, AppColors.hotViolet);
+      final b = await renderKey(tester, AppIcons.plan, AppColors.hotViolet);
+      expect(a, b);
+    });
+
+    testWidgets('different asset → different key', (tester) async {
+      final plan = await renderKey(tester, AppIcons.plan, AppColors.hotViolet);
+      final lift = await renderKey(tester, AppIcons.lift, AppColors.hotViolet);
+      expect(plan, isNot(lift));
+    });
+
+    testWidgets(
+      'same asset + different color → different key (the nav-selected violet '
+      'plan can never reconcile onto a textDim plan, or vice versa)',
+      (tester) async {
+        final violet = await renderKey(
+          tester,
+          AppIcons.plan,
+          AppColors.hotViolet,
+        );
+        final dim = await renderKey(tester, AppIcons.plan, AppColors.textDim);
+        expect(violet, isNot(dim));
+      },
+    );
+
+    testWidgets('the IconTheme-inherited path is keyed by the RESOLVED color', (
+      tester,
+    ) async {
+      // No explicit color: the key must reflect the ambient IconTheme color so
+      // a gold-inherited icon never shares an identity with a violet one.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: IconTheme(
+              data: const IconThemeData(color: AppColors.heroGold),
+              child: Center(child: AppIcons.render(AppIcons.plan, size: 24)),
+            ),
+          ),
+        ),
+      );
+      final gold = keyOf(tester);
+
+      final violet = await renderKey(
+        tester,
+        AppIcons.plan,
+        AppColors.hotViolet,
+      );
+      expect(gold, isNot(violet));
+    });
+  });
+
   // Guards the IconTheme-fallback contract: when a caller omits `color:`,
   // the renderer must read from the ambient `IconTheme`. This is the path
   // `RewardAccent` relies on to paint descendant SVGs gold without the

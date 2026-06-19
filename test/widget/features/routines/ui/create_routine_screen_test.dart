@@ -791,6 +791,139 @@ void main() {
       });
     });
 
+    // Zero target = no target. A `0:00` time / `0` distance entered in the
+    // builder's target dialog must clear the slot to null (the `+ add` ghost),
+    // NOT persist a literal 0. The shared `CardioFormat` parsers still return 0
+    // (that layer is correct for the active logging card) — the builder folds
+    // the zero into null at the `onTap` boundary. Persistence is asserted via
+    // the rehydrate path: a slot cleared to null shows the ghost, so a saved
+    // null reopens as the ghost (matching the empty-target case exactly).
+    group('zero cardio target is treated as no target (null)', () {
+      Future<void> enterDurationDialog(WidgetTester tester, String text) async {
+        // The filled duration slot is tappable (edit affordance). Tap it to
+        // open the duration dialog, type, confirm.
+        await tester.tap(find.text('28:00'));
+        await tester.pumpAndSettle();
+        expect(find.text('Enter duration'), findsOneWidget);
+        await tester.enterText(find.byType(TextField).last, text);
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets(
+        'entering 0:00 on a filled time slot reverts it to the + add ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680), // 28:00
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Precondition: the value is filled, no ghost on the time slot.
+          expect(find.text('28:00'), findsOneWidget);
+
+          await enterDurationDialog(tester, '0:00');
+
+          // The slot reverts to the invite ghost — zero is NOT stored as 0:00.
+          expect(find.text('28:00'), findsNothing);
+          // Both slots now empty (time cleared, distance never set) → two ghosts.
+          expect(find.text('+ add'), findsNWidgets(2));
+          // The edit pencil only shows on a FILLED slot; with both empty there
+          // is none — confirms the cleared slot is genuinely treated as empty.
+          expect(find.byIcon(Icons.edit), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'entering bare 0 on a filled time slot also reverts to the ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await enterDurationDialog(tester, '0');
+
+          expect(find.text('28:00'), findsNothing);
+          expect(find.text('+ add'), findsNWidgets(2));
+        },
+      );
+
+      testWidgets(
+        'a real non-zero value (28:45) still persists — zero-guard does not '
+        'eat valid targets',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDurationSeconds: 1680),
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await enterDurationDialog(tester, '28:45');
+
+          // 28:45 is a real target → it renders, no ghost on the time slot.
+          expect(find.text('28:45'), findsOneWidget);
+          expect(find.text('28:00'), findsNothing);
+          // Only the distance slot (never set) shows the ghost.
+          expect(find.text('+ add'), findsOneWidget);
+          // The filled time slot keeps its edit pencil.
+          expect(find.byIcon(Icons.edit), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'entering 0 on a filled distance slot reverts it to the + add ghost',
+        (tester) async {
+          await tester.pumpWidget(
+            _buildScreen(
+              routine: _routineWith(
+                _makeCardio(),
+                setConfigs: const [
+                  RoutineSetConfig(targetDistanceM: 5000), // 5 km
+                ],
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          // Precondition: 5 km filled.
+          expect(find.text('5 km'), findsOneWidget);
+
+          // Open the distance dialog by tapping the filled distance value.
+          await tester.tap(find.text('5 km'));
+          await tester.pumpAndSettle();
+          expect(find.text('Enter distance'), findsOneWidget);
+          await tester.enterText(find.byType(TextField).last, '0');
+          await tester.tap(find.text('OK'));
+          await tester.pumpAndSettle();
+
+          // Cleared to the ghost — zero distance is no target, not 0 m.
+          expect(find.text('5 km'), findsNothing);
+          expect(find.text('+ add'), findsNWidgets(2));
+          expect(find.byIcon(Icons.edit), findsNothing);
+        },
+      );
+    });
+
     group('Phase 38h — section eyebrows + name counter (2c)', () {
       testWidgets(
         'ROUTINE and NOTES section eyebrows render above the fields',

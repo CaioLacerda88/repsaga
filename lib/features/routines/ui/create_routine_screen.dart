@@ -535,8 +535,13 @@ class _ExerciseCard extends StatelessWidget {
   final String weightUnit;
   final ValueChanged<int> onSetCountChanged;
   final ValueChanged<int> onRestChanged;
-  final ValueChanged<int> onTargetDurationChanged;
-  final ValueChanged<double> onTargetDistanceChanged;
+  // Nullable: a cleared / zero target (`0:00` time, `0` distance) is treated
+  // as NO target (null), identical to leaving the slot empty — never stored as
+  // a literal 0. The builder's `onTap` handlers fold the zero case into null
+  // before invoking these (the shared `CardioFormat` parsers legitimately keep
+  // 0 for the active logging card, so the decision lives here, builder-side).
+  final ValueChanged<int?> onTargetDurationChanged;
+  final ValueChanged<double?> onTargetDistanceChanged;
   final VoidCallback onRemove;
 
   static const _restOptions = [30, 60, 90, 120, 180, 240];
@@ -629,7 +634,13 @@ class _ExerciseCard extends StatelessWidget {
                         entry.targetDurationSeconds ??
                         kDefaultCardioDurationSeconds,
                   );
-                  if (seconds != null) onTargetDurationChanged(seconds);
+                  // A dialog dismissal returns null → leave the target
+                  // untouched. A returned 0 (`0:00`) means "no target" — clear
+                  // it to null so the slot reverts to the `+ add` ghost rather
+                  // than persisting a meaningless 0s target.
+                  if (seconds != null) {
+                    onTargetDurationChanged(seconds == 0 ? null : seconds);
+                  }
                 },
                 child: !hasDuration
                     ? GhostValue(text: l10n.cardioAddValue)
@@ -657,7 +668,12 @@ class _ExerciseCard extends StatelessWidget {
                     distanceUnit: distanceUnit,
                     locale: locale,
                   );
-                  if (meters != null) onTargetDistanceChanged(meters);
+                  // Same zero-is-no-target rule as duration: a returned 0.0
+                  // distance clears the target to null (→ `+ add` ghost), not a
+                  // stored 0 m.
+                  if (meters != null) {
+                    onTargetDistanceChanged(meters == 0 ? null : meters);
+                  }
                 },
                 child: !hasDistance
                     ? GhostValue(text: l10n.cardioAddValue)

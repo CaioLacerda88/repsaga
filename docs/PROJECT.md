@@ -109,6 +109,7 @@ auto-memory entry of the same slug.
 |---|---|---|
 | `flutter-web-aom-role-swap` | Web | Sibling Text drops parent's `flt-semantics-identifier`; use `ValueKey(id)` |
 | `flutter-web-identifier-transition-stale` | Web | Identifier-only mutations skip setAttribute; force fresh node mount |
+| `flutter-web-svg-layer-recycle` | Web | Unkeyed `SvgPicture` (`RenderWebVectorGraphic`) recycled across a shape-changing subtree repaints its RETAINED `ColorFilterLayer` + cached picture at the new offset → a stray wrong-color glyph (paint-only, AOM-clean, web-only). Fix: stable `ValueKey(asset+color)` on the icon helper. Paint-layer sibling of `flutter-web-identifier-transition-stale`. Surfaced PR #355 (cardio card filled-state). |
 | `flutter-web-popscope-unreachable` | Web | GoRouter consumes popstate; PopScope contracts owned by widget tests |
 | `gorouter-context-go-vs-push` | Routing | `go` replaces stack, `push` adds; choose by back-button intent |
 | `nested-nav-back-gate` | Android | Inner nested nav's `NavigationNotification(canHandlePop:false)` → `setFrameworkHandlesBack(false)` → OS finishes activity natively; wrap shell in `NotificationListener<NavigationNotification>` that re-emits `true` |
