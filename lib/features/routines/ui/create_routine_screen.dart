@@ -462,6 +462,12 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
             else ...[
               ..._exercises.asMap().entries.map(
                 (entry) => _ExerciseCard(
+                  // Key by the entry's object identity so each card's State
+                  // stays bound to ITS entry across remove / undo / reorder
+                  // (index shifts otherwise reuse a sibling's State, leaking
+                  // the stateful `_showAddedWeight` reveal flag onto the wrong
+                  // exercise — cluster: missing-key-state-reuse).
+                  key: ObjectKey(entry.value),
                   entry: entry.value,
                   weightUnit: weightUnit,
                   reorderMode: _reorderMode,
@@ -514,12 +520,11 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           ],
         ),
       ),
-      // Bottom-anchored full-width Save CTA (Phase 38h 2e). The AppBar Save
-      // stays as a secondary affordance; this is the primary, thumb-reachable
-      // one. SafeArea-floored so it clears the gesture nav bar. Mirrors the
-      // AppBar's enabled/disabled gating (_canSave && !_saving). Coexists with
-      // `resizeToAvoidBottomInset: false`: the only editable fields sit above
-      // the keyboard, so the bar never needs to ride the IME — it stays put.
+      // Bottom-anchored full-width Save CTA — the SOLE Save affordance (the
+      // redundant AppBar Save was dropped). Thumb-reachable, gated by
+      // `_canSave && !_saving`. SafeArea-floored so it clears the gesture nav
+      // bar. Coexists with `resizeToAvoidBottomInset: false`: the only editable
+      // fields sit above the keyboard, so the bar never needs to ride the IME.
       bottomNavigationBar: _BottomSaveBar(
         enabled: _canSave && !_saving,
         saving: _saving,
@@ -530,9 +535,9 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   }
 }
 
-/// Bottom Save bar — a full-width primary CTA floored by [SafeArea] so it
-/// clears the Android gesture pill. Disabled state mirrors the AppBar Save's
-/// gating exactly so the two affordances never disagree.
+/// Bottom Save bar — the full-width primary (and only) Save CTA, floored by
+/// [SafeArea] so it clears the Android gesture pill. Disabled when the routine
+/// can't be saved (no name / no exercises) or a save is in flight.
 class _BottomSaveBar extends StatelessWidget {
   const _BottomSaveBar({
     required this.enabled,
@@ -632,6 +637,7 @@ class _RoutineExerciseEntry {
 ///   * **Strength** (else) — unchanged.
 class _ExerciseCard extends StatefulWidget {
   const _ExerciseCard({
+    super.key,
     required this.entry,
     required this.weightUnit,
     required this.reorderMode,
@@ -684,13 +690,27 @@ class _ExerciseCardState extends State<_ExerciseCard> {
 
   _RoutineExerciseEntry get entry => widget.entry;
 
+  // A bodyweight entry that already carries an added-weight target shows the
+  // stepper immediately (not behind the reveal CTA).
+  bool get _entryWantsAddedWeight =>
+      entry.isBodyweight && (entry.targetWeight ?? 0) > 0;
+
   @override
   void initState() {
     super.initState();
-    // A rehydrated bodyweight entry with an existing added-weight target must
-    // show the stepper immediately (not behind the reveal CTA).
-    if (entry.isBodyweight && (entry.targetWeight ?? 0) > 0) {
-      _showAddedWeight = true;
+    if (_entryWantsAddedWeight) _showAddedWeight = true;
+  }
+
+  @override
+  void didUpdateWidget(_ExerciseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If this State got re-associated with a DIFFERENT entry, re-derive the
+    // reveal from the new entry so a stale flag can't bleed across (cluster:
+    // missing-key-state-reuse). The ObjectKey on the card should prevent reuse;
+    // this is the belt-and-suspenders half of the fix template. Same-entry
+    // rebuilds (reorder toggle, unit change) preserve a manual reveal.
+    if (!identical(oldWidget.entry, widget.entry)) {
+      _showAddedWeight = _entryWantsAddedWeight;
     }
   }
 

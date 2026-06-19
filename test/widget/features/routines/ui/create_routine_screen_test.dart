@@ -1375,5 +1375,76 @@ void main() {
         },
       );
     });
+
+    group('per-card state isolation (missing-key-state-reuse)', () {
+      testWidgets(
+        'removing a card does NOT leak its + Add weight reveal onto the '
+        'card that takes its position',
+        (tester) async {
+          // Two bodyweight entries: a weighted pull-up (added-weight target →
+          // the stepper auto-reveals) ABOVE a plain dip (no added weight →
+          // collapsed). Without a stable key + didUpdateWidget, removing index
+          // 0 reuses the State by position and bleeds the revealed flag onto
+          // the dip (cluster: missing-key-state-reuse).
+          final routine = Routine(
+            id: 'routine-bw-leak',
+            name: 'Calisthenics',
+            isDefault: false,
+            exercises: [
+              RoutineExercise(
+                exerciseId: 'ex-pullup',
+                setConfigs: const [
+                  RoutineSetConfig(
+                    targetReps: 8,
+                    targetWeight: 20,
+                    restSeconds: 90,
+                  ),
+                ],
+                exercise: _makeBodyweight(
+                  id: 'ex-pullup',
+                  name: 'Weighted Pull-up',
+                ),
+              ),
+              RoutineExercise(
+                exerciseId: 'ex-dip',
+                setConfigs: const [
+                  RoutineSetConfig(targetReps: 8, restSeconds: 90),
+                ],
+                exercise: _makeBodyweight(id: 'ex-dip', name: 'Dip'),
+              ),
+            ],
+            createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+          );
+
+          await tester.pumpWidget(_buildScreen(routine: routine));
+          await tester.pumpAndSettle();
+
+          // Precondition: the pull-up auto-reveals its Added-weight stepper;
+          // the dip shows the collapsed "+ Add weight" CTA.
+          expect(find.text('Added weight'), findsOneWidget);
+          expect(find.text('+ Add weight'), findsOneWidget);
+
+          // Remove the pull-up (first card).
+          await tester.tap(find.byIcon(Icons.close).first);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+
+          // Only the dip remains. It must keep its OWN collapsed state — the
+          // pull-up's revealed Added-weight stepper must NOT bleed through.
+          expect(find.text('Weighted Pull-up'), findsNothing);
+          expect(find.text('Dip'), findsOneWidget);
+          expect(
+            find.text('+ Add weight'),
+            findsOneWidget,
+            reason: 'the dip has no added weight — its reveal stays collapsed',
+          );
+          expect(
+            find.text('Added weight'),
+            findsNothing,
+            reason: "the removed card's reveal flag must not leak onto the dip",
+          );
+        },
+      );
+    });
   });
 }
