@@ -8,6 +8,8 @@ import '../../../core/utils/enum_l10n.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../exercises/models/exercise.dart';
 import '../../profile/providers/profile_providers.dart';
+import '../../rpg/domain/body_part_hues.dart';
+import '../../rpg/models/body_part.dart';
 import '../../workouts/ui/widgets/cardio_field.dart';
 import '../../workouts/ui/widgets/cardio_target_dialogs.dart';
 import '../../workouts/ui/widgets/exercise_picker_sheet.dart';
@@ -31,6 +33,13 @@ const _kRoutineNotesMaxLength = 600;
 /// Show the live character counter only once the user is within 100 chars of
 /// the cap — keeps the field chrome quiet until brevity actually matters.
 const _kRoutineNotesCounterThreshold = 500;
+
+/// DB + UI cap for the routine name.
+const _kRoutineNameMaxLength = 80;
+
+/// Show the name counter only once the user is within ~10 of the cap — mirrors
+/// the notes-counter pattern so the field chrome stays quiet until it matters.
+const _kRoutineNameCounterThreshold = 70;
 
 class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
   late final TextEditingController _nameController;
@@ -190,6 +199,43 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
     );
   }
 
+  /// Custom name counter — mirrors [_buildNotesCounter]: returns `null` (fully
+  /// collapsing the sub-row) until within ~10 of the cap, then the colored
+  /// "{current} / {max}" readout.
+  Widget? _buildNameCounter(BuildContext context, int currentLength) {
+    if (currentLength < _kRoutineNameCounterThreshold) {
+      return null;
+    }
+    final l10n = AppLocalizations.of(context);
+    final remaining = _kRoutineNameMaxLength - currentLength;
+    final Color color;
+    if (remaining <= 0) {
+      color = AppColors.error;
+    } else if (remaining <= 5) {
+      color = AppColors.warning;
+    } else {
+      color = AppColors.textDim;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        l10n.notesCharCounter(currentLength, _kRoutineNameMaxLength),
+        style: AppTextStyles.bodySmall.copyWith(color: color),
+      ),
+    );
+  }
+
+  /// Uppercase section eyebrow above the name / notes fields (Phase 38h 2c).
+  Widget _sectionEyebrow(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 7),
+      child: Text(
+        label.toUpperCase(),
+        style: AppTextStyles.sectionHeader.copyWith(color: AppColors.hotViolet),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -248,14 +294,24 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _sectionEyebrow(l10n.routineSectionLabel),
             TextField(
               controller: _nameController,
               autofocus: !_isEditing,
-              maxLength: 80,
+              maxLength: _kRoutineNameMaxLength,
+              // Custom counter (see _buildNameCounter): hidden until near cap.
+              buildCounter:
+                  (
+                    context, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => _buildNameCounter(context, currentLength),
               decoration: InputDecoration(hintText: l10n.routineName),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
+            _sectionEyebrow(l10n.notesSectionLabel),
             // Q2 routine notes — optional, multiline, flat field on surface2
             // (no Card chrome). Lives below name, above the exercise list.
             Semantics(
@@ -284,7 +340,34 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (_exercises.isNotEmpty) ...[
+            if (_exercises.isEmpty)
+              // RPG-voiced empty-state beat — a center of gravity between the
+              // notes field and the add button (Phase 38h 3d) instead of a
+              // cold blank gap.
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 30,
+                  horizontal: 16,
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.fitness_center,
+                      size: 30,
+                      color: AppColors.textDim.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.routineEmptyExercises,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
               ..._exercises.asMap().entries.map(
                 (entry) => _ExerciseCard(
                   entry: entry.value,
@@ -306,7 +389,8 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
                   },
                 ),
               ),
-              const SizedBox(height: 8),
+              // 16dp separation from the last card (Phase 38h 2d).
+              const SizedBox(height: 16),
             ],
             Semantics(
               container: true,
@@ -327,6 +411,71 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
               ),
             ),
           ],
+        ),
+      ),
+      // Bottom-anchored full-width Save CTA (Phase 38h 2e). The AppBar Save
+      // stays as a secondary affordance; this is the primary, thumb-reachable
+      // one. SafeArea-floored so it clears the gesture nav bar. Mirrors the
+      // AppBar's enabled/disabled gating (_canSave && !_saving). Coexists with
+      // `resizeToAvoidBottomInset: false`: the only editable fields sit above
+      // the keyboard, so the bar never needs to ride the IME — it stays put.
+      bottomNavigationBar: _BottomSaveBar(
+        enabled: _canSave && !_saving,
+        saving: _saving,
+        label: l10n.saveRoutineCta,
+        onSave: _save,
+      ),
+    );
+  }
+}
+
+/// Bottom Save bar — a full-width primary CTA floored by [SafeArea] so it
+/// clears the Android gesture pill. Disabled state mirrors the AppBar Save's
+/// gating exactly so the two affordances never disagree.
+class _BottomSaveBar extends StatelessWidget {
+  const _BottomSaveBar({
+    required this.enabled,
+    required this.saving,
+    required this.label,
+    required this.onSave,
+  });
+
+  final bool enabled;
+  final bool saving;
+  final String label;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.abyss,
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.hair)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Semantics(
+              container: true,
+              identifier: 'create-routine-save-cta',
+              child: FilledButton.icon(
+                onPressed: enabled ? onSave : null,
+                icon: saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check, size: 20),
+                label: Text(label),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -450,11 +599,17 @@ class _ExerciseCard extends StatelessWidget {
     final locale = Localizations.localeOf(context).languageCode;
     final distanceUnit = CardioFormat.distanceUnitFor(weightUnit);
 
+    final hasDuration = entry.targetDurationSeconds != null;
+    final hasDistance = entry.targetDistanceM != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(context, child: CardioEyebrow(slug: entry.exercise?.slug)),
-        const SizedBox(height: 12),
+        _header(
+          context,
+          child: _IdentityPill.cardio(slug: entry.exercise?.slug),
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -462,6 +617,11 @@ class _ExerciseCard extends StatelessWidget {
                 identifier: 'create-routine-target-time',
                 semanticsLabel: l10n.routineTargetTimeLabel,
                 label: l10n.routineTargetTimeLabel,
+                // Taller hero slot + edit glyph on a filled value (Phase 38h
+                // 2a/3a). The active CardioEntryCard stays on the compact
+                // default — the size is opt-in here only.
+                size: CardioFieldSize.large,
+                showEditAffordance: hasDuration,
                 onTap: () async {
                   final seconds = await showCardioDurationDialog(
                     context,
@@ -471,12 +631,12 @@ class _ExerciseCard extends StatelessWidget {
                   );
                   if (seconds != null) onTargetDurationChanged(seconds);
                 },
-                child: entry.targetDurationSeconds == null
+                child: !hasDuration
                     ? GhostValue(text: l10n.cardioAddValue)
                     : Text(
                         CardioFormat.duration(entry.targetDurationSeconds!),
                         style: AppTextStyles.numeric.copyWith(
-                          fontSize: 18,
+                          fontSize: CardioFieldSize.large.valueFontSize,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -488,6 +648,8 @@ class _ExerciseCard extends StatelessWidget {
                 identifier: 'create-routine-target-distance',
                 semanticsLabel: l10n.routineTargetDistanceLabel,
                 label: l10n.routineTargetDistanceLabel,
+                size: CardioFieldSize.large,
+                showEditAffordance: hasDistance,
                 onTap: () async {
                   final meters = await showCardioDistanceDialog(
                     context,
@@ -497,7 +659,7 @@ class _ExerciseCard extends StatelessWidget {
                   );
                   if (meters != null) onTargetDistanceChanged(meters);
                 },
-                child: entry.targetDistanceM == null
+                child: !hasDistance
                     ? GhostValue(text: l10n.cardioAddValue)
                     : Text.rich(
                         TextSpan(
@@ -507,7 +669,7 @@ class _ExerciseCard extends StatelessWidget {
                             locale: locale,
                           ),
                           style: AppTextStyles.numeric.copyWith(
-                            fontSize: 18,
+                            fontSize: CardioFieldSize.large.valueFontSize,
                             fontWeight: FontWeight.w600,
                           ),
                           children: [
@@ -536,7 +698,14 @@ class _ExerciseCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(context, child: _typeTag(context)),
+        _header(
+          context,
+          child: entry.isBodyweight
+              ? _IdentityPill.bodyweight(label: l10n.routineBodyweightTag)
+              : _IdentityPill.strength(
+                  muscleGroup: entry.exercise?.muscleGroup,
+                ),
+        ),
         const SizedBox(height: 12),
 
         // Set count stepper
@@ -625,55 +794,128 @@ class _ExerciseCard extends StatelessWidget {
             ],
           ),
         ),
+        // Remove ×. Drops `visualDensity: compact` (which silently shrank the
+        // rendered hit-box below the 48dp floor — feedback:
+        // tap-target-measurement) and pins explicit 48×48 constraints.
         IconButton(
           icon: Icon(Icons.close, color: theme.colorScheme.error, size: 20),
           onPressed: onRemove,
-          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         ),
       ],
     );
   }
+}
 
-  /// Strength/bodyweight sub-line tag. Bodyweight gets a NEUTRAL tag (cream on
-  /// surface2, hair border, no identity color — brand-vs-identity rule);
-  /// every other muscle group keeps the violet muscle-group chip.
-  Widget _typeTag(BuildContext context) {
-    final theme = Theme.of(context);
+/// One unified identity pill grammar for all three exercise types (Phase 38h
+/// 2b): filled, identity color at 15% alpha, uppercase [AppTextStyles.label]
+/// in the identity color, [kRadiusSm] corners. Only the color varies:
+///   * [cardio]     — teal ([AppColors.bodyPartCardio]); renders the resolved
+///     "Running · Cardio" activity eyebrow via [CardioEyebrow]'s slug map,
+///     never a raw slug.
+///   * [strength]   — the muscle group's [BodyPartHues] identity hue (chest
+///     pink, back blue, …). MuscleGroup and BodyPart share enum names, so the
+///     hue is looked up by name.
+///   * [bodyweight] — NEUTRAL (surface2 fill, hair border, textDim label —
+///     NO identity color, per the brand-vs-identity rule).
+class _IdentityPill extends StatelessWidget {
+  const _IdentityPill._({
+    required this.label,
+    required this.color,
+    this.labelColor,
+    this.cardioSlug,
+    this.neutral = false,
+    this.isCardio = false,
+  });
+
+  /// Cardio variant — the activity eyebrow (resolved label, never a raw slug).
+  /// Background is teal at 15%; the label keeps the teal-dim (0.72 alpha)
+  /// register the active card's eyebrow uses so the two read as one family.
+  const _IdentityPill.cardio({String? slug})
+    : this._(
+        label: null,
+        color: AppColors.bodyPartCardio,
+        cardioSlug: slug,
+        isCardio: true,
+      );
+
+  /// Strength variant — colored by the muscle group's identity hue.
+  factory _IdentityPill.strength({required MuscleGroup? muscleGroup}) {
+    final bodyPart = muscleGroup == null
+        ? null
+        : BodyPart.tryFromDbValue(muscleGroup.name);
+    return _IdentityPill._(
+      label: muscleGroup,
+      color: bodyPart == null
+          ? AppColors.hotViolet
+          : BodyPartHues.hueFor(bodyPart),
+    );
+  }
+
+  /// Bodyweight variant — neutral, no identity color.
+  const _IdentityPill.bodyweight({required String label})
+    : this._(label: label, color: AppColors.textDim, neutral: true);
+
+  /// Either a [String] (bodyweight literal) or a [MuscleGroup] (strength), or
+  /// null for the cardio variant (which renders [cardioSlug] instead).
+  final Object? label;
+  final Color color;
+  final Color? labelColor;
+  final String? cardioSlug;
+  final bool neutral;
+  final bool isCardio;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    if (entry.isBodyweight) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          border: Border.all(color: AppColors.hair),
-          borderRadius: BorderRadius.circular(kRadiusSm),
-        ),
-        child: Text(
-          l10n.routineBodyweightTag.toUpperCase(),
-          style: AppTextStyles.label.copyWith(
-            fontSize: 11,
-            color: AppColors.textDim,
-          ),
-        ),
-      );
+    final String text;
+    if (isCardio) {
+      // Resolved activity eyebrow inside the pill shell (never a raw slug).
+      text = _CardioPillLabel.resolve(cardioSlug, l10n);
+    } else if (label is MuscleGroup) {
+      text = (label as MuscleGroup).localizedName(l10n).toUpperCase();
+    } else {
+      text = (label as String).toUpperCase();
     }
 
-    final muscleGroup = entry.exercise?.muscleGroup.localizedName(l10n);
-    if (muscleGroup == null) return const SizedBox.shrink();
+    // Cardio keeps the teal-dim (0.72) label register the active card uses;
+    // strength/bodyweight render the label at the full identity color.
+    final resolvedLabelColor =
+        labelColor ?? (isCardio ? color.withValues(alpha: 0.72) : color);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
+        color: neutral ? AppColors.surface2 : color.withValues(alpha: 0.15),
+        border: neutral ? Border.all(color: AppColors.hair) : null,
+        borderRadius: BorderRadius.circular(kRadiusSm),
       ),
       child: Text(
-        muscleGroup,
-        style: AppTextStyles.label.copyWith(
-          fontSize: 11,
-          color: theme.colorScheme.primary,
-        ),
+        text,
+        style: AppTextStyles.label.copyWith(color: resolvedLabelColor),
       ),
     );
+  }
+}
+
+/// Resolves the cardio pill's text — `<ACTIVITY> · CARDIO` or the generic
+/// `CARDIO` fallback (never a raw slug — cluster:
+/// slug-rendered-as-display-name). Mirrors [CardioEyebrow]'s slug map so the
+/// builder pill and the active-card eyebrow stay in lockstep.
+abstract final class _CardioPillLabel {
+  static String resolve(String? slug, AppLocalizations l10n) {
+    final activity = switch (slug) {
+      'treadmill' => l10n.cardioActivityRunning,
+      'rowing_machine' => l10n.cardioActivityRowing,
+      'stationary_bike' || 'assault_bike' => l10n.cardioActivityCycling,
+      'jump_rope' => l10n.cardioActivityJumpRope,
+      'elliptical' => l10n.cardioActivityElliptical,
+      'sled_push' || 'sled_drag' => l10n.cardioActivitySled,
+      _ => null,
+    };
+    return activity != null
+        ? l10n.cardioEyebrow(activity)
+        : l10n.cardioEyebrowGeneric;
   }
 }

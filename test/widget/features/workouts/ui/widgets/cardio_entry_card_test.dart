@@ -26,6 +26,7 @@ import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/widgets/cardio_entry_card.dart';
+import 'package:repsaga/features/workouts/ui/widgets/cardio_field.dart';
 import 'package:repsaga/features/workouts/ui/widgets/duration_stepper.dart';
 
 import '../../../../../helpers/test_material_app.dart';
@@ -552,6 +553,32 @@ void main() {
       expect(find.byIcon(Icons.check), findsOneWidget);
       expect(find.byIcon(Icons.arrow_upward), findsNothing);
       expect(find.byIcon(Icons.arrow_downward), findsNothing);
+    });
+  });
+
+  group('CardioEntryCard — shared CardioField density (blast-radius guard)', () {
+    testWidgets('the active card keeps the COMPACT CardioField size — the '
+        'Phase 38h builder-only large variant must NOT leak in here', (
+      tester,
+    ) async {
+      await _pump(tester, _session());
+
+      final fields = tester.widgetList<CardioField>(find.byType(CardioField));
+      expect(fields, isNotEmpty);
+      for (final f in fields) {
+        expect(
+          f.size,
+          CardioFieldSize.compact,
+          reason:
+              'the active CardioEntryCard renders byte-identically to before '
+              '38h — the large variant is opt-in for the routine builder only',
+        );
+        expect(
+          f.showEditAffordance,
+          isFalse,
+          reason: 'the pencil glyph is a routine-builder affordance only',
+        );
+      }
     });
   });
 

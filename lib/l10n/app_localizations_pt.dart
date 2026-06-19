@@ -3330,6 +3330,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routineBodyweightTag => 'Peso corporal';
 
   @override
+  String get routineSectionLabel => 'Rotina';
+
+  @override
+  String get notesSectionLabel => 'Notas';
+
+  @override
+  String get routineEmptyExercises =>
+      'Nenhum exercício ainda — adicione o primeiro para forjar esta rotina.';
+
+  @override
+  String get saveRoutineCta => 'Salvar rotina';
+
+  @override
   String get completeCardio => 'Concluir cardio';
 
   @override
@@ -3353,7 +3366,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get enterDurationHint => 'mm:ss';
 
   @override
+  String get enterDurationHelper => 'mm:ss ou minutos — ex.: 28:00';
+
+  @override
+  String get enterDurationError => 'Use mm:ss — ex.: 28:00';
+
+  @override
   String get enterDistance => 'Inserir distância';
+
+  @override
+  String get enterDistanceHelper => 'ex.: 5,2';
+
+  @override
+  String get enterDistanceError => 'Insira uma distância válida';
 
   @override
   String get decrementDuration => 'Diminuir duração';
