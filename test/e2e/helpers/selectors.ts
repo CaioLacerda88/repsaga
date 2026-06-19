@@ -641,8 +641,18 @@ export const CREATE_ROUTINE = {
   nameInput: 'input[data-semantics-role="text-field"]',
   /** "Add Exercise" button — Semantics(identifier: 'create-routine-add-exercise') */
   addExerciseButton: '[flt-semantics-identifier="create-routine-add-exercise"]',
-  /** "Save" button — Semantics(identifier: 'create-routine-save') */
+  /** "Save" button in the AppBar (secondary) — Semantics(identifier: 'create-routine-save') */
   saveButton: '[flt-semantics-identifier="create-routine-save"]',
+  /**
+   * Bottom-anchored full-width "Save routine" CTA (Phase 38h 2e) — the PRIMARY
+   * save affordance. `_BottomSaveBar` wraps a FilledButton.icon in
+   * Semantics(container: true, identifier: 'create-routine-save-cta'). The
+   * AppBar `saveButton` remains as the secondary affordance. Both share the
+   * same enable gate (name + >=1 exercise) and the same save handler. Match by
+   * identifier for locale-independence; tap with `.click({ force: true })`
+   * since the Semantics container may block child-name merge.
+   */
+  saveCtaButton: '[flt-semantics-identifier="create-routine-save-cta"]',
   /**
    * Sets label in set configuration row — Semantics(identifier:
    * 'create-routine-sets'). Renders ONLY on strength/bodyweight cards; a cardio

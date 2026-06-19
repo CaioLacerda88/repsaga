@@ -401,6 +401,196 @@ test.describe('Routine builder cardio target', { tag: '@smoke' }, () => {
 });
 
 // =============================================================================
+// Routine builder polish (smokeRoutineManagement user) — Phase 38h
+// =============================================================================
+//
+// Two flows for the post-review polish pass:
+//   (a) the NEW bottom-anchored Save CTA (create-routine-save-cta) is now the
+//       primary save affordance — drive a full create/save through it (not the
+//       AppBar save) and prove the routine lands in MY ROUTINES.
+//   (b) cardio-target VALIDATE-BEFORE-CLOSE: open the duration dialog, type an
+//       unparseable value, assert the dialog STAYS OPEN (OK still present) and
+//       nothing got saved; then type a valid value, confirm + save, and verify
+//       the typed target persisted at the DB layer (the canvas-drawn value is
+//       outside the AOM — cluster aom-explicit-children-block-name-merge).
+//
+// Shares the smokeRoutineManagement user but runs SERIAL with a per-test reseed
+// scoped to this block's OWN name prefix (cluster e2e-spec-state-leak-across-
+// tests) — never touches the CRUD block's "Smoke Test Routine" rows nor the
+// cardio-target block's "Cardio Target Routine" rows.
+
+const POLISH_ROUTINE_PREFIX = 'Polish Routine';
+
+/** Delete this block's own routines (by name prefix) so each test starts clean. */
+async function reseedRoutineBuilderPolishUser(): Promise<void> {
+  const admin = getAdminClient();
+  const userId = await getUserIdByEmail(
+    admin,
+    getUser('smokeRoutineManagement').email,
+  );
+  if (!userId) return;
+  await admin
+    .from('workout_templates')
+    .delete()
+    .eq('user_id', userId)
+    .like('name', `${POLISH_ROUTINE_PREFIX}%`);
+}
+
+test.describe('Routine builder polish', { tag: '@smoke' }, () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await reseedRoutineBuilderPolishUser();
+    await login(
+      page,
+      getUser('smokeRoutineManagement').email,
+      getUser('smokeRoutineManagement').password,
+    );
+    await navigateToTab(page, 'Routines');
+  });
+
+  test.afterEach(async () => {
+    await reseedRoutineBuilderPolishUser();
+  });
+
+  test('should create and save a routine via the bottom Save CTA', async ({
+    page,
+  }) => {
+    const routineName = `${POLISH_ROUTINE_PREFIX} CTA ${Date.now()}`;
+
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The bottom CTA is present from the start but DISABLED while invalid
+    // (empty name + no exercise) — it shares the AppBar save's enable gate.
+    await expect(page.locator(CREATE_ROUTINE.saveCtaButton)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', EXERCISE_NAME);
+    const addTile = page
+      .locator(EXERCISE_PICKER.addExerciseButton(EXERCISE_NAME))
+      .first();
+    await expect(addTile).toBeVisible({ timeout: 10_000 });
+    await addTile.click();
+    await expect(page.locator(`text=${EXERCISE_NAME}`).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Save via the NEW bottom CTA (not the AppBar save). force-click forwards
+    // the tap onto the FilledButton inside the Semantics container.
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
+
+    // Back on the routines list, the new routine appears in MY ROUTINES —
+    // proving the bottom CTA performed the same save the AppBar action does.
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(ROUTINE.routineName(routineName)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('should keep the cardio duration dialog open on invalid input, then persist a valid target', async ({
+    page,
+  }) => {
+    const routineName = `${POLISH_ROUTINE_PREFIX} Cardio ${Date.now()}`;
+
+    await expect(page.locator(ROUTINE.heading).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(ROUTINE_MANAGEMENT.createIconButton).click();
+    await expect(
+      page.locator(ROUTINE_MANAGEMENT.createRoutineScreenTitle),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await flutterFill(page, CREATE_ROUTINE.nameInput, routineName);
+
+    await page.locator(CREATE_ROUTINE.addExerciseButton).click();
+    await expect(page.locator(EXERCISE_PICKER.searchInput)).toBeVisible({
+      timeout: 10_000,
+    });
+    await flutterFillByInput(page, 'Search exercises', SEED_EXERCISES.treadmill);
+    const addTreadmill = page
+      .locator(EXERCISE_PICKER.addExerciseButton(SEED_EXERCISES.treadmill))
+      .first();
+    await expect(addTreadmill).toBeVisible({ timeout: 10_000 });
+    await addTreadmill.click();
+
+    await expect(page.locator(CREATE_ROUTINE.targetTime)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // --- Open the duration dialog and type an UNPARSEABLE value (28:90 — ss
+    // >= 60). Validate-before-close: OK must NOT pop the dialog. ---
+    await page.locator(CREATE_ROUTINE.targetTime).click({ force: true });
+    const okButton = page.locator('text="OK"');
+    await expect(okButton).toBeVisible({ timeout: 5_000 });
+
+    const durationInput = page.locator('input').last();
+    await durationInput.click({ timeout: 5_000 });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type('28:90', { delay: 10 });
+    await okButton.click();
+
+    // The dialog must STILL be open — OK is still visible (pre-38h, the dialog
+    // silently popped null here, reading as a broken OK).
+    await expect(okButton).toBeVisible({ timeout: 3_000 });
+
+    // --- Correct it to a valid value; the error clears and OK now closes. ---
+    await durationInput.click({ timeout: 5_000 });
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type('28:00', { delay: 10 });
+    await okButton.click();
+    await expect(okButton).not.toBeVisible({ timeout: 5_000 });
+
+    // --- Save and verify the VALID target (1680s) persisted; the invalid
+    // 28:90 was never accepted. The value is canvas-drawn outside the AOM, so
+    // the DB read is the authoritative persistence check. ---
+    await page.locator(CREATE_ROUTINE.saveCtaButton).click({ force: true });
+    await expect(page.locator(ROUTINE.myRoutinesSection)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator(ROUTINE.routineName(routineName)).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    const admin = getAdminClient();
+    const userId = await getUserIdByEmail(
+      admin,
+      getUser('smokeRoutineManagement').email,
+    );
+    expect(userId).toBeTruthy();
+    const { data: template, error } = await admin
+      .from('workout_templates')
+      .select('exercises')
+      .eq('user_id', userId!)
+      .eq('name', routineName)
+      .single();
+    expect(error).toBeNull();
+    const savedConfigs = (template?.exercises?.[0]?.set_configs ?? []) as Array<
+      Record<string, unknown>
+    >;
+    expect(savedConfigs).toHaveLength(1);
+    // The valid 28:00 = 1680s persisted; the rejected 28:90 never made it.
+    expect(savedConfigs[0]?.['target_duration_seconds']).toBe(1680);
+  });
+});
+
+// =============================================================================
 // SMOKE — Routine start (smokeRoutineStart user, BUG-001/003/004/005)
 // =============================================================================
 

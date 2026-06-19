@@ -149,6 +149,56 @@ void main() {
       expect(captured, 1680);
     });
 
+    testWidgets('very large bare minutes (999) pops 59940 and closes', (
+      tester,
+    ) async {
+      // No upper clamp in parseDuration — a 999-minute target is accepted as
+      // 59940s. Pins that "very large" is a valid target, not silently eaten.
+      int? captured;
+      var completed = false;
+      await host(tester, (v) {
+        captured = v;
+        completed = true;
+      });
+      await openAndType(tester, '999');
+      expect(completed, isTrue);
+      expect(captured, 59940);
+      expect(find.text('Enter duration'), findsNothing);
+    });
+
+    // PRODUCT-AMBIGUITY FLAG (zero duration target): parseDuration('0') and
+    // ('0:00') both return 0 (NOT null), so the dialog accepts zero as a valid
+    // target and pops 0. Whether a 0-second cardio target is meaningful is a
+    // product call — these tests pin the CURRENT behavior (zero is accepted).
+    // If product later decides zero should be rejected, parseDuration must
+    // gain a `> 0` guard and these expectations flip to the invalid-path
+    // (errorText shown, no pop). Flagged in the QA report.
+    testWidgets('zero bare (0) is accepted and pops 0', (tester) async {
+      int? captured;
+      var completed = false;
+      await host(tester, (v) {
+        captured = v;
+        completed = true;
+      });
+      await openAndType(tester, '0');
+      expect(completed, isTrue);
+      expect(captured, 0);
+      expect(find.text('Enter duration'), findsNothing);
+    });
+
+    testWidgets('zero mm:ss (0:00) is accepted and pops 0', (tester) async {
+      int? captured;
+      var completed = false;
+      await host(tester, (v) {
+        captured = v;
+        completed = true;
+      });
+      await openAndType(tester, '0:00');
+      expect(completed, isTrue);
+      expect(captured, 0);
+      expect(find.text('Enter duration'), findsNothing);
+    });
+
     for (final invalid in <String>['28:90', '28,5', 'abc', ':30']) {
       testWidgets('invalid "$invalid" shows errorText and does NOT pop', (
         tester,
@@ -325,6 +375,22 @@ void main() {
       expect(captured, 0.0);
     });
 
+    testWidgets('very large distance (999) pops 999000m and closes', (
+      tester,
+    ) async {
+      // No upper clamp — a 999 km target converts to 999000m and is accepted.
+      double? captured;
+      var completed = false;
+      await host(tester, (v) {
+        captured = v;
+        completed = true;
+      });
+      await openAndType(tester, '999');
+      expect(completed, isTrue);
+      expect(captured, 999000.0);
+      expect(find.text('Enter distance'), findsNothing);
+    });
+
     for (final invalid in <String>['-3', 'abc']) {
       testWidgets('invalid "$invalid" shows errorText and does NOT pop', (
         tester,
@@ -355,6 +421,25 @@ void main() {
       expect(captured, isNull);
       expect(find.text('Enter a valid distance'), findsNothing);
       expect(find.text('Enter distance'), findsNothing);
+    });
+
+    testWidgets('editing after an error clears the distance error state', (
+      tester,
+    ) async {
+      await host(tester, (_) {});
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '-3'); // invalid
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a valid distance'), findsOneWidget);
+
+      // Typing a valid value clears the sticky error and restores the helper.
+      await tester.enterText(find.byType(TextField), '5.2');
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a valid distance'), findsNothing);
+      expect(find.text('e.g. 5.2'), findsOneWidget);
     });
   });
 }
