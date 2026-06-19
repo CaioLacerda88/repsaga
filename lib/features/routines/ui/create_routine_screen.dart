@@ -1014,6 +1014,21 @@ class _ExerciseCardState extends State<_ExerciseCard> {
 
     return Row(
       children: [
+        // Drag affordance glyph — the visual cue that the card is draggable.
+        // Leading (before the name) per the locked phase-38 mockup. The drag
+        // itself is started by the enclosing ReorderableDragStartListener
+        // (whole-card), so this is a passive, semantics-labelled cue only.
+        Semantics(
+          container: true,
+          identifier: 'create-routine-drag-handle',
+          label: l10n.dragToReorder,
+          child: const SizedBox(
+            width: 32,
+            height: 40,
+            child: Icon(Icons.drag_handle, color: AppColors.textDim, size: 20),
+          ),
+        ),
+        const SizedBox(width: 4),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,19 +1037,6 @@ class _ExerciseCardState extends State<_ExerciseCard> {
               const SizedBox(height: 4),
               pills,
             ],
-          ),
-        ),
-        // Drag affordance glyph — the visual cue that the card is draggable.
-        // The drag itself is started by the enclosing ReorderableDragStartListener
-        // (whole-card), so this is a passive, semantics-labelled cue only.
-        Semantics(
-          container: true,
-          identifier: 'create-routine-drag-handle',
-          label: l10n.dragToReorder,
-          child: const SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(Icons.drag_handle, color: AppColors.textDim, size: 20),
           ),
         ),
       ],
