@@ -822,7 +822,6 @@ class _IdentityPill extends StatelessWidget {
   const _IdentityPill._({
     required this.label,
     required this.color,
-    this.labelColor,
     this.cardioSlug,
     this.neutral = false,
     this.isCardio = false,
@@ -860,7 +859,6 @@ class _IdentityPill extends StatelessWidget {
   /// null for the cardio variant (which renders [cardioSlug] instead).
   final Object? label;
   final Color color;
-  final Color? labelColor;
   final String? cardioSlug;
   final bool neutral;
   final bool isCardio;
@@ -881,8 +879,7 @@ class _IdentityPill extends StatelessWidget {
 
     // Cardio keeps the teal-dim (0.72) label register the active card uses;
     // strength/bodyweight render the label at the full identity color.
-    final resolvedLabelColor =
-        labelColor ?? (isCardio ? color.withValues(alpha: 0.72) : color);
+    final resolvedLabelColor = isCardio ? color.withValues(alpha: 0.72) : color;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -901,19 +898,12 @@ class _IdentityPill extends StatelessWidget {
 
 /// Resolves the cardio pill's text — `<ACTIVITY> · CARDIO` or the generic
 /// `CARDIO` fallback (never a raw slug — cluster:
-/// slug-rendered-as-display-name). Mirrors [CardioEyebrow]'s slug map so the
-/// builder pill and the active-card eyebrow stay in lockstep.
+/// slug-rendered-as-display-name). Delegates the slug→activity lookup to
+/// [CardioEyebrow.activityLabel] (the single source) so the builder pill and
+/// the active-card eyebrow can't drift.
 abstract final class _CardioPillLabel {
   static String resolve(String? slug, AppLocalizations l10n) {
-    final activity = switch (slug) {
-      'treadmill' => l10n.cardioActivityRunning,
-      'rowing_machine' => l10n.cardioActivityRowing,
-      'stationary_bike' || 'assault_bike' => l10n.cardioActivityCycling,
-      'jump_rope' => l10n.cardioActivityJumpRope,
-      'elliptical' => l10n.cardioActivityElliptical,
-      'sled_push' || 'sled_drag' => l10n.cardioActivitySled,
-      _ => null,
-    };
+    final activity = CardioEyebrow.activityLabel(slug, l10n);
     return activity != null
         ? l10n.cardioEyebrow(activity)
         : l10n.cardioEyebrowGeneric;

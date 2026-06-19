@@ -148,7 +148,12 @@ class CardioEyebrow extends StatelessWidget {
 
   final String? slug;
 
-  static String? _activityLabel(String? slug, AppLocalizations l10n) {
+  /// Resolves a cardio exercise slug to its localized activity label
+  /// (e.g. `treadmill` → "Running"), or null for an unknown slug. SINGLE
+  /// source of the slug→activity map — both this eyebrow and the routine
+  /// builder's identity pill call it so they can't drift (cluster:
+  /// slug-rendered-as-display-name).
+  static String? activityLabel(String? slug, AppLocalizations l10n) {
     return switch (slug) {
       'treadmill' => l10n.cardioActivityRunning,
       'rowing_machine' => l10n.cardioActivityRowing,
@@ -163,7 +168,7 @@ class CardioEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final activity = _activityLabel(slug, l10n);
+    final activity = activityLabel(slug, l10n);
     return Padding(
       padding: const EdgeInsets.only(top: 3),
       child: Text(
