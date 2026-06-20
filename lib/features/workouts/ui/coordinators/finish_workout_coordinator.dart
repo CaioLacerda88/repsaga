@@ -19,7 +19,6 @@ import '../../../rpg/domain/rank_curve.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
-import '../../../rpg/providers/vitality_fresh_pulse_provider.dart';
 import '../../models/active_workout_state.dart';
 import '../post_session/post_session_controller.dart';
 import '../../providers/workout_history_providers.dart';
@@ -483,20 +482,25 @@ class FinishWorkoutCoordinator {
           for (final entry in bpDeltasNum.entries)
             entry.key: entry.value.round(),
         };
-        // Phase Vitality PR 2 — record a 24h "fresh today" pulse for every
-        // body part trained this session (PR 1 recomputes their vitality at
-        // save time, so they're freshly charged). Consumed by
-        // `BodyPartRankRow` as a SECOND trigger source alongside the rank-up
-        // pulse — saga rows read "fresh today" after a workout, not only
-        // after a rank-up. Fire-and-forget: a cosmetic pulse write must not
-        // block the post-session navigation. Written here (not in the
-        // celebration orchestrator, which only runs on rank-up sessions) so
-        // it fires for plain XP-only finishes too.
-        unawaited(
-          ref
-              .read(vitalityFreshPulseLocalStorageProvider)
-              .recordChargedBatch(bpDeltas.keys),
-        );
+        // Phase Vitality PR 2 — the 24h "fresh today" pulse for every body
+        // part trained this session is recorded by [PostSessionScreen] on
+        // mount (it reads `params.bpXpDeltas.keys`), NOT here.
+        //
+        // WHY NOT HERE (web-IndexedDB finish-path hazard, cousin of cluster
+        // `hive-testwidgets`): on Flutter web, `VitalityFreshPulseLocalStorage`
+        // writes go to IndexedDB. Reading the provider here ALSO fires its
+        // first-read `sweepExpired()` (more IndexedDB work), and the
+        // `recordChargedBatch` loop is a sequence of awaited `box.put`s.
+        // Kicking off that IndexedDB work in the same synchronous tick that
+        // schedules the post-frame `rootContext.go('/workout/finish/...')`
+        // starved the post-frame callback on web — finish hung on the spinner
+        // and never navigated (save_workout RPC returned 200; only the
+        // client-side nav stalled). The pulse only needs to land sometime
+        // before the user next views the Saga screen, so it moves off the
+        // finish critical path entirely onto the destination screen's mount —
+        // the navigation no longer depends on any Hive/IndexedDB write
+        // completing first. `bpDeltas` is still threaded into PostSessionParams
+        // (`bpXpDeltas`) below, which is the source the screen pulses from.
         // Normalize the empty-queue case: baseline XP-only sessions have
         // `consumeLastCelebration() == null` (the notifier short-circuits
         // when `events.isEmpty` at active_workout_notifier.dart:1843).

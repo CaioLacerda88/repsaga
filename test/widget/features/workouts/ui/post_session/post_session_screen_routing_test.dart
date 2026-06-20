@@ -36,11 +36,14 @@ import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_skip_button.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_tap_hint.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+import '../../../../../fixtures/fake_fresh_pulse_storage.dart';
 
 /// Cross-build catalog entry the post-session screen looks up for the
 /// `pillar_walker` slug (the load-bearing case — the same slug the
@@ -106,6 +109,11 @@ Widget _harness({
       // a no-op on its own, so only `currentUserIdProvider` needs an
       // override here.
       currentUserIdProvider.overrideWithValue('user-routing-test'),
+      // PostSessionScreen records the fresh-today pulse on mount; the default
+      // provider opens a Hive box unavailable in this harness.
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        FakeFreshPulseStorage(),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -310,6 +318,11 @@ void main() {
               ),
               // PR #277 review — see [_harness] for rationale.
               currentUserIdProvider.overrideWithValue('user-back-gesture-test'),
+              // PostSessionScreen records the fresh-today pulse on mount; the
+              // default provider opens a Hive box unavailable in this harness.
+              vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+                FakeFreshPulseStorage(),
+              ),
             ],
             child: MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,

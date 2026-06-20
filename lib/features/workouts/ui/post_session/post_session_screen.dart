@@ -18,6 +18,7 @@ import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/models/character_class.dart';
 import '../../../rpg/models/title.dart' as rpg;
 import '../../../rpg/providers/earned_titles_provider.dart';
+import '../../../rpg/providers/vitality_fresh_pulse_provider.dart';
 import '../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/title_localization.dart';
@@ -136,6 +137,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _fireMountAnalytics();
+      _recordFreshPulse();
       _playCurrentCut();
     });
 
@@ -224,6 +226,37 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         ),
       );
     }
+  }
+
+  /// Phase Vitality PR 2 — record the 24h "fresh today" pulse for every body
+  /// part trained this session. Consumed by [BodyPartRankRow] as a SECOND
+  /// trigger source alongside the rank-up pulse: a saga row reads "fresh
+  /// today" for 24h after the user lifts it (reflecting the save-time
+  /// vitality rebuild in PR 1), not only after a rank-up.
+  ///
+  /// **Why here, not in [FinishWorkoutCoordinator]'s finish path:** on Flutter
+  /// web these writes go to IndexedDB, and reading
+  /// `vitalityFreshPulseLocalStorageProvider` ALSO fires its first-read
+  /// `sweepExpired()`. Kicking off that IndexedDB work in the same synchronous
+  /// tick that scheduled the finish→post-session post-frame navigation starved
+  /// the post-frame callback on web — finish hung on the spinner and never
+  /// navigated (web-IndexedDB finish-path hazard, cousin of cluster
+  /// `hive-testwidgets`). Moving the write to the destination screen's mount
+  /// means the navigation never depends on a Hive/IndexedDB write completing
+  /// first, while the pulse still lands well before the user navigates onward
+  /// to the Saga screen.
+  ///
+  /// Fire-and-forget + idempotent: a cosmetic pulse write must never affect
+  /// the cinematic. `bpXpDeltas.keys` is the set of strength body parts that
+  /// earned XP this session — the same set the coordinator threaded in.
+  void _recordFreshPulse() {
+    final trained = widget.params.bpXpDeltas.keys;
+    if (trained.isEmpty) return;
+    unawaited(
+      ref
+          .read(vitalityFreshPulseLocalStorageProvider)
+          .recordChargedBatch(trained),
+    );
   }
 
   void _onAnimationStatus(AnimationStatus status) {

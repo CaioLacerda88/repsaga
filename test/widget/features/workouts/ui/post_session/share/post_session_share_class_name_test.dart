@@ -37,10 +37,13 @@ import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/providers/class_provider.dart';
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/share_cta_button.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+import '../../../../../../fixtures/fake_fresh_pulse_storage.dart';
 
 /// Builds [PostSessionParams] for a session that earns XP (so `hasShareCta`
 /// is true and the share bundle gets composed). Pass [events] to drive a
@@ -84,6 +87,11 @@ Widget _harness({
       // a rank distribution that the resolver maps to it.
       characterClassProvider.overrideWithValue(characterClass),
       currentUserIdProvider.overrideWithValue('user-share-class-test'),
+      // PostSessionScreen records the fresh-today pulse on mount; the default
+      // provider opens a Hive box unavailable in this harness.
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        FakeFreshPulseStorage(),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
