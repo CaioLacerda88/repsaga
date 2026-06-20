@@ -3170,6 +3170,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get postSessionXpEarnedLabel => 'XP EARNED';
 
   @override
+  String get postSessionConditioningChargedEyebrow => 'Conditioning charged';
+
+  @override
+  String postSessionConditioningChargedDelta(int pct) {
+    return '+$pct%';
+  }
+
+  @override
+  String get postSessionConditioningChargedCaption =>
+      'The rune recharges over ~7 days.';
+
+  @override
   String get avatarPickerSheetTitle => 'Choose avatar source';
 
   @override

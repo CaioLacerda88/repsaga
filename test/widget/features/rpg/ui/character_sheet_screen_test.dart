@@ -24,7 +24,9 @@ import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/data/vitality_fresh_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/character_sheet_screen.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
@@ -41,6 +43,11 @@ import 'package:repsaga/l10n/app_localizations.dart';
 // The animation controller runs repeat() in both modes, so this file uses
 // manual tester.pump() advances instead of pumpAndSettle (which would hang).
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+
+// Same Hive-free stand-in for the fresh-today pulse (Phase Vitality PR 2):
+// the 'vitality_fresh_pulse' box is never opened in the test harness.
+class _MockFreshPulseStorage extends Mock
+    implements VitalityFreshPulseLocalStorage {}
 
 /// Stub ProfileNotifier — RuneHalo embeds ProfileAvatar (Phase 32 PR 32e
 /// scope add); the avatar resolves identity through these providers.
@@ -203,10 +210,17 @@ Widget _buildApp(CharacterSheetState state) {
   when(
     () => pulseStorage.isPulsing(any(), now: any(named: 'now')),
   ).thenReturn(false);
+  final freshPulseStorage = _MockFreshPulseStorage();
+  when(
+    () => freshPulseStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
   return ProviderScope(
     overrides: [
       characterSheetProvider.overrideWith((_) => AsyncData(state)),
       rankUpPulseLocalStorageProvider.overrideWithValue(pulseStorage),
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        freshPulseStorage,
+      ),
       // RuneHalo embeds ProfileAvatar (Phase 32 PR 32e scope add).
       profileProvider.overrideWith(
         () =>

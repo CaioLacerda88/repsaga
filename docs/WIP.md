@@ -79,17 +79,28 @@ L1613-1653 + `saga.spec.ts` / `cardio.spec.ts` (selectors unchanged unless DOM s
 LOCKED DESIGN (user-approved 2026-06-20, `docs/phase-vitality-mockups.html`): **Variant A — single aggregate
 teal charge bar**, two-tone fill (dim `was` → solid `now`) counting up, **delta-only "+N%"**, caption
 "recharges over ~7 days". Drop the "· N groups" scope caption (aggregate needs no scope). NOT a new cinematic cut.
-- [ ] **Scroll fix (the reported bug):** `post_session_summary_panel.dart` `Column`+`Spacer()` →
+- [x] **Scroll fix (the reported bug):** `post_session_summary_panel.dart` `Column`+`Spacer()` →
       `Column[ Expanded(SingleChildScrollView(content)), <pinned share+Continue CTA> ]`. Continue always
-      reachable; content scrolls. Keep SafeArea `minimum: top12/bottom16` floor ([[cluster-safearea-system-overlay-overlap]]).
-- [ ] **Beat data:** extend `PostSessionState` with aggregate before/after vitality_pct (mean of trained bps'
-      ewma/peak). BEFORE = `finish_workout_coordinator` pre-finish `rpgProgressProvider` snapshot (L243-254);
-      AFTER = post-`refreshAfterSave()` read. NO change to `save_workout` return / `workout_repository` contract.
-- [ ] **Beat widget:** Variant A aggregate charge bar in `MissionDebriefSection` (sibling of `XpSegmentedBar`
-      — needs a two-tone was/now overlay the current class doesn't express; new widget in the same family).
-      Count-up rightward only (rebuild, never a depleting HP bar). Teal `bodyPartCardio #22D3EE` once.
-- [ ] **Fresh-today pulse:** sibling Hive box on the `rank_up_pulse_local_storage` pattern (key=bodyPart.dbValue,
-      24h), set for trained bps, consumed in `body_part_rank_row.dart` so saga rows pulse "fresh today".
-- [ ] TDD: beat renders the delta + count-up (assert rendered output, not controller — [[cluster-pump-duration-masks-forward]]);
-      scroll test (content scrolls, CTA stays pinned/visible at small viewport); aggregate computation unit test.
+      reachable; content scrolls. Kept SafeArea `minimum: top12/bottom16` floor ([[cluster-safearea-system-overlay-overlap]]).
+      SingleChildScrollView (not ListView) keeps every child eager for E2E/AOM ([[cluster-listview-lazy-build-breaks-e2e]]).
+- [x] **Beat data:** new pure `ConditioningCharge` domain object (`conditioning_charge.dart`) — aggregate
+      before/after vitality_pct (mean of trained bps' clamp(ewma/peak)). Added nullable `conditioningCharge`
+      field to `PostSessionState`. BEFORE = `finish_workout_coordinator` pre-finish `rpgProgressProvider`
+      snapshot threaded via new `PostSessionParams.bpVitalityBefore`; AFTER = post-`refreshAfterSave()`
+      provider read in controller `_buildInitial` (real provider, not a guess — [[cluster-optimistic-ui-vs-async-provider]]).
+      NO change to `save_workout` return / `workout_repository` contract.
+- [x] **Beat widget:** `ConditioningChargeBar` (new, sibling of `XpSegmentedBar`) — Variant A aggregate
+      two-tone teal charge bar (8dp), delta-only "+N%", caption, count-up rightward only (clamps `now ≥ was`,
+      never depletes). Added to `MissionDebriefSection` gated on `conditioningCharge.shouldRender`. Teal
+      `bodyPartCardio #22D3EE`. Dropped the "· N groups" scope caption per locked design.
+- [x] **Fresh-today pulse:** new `VitalityFreshPulseLocalStorage` (box `vitality_fresh_pulse`, registered in
+      HiveService) + provider, sibling of `rank_up_pulse`. Written for all trained bps in the coordinator's
+      post-session push branch; consumed in `body_part_rank_row.dart` (OR'd with the rank-up pulse → reuses
+      the existing AmbientPulseDot emphasis, no new visual).
+- [x] TDD: beat renders delta + two-tone + count-up reaches correct final geometry (rendered output, not
+      controller — [[cluster-pump-duration-masks-forward]]); scroll test (CTA pinned/tappable + content in a
+      Scrollable at 320×600 MAX content); `ConditioningCharge` mean/clamp/graceful-hide unit test; fresh-pulse
+      24h window + batch + expiry test. ARB en+pt keys added. `dart analyze --fatal-infos` clean; full
+      `flutter test` green (3943 pass, 1 pre-existing integration skip).
 - [ ] Visual gate (mockup vs 320/360/412, MAX-content session) + verify trend chart no same-day double-count.
+      **(orchestrator step — not done by this agent.)**

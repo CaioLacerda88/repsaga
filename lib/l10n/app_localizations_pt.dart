@@ -3183,6 +3183,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get postSessionXpEarnedLabel => 'XP GANHO';
 
   @override
+  String get postSessionConditioningChargedEyebrow =>
+      'Condicionamento recarregado';
+
+  @override
+  String postSessionConditioningChargedDelta(int pct) {
+    return '+$pct%';
+  }
+
+  @override
+  String get postSessionConditioningChargedCaption =>
+      'A runa recarrega ao longo de ~7 dias.';
+
+  @override
   String get avatarPickerSheetTitle => 'Escolha a origem do avatar';
 
   @override

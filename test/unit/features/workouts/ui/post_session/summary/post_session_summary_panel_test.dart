@@ -75,6 +75,7 @@ void main() {
     bool hasShareCta = false,
     Widget? titleEquipRow,
     Widget? rankUpOverflow,
+    Widget? debriefSection,
     VoidCallback? onContinue,
   }) {
     return ProviderScope(
@@ -106,6 +107,7 @@ void main() {
             hasShareCta: hasShareCta,
             titleEquipRow: titleEquipRow,
             rankUpOverflow: rankUpOverflow,
+            debriefSection: debriefSection,
             onContinue: onContinue ?? () {},
             nextStepHookFormatter: (h) => switch (h) {
               NextRankHook(
@@ -210,6 +212,66 @@ void main() {
     );
     expect(find.text('OVERFLOW_PLACEHOLDER'), findsOneWidget);
   });
+
+  testWidgets(
+    'content scrolls while the Continue CTA stays pinned/visible at a small '
+    'viewport with MAX content',
+    (tester) async {
+      // Smallest Android viewport where the pre-fix fixed Column + Spacer()
+      // overflowed: 320×600, body deliberately overfilled with a tall
+      // debrief stand-in. The fix wraps content in
+      // Expanded(SingleChildScrollView) with the CTA block pinned below.
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        panel(
+          hasShareCta: true,
+          // A 1200dp-tall stand-in guarantees the content exceeds the
+          // viewport on any device — forcing the scroll/pin contract.
+          debriefSection: const SizedBox(
+            height: 1200,
+            child: Center(child: Text('DEBRIEF_TALL_CONTENT')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The Continue CTA is pinned and hit-testable WITHOUT scrolling —
+      // even though the content above overflows the viewport.
+      expect(find.text('CONTINUAR'), findsOneWidget);
+      expect(
+        tester.getRect(find.text('CONTINUAR')).bottom,
+        lessThanOrEqualTo(600),
+        reason: 'Continue CTA sits within the viewport floor',
+      );
+
+      // The overflowing body lives inside a Scrollable (it can scroll).
+      final scrollable = find.descendant(
+        of: find.byType(PostSessionSummaryPanel),
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollable, findsOneWidget);
+
+      // Tapping Continue still works at this viewport (pinned + tappable).
+      var tapped = false;
+      await tester.pumpWidget(
+        panel(
+          hasShareCta: true,
+          onContinue: () => tapped = true,
+          debriefSection: const SizedBox(
+            height: 1200,
+            child: Center(child: Text('DEBRIEF_TALL_CONTENT')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CONTINUAR'));
+      await tester.pumpAndSettle();
+      expect(tapped, isTrue);
+    },
+  );
 
   testWidgets('share CTA tap opens the share sheet (PR 30b wired behavior)', (
     tester,

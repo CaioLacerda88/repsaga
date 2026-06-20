@@ -8,6 +8,7 @@ import '../../../utils/cardio_format.dart';
 import '../post_session_state.dart';
 import 'mission_debrief_localizations.dart';
 import 'widgets/cardio_entry_row.dart';
+import 'widgets/conditioning_charge_bar.dart';
 import 'widgets/lift_row.dart';
 import 'widgets/xp_segmented_bar.dart';
 
@@ -283,6 +284,29 @@ class MissionDebriefSection extends StatelessWidget {
           // a continuation of the deltas. 16 → 20 dp gap above the rule,
           // 10 dp gap below.
           if (sortedBpEntries.isNotEmpty) const SizedBox(height: 20),
+
+          // 4b) "Conditioning charged" beat (Phase Vitality PR 2). Static
+          // aggregate teal charge bar reporting the save-time vitality
+          // rebuild across the trained bps. Gated on a valid, non-zero
+          // delta — hides gracefully on day-zero / fully-charged plateau /
+          // same-day re-save (charge.shouldRender). Sits below the per-BP
+          // rank rows + segmented bar (which already answer which-BP) and
+          // above the next-target callout, separated by a hair divider so
+          // it reads as its own structural block.
+          if (state.conditioningCharge?.shouldRender ?? false) ...[
+            const Divider(color: AppColors.hair, height: 1, thickness: 1),
+            const SizedBox(height: 14),
+            ConditioningChargeBar(
+              beforeFraction: state.conditioningCharge!.beforePct,
+              afterFraction: state.conditioningCharge!.afterPct,
+              eyebrowLabel: localizations.conditioningChargedEyebrow,
+              deltaLabel: localizations.conditioningChargedDelta(
+                state.conditioningCharge!.deltaPercentInt,
+              ),
+              captionLabel: localizations.conditioningChargedCaption,
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // 5) Next-target callout.
           if (showNextTarget) ...[

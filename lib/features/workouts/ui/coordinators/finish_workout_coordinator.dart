@@ -19,6 +19,7 @@ import '../../../rpg/domain/rank_curve.dart';
 import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
+import '../../../rpg/providers/vitality_fresh_pulse_provider.dart';
 import '../../models/active_workout_state.dart';
 import '../post_session/post_session_controller.dart';
 import '../../providers/workout_history_providers.dart';
@@ -243,12 +244,23 @@ class FinishWorkoutCoordinator {
       final preFinishProgress = ref.read(rpgProgressProvider).value;
       final bpRankBefore = <BodyPart, int>{};
       final bpProgressFractionPre = <BodyPart, double>{};
+      // Phase Vitality PR 2 — capture the pre-finish per-BP vitality
+      // (ewma, peak) in the same loop, same `ref`-lifetime contract. The
+      // "Conditioning charged" beat needs the BEFORE charge to two-tone the
+      // was→now bar; reading it AFTER `await notifier.finishWorkout()` would
+      // throw (active-workout State disposed) OR read the post-save rebuilt
+      // value — collapsing the delta to ~0 and erasing the beat.
+      final bpVitalityBefore = <BodyPart, ({double ewma, double peak})>{};
       if (preFinishProgress != null) {
         preFinishProgress.byBodyPart.forEach((bp, row) {
           bpRankBefore[bp] = row.rank;
           bpProgressFractionPre[bp] = RankCurve.progressFraction(
             row.totalXp,
             row.rank,
+          );
+          bpVitalityBefore[bp] = (
+            ewma: row.vitalityEwma,
+            peak: row.vitalityPeak,
           );
         });
       }
@@ -471,6 +483,20 @@ class FinishWorkoutCoordinator {
           for (final entry in bpDeltasNum.entries)
             entry.key: entry.value.round(),
         };
+        // Phase Vitality PR 2 — record a 24h "fresh today" pulse for every
+        // body part trained this session (PR 1 recomputes their vitality at
+        // save time, so they're freshly charged). Consumed by
+        // `BodyPartRankRow` as a SECOND trigger source alongside the rank-up
+        // pulse — saga rows read "fresh today" after a workout, not only
+        // after a rank-up. Fire-and-forget: a cosmetic pulse write must not
+        // block the post-session navigation. Written here (not in the
+        // celebration orchestrator, which only runs on rank-up sessions) so
+        // it fires for plain XP-only finishes too.
+        unawaited(
+          ref
+              .read(vitalityFreshPulseLocalStorageProvider)
+              .recordChargedBatch(bpDeltas.keys),
+        );
         // Normalize the empty-queue case: baseline XP-only sessions have
         // `consumeLastCelebration() == null` (the notifier short-circuits
         // when `events.isEmpty` at active_workout_notifier.dart:1843).
@@ -502,6 +528,11 @@ class FinishWorkoutCoordinator {
           // Debrief renders correct `Rank N → M` arrows on multi-rank-jump
           // sessions.
           bpRankBefore: bpRankBefore,
+          // Phase Vitality PR 2 — pre-finish per-BP vitality snapshot
+          // captured above. The controller derives the AFTER side from the
+          // post-save snapshot and rolls both up into the aggregate
+          // "Conditioning charged" beat.
+          bpVitalityBefore: bpVitalityBefore,
           bpFirstAwakening: queueResultForRoute.queue
               .whereType<FirstAwakeningEvent>()
               .map((e) => e.bodyPart)

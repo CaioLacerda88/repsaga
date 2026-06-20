@@ -70,6 +70,7 @@ PostSessionParams _params({
     bpXpDeltas: bpXpDeltas,
     bpProgressFractionPre: const {},
     bpRankBefore: bpRankBefore,
+    bpVitalityBefore: const {},
     bpFirstAwakening: const {},
     priorFinishedWorkoutCount: 46,
     durationMinutes: 48,

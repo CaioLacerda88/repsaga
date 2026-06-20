@@ -19,15 +19,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/data/vitality_fresh_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/widgets/ambient_pulse_dot.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+
+class _MockFreshPulseStorage extends Mock
+    implements VitalityFreshPulseLocalStorage {}
 
 BodyPartSheetEntry _entry({
   BodyPart bp = BodyPart.chest,
@@ -49,7 +54,20 @@ BodyPartSheetEntry _entry({
   totalXp: totalXp,
 );
 
-Widget _wrap(Widget child, {RankUpPulseLocalStorage? storage}) {
+Widget _wrap(
+  Widget child, {
+  RankUpPulseLocalStorage? storage,
+  VitalityFreshPulseLocalStorage? freshStorage,
+}) {
+  // Default fresh-pulse stub returns "not pulsing" so the existing
+  // rank-up-driven emphasis assertions stay isolated to that trigger
+  // source. Tests exercising the fresh-today trigger pass an explicit stub.
+  final fresh = freshStorage ?? _MockFreshPulseStorage();
+  if (freshStorage == null) {
+    when(
+      () => fresh.isPulsing(any(), now: any(named: 'now')),
+    ).thenReturn(false);
+  }
   final router = GoRouter(
     initialLocation: '/profile',
     routes: [
@@ -67,6 +85,7 @@ Widget _wrap(Widget child, {RankUpPulseLocalStorage? storage}) {
     overrides: [
       if (storage != null)
         rankUpPulseLocalStorageProvider.overrideWithValue(storage),
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(fresh),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -196,6 +215,66 @@ void main() {
         ).thenReturn(false);
         await tester.pumpWidget(
           _wrap(BodyPartRankRow(entry: _entry()), storage: storage),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        final pulseDot = tester.widget<AmbientPulseDot>(
+          find.byType(AmbientPulseDot),
+        );
+        expect(pulseDot.emphasized, isFalse);
+      },
+    );
+
+    testWidgets(
+      'fresh-today pulse drives emphasized=true even with no rank-up pulse',
+      (tester) async {
+        // Phase Vitality PR 2 — the second trigger source. The rank-up
+        // pulse says "not pulsing" but the fresh-today pulse fires for the
+        // trained bp, so the dot reuses the SAME emphasis styling.
+        final storage = _MockPulseStorage();
+        when(
+          () => storage.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        final fresh = _MockFreshPulseStorage();
+        when(
+          () => fresh.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        when(
+          () => fresh.isPulsing(BodyPart.chest, now: any(named: 'now')),
+        ).thenReturn(true);
+        await tester.pumpWidget(
+          _wrap(
+            BodyPartRankRow(entry: _entry()),
+            storage: storage,
+            freshStorage: fresh,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        final pulseDot = tester.widget<AmbientPulseDot>(
+          find.byType(AmbientPulseDot),
+        );
+        expect(pulseDot.emphasized, isTrue);
+      },
+    );
+
+    testWidgets(
+      'no emphasis when neither rank-up nor fresh-today pulse fires',
+      (tester) async {
+        final storage = _MockPulseStorage();
+        when(
+          () => storage.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        final fresh = _MockFreshPulseStorage();
+        when(
+          () => fresh.isPulsing(any(), now: any(named: 'now')),
+        ).thenReturn(false);
+        await tester.pumpWidget(
+          _wrap(
+            BodyPartRankRow(entry: _entry()),
+            storage: storage,
+            freshStorage: fresh,
+          ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 16));

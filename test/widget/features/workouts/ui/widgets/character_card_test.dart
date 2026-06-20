@@ -32,12 +32,14 @@ import 'package:repsaga/features/auth/providers/auth_providers.dart';
 import 'package:repsaga/features/profile/models/profile.dart';
 import 'package:repsaga/features/profile/providers/profile_providers.dart';
 import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
+import 'package:repsaga/features/rpg/data/vitality_fresh_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/character_sheet_state.dart';
 import 'package:repsaga/features/rpg/models/vitality_state.dart';
 import 'package:repsaga/features/rpg/providers/character_sheet_provider.dart';
 import 'package:repsaga/features/rpg/providers/rank_up_pulse_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/rpg/ui/widgets/body_part_rank_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/cardio_progress_row.dart';
 import 'package:repsaga/features/rpg/ui/widgets/character_xp_bar.dart';
@@ -45,6 +47,9 @@ import 'package:repsaga/features/workouts/ui/widgets/character_card.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
 
 class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+
+class _MockFreshPulseStorage extends Mock
+    implements VitalityFreshPulseLocalStorage {}
 
 /// Stub ProfileNotifier for RuneHalo's embedded ProfileAvatar (Phase 32
 /// PR 32e scope add). Without this override the avatar's identity
@@ -160,6 +165,13 @@ Widget _harness({
       () => storage.isPulsing(any(), now: any(named: 'now')),
     ).thenReturn(false);
   }
+  // Phase Vitality PR 2 — BodyPartRankRow now also reads the fresh-today
+  // pulse provider. Hive-free stub returning "not pulsing" so the expanded
+  // body's rows mount without opening the real box.
+  final freshStorage = _MockFreshPulseStorage();
+  when(
+    () => freshStorage.isPulsing(any(), now: any(named: 'now')),
+  ).thenReturn(false);
   // Real GoRouter (with a placeholder /saga/stats route) so the expanded
   // body's BodyPartRankRow `context.push('/saga/stats?body_part=...')` taps
   // resolve to an asserted destination instead of throwing. Same pattern
@@ -211,6 +223,7 @@ Widget _harness({
     overrides: [
       characterSheetProvider.overrideWith((_) => AsyncData(sheet)),
       rankUpPulseLocalStorageProvider.overrideWithValue(storage),
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(freshStorage),
       // RuneHalo embeds ProfileAvatar (Phase 32 PR 32e scope add); the
       // avatar's identity resolver reads these providers. Stubbed with
       // a steady-state profile so the gradient + monogram render

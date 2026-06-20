@@ -5,6 +5,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../personal_records/domain/pr_detection_service.dart';
 import '../../../rpg/domain/celebration_queue.dart';
 import '../../../rpg/models/body_part.dart';
+import '../../domain/conditioning_charge.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
 import '../../domain/session_cardio_summary.dart';
@@ -141,6 +142,17 @@ abstract class PostSessionState with _$PostSessionState {
     /// pre-finish exercise snapshot — cardio earns no `BodyPart.cardio` XP
     /// delta, so `bpXpDeltas` cannot be the signal.
     @Default(false) bool hadCardio,
+
+    /// Aggregate before/after conditioning charge for the "Conditioning
+    /// charged" debrief beat (Phase Vitality PR 2). BEFORE comes from the
+    /// pre-finish `rpgProgressProvider` snapshot (captured by
+    /// [FinishWorkoutCoordinator]); AFTER from the post-`refreshAfterSave`
+    /// snapshot the controller reads. `null` when no charge could be
+    /// computed (no trained bp, legacy fixtures); the beat also hides when
+    /// `conditioningCharge.shouldRender` is false (delta rounds to 0% —
+    /// day-zero, fully-charged plateau, same-day re-save). Honest forward-
+    /// only signal: vitality rebuilds at save time, never depletes.
+    ConditioningCharge? conditioningCharge,
   }) = _PostSessionState;
 }
 

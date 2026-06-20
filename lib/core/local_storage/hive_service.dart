@@ -24,6 +24,14 @@ class HiveService {
   /// active pulse window. Same lifetime contract as [offlineQueue].
   static const String rankUpPulse = 'rank_up_pulse';
 
+  /// 24h "charged today" pulse window per body part (Phase Vitality PR 2) —
+  /// sibling of [rankUpPulse]. Written for every body part trained in a
+  /// saved session (not just rank-ups) so the saga rows pulse "fresh today"
+  /// after a workout, reflecting the save-time vitality rebuild. Durable
+  /// user state — excluded from [cacheSchemaBoxes] for the same reason as
+  /// [rankUpPulse].
+  static const String vitalityFreshPulse = 'vitality_fresh_pulse';
+
   /// Bundled schema version for the model-shape-dependent caches
   /// (`exerciseCache`, `routineCache`, `prCache`, `workoutHistoryCache`,
   /// `lastSetsCache`, `activeWorkout`). Bump by 1 in the same PR as any
@@ -123,6 +131,7 @@ class HiveService {
     workoutHistoryCache,
     lastSetsCache,
     rankUpPulse,
+    vitalityFreshPulse,
   ];
 
   /// Open every box, recovering from any single-box corruption by
@@ -255,6 +264,7 @@ class HiveService {
       _clearIfOpen(workoutHistoryCache),
       _clearIfOpen(lastSetsCache),
       _clearIfOpen(rankUpPulse),
+      _clearIfOpen(vitalityFreshPulse),
     ]);
   }
 
