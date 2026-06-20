@@ -710,11 +710,12 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         exercise.equipmentType,
         weightUnit,
       );
-      // Weight precedence: target → last-lifted → 0. The final 0 (NOT
-      // equipDefaults.weight) is deliberate — kill the "nebulous"
-      // equipment-default weight for a never-done lift and force a conscious
-      // entry (user-approved 2026-06-20). Do not restore equipDefaults.weight
-      // here. Reps keep the equipment default (a 0-rep set is a non-set).
+      // Weight precedence at the add-exercise path: last-lifted → 0 (no routine
+      // target on this path). The final 0 (NOT equipDefaults.weight) is
+      // deliberate — kill the "nebulous" equipment-default weight for a
+      // never-done lift and force a conscious entry (user-approved 2026-06-20).
+      // Do not restore equipDefaults.weight here. Reps keep the equipment
+      // default (a 0-rep set is a non-set).
       seedWeight ??= 0;
       seedReps ??= equipDefaults.reps;
     }
