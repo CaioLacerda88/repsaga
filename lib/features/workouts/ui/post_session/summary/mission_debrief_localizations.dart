@@ -26,6 +26,9 @@ class MissionDebriefLocalizations {
     required this.rankUpArrow,
     required this.weightUnit,
     required this.xpEarnedLabel,
+    required this.conditioningChargedEyebrow,
+    required this.conditioningChargedDelta,
+    required this.conditioningChargedCaption,
   });
 
   /// Bridge from the generated [AppLocalizations] to the typed bundle.
@@ -41,6 +44,9 @@ class MissionDebriefLocalizations {
       rankUpArrow: l10n.postSessionRankUpArrow,
       weightUnit: l10n.postSessionWeightUnit,
       xpEarnedLabel: l10n.postSessionXpEarnedLabel,
+      conditioningChargedEyebrow: l10n.postSessionConditioningChargedEyebrow,
+      conditioningChargedDelta: l10n.postSessionConditioningChargedDelta,
+      conditioningChargedCaption: l10n.postSessionConditioningChargedCaption,
     );
   }
 
@@ -84,4 +90,17 @@ class MissionDebriefLocalizations {
   /// spec'd it as the FIRST child of the Mission Debrief section.
   /// Pre-uppercased to match the tracked-label register.
   final String xpEarnedLabel;
+
+  /// "Conditioning charged" — eyebrow above the aggregate teal charge bar
+  /// (Phase Vitality PR 2). Title-cased; the widget uppercases for the
+  /// tracked-label register.
+  final String conditioningChargedEyebrow;
+
+  /// "+N%" delta label on the charge bar. Pass the integer percentage-point
+  /// increase (afterPct − beforePct).
+  final String Function(int pct) conditioningChargedDelta;
+
+  /// "The rune recharges over ~7 days." caption locking the rebuild-not-
+  /// deplete metaphor in copy.
+  final String conditioningChargedCaption;
 }

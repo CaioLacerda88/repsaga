@@ -161,66 +161,95 @@ class PostSessionSummaryPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Saga eyebrow — mockup `t-label` register (Barlow Condensed
-                // 11sp tracked) in textDim. The number stays visually quiet
-                // here because the cinematic preceding the summary already
-                // carried the saga's emotional weight via B1/B2/B3 cuts.
-                Text(
-                  sagaLabel,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.label.copyWith(color: AppColors.textDim),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  durationSetsLabel,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.numeric.copyWith(fontSize: 17),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tonnageLabel,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall,
-                ),
-                // Legacy next-step eyebrow+hook block. Only renders when
-                // the Phase 31 debrief section isn't supplied — the
-                // debrief subsumes the next-target callout via its
-                // fifth row. The fallback exists for fixtures that don't
-                // wire the debrief (tests of the panel chrome, day-zero
-                // baselines, etc).
-                if (debriefSection == null && nextStepHook != null) ...[
-                  const SizedBox(height: 22),
-                  const Divider(color: AppColors.hair, height: 1),
-                  const SizedBox(height: 10),
-                  Text(
-                    nextStepEyebrow.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.label.copyWith(
-                      color: eyebrowColor,
-                      fontSize: 11,
+                // Scrollable content region. Pre-fix this was a fixed
+                // `Column` + `Spacer()` with no scroll view, so a content-
+                // heavy session (multi-BP rank-ups + cardio finisher +
+                // conditioning beat + age prompt) overflowed with no way to
+                // reach the lower rows — and the bottom CTAs could be pushed
+                // off-screen. Wrapping everything-above-the-CTA in
+                // `Expanded(SingleChildScrollView)` lets the body scroll
+                // while the share + Continue block pins to the SafeArea
+                // floor below, always reachable (mockup §1 scroll-fixed
+                // panel). SingleChildScrollView (not ListView) keeps every
+                // child eagerly built so E2E/AOM lookups + screen readers
+                // reach off-viewport rows (cluster:
+                // listview-lazy-build-breaks-e2e).
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Saga eyebrow — mockup `t-label` register (Barlow
+                        // Condensed 11sp tracked) in textDim. The number
+                        // stays visually quiet here because the cinematic
+                        // preceding the summary already carried the saga's
+                        // emotional weight via B1/B2/B3 cuts.
+                        Text(
+                          sagaLabel,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.label.copyWith(
+                            color: AppColors.textDim,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          durationSetsLabel,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.numeric.copyWith(fontSize: 17),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tonnageLabel,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodySmall,
+                        ),
+                        // Legacy next-step eyebrow+hook block. Only renders
+                        // when the Phase 31 debrief section isn't supplied —
+                        // the debrief subsumes the next-target callout via
+                        // its fifth row. The fallback exists for fixtures
+                        // that don't wire the debrief (tests of the panel
+                        // chrome, day-zero baselines, etc).
+                        if (debriefSection == null && nextStepHook != null) ...[
+                          const SizedBox(height: 22),
+                          const Divider(color: AppColors.hair, height: 1),
+                          const SizedBox(height: 10),
+                          Text(
+                            nextStepEyebrow.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.label.copyWith(
+                              color: eyebrowColor,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _formatHook(nextStepHook!),
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.body,
+                          ),
+                        ],
+                        if (rankUpOverflow != null) ...[
+                          const SizedBox(height: 14),
+                          rankUpOverflow!,
+                        ],
+                        if (titleEquipRow != null) ...[
+                          const SizedBox(height: 14),
+                          titleEquipRow!,
+                        ],
+                        if (debriefSection != null) ...[
+                          const SizedBox(height: 8),
+                          debriefSection!,
+                        ],
+                        ?agePrompt,
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _formatHook(nextStepHook!),
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.body,
-                  ),
-                ],
-                if (rankUpOverflow != null) ...[
-                  const SizedBox(height: 14),
-                  rankUpOverflow!,
-                ],
-                if (titleEquipRow != null) ...[
-                  const SizedBox(height: 14),
-                  titleEquipRow!,
-                ],
-                if (debriefSection != null) ...[
-                  const SizedBox(height: 8),
-                  debriefSection!,
-                ],
-                ?agePrompt,
-                const Spacer(),
+                ),
+                // Pinned bottom CTA block — share + Continue. Sits outside
+                // the scroll view so it always hugs the SafeArea floor and
+                // stays tappable regardless of content height (mockup §1
+                // `.pinned`).
+                const SizedBox(height: 10),
                 if (hasShareCta &&
                     sharePayload != null &&
                     shareCardStrings != null &&

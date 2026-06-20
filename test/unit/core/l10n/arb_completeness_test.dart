@@ -108,6 +108,12 @@ void main() {
       // Both spans remain pure format on the gym-vernacular loanwords.
       'historyDetailStripXpPart', // "+{xp} XP"
       'historyDetailStripPrPart', // "{prs} PRs"
+      // Phase Vitality PR 2 — "Conditioning charged" delta label. Pure
+      // format: "+{pct}%" (leading "+" + placeholder + percent glyph, no
+      // localizable prose). Identical in pt-BR + en by design; the "+"
+      // prefix trips the placeholderOnly char-class floor, so allow-list it
+      // explicitly (same precedent as historyCardXpEyebrow "+{xp} XP").
+      'postSessionConditioningChargedDelta', // "+{pct}%"
     };
 
     /// Pattern for format-only strings (only placeholders and punctuation).

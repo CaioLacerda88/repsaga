@@ -75,7 +75,9 @@ import 'package:repsaga/features/rpg/domain/rank_curve.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/body_part_progress.dart';
 import 'package:repsaga/features/rpg/models/celebration_event.dart';
+import 'package:repsaga/features/rpg/data/vitality_fresh_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/exercise_set.dart';
 import 'package:repsaga/features/workouts/models/set_type.dart';
@@ -380,6 +382,25 @@ class _RpgProgressStub extends AsyncNotifier<RpgProgressSnapshot>
   Future<void> runBackfill() async {}
 }
 
+/// No-op in-memory fresh-today pulse storage — avoids the Hive box the real
+/// [VitalityFreshPulseLocalStorage] opens (unavailable in this harness).
+class _FakeFreshPulseStorage implements VitalityFreshPulseLocalStorage {
+  @override
+  bool isPulsing(BodyPart bodyPart, {DateTime? now}) => false;
+
+  @override
+  Future<void> recordCharged(BodyPart bodyPart, {DateTime? at}) async {}
+
+  @override
+  Future<void> recordChargedBatch(
+    Iterable<BodyPart> bodyParts, {
+    DateTime? at,
+  }) async {}
+
+  @override
+  Future<void> sweepExpired({DateTime? now}) async {}
+}
+
 /// Factory for a [BodyPartProgress] row at arbitrary `(totalXp, rank)`.
 /// Lets the test seed a snapshot whose `progressFraction(totalXp, rank)`
 /// is a known non-zero value, so the captured params can be compared
@@ -510,6 +531,14 @@ Widget _buildHarness({
       // that pin the contract pass a populated snapshot.
       rpgProgressProvider.overrideWith(
         () => _RpgProgressStub(preFinishProgress ?? RpgProgressSnapshot.empty),
+      ),
+      // Phase Vitality PR 2 — the coordinator's post-session push branch
+      // records a fresh-today pulse for the trained bps. The default
+      // provider constructs a Hive-backed storage (box not open in this
+      // harness → throws synchronously, breaking the finish flow). A no-op
+      // in-memory fake keeps the navigation contract isolated.
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        _FakeFreshPulseStorage(),
       ),
     ],
     child: MaterialApp.router(

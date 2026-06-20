@@ -3,12 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/celebration_event.dart';
+import 'package:repsaga/features/workouts/domain/conditioning_charge.dart';
 import 'package:repsaga/features/workouts/domain/post_session_choreographer.dart';
 import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 import 'package:repsaga/features/workouts/domain/session_lift_summary.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_state.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/mission_debrief_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/mission_debrief_section.dart';
+import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/conditioning_charge_bar.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/lift_row.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/xp_segmented_bar.dart';
 
@@ -55,6 +57,9 @@ MissionDebriefLocalizations _ptLocalizations() {
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
     xpEarnedLabel: 'XP GANHO',
+    conditioningChargedEyebrow: 'Condicionamento recarregado',
+    conditioningChargedDelta: (pct) => '+$pct%',
+    conditioningChargedCaption: 'A runa recarrega ao longo de ~7 dias.',
   );
 }
 
@@ -70,6 +75,9 @@ MissionDebriefLocalizations _enLocalizations() {
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
     xpEarnedLabel: 'XP EARNED',
+    conditioningChargedEyebrow: 'Conditioning charged',
+    conditioningChargedDelta: (pct) => '+$pct%',
+    conditioningChargedCaption: 'The rune recharges over ~7 days.',
   );
 }
 
@@ -83,6 +91,7 @@ PostSessionState _buildState({
   BodyPart? dominantBodyPart,
   int? dominantXpToNextRank,
   int? dominantNextRank,
+  ConditioningCharge? conditioningCharge,
 }) {
   final inferredDominant =
       dominantBodyPart ??
@@ -129,6 +138,7 @@ PostSessionState _buildState({
     dominantNextRank: dominantNextRank ?? 12,
     ranksToNextLevel: null,
     nextLevel: null,
+    conditioningCharge: conditioningCharge,
   );
 }
 
@@ -930,5 +940,95 @@ void main() {
         expect(find.text('PRÓXIMO PASSO'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'Conditioning charged beat renders when the charge has a non-zero delta',
+      (tester) async {
+        final state = _buildState(
+          topLifts: const [
+            SessionLiftSummary(
+              exerciseId: 'supino',
+              exerciseName: 'Supino',
+              bodyPart: BodyPart.chest,
+              peakWeightKg: 80,
+              peakReps: 8,
+              xpContribution: 640,
+              isPR: false,
+            ),
+          ],
+          bpXpDeltas: const {BodyPart.chest: 640},
+          bpRankAfter: const {BodyPart.chest: 12},
+          conditioningCharge: const ConditioningCharge(
+            beforePct: 0.58,
+            afterPct: 0.72,
+          ),
+        );
+
+        await _pumpDebrief(tester, state: state);
+
+        // The beat widget mounts with its eyebrow + delta (pt fixtures).
+        expect(find.byType(ConditioningChargeBar), findsOneWidget);
+        expect(
+          find.textContaining('CONDICIONAMENTO RECARREGADO'),
+          findsOneWidget,
+        );
+        // delta = 0.72 - 0.58 = 0.14 → +14%
+        expect(find.text('+14%'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Conditioning charged beat hides when the charge delta is 0% '
+        '(day-zero / plateau / same-day re-save)', (tester) async {
+      final state = _buildState(
+        topLifts: const [
+          SessionLiftSummary(
+            exerciseId: 'supino',
+            exerciseName: 'Supino',
+            bodyPart: BodyPart.chest,
+            peakWeightKg: 80,
+            peakReps: 8,
+            xpContribution: 640,
+            isPR: false,
+          ),
+        ],
+        bpXpDeltas: const {BodyPart.chest: 640},
+        bpRankAfter: const {BodyPart.chest: 12},
+        // after == before → delta 0% → shouldRender false.
+        conditioningCharge: const ConditioningCharge(
+          beforePct: 0.72,
+          afterPct: 0.72,
+        ),
+      );
+
+      await _pumpDebrief(tester, state: state);
+
+      expect(find.byType(ConditioningChargeBar), findsNothing);
+      expect(find.textContaining('CONDICIONAMENTO RECARREGADO'), findsNothing);
+    });
+
+    testWidgets('Conditioning charged beat is absent when charge is null', (
+      tester,
+    ) async {
+      final state = _buildState(
+        topLifts: const [
+          SessionLiftSummary(
+            exerciseId: 'supino',
+            exerciseName: 'Supino',
+            bodyPart: BodyPart.chest,
+            peakWeightKg: 80,
+            peakReps: 8,
+            xpContribution: 640,
+            isPR: false,
+          ),
+        ],
+        bpXpDeltas: const {BodyPart.chest: 640},
+        bpRankAfter: const {BodyPart.chest: 12},
+        // conditioningCharge defaults to null.
+      );
+
+      await _pumpDebrief(tester, state: state);
+
+      expect(find.byType(ConditioningChargeBar), findsNothing);
+    });
   });
 }

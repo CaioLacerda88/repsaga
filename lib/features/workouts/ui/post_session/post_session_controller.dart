@@ -11,6 +11,7 @@ import '../../../rpg/models/body_part.dart';
 import '../../../rpg/models/celebration_event.dart';
 import '../../../rpg/providers/rpg_progress_provider.dart';
 import '../../../rpg/ui/widgets/body_part_localization.dart';
+import '../../domain/conditioning_charge.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/reward_tier.dart';
 import '../../domain/session_cardio_summary.dart';
@@ -35,6 +36,7 @@ class PostSessionParams {
     required this.bpXpDeltas,
     required this.bpProgressFractionPre,
     required this.bpRankBefore,
+    required this.bpVitalityBefore,
     required this.bpFirstAwakening,
     required this.priorFinishedWorkoutCount,
     required this.durationMinutes,
@@ -75,6 +77,17 @@ class PostSessionParams {
   /// [PostSessionState.bpRankBefore] so the Mission Debrief can render
   /// accurate multi-rank-jump arrows (`Rank 5 → 8`). Phase 31 Blocker 1.
   final Map<BodyPart, int> bpRankBefore;
+
+  /// Pre-finish per-body-part vitality `(ewma, peak)` snapshot. Captured by
+  /// [FinishWorkoutCoordinator] from `rpgProgressProvider` BEFORE awaiting
+  /// `notifier.finishWorkout()` (same `ref`-lifetime contract as
+  /// [bpRankBefore]). Threaded to [PostSessionState.conditioningCharge] as
+  /// the BEFORE side of the "Conditioning charged" debrief beat; the
+  /// controller derives the AFTER side from the post-save snapshot it reads
+  /// in `_buildInitial`. Body parts the user has never charged
+  /// (`peak == 0`) or never trained server-side are absent — the aggregate
+  /// roll-up excludes them. Phase Vitality PR 2.
+  final Map<BodyPart, ({double ewma, double peak})> bpVitalityBefore;
   final Set<BodyPart> bpFirstAwakening;
   final int priorFinishedWorkoutCount;
   final int durationMinutes;
@@ -142,12 +155,32 @@ class PostSessionController extends ChangeNotifier {
 
     final bpRankAfter = <BodyPart, int>{};
     final bpProgressAfter = <BodyPart, double>{};
+    // AFTER-side vitality snapshot for the "Conditioning charged" beat —
+    // read from the POST-save `rpgProgressProvider` snapshot (PR 1 makes
+    // `save_workout` recompute vitality in-txn, so by the time
+    // `refreshAfterSave()` resolves these rows carry the rebuilt ewma).
+    // Reads the REAL refreshed provider value, never a local guess
+    // (cluster: optimistic-ui-vs-async-provider).
+    final bpVitalityAfter = <BodyPart, ({double ewma, double peak})>{};
     for (final bp in params.bpXpDeltas.keys) {
       final row = progress.byBodyPart[bp];
       bpRankAfter[bp] = row?.rank ?? 1;
       final totalXp = row?.totalXp ?? 0.0;
       bpProgressAfter[bp] = RankCurve.progressFraction(totalXp, row?.rank ?? 1);
+      if (row != null) {
+        bpVitalityAfter[bp] = (ewma: row.vitalityEwma, peak: row.vitalityPeak);
+      }
     }
+
+    // Aggregate before/after conditioning charge (mean of per-bp
+    // clamp(ewma/peak) over the trained bps). Hides gracefully (shouldRender
+    // false) when no trained bp has charge data or the delta rounds to 0%
+    // (day-zero, fully-charged plateau, same-day re-save).
+    final conditioningCharge = ConditioningCharge.fromSnapshots(
+      trainedBodyParts: params.bpXpDeltas.keys,
+      before: params.bpVitalityBefore,
+      after: bpVitalityAfter,
+    );
 
     final levelUpEvent = params.queueResult.queue
         .whereType<LevelUpEvent>()
@@ -295,6 +328,7 @@ class PostSessionController extends ChangeNotifier {
       ranksToNextLevel: ranksToNextLevel,
       nextLevel: nextLevel,
       hadCardio: hadCardio,
+      conditioningCharge: conditioningCharge,
     );
   }
 

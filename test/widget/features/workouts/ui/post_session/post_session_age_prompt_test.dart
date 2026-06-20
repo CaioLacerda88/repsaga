@@ -26,6 +26,7 @@ import 'package:repsaga/features/profile/ui/widgets/age_row.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
 import 'package:repsaga/features/workouts/models/cardio_session.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
@@ -33,6 +34,8 @@ import 'package:repsaga/features/workouts/ui/post_session/post_session_controlle
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/age_prompt_banner.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+import '../../../../../fixtures/fake_fresh_pulse_storage.dart';
 
 class _MockProfileRepository extends Mock implements ProfileRepository {}
 
@@ -95,6 +98,7 @@ PostSessionParams _params({
     bpXpDeltas: const {BodyPart.chest: 240},
     bpProgressFractionPre: const {},
     bpRankBefore: const {},
+    bpVitalityBefore: const {},
     bpFirstAwakening: const {},
     priorFinishedWorkoutCount: 5,
     durationMinutes: 28,
@@ -124,6 +128,11 @@ Widget _harness({
       // repository (no Supabase in this test) — userId == null returns
       // early. The age-prompt gating under test is independent of analytics.
       currentUserIdProvider.overrideWithValue(null),
+      // PostSessionScreen records the fresh-today pulse on mount; the default
+      // provider opens a Hive box unavailable in this harness.
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        FakeFreshPulseStorage(),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

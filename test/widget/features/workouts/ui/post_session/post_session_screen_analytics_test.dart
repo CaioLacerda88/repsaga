@@ -31,9 +31,12 @@ import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
+import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/l10n/app_localizations.dart';
+
+import '../../../../../fixtures/fake_fresh_pulse_storage.dart';
 
 const _kCatalog = <rpg.Title>[
   rpg.Title.crossBuild(
@@ -57,6 +60,7 @@ PostSessionParams _params({
     bpXpDeltas: bpXpDeltas,
     bpProgressFractionPre: const {},
     bpRankBefore: const {},
+    bpVitalityBefore: const {},
     bpFirstAwakening: const {},
     priorFinishedWorkoutCount: priorFinishedWorkoutCount,
     durationMinutes: 48,
@@ -79,6 +83,13 @@ Widget _harness({
       ),
       analyticsRepositoryProvider.overrideWithValue(analyticsRepo),
       currentUserIdProvider.overrideWithValue(userId),
+      // Phase Vitality PR 2 — PostSessionScreen records the fresh-today pulse
+      // on mount; the default provider opens a Hive box (not available in
+      // this harness → throws). No-op fake keeps the analytics contract
+      // isolated.
+      vitalityFreshPulseLocalStorageProvider.overrideWithValue(
+        FakeFreshPulseStorage(),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -2466,6 +2466,15 @@
   "@postSessionLeaveConfirm": { "description": "Phase 31 round-2 Bug E — Confirm action on the post-session leave-confirmation dialog. Routes the user through the same `onContinue` path the CONTINUAR button uses (back to /home)." },
   "postSessionXpEarnedLabel": "XP EARNED",
   "@postSessionXpEarnedLabel": { "description": "Phase 31 round-2 Bug F — Mission Debrief XP hero block right-of-numeral label. Renders alongside the '+{totalXp}' numeric ('+340 XP EARNED'). Pre-uppercased — already in the tracked-label register." },
+  "postSessionConditioningChargedEyebrow": "Conditioning charged",
+  "@postSessionConditioningChargedEyebrow": { "description": "Phase Vitality — Mission Debrief eyebrow above the aggregate teal 'Conditioning charged' charge bar. Reports that the per-body-part vitality rune rebuilt UP toward its 7-day peak at save time. Teal (bodyPartCardio) register; widget uppercases for the tracked-label register. Pre-title-cased." },
+  "postSessionConditioningChargedDelta": "+{pct}%",
+  "@postSessionConditioningChargedDelta": {
+    "description": "Phase Vitality — delta-only label on the 'Conditioning charged' charge bar (e.g. '+14%'). The honest aggregate increase in vitality across the body parts trained this session (afterPct − beforePct). Always positive (vitality only rebuilds at save time, never depletes); the bar hides when the delta is 0.",
+    "placeholders": { "pct": { "type": "int" } }
+  },
+  "postSessionConditioningChargedCaption": "The rune recharges over ~7 days.",
+  "@postSessionConditioningChargedCaption": { "description": "Phase Vitality — caption under the 'Conditioning charged' charge bar. Locks the rebuild-not-deplete metaphor in copy: vitality is a charge that rebuilds over a ~7-day window, never a depleting HP bar. textDim register." },
   "avatarPickerSheetTitle": "Choose avatar source",
   "@avatarPickerSheetTitle": { "description": "Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows." },
   "avatarPickerCamera": "Take a photo",

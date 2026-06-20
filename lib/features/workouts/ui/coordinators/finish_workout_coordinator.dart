@@ -243,12 +243,23 @@ class FinishWorkoutCoordinator {
       final preFinishProgress = ref.read(rpgProgressProvider).value;
       final bpRankBefore = <BodyPart, int>{};
       final bpProgressFractionPre = <BodyPart, double>{};
+      // Phase Vitality PR 2 — capture the pre-finish per-BP vitality
+      // (ewma, peak) in the same loop, same `ref`-lifetime contract. The
+      // "Conditioning charged" beat needs the BEFORE charge to two-tone the
+      // was→now bar; reading it AFTER `await notifier.finishWorkout()` would
+      // throw (active-workout State disposed) OR read the post-save rebuilt
+      // value — collapsing the delta to ~0 and erasing the beat.
+      final bpVitalityBefore = <BodyPart, ({double ewma, double peak})>{};
       if (preFinishProgress != null) {
         preFinishProgress.byBodyPart.forEach((bp, row) {
           bpRankBefore[bp] = row.rank;
           bpProgressFractionPre[bp] = RankCurve.progressFraction(
             row.totalXp,
             row.rank,
+          );
+          bpVitalityBefore[bp] = (
+            ewma: row.vitalityEwma,
+            peak: row.vitalityPeak,
           );
         });
       }
@@ -471,6 +482,25 @@ class FinishWorkoutCoordinator {
           for (final entry in bpDeltasNum.entries)
             entry.key: entry.value.round(),
         };
+        // Phase Vitality PR 2 — the 24h "fresh today" pulse for every body
+        // part trained this session is recorded by [PostSessionScreen] on
+        // mount (it reads `params.bpXpDeltas.keys`), NOT here.
+        //
+        // WHY NOT HERE (web-IndexedDB finish-path hazard, cousin of cluster
+        // `hive-testwidgets`): on Flutter web, `VitalityFreshPulseLocalStorage`
+        // writes go to IndexedDB. Reading the provider here ALSO fires its
+        // first-read `sweepExpired()` (more IndexedDB work), and the
+        // `recordChargedBatch` loop is a sequence of awaited `box.put`s.
+        // Kicking off that IndexedDB work in the same synchronous tick that
+        // schedules the post-frame `rootContext.go('/workout/finish/...')`
+        // starved the post-frame callback on web — finish hung on the spinner
+        // and never navigated (save_workout RPC returned 200; only the
+        // client-side nav stalled). The pulse only needs to land sometime
+        // before the user next views the Saga screen, so it moves off the
+        // finish critical path entirely onto the destination screen's mount —
+        // the navigation no longer depends on any Hive/IndexedDB write
+        // completing first. `bpDeltas` is still threaded into PostSessionParams
+        // (`bpXpDeltas`) below, which is the source the screen pulses from.
         // Normalize the empty-queue case: baseline XP-only sessions have
         // `consumeLastCelebration() == null` (the notifier short-circuits
         // when `events.isEmpty` at active_workout_notifier.dart:1843).
@@ -502,6 +532,11 @@ class FinishWorkoutCoordinator {
           // Debrief renders correct `Rank N → M` arrows on multi-rank-jump
           // sessions.
           bpRankBefore: bpRankBefore,
+          // Phase Vitality PR 2 — pre-finish per-BP vitality snapshot
+          // captured above. The controller derives the AFTER side from the
+          // post-save snapshot and rolls both up into the aggregate
+          // "Conditioning charged" beat.
+          bpVitalityBefore: bpVitalityBefore,
           bpFirstAwakening: queueResultForRoute.queue
               .whereType<FirstAwakeningEvent>()
               .map((e) => e.bodyPart)

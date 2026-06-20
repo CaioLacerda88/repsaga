@@ -8,6 +8,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../models/body_part.dart';
 import '../../models/character_sheet_state.dart';
 import '../../providers/rank_up_pulse_provider.dart';
+import '../../providers/vitality_fresh_pulse_provider.dart';
 import '../utils/vitality_state_styles.dart';
 import 'ambient_pulse_dot.dart';
 import 'body_part_localization.dart';
@@ -45,14 +46,22 @@ class BodyPartRankRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Always read the provider first — Riverpod convention is to watch
+    // Always read the providers first — Riverpod convention is to watch
     // unconditionally so the subscription set is stable across rebuilds.
     // The untrained branch ignores the result (untrained rows never pulse).
     final pulseStorage = ref.watch(rankUpPulseLocalStorageProvider);
+    // Phase Vitality PR 2 — second trigger source: a row pulses "fresh
+    // today" for 24h after the body part was trained in a saved session
+    // (not only after a rank-up), reflecting the save-time vitality
+    // rebuild. Reuses the SAME emphasis styling the rank-up pulse drives —
+    // no new visual, just an OR of the two trigger windows.
+    final freshPulseStorage = ref.watch(vitalityFreshPulseLocalStorageProvider);
     if (entry.isUntrained) {
       return _UntrainedRow(entry: entry);
     }
-    final emphasized = pulseStorage.isPulsing(entry.bodyPart);
+    final emphasized =
+        pulseStorage.isPulsing(entry.bodyPart) ||
+        freshPulseStorage.isPulsing(entry.bodyPart);
     return _TrainedRow(entry: entry, emphasized: emphasized);
   }
 }

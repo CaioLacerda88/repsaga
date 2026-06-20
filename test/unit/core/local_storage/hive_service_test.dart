@@ -19,7 +19,7 @@ void main() {
     });
 
     group('box constants', () {
-      test('all 9 box names are unique', () {
+      test('all 10 box names are unique', () {
         final names = [
           HiveService.activeWorkout,
           HiveService.offlineQueue,
@@ -30,13 +30,14 @@ void main() {
           HiveService.workoutHistoryCache,
           HiveService.lastSetsCache,
           HiveService.rankUpPulse,
+          HiveService.vitalityFreshPulse,
         ];
-        expect(names.toSet().length, 9);
+        expect(names.toSet().length, 10);
       });
     });
 
     group('init', () {
-      test('opens all 9 boxes', () async {
+      test('opens all 10 boxes', () async {
         // HiveService.init() calls Hive.initFlutter() which needs Flutter
         // bindings. Instead, we simulate what init does: open all boxes
         // and verify they are accessible.
@@ -50,6 +51,7 @@ void main() {
           Hive.openBox<dynamic>(HiveService.workoutHistoryCache),
           Hive.openBox<dynamic>(HiveService.lastSetsCache),
           Hive.openBox<dynamic>(HiveService.rankUpPulse),
+          Hive.openBox<dynamic>(HiveService.vitalityFreshPulse),
         ]);
 
         expect(Hive.isBoxOpen(HiveService.activeWorkout), isTrue);
@@ -61,6 +63,7 @@ void main() {
         expect(Hive.isBoxOpen(HiveService.workoutHistoryCache), isTrue);
         expect(Hive.isBoxOpen(HiveService.lastSetsCache), isTrue);
         expect(Hive.isBoxOpen(HiveService.rankUpPulse), isTrue);
+        expect(Hive.isBoxOpen(HiveService.vitalityFreshPulse), isTrue);
       });
     });
 
@@ -326,7 +329,7 @@ void main() {
     });
 
     group('clearAll', () {
-      test('clears all 9 boxes', () async {
+      test('clears all 10 boxes', () async {
         // Open all boxes and put some data in each.
         final boxNames = [
           HiveService.activeWorkout,
@@ -338,6 +341,7 @@ void main() {
           HiveService.workoutHistoryCache,
           HiveService.lastSetsCache,
           HiveService.rankUpPulse,
+          HiveService.vitalityFreshPulse,
         ];
 
         for (final name in boxNames) {

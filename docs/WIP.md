@@ -75,11 +75,32 @@ L1613-1653 + `saga.spec.ts` / `cardio.spec.ts` (selectors unchanged unless DOM s
 - [x] Verify: migration applied LOCAL; FULL integration suite GREEN (15 files, 0 failures — incl. cardio XP-gate
       parity); `dart format` + `dart analyze --fatal-infos` clean. Hosted push deferred to post-merge (pipeline step 12).
 
-### PR 2 — UI: debrief beat + fresh-today pulse (after PR 1 merges)
-- [ ] ui-ux-critic defines the "Conditioning charged +N%" beat (count-up on body-part-hue bar, per trained bp).
-- [ ] Extend `PostSessionState` with before/after vitality_pct per trained bp (from coordinator snapshot vs
-      post-refresh) — NO change to `save_workout` return / `PostSessionParams` contract.
-- [ ] Render beat in `MissionDebriefSection` (static; no new cinematic cut). Honest server number.
-- [ ] Saga rows "fresh today" pulse: sibling Hive box on the rank-up-pulse pattern, set for trained bps,
-      consumed in `body_part_rank_row.dart`.
-- [ ] Visual gate (mockup vs 320/360/412) + verify trend chart no same-day double-count.
+### PR 2 — UI: post-session scroll fix + "Conditioning charged" beat + fresh-today pulse (PR 1 #362 MERGED + deployed)
+LOCKED DESIGN (user-approved 2026-06-20, `docs/phase-vitality-mockups.html`): **Variant A — single aggregate
+teal charge bar**, two-tone fill (dim `was` → solid `now`) counting up, **delta-only "+N%"**, caption
+"recharges over ~7 days". Drop the "· N groups" scope caption (aggregate needs no scope). NOT a new cinematic cut.
+- [x] **Scroll fix (the reported bug):** `post_session_summary_panel.dart` `Column`+`Spacer()` →
+      `Column[ Expanded(SingleChildScrollView(content)), <pinned share+Continue CTA> ]`. Continue always
+      reachable; content scrolls. Kept SafeArea `minimum: top12/bottom16` floor ([[cluster-safearea-system-overlay-overlap]]).
+      SingleChildScrollView (not ListView) keeps every child eager for E2E/AOM ([[cluster-listview-lazy-build-breaks-e2e]]).
+- [x] **Beat data:** new pure `ConditioningCharge` domain object (`conditioning_charge.dart`) — aggregate
+      before/after vitality_pct (mean of trained bps' clamp(ewma/peak)). Added nullable `conditioningCharge`
+      field to `PostSessionState`. BEFORE = `finish_workout_coordinator` pre-finish `rpgProgressProvider`
+      snapshot threaded via new `PostSessionParams.bpVitalityBefore`; AFTER = post-`refreshAfterSave()`
+      provider read in controller `_buildInitial` (real provider, not a guess — [[cluster-optimistic-ui-vs-async-provider]]).
+      NO change to `save_workout` return / `workout_repository` contract.
+- [x] **Beat widget:** `ConditioningChargeBar` (new, sibling of `XpSegmentedBar`) — Variant A aggregate
+      two-tone teal charge bar (8dp), delta-only "+N%", caption, count-up rightward only (clamps `now ≥ was`,
+      never depletes). Added to `MissionDebriefSection` gated on `conditioningCharge.shouldRender`. Teal
+      `bodyPartCardio #22D3EE`. Dropped the "· N groups" scope caption per locked design.
+- [x] **Fresh-today pulse:** new `VitalityFreshPulseLocalStorage` (box `vitality_fresh_pulse`, registered in
+      HiveService) + provider, sibling of `rank_up_pulse`. Written for all trained bps in the coordinator's
+      post-session push branch; consumed in `body_part_rank_row.dart` (OR'd with the rank-up pulse → reuses
+      the existing AmbientPulseDot emphasis, no new visual).
+- [x] TDD: beat renders delta + two-tone + count-up reaches correct final geometry (rendered output, not
+      controller — [[cluster-pump-duration-masks-forward]]); scroll test (CTA pinned/tappable + content in a
+      Scrollable at 320×600 MAX content); `ConditioningCharge` mean/clamp/graceful-hide unit test; fresh-pulse
+      24h window + batch + expiry test. ARB en+pt keys added. `dart analyze --fatal-infos` clean; full
+      `flutter test` green (3943 pass, 1 pre-existing integration skip).
+- [ ] Visual gate (mockup vs 320/360/412, MAX-content session) + verify trend chart no same-day double-count.
+      **(orchestrator step — not done by this agent.)**

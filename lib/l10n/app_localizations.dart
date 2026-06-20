@@ -5442,6 +5442,24 @@ abstract class AppLocalizations {
   /// **'XP EARNED'**
   String get postSessionXpEarnedLabel;
 
+  /// Phase Vitality — Mission Debrief eyebrow above the aggregate teal 'Conditioning charged' charge bar. Reports that the per-body-part vitality rune rebuilt UP toward its 7-day peak at save time. Teal (bodyPartCardio) register; widget uppercases for the tracked-label register. Pre-title-cased.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning charged'**
+  String get postSessionConditioningChargedEyebrow;
+
+  /// Phase Vitality — delta-only label on the 'Conditioning charged' charge bar (e.g. '+14%'). The honest aggregate increase in vitality across the body parts trained this session (afterPct − beforePct). Always positive (vitality only rebuilds at save time, never depletes); the bar hides when the delta is 0.
+  ///
+  /// In en, this message translates to:
+  /// **'+{pct}%'**
+  String postSessionConditioningChargedDelta(int pct);
+
+  /// Phase Vitality — caption under the 'Conditioning charged' charge bar. Locks the rebuild-not-deplete metaphor in copy: vitality is a charge that rebuilds over a ~7-day window, never a depleting HP bar. textDim register.
+  ///
+  /// In en, this message translates to:
+  /// **'The rune recharges over ~7 days.'**
+  String get postSessionConditioningChargedCaption;
+
   /// Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows.
   ///
   /// In en, this message translates to:
