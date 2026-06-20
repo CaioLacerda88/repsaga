@@ -435,10 +435,11 @@ void main() {
       final state = container.read(activeWorkoutProvider).value!;
       final sets = state.exercises[0].sets;
 
-      // Falls back to equipment-type defaults (barbell: 20kg) and targetReps
-      expect(sets[0].weight, 20.0);
+      // Never-done weight seeds 0 (no target, no history); reps come from
+      // targetReps (10). The 0 replaces the old 20 kg equipment default.
+      expect(sets[0].weight, 0.0);
       expect(sets[0].reps, 10);
-      expect(sets[1].weight, 20.0);
+      expect(sets[1].weight, 0.0);
       expect(sets[1].reps, 10);
       expect(sets[0].isCompleted, false);
     });

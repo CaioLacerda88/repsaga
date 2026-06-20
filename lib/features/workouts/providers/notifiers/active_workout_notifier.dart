@@ -432,8 +432,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // 100, ...]` — set #1 of the routine started at warmup weight.
         // Filtering here keeps the routine path in lockstep with the
         // ad-hoc add-set path. Edge case: if ALL previous sets were
-        // warmups, the filter returns empty and we fall through to
-        // equipment defaults via `prev?.weight ?? equipDefaults.weight`.
+        // warmups, the filter returns empty so `prev` is null — weight
+        // then falls through to the never-done 0 (see seed below) and
+        // reps fall through to `equipDefaults.reps`.
         final previousSets = (lastSets[re.exerciseId] ?? const <ExerciseSet>[])
             .where((s) => s.setType != SetType.warmup)
             .toList(growable: false);
@@ -455,7 +456,13 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
             id: _uuid.v4(),
             workoutExerciseId: workoutExerciseId,
             setNumber: setIndex + 1,
-            weight: re.targetWeight ?? prev?.weight ?? equipDefaults.weight,
+            // Weight precedence: target → last-lifted → 0. The final 0 (NOT
+            // equipDefaults.weight) is deliberate — kill the "nebulous"
+            // equipment-default weight for a never-done lift and force a
+            // conscious entry (user-approved 2026-06-20). Do not restore
+            // equipDefaults.weight here. Reps keep the equipment default
+            // (a 0-rep set is a non-set).
+            weight: re.targetWeight ?? prev?.weight ?? 0,
             reps: re.targetReps ?? prev?.reps ?? equipDefaults.reps,
             setType: SetType.working,
             isCompleted: false,
@@ -559,8 +566,10 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   ///      Phase 22 Q2 — FitNotes/Hevy treat warmups as non-performance
   ///      data). Take the set with the lowest `setNumber` (the "set 1"
   ///      match); if none, fall back to the LAST working set's values.
-  ///   2. Equipment defaults via [defaultSetValues] when there's no
-  ///      prior data — or when prior data contained ONLY warmups.
+  ///   2. Never-done fallback when there's no prior data — or when prior
+  ///      data contained ONLY warmups: WEIGHT seeds 0 (kill the nebulous
+  ///      equipment default; user-approved 2026-06-20), REPS seed the
+  ///      equipment default via [defaultSetValues].
   ///
   /// Bodyweight exercises (`EquipmentType.bodyweight`) skip weight on
   /// the prior-data path (`weight = 0` falls out naturally from the
@@ -650,9 +659,9 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
   /// [ActiveWorkoutExercise].
   ///
   /// Failure of the network fetch is treated as "no prior data" — the
-  /// equipment-defaults fallback kicks in. We never block add-exercise
-  /// on a network failure; the user must always be able to add an
-  /// exercise mid-workout even when offline.
+  /// never-done fallback kicks in (weight 0, equipment-default reps). We
+  /// never block add-exercise on a network failure; the user must always
+  /// be able to add an exercise mid-workout even when offline.
   Future<ExerciseSet> _seedFirstSetForAddedExercise({
     required String workoutExerciseId,
     required Exercise exercise,
@@ -694,14 +703,19 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
     }
 
     if (seedWeight == null || seedReps == null) {
-      // Priority 2 — equipment defaults. Covers: no prior data at all,
+      // Priority 2 — never-done fallback. Covers: no prior data at all,
       // OR prior session was ALL warmups (the .where filter above
-      // returned empty).
+      // returned empty). Weight seeds 0; reps seed the equipment default.
       final equipDefaults = defaultSetValues(
         exercise.equipmentType,
         weightUnit,
       );
-      seedWeight ??= equipDefaults.weight;
+      // Weight precedence: target → last-lifted → 0. The final 0 (NOT
+      // equipDefaults.weight) is deliberate — kill the "nebulous"
+      // equipment-default weight for a never-done lift and force a conscious
+      // entry (user-approved 2026-06-20). Do not restore equipDefaults.weight
+      // here. Reps keep the equipment default (a 0-rep set is a non-set).
+      seedWeight ??= 0;
       seedReps ??= equipDefaults.reps;
     }
 

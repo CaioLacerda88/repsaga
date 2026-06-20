@@ -527,34 +527,37 @@ void main() {
         expect(seeded.reps, 6);
       });
 
+      test('should seed never-done weight 0 and equipment-default reps when no '
+          'prior data exists', () async {
+        // Default makeContainer stubs getLastWorkoutSets to {}.
+        // Never-done weight seeds 0 (kill the nebulous equipment default);
+        // reps keep the equipment default (barbell + kg → 5).
+        final container = makeContainer(makeState());
+        addTearDown(container.dispose);
+        await container.read(activeWorkoutProvider.future);
+
+        await container
+            .read(activeWorkoutProvider.notifier)
+            .addExercise(makeExercise()); // barbell default
+
+        final seeded = container
+            .read(activeWorkoutProvider)
+            .value!
+            .exercises
+            .first
+            .sets
+            .first;
+        expect(
+          seeded.weight,
+          0,
+          reason: 'never-done weight seeds 0, not the 20 kg equipment default.',
+        );
+        expect(seeded.reps, 5);
+      });
+
       test(
-        'should fall back to equipment defaults when no prior data exists',
-        () async {
-          // Default makeContainer stubs getLastWorkoutSets to {}.
-          // Barbell equipment + kg → 20kg × 5 from defaultSetValues.
-          final container = makeContainer(makeState());
-          addTearDown(container.dispose);
-          await container.read(activeWorkoutProvider.future);
-
-          await container
-              .read(activeWorkoutProvider.notifier)
-              .addExercise(makeExercise()); // barbell default
-
-          final seeded = container
-              .read(activeWorkoutProvider)
-              .value!
-              .exercises
-              .first
-              .sets
-              .first;
-          expect(seeded.weight, 20);
-          expect(seeded.reps, 5);
-        },
-      );
-
-      test(
-        'should fall back to equipment defaults when prior session contained '
-        'ONLY warmup sets (warmup-filter applied)',
+        'should seed never-done weight 0 and equipment-default reps when prior '
+        'session contained ONLY warmup sets (warmup-filter applied)',
         () async {
           final (:container, :mockRepo) = makeContainerWithRepo(makeState());
           addTearDown(container.dispose);
@@ -597,8 +600,10 @@ void main() {
               .first
               .sets
               .first;
-          // Equipment default (barbell + kg) — NOT the warmup weights.
-          expect(seeded.weight, 20);
+          // Never-done weight 0 (warmups are filtered out → no history),
+          // NOT the warmup weights and NOT the 20 kg equipment default.
+          // Reps keep the equipment default (5).
+          expect(seeded.weight, 0);
           expect(seeded.reps, 5);
         },
       );
@@ -725,32 +730,42 @@ void main() {
         },
       );
 
-      test('should NOT block add-exercise on repo error — falls back to '
-          'equipment defaults (offline resilience)', () async {
-        // Pre-fill is a UX nicety, never a blocker. A repo throw must
-        // be swallowed and the equipment defaults kick in instead.
-        final (:container, :mockRepo) = makeContainerWithRepo(makeState());
-        addTearDown(container.dispose);
-        await container.read(activeWorkoutProvider.future);
+      test(
+        'should NOT block add-exercise on repo error — falls back to '
+        'never-done weight 0 + equipment-default reps (offline resilience)',
+        () async {
+          // Pre-fill is a UX nicety, never a blocker. A repo throw must be
+          // swallowed and the never-done seed (weight 0, equipment-default
+          // reps) kicks in instead.
+          final (:container, :mockRepo) = makeContainerWithRepo(makeState());
+          addTearDown(container.dispose);
+          await container.read(activeWorkoutProvider.future);
 
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenThrow(Exception('offline'));
+          when(
+            () => mockRepo.getLastWorkoutSets(any()),
+          ).thenThrow(Exception('offline'));
 
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .addExercise(makeExercise()); // barbell default
+          await container
+              .read(activeWorkoutProvider.notifier)
+              .addExercise(makeExercise()); // barbell default
 
-        final seeded = container
-            .read(activeWorkoutProvider)
-            .value!
-            .exercises
-            .first
-            .sets
-            .first;
-        expect(seeded.weight, 20);
-        expect(seeded.reps, 5);
-      });
+          final seeded = container
+              .read(activeWorkoutProvider)
+              .value!
+              .exercises
+              .first
+              .sets
+              .first;
+          expect(
+            seeded.weight,
+            0,
+            reason:
+                'never-done weight seeds 0 even when the repo throws; reps keep '
+                'the equipment default.',
+          );
+          expect(seeded.reps, 5);
+        },
+      );
     });
 
     // -------------------------------------------------------------- removeExercise
@@ -5680,8 +5695,8 @@ void main() {
       }
     });
 
-    test('M1: previous session is warmup-ONLY → falls through to equipment '
-        'defaults instead of pre-filling warmup weights', () async {
+    test('M1: previous session is warmup-ONLY → never-done weight 0 instead of '
+        'pre-filling warmup weights', () async {
       final (:container, :mockRepo, :mockStorage, :mockAuth) =
           makeAsyncContainer(null, locale: const Locale('en'));
       addTearDown(container.dispose);
@@ -5695,8 +5710,8 @@ void main() {
       ).thenAnswer((_) async => makeWorkout(id: 'workout-warmup-only'));
 
       // Pathological case: every previous-session set was a warmup.
-      // Post-fix the filter empties `previousSets`, so `prev` resolves
-      // to null and the equipment default takes over (barbell → 20kg).
+      // The filter empties `previousSets`, so `prev` resolves to null and
+      // the never-done seed takes over (weight 0; no target either).
       final prevWarmupOnly = <ExerciseSet>[
         ExerciseSet(
           id: 'prev-warm-1',
@@ -5745,18 +5760,19 @@ void main() {
       final state = container.read(activeWorkoutProvider).value!;
       final sets = state.exercises.first.sets;
       expect(sets, hasLength(2));
-      // The exact equipment default depends on the user's weight unit
-      // and equipment type; we just assert it is NOT a leaked warmup
-      // weight (40 or 60).
+      // When ALL previous sets are warmups the filter empties the list and
+      // (with no target) the never-done seed kicks in: weight 0. Pins both
+      // that the warmup weights (40/60) did NOT leak through AND the new
+      // never-done contract (0, not a 20 kg equipment default).
       for (final s in sets) {
         expect(
-          s.weight == 40.0 || s.weight == 60.0,
-          isFalse,
+          s.weight,
+          0.0,
           reason:
-              'PR-4 / M1 edge case: when ALL previous sets are warmups '
-              'the filter empties the list and the equipment default '
-              'must take over. A 40kg or 60kg pre-fill here would mean '
-              'the warmup weight leaked through.',
+              'PR-4 / M1 edge case: when ALL previous sets are warmups the '
+              'filter empties the list and the never-done weight (0) takes '
+              'over. A 40/60 kg pre-fill would mean a warmup leaked through; '
+              'a 20 kg value would mean the old equipment default returned.',
         );
       }
     });
