@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase Vitality mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#0D0319; --surface:#1A0F2E; --surface2:#241640;
+    --primaryViolet:#6A2FA8; --hotViolet:#B36DFF; --heroGold:#FFB800;
+    --cream:#EEE7FA; --dim:#9C8DB8; --hair:rgba(179,109,255,0.14);
+    --success:#4ADE80; --chest:#F472B6; --back:#38BDF8; --core:#9C8DB8; --cardio:#22D3EE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#08040F;color:var(--cream);font-family:Barlow,sans-serif;padding:30px 18px 90px;-webkit-font-smoothing:antialiased}
+  h1{font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:.5px;font-size:25px;margin-bottom:3px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:6px}
+  .note{color:var(--dim);font-size:12.5px;max-width:820px;line-height:1.55;margin-bottom:10px}
+  .note b{color:var(--cardio)}
+  .note code{color:var(--hotViolet);font-family:ui-monospace,monospace;font-size:11.5px}
+  hr.div{border:0;border-top:1px solid var(--hair);margin:30px 0 22px;max-width:980px}
+  h2.sec{font-family:Rajdhani,sans-serif;font-weight:700;font-size:18px;letter-spacing:.4px;margin-bottom:4px}
+  .grid{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start;margin-top:18px}
+  .col h3{font-family:"Barlow Semi Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;font-size:12px;color:var(--dim);margin-bottom:9px}
+  .rationale{max-width:340px;color:var(--dim);font-size:12px;line-height:1.55;margin-top:12px}
+  .rationale .tag{display:inline-block;font-family:"Barlow Semi Condensed";text-transform:uppercase;letter-spacing:1px;font-size:10px;padding:2px 7px;border-radius:3px;margin-bottom:6px}
+  .tag.rec{background:rgba(34,211,238,.16);color:var(--cardio);border:1px solid rgba(34,211,238,.5)}
+  .tag.alt{background:rgba(156,141,184,.13);color:var(--dim);border:1px solid var(--hair)}
+  .rationale b{color:var(--cream)}
+  .rationale .con{color:#F26B6B} .rationale .pro{color:var(--success)}
+  .device{background:var(--abyss);border:1px solid var(--hair);border-radius:18px;overflow:hidden;position:relative}
+  .device .vp{position:absolute;top:6px;right:10px;font-family:"Barlow Semi Condensed";font-size:9px;letter-spacing:1px;color:rgba(156,141,184,.5);text-transform:uppercase;z-index:5}
+  .panel{display:flex;flex-direction:column;height:100%;background:var(--abyss);padding:12px 20px 16px}
+  .scrollwrap{flex:1 1 auto;overflow-y:auto;min-height:0;position:relative}
+  .scrollwrap::-webkit-scrollbar{width:3px}
+  .scrollwrap::-webkit-scrollbar-thumb{background:rgba(179,109,255,.35);border-radius:2px}
+  .pinned{flex:0 0 auto;padding-top:10px}
+  .saga-eyebrow{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:2px;font-size:11px;color:var(--dim);text-align:center;margin-bottom:16px}
+  .duration{font-family:Rajdhani;font-weight:700;font-size:17px;color:var(--cream);text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .tonnage{font-family:Barlow;font-size:12px;color:var(--dim);text-align:center;margin-top:4px}
+  .xphero{display:flex;align-items:baseline;border-bottom:1px solid var(--hair);padding:10px 0;margin-top:10px}
+  .xphero .big{font-family:Rajdhani;font-weight:700;font-size:36px;line-height:1;color:var(--cream);font-variant-numeric:tabular-nums;letter-spacing:-.7px}
+  .xphero .lbl{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:1.9px;font-size:12px;color:var(--dim);margin-left:6px}
+  .xphero .cls{margin-left:auto;font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:1.1px;font-size:11px;color:var(--hotViolet)}
+  .deyebrow{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:2.4px;font-size:11px;color:var(--dim);margin:14px 0 12px}
+  .liftrow{display:flex;align-items:center;gap:9px;padding:2px 0;margin-bottom:8px}
+  .liftrow .hue{width:3px;align-self:stretch;border-radius:2px;min-height:30px}
+  .liftrow .body{flex:1;min-width:0}
+  .liftrow .nm{font-family:Barlow;font-weight:600;font-size:14px;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .liftrow .meta{font-family:Rajdhani;font-weight:600;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:1px}
+  .liftrow .pr{font-family:"Barlow Semi Condensed";font-weight:600;font-size:10px;letter-spacing:1px;color:var(--heroGold);border:1px solid rgba(255,184,0,.5);border-radius:3px;padding:1px 5px;text-transform:uppercase}
+  .more{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:1.6px;font-size:11px;color:var(--dim);text-align:center;margin:6px 0 0}
+  .xpbar{display:flex;height:16px;gap:2px;margin:16px 0}
+  .xpbar span{display:block}
+  .rankrow{font-size:13px;margin-bottom:8px;font-family:"Barlow Semi Condensed";font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+  .rankrow .sep{color:var(--dim);margin:0 7px}
+  .rankrow .n{font-family:Rajdhani;font-weight:700;color:var(--cream);font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0}
+  .nt-div{border-top:1px solid var(--hair);margin-top:20px;padding-top:10px}
+  .nt-eyebrow{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:2.4px;font-size:11px;color:var(--primaryViolet)}
+  .nt-body{font-family:Barlow;font-size:14px;color:var(--cream);margin-top:6px}
+  .cc-block{margin-top:18px;padding-top:14px;border-top:1px solid var(--hair)}
+  .cc-eyebrow{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:2.4px;font-size:11px;color:var(--cardio);display:flex;align-items:center;gap:6px}
+  .cc-eyebrow .rune{font-size:12px}
+  .ccA{margin-top:10px}
+  .ccA .toprow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px}
+  .ccA .scope{font-family:Barlow;font-weight:600;font-size:13px;color:var(--cream)}
+  .ccA .scope .who{color:var(--dim);font-weight:500}
+  .ccA .delta{font-family:Rajdhani;font-weight:700;font-size:16px;color:var(--cardio);font-variant-numeric:tabular-nums;letter-spacing:.3px}
+  .ccA .delta .arr{color:var(--dim);font-size:12px;margin-right:3px}
+  .charge{position:relative;height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+  .charge .was{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:rgba(34,211,238,.28)}
+  .charge .now{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--cardio)}
+  .ccA .foot{font-family:Barlow;font-size:11px;color:var(--dim);margin-top:6px;line-height:1.45}
+  .ccB{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+  .miniwrap .mtop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px}
+  .miniwrap .mname{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:11px}
+  .miniwrap .mdelta{font-family:Rajdhani;font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+  .miniwrap .mdelta .arr{color:var(--dim);font-size:11px;margin-right:2px}
+  .minibar{position:relative;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+  .minibar .was{position:absolute;left:0;top:0;bottom:0;border-radius:3px;opacity:.30}
+  .minibar .now{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+  .ccC{margin-top:10px;background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.22);border-radius:6px;padding:11px 12px}
+  .ccC .crow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+  .ccC .cname{font-family:Barlow;font-weight:600;font-size:14px;color:var(--cream)}
+  .ccC .cdelta{font-family:Rajdhani;font-weight:700;font-size:18px;color:var(--cardio);font-variant-numeric:tabular-nums}
+  .ccC .cdelta .arr{color:var(--dim);font-size:13px;margin-right:3px}
+  .ccC .cfoot{font-family:Barlow;font-size:11px;color:var(--dim);margin-top:7px}
+  .ageprompt{margin-top:14px;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:10px 12px}
+  .ageprompt .ai{color:var(--cardio);font-size:16px}
+  .ageprompt .atxt{flex:1;font-family:Barlow;font-size:12px;color:var(--cream);line-height:1.35}
+  .ageprompt .atxt .sub{color:var(--dim);font-size:11px}
+  .ageprompt .ago{font-family:"Barlow Semi Condensed";font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:11px;color:var(--cardio)}
+  .share-cta{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;border:1px solid var(--hair);border-radius:4px;background:transparent;font-family:Rajdhani;font-weight:600;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--cream);margin-bottom:10px}
+  .continue-cta{display:flex;align-items:center;justify-content:center;gap:8px;height:46px;border-radius:4px;background:var(--primaryViolet);color:var(--cream);font-family:Rajdhani;font-weight:600;font-size:13px;letter-spacing:.5px;text-transform:uppercase}
+  .fade{position:absolute;left:0;right:0;bottom:0;height:34px;pointer-events:none;background:linear-gradient(to bottom,rgba(13,3,25,0),var(--abyss))}
+  .callout{max-width:980px;background:var(--surface);border:1px solid var(--hair);border-radius:8px;padding:16px 18px;margin-top:8px;font-size:13px;line-height:1.6;color:var(--cream)}
+  .callout h4{font-family:Rajdhani;font-weight:700;font-size:15px;margin-bottom:8px;color:var(--cardio)}
+  .callout ul{margin:6px 0 6px 18px} .callout li{margin-bottom:5px;color:var(--dim)}
+  .callout li b{color:var(--cream)}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin:0 3px}
+</style>
+</head>
+<body>
+  <h1>Phase Vitality &mdash; Conditioning charged beat <span style="color:var(--dim);font-size:15px">+ summary-panel scroll fix</span></h1>
+  <div class="sub">Static beat inside <code>MissionDebriefSection</code> &middot; post-cinematic summary &middot; teal Conditioning identity <span class="swatch" style="background:#22D3EE"></span></div>
+  <div class="note">
+    The beat reports the <b>honest server recompute</b> of per-body-part vitality at save time: the rune <b>rebuilt UP</b> toward its 7-day peak. <b>was-value</b> = pre-finish snapshot, <b>now-value</b> = post-save refresh, animated as a count-up that fills from the was tick to the now tick on the body-part-hue bar. It is <b>not</b> a new cinematic cut and <b>never</b> an HP bar that depletes &mdash; the fill only ever moves right. Reuses <code>XpSegmentedBar</code> geometry + <code>BodyPartHues.hueFor</code>. Three variants below for multi-BP sessions.
+  </div>
+  <hr class="div">
+  <h2 class="sec">&sect;1 &middot; Scroll-fixed panel &mdash; MAX-content state @ 320&times;640</h2>
+  <div class="note" style="margin-bottom:16px">
+    Current panel is a fixed <code>Column</code> + <code>Spacer()</code> with no scroll view, so it overflows on heavy sessions. Fix: <code>Column[ Expanded(SingleChildScrollView(content)), pinned bottom CTA block ]</code>. Share + Continue stay pinned and always tappable; everything above scrolls. Shown at the smallest Android viewport where overflow bites, body deliberately overfilled (multi-BP rank-ups + cardio finisher + conditioning beat + age prompt) with the bottom-fade scroll affordance visible. The beat here uses the <b>recommended Variant A</b>.
+  </div>
+  <div class="grid">
+    <div class="col">
+      <h3>320 &times; 640 &middot; scroll TOP (fade hints more below)</h3>
+      <div class="device" style="width:320px;height:640px">
+        <div class="vp">320x640</div>
+        <div class="panel">
+          <div class="scrollwrap">
+            <div class="saga-eyebrow">Saga 47</div>
+            <div class="duration">62 min &middot; 21 s&eacute;ries</div>
+            <div class="tonnage">8 420 kg movimentados</div>
+            <div class="xphero"><span class="big">+340</span><span class="lbl">XP</span><span class="cls">Iron Sentinel</span></div>
+            <div class="deyebrow">Relat&oacute;rio da sess&atilde;o</div>
+            <div class="liftrow"><span class="hue" style="background:var(--success)"></span><div class="body"><div class="nm">Agachamento livre</div><div class="meta">140 kg &times; 5</div></div><span class="pr">PR</span></div>
+            <div class="liftrow"><span class="hue" style="background:var(--core)"></span><div class="body"><div class="nm">Prancha abdominal</div><div class="meta">60 s &times; 3</div></div></div>
+            <div class="liftrow"><span class="hue" style="background:var(--cardio)"></span><div class="body"><div class="nm">Esteira</div><div class="meta">28:45 &middot; 5.2 km</div></div></div>
+            <div class="more">+ 2 exerc&iacute;cios</div>
+            <div class="xpbar"><span style="flex:62;background:var(--success)"></span><span style="flex:23;background:var(--core)"></span><span style="flex:15;background:var(--chest)"></span></div>
+            <div class="rankrow"><span style="color:var(--success)">Pernas</span><span class="sep">&middot;</span><span class="n">Rank 14 &rarr; 15</span></div>
+            <div class="rankrow"><span style="color:var(--core)">Core</span><span class="sep">&middot;</span><span class="n">Rank 9</span></div>
+            <div class="rankrow"><span style="color:var(--chest)">Peito</span><span class="sep">&middot;</span><span class="n">Rank 11 &rarr; 12</span></div>
+            <div class="cc-block">
+              <div class="cc-eyebrow"><span class="rune">&#9889;</span> Condicionamento recarregado</div>
+              <div class="ccA">
+                <div class="toprow"><div class="scope">Esta sess&atilde;o <span class="who">&middot; 3 grupos</span></div><div class="delta"><span class="arr">&#9650;</span>+14%</div></div>
+                <div class="charge"><span class="was" style="width:58%"></span><span class="now" style="width:72%"></span></div>
+                <div class="foot">A runa recarrega ao longo de 7 dias. Continue treinando para mant&ecirc;-la acesa.</div>
+              </div>
+            </div>
+            <div class="nt-div"><div class="nt-eyebrow">Pr&oacute;ximo passo</div><div class="nt-body">Faltam 120 XP para Pernas alcan&ccedil;ar o Rank 16.</div></div>
+            <div class="fade"></div>
+          </div>
+          <div class="pinned">
+            <div class="share-cta">&#128247;&nbsp; Compartilhar saga</div>
+            <div class="continue-cta">Continuar&nbsp; &rarr;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>320 &times; 640 &middot; scrolled DOWN (CTA still pinned)</h3>
+      <div class="device" style="width:320px;height:640px">
+        <div class="vp">320x640</div>
+        <div class="panel">
+          <div class="scrollwrap">
+            <div class="liftrow" style="opacity:.5"><span class="hue" style="background:var(--core)"></span><div class="body"><div class="nm">Prancha abdominal</div><div class="meta">60 s &times; 3</div></div></div>
+            <div class="liftrow"><span class="hue" style="background:var(--cardio)"></span><div class="body"><div class="nm">Esteira</div><div class="meta">28:45 &middot; 5.2 km</div></div></div>
+            <div class="more">+ 2 exerc&iacute;cios</div>
+            <div class="xpbar"><span style="flex:62;background:var(--success)"></span><span style="flex:23;background:var(--core)"></span><span style="flex:15;background:var(--chest)"></span></div>
+            <div class="rankrow"><span style="color:var(--success)">Pernas</span><span class="sep">&middot;</span><span class="n">Rank 14 &rarr; 15</span></div>
+            <div class="rankrow"><span style="color:var(--core)">Core</span><span class="sep">&middot;</span><span class="n">Rank 9</span></div>
+            <div class="rankrow"><span style="color:var(--chest)">Peito</span><span class="sep">&middot;</span><span class="n">Rank 11 &rarr; 12</span></div>
+            <div class="cc-block">
+              <div class="cc-eyebrow"><span class="rune">&#9889;</span> Condicionamento recarregado</div>
+              <div class="ccA">
+                <div class="toprow"><div class="scope">Esta sess&atilde;o <span class="who">&middot; 3 grupos</span></div><div class="delta"><span class="arr">&#9650;</span>+14%</div></div>
+                <div class="charge"><span class="was" style="width:58%"></span><span class="now" style="width:72%"></span></div>
+                <div class="foot">A runa recarrega ao longo de 7 dias. Continue treinando para mant&ecirc;-la acesa.</div>
+              </div>
+            </div>
+            <div class="ageprompt"><span class="ai">&#9432;</span><div class="atxt">Defina sua idade para calibrar o esfor&ccedil;o cardio.<div class="sub">Melhora a precis&atilde;o das zonas de FC.</div></div><span class="ago">Definir</span></div>
+            <div class="nt-div"><div class="nt-eyebrow">Pr&oacute;ximo passo</div><div class="nt-body">Faltam 120 XP para Pernas alcan&ccedil;ar o Rank 16.</div></div>
+          </div>
+          <div class="pinned">
+            <div class="share-cta">&#128247;&nbsp; Compartilhar saga</div>
+            <div class="continue-cta">Continuar&nbsp; &rarr;</div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale"><b>Scroll behavior:</b> the body scrolls inside <code>Expanded(SingleChildScrollView)</code>; Share + Continue sit in a <b>pinned</b> non-scrolling block hugging the SafeArea floor. The bottom-fade gradient hints at more content without a heavy scrollbar. On short sessions the content does not fill, so there is no scroll and the CTAs sit where the <code>Spacer()</code> used to push them.</div>
+    </div>
+  </div>
+  <hr class="div">
+  <h2 class="sec">&sect;2 &middot; Conditioning charged beat &mdash; three variants for multi-BP sessions</h2>
+  <div class="note" style="margin-bottom:16px">A session can charge several body parts (legs + core + a cardio finisher). The honest per-BP recompute returns a delta for each trained group. How to present them? Three options, isolated below at full panel width for legibility. All share the teal eyebrow + the rebuild-only fill grammar.</div>
+  <div class="grid">
+    <div class="col">
+      <h3>A &middot; Single aggregate bar</h3>
+      <div class="device" style="width:300px;padding:14px 0">
+        <div style="padding:0 18px">
+          <div class="cc-block" style="border-top:none;margin-top:0;padding-top:0">
+            <div class="cc-eyebrow"><span class="rune">&#9889;</span> Condicionamento recarregado</div>
+            <div class="ccA">
+              <div class="toprow"><div class="scope">Esta sess&atilde;o <span class="who">&middot; 3 grupos</span></div><div class="delta"><span class="arr">&#9650;</span>+14%</div></div>
+              <div class="charge"><span class="was" style="width:58%"></span><span class="now" style="width:72%"></span></div>
+              <div class="foot">A runa recarrega ao longo de 7 dias.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <span class="tag rec">Recommended</span><br>
+        <b>One charge bar, aggregate delta.</b> The lighter teal stub is the was snapshot; solid teal is the now post-save value. The count-up animates the solid fill from the was tick rightward only.<br><br>
+        <span class="pro">Pros:</span> single calm beat, never competes with the rank-delta rows directly above it. Per-BP identity is already carried by those rows + the segmented bar, so re-coloring per BP here would be redundant noise. One number = one &lt;2s glance. Scales to 1 BP or 6 BPs with no layout change.<br>
+        <span class="con">Cons:</span> hides which BP charged most &mdash; acceptable, the rank rows + bar already answer which; this beat answers did my conditioning rebuild. Aggregate = the volume-weighted EWMA roll-up across trained groups (matches the server roll-up).
+      </div>
+    </div>
+    <div class="col">
+      <h3>B &middot; Per-BP mini-bars</h3>
+      <div class="device" style="width:300px;padding:14px 0">
+        <div style="padding:0 18px">
+          <div class="cc-block" style="border-top:none;margin-top:0;padding-top:0">
+            <div class="cc-eyebrow"><span class="rune">&#9889;</span> Condicionamento recarregado</div>
+            <div class="ccB">
+              <div class="miniwrap"><div class="mtop"><span class="mname" style="color:var(--success)">Pernas</span><span class="mdelta" style="color:var(--success)"><span class="arr">&#9650;</span>+18%</span></div><div class="minibar"><span class="was" style="width:55%;background:var(--success)"></span><span class="now" style="width:73%;background:var(--success)"></span></div></div>
+              <div class="miniwrap"><div class="mtop"><span class="mname" style="color:var(--core)">Core</span><span class="mdelta" style="color:var(--core)"><span class="arr">&#9650;</span>+9%</span></div><div class="minibar"><span class="was" style="width:48%;background:var(--core)"></span><span class="now" style="width:57%;background:var(--core)"></span></div></div>
+              <div class="miniwrap"><div class="mtop"><span class="mname" style="color:var(--cardio)">Condicionamento</span><span class="mdelta" style="color:var(--cardio)"><span class="arr">&#9650;</span>+15%</span></div><div class="minibar"><span class="was" style="width:40%;background:var(--cardio)"></span><span class="now" style="width:55%;background:var(--cardio)"></span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <span class="tag alt">Alternative</span><br>
+        <b>One mini charge bar per trained BP,</b> hue-coded, each with its own delta, via <code>BodyPartHues.hueFor</code> per row.<br><br>
+        <span class="pro">Pros:</span> honest granularity &mdash; you see exactly which rune charged most. Strong on cardio days where Conditioning (teal) is the star and you want it spotlighted next to strength groups.<br>
+        <span class="con">Cons:</span> directly duplicates the per-BP rank-delta rows AND the segmented bar already on screen &mdash; three stacked per-BP visualizations read as repetitive chrome (anti-generic-AI flag: stacked identical bars is exactly the card-soup we avoid). On a 6-BP session it bloats the scroll. Conditioning (teal) is itself one of the BPs, so it sits inline here, not separately.
+      </div>
+    </div>
+    <div class="col">
+      <h3>C &middot; Dominant BP only</h3>
+      <div class="device" style="width:300px;padding:14px 0">
+        <div style="padding:0 18px">
+          <div class="cc-block" style="border-top:none;margin-top:0;padding-top:0">
+            <div class="cc-eyebrow"><span class="rune">&#9889;</span> Condicionamento recarregado</div>
+            <div class="ccC">
+              <div class="crow"><span class="cname">Pernas</span><span class="cdelta"><span class="arr">&#9650;</span>+18%</span></div>
+              <div class="charge"><span class="was" style="width:55%;background:rgba(74,222,128,.30)"></span><span class="now" style="width:73%;background:var(--success)"></span></div>
+              <div class="cfoot">+ Core e Condicionamento tamb&eacute;m recarregaram.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rationale">
+        <span class="tag alt">Alternative</span><br>
+        <b>Spotlight the dominant BP only,</b> tinted box in that BP hue, with a one-line "+ others also charged" footer.<br><br>
+        <span class="pro">Pros:</span> picks a hero, mirrors the existing dominant-BP logic the next-target callout already uses (<code>state.dominantBodyPart</code>) &mdash; consistent mental model. Compact.<br>
+        <span class="con">Cons:</span> on a pure-cardio finisher day where Conditioning is the WHOLE point, dominant is whatever earned most volume &mdash; could bury the cardio charge under a strength group. The tinted box re-introduces a per-BP color competing with the rank-delta row directly above for the same BP. Picking a hero implies the others lost, clashing with the rebuild-not-deplete framing.
+      </div>
+    </div>
+  </div>
+  <hr class="div">
+  <div class="callout">
+    <h4>Recommendation &mdash; Variant A (single aggregate charge bar)</h4>
+    <ul>
+      <li><b>One calm beat, one number.</b> Which-BP is already answered three lines up by the segmented bar + per-BP rank-delta rows. The conditioning beat answers a different question &mdash; did my conditioning rebuild &mdash; so it should be one honest aggregate signal, not a fourth stacked per-BP visualization.</li>
+      <li><b>Rebuild, never deplete.</b> The bar has a dim was stub and a solid now fill; the count-up only ever moves the fill <b>rightward</b> from was to now. No drain, no red, no shrinking. The "&#9650; +14%" + the &#9889; rune + "recarrega ao longo de 7 dias" footer lock the rebuild metaphor in copy, not just motion.</li>
+      <li><b>Teal is the Conditioning hue, used once.</b> Eyebrow + bar fill = <code>bodyPartCardio #22D3EE</code>. Even when the session is all-strength the aggregate bar stays teal, because the beat IS the Conditioning concept &mdash; teal is its identity, not a per-BP color here. Keeps brand violet / heroGold off the bar (scarcity contract intact).</li>
+      <li><b>Anti-generic-AI:</b> no gradient, no rounded drop-shadow card, no decorative icon beyond the single functional &#9889; rune. The bar is the same hard geometry family as <code>XpSegmentedBar</code> (8px vs 16px) &mdash; a deliberate slimmer sibling so it reads as a secondary state signal under the primary XP bar, not a clone competing for weight.</li>
+    </ul>
+  </div>
+  <div class="callout" style="margin-top:14px">
+    <h4>Open decisions for the user</h4>
+    <ul>
+      <li><b>Scope label:</b> "Esta sess&atilde;o &middot; 3 grupos" vs just "Condicionamento". The 3-grupos caption tells the user the aggregate spans 3 trained BPs. Drop it if it reads as clutter.</li>
+      <li><b>Show the absolute now-%?</b> Current design shows only the <b>delta</b> (+14%) &mdash; honest and motivating. We could also surface the absolute charge level (72%) at the bar right tick. Risk: an absolute % invites why-isnt-it-100% anxiety that fights the rebuild framing. Recommend delta-only.</li>
+      <li><b>Single-BP sessions:</b> with one trained group the aggregate bar and a single mini-bar are visually identical, so Variant A degrades gracefully &mdash; the N-grupos caption reads 1 grupo or is omitted.</li>
+    </ul>
+  </div>
+</body>
+</html>

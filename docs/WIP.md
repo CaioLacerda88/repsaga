@@ -75,11 +75,21 @@ L1613-1653 + `saga.spec.ts` / `cardio.spec.ts` (selectors unchanged unless DOM s
 - [x] Verify: migration applied LOCAL; FULL integration suite GREEN (15 files, 0 failures — incl. cardio XP-gate
       parity); `dart format` + `dart analyze --fatal-infos` clean. Hosted push deferred to post-merge (pipeline step 12).
 
-### PR 2 — UI: debrief beat + fresh-today pulse (after PR 1 merges)
-- [ ] ui-ux-critic defines the "Conditioning charged +N%" beat (count-up on body-part-hue bar, per trained bp).
-- [ ] Extend `PostSessionState` with before/after vitality_pct per trained bp (from coordinator snapshot vs
-      post-refresh) — NO change to `save_workout` return / `PostSessionParams` contract.
-- [ ] Render beat in `MissionDebriefSection` (static; no new cinematic cut). Honest server number.
-- [ ] Saga rows "fresh today" pulse: sibling Hive box on the rank-up-pulse pattern, set for trained bps,
-      consumed in `body_part_rank_row.dart`.
-- [ ] Visual gate (mockup vs 320/360/412) + verify trend chart no same-day double-count.
+### PR 2 — UI: post-session scroll fix + "Conditioning charged" beat + fresh-today pulse (PR 1 #362 MERGED + deployed)
+LOCKED DESIGN (user-approved 2026-06-20, `docs/phase-vitality-mockups.html`): **Variant A — single aggregate
+teal charge bar**, two-tone fill (dim `was` → solid `now`) counting up, **delta-only "+N%"**, caption
+"recharges over ~7 days". Drop the "· N groups" scope caption (aggregate needs no scope). NOT a new cinematic cut.
+- [ ] **Scroll fix (the reported bug):** `post_session_summary_panel.dart` `Column`+`Spacer()` →
+      `Column[ Expanded(SingleChildScrollView(content)), <pinned share+Continue CTA> ]`. Continue always
+      reachable; content scrolls. Keep SafeArea `minimum: top12/bottom16` floor ([[cluster-safearea-system-overlay-overlap]]).
+- [ ] **Beat data:** extend `PostSessionState` with aggregate before/after vitality_pct (mean of trained bps'
+      ewma/peak). BEFORE = `finish_workout_coordinator` pre-finish `rpgProgressProvider` snapshot (L243-254);
+      AFTER = post-`refreshAfterSave()` read. NO change to `save_workout` return / `workout_repository` contract.
+- [ ] **Beat widget:** Variant A aggregate charge bar in `MissionDebriefSection` (sibling of `XpSegmentedBar`
+      — needs a two-tone was/now overlay the current class doesn't express; new widget in the same family).
+      Count-up rightward only (rebuild, never a depleting HP bar). Teal `bodyPartCardio #22D3EE` once.
+- [ ] **Fresh-today pulse:** sibling Hive box on the `rank_up_pulse_local_storage` pattern (key=bodyPart.dbValue,
+      24h), set for trained bps, consumed in `body_part_rank_row.dart` so saga rows pulse "fresh today".
+- [ ] TDD: beat renders the delta + count-up (assert rendered output, not controller — [[cluster-pump-duration-masks-forward]]);
+      scroll test (content scrolls, CTA stays pinned/visible at small viewport); aggregate computation unit test.
+- [ ] Visual gate (mockup vs 320/360/412, MAX-content session) + verify trend chart no same-day double-count.
