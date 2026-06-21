@@ -26,6 +26,24 @@ class ErrorMapper {
       return const TimeoutException();
     }
 
+    // cluster: jsonb-payload-vs-typed-dart
+    // A raw deserialization failure — `_TypeError` from a bad `as` cast or a
+    // `CastError` from `.cast<T>()` on a drifted JSON row. Both implement the
+    // dart:core `TypeError` interface. These are Dart `Error`s (programmer-
+    // /schema-error class), NOT transient `Exception`s. Reclassifying them as
+    // `DatabaseException` (instead of letting them fall into the
+    // `NetworkException` catch-all) is load-bearing: NetworkException is an
+    // `Exception`, so it DEFEATS Riverpod's `defaultRetry` guard
+    // (`if (error is Error) return null`) and the failed provider retries on a
+    // 200ms×2ⁿ backoff (cap 6.4s) — the mystery slow-load storm the cluster
+    // documents. `appProviderRetry` (core/data/app_retry.dart) is the other
+    // half of the fix; this branch is the correctness half (typed error with a
+    // field-bearing message instead of an opaque cast string).
+    if (error is TypeError) {
+      debugPrint('[ErrorMapper] Deserialization TypeError: $error');
+      return DatabaseException(error.toString(), code: 'deserialization');
+    }
+
     // Log the raw error for debugging; return a safe network exception.
     debugPrint('[ErrorMapper] Unmapped error: $error');
     return const NetworkException('An unexpected error occurred.');

@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
+import 'core/data/app_retry.dart';
 import 'core/device/platform_info.dart';
 import 'core/local_storage/hive_service.dart';
 import 'core/observability/sentry_init.dart';
@@ -61,6 +62,10 @@ Future<void> main() async {
         authFlowType: AuthFlowType.pkce,
       ),
     );
-    runApp(const ProviderScope(child: App()));
+    // cluster: jsonb-payload-vs-typed-dart — opt-in retry: only transient
+    // transport/timeout/5xx failures retry; deserialization/validation/4xx/
+    // auth failures surface immediately instead of storming the 200ms×2ⁿ
+    // default backoff. See [appProviderRetry].
+    runApp(const ProviderScope(retry: appProviderRetry, child: App()));
   });
 }
