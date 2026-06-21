@@ -221,7 +221,13 @@ void main() {
 
         await expectLater(
           repo.getDoneCounts(userId: 'u-1', mondayStr: '2026-06-15'),
-          throwsA(isA<DatabaseException>()),
+          throwsA(
+            isA<DatabaseException>().having(
+              (e) => e.code,
+              'code',
+              'json_wrong_type',
+            ),
+          ),
         );
       },
     );
