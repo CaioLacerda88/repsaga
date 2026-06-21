@@ -289,14 +289,15 @@ independent audit lanes (highest confidence). User chose: do this before 39/40, 
   is currently a no-op. Inject real DSN + prove a scrubbed test crash ingests. `sentry_init.dart:85`.
 
 **Tier 1 — Correctness/safety (DOING FIRST):**
-- [ ] **T1.1 ⭑** `weekly_engagement_provider.dart:147-174` runs a raw `.from('sets')` query inside
-  a `FutureProvider` (only true layering leak) + walks JSONB with throwing `as Map` casts, no
-  `mapException` → latent `_TypeError` crash (`jsonb-payload-vs-typed-dart` cluster). Extract to a
-  `WeeklyEngagementRepository`; parse via `json_helpers.requireField/optionalField`.
-- [ ] **T1.2 ⭑** `error_mapper.dart:30` catch-all maps every unrecognized error → `NetworkException`
-  → swallowed `_TypeError` → Riverpod retry-storm. Branch `TypeError`/`CastError` → typed
-  `DatabaseException`. **Boundary change** — needs a caller inventory first (anything keying on
-  NetworkException / retry config).
+- [x] **T1.1 ⭑** ✅ #367 (2026-06-21) — extracted the raw `.from('sets')` query out of
+  `weekly_engagement_provider` into `WeeklyEngagementRepository` (BaseRepository-routed,
+  `json_helpers`-parsed). Killed the only true layering leak + latent `_TypeError`.
+- [x] **T1.2 ⭑** ✅ #367 (2026-06-21) — **verified root cause** (vs riverpod 3.2.1 source):
+  `defaultRetry` declines Dart `Error`s, but `error_mapper` wrapped `_TypeError` as
+  `NetworkException` (an `Exception`), defeating the guard → 200ms×2ⁿ retry storm. Fixed in two
+  halves: `error_mapper` now maps `TypeError`/`CastError` → `DatabaseException(code:'deserialization')`,
+  AND a custom global `ProviderScope(retry: appProviderRetry)` retries only transient failures
+  (reuses `SyncErrorClassifier.isNetworkClass`). +16 tests.
 - [ ] **T1.3 ⭑** RLS is enabled everywhere but tested nowhere (`ci.yml:445-455` `rls-tests`
   commented out). Stand up a cross-user isolation gate (`supabase test db` against the instance
   the `integration-test` job already boots, OR a 2-user e2e). **Prerequisite for Phase 40.**
