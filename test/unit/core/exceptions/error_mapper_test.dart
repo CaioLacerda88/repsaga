@@ -72,6 +72,49 @@ void main() {
 
       expect(result, isA<NetworkException>());
     });
+
+    // cluster: jsonb-payload-vs-typed-dart
+    // Deserialization failures (a `_TypeError` from a bad `as` cast, a
+    // `CastError` from `.cast<T>()`) must reclassify to a DatabaseException
+    // with code 'deserialization' so they are NOT retried by Riverpod's
+    // default backoff (the mystery slow-load storm). A NetworkException here
+    // would defeat Riverpod's `if (error is Error) return null` guard.
+    test('should map a _TypeError (bad as cast) to DatabaseException', () {
+      // Force a real `_TypeError` (which implements dart:core `TypeError`).
+      TypeError? thrown;
+      try {
+        final dynamic value = <String, dynamic>{'x': 1};
+        value as List<int>; // throws _TypeError
+      } on TypeError catch (e) {
+        thrown = e;
+      }
+      expect(thrown, isNotNull);
+
+      final result = ErrorMapper.mapException(thrown!);
+
+      expect(result, isA<DatabaseException>());
+      expect((result as DatabaseException).code, 'deserialization');
+    });
+
+    test('should map a CastError (.cast<T>) to DatabaseException', () {
+      // `.cast<int>()` on a list holding a String throws a CastError, which
+      // also implements dart:core `TypeError`.
+      TypeError? thrown;
+      try {
+        final list = <Object>['not-an-int'].cast<int>();
+        // The cast is lazy — force the element access that triggers the error.
+        // ignore: unused_local_variable
+        final first = list.first;
+      } on TypeError catch (e) {
+        thrown = e;
+      }
+      expect(thrown, isNotNull);
+
+      final result = ErrorMapper.mapException(thrown!);
+
+      expect(result, isA<DatabaseException>());
+      expect((result as DatabaseException).code, 'deserialization');
+    });
   });
 
   group('ErrorMapper produces safe userMessages', () {

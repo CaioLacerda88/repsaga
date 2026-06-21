@@ -272,6 +272,166 @@ Single source of truth for **deferred work that is not yet a phase but is on the
 
 Items in (d) move to the "v2-park" sub-list and don't get worked on without new product input.
 
+### Phase 38.9 — Quality & Launch-Readiness Hardening: 🟡 ACTIVE (runs before 39/40)
+
+Pre-phase hardening pass from the 2026-06-21 three-lane code audit (reviewer + qa-engineer
++ tech-lead). **Verdict: the code is healthy/disciplined; the risk is observability +
+launch-readiness, not architectural rot.** Two items are prerequisites for the queued phases:
+the RLS test gate (T1.3) must exist before Phase 40 adds the first cross-user RLS, and the
+`finishWorkout` decompose (T3.1) should land before Phase 39 modifies it. `⭑` = flagged by ≥2
+independent audit lanes (highest confidence). User chose: do this before 39/40, **Tier 1 first**.
+
+**Tier 0 — Launch blockers (owned by Launch Phase, surfaced now):**
+- [ ] **T0.1** Release pipeline ships UNSIGNED, debug-signed APKs with `.env.example` placeholder
+  secrets → artifact can't reach backend. Need signed AAB + keystore + real `.env` from CI
+  secrets + `--obfuscate --split-debug-info` + Play upload. `.github/workflows/release.yml`.
+- [ ] **T0.2** Sentry no-ops without a DSN and the release injects an empty DSN → crash reporting
+  is currently a no-op. Inject real DSN + prove a scrubbed test crash ingests. `sentry_init.dart:85`.
+
+**Tier 1 — Correctness/safety (DOING FIRST):**
+- [ ] **T1.1 ⭑** `weekly_engagement_provider.dart:147-174` runs a raw `.from('sets')` query inside
+  a `FutureProvider` (only true layering leak) + walks JSONB with throwing `as Map` casts, no
+  `mapException` → latent `_TypeError` crash (`jsonb-payload-vs-typed-dart` cluster). Extract to a
+  `WeeklyEngagementRepository`; parse via `json_helpers.requireField/optionalField`.
+- [ ] **T1.2 ⭑** `error_mapper.dart:30` catch-all maps every unrecognized error → `NetworkException`
+  → swallowed `_TypeError` → Riverpod retry-storm. Branch `TypeError`/`CastError` → typed
+  `DatabaseException`. **Boundary change** — needs a caller inventory first (anything keying on
+  NetworkException / retry config).
+- [ ] **T1.3 ⭑** RLS is enabled everywhere but tested nowhere (`ci.yml:445-455` `rls-tests`
+  commented out). Stand up a cross-user isolation gate (`supabase test db` against the instance
+  the `integration-test` job already boots, OR a 2-user e2e). **Prerequisite for Phase 40.**
+- [ ] **T1.4** Offline sync (4,347 LOC) has no integration tier — add a replay-under-partial-failure
+  `test/integration/offline_sync_replay_test.dart`.
+
+**Tier 2 — Pipeline gaps we were flying blind on (cheap, high-leverage):**
+- [ ] **T2.1** Code coverage measured then discarded — upload `lcov.info` + non-regressing floor.
+- [ ] **T2.2** No dependency-vuln scanning — add `osv-scanner`/dependabot.
+- [ ] **T2.3** No layering CI gate — grep-gate forbidding `.from('`/`.rpc('` outside `lib/**/data/`
+  (mirrors `check_hardcoded_colors`); converts the rule from convention to structural guarantee.
+- [ ] **T2.4** No migration-rollback story — document the forward-fix convention + a pre-push
+  `pg_dump` checklist in CLAUDE.md's migration step.
+- [ ] **T2.5** No perf-regression signal on the XP/vitality hot path (correctness tested, latency not).
+- [ ] **T2.6** Visual-verification + a11y are process-only, not CI-enforced (visual-only bugs escape).
+
+**Tier 3 — Maintainability tech debt (opportunistic):**
+- [ ] **T3.1** Decompose `finishWorkout()` (~617 lines, `active_workout_notifier.dart:1526-2143`)
+  into `_partitionCommitted`/`_detectAndPersistPRs`/`_diffRpgSnapshot`/`_persistWorkout`.
+  **Do before Phase 39 touches it.**
+- [ ] **T3.2** Decompose 3 monolithic `build()`s: `login_screen` (~472), `create_routine_screen`
+  (~316), `week_plan_screen` (~220) — all violate the 50-line rule.
+- [ ] **T3.3** `docs/` canonical-RPC reference for `save_workout`/`record_session_xp_batch`
+  (spread verbatim across ~6 migrations).
+- [ ] **T3.4** Test hygiene: rewrite `celebration_orchestrator_test` (only wiring-not-behavior file)
+  to assert via storage reads; audit 6 animation `pump(Duration)` tests for the `forward()`-mask
+  trap; delete dead skips (`start_workout_offline_guard_test.dart:306`, superseded charter-d block);
+  add explicit `mode: 'serial'` to manage-data destructive block.
+
+### Phase 39 — Gamified Progression Safety + Daily Quest Ritual: 🔲 PRE-LAUNCH, NEEDS SPECS
+
+**Status:** exploration / spec-pending. Not yet pipelined. Pre-launch (gates the
+Launch Phase's retention story, but must NOT ship a mechanic that contradicts our own
+medical-safety posture). Triggered by the June 2026 competitive analysis (GymLevels
+shipped a daily-quest ritual + is taking the "gym RPG" market while we're pre-launch;
+quest + friend-leaderboard are the retention spine we currently lack) **fused with** a
+health-safety review: a naive daily-streak quest pushes overtraining AND undercuts the
+ToS §1 "ranks are reflective, not prescriptive" shield.
+
+**Core tension to resolve in the spec:** a daily quest is forward-looking/prescriptive;
+our entire medical-liability defense (`assets/legal/terms_of_service.md:24`) rests on the
+RPG layer being a *descriptive summary of past training*. The mechanic and the policy must
+ship in lockstep, or we say one thing and incentivize the opposite.
+
+**Topics to explore (spec must answer each):**
+1. **Quest mechanic design — vitality-cadence-based, NOT a daily-training streak.** Vitality
+   already maintains a body part at ~2×/week and decays over ~7 days (strength) / ~3 wk
+   (cardio); quests inherit that cadence. Hard constraints to bake in: (a) the "daily ritual"
+   is a daily *check-in/surfacing*, never a daily *training demand*; (b) the system must be
+   able to recommend **rest** as a valid quest outcome ("Chest is charged — rest or train
+   legs"); (c) never target the same muscle on consecutive days; (d) the only "penalty" for
+   skipping is natural vitality decay (already physiological) — no punitive streak-break
+   countdown, no loss-aversion casino mechanic (we already rejected streaks for vitality on
+   purpose). Quests are opt-in nudges, not obligations.
+2. **Algorithmic rest-need detection (the user's explicit ask: "can our algorithm track the
+   need for rest?").** Explore whether the existing per-body-part training-load signal can
+   surface an overreaching/rest nudge. Candidate signals: (a) **acute:chronic workload ratio
+   (ACWR)** per body part — short-window load vs the chronic EWMA baseline vitality already
+   computes; a spike past a threshold = "you're ramping fast, consider a lighter session";
+   (b) same-muscle consecutive-session frequency; (c) declining performance / volume drop
+   trend (we already store xp_events + peak loads); (d) a vitality "overcharge"/saturation
+   read. Output = a gentle, dismissible rest/deload suggestion — never blocking. Feasibility,
+   formula, and false-positive risk to be assessed by tech-lead + product-owner; must respect
+   the RPG thesis (signal is descriptive, derived from real logged load).
+3. **ToS §1 + privacy revision (legal).** Current §1 leans on "reflective, not prescriptive."
+   Add language that quests/suggestions are optional, recovery-aware, non-obligatory, carry no
+   penalty beyond natural decay; reaffirm rest. Legal review required before any quest ships.
+4. **In-app surfacing of the rest/recovery guidance.** Today all the excellent rest language
+   lives only inside the ToS doc (which nobody reads). A forward-looking quest needs the
+   recovery message surfaced at/near the mechanic — a one-time "quests are optional &
+   recovery-aware, rest is always allowed" beat + rest-day framing in the quest UI.
+
+**Pipeline note:** user-facing → full pipeline (product-owner thesis gut-check + ui-ux-critic
+design direction + tech-lead + legal review of the ToS delta). Health-safety guardrails in
+topic 1 are **hard acceptance criteria, not nice-to-haves** — a quest that can't recommend
+rest fails the gate. Social/leaderboard (the other half of the competitive retention spine)
+is tracked separately — see the social-feasibility assessment when it lands.
+
+### Phase 40 — Minimal Social: Friend Rank Leaderboard: 🔲 PRE-LAUNCH, NEEDS SPECS
+
+**Status:** spec-pending, product decisions LOCKED (2026-06-21). Pre-launch (the other half
+of the competitive retention spine alongside Phase 39 — see the June 2026 analysis: zero
+social graph is our biggest gap vs Hevy). Scope = **minimal viable social**, thesis-pure.
+
+**Product decisions (locked by user 2026-06-21):**
+- **Mutual-accept friendship** (NOT open follow) — bilateral consent, smaller harassment
+  surface, includes a `blocked` state. Right default for an LGPD-strict health app.
+- **Friends-only leaderboard** (NOT a global ladder) — smaller privacy/abuse/sandbagging
+  surface; stays on-thesis.
+- **Claim a username** — activate the currently-dead `profiles.username` UNIQUE column
+  (`00001`:48, zero `lib/` refs today) as a distinct **public handle**; keep `display_name`
+  private (it defaults to "Gym User"/email-local-part — must NOT leak as identity). Adds a
+  handle-claim step (onboarding + settings) with uniqueness + a **pt-BR-aware** profanity/format filter.
+
+**Architecture (tech-lead feasibility, 2026-06-21 — overall MEDIUM, ~one phase):**
+- **The crux:** every RLS policy in the app today is `USING (user_id = auth.uid())` — nobody
+  ever reads anyone else's rows. Social is the *first deliberate cross-user hole* in a uniform
+  single-tenant model. Get the shape wrong → leak health data.
+- **Do NOT loosen RLS on `body_part_progress`** (hot table; raw row exposes XP/vitality/
+  timestamps = behavioral-inference vectors). Instead add a **denormalized, opt-in projection
+  table** `leaderboard_entries (user_id, body_part, rank, display_name/handle, updated_at)` that
+  exposes **only `rank`** — already an abstraction over real load, the thesis-pure signal. Keep
+  it in sync via the existing server XP-write path (`record_session_xp_batch` / the `00040`
+  rank-upsert), conditional on opt-in, idempotent single upsert (no fan-out, no `_hasRun` flag).
+- New `friendships (requester_id, addressee_id, status pending|accepted|blocked, ...)` table.
+  The **two cross-user RLS policies** (friend-mutual-accept read on `leaderboard_entries`;
+  friendship state-machine on `friendships`) are the first in the app's history — need dedicated
+  test coverage (non-friend / pending / blocked all return zero rows).
+- **Query path:** a `SECURITY DEFINER` RPC `get_friend_leaderboard(p_body_part)` joins
+  projection + friendships + handle (and later mints short-lived signed avatar URLs — migration
+  `00069` already wrote down this elevated-read-RPC path). v1 = **initials-only**, defer avatars.
+- New `lib/features/social/{data,models,providers,ui}/` module + one screen on a new `/social`
+  route (flat `ShellRoute` list — easy to extend).
+
+**Hard requirements (acceptance criteria, not nice-to-haves):**
+- **New LGPD consent gate** "Appear on friends' leaderboards", **default OFF**, mirroring
+  `bodyweightConsentProvider`/`genderConsentProvider`. **Withdrawal = DELETE** the user's
+  `leaderboard_entries` rows (differs from the bodyweight pattern: this data is exposed to
+  others, so opt-out must remove it, not just hide it locally).
+- Projection exposes `rank` ONLY — never XP, vitality, timestamps, or bodyweight.
+- **Privacy policy revision + DPO/record-of-processing update** before ship — current policy
+  promises *"we do not share your fitness data with anyone"* (`privacy_policy.md`); exposing
+  rank to friends is new processing. Legal review required.
+
+**Top risks:** (1) data-protection (mitigated structurally: rank-only, opt-in default-off,
+withdrawal=delete, mutual-accept); (2) identity/harassment (handle uniqueness, impersonation,
+`blocked` state, pt-BR profanity filter — all net-new); (3) perf trap = putting the follow-join
+into RLS on hot `body_part_progress` (the projection design avoids it; the friends read is bounded+indexed).
+
+**Open (decide at spec time):** leaderboard axis — six per-body-part boards vs one dominant-rank
+board vs Character Level (cardio is already excluded from active ranks in `character_state`, v1
+mirrors that); avatars v1 vs initials-only (recommend initials).
+
+**Pipeline:** user-facing → full pipeline (product-owner + ui-ux-critic + tech-lead + legal review).
+
 ### Phase 38 — Cardio / Conditioning Track: ✅ COMPLETE (2026-06-18)
 
 All stages shipped — 38a (#335) · 38b (#337) · 38c (#340) · 38d (#342) · 38e (#344) ·

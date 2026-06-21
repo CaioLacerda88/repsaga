@@ -1,14 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/connectivity/recovery_recorder_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../exercises/models/exercise.dart';
 import '../../routines/models/routine.dart';
 import '../../routines/providers/notifiers/routine_list_notifier.dart';
 import '../../rpg/models/body_part.dart';
 import '../data/models/weekly_plan.dart';
+import '../data/weekly_engagement_repository.dart';
 import '../domain/weekly_engagement.dart';
 import 'weekly_plan_provider.dart';
+
+/// Provides the [WeeklyEngagementRepository] singleton. Mirrors
+/// [weeklyPlanRepositoryProvider] — same Supabase client + recovery recorder
+/// wiring.
+final weeklyEngagementRepositoryProvider = Provider<WeeklyEngagementRepository>(
+  (ref) {
+    return WeeklyEngagementRepository(
+      Supabase.instance.client,
+      recoveryRecorder: ref.watch(recoveryRecorderProvider),
+    );
+  },
+);
 
 /// Arguments for [weeklyEngagementProvider].
 ///
@@ -138,58 +152,14 @@ final weeklyEngagementProvider = FutureProvider.family
           '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
 
       // ---- DONE COUNTS -----------------------------------------------------
-      // One round-trip: pull every completed working set + its exercise's
-      // xp_attribution for the current week. Returns rows like:
-      //   { is_completed: true, set_type: 'working', reps: 8,
-      //     workout_exercises: { exercise: { xp_attribution: {...},
-      //                                      muscle_group: 'chest' },
-      //                          workouts: { user_id, finished_at } } }
-      final client = Supabase.instance.client;
-      final doneRows = await client
-          .from('sets')
-          .select('''
-            is_completed,
-            set_type,
-            reps,
-            workout_exercises!inner(
-              workout_id,
-              exercise:exercises!inner(xp_attribution, muscle_group),
-              workouts!inner(user_id, finished_at)
-            )
-          ''')
-          .eq('workout_exercises.workouts.user_id', userId)
-          .gte('workout_exercises.workouts.finished_at', mondayStr)
-          .eq('is_completed', true);
-
-      final doneCounts = <BodyPart, int>{};
-      for (final row in doneRows as List<dynamic>) {
-        final r = row as Map<String, dynamic>;
-        final setType = (r['set_type'] as String?) ?? 'working';
-        if (setType != 'working') continue;
-        final reps = r['reps'] as int?;
-        if (reps == null || reps < 1) continue;
-
-        final we = r['workout_exercises'] as Map<String, dynamic>?;
-        if (we == null) continue;
-        final ex = we['exercise'] as Map<String, dynamic>?;
-        if (ex == null) continue;
-        final attrJson = ex['xp_attribution'] as Map<String, dynamic>?;
-        final primaryMuscle = ex['muscle_group'] as String?;
-
-        final Map<String, num> attrMap;
-        if (attrJson != null && attrJson.isNotEmpty) {
-          attrMap = attrJson.map((k, v) => MapEntry(k, v as num));
-        } else if (primaryMuscle != null) {
-          attrMap = <String, num>{primaryMuscle: 1.0};
-        } else {
-          continue; // No attribution, no muscle_group — nothing to credit.
-        }
-
-        final winners = primaryBodyPartsForSet(attrMap);
-        for (final bp in winners) {
-          doneCounts[bp] = (doneCounts[bp] ?? 0) + 1;
-        }
-      }
+      // cluster: jsonb-payload-vs-typed-dart — the raw `.from('sets')` + `as`
+      // walks that used to live here now run through
+      // [WeeklyEngagementRepository.getDoneCounts], which routes the query
+      // through `mapException` and parses the nested JSONB join with
+      // json_helpers instead of throwing `as Map` casts.
+      final doneCounts = await ref
+          .read(weeklyEngagementRepositoryProvider)
+          .getDoneCounts(userId: userId, mondayStr: mondayStr);
 
       // ---- PLANNED COUNTS --------------------------------------------------
       Map<BodyPart, int> plannedCounts = const {};
