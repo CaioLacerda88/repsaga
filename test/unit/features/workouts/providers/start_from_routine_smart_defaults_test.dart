@@ -1,14 +1,15 @@
-// Tests that expose BUG-004: startFromRoutine uses weight=0 for first-time
-// exercises instead of equipment-type smart defaults.
+// Never-done seed contract for startFromRoutine.
 //
-// When there is no previous session data for an exercise, the manual "Add Set"
-// path in the active workout screen calls defaultSetValues(equipmentType,
-// weightUnit) to supply sensible starting weights (e.g., 20 kg for barbell,
-// 10 kg for dumbbell). The startFromRoutine path does not apply this same
-// logic — it hard-codes `weight: prev?.weight ?? 0`.
+// Weight precedence is target → last-lifted → 0. When there is NO target and
+// NO previous session data, a brand-new lift seeds weight = 0 (NOT an
+// equipment-type smart default). The 0 is deliberate: it kills the "nebulous"
+// equipment-default weight and forces a conscious entry for a lift the user
+// has never performed (user-approved 2026-06-20). This intentionally reverses
+// the old BUG-004 weight smart-default.
 //
-// This test documents the expected behaviour (smart defaults) and will fail
-// until the notifier is fixed to apply defaultSetValues as the final fallback.
+// REPS keep the equipment-type default (target → last-lifted → equipDefaults):
+// a 0-rep set is a non-set, so reps still fall back to a sensible starting
+// count (barbell 5, dumbbell 10, machine 12, etc.).
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,124 +112,117 @@ void main() {
     registerFallbackValue(FakeActiveWorkoutState());
   });
 
-  group('ActiveWorkoutNotifier.startFromRoutine — smart defaults (BUG-004)', () {
-    test(
-      'barbell exercise with no previous data should use 20 kg default, not 0',
-      () async {
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            _makeContainer();
-        addTearDown(container.dispose);
+  group('ActiveWorkoutNotifier.startFromRoutine — never-done seed', () {
+    test('barbell exercise with no target/no previous data seeds weight 0 and '
+        'reps = equipment default (5)', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
 
-        when(() => mockAuth.currentUser).thenReturn(_fakeUser());
-        when(
-          () => mockRepo.createActiveWorkout(
-            userId: any(named: 'userId'),
-            name: any(named: 'name'),
+      when(() => mockAuth.currentUser).thenReturn(_fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => _makeWorkout());
+      // No previous session data for this exercise
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {});
+
+      final barbellExercise = _makeExercise('barbell');
+      final config = RoutineStartConfig(
+        routineName: 'Push Day',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: barbellExercise.id,
+            exercise: barbellExercise,
+            setCount: 3,
           ),
-        ).thenAnswer((_) async => _makeWorkout());
-        // No previous session data for this exercise
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenAnswer((_) async => {});
+        ],
+      );
 
-        final barbellExercise = _makeExercise('barbell');
-        final config = RoutineStartConfig(
-          routineName: 'Push Day',
-          exercises: [
-            RoutineStartExercise(
-              exerciseId: barbellExercise.id,
-              exercise: barbellExercise,
-              setCount: 3,
-            ),
-          ],
-        );
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
 
-        await container.read(activeWorkoutProvider.future);
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .startFromRoutine(config);
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises[0].sets;
 
-        final state = container.read(activeWorkoutProvider).value!;
-        final sets = state.exercises[0].sets;
+      // Equipment-default reps for barbell (WeightUnit.kg is the default).
+      final expected = defaultSetValues(EquipmentType.barbell, WeightUnit.kg);
 
-        // Expected smart default for barbell in kg (WeightUnit.kg is the default)
-        final expected = defaultSetValues(EquipmentType.barbell, WeightUnit.kg);
+      // Never-done weight seeds 0 (kill the nebulous equipment default);
+      // reps keep the equipment default.
+      expect(
+        sets[0].weight,
+        0.0,
+        reason:
+            'barbell never-done weight seeds 0 — no target, no history — '
+            'forcing a conscious entry, not the 20 kg equipment default.',
+      );
+      expect(sets[0].reps, expected.reps);
+      expect(sets[1].weight, 0.0);
+      expect(sets[2].weight, 0.0);
+      expect(sets[1].reps, expected.reps);
+      expect(sets[2].reps, expected.reps);
+    });
 
-        // BUG-004: currently weight is 0 because startFromRoutine does not call
-        // defaultSetValues. This assertion FAILS until the bug is fixed.
-        expect(
-          sets[0].weight,
-          expected.weight,
-          reason:
-              'BUG-004: barbell exercise with no previous data should default to '
-              '${expected.weight} kg (equipment smart default), not 0.',
-        );
-        expect(sets[0].reps, expected.reps);
-        expect(sets[1].weight, expected.weight);
-        expect(sets[2].weight, expected.weight);
-      },
-    );
+    test('dumbbell exercise with no target/no previous data seeds weight 0 and '
+        'reps = equipment default (10)', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
 
-    test(
-      'dumbbell exercise with no previous data should use 10 kg default, not 0',
-      () async {
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            _makeContainer();
-        addTearDown(container.dispose);
+      when(() => mockAuth.currentUser).thenReturn(_fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => _makeWorkout());
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {});
 
-        when(() => mockAuth.currentUser).thenReturn(_fakeUser());
-        when(
-          () => mockRepo.createActiveWorkout(
-            userId: any(named: 'userId'),
-            name: any(named: 'name'),
+      final dumbbellExercise = _makeExercise('dumbbell');
+      final config = RoutineStartConfig(
+        routineName: 'Arm Day',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: dumbbellExercise.id,
+            exercise: dumbbellExercise,
+            setCount: 2,
           ),
-        ).thenAnswer((_) async => _makeWorkout());
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenAnswer((_) async => {});
+        ],
+      );
 
-        final dumbbellExercise = _makeExercise('dumbbell');
-        final config = RoutineStartConfig(
-          routineName: 'Arm Day',
-          exercises: [
-            RoutineStartExercise(
-              exerciseId: dumbbellExercise.id,
-              exercise: dumbbellExercise,
-              setCount: 2,
-            ),
-          ],
-        );
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
 
-        await container.read(activeWorkoutProvider.future);
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .startFromRoutine(config);
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises[0].sets;
 
-        final state = container.read(activeWorkoutProvider).value!;
-        final sets = state.exercises[0].sets;
+      final expected = defaultSetValues(EquipmentType.dumbbell, WeightUnit.kg);
 
-        final expected = defaultSetValues(
-          EquipmentType.dumbbell,
-          WeightUnit.kg,
-        );
-
-        // BUG-004: currently 0, should be 10 kg
-        expect(
-          sets[0].weight,
-          expected.weight,
-          reason:
-              'BUG-004: dumbbell exercise with no previous data should default '
-              'to ${expected.weight} kg, not 0.',
-        );
-      },
-    );
+      // Never-done weight seeds 0; reps keep the equipment default (10).
+      expect(
+        sets[0].weight,
+        0.0,
+        reason:
+            'dumbbell never-done weight seeds 0, not the 10 kg equipment '
+            'default.',
+      );
+      expect(sets[0].reps, expected.reps);
+    });
 
     test(
       'bodyweight exercise with no previous data correctly uses weight 0',
       () async {
-        // Bodyweight exercises have weight=0 by design — smart defaults also
-        // return 0. This test verifies the correct behavior is preserved whether
-        // or not BUG-004 fix is applied.
+        // Bodyweight exercises have weight=0 by design — the never-done seed
+        // also returns 0. Verifies the behavior is unchanged for this type.
         final (:container, :mockRepo, :mockStorage, :mockAuth) =
             _makeContainer();
         addTearDown(container.dispose);
@@ -271,118 +265,113 @@ void main() {
       },
     );
 
-    test(
-      'exercise with previous session data uses previous weight (regression guard)',
-      () async {
-        // Regression guard: when previous data exists, it must still be preferred
-        // over smart defaults. The BUG-004 fix must not break this.
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            _makeContainer();
-        addTearDown(container.dispose);
+    test('exercise with previous session data uses last-lifted weight '
+        '(regression guard)', () async {
+      // Regression guard: when previous data exists, last-lifted weight must
+      // still be preferred over the never-done 0 fallback.
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
 
-        when(() => mockAuth.currentUser).thenReturn(_fakeUser());
-        when(
-          () => mockRepo.createActiveWorkout(
-            userId: any(named: 'userId'),
-            name: any(named: 'name'),
+      when(() => mockAuth.currentUser).thenReturn(_fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => _makeWorkout());
+
+      // Simulate previous session: 100 kg sets
+      final previousSets = [
+        ExerciseSet.fromJson(
+          TestSetFactory.create(
+            id: 'prev-1',
+            setNumber: 1,
+            weight: 100.0,
+            reps: 5,
+            workoutExerciseId: 'we-prev',
           ),
-        ).thenAnswer((_) async => _makeWorkout());
+        ),
+      ];
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {'ex-001': previousSets});
 
-        // Simulate previous session: 100 kg sets
-        final previousSets = [
-          ExerciseSet.fromJson(
-            TestSetFactory.create(
-              id: 'prev-1',
-              setNumber: 1,
-              weight: 100.0,
-              reps: 5,
-              workoutExerciseId: 'we-prev',
-            ),
+      final barbellExercise = _makeExercise('barbell');
+      final config = RoutineStartConfig(
+        routineName: 'Push Day',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: barbellExercise.id,
+            exercise: barbellExercise,
+            setCount: 2,
           ),
-        ];
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenAnswer((_) async => {'ex-001': previousSets});
+        ],
+      );
 
-        final barbellExercise = _makeExercise('barbell');
-        final config = RoutineStartConfig(
-          routineName: 'Push Day',
-          exercises: [
-            RoutineStartExercise(
-              exerciseId: barbellExercise.id,
-              exercise: barbellExercise,
-              setCount: 2,
-            ),
-          ],
-        );
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
 
-        await container.read(activeWorkoutProvider.future);
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .startFromRoutine(config);
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises[0].sets;
 
-        final state = container.read(activeWorkoutProvider).value!;
-        final sets = state.exercises[0].sets;
+      // Previous data (100 kg) should take precedence over any default.
+      expect(
+        sets[0].weight,
+        100.0,
+        reason:
+            'Previous session weight should be preferred over smart defaults.',
+      );
+    });
 
-        // Previous data (100 kg) should take precedence over any default.
-        expect(
-          sets[0].weight,
-          100.0,
-          reason:
-              'Previous session weight should be preferred over smart defaults.',
-        );
-      },
-    );
+    test('machine exercise with no target/no previous data seeds weight 0 and '
+        'reps = equipment default (10)', () async {
+      final (:container, :mockRepo, :mockStorage, :mockAuth) = _makeContainer();
+      addTearDown(container.dispose);
 
-    test(
-      'machine exercise with no previous data should use 20 kg default, not 0',
-      () async {
-        final (:container, :mockRepo, :mockStorage, :mockAuth) =
-            _makeContainer();
-        addTearDown(container.dispose);
+      when(() => mockAuth.currentUser).thenReturn(_fakeUser());
+      when(
+        () => mockRepo.createActiveWorkout(
+          userId: any(named: 'userId'),
+          name: any(named: 'name'),
+        ),
+      ).thenAnswer((_) async => _makeWorkout());
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => {});
 
-        when(() => mockAuth.currentUser).thenReturn(_fakeUser());
-        when(
-          () => mockRepo.createActiveWorkout(
-            userId: any(named: 'userId'),
-            name: any(named: 'name'),
+      final machineExercise = _makeExercise('machine');
+      final config = RoutineStartConfig(
+        routineName: 'Machine Day',
+        exercises: [
+          RoutineStartExercise(
+            exerciseId: machineExercise.id,
+            exercise: machineExercise,
+            setCount: 1,
           ),
-        ).thenAnswer((_) async => _makeWorkout());
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenAnswer((_) async => {});
+        ],
+      );
 
-        final machineExercise = _makeExercise('machine');
-        final config = RoutineStartConfig(
-          routineName: 'Machine Day',
-          exercises: [
-            RoutineStartExercise(
-              exerciseId: machineExercise.id,
-              exercise: machineExercise,
-              setCount: 1,
-            ),
-          ],
-        );
+      await container.read(activeWorkoutProvider.future);
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .startFromRoutine(config);
 
-        await container.read(activeWorkoutProvider.future);
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .startFromRoutine(config);
+      final state = container.read(activeWorkoutProvider).value!;
+      final sets = state.exercises[0].sets;
 
-        final state = container.read(activeWorkoutProvider).value!;
-        final sets = state.exercises[0].sets;
+      final expected = defaultSetValues(EquipmentType.machine, WeightUnit.kg);
 
-        final expected = defaultSetValues(EquipmentType.machine, WeightUnit.kg);
-
-        // BUG-004: currently 0, should be 20 kg
-        expect(
-          sets[0].weight,
-          expected.weight,
-          reason:
-              'BUG-004: machine exercise with no previous data should default to '
-              '${expected.weight} kg, not 0.',
-        );
-      },
-    );
+      // Never-done weight seeds 0; reps keep the equipment default (10).
+      expect(
+        sets[0].weight,
+        0.0,
+        reason:
+            'machine never-done weight seeds 0, not the 20 kg equipment '
+            'default.',
+      );
+      expect(sets[0].reps, expected.reps);
+    });
   });
 }

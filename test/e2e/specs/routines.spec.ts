@@ -1075,9 +1075,15 @@ test.describe('Routine start', { tag: '@smoke' }, () => {
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('should pre-fill non-zero weight for first-time exercises when starting routine (BUG-004)', async ({
+  test('should seed 0 kg weight for a first-time exercise with no target and no history', async ({
     page,
   }) => {
+    // Seed-state contract (verified against global-setup.ts):
+    //   `fullRoutines` has NO seed runner -> auth user + trigger profile only,
+    //   zero completed sets, zero workout history. The starter routines from
+    //   migration 00014 carry `target_reps` only -- NO `target_weight`. So the
+    //   active-workout weight precedence (target -> last-lifted -> 0kg) lands on
+    //   0kg for every strength exercise in this routine for this user.
     await expect(page.locator(ROUTINE.starterRoutinesSection)).toBeVisible({
       timeout: 10_000,
     });
@@ -1095,23 +1101,21 @@ test.describe('Routine start', { tag: '@smoke' }, () => {
       timeout: 10_000,
     });
 
-    // The weight value in the first set row must NOT be "0" for a barbell exercise.
+    // The first-set weight button must read "0 kg" — the seed weight for a
+    // never-done strength exercise with no target and no prior history.
     // Flutter Semantics uses label: 'Weight value: <N> kg. Tap to enter weight.'
-    // with button: true. In Flutter web CanvasKit, the accessible name of the
-    // flt-semantics element is exposed via aria-label on the element itself.
-    // However Playwright's role=button[name*="..."] uses computed accessible name,
-    // which correctly matches these buttons regardless of attribute vs text source.
+    // with button: true; Playwright's role=button[name*="..."] matches on the
+    // computed accessible name regardless of attribute vs text source.
     const zeroWeightButton = page.locator(
       'role=button[name*="Weight value: 0 kg"]',
     );
-    await expect(zeroWeightButton).not.toBeVisible({ timeout: 5_000 });
+    await expect(zeroWeightButton.first()).toBeVisible({ timeout: 10_000 });
 
-    // Also verify that at least one weight button with a positive value is shown.
-    // Barbell default is 20 kg, dumbbell default is 10 kg.
-    const anyWeightButton = page.locator(
-      'role=button[name*="Weight value:"]',
-    );
-    await expect(anyWeightButton.first()).toBeVisible({ timeout: 10_000 });
+    // No weight button may carry the legacy barbell equipment default (20 kg) —
+    // that path was retired; weight now seeds 0 when there is no target/history.
+    await expect(
+      page.locator('role=button[name*="Weight value: 20 kg"]'),
+    ).toHaveCount(0);
 
     // Clean up.
     await page.locator(WORKOUT.discardButton).click();
@@ -1649,10 +1653,16 @@ test.describe('Routine regressions', () => {
     expect(onRoutines || onHome).toBe(true);
   });
 
-  test('should start Full Body routine barbell exercises with non-zero weight (BUG-004)', async ({
+  test('should seed Full Body strength exercises at 0 kg when the user has no history', async ({
     page,
   }) => {
-    // Full Body may render below the fold — scroll into view before tapping.
+    // Seed-state contract (verified against global-setup.ts):
+    //   `fullRoutineRegression` has NO seed runner -> zero completed sets, zero
+    //   history. The "Full Body Beginner" starter routine (migration 00014)
+    //   carries `target_reps` only -- NO `target_weight`. With the precedence
+    //   target -> last-lifted -> 0kg and neither a target nor history present,
+    //   EVERY weight button (barbell Squat / Bench Press AND bodyweight Plank)
+    //   seeds 0 kg. The legacy barbell-20kg equipment default is retired.
     const fullBody = await scrollToVisible(
       page,
       ROUTINE.routineName('Full Body'),
@@ -1670,17 +1680,11 @@ test.describe('Routine regressions', () => {
       page.locator(`role=group[name*="Exercise: ${SEED_EXERCISES.squat}. Tap for details"]`),
     ).toBeVisible({ timeout: 10_000 });
 
-    // For barbell exercises, the default weight is 20 kg — not 0 kg.
     // Use role=button[name*=...] which matches on computed accessible name —
     // this correctly matches Flutter Semantics(label: ..., button: true) elements.
     const zeroWeightButtons = page.locator(
       'role=button[name*="Weight value: 0 kg"]',
     );
-
-    // Count how many exercise cards are barbell vs bodyweight.
-    // We can't easily distinguish per-exercise, but we can assert that
-    // NOT ALL weight buttons show 0 — at least one barbell exercise (Squat or
-    // Bench Press) should show a non-zero value.
     const allWeightButtons = page.locator(
       'role=button[name*="Weight value:"]',
     );
@@ -1689,11 +1693,15 @@ test.describe('Routine regressions', () => {
     const totalWeightButtons = await allWeightButtons.count();
     const zeroWeightCount = await zeroWeightButtons.count();
 
-    // Not ALL weight buttons can be zero — barbell exercises should have 20 kg.
-    // Plank (bodyweight) legitimately shows 0 kg, but Barbell Squat and
-    // Barbell Bench Press must not be 0.
-    // Conservative assertion: at least one weight button must be non-zero.
-    expect(zeroWeightCount).toBeLessThan(totalWeightButtons);
+    // ALL visible weight buttons must read 0 kg — no target, no history for this
+    // user, so the barbell exercises seed 0 just like the bodyweight Plank.
+    expect(totalWeightButtons).toBeGreaterThan(0);
+    expect(zeroWeightCount).toBe(totalWeightButtons);
+
+    // The retired barbell equipment default (20 kg) must be absent.
+    await expect(
+      page.locator('role=button[name*="Weight value: 20 kg"]'),
+    ).toHaveCount(0);
 
     // Clean up.
     await page.locator(WORKOUT.discardButton).click();
@@ -1703,11 +1711,16 @@ test.describe('Routine regressions', () => {
     await expect(page.locator(NAV.homeTab)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('should start Push Day dumbbell exercises with non-zero weight (BUG-004)', async ({
+  test('should seed Push Day strength exercises at 0 kg when the user has no history', async ({
     page,
   }) => {
-    // Push Day may be below the fold due to viewport culling in Flutter's
-    // SliverList.builder — scroll into view via the shared helper.
+    // Seed-state contract (verified against global-setup.ts):
+    //   `fullRoutineRegression` has NO seed runner -> zero completed sets, zero
+    //   history. The "Push Day" starter routine (migration 00014) carries
+    //   `target_reps` only -- NO `target_weight`. With precedence
+    //   target -> last-lifted -> 0kg and neither present, every strength
+    //   exercise (barbell + dumbbell alike) seeds 0 kg. The legacy dumbbell-10kg
+    //   / barbell-20kg equipment defaults are retired.
     const pushDay = await scrollToVisible(
       page,
       ROUTINE.routineName('Push Day'),
@@ -1718,19 +1731,13 @@ test.describe('Routine regressions', () => {
       timeout: 20_000,
     });
 
-    // Push Day includes dumbbell exercises (e.g., Lateral Raise, Incline Dumbbell Press).
-    // Lateral Raise is the 4th exercise — it may be outside the viewport and NOT in
-    // the DOM due to Flutter's virtualized list. Instead of scrolling to a specific
-    // exercise, scroll down to load more exercise cards and then check all visible
-    // weight buttons. Incline Dumbbell Press (dumbbell, 10 kg default) is always
-    // visible and is sufficient to verify the non-zero default weight behavior.
-    //
-    // Scroll the workout list down to ensure dumbbell exercises are in view.
-    // Use mouse wheel scrolling which triggers Flutter's scroll physics.
+    // Push Day's exercises may extend past the viewport (Flutter's
+    // SliverList.builder culls off-screen cards). Scroll down so additional
+    // exercise cards (e.g., Lateral Raise, Incline Dumbbell Press) mount before
+    // we read their weight buttons. Mouse wheel triggers Flutter scroll physics.
     await page.mouse.wheel(0, 500);
     await page.waitForTimeout(500);
 
-    // At least one weight button must show a non-zero value.
     // Use role=button[name*=...] for computed accessible name matching.
     const allWeightButtons = page.locator(
       'role=button[name*="Weight value:"]',
@@ -1743,9 +1750,18 @@ test.describe('Routine regressions', () => {
     const total = await allWeightButtons.count();
     const zeros = await zeroWeightButtons.count();
 
-    // Push Day has no bodyweight exercises — all should have defaults > 0.
-    // At minimum, Incline Dumbbell Press (10 kg) confirms dumbbell defaults work.
-    expect(zeros).toBeLessThan(total);
+    // Every visible weight button must read 0 kg — no target, no history, so
+    // the dumbbell/barbell equipment defaults do not apply.
+    expect(total).toBeGreaterThan(0);
+    expect(zeros).toBe(total);
+
+    // The retired equipment defaults (10 kg dumbbell, 20 kg barbell) must be absent.
+    await expect(
+      page.locator('role=button[name*="Weight value: 10 kg"]'),
+    ).toHaveCount(0);
+    await expect(
+      page.locator('role=button[name*="Weight value: 20 kg"]'),
+    ).toHaveCount(0);
 
     // Clean up.
     await page.locator(WORKOUT.discardButton).click();

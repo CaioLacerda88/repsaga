@@ -32,6 +32,8 @@ import 'package:repsaga/features/workouts/models/workout.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
 import 'package:repsaga/features/workouts/ui/active_workout_screen.dart';
 import 'package:repsaga/features/workouts/ui/widgets/set_row.dart';
+import 'package:repsaga/shared/widgets/reps_stepper.dart';
+import 'package:repsaga/shared/widgets/weight_stepper.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../helpers/test_material_app.dart';
@@ -226,63 +228,83 @@ void main() {
       );
     });
 
-    testWidgets(
-      'should render exercise card with equipment-default-filled set when '
-      'no prior data exists',
-      (tester) async {
-        // Fallback path: empty prior data → equipment defaults.
-        // Barbell + kg = 20 kg × 5 per defaultSetValues.
-        final mockRepo = _MockWorkoutRepository();
-        final mockStorage = _MockWorkoutLocalStorage();
+    testWidgets('should render exercise card with never-done set (weight 0, '
+        'equipment-default reps) when no prior data exists', (tester) async {
+      // Never-done path: empty prior data, no target → weight seeds 0
+      // (kill the nebulous equipment default), reps keep the equipment
+      // default (barbell + kg → 5 per defaultSetValues).
+      final mockRepo = _MockWorkoutRepository();
+      final mockStorage = _MockWorkoutLocalStorage();
 
-        when(
-          () => mockStorage.loadActiveWorkout(),
-        ).thenReturn(ActiveWorkoutState(workout: _workout(), exercises: []));
-        when(
-          () => mockStorage.saveActiveWorkout(any()),
-        ).thenAnswer((_) async {});
-        when(
-          () => mockRepo.getLastWorkoutSets(any()),
-        ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
+      when(
+        () => mockStorage.loadActiveWorkout(),
+      ).thenReturn(ActiveWorkoutState(workout: _workout(), exercises: []));
+      when(() => mockStorage.saveActiveWorkout(any())).thenAnswer((_) async {});
+      when(
+        () => mockRepo.getLastWorkoutSets(any()),
+      ).thenAnswer((_) async => const <String, List<ExerciseSet>>{});
 
-        final container = ProviderContainer(
-          overrides: [
-            workoutRepositoryProvider.overrideWithValue(mockRepo),
-            workoutLocalStorageProvider.overrideWithValue(mockStorage),
-            restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
-            profileProvider.overrideWith(() => _KgProfileNotifier()),
-            exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
-            lastWorkoutSetsProvider.overrideWith((ref, _) => Future.value({})),
-            elapsedTimerProvider.overrideWith(
-              (ref, startedAt) => Stream.value(const Duration(minutes: 5)),
-            ),
-          ],
-        );
-        addTearDown(container.dispose);
-
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: TestMaterialApp(
-              theme: AppTheme.dark,
-              home: const ActiveWorkoutScreen(),
-            ),
+      final container = ProviderContainer(
+        overrides: [
+          workoutRepositoryProvider.overrideWithValue(mockRepo),
+          workoutLocalStorageProvider.overrideWithValue(mockStorage),
+          restTimerProvider.overrideWith(() => _NullRestTimerNotifier()),
+          profileProvider.overrideWith(() => _KgProfileNotifier()),
+          exercisePRsProvider.overrideWith((ref, _) => Future.value([])),
+          lastWorkoutSetsProvider.overrideWith((ref, _) => Future.value({})),
+          elapsedTimerProvider.overrideWith(
+            (ref, startedAt) => Stream.value(const Duration(minutes: 5)),
           ),
-        );
-        await tester.pump();
-        await tester.pump();
+        ],
+      );
+      addTearDown(container.dispose);
 
-        await container
-            .read(activeWorkoutProvider.notifier)
-            .addExercise(_benchPress);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: TestMaterialApp(
+            theme: AppTheme.dark,
+            home: const ActiveWorkoutScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
 
-        expect(find.byType(SetRow), findsOneWidget);
-        // Barbell equipment defaults = 20 kg × 5.
-        expect(find.textContaining('20'), findsWidgets);
-        expect(find.textContaining('5'), findsWidgets);
-      },
-    );
+      await container
+          .read(activeWorkoutProvider.notifier)
+          .addExercise(_benchPress);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byType(SetRow), findsOneWidget);
+      // Never-done seed: weight 0 (NOT the old 20 kg equipment default),
+      // reps = equipment default (5). Assert on the rendered stepper
+      // values — the exact numbers the user sees in the set row — rather
+      // than `find.textContaining('0')`, which would collide with the
+      // set-number "1", the elapsed timer, and other chrome.
+      final weightStepper = tester.widget<WeightStepper>(
+        find.descendant(
+          of: find.byType(SetRow),
+          matching: find.byType(WeightStepper),
+        ),
+      );
+      expect(
+        weightStepper.value,
+        0,
+        reason: 'never-done weight renders 0, not the 20 kg equipment default.',
+      );
+      final repsStepper = tester.widget<RepsStepper>(
+        find.descendant(
+          of: find.byType(SetRow),
+          matching: find.byType(RepsStepper),
+        ),
+      );
+      expect(
+        repsStepper.value,
+        5,
+        reason: 'reps keep the barbell equipment default (5).',
+      );
+    });
   });
 }
