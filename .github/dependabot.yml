@@ -11,6 +11,11 @@
 #
 # Auto-updates only open PRs — they do NOT auto-merge. Each PR still goes
 # through the normal CI pipeline (ci.yml) before a maintainer merges.
+#
+# Grouping: minor + patch updates are batched into a single PR per ecosystem
+# (one "pub" PR, one "github-actions" PR) instead of one PR per package, to keep
+# the queue quiet. MAJOR updates stay as individual PRs — they're more likely to
+# carry breaking changes and deserve isolated review/CI.
 
 version: 2
 
@@ -23,6 +28,11 @@ updates:
       time: "09:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
+    groups:
+      pub-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "dart"
@@ -37,6 +47,12 @@ updates:
       time: "09:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
+    groups:
+      actions-all:
+        update-types:
+          - "minor"
+          - "patch"
+          - "major"
     labels:
       - "dependencies"
       - "github-actions"
