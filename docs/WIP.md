@@ -25,11 +25,25 @@ reviewer reads, no separate QA gate (this IS the test-quality work).
 - [x] Audit the 6 animation `pump(Duration)` tests — verdict: ALL 6 already assert RENDERED
   output (finders, painted alpha, render-box sizes, Semantics props, widget props, `findsNothing`
   after duration). None assert `controller.value`/progress. No fixes needed; none churned.
-- [x] Delete dead skips: removed the retired ActionHero group from
-  `start_workout_offline_guard_test.dart` (+ orphaned stubs/imports) and deleted the superseded
-  `charter-d-exploratory.spec.ts` (whole file was the one `describe.skip` block; also removed its
-  `testIgnore` entry in `playwright.config.ts`). Added `mode: 'serial'` to the `manage-data`
-  "Manage Data" block. `flutter test` 3978 green; `dart analyze --fatal-infos` clean.
+- [x] Dead skips + serial mode: **(reviewer fix)** the skipped `ActionHero._startQuickWorkout`
+  offline-guard group was NOT dead — the quick-workout feature is live (`action_hero.dart:185`,
+  wired to `_FreeWorkoutHero` card tap, offline guard intact at 186-195); only the trigger widget
+  changed in 26f (OutlinedButton → card tap), which is why the old text-based test couldn't pass.
+  **Re-pointed** (not deleted): `start_workout_offline_guard_test.dart` now has a
+  `Free-workout hero — offline guard` group that renders the real `ActionHero` on its free-workout
+  branch and asserts BEHAVIOR — offline tap → `offlineStartWorkout` snackbar + `startWorkout` never
+  invoked + no nav to `/workout/active`; online tap → workout started + nav fires + no snackbar.
+  Deleted the superseded `charter-d-exploratory.spec.ts` (whole file was the one `describe.skip`
+  block; also removed its `testIgnore` entry in `playwright.config.ts`) — B8/B9/B11 contracts
+  confirmed live-covered elsewhere (below). Added `mode: 'serial'` to the `manage-data`
+  "Manage Data" block. `flutter test` 3980 green; `dart analyze --fatal-infos` clean.
+  - charter-d B8/B9/B11 coverage check: B8 (offline finish) — `offline-sync.spec.ts` OFFLINE-005/007/008
+    (queue → pending-sync badge → home nav) + snackbar copy unit-pinned in
+    `active_workout_notifier_finish_classification_test.dart`. B9 (server-500 save) —
+    `offline-sync.spec.ts:673` pins `workoutSavedServerError` copy + negative-pin on offline copy.
+    B11 (double-tap dedupe) — `crash-recovery.spec.ts:411` (rapid double-tap → clean state) +
+    unit `active_workout_notifier_test.dart:3785` "second concurrent finishWorkout returns null". All
+    three covered; no backlog item needed.
 
 ### T3.3 — canonical-RPC reference doc (tech-lead)
 - [x] `docs/canonical-rpc-definitions.md` — for `save_workout` + `record_session_xp_batch` (each

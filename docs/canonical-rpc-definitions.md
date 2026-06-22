@@ -2,7 +2,8 @@
 
 Single source of truth for **what RepSaga's two most critical RPCs do _now_** —
 `save_workout` and `record_session_xp_batch`. Both are redefined verbatim across
-~6 migrations each (audit finding M3: figuring out current behavior is a
+many migrations (7 for `save_workout`, 10 for `record_session_xp_batch` — see the
+lineage tables below; audit finding M3: figuring out current behavior is a
 git-archaeology exercise). This doc captures the **current** definition so a
 future XP / vitality change doesn't need to diff every migration that touched it.
 
