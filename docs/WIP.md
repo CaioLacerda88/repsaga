@@ -11,10 +11,34 @@ the phase summary in PROJECT.md §4.
 
 ---
 
-_No in-flight work._ **Phase 38.9 hardening — Tiers 1-3 complete.** Tier 1 (#367/#369/#372),
-Tier 2 T2.1-T2.4 (#374), Tier 3 T3.1-T3.4 (#384/#385/#393). Two curated dependency batches
-merged (#386, #394) — safe bumps in (incl. share_plus/connectivity_plus/permission_handler/
-google_fonts majors), supabase_flutter 2.15 deferred (passkeys_web boot crash). **Remaining
-Phase 38.9:** T2.5 (perf-regression signal) + T2.6 (visual/a11y CI) — deferred, harder; and
-**Tier 0 (launch-readiness)** — needs user-provided secrets (keystore, Play service-account,
-Sentry DSN). All in `docs/PROJECT.md` §2.
+## Phase 38.9 Tier 0 — launch-readiness release pipeline (scaffold) — `feature/tier0-launch-release-pipeline`
+
+Per `docs/PROJECT.md` §2 → Phase 38.9 Tier 0 (T0.1 release pipeline + T0.2 Sentry). Scaffold the
+real release pipeline; INERT until the user adds GitHub secrets + tags a release. CI/tooling →
+reviewer reads, QA skipped.
+
+**Already in place (verified):** `android/app/build.gradle.kts` reads `key.properties` for the
+release signing config and falls back to debug-signing when absent — so this scaffolding does NOT
+break local/CI builds.
+
+### Checklist
+- [x] Rewrite `.github/workflows/release.yml`:
+  - Inject the keystore (base64 secret → file) + write `android/key.properties` from secrets.
+  - Write the REAL prod `.env` from secrets (SUPABASE_URL, SUPABASE_ANON_KEY, SENTRY_DSN) instead
+    of `cp .env.example .env`.
+  - `flutter build appbundle --release --obfuscate --split-debug-info=build/debug-info` (AAB for
+    Play) + keep signed split APKs for the GitHub release direct-download. Upload `build/debug-info`
+    as a release artifact (needed to de-obfuscate crash stacks).
+  - Upload the AAB to Play (internal track) via a Play-upload action, gated on the service-account
+    secret (skip gracefully if absent so a tag without secrets fails loud-but-clear, not silently).
+  - Keep the GitHub release step for the signed artifacts.
+- [x] Verify `build.gradle.kts` signing path is complete (keystore present → release-signed; absent
+    → debug fallback). No change expected; confirmed complete — no changes made.
+- [x] **T0.2 Sentry:** SENTRY_DSN injected into the release `.env`. Manual verification procedure
+    documented in `docs/release-checklist.md` section 4.
+- [x] `docs/release-checklist.md` — the exact secrets the user must add to GitHub repo secrets +
+    how to generate each (keytool keystore command, Play service-account steps, Sentry DSN, prod
+    Supabase creds) + the release/tag procedure.
+- [x] YAML valid (python yaml.safe_load passes); ci.yml untouched; release.yml triggers on `v*` tags only.
+
+_Tiers 1-3 complete. T2.5/T2.6 deferred. This is the last hardening item; needs user secrets to go live._
