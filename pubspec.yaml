@@ -36,7 +36,7 @@ dependencies:
   wakelock_plus: ^1.2.8
   sentry_flutter: ^9.16.1
   clock: ^1.1.1
-  connectivity_plus: ^6.1.0
+  connectivity_plus: ^7.1.1
   # Web-only DOM event subscriptions (window.online / window.offline) for the
   # OfflineBanner. Imported via a conditional import in
   # `lib/core/connectivity/web_online_events_web.dart`; native builds resolve
