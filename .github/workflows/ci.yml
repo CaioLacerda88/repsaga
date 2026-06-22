@@ -18,7 +18,7 @@ jobs:
     name: exercise-translation-coverage-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Fetch enough history to diff against the PR base / main head.
           fetch-depth: 0
@@ -39,7 +39,7 @@ jobs:
     name: exercise-difficulty-mult-coverage-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Fetch enough history to diff against the PR base / main head.
           fetch-depth: 0
@@ -60,7 +60,7 @@ jobs:
     name: workout-template-translation-coverage-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Fetch enough history to diff against the PR base / main head.
           fetch-depth: 0
@@ -87,7 +87,7 @@ jobs:
     # translation gate.
     needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -166,7 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: analyze
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -213,7 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: analyze
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -274,7 +274,7 @@ jobs:
     timeout-minutes: 25
     needs: analyze
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -294,7 +294,7 @@ jobs:
           key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
 
@@ -365,7 +365,7 @@ jobs:
     # aggregator below depends on this job's success.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -446,11 +446,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
 
@@ -492,7 +492,7 @@ jobs:
     # .rpc() with string literal arguments.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -512,7 +512,7 @@ jobs:
     # Runs in parallel with other jobs (no Flutter SDK needed).
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 

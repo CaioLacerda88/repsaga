@@ -116,6 +116,7 @@ auto-memory entry of the same slug.
 | `flutter-web-identifier-transition-stale` | Web | Identifier-only mutations skip setAttribute; force fresh node mount |
 | `flutter-web-svg-layer-recycle` | Web | Unkeyed `SvgPicture` (`RenderWebVectorGraphic`) recycled across a shape-changing subtree repaints its RETAINED `ColorFilterLayer` + cached picture at the new offset → a stray wrong-color glyph (paint-only, AOM-clean, web-only). Fix: stable `ValueKey(asset+color)` on the icon helper. Paint-layer sibling of `flutter-web-identifier-transition-stale`. Surfaced PR #355 (cardio card filled-state). |
 | `flutter-web-hive-write-blocks-postframe-nav` | Web | A fire-and-forget Hive/IndexedDB write (`ref.read(hiveProvider).writeBatch()`) fired in the SAME tick that schedules an `addPostFrameCallback` navigation starves that callback on web → the post-frame nav never runs, screen hangs on its spinner (backend may be HTTP 200; only client nav stalls). Passes `flutter test` + on device; only web E2E catches it. Fix: move the write to the DESTINATION screen's `initState` post-frame (off the finish→navigate critical path), reading the same data from route params. Cousin of `hive-testwidgets`. Surfaced vitality-immediacy PR 2 (`recordChargedBatch` in finish coordinator). |
+| `supabase-passkeys-web-boot-crash` | Web / deps | A dep bump pulling a NEW web platform-channel plugin (`supabase_flutter` 2.15 → `gotrue` 2.22 → `passkeys_web`) crashes Flutter-web BOOT at the plugin registrant (`window.PasskeyAuthenticator.init()` undefined → "Null check operator used on null" before the router navigates → app hangs on splash; web E2E mass-fails). `flutter test` + `analyze` stay green (they never boot the app); only a real `flutter build web` + browser catches it. Fix: drop the bump (pin known-good) and gate dep upgrades on a real web-boot check, not just `flutter test`. Hard-throw sibling of `permission-handler-web-silent-failure`. Surfaced dep-batch #386. |
 | `flutter-web-popscope-unreachable` | Web | GoRouter consumes popstate; PopScope contracts owned by widget tests |
 | `gorouter-context-go-vs-push` | Routing | `go` replaces stack, `push` adds; choose by back-button intent |
 | `gorouter-extra-not-process-death-safe` | Routing | `state.extra` is in-memory-only (NOT restored across Android process death); a bare `as T` cast on it throws `_TypeError` on resume → grey `ErrorWidget` in release (whole tab blank, debug hides it). Fix: type-guard with `e is T ? e : null` and degrade to the day-zero path, OR a `redirect` that bounces on `extra is! T`. Grep route tables for `state.extra as`. Surfaced PR #359 (`/routines/create` grey Treinos tab on resume). |
@@ -476,7 +477,19 @@ runs, group specs explicitly or go to 5 shards.
 
 ### Architectural follow-ups (parked, no urgency)
 
-_None outstanding._ Recently closed:
+- **supabase_flutter 2.15 upgrade (deferred from the #386 dep batch, 2026-06-22)** —
+  `supabase_flutter` is pinned to **2.12.2** in pubspec.yaml because 2.15 (via `gotrue`
+  2.22's WebAuthn/passkey support) pulls in the new transitive `passkeys_web` plugin,
+  whose web registrant calls `window.PasskeyAuthenticator.init()` on a JS global that
+  isn't injected in our Flutter 3.41.6 build → **crashes web boot** (54 e2e splash-hang
+  failures; see cluster [[cluster-supabase-passkeys-web-boot-crash]]). To re-attempt:
+  (a) confirm the `passkeys_web` JS asset is wired into web bootstrap OR the passkey
+  path is disabled, (b) do the `anonKey → publishableKey` migration (2.15 deprecates
+  `anonKey`), (c) **gate on a real `flutter build web` + browser-boot check, not just
+  `flutter test`** — unit/widget tests don't boot the app so they can't catch this.
+  Unpin the version constraint when it lands.
+
+_Architectural follow-ups otherwise_ — recently closed:
 
 - **20-P-1** — post-completion hint persistence — dropped 2026-05-13. The
   entire per-row hint mechanic was removed in Phase 23 D4 (`set_row.dart:223`);
