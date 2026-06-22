@@ -36,7 +36,7 @@ typedef AppSettingsOpener = Future<bool> Function();
 /// run pure-Dart without staging Android/iOS plugin channels. Default
 /// implementations delegate to:
 ///   * `image_picker.ImagePicker().pickImage(...)`
-///   * `share_plus.Share.shareXFiles(...)`
+///   * `share_plus.SharePlus.instance.share(ShareParams(...))`
 ///   * `permission_handler.Permission.camera.request()` / `.status`
 class ShareService {
   ShareService({
@@ -147,10 +147,9 @@ class ShareService {
     List<XFile> files, {
     String? text,
   }) {
-    // share_plus 10.x API. (11.x renamed this to `SharePlus.instance.share`
-    // with a `ShareParams` builder, but we hold at 10.x because 11.x bumped
-    // Dart min above 3.11.4.)
-    return Share.shareXFiles(files, text: text);
+    // share_plus 12.x API: the static `Share.shareXFiles` was deprecated in
+    // favor of `SharePlus.instance.share` with a `ShareParams` builder.
+    return SharePlus.instance.share(ShareParams(files: files, text: text));
   }
 
   static Future<PermissionStatus> _defaultPermissionRequester(

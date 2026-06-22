@@ -12,10 +12,12 @@
 # Auto-updates only open PRs — they do NOT auto-merge. Each PR still goes
 # through the normal CI pipeline (ci.yml) before a maintainer merges.
 #
-# Grouping: minor + patch updates are batched into a single PR per ecosystem
-# (one "pub" PR, one "github-actions" PR) instead of one PR per package, to keep
-# the queue quiet. MAJOR updates stay as individual PRs — they're more likely to
-# carry breaking changes and deserve isolated review/CI.
+# Grouping: minor + patch + major updates are batched into a single PR per
+# ecosystem (one "pub" PR, one "github-actions" PR) instead of one PR per
+# package, to keep the queue quiet. Batching majors too lets us validate all
+# bumps TOGETHER in one CI run — the consolidated-batch workflow we adopted
+# after the 2026-06 batch (majors validated as a set is faster and catches
+# cross-dep interactions a per-package PR would miss).
 
 version: 2
 
@@ -29,10 +31,11 @@ updates:
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
     groups:
-      pub-minor-patch:
+      pub-all:
         update-types:
           - "minor"
           - "patch"
+          - "major"
     labels:
       - "dependencies"
       - "dart"

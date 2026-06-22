@@ -30,13 +30,13 @@ dependencies:
   flutter_dotenv: ^6.0.0
   flutter_markdown_plus: ^1.0.3
   flutter_svg: ^2.0.10+1
-  google_fonts: ^6.2.0
+  google_fonts: ^8.1.0
   intl: ^0.20.0
   uuid: ^4.5.1
   wakelock_plus: ^1.2.8
   sentry_flutter: ^9.16.1
   clock: ^1.1.1
-  connectivity_plus: ^6.1.0
+  connectivity_plus: ^7.1.1
   # Web-only DOM event subscriptions (window.online / window.offline) for the
   # OfflineBanner. Imported via a conditional import in
   # `lib/core/connectivity/web_online_events_web.dart`; native builds resolve
@@ -45,13 +45,14 @@ dependencies:
   fl_chart: ^1.1.0
   # Phase 30 PR 30b Pass 2: share-card IO pipeline.
   #   image_picker  — camera + gallery picker (`pickImage`)
-  #   share_plus    — native share sheet (`Share.shareXFiles`)
+  #   share_plus    — native share sheet (`SharePlus.instance.share`)
   #   permission_handler — graceful camera-denial UX (status + request)
-  # Versions pinned to the latest stable line compatible with Dart SDK 3.11.4.
-  # 11.x of share_plus bumped Dart min beyond 3.11.4, so we hold at 10.x.
+  # Versions on the latest stable line compatible with Dart SDK 3.11.4.
+  # Batch 2 (2026-06): share_plus 10→12, permission_handler 11→12 — both
+  # resolve cleanly on SDK 3.11.4 and pass the web-boot gate.
   image_picker: ^1.1.2
-  share_plus: ^10.1.4
-  permission_handler: ^11.3.1
+  share_plus: ^12.0.2
+  permission_handler: ^12.0.3
   # `cross_file` is a transitive dep of `share_plus` (XFile type) and
   # `path_provider` is transitive via `hive_flutter`. Listed explicitly so
   # `ShareImageRenderer` / `ShareService` can import them without depending
