@@ -141,12 +141,17 @@ FLUTTER_APP_URL= npx playwright test "specs/auth.spec.ts:16"
 
 | Agent           | Role                                                         | Writes Code | Model  |
 | --------------- | ------------------------------------------------------------ | ----------- | ------ |
-| `tech-lead`     | Architecture, implementation, bug fixes, migrations          | Yes         | Fable  |
+| `tech-lead`     | Architecture, implementation, bug fixes, migrations          | Yes         | Opus   |
 | `qa-engineer`   | Test strategy, unit/widget/e2e tests, Playwright             | Yes         | Opus   |
 | `devops`        | CI/CD pipelines, GitHub Actions, releases                    | Yes         | Sonnet |
 | `reviewer`      | Code review, quality checks                                  | Read-only   | Opus   |
 | `product-owner` | Market research, competitor analysis, feature priorities     | Read-only   | Sonnet |
 | `ui-ux-critic`  | Design critique, anti-generic-AI aesthetics                  | Read-only   | Opus   |
+
+> **Model note:** `tech-lead` ran on Fable until 2026-06; Fable access is paused
+> (see anthropic.com/news/fable-mythos-access), so it now runs on Opus. Do not
+> re-introduce a `model: fable` override — resuming a Fable-pinned agent fails at
+> spawn. The agent frontmatter (`.claude/agents/tech-lead.md`) is already set to Opus.
 
 ### How it works
 
