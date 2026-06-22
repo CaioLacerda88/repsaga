@@ -45,7 +45,7 @@ dependencies:
   fl_chart: ^1.1.0
   # Phase 30 PR 30b Pass 2: share-card IO pipeline.
   #   image_picker  — camera + gallery picker (`pickImage`)
-  #   share_plus    — native share sheet (`Share.shareXFiles`)
+  #   share_plus    — native share sheet (`SharePlus.instance.share`)
   #   permission_handler — graceful camera-denial UX (status + request)
   # Versions on the latest stable line compatible with Dart SDK 3.11.4.
   # Batch 2 (2026-06): share_plus 10→12, permission_handler 11→12 — both
