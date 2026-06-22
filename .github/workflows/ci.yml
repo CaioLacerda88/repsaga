@@ -521,7 +521,7 @@ jobs:
         # that is NOT listed in .osv-scanner.toml (the ignore-list file).
         # Pre-existing advisories with no available fix belong in .osv-scanner.toml
         # with a dated comment and tracking URL — see that file's header.
-        uses: google/osv-scanner-action/osv-scanner-action@v2
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             --config=.osv-scanner.toml
