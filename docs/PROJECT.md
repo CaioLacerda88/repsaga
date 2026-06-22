@@ -304,8 +304,14 @@ independent audit lanes (highest confidence). User chose: do this before 39/40, 
   (`supabase test db` against the local Supabase the pipeline boots). Current RLS verified
   **hole-free** (positive own-row + negative cross-user SELECT/write isolation, incl. billing +
   vitality + backfill read surfaces). **Prerequisite for Phase 40 — now in place.**
-- [ ] **T1.4** Offline sync (4,347 LOC) has no integration tier — add a replay-under-partial-failure
-  `test/integration/offline_sync_replay_test.dart`.
+- [x] **T1.4** ✅ #372 (2026-06-22) — added `test/integration/offline_sync_replay_test.dart`
+  (real Hive + real `SyncService` drain vs real local Supabase; mid-batch structural failure
+  isolated, no valid action lost). Uncovered + fixed a real bug it was built to find:
+  `SyncErrorClassifier.isTerminal` keyed on HTTP codes but `PostgrestException.code` is the
+  Postgres SQLSTATE → the terminal fast-path was **dead in production** (broken actions retried
+  6× instead of dropping; unit tests only passed on mock shapes). Fixed with a conservative
+  SQLSTATE/PGRST allow-set + drain-loop terminal escalation; structural save errors now surface
+  to UI instead of silent-queue. New cluster `classifier-keyed-on-http-not-sqlstate`. **Tier 1 complete.**
 
 **Tier 2 — Pipeline gaps we were flying blind on (cheap, high-leverage):**
 - [ ] **T2.1** Code coverage measured then discarded — upload `lcov.info` + non-regressing floor.
