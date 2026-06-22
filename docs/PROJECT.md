@@ -338,8 +338,10 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
   `_persistWorkout` / `_detectAndPersistPRs` / `_trackWorkoutFinishedEvent`; control flow stays
   in the orchestrator. Pure behavior-preserving (reviewer token-diff verified, 3978 tests
   unchanged). **Phase 39 prerequisite cleared.**
-- [ ] **T3.2** Decompose 3 monolithic `build()`s: `login_screen` (~472), `create_routine_screen`
-  (~316), `week_plan_screen` (~220) — all violate the 50-line rule.
+- [x] **T3.2** ✅ #385 (2026-06-22) — decomposed the 3 monolithic `build()`s (login 432→277,
+  create_routine 298→200, week_plan 219→140) into `const` private sub-widgets. Pure
+  behavior-preserving (reviewer render-equivalence diff verified; 3978 tests unchanged).
+  setState-coupled subtrees deliberately left inline (separate audit item).
 - [ ] **T3.3** `docs/` canonical-RPC reference for `save_workout`/`record_session_xp_batch`
   (spread verbatim across ~6 migrations).
 - [ ] **T3.4** Test hygiene: rewrite `celebration_orchestrator_test` (only wiring-not-behavior file)
