@@ -48,8 +48,8 @@ dependencies:
   #   share_plus    — native share sheet (`SharePlus.instance.share`)
   #   permission_handler — graceful camera-denial UX (status + request)
   # Versions on the latest stable line compatible with Dart SDK 3.11.4.
-  # Batch 2 (2026-06): share_plus 10→12, permission_handler 11→12 — both
-  # resolve cleanly on SDK 3.11.4 and pass the web-boot gate.
+  # Batches (2026-06): share_plus 10→12→13, permission_handler 11→12,
+  # package_info_plus 9→10 — all resolve cleanly on SDK 3.11.4 + pass the web-boot gate.
   image_picker: ^1.1.2
   share_plus: ^13.1.0
   permission_handler: ^12.0.3
@@ -59,7 +59,7 @@ dependencies:
   # on undeclared transitive resolution surviving future package upgrades.
   cross_file: ^0.3.4
   path_provider: ^2.1.4
-  package_info_plus: ^10.1.0 # Pinned: 10.x requires Dart SDK newer than 3.11.4
+  package_info_plus: ^10.1.0
   # Used for `firstWhereOrNull` in `active_workout_screen.dart` (PR3 review W1)
   # — the previous `firstWhere(orElse: () => after.last)` silently returned the
   # wrong element when no diff entry was found, which would corrupt undo state
