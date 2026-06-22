@@ -1,0 +1,19 @@
+# OSV Scanner configuration for RepSaga.
+#
+# If the first CI run flags a transitive advisory with NO available fix
+# (i.e. no published package version resolves it), add an ignore entry here:
+#
+#   [[IgnoredVulns]]
+#   id = "GHSA-xxxx-xxxx-xxxx"
+#   reason = "No fixed version available as of YYYY-MM-DD; track at <url>"
+#
+# Process for adding an ignore:
+#   1. Confirm the advisory ID in the osv-scanner job output.
+#   2. Check pub.dev / the package's GitHub issues to verify no fix exists.
+#   3. Add the entry with a dated reason and the tracking URL.
+#   4. Open a follow-up issue to revisit when a fix ships.
+#
+# DO NOT add ignores for advisories that have a fixed version available —
+# those must be resolved by updating the dependency.
+#
+# Current ignores: none.

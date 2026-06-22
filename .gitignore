@@ -92,3 +92,6 @@ qa-screenshots/
 tools/.staging_images/
 tools/.exercises_catalog.json
 tools/_find_matches.js
+
+# Generated test coverage output
+coverage/
