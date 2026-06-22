@@ -51,7 +51,7 @@ dependencies:
   # 11.x of share_plus bumped Dart min beyond 3.11.4, so we hold at 10.x.
   image_picker: ^1.1.2
   share_plus: ^10.1.4
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.3
   # `cross_file` is a transitive dep of `share_plus` (XFile type) and
   # `path_provider` is transitive via `hive_flutter`. Listed explicitly so
   # `ShareImageRenderer` / `ShareService` can import them without depending
