@@ -334,11 +334,40 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
   the T1.1 weekly_engagement leak. `health_check_provider` allow-listed.
 - [x] **T2.4** Migration-rollback doc — CLAUDE.md step 12: forward-fix convention + pre-push
   `pg_dump`/PITR checklist for launch-critical migrations.
-- [ ] **T2.5** No perf-regression signal on the XP/vitality hot path (correctness tested, latency not).
-  *(harder — deferred from the #374 bundle; a latency-budget assertion on the existing
-  `rpg_save_workout_perf_test.dart` is the likely lightweight approach.)*
-- [ ] **T2.6** Visual-verification + a11y are process-only, not CI-enforced (visual-only bugs escape).
-  *(harder — golden-image diff is excluded for host-shaping reasons; needs design. Deferred.)*
+- **T2.5 — perf-regression gate on the XP/vitality hot path** (refined 2026-06-22):
+  - **Why wall-clock doesn't work:** `rpg_save_workout_perf_test.dart` already measures p50/p95/p99
+    but only LOGS — its own comments note the wall-clock is PostgREST/Docker REST round-trip
+    (400-700ms overhead) which swamps the ~50ms Postgres execution time ~10×. A wall-clock gate is
+    too loose or flaky. The signal lives INSIDE Postgres (plan + index usage), not at the client.
+  - **The deterministic gate:** SQL-level checks in the `supabase test db` (pgTAP) harness —
+    [x] (easy win, build now) **index-coverage** `has_index` assertions on the hot tables
+      (`xp_events`, `body_part_progress`, `sets`, `exercise_peak_loads[_by_rep_range]`,
+      `cardio_sessions`) — catches the #1 perf regression (a migration adding a query without its
+      index, or dropping one). Deterministic, no timing.
+    - [ ] (deferred — deeper) `auto_explain`/`EXPLAIN`-based plan assertions (no Seq Scan on hot
+      tables, no new nested-loop, bounded statement count) to catch a per-row subquery / N+1 added
+      inside the plpgsql RPC bodies. Harder (plpgsql hides inner plans — needs auto_explain log
+      parsing or extracted-query EXPLAIN); not built yet.
+- **T2.6 — a11y gate + visual-regression** (refined 2026-06-22). Two separable problems:
+  - [x] **a11y guideline gate (easy win, build now):** Flutter's `meetsGuideline(textContrast /
+    androidTapTarget / labeledTapTarget)` in widget tests — deterministic, no host-render issues,
+    currently 0 files use it. Add to the key screens. Catches contrast / sub-48dp tap-target /
+    unlabeled-control regressions in CI.
+  - [ ] **Visual regression (deferred — partly unsolvable):** the `tolerant_golden_comparator` (3%)
+    + 8 goldens exist but are CI-EXCLUDED (host boundary: dev-Windows vs CI-Linux). *Fixable* by
+    generating goldens ON the CI image and gating `--tags golden` — BUT widget-test goldens use the
+    Flutter test renderer, NOT CanvasKit, so they can't catch the real-web-render/CanvasKit paint
+    bugs that actually escape (the signup-email-obscured class). The bug-catching gate is the manual
+    Playwright visual-verification at 320/360/412dp — so the realistic deliverable is to make that
+    manual gate **non-skippable** (a required "visuals attached" PR step), NOT a flaky auto screenshot-diff.
+  - **a11y findings surfaced by the new gate (deferred — genuine WCAG gaps that currently ship):**
+    [ ] Sub-48dp tap targets on the core logging row — stepper +/- buttons (40dp wide by BUG-019
+    row-budget design) + SetRow done-cell checkbox / gold ◆ (32dp); raising to 48×48 is an
+    active-workout grid layout change → tech-lead. [ ] Low text contrast (`AppColors.textDim` on
+    dark) below WCAG AA: SetRow "kg" (1.13), HomeGreeting date eyebrow (2.78), Login wordmark
+    (2.48) / "Forgot password?" (1.21) / "OR" (2.95) / sign-up toggle (2.48) / Terms·Privacy (2.09)
+    → design-token contrast pass. (The new gate asserts the guidelines that pass today + `TODO(a11y)`
+    skips these specific ones, so it stays green AND catches future regressions.)
 
 **Tier 3 — Maintainability tech debt (opportunistic):**
 - [x] **T3.1** ✅ #384 (2026-06-22) — decomposed `finishWorkout()` (617 → 277 lines) into
