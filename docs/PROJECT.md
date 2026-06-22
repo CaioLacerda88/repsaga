@@ -333,9 +333,10 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
   *(harder — golden-image diff is excluded for host-shaping reasons; needs design. Deferred.)*
 
 **Tier 3 — Maintainability tech debt (opportunistic):**
-- [ ] **T3.1** Decompose `finishWorkout()` (~617 lines, `active_workout_notifier.dart:1526-2143`)
-  into `_partitionCommitted`/`_detectAndPersistPRs`/`_diffRpgSnapshot`/`_persistWorkout`.
-  **Do before Phase 39 touches it.**
+- [x] **T3.1** ✅ #384 (2026-06-22) — decomposed `finishWorkout()` (617 → 277 lines) into
+  `_persistWorkout` / `_detectAndPersistPRs` / `_trackWorkoutFinishedEvent`; control flow stays
+  in the orchestrator. Pure behavior-preserving (reviewer token-diff verified, 3978 tests
+  unchanged). **Phase 39 prerequisite cleared.**
 - [ ] **T3.2** Decompose 3 monolithic `build()`s: `login_screen` (~472), `create_routine_screen`
   (~316), `week_plan_screen` (~220) — all violate the 50-line rule.
 - [ ] **T3.3** `docs/` canonical-RPC reference for `save_workout`/`record_session_xp_batch`

@@ -249,7 +249,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final authState = ref.watch(authNotifierProvider);
     final isLoading = authState.isLoading;
@@ -286,50 +285,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Brand sigil — the Arcane launcher-icon foreground. The
-                    // colored composite (rune + barbell) already carries the
-                    // palette, so no color tint is applied. Sized 96dp for the
-                    // login header, which reads balanced against the 32dp
-                    // displayMedium wordmark below.
-                    Image.asset(
-                      'assets/app_icon/arcane_sigil_foreground.png',
-                      width: 96,
-                      height: 96,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l10n.appName,
-                      style: AppTextStyles.display.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    // Mode context line. In signup mode this is a promoted
-                    // Rajdhani-700 16sp "CREATE ACCOUNT" heading (full cream)
-                    // per Option A — it replaces the dim subtitle so the
-                    // login-vs-signup mode is unambiguous. In login mode it
-                    // stays the dim 16sp "Welcome back" subtitle. The
-                    // `auth-welcome-back` identifier is preserved across both
-                    // modes so the existing E2E anchor keeps resolving.
-                    Semantics(
-                      container: true,
-                      identifier: _isSignUp
-                          ? 'auth-signup-heading'
-                          : 'auth-welcome-back',
-                      child: Text(
-                        _isSignUp ? l10n.signupHeading : l10n.welcomeBack,
-                        style: _isSignUp
-                            ? AppTextStyles.display.copyWith(fontSize: 16)
-                            : AppTextStyles.body.copyWith(
-                                fontSize: 16,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.7,
-                                ),
-                              ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                    _BrandHeader(isSignUp: _isSignUp),
                     const SizedBox(height: 40),
                     // Display name — signup only, above email. Non-empty
                     // validation only (no length minimum). Forwarded into
@@ -356,41 +312,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     // Inline error message
                     if (_errorMessage != null) ...[
-                      Semantics(
-                        liveRegion: true,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.error.withValues(
-                              alpha: 0.15,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: theme.colorScheme.error.withValues(
-                                alpha: 0.4,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                color: theme.colorScheme.error,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage!,
-                                  style: AppTextStyles.body.copyWith(
-                                    color: theme.colorScheme.error,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      _ErrorBanner(message: _errorMessage!),
                       const SizedBox(height: 16),
                     ],
                     AppTextField(
@@ -487,26 +409,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                     ],
                     if (!_isSignUp) ...[
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Semantics(
-                          container: true,
-                          identifier: 'auth-forgot-pwd',
-                          child: TextButton(
-                            onPressed: isLoading ? null : _forgotPassword,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                            ),
-                            child: Text(
-                              l10n.forgotPassword,
-                              style: AppTextStyles.body.copyWith(
-                                color: theme.colorScheme.primary.withValues(
-                                  alpha: 0.8,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                      _ForgotPasswordLink(
+                        onPressed: isLoading ? null : _forgotPassword,
                       ),
                     ],
                     // Legal PR 2 — age confirmation checkbox.
@@ -594,74 +498,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            l10n.or,
-                            style: AppTextStyles.body.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    const _OrDivider(),
                     const SizedBox(height: 16),
-                    Semantics(
-                      container: true,
-                      identifier: 'auth-google-btn',
-                      child: OutlinedButton.icon(
-                        onPressed: isLoading ? null : _signInWithGoogle,
-                        icon: SvgPicture.asset(
-                          'assets/icons/google_logo.svg',
-                          width: 20,
-                          height: 20,
-                        ),
-                        label: Text(l10n.continueWithGoogle),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+                    _GoogleButton(
+                      onPressed: isLoading ? null : _signInWithGoogle,
                     ),
                     const SizedBox(height: 24),
-                    Semantics(
-                      container: true,
-                      identifier: _isSignUp
-                          ? 'auth-toggle-login'
-                          : 'auth-toggle-signup',
-                      child: TextButton(
-                        onPressed: isLoading ? null : _toggleMode,
-                        child: Text(
-                          _isSignUp
-                              ? l10n.alreadyHaveAccount
-                              : l10n.dontHaveAccount,
-                        ),
-                      ),
+                    _ModeToggleButton(
+                      isSignUp: _isSignUp,
+                      onPressed: isLoading ? null : _toggleMode,
                     ),
                     // Login mode keeps the bottom legal footer. In signup mode
                     // the inline age-gate checkbox label already satisfies the
@@ -677,6 +522,236 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Brand header — Arcane sigil + wordmark + the login/signup mode context line.
+///
+/// The sigil is the colored launcher-icon foreground (no tint — the composite
+/// already carries the palette), sized 96dp. The mode line preserves the
+/// `auth-welcome-back` / `auth-signup-heading` identifier swap across modes so
+/// the existing E2E anchors keep resolving.
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader({required this.isSignUp});
+
+  final bool isSignUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Brand sigil — the Arcane launcher-icon foreground. The
+        // colored composite (rune + barbell) already carries the
+        // palette, so no color tint is applied. Sized 96dp for the
+        // login header, which reads balanced against the 32dp
+        // displayMedium wordmark below.
+        Image.asset(
+          'assets/app_icon/arcane_sigil_foreground.png',
+          width: 96,
+          height: 96,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          l10n.appName,
+          style: AppTextStyles.display.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        // Mode context line. In signup mode this is a promoted
+        // Rajdhani-700 16sp "CREATE ACCOUNT" heading (full cream)
+        // per Option A — it replaces the dim subtitle so the
+        // login-vs-signup mode is unambiguous. In login mode it
+        // stays the dim 16sp "Welcome back" subtitle. The
+        // `auth-welcome-back` identifier is preserved across both
+        // modes so the existing E2E anchor keeps resolving.
+        Semantics(
+          container: true,
+          identifier: isSignUp ? 'auth-signup-heading' : 'auth-welcome-back',
+          child: Text(
+            isSignUp ? l10n.signupHeading : l10n.welcomeBack,
+            style: isSignUp
+                ? AppTextStyles.display.copyWith(fontSize: 16)
+                : AppTextStyles.body.copyWith(
+                    fontSize: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Inline error banner shown above the email field on auth failure. The error
+/// text is resolved by the screen layer (`AuthErrorMessages.fromError`) and
+/// passed in; this widget is pure presentation.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.error.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.error.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.error, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.body.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Right-aligned "Forgot password?" link (login mode only). Disabled (null
+/// callback) while an auth request is in flight.
+class _ForgotPasswordLink extends StatelessWidget {
+  const _ForgotPasswordLink({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Semantics(
+        container: true,
+        identifier: 'auth-forgot-pwd',
+        child: TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+          ),
+          child: Text(
+            l10n.forgotPassword,
+            style: AppTextStyles.body.copyWith(
+              color: theme.colorScheme.primary.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "OR" divider separating the email/password form from the Google CTA.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            l10n.or,
+            style: AppTextStyles.body.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Continue with Google" outlined button. Disabled (null callback) while an
+/// auth request is in flight.
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: 'auth-google-btn',
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: SvgPicture.asset(
+          'assets/icons/google_logo.svg',
+          width: 20,
+          height: 20,
+        ),
+        label: Text(l10n.continueWithGoogle),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          side: BorderSide(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom "Don't have an account? / Already have an account?" mode-toggle
+/// button. Disabled (null callback) while an auth request is in flight.
+class _ModeToggleButton extends StatelessWidget {
+  const _ModeToggleButton({required this.isSignUp, required this.onPressed});
+
+  final bool isSignUp;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: isSignUp ? 'auth-toggle-login' : 'auth-toggle-signup',
+      child: TextButton(
+        onPressed: onPressed,
+        child: Text(isSignUp ? l10n.alreadyHaveAccount : l10n.dontHaveAccount),
       ),
     );
   }

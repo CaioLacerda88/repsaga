@@ -289,73 +289,6 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
       );
   }
 
-  /// Custom notes counter. Returns `null` (fully collapsing the counter
-  /// sub-row, so the field reserves no vertical gap for it) until the user is
-  /// within 100 chars of the cap, then "{current} / {max}" colored by
-  /// remaining headroom: textDim normally → warning at ≤30 remaining → error
-  /// at the cap (≤0). `null` (not `SizedBox.shrink()`) matches the
-  /// NotesEditSheet pattern and avoids InputDecorator's counter sub-row
-  /// padding entirely while the counter is hidden.
-  Widget? _buildNotesCounter(BuildContext context, int currentLength) {
-    if (currentLength < _kRoutineNotesCounterThreshold) {
-      return null;
-    }
-    final l10n = AppLocalizations.of(context);
-    final remaining = _kRoutineNotesMaxLength - currentLength;
-    final Color color;
-    if (remaining <= 0) {
-      color = AppColors.error;
-    } else if (remaining <= 30) {
-      color = AppColors.warning;
-    } else {
-      color = AppColors.textDim;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        l10n.notesCharCounter(currentLength, _kRoutineNotesMaxLength),
-        style: AppTextStyles.bodySmall.copyWith(color: color),
-      ),
-    );
-  }
-
-  /// Custom name counter — mirrors [_buildNotesCounter]: returns `null` (fully
-  /// collapsing the sub-row) until within ~10 of the cap, then the colored
-  /// "{current} / {max}" readout.
-  Widget? _buildNameCounter(BuildContext context, int currentLength) {
-    if (currentLength < _kRoutineNameCounterThreshold) {
-      return null;
-    }
-    final l10n = AppLocalizations.of(context);
-    final remaining = _kRoutineNameMaxLength - currentLength;
-    final Color color;
-    if (remaining <= 0) {
-      color = AppColors.error;
-    } else if (remaining <= 5) {
-      color = AppColors.warning;
-    } else {
-      color = AppColors.textDim;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        l10n.notesCharCounter(currentLength, _kRoutineNameMaxLength),
-        style: AppTextStyles.bodySmall.copyWith(color: color),
-      ),
-    );
-  }
-
-  /// Uppercase section eyebrow above the name / notes fields (Phase 38h 2c).
-  Widget _sectionEyebrow(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, bottom: 7),
-      child: Text(
-        label.toUpperCase(),
-        style: AppTextStyles.sectionHeader.copyWith(color: AppColors.hotViolet),
-      ),
-    );
-  }
-
   /// Builds one exercise card with all its edit callbacks wired. Shared by the
   /// eager normal-mode [SliverList] and the reorder-mode [SliverReorderableList]
   /// so the two never drift. The [key] rides the card directly in normal mode;
@@ -397,7 +330,6 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     // Distance target slot follows the same one unit-system toggle the active
     // cardio card uses — kg → km, lbs → mi (CardioFormat.distanceUnitFor).
@@ -428,20 +360,9 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           // exercise, so it's gated on that (a single card can't reorder).
           // Reuses the active-workout reorder l10n.
           if (_exercises.length > 1)
-            Semantics(
-              container: true,
-              explicitChildNodes: true,
-              identifier: 'create-routine-reorder-toggle',
-              label: _reorderMode
-                  ? l10n.exitReorderModeTooltip
-                  : l10n.reorderExercisesTooltip,
-              child: IconButton(
-                onPressed: _toggleReorderMode,
-                icon: Icon(_reorderMode ? Icons.done : Icons.reorder),
-                tooltip: _reorderMode
-                    ? l10n.exitReorderModeTooltip
-                    : l10n.reorderExercisesTooltip,
-              ),
+            _ReorderToggle(
+              reorderMode: _reorderMode,
+              onPressed: _toggleReorderMode,
             ),
         ],
       ),
@@ -501,56 +422,11 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionEyebrow(l10n.routineSectionLabel),
-                  TextField(
-                    controller: _nameController,
-                    autofocus: !_isEditing,
-                    maxLength: _kRoutineNameMaxLength,
-                    // Custom counter (see _buildNameCounter): hidden until cap.
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          maxLength,
-                        }) => _buildNameCounter(context, currentLength),
-                    decoration: InputDecoration(hintText: l10n.routineName),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 16),
-                  _sectionEyebrow(l10n.notesSectionLabel),
-                  // Q2 routine notes — optional, multiline, flat field on
-                  // surface2 (no Card chrome). Below name, above the list.
-                  Semantics(
-                    container: true,
-                    identifier: 'create-routine-notes',
-                    child: TextField(
-                      controller: _notesController,
-                      minLines: 2,
-                      maxLines: 4,
-                      maxLength: _kRoutineNotesMaxLength,
-                      // Custom counter (see _buildNotesCounter): hide Material's
-                      // default by returning null when below threshold.
-                      buildCounter:
-                          (
-                            context, {
-                            required currentLength,
-                            required isFocused,
-                            maxLength,
-                          }) => _buildNotesCounter(context, currentLength),
-                      decoration: InputDecoration(
-                        hintText: l10n.routineNotesHint,
-                        filled: true,
-                        fillColor: AppColors.surface2,
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+              child: _RoutineHeaderForm(
+                nameController: _nameController,
+                notesController: _notesController,
+                autofocusName: !_isEditing,
+                onChanged: () => setState(() {}),
               ),
             ),
           ),
@@ -559,34 +435,10 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
           // the page; see the body comment). Empty-state beat renders as its own
           // adapter instead. Horizontal 16 chrome matches the header.
           if (_exercises.isEmpty)
-            SliverToBoxAdapter(
-              // RPG-voiced empty-state beat — a center of gravity between the
-              // notes field and the add button (Phase 38h 3d) instead of a
-              // cold blank gap.
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 30,
-                  horizontal: 16,
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.fitness_center,
-                      size: 30,
-                      color: AppColors.textDim.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.routineEmptyExercises,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.body.copyWith(
-                        color: AppColors.textDim,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            // RPG-voiced empty-state beat — a center of gravity between the
+            // notes field and the add button (Phase 38h 3d) instead of a
+            // cold blank gap.
+            const SliverToBoxAdapter(child: _EmptyExercisesBeat())
           else if (_reorderMode)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -659,24 +511,7 @@ class _CreateRoutineScreenState extends ConsumerState<CreateRoutineScreen> {
               16,
             ),
             sliver: SliverToBoxAdapter(
-              child: Semantics(
-                container: true,
-                identifier: 'create-routine-add-exercise',
-                child: OutlinedButton.icon(
-                  onPressed: _addExercise,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.addExercise),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: BorderSide(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ),
-              ),
+              child: _AddExerciseButton(onPressed: _addExercise),
             ),
           ),
         ],
@@ -742,6 +577,237 @@ class _BottomSaveBar extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// AppBar reorder-MODE toggle — collapses the cards to draggable headers
+/// (Icons.reorder) and back (Icons.done). Only mounted when >1 exercise, so a
+/// single card can't reorder. Reuses the active-workout reorder l10n.
+class _ReorderToggle extends StatelessWidget {
+  const _ReorderToggle({required this.reorderMode, required this.onPressed});
+
+  final bool reorderMode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      identifier: 'create-routine-reorder-toggle',
+      label: reorderMode
+          ? l10n.exitReorderModeTooltip
+          : l10n.reorderExercisesTooltip,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(reorderMode ? Icons.done : Icons.reorder),
+        tooltip: reorderMode
+            ? l10n.exitReorderModeTooltip
+            : l10n.reorderExercisesTooltip,
+      ),
+    );
+  }
+}
+
+/// Header form — ROUTINE/NOTES section eyebrows + the name and notes fields.
+/// Each field keeps its custom char-counter (hidden until near the cap) and
+/// fires [onChanged] back to the screen so `_canSave` re-evaluates.
+class _RoutineHeaderForm extends StatelessWidget {
+  const _RoutineHeaderForm({
+    required this.nameController,
+    required this.notesController,
+    required this.autofocusName,
+    required this.onChanged,
+  });
+
+  final TextEditingController nameController;
+  final TextEditingController notesController;
+  final bool autofocusName;
+  final VoidCallback onChanged;
+
+  /// Uppercase section eyebrow above the name / notes fields (Phase 38h 2c).
+  Widget _sectionEyebrow(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 7),
+      child: Text(
+        label.toUpperCase(),
+        style: AppTextStyles.sectionHeader.copyWith(color: AppColors.hotViolet),
+      ),
+    );
+  }
+
+  /// Custom name counter — mirrors [_buildNotesCounter]: returns `null` (fully
+  /// collapsing the sub-row) until within ~10 of the cap, then the colored
+  /// "{current} / {max}" readout.
+  Widget? _buildNameCounter(BuildContext context, int currentLength) {
+    if (currentLength < _kRoutineNameCounterThreshold) {
+      return null;
+    }
+    final l10n = AppLocalizations.of(context);
+    final remaining = _kRoutineNameMaxLength - currentLength;
+    final Color color;
+    if (remaining <= 0) {
+      color = AppColors.error;
+    } else if (remaining <= 5) {
+      color = AppColors.warning;
+    } else {
+      color = AppColors.textDim;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        l10n.notesCharCounter(currentLength, _kRoutineNameMaxLength),
+        style: AppTextStyles.bodySmall.copyWith(color: color),
+      ),
+    );
+  }
+
+  /// Custom notes counter. Returns `null` (fully collapsing the counter
+  /// sub-row, so the field reserves no vertical gap for it) until the user is
+  /// within 100 chars of the cap, then "{current} / {max}" colored by
+  /// remaining headroom: textDim normally → warning at ≤30 remaining → error
+  /// at the cap (≤0). `null` (not `SizedBox.shrink()`) matches the
+  /// NotesEditSheet pattern and avoids InputDecorator's counter sub-row
+  /// padding entirely while the counter is hidden.
+  Widget? _buildNotesCounter(BuildContext context, int currentLength) {
+    if (currentLength < _kRoutineNotesCounterThreshold) {
+      return null;
+    }
+    final l10n = AppLocalizations.of(context);
+    final remaining = _kRoutineNotesMaxLength - currentLength;
+    final Color color;
+    if (remaining <= 0) {
+      color = AppColors.error;
+    } else if (remaining <= 30) {
+      color = AppColors.warning;
+    } else {
+      color = AppColors.textDim;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        l10n.notesCharCounter(currentLength, _kRoutineNotesMaxLength),
+        style: AppTextStyles.bodySmall.copyWith(color: color),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionEyebrow(l10n.routineSectionLabel),
+        TextField(
+          controller: nameController,
+          autofocus: autofocusName,
+          maxLength: _kRoutineNameMaxLength,
+          // Custom counter (see _buildNameCounter): hidden until cap.
+          buildCounter:
+              (
+                context, {
+                required currentLength,
+                required isFocused,
+                maxLength,
+              }) => _buildNameCounter(context, currentLength),
+          decoration: InputDecoration(hintText: l10n.routineName),
+          onChanged: (_) => onChanged(),
+        ),
+        const SizedBox(height: 16),
+        _sectionEyebrow(l10n.notesSectionLabel),
+        // Q2 routine notes — optional, multiline, flat field on
+        // surface2 (no Card chrome). Below name, above the list.
+        Semantics(
+          container: true,
+          identifier: 'create-routine-notes',
+          child: TextField(
+            controller: notesController,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: _kRoutineNotesMaxLength,
+            // Custom counter (see _buildNotesCounter): hide Material's
+            // default by returning null when below threshold.
+            buildCounter:
+                (
+                  context, {
+                  required currentLength,
+                  required isFocused,
+                  maxLength,
+                }) => _buildNotesCounter(context, currentLength),
+            decoration: InputDecoration(
+              hintText: l10n.routineNotesHint,
+              filled: true,
+              fillColor: AppColors.surface2,
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+/// RPG-voiced empty-state beat shown between the notes field and the add
+/// button when the routine has no exercises yet (Phase 38h 3d) — a center of
+/// gravity instead of a cold blank gap.
+class _EmptyExercisesBeat extends StatelessWidget {
+  const _EmptyExercisesBeat();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
+      child: Column(
+        children: [
+          Icon(
+            Icons.fitness_center,
+            size: 30,
+            color: AppColors.textDim.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.routineEmptyExercises,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.body.copyWith(color: AppColors.textDim),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full-width "+ Add exercise" outlined button below the exercise list.
+class _AddExerciseButton extends StatelessWidget {
+  const _AddExerciseButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: 'create-routine-add-exercise',
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.add),
+        label: Text(l10n.addExercise),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          side: BorderSide(
+            color: theme.colorScheme.primary.withValues(alpha: 0.5),
           ),
         ),
       ),
