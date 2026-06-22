@@ -476,7 +476,19 @@ runs, group specs explicitly or go to 5 shards.
 
 ### Architectural follow-ups (parked, no urgency)
 
-_None outstanding._ Recently closed:
+- **supabase_flutter 2.15 upgrade (deferred from the #386 dep batch, 2026-06-22)** —
+  `supabase_flutter` is pinned to **2.12.2** in pubspec.yaml because 2.15 (via `gotrue`
+  2.22's WebAuthn/passkey support) pulls in the new transitive `passkeys_web` plugin,
+  whose web registrant calls `window.PasskeyAuthenticator.init()` on a JS global that
+  isn't injected in our Flutter 3.41.6 build → **crashes web boot** (54 e2e splash-hang
+  failures; see cluster [[cluster-supabase-passkeys-web-boot-crash]]). To re-attempt:
+  (a) confirm the `passkeys_web` JS asset is wired into web bootstrap OR the passkey
+  path is disabled, (b) do the `anonKey → publishableKey` migration (2.15 deprecates
+  `anonKey`), (c) **gate on a real `flutter build web` + browser-boot check, not just
+  `flutter test`** — unit/widget tests don't boot the app so they can't catch this.
+  Unpin the version constraint when it lands.
+
+_Architectural follow-ups otherwise_ — recently closed:
 
 - **20-P-1** — post-completion hint persistence — dropped 2026-05-13. The
   entire per-row hint mechanic was removed in Phase 23 D4 (`set_row.dart:223`);
