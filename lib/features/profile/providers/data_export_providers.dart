@@ -46,16 +46,13 @@ final dataExportServiceProvider = Provider<DataExportService>((ref) {
   return DataExportService(Supabase.instance.client);
 });
 
-/// DI seam for the share sink. Defaults to `share_plus`'s `Share.shareXFiles`
-/// — same shape `ShareService._defaultFileShareSink` uses for the
-/// share-card flow. Overridden in widget tests with a fake that records the
-/// file/text payload without invoking the plugin channel.
-///
-/// Held at share_plus 10.x (see pubspec.yaml — 11.x bumps Dart min beyond
-/// 3.11.4).
+/// DI seam for the share sink. Defaults to `share_plus`'s
+/// `SharePlus.instance.share` — same shape `ShareService._defaultFileShareSink`
+/// uses for the share-card flow. Overridden in widget tests with a fake that
+/// records the file/text payload without invoking the plugin channel.
 final dataExportShareSinkProvider = Provider<DataExportShareSink>((ref) {
   return (List<XFile> files, {String? text}) =>
-      Share.shareXFiles(files, text: text);
+      SharePlus.instance.share(ShareParams(files: files, text: text));
 });
 
 /// Coordinator for the "Export my data" flow.
