@@ -11,7 +11,14 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  supabase_flutter: ^2.5.0
+  # Pinned to 2.12.2: supabase_flutter 2.15 (via gotrue 2.22) pulls in the
+  # `passkeys_web` transitive plugin whose web registrant calls
+  # `window.PasskeyAuthenticator.init()` at boot — that JS global is undefined
+  # in our build, throwing "Null check operator used on a null value" /
+  # "Cannot read properties of undefined (reading 'init')" before the router
+  # navigates, so the app hangs on splash. The 2.15 upgrade (publishableKey
+  # migration + passkeys handling) is a separate focused task.
+  supabase_flutter: 2.12.2
   flutter_riverpod: ^3.3.1
   riverpod_annotation: ^4.0.0
   go_router: ^17.0.0

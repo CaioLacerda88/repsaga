@@ -57,9 +57,7 @@ Future<void> main() async {
   await initSentryAndRun(() async {
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL']!,
-      // supabase_flutter 2.15 renamed `anonKey` → `publishableKey`; the legacy
-      // anon JWT is still accepted under the new param name (backward-compatible).
-      publishableKey: dotenv.env['SUPABASE_ANON_KEY']!,
+      anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
       ),
