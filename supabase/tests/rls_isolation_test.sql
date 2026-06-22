@@ -34,10 +34,12 @@
 --
 --   SEEDING strategy: rows are seeded as the bootstrap superuser (which
 --   BYPASSES RLS) so we can plant BOTH users' data regardless of the
---   per-table write policies. Several RPG tables (`xp_events`,
+--   per-table write policies. Several tables (`xp_events`,
 --   `body_part_progress`, `exercise_peak_loads`, `exercise_peak_loads_by_rep_range`,
---   `backfill_progress`) are SELECT-only for `authenticated` by design — all
---   writes flow through SECURITY DEFINER RPCs — so for those tables we assert
+--   `backfill_progress`, `vitality_runs`, `subscriptions`, `subscription_events`)
+--   are SELECT-only for `authenticated` by design — all
+--   writes flow through SECURITY DEFINER RPCs or service-role Edge Functions
+--   — so for those tables we assert
 --   the READ isolation contract only (that is the entire authenticated-role
 --   attack surface). Writable tables additionally assert INSERT/UPDATE/DELETE
 --   isolation.
@@ -59,7 +61,7 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 -- -----------------------------------------------------------------------------
 -- Plan: count every ok()/is()/throws-style assertion below.
 -- -----------------------------------------------------------------------------
-SELECT plan(49);
+SELECT plan(58);
 
 -- -----------------------------------------------------------------------------
 -- Fixed test user UUIDs. Two distinct users:
@@ -195,6 +197,38 @@ VALUES
   ('11111111-1111-1111-1111-111111111111', 'a_title', false),
   ('22222222-2222-2222-2222-222222222222', 'b_title', false);
 
+-- backfill_progress (SELECT-only for authenticated; PK user_id; writes via
+-- SECURITY DEFINER backfill procedure).
+INSERT INTO public.backfill_progress (user_id, sets_processed)
+VALUES
+  ('11111111-1111-1111-1111-111111111111', 5),
+  ('22222222-2222-2222-2222-222222222222', 5);
+
+-- vitality_runs (SELECT-only for authenticated; PK (user_id, run_date);
+-- writes via the nightly vitality Edge Function using service-role).
+INSERT INTO public.vitality_runs (user_id, run_date)
+VALUES
+  ('11111111-1111-1111-1111-111111111111', '2026-06-15'),
+  ('22222222-2222-2222-2222-222222222222', '2026-06-15');
+
+-- subscriptions (SELECT-only for authenticated; UNIQUE(user_id); writes via
+-- validate-purchase / rtdn-webhook Edge Functions using service-role).
+INSERT INTO public.subscriptions (id, user_id, product_id, purchase_token, state)
+VALUES
+  ('a0000000-0000-0000-0000-000000000a10', '11111111-1111-1111-1111-111111111111',
+   'premium_monthly', 'rls-a-token', 'active'),
+  ('b0000000-0000-0000-0000-000000000a10', '22222222-2222-2222-2222-222222222222',
+   'premium_monthly', 'rls-b-token', 'active');
+
+-- subscription_events (SELECT-only for authenticated; append-only audit log;
+-- writes via Edge Functions using service-role).
+INSERT INTO public.subscription_events (id, user_id, purchase_token, notification_type, event_time)
+VALUES
+  ('a0000000-0000-0000-0000-000000000a11', '11111111-1111-1111-1111-111111111111',
+   'rls-a-token', 'SUBSCRIPTION_PURCHASED', now()),
+  ('b0000000-0000-0000-0000-000000000a11', '22222222-2222-2222-2222-222222222222',
+   'rls-b-token', 'SUBSCRIPTION_PURCHASED', now());
+
 -- =============================================================================
 -- ASSERTIONS — each table: positive (own rows visible/writable) + negative
 -- (other user's rows invisible / unwritable). The NEGATIVE assertions ARE the
@@ -325,6 +359,46 @@ SELECT is(
      WHERE user_id = '22222222-2222-2222-2222-222222222222'),
   0, 'earned_titles: A CANNOT see B''s title (isolation)');
 
+-- ----- backfill_progress (SELECT-only) -----
+SELECT is(
+  (SELECT count(*)::int FROM public.backfill_progress
+     WHERE user_id = '11111111-1111-1111-1111-111111111111'),
+  1, 'backfill_progress: A sees A''s own progress');
+SELECT is(
+  (SELECT count(*)::int FROM public.backfill_progress
+     WHERE user_id = '22222222-2222-2222-2222-222222222222'),
+  0, 'backfill_progress: A CANNOT see B''s progress (isolation)');
+
+-- ----- vitality_runs (SELECT-only) -----
+SELECT is(
+  (SELECT count(*)::int FROM public.vitality_runs
+     WHERE user_id = '11111111-1111-1111-1111-111111111111'),
+  1, 'vitality_runs: A sees A''s own run');
+SELECT is(
+  (SELECT count(*)::int FROM public.vitality_runs
+     WHERE user_id = '22222222-2222-2222-2222-222222222222'),
+  0, 'vitality_runs: A CANNOT see B''s run (isolation)');
+
+-- ----- subscriptions (SELECT-only) -----
+SELECT is(
+  (SELECT count(*)::int FROM public.subscriptions
+     WHERE user_id = '11111111-1111-1111-1111-111111111111'),
+  1, 'subscriptions: A sees A''s own subscription');
+SELECT is(
+  (SELECT count(*)::int FROM public.subscriptions
+     WHERE user_id = '22222222-2222-2222-2222-222222222222'),
+  0, 'subscriptions: A CANNOT see B''s subscription (isolation)');
+
+-- ----- subscription_events (SELECT-only) -----
+SELECT is(
+  (SELECT count(*)::int FROM public.subscription_events
+     WHERE user_id = '11111111-1111-1111-1111-111111111111'),
+  1, 'subscription_events: A sees A''s own event');
+SELECT is(
+  (SELECT count(*)::int FROM public.subscription_events
+     WHERE user_id = '22222222-2222-2222-2222-222222222222'),
+  0, 'subscription_events: A CANNOT see B''s event (isolation)');
+
 -- =============================================================================
 -- WRITE isolation — for the writable owner-scoped tables, prove A's writes to
 -- B's rows affect ZERO rows (UPDATE/DELETE silently match nothing under RLS)
@@ -344,6 +418,18 @@ WITH upd AS (
   WHERE id = 'b0000000-0000-0000-0000-000000000a01' RETURNING 1)
 SELECT is((SELECT count(*)::int FROM upd), 0,
   'workouts: A''s UPDATE of B''s workout affects 0 rows (write isolation)');
+
+-- Make "0 rows affected" mean "row truly untouched": read B's row AS THE
+-- BOOTSTRAP SUPERUSER (bypasses RLS) and assert its name is still the seeded
+-- value, not 'HACKED'. The 0-affected count alone leaves "untouched" implicit;
+-- this pins it explicitly for one representative writable table.
+RESET role;  -- superuser read to inspect B's true row state
+SELECT is(
+  (SELECT name FROM public.workouts WHERE id = 'b0000000-0000-0000-0000-000000000a01'),
+  'B Workout',
+  'workouts: B''s row value is intact after A''s blocked UPDATE (truly untouched)');
+SET LOCAL role authenticated;  -- re-establish actor A for the remaining write block
+SET LOCAL request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}';
 
 WITH del AS (
   DELETE FROM public.workouts
