@@ -201,6 +201,14 @@ jobs:
         # excluded here. Run them locally via `make test-integration`.
         run: flutter test --coverage --exclude-tags integration
 
+      - name: Check coverage floor
+        # Phase 38.9 T2.1 — self-contained line-coverage gate (no external
+        # service or secret). Parses the lcov.info produced by the step above
+        # and fails if overall line coverage drops below the committed floor.
+        # The floor is stored in the script itself; see
+        # scripts/check_coverage_floor.sh header for how to raise it.
+        run: bash scripts/check_coverage_floor.sh
+
   build:
     runs-on: ubuntu-latest
     needs: analyze
@@ -467,11 +475,63 @@ jobs:
         # `not ok` assertion OR a plan-count mismatch — both fail the pipeline.
         run: supabase test db
 
+  layering-check:
+    # Phase 38.9 T2.3 — architectural layering gate.
+    # Fails if any Dart file under lib/ OUTSIDE a data/ directory contains a
+    # Supabase table call (.from('…')) or RPC call (.rpc('…')) in
+    # string-literal form. This enforces that all data-access logic lives in
+    # repository classes (lib/**/data/) and does not leak into providers,
+    # widgets, or domain models.
+    #
+    # Pure bash/grep — no Flutter SDK needed. Runs in parallel with analyze/
+    # test/build to avoid adding to the critical path.
+    #
+    # The only current allowed exception is lib/core/offline/health_check_provider.dart
+    # (infra connectivity probe — see script ALLOW_LIST and its documented
+    # justification). All other files outside data/ must not call .from() or
+    # .rpc() with string literal arguments.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Check no Supabase calls outside data layer
+        run: bash scripts/check_no_supabase_outside_data.sh
+
+  osv-scanner:
+    # Phase 38.9 T2.2 — dependency vulnerability scanning.
+    # Scans pubspec.lock with osv-scanner to detect known vulnerabilities in
+    # Flutter/Dart transitive dependencies. Uses the official Google OSV
+    # Scanner GitHub Action.
+    #
+    # Pre-existing advisories with no available fix are ignored via
+    # .osv-scanner.toml so they don't block main spuriously. Any new advisory
+    # that ships a fixed version will trip this gate and must be resolved.
+    #
+    # Runs in parallel with other jobs (no Flutter SDK needed).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run OSV Scanner
+        # Scans pubspec.lock for known vulnerabilities. Fails on any finding
+        # that is NOT listed in .osv-scanner.toml (the ignore-list file).
+        # Pre-existing advisories with no available fix belong in .osv-scanner.toml
+        # with a dated comment and tracking URL — see that file's header.
+        uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --config=.osv-scanner.toml
+            --lockfile=pubspec.lock
+
   ci:
     name: ci
     runs-on: ubuntu-latest
     if: always()
-    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests, integration-test, rls-tests]
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests, integration-test, rls-tests, layering-check, osv-scanner]
     steps:
       - name: Check all jobs passed
         run: |
@@ -483,7 +543,9 @@ jobs:
                 "${{ needs.build.result }}" != "success" || \
                 "${{ needs.deno-tests.result }}" != "success" || \
                 "${{ needs.integration-test.result }}" != "success" || \
-                "${{ needs.rls-tests.result }}" != "success" ]]; then
+                "${{ needs.rls-tests.result }}" != "success" || \
+                "${{ needs.layering-check.result }}" != "success" || \
+                "${{ needs.osv-scanner.result }}" != "success" ]]; then
             echo "One or more required jobs failed or were skipped"
             echo "  exercise-translation-coverage-check:        ${{ needs.exercise-translation-coverage-check.result }}"
             echo "  exercise-difficulty-mult-coverage-check:    ${{ needs.exercise-difficulty-mult-coverage-check.result }}"
@@ -494,6 +556,8 @@ jobs:
             echo "  deno-tests:                                 ${{ needs.deno-tests.result }}"
             echo "  integration-test:                           ${{ needs.integration-test.result }}"
             echo "  rls-tests:                                  ${{ needs.rls-tests.result }}"
+            echo "  layering-check:                             ${{ needs.layering-check.result }}"
+            echo "  osv-scanner:                                ${{ needs.osv-scanner.result }}"
             exit 1
           fi
           echo "All required jobs passed"

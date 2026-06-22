@@ -1,0 +1,44 @@
+# Dependabot auto-update configuration.
+#
+# Two ecosystems:
+#   1. pub — Flutter/Dart package dependencies (pubspec.yaml / pubspec.lock).
+#      Weekly schedule to avoid PR churn. Limit 5 open PRs to keep the queue
+#      manageable; maintainers review + merge before new ones open.
+#   2. github-actions — first-party Actions (actions/checkout, subosito/flutter-action,
+#      etc.) pinned to major-version tags. Weekly bumps ensure we pick up
+#      Node.js runtime upgrades automatically rather than drifting behind.
+#      Limit 5 open PRs.
+#
+# Auto-updates only open PRs — they do NOT auto-merge. Each PR still goes
+# through the normal CI pipeline (ci.yml) before a maintainer merges.
+
+version: 2
+
+updates:
+  - package-ecosystem: pub
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "dart"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"

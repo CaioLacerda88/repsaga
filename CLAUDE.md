@@ -190,6 +190,15 @@ Each PROJECT.md step follows this pipeline. **No step is skippable.**
 10. **Verify after QA + visuals** — `make ci` + E2E green + visuals match. Final check before merge.
 11. **Ship** — QA OK + CI green + visuals match → squash merge.
 12. **Apply migrations** — After merge, check if the phase added/modified SQL migrations (`supabase/migrations/`). If so, apply them to the hosted Supabase instance with `npx supabase db push` (or link + push). Verify the schema matches what the code expects before moving on. During QA/testing, always confirm that any new migrations have been applied to the environment under test.
+
+   **Forward-fix convention:** We never write down-migrations. A migration that has been applied to any environment (local or hosted) is immutable — `supabase db push` has no safe "undo." If a bad migration slips through, the fix is a NEW forward migration that corrects the schema, never an in-place edit or git-revert of an applied file. This keeps the migration log append-only and prevents `supabase db push` from desync-ing between environments.
+
+   **Pre-push checklist for launch-critical migrations** (schema drops, column renames, constraint changes, data backfills):
+   - Confirm Supabase's automatic PITR/backup window covers the moment of push (Supabase Pro keeps 7-day PITR; check the dashboard → Settings → Backups before pushing).
+   - For extra safety on destructive operations: `pg_dump --schema-only -d "$DATABASE_URL" > backup_pre_push_$(date +%Y%m%d_%H%M).sql` and keep it locally until the post-push smoke check passes.
+   - Run the migration against the local Supabase first (`supabase db push --local` or apply via `supabase start` + verify) before touching the hosted instance.
+   - Have the corrective forward migration written and reviewed BEFORE pushing, so recovery is one command away if the push breaks the live schema.
+
 13. **Close WIP** — Remove WIP section, condense phase in PROJECT.md §4 (see lifecycle below).
 
 ### Pipeline exceptions
