@@ -412,11 +412,66 @@ jobs:
           SUPABASE_URL: http://localhost:54321
         run: deno test --allow-net --allow-env "supabase/functions/**/*.test.ts"
 
+  rls-tests:
+    # Cross-user RLS isolation gate (Phase 38.9 T1.3). RLS is ENABLEd on every
+    # user-data table but, until this job existed, nothing verified the
+    # policies' BEHAVIOR — that user A cannot read/write user B's rows. This
+    # closes the #1 audit gap AND pins the current isolation contract so the
+    # first cross-user RLS in Phase 40 can't silently widen read access.
+    #
+    # APPROACH: pgTAP via `supabase test db` against the LOCAL Supabase the
+    # pipeline already boots — NOT a hosted test instance (the previous
+    # commented stub needed TEST_SUPABASE_* secrets that don't exist). Tests
+    # live in supabase/tests/*.sql and are wholly self-contained / secret-free.
+    # `supabase test db` runs each file in a transaction it rolls back, so the
+    # two seeded auth users never persist.
+    #
+    # Mirrors the integration-test Supabase-boot pattern (setup-cli@latest →
+    # start → wait-for-ready probe) but needs NO Flutter: pgTAP runs entirely
+    # in Postgres. `supabase start` auto-applies supabase/migrations/, so the
+    # explicit GRANT migration that fixed the supabase-cli-latest-grant-drift
+    # cluster is always in place — a regression there would fail the positive
+    # (own-row) assertions with 42501 rather than passing silently.
+    #
+    # A RED run here is a real RLS hole (one user reading/writing another's
+    # data), never a flaky test — the fix is the policy, never the assertion.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Wait for Supabase database to be ready
+        run: |
+          echo "Waiting for Supabase REST API to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:54321/auth/v1/settings > /dev/null 2>&1; then
+              echo "Auth endpoint ready on attempt $i"
+              break
+            fi
+            echo "Waiting for auth endpoint... (attempt $i/30)"
+            sleep 2
+            if [ "$i" -eq 30 ]; then echo "ERROR: Supabase never became ready"; exit 1; fi
+          done
+
+      - name: Run RLS isolation tests (pgTAP)
+        # Runs every supabase/tests/*.sql via pg_prove. Exits non-zero on any
+        # `not ok` assertion OR a plan-count mismatch — both fail the pipeline.
+        run: supabase test db
+
   ci:
     name: ci
     runs-on: ubuntu-latest
     if: always()
-    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests, integration-test]
+    needs: [exercise-translation-coverage-check, exercise-difficulty-mult-coverage-check, workout-template-translation-coverage-check, analyze, test, build, deno-tests, integration-test, rls-tests]
     steps:
       - name: Check all jobs passed
         run: |
@@ -427,7 +482,8 @@ jobs:
                 "${{ needs.test.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
                 "${{ needs.deno-tests.result }}" != "success" || \
-                "${{ needs.integration-test.result }}" != "success" ]]; then
+                "${{ needs.integration-test.result }}" != "success" || \
+                "${{ needs.rls-tests.result }}" != "success" ]]; then
             echo "One or more required jobs failed or were skipped"
             echo "  exercise-translation-coverage-check:        ${{ needs.exercise-translation-coverage-check.result }}"
             echo "  exercise-difficulty-mult-coverage-check:    ${{ needs.exercise-difficulty-mult-coverage-check.result }}"
@@ -437,19 +493,7 @@ jobs:
             echo "  build:                                      ${{ needs.build.result }}"
             echo "  deno-tests:                                 ${{ needs.deno-tests.result }}"
             echo "  integration-test:                           ${{ needs.integration-test.result }}"
+            echo "  rls-tests:                                  ${{ needs.rls-tests.result }}"
             exit 1
           fi
           echo "All required jobs passed"
-
-  # Uncomment when test Supabase instance is configured
-  # rls-tests:
-  #   runs-on: ubuntu-latest
-  #   needs: ci
-  #   env:
-  #     SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
-  #     SUPABASE_SERVICE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_KEY }}
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - uses: supabase/setup-cli@v1
-  #     - name: Run RLS tests
-  #       run: supabase test db
