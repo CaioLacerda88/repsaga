@@ -1694,11 +1694,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // the queue then logged a structural failure no user could fix.
         //
         // Contract:
-        //   - terminal (4xx, RLS, FK) → rethrow so the outer AsyncValue.guard
-        //     lands in AsyncError; the coordinator's `asyncState.hasError`
-        //     branch shows the localized "Failed to save workout" snackbar
-        //     and the user keeps their unsaved local state.
-        //   - transient (offline, timeout, 5xx, unknown) → enqueue.
+        //   - terminal (deterministic data/permission failure — malformed
+        //     payload 22P02, constraint 235xx, RLS 42501, missing schema
+        //     object 42P01/42703, or PGRST* request error) → rethrow so the
+        //     outer AsyncValue.guard lands in AsyncError; the coordinator's
+        //     `asyncState.hasError` branch shows the localized "Failed to save
+        //     workout" snackbar and the user keeps their unsaved local state.
+        //     SyncErrorClassifier.isTerminal keys on the SQLSTATE/PGRST code,
+        //     NOT an HTTP int (PostgrestException.code is the SQLSTATE).
+        //   - transient (offline, timeout, 5xx, serialization/deadlock,
+        //     unknown) → enqueue.
         //   - 5xx specifically sets `serverErrorQueued = true` so the UI can
         //     pick a "server error — saved offline, will retry" copy variant
         //     (Q1.3 in the impact analysis).
@@ -1717,14 +1722,14 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
         // 5xx is transient (queue) but distinct from connectivity failure;
         // the queue still retries, but the UI tells the user it was a server
         // problem so a "Pending sync (1)" badge is not misleading.
-        // [SyncErrorClassifier.httpCode] recognises both the raw
-        // [supabase.PostgrestException] and the [BaseRepository]-mapped
-        // [app.DatabaseException] / [app.AuthException] forms — the
-        // production catch site sees the wrapped variant, but routing
-        // through the canonical helper keeps the discriminator robust if a
-        // future repository forgets to wrap or if a new code-bearing shape
-        // is added to [SyncErrorClassifier.isTerminal] without updating
-        // every call site.
+        // [SyncErrorClassifier.httpCode] yields a numeric HTTP status ONLY
+        // for shapes that actually carry one — i.e. the [app.AuthException] /
+        // [supabase.AuthException] forms whose code is the gotrue HTTP
+        // `statusCode`. [PostgrestException]/[app.DatabaseException] carry the
+        // SQLSTATE/PGRST code (non-numeric), so this branch never trips for
+        // them — which is correct: a real Postgrest 5xx surfaces as a
+        // transport-layer Socket/Http exception, not a Postgrest error. This
+        // is a copy-variant selector only (no data-correctness impact).
         final code = SyncErrorClassifier.httpCode(e);
         if (code != null && code >= 500 && code < 600) {
           serverErrorQueued = true;
