@@ -228,6 +228,7 @@ Key relationships — read migration files in `supabase/migrations/` for full DD
 
 - **Localized exercise content:** `exercises` carries `slug` + structural fields; display strings live in `exercise_translations(exercise_id, locale)`. Fallback cascade `p_locale → 'en' → any`. See Phase 15f for the contract and CLAUDE.md → Exercise content translation coverage rule for the CI gate.
 - **RPG:** `body_part_progress` is current state per (user, body_part); `xp_events` is the immutable per-set ledger; `character_state` view derives Character Level + dominant rank + class.
+- **Critical RPCs:** `save_workout` + `record_session_xp_batch` are each redefined verbatim across ~6 migrations. For the CURRENT canonical behavior (signature, step-by-step, invariants, migration lineage) without diffing every migration, see [`docs/canonical-rpc-definitions.md`](canonical-rpc-definitions.md).
 - **Subscriptions:** `entitlements` view derives state from `subscriptions` row; client reads view only, all writes go through Edge Functions using service role. See the Launch Phase entry in §5 (formerly Phase 16) for the full lifecycle.
 - **RLS:** All user data scoped by `user_id = auth.uid()`. Default exercises/templates readable by all. Subscription tables SELECT-only for clients.
 
