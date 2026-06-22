@@ -67,11 +67,23 @@ abstract final class SyncErrorClassifier {
     'deserialization',
   };
 
-  /// `true` when [code] is a PostgREST request/schema-cache error
-  /// (`PGRST100`, `PGRST202`, `PGRST204`, …). These are deterministic
-  /// malformed-request / missing-RPC / stale-schema-cache failures — an
-  /// identical replay reproduces them, so they are terminal.
-  static bool _isTerminalPgrst(String code) => code.startsWith('PGRST');
+  /// `true` when [code] is a PostgREST request/schema-cache/JWT error
+  /// (`PGRST1xx` malformed request, `PGRST2xx` schema cache, `PGRST3xx` JWT) —
+  /// deterministic malformed-request / missing-RPC / stale-schema-cache
+  /// failures that an identical replay reproduces, so they are terminal.
+  ///
+  /// **Carve-out — the `PGRST0xx` connection family is TRANSIENT**, not
+  /// terminal: `PGRST000` (could not connect), `PGRST001` (internal pool
+  /// error), `PGRST002` (schema cache load failed), `PGRST003` (timed out
+  /// acquiring a pooled connection) all resolve on their own once the DB /
+  /// pool recovers. In practice these surface as a transport
+  /// `SocketException`/`TimeoutException` before a `PGRST0xx` body is ever
+  /// parsed, so this carve-out is belt-and-suspenders — but it keeps the
+  /// "only deterministic-replay-failures are terminal" invariant airtight if
+  /// one ever does arrive as a structured code. cluster:
+  /// classifier-keyed-on-http-not-sqlstate.
+  static bool _isTerminalPgrst(String code) =>
+      code.startsWith('PGRST') && !code.startsWith('PGRST0');
 
   static bool _isTerminalCode(String code) =>
       _terminalSqlStates.contains(code) || _isTerminalPgrst(code);

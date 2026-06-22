@@ -97,6 +97,20 @@ void main() {
         expect(SyncErrorClassifier.isTerminal(error), isTrue);
       });
 
+      test(
+        'returns false for PGRST0xx connection family (transient, retryable)',
+        () {
+          // PGRST003 = timed out acquiring a pooled connection; the PGRST0xx
+          // connection group resolves once the DB/pool recovers, so it must
+          // NOT be swept into terminal alongside PGRST1xx/2xx/3xx.
+          const error = supabase.PostgrestException(
+            message: 'Timed out acquiring connection from the pool',
+            code: 'PGRST003',
+          );
+          expect(SyncErrorClassifier.isTerminal(error), isFalse);
+        },
+      );
+
       // --- Transient SQLSTATEs (retry can succeed — must NOT be terminal)
       test('returns false for 40001 serialization_failure (retryable)', () {
         const error = supabase.PostgrestException(
@@ -364,6 +378,18 @@ void main() {
       test('returns true for 5xx wrapped app.DatabaseException', () {
         const error = app.DatabaseException('ISE', code: '500');
         expect(SyncErrorClassifier.isNetworkClass(error), isTrue);
+      });
+
+      test('returns false for an all-digit SQLSTATE that parses but is not 5xx '
+          '(42501 RLS denial)', () {
+        // 42501 happens to int.tryParse to 42501 — but it is a Postgres
+        // SQLSTATE (insufficient_privilege), NOT an HTTP status. Pin that it
+        // stays OUT of the 500-599 server-class window so a future edit to
+        // that range can't silently turn an all-digit SQLSTATE into a false
+        // network-class / server-error-copy classification.
+        const error = app.DatabaseException('RLS denied', code: '42501');
+        expect(SyncErrorClassifier.httpCode(error), 42501);
+        expect(SyncErrorClassifier.isNetworkClass(error), isFalse);
       });
 
       test(
