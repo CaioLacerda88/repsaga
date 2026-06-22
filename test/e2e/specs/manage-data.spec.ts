@@ -461,6 +461,13 @@ test.describe('Account deletion', { tag: '@smoke' }, () => {
 // =============================================================================
 
 test.describe('Manage Data', () => {
+  // Belt-and-suspenders: this block's tests are destructive (Reset All /
+  // delete-history flows mutate the shared fullManageData user's state) and
+  // lean on reseed-idempotency in beforeEach. Serial mode guarantees no two
+  // tests race the same reset under --workers>1 / --repeat-each — cluster
+  // e2e-spec-state-leak-across-tests.
+  test.describe.configure({ mode: 'serial' });
+
   // Tests that call doWorkoutAndReturnHome run a full workout cycle (Phase 18c
   // overlays + celebrations can queue), so the suite needs the extended 180s
   // budget to stay stable under --repeat-each.

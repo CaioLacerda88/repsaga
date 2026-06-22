@@ -1,39 +1,85 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:repsaga/features/rpg/data/rank_up_pulse_local_storage.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/models/celebration_event.dart';
 import 'package:repsaga/features/rpg/models/character_class.dart';
 import 'package:repsaga/features/workouts/ui/coordinators/celebration_orchestrator.dart';
 
-class _MockPulseStorage extends Mock implements RankUpPulseLocalStorage {}
+/// A real [RankUpPulseLocalStorage] that injects a write failure for one
+/// designated body part — simulating a Hive disk-full / corrupted-box error
+/// on a single key while letting every other write land in the real box.
+///
+/// This lets the failure-isolation test assert the OBSERVABLE outcome: the
+/// surviving writes are actually readable via `isPulsing`, not merely that
+/// "the mock method was called".
+class _FailOnBodyPartStorage extends RankUpPulseLocalStorage {
+  _FailOnBodyPartStorage({required this.failOn});
+
+  final BodyPart failOn;
+
+  @override
+  Future<void> recordRankUp(BodyPart bodyPart, {DateTime? at}) async {
+    if (bodyPart == failOn) {
+      throw Exception('simulated hive write failure for ${bodyPart.dbValue}');
+    }
+    return super.recordRankUp(bodyPart, at: at);
+  }
+}
 
 void main() {
-  setUpAll(() {
-    registerFallbackValue(BodyPart.chest);
+  late Directory tempDir;
+
+  setUp(() async {
+    // Real Hive box on a temp dir (same pattern as
+    // rank_up_pulse_local_storage_test.dart). Pure unit tests can't call
+    // Hive.initFlutter() — that needs path_provider, which has no host-VM
+    // implementation. Cluster: hive-testwidgets (init must precede openBox).
+    tempDir = await Directory.systemTemp.createTemp('celebration_orch_test_');
+    Hive.init(tempDir.path);
+    await Hive.openBox<dynamic>(RankUpPulseLocalStorage.boxName);
+    await Hive.box<dynamic>(RankUpPulseLocalStorage.boxName).clear();
+  });
+
+  tearDown(() async {
+    await Hive.close();
+    await tempDir.delete(recursive: true);
   });
 
   group('CelebrationOrchestrator.recordRankUpPulses', () {
-    test('writes one pulse per RankUpEvent in the queue', () async {
-      final storage = _MockPulseStorage();
-      when(() => storage.recordRankUp(any())).thenAnswer((_) async {});
+    // The behavioral contract under test: after recordRankUpPulses runs, the
+    // pulse the UI (BodyPartRankRow) reads via isPulsing() is actually
+    // present for each ranked-up body part. We assert the surfaced state, not
+    // the storage call.
+    test(
+      'records a readable pulse for every RankUpEvent in the queue',
+      () async {
+        final storage = RankUpPulseLocalStorage();
+        final now = DateTime(2026, 6, 15, 10, 0);
 
-      await CelebrationOrchestrator.recordRankUpPulses(
-        queue: const [
-          CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 4),
-          CelebrationEvent.rankUp(bodyPart: BodyPart.back, newRank: 3),
-          CelebrationEvent.levelUp(newLevel: 12),
-        ],
-        pulseStorage: storage,
-      );
+        await CelebrationOrchestrator.recordRankUpPulses(
+          queue: const [
+            CelebrationEvent.rankUp(bodyPart: BodyPart.chest, newRank: 4),
+            CelebrationEvent.rankUp(bodyPart: BodyPart.back, newRank: 3),
+            CelebrationEvent.levelUp(newLevel: 12),
+          ],
+          pulseStorage: storage,
+        );
 
-      verify(() => storage.recordRankUp(BodyPart.chest)).called(1);
-      verify(() => storage.recordRankUp(BodyPart.back)).called(1);
-      verifyNoMoreInteractions(storage);
-    });
+        // The pulses the UI will read are present for both ranked-up parts.
+        expect(storage.isPulsing(BodyPart.chest, now: now), isTrue);
+        expect(storage.isPulsing(BodyPart.back, now: now), isTrue);
+        // The level-up event ranked up nothing, so its incidental body parts
+        // do not pulse.
+        expect(storage.isPulsing(BodyPart.legs, now: now), isFalse);
+      },
+    );
 
-    test('writes nothing when the queue has no RankUpEvents', () async {
-      final storage = _MockPulseStorage();
+    test('records no pulses when the queue has no RankUpEvents', () async {
+      final storage = RankUpPulseLocalStorage();
+      final now = DateTime(2026, 6, 15, 10, 0);
 
       await CelebrationOrchestrator.recordRankUpPulses(
         queue: const [
@@ -46,7 +92,14 @@ void main() {
         pulseStorage: storage,
       );
 
-      verifyZeroInteractions(storage);
+      // No body part surfaces a pulse — nothing in the queue ranked up.
+      for (final bodyPart in BodyPart.values) {
+        expect(
+          storage.isPulsing(bodyPart, now: now),
+          isFalse,
+          reason: '${bodyPart.dbValue} must not pulse without a RankUpEvent',
+        );
+      }
     });
 
     test(
@@ -54,14 +107,11 @@ void main() {
       () async {
         // Documented limitation: OverflowPayload carries only a count, not
         // body parts. By tightening the signature to take just `queue`, this
-        // is now structurally enforced — the helper can't see the overflow
-        // even if it wanted to. Test pins the behavior: passing a queue with
-        // 1 RankUpEvent yields exactly 1 pulse write, regardless of what the
-        // hypothetical overflow looked like.
-        final storage = _MockPulseStorage();
-        // Generic stub so the chest call below resolves; overflow body parts
-        // never reach the storage (helper iterates only the queue list).
-        when(() => storage.recordRankUp(any())).thenAnswer((_) async {});
+        // is structurally enforced — the helper can't see the overflow even
+        // if it wanted to. We pin the behavior: a queue with one RankUpEvent
+        // surfaces exactly that one body part's pulse, no more.
+        final storage = RankUpPulseLocalStorage();
+        final now = DateTime(2026, 6, 15, 10, 0);
 
         await CelebrationOrchestrator.recordRankUpPulses(
           queue: const [
@@ -70,8 +120,13 @@ void main() {
           pulseStorage: storage,
         );
 
-        verify(() => storage.recordRankUp(BodyPart.chest)).called(1);
-        verifyNoMoreInteractions(storage);
+        expect(storage.isPulsing(BodyPart.chest, now: now), isTrue);
+        // Every other body part — including any that a hypothetical overflow
+        // might have carried — stays unpulsed.
+        for (final bodyPart in BodyPart.values) {
+          if (bodyPart == BodyPart.chest) continue;
+          expect(storage.isPulsing(bodyPart, now: now), isFalse);
+        }
       },
     );
 
@@ -80,18 +135,12 @@ void main() {
       () async {
         // Critical contract: per-iteration try/catch ensures one bad write
         // (Hive disk-full / corrupted box) doesn't skip the remaining body
-        // parts. The plan called this fire-and-forget; this test pins the
-        // behavior so a future refactor can't silently re-introduce the
-        // post-workout-flow abort hazard.
-        final storage = _MockPulseStorage();
-        when(
-          () => storage.recordRankUp(BodyPart.chest),
-        ).thenThrow(Exception('simulated hive write failure'));
-        when(
-          () => storage.recordRankUp(BodyPart.back),
-        ).thenAnswer((_) async {});
+        // parts. We inject a real write failure on chest and assert the
+        // OBSERVABLE survivor: back's pulse is actually readable afterward.
+        final storage = _FailOnBodyPartStorage(failOn: BodyPart.chest);
+        final now = DateTime(2026, 6, 15, 10, 0);
 
-        // Must not throw — the helper swallows the exception per the
+        // Must not throw — the helper swallows the per-write exception per the
         // fire-and-forget contract.
         await CelebrationOrchestrator.recordRankUpPulses(
           queue: const [
@@ -101,9 +150,11 @@ void main() {
           pulseStorage: storage,
         );
 
-        // Both writes were attempted — the failure on chest did not skip back.
-        verify(() => storage.recordRankUp(BodyPart.chest)).called(1);
-        verify(() => storage.recordRankUp(BodyPart.back)).called(1);
+        // Chest's write failed — no pulse surfaces for it.
+        expect(storage.isPulsing(BodyPart.chest, now: now), isFalse);
+        // Back came AFTER chest in the queue: the failure did not abort the
+        // loop, so back's pulse is present and readable by the UI.
+        expect(storage.isPulsing(BodyPart.back, now: now), isTrue);
       },
     );
   });

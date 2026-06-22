@@ -3,8 +3,6 @@
 /// Verifies that:
 ///   - `startRoutineWorkout` shows a snackbar when offline (isOnlineProvider
 ///     returns false) and does NOT call startFromRoutine.
-///   - `_startQuickWorkout` (via ActionHero) shows a snackbar when offline and
-///     does NOT call startWorkout.
 library;
 
 import 'package:flutter/material.dart';
@@ -14,17 +12,11 @@ import 'package:go_router/go_router.dart';
 import 'package:repsaga/core/connectivity/connectivity_provider.dart';
 import 'package:repsaga/core/theme/app_theme.dart';
 import 'package:repsaga/features/routines/models/routine.dart';
-import 'package:repsaga/features/routines/providers/notifiers/routine_list_notifier.dart';
 import 'package:repsaga/features/routines/ui/start_routine_action.dart';
-import 'package:repsaga/features/weekly_plan/providers/weekly_plan_provider.dart';
 import 'package:repsaga/features/workouts/data/workout_local_storage.dart';
 import 'package:repsaga/features/workouts/data/workout_repository.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
-import 'package:repsaga/features/workouts/models/routine_start_config.dart';
-import 'package:repsaga/features/workouts/providers/workout_history_providers.dart';
 import 'package:repsaga/features/workouts/providers/workout_providers.dart';
-import 'package:repsaga/features/workouts/ui/widgets/action_hero.dart';
-import 'package:repsaga/features/weekly_plan/data/models/weekly_plan.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../../../fixtures/test_factories.dart';
@@ -40,53 +32,6 @@ class MockWorkoutRepository extends Mock implements WorkoutRepository {}
 class MockWorkoutLocalStorage extends Mock implements WorkoutLocalStorage {}
 
 class FakeActiveWorkoutState extends Fake implements ActiveWorkoutState {}
-
-// ---------------------------------------------------------------------------
-// Stubs for ActionHero harness
-// ---------------------------------------------------------------------------
-
-/// Minimal plan stub: always resolves to null (no active plan) so ActionHero
-/// enters the lapsed/brand-new branch based on workoutCount alone.
-class _NullPlanStub extends AsyncNotifier<WeeklyPlan?>
-    implements WeeklyPlanNotifier {
-  @override
-  Future<WeeklyPlan?> build() async => null;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// Empty routine list — not needed for the offline guard path but required so
-/// ActionHero's _BrandNewHero / _LapsedHero branches don't crash.
-class _EmptyRoutineListStub extends AsyncNotifier<List<Routine>>
-    implements RoutineListNotifier {
-  @override
-  Future<List<Routine>> build() async => const [];
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// Tracks whether startWorkout was called. Used to assert the offline guard
-/// blocks the call.
-class _TrackingActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?>
-    implements ActiveWorkoutNotifier {
-  int startWorkoutCallCount = 0;
-
-  @override
-  Future<ActiveWorkoutState?> build() async => null;
-
-  @override
-  Future<void> startWorkout([String? name]) async {
-    startWorkoutCallCount++;
-  }
-
-  @override
-  Future<void> startFromRoutine(RoutineStartConfig config) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -286,102 +231,4 @@ void main() {
       );
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // ActionHero._startQuickWorkout — offline guard
-  //
-  // _startQuickWorkout is a private method on ActionHero (lapsed-state path).
-  // It shares the same guard pattern as startRoutineWorkout but lives in a
-  // different file and a different widget tree. Testing it separately ensures
-  // neither copy can be removed without a test failure catching the regression.
-  // ---------------------------------------------------------------------------
-
-  group(
-    'ActionHero._startQuickWorkout — offline guard',
-    // Phase 26f T10 collapsed ActionHero from 4 branches to 3 and removed
-    // the legacy `_LapsedHero` that surfaced the "Quick workout" secondary
-    // button. T12 deletes this group once `_startQuickWorkout` is fully
-    // unused; until then we skip it so the rest of the offline-guard
-    // contract (startRoutineWorkout) stays under test.
-    skip: 'Retired in T12 — Quick workout button removed in 26f',
-    () {
-      late _TrackingActiveWorkoutNotifier trackingNotifier;
-
-      setUp(() {
-        trackingNotifier = _TrackingActiveWorkoutNotifier();
-      });
-
-      Future<void> pumpActionHeroLapsed(
-        WidgetTester tester, {
-        required bool isOnline,
-      }) async {
-        final router = GoRouter(
-          initialLocation: '/home',
-          routes: [
-            GoRoute(
-              path: '/home',
-              builder: (ctx, _) => Consumer(
-                builder: (context, ref, _) {
-                  ref.watch(activeWorkoutProvider);
-                  return const Scaffold(body: ActionHero());
-                },
-              ),
-            ),
-            GoRoute(
-              path: '/workout/active',
-              builder: (ctx, _) =>
-                  const Scaffold(body: Text('Active Workout Screen')),
-            ),
-            GoRoute(
-              path: '/plan/week',
-              builder: (ctx, _) =>
-                  const Scaffold(body: Text('Plan Week Screen')),
-            ),
-          ],
-        );
-
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              isOnlineProvider.overrideWithValue(isOnline),
-              weeklyPlanProvider.overrideWith(() => _NullPlanStub()),
-              routineListProvider.overrideWith(() => _EmptyRoutineListStub()),
-              // workoutCount > 0 → lapsed state → "Quick workout" button visible.
-              workoutCountProvider.overrideWith((_) => Future.value(3)),
-              activeWorkoutProvider.overrideWith(() => trackingNotifier),
-            ],
-            child: MaterialApp.router(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              theme: AppTheme.dark,
-              routerConfig: router,
-            ),
-          ),
-        );
-      }
-
-      testWidgets('shows snackbar and does NOT call startWorkout when offline', (
-        tester,
-      ) async {
-        await pumpActionHeroLapsed(tester, isOnline: false);
-        // Settle so workoutCountProvider resolves and ActionHero renders lapsed.
-        await tester.pumpAndSettle();
-
-        // The lapsed hero renders "Quick workout" as a secondary OutlinedButton.
-        expect(find.text('Quick workout'), findsOneWidget);
-
-        await tester.tap(find.text('Quick workout'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
-
-        expect(
-          find.text('Starting a workout requires an internet connection'),
-          findsOneWidget,
-        );
-
-        // The tracking notifier must not have been asked to start a workout.
-        expect(trackingNotifier.startWorkoutCallCount, 0);
-      });
-    },
-  );
 }

@@ -83,8 +83,6 @@ export default defineConfig({
           '**/specs/charter-b-followup.spec.ts',
           // charter-c cluster
           '**/specs/charter-c-exploratory.spec.ts',
-          // charter-d cluster
-          '**/specs/charter-d-exploratory.spec.ts',
           // generic exploratory driver
           '**/specs/exploratory.spec.ts',
         ],
