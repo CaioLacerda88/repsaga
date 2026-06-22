@@ -174,33 +174,9 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
           child: Text(l10n.thisWeeksPlan),
         ),
         actions: [
-          Semantics(
-            container: true,
-            identifier: 'weekly-plan-overflow',
-            label: l10n.moreOptions,
-            child: PopupMenuButton<String>(
-              tooltip: l10n.moreOptions,
-              onSelected: (value) {
-                if (value == 'clear') _confirmClear(context);
-                if (value == 'autofill') {
-                  _autoFill(allRoutines, trainingFrequency);
-                }
-              },
-              itemBuilder: (context) {
-                final l10n = AppLocalizations.of(context);
-                return [
-                  PopupMenuItem(value: 'autofill', child: Text(l10n.autoFill)),
-                  PopupMenuItem(
-                    value: 'clear',
-                    child: Semantics(
-                      container: true,
-                      identifier: 'weekly-plan-clear-week',
-                      child: Text(l10n.clearWeek),
-                    ),
-                  ),
-                ];
-              },
-            ),
+          _OverflowMenu(
+            onClear: () => _confirmClear(context),
+            onAutoFill: () => _autoFill(allRoutines, trainingFrequency),
           ),
         ],
       ),
@@ -213,23 +189,9 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             // "ESTA SEMANA" header + N-days-trained pill row.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    l10n.thisWeek,
-                    style: AppTextStyles.label.copyWith(
-                      letterSpacing: 1.2,
-                      color: AppColors.textDim,
-                    ),
-                  ),
-                  const Spacer(),
-                  _CounterPill(
-                    label: l10n.daysTrainedCount(uniqueCompletionDays),
-                  ),
-                ],
-              ),
+            _WeekHeaderRow(
+              title: l10n.thisWeek,
+              counterLabel: l10n.daysTrainedCount(uniqueCompletionDays),
             ),
             // Bucket list — ReorderableListView in shrinkWrap mode so it
             // lives inside the outer ListView with the Engajamento section
@@ -277,56 +239,15 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
               },
             ),
             // "+ Adicionar treino" CTA.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Semantics(
-                  container: true,
-                  explicitChildNodes: true,
-                  button: true,
-                  identifier: 'weekly-plan-add-workout',
-                  child: InkWell(
-                    key: const ValueKey('weekly-plan-add-workout'),
-                    onTap: () => _showAddSheet(allRoutines),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 12,
-                      ),
-                      child: Text(
-                        l10n.addWorkout,
-                        style: AppTextStyles.body.copyWith(
-                          color: AppColors.hotViolet,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            _AddWorkoutCta(
+              label: l10n.addWorkout,
+              onTap: () => _showAddSheet(allRoutines),
             ),
             // Soft-cap warning — only shown when the bucket count strictly
             // exceeds the user's weekly target. At-cap is the normal
             // steady state and does not need a warning.
             if (overSoftCap)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: Semantics(
-                  container: true,
-                  identifier: 'weekly-plan-soft-cap-warning',
-                  child: Text(
-                    l10n.softCapWarning(trainingFrequency),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: AppColors.warning),
-                  ),
-                ),
-              ),
+              _SoftCapWarning(label: l10n.softCapWarning(trainingFrequency)),
             const SizedBox(height: 16),
             // Engajamento section (hairline + 6 bars + ⓘ).
             engagementAsync.when(
@@ -703,6 +624,141 @@ class _WeekPlanScreenState extends ConsumerState<WeekPlanScreen> {
         ),
         platform: currentPlatform(),
         appVersion: currentAppVersion(),
+      ),
+    );
+  }
+}
+
+/// AppBar overflow menu — "Auto-fill" + "Clear week" actions. The screen wires
+/// the two callbacks; this widget only presents the menu.
+class _OverflowMenu extends StatelessWidget {
+  const _OverflowMenu({required this.onClear, required this.onAutoFill});
+
+  final VoidCallback onClear;
+  final VoidCallback onAutoFill;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: 'weekly-plan-overflow',
+      label: l10n.moreOptions,
+      child: PopupMenuButton<String>(
+        tooltip: l10n.moreOptions,
+        onSelected: (value) {
+          if (value == 'clear') onClear();
+          if (value == 'autofill') onAutoFill();
+        },
+        itemBuilder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return [
+            PopupMenuItem(value: 'autofill', child: Text(l10n.autoFill)),
+            PopupMenuItem(
+              value: 'clear',
+              child: Semantics(
+                container: true,
+                identifier: 'weekly-plan-clear-week',
+                child: Text(l10n.clearWeek),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+  }
+}
+
+/// "ESTA SEMANA" header row — the uppercase week label on the left and the
+/// N-days-trained [_CounterPill] on the right. Both strings are resolved by
+/// the screen layer and passed in.
+class _WeekHeaderRow extends StatelessWidget {
+  const _WeekHeaderRow({required this.title, required this.counterLabel});
+
+  final String title;
+  final String counterLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: AppTextStyles.label.copyWith(
+              letterSpacing: 1.2,
+              color: AppColors.textDim,
+            ),
+          ),
+          const Spacer(),
+          _CounterPill(label: counterLabel),
+        ],
+      ),
+    );
+  }
+}
+
+/// Left-aligned "+ Adicionar treino" CTA below the bucket list.
+class _AddWorkoutCta extends StatelessWidget {
+  const _AddWorkoutCta({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          button: true,
+          identifier: 'weekly-plan-add-workout',
+          child: InkWell(
+            key: const ValueKey('weekly-plan-add-workout'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+              child: Text(
+                label,
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.hotViolet,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Soft-cap warning shown when the bucket count strictly exceeds the user's
+/// weekly training target. The composed warning string is resolved by the
+/// screen layer and passed in.
+class _SoftCapWarning extends StatelessWidget {
+  const _SoftCapWarning({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Semantics(
+        container: true,
+        identifier: 'weekly-plan-soft-cap-warning',
+        child: Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: AppColors.warning),
+        ),
       ),
     );
   }
