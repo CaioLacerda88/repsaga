@@ -298,9 +298,11 @@ independent audit lanes (highest confidence). User chose: do this before 39/40, 
   halves: `error_mapper` now maps `TypeError`/`CastError` → `DatabaseException(code:'deserialization')`,
   AND a custom global `ProviderScope(retry: appProviderRetry)` retries only transient failures
   (reuses `SyncErrorClassifier.isNetworkClass`). +16 tests.
-- [ ] **T1.3 ⭑** RLS is enabled everywhere but tested nowhere (`ci.yml:445-455` `rls-tests`
-  commented out). Stand up a cross-user isolation gate (`supabase test db` against the instance
-  the `integration-test` job already boots, OR a 2-user e2e). **Prerequisite for Phase 40.**
+- [x] **T1.3 ⭑** ✅ #369 (2026-06-21) — pgTAP cross-user isolation gate (`supabase/tests/
+  rls_isolation_test.sql`, 58 assertions across 19 surfaces) + a permanent `rls-tests` CI job
+  (`supabase test db` against the local Supabase the pipeline boots). Current RLS verified
+  **hole-free** (positive own-row + negative cross-user SELECT/write isolation, incl. billing +
+  vitality + backfill read surfaces). **Prerequisite for Phase 40 — now in place.**
 - [ ] **T1.4** Offline sync (4,347 LOC) has no integration tier — add a replay-under-partial-failure
   `test/integration/offline_sync_replay_test.dart`.
 
