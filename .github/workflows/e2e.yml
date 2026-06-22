@@ -43,7 +43,7 @@ jobs:
           cache: npm
           cache-dependency-path: test/e2e/package-lock.json
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
 

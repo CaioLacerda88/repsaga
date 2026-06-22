@@ -294,7 +294,7 @@ jobs:
           key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
 
@@ -450,7 +450,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
 
