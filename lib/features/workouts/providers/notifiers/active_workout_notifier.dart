@@ -40,6 +40,7 @@ import '../../models/exercise_set.dart';
 import '../../models/routine_start_config.dart';
 import '../../models/set_type.dart';
 import '../../models/weight_unit.dart';
+import '../../models/workout.dart';
 import '../../models/workout_exercise.dart';
 import '../../utils/cardio_format.dart';
 import '../../utils/set_defaults.dart';
@@ -1658,160 +1659,19 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       final sets = committedExercises.expand((e) => e.sets).toList();
 
       // --- Save workout (online or offline queue) ---
-      try {
-        await _repo.saveWorkout(
-          workout: workout,
-          exercises: workoutExercises,
-          sets: sets,
-          // Phase 38b: completed cardio entries ride the same RPC
-          // transaction (p_cardio → cardio_sessions, migration 00078).
-          cardio: committedCardio,
-          // 26e: source routine for weekly_plans bucket find-or-create
-          // (00063). Null for free workouts started ad-hoc — the RPC
-          // treats them as spontaneous-append candidates.
-          routineId: current.routineId,
-        );
-        // C1: mark the commit so the post-guard cancel-check honors it.
-        // Anything below this line that throws will leave saveCommitted
-        // true and the cancel-after-commit semantic still applies — the
-        // server-side write has already happened.
-        saveCommitted = true;
-        // PR #202 review O1: workout is durable server-side → the undo
-        // map's contents are no longer relevant. Clear here (post-commit)
-        // so the next session starts with a fresh map regardless of
-        // whether finishWorkout proceeds normally or short-circuits via
-        // the post-guard cancel-check below. Mirrors the discardWorkout
-        // placement (server-commit → clear). The offline-queue branch
-        // does NOT clear: an offline save is not durable and the user
-        // may continue editing the same workout in a degraded state
-        // until a retry succeeds.
-        _originalSetIndices.clear();
-      } catch (e) {
-        // Classify at the catch site so terminal errors surface to the user
-        // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
-        // uniformly enqueued as offline — a 4xx / RLS denial / FK violation
-        // produced a "Saved offline" snackbar with no error indication, and
-        // the queue then logged a structural failure no user could fix.
-        //
-        // Contract:
-        //   - terminal (deterministic data/permission failure — malformed
-        //     payload 22P02, constraint 235xx, RLS 42501, missing schema
-        //     object 42P01/42703, or PGRST* request error) → rethrow so the
-        //     outer AsyncValue.guard lands in AsyncError; the coordinator's
-        //     `asyncState.hasError` branch shows the localized "Failed to save
-        //     workout" snackbar and the user keeps their unsaved local state.
-        //     SyncErrorClassifier.isTerminal keys on the SQLSTATE/PGRST code,
-        //     NOT an HTTP int (PostgrestException.code is the SQLSTATE).
-        //   - transient (offline, timeout, 5xx, serialization/deadlock,
-        //     unknown) → enqueue.
-        //   - 5xx specifically sets `serverErrorQueued = true` so the UI can
-        //     pick a "server error — saved offline, will retry" copy variant
-        //     (Q1.3 in the impact analysis).
-        if (SyncErrorClassifier.isTerminal(e)) {
-          // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
-          // visibility for terminal save errors on physical-device triage.
-          debugPrint(
-            '[ActiveWorkoutNotifier] Terminal save error, surfacing to UI: $e',
-          );
-          rethrow;
-        }
-        debugPrint(
-          '[ActiveWorkoutNotifier] Network save failed, queueing offline: $e',
-        );
-        savedOffline = true;
-        // 5xx is transient (queue) but distinct from connectivity failure;
-        // the queue still retries, but the UI tells the user it was a server
-        // problem so a "Pending sync (1)" badge is not misleading.
-        // [SyncErrorClassifier.httpCode] yields a numeric HTTP status ONLY
-        // for shapes that actually carry one — i.e. the [app.AuthException] /
-        // [supabase.AuthException] forms whose code is the gotrue HTTP
-        // `statusCode`. [PostgrestException]/[app.DatabaseException] carry the
-        // SQLSTATE/PGRST code (non-numeric), so this branch never trips for
-        // them — which is correct: a real Postgrest 5xx surfaces as a
-        // transport-layer Socket/Http exception, not a Postgrest error. This
-        // is a copy-variant selector only (no data-correctness impact).
-        final code = SyncErrorClassifier.httpCode(e);
-        if (code != null && code >= 500 && code < 600) {
-          serverErrorQueued = true;
-        }
-
-        // Build raw JSON maps matching the RPC shape.
-        // Include all required Workout fields so Workout.fromJson succeeds
-        // when retrying from the queue.
-        final workoutJson = <String, dynamic>{
-          'id': workout.id,
-          'user_id': workout.userId,
-          'name': workout.name,
-          'started_at': workout.startedAt.toIso8601String(),
-          'finished_at': workout.finishedAt?.toIso8601String(),
-          'duration_seconds': workout.durationSeconds,
-          'is_active': false,
-          'notes': workout.notes,
-          'created_at': workout.createdAt.toIso8601String(),
-          // 26e: ride the source routine through the offline payload so the
-          // drain in pending_sync_provider can replay the same find-or-create
-          // semantics the online path uses. The 00063 `save_workout` RPC
-          // does the bucket update in the same transaction as the workout
-          // insert; persisting `routine_id` here is what replaces the
-          // pre-26e `PendingMarkRoutineComplete` sibling enqueue.
-          'routine_id': current.routineId,
-        };
-        final exercisesJson = workoutExercises
-            .map(
-              (e) => <String, dynamic>{
-                'id': e.id,
-                'workout_id': e.workoutId,
-                'exercise_id': e.exerciseId,
-                'order': e.order,
-                'rest_seconds': e.restSeconds,
-              },
-            )
-            .toList();
-        // BUG-001 fix: use the shared `toRpcJson()` extension so the offline
-        // payload always matches the online one. Drift between these two
-        // serializers (offline omitting `created_at`) was the root cause of
-        // the "type 'Null' is not a subtype of type 'String' in type cast"
-        // crash on replay — `_$ExerciseSetFromJson` calls
-        // `DateTime.parse(json['created_at'] as String)` unconditionally.
-        final setsJson = sets.map((s) => s.toRpcJson()).toList();
-        // Phase 38b: shared `toRpcJson()` keeps the offline cardio payload
-        // byte-identical to the online one — same BUG-001 drift guard as
-        // setsJson above.
-        final cardioJson = committedCardio.map((c) => c.toRpcJson()).toList();
-
-        // Phase 32 PR 32h retired the user-create-exercise surface, so a
-        // queued workout can no longer depend on an offline exercise create
-        // (the `PendingCreateExercise` variant was deleted from the sealed
-        // union). All offline workouts reference exercises that already
-        // exist server-side (defaults), so the new save needs no parent
-        // `dependsOn`. Pre-existing `PendingUpsertRecords` children of THIS
-        // workout are wired with the workout's id further down — that
-        // ordering is unaffected.
-        await ref
-            .read(pendingSyncProvider.notifier)
-            .enqueue(
-              PendingAction.saveWorkout(
-                id: workout.id,
-                workoutJson: workoutJson,
-                exercisesJson: exercisesJson,
-                setsJson: setsJson,
-                cardioJson: cardioJson,
-                userId: workout.userId,
-                queuedAt: now,
-              ),
-            );
-
-        _repo.incrementCachedWorkoutCount(workout.userId);
-        _repo.evictHistoryCaches(workout.userId);
-
-        _trackWorkoutEvent(
-          event: const AnalyticsEvent.workoutSyncQueued(
-            actionType: 'save_workout',
-          ),
-          breadcrumbMessage: 'workout queued for offline sync',
-          breadcrumbData: {'workout_id': workout.id},
-        );
-      }
+      // Step extracted T3.1: persistence + offline-fallback. Terminal errors
+      // rethrow out of this call → captured by the outer AsyncValue.guard.
+      final persistOutcome = await _persistWorkout(
+        workout: workout,
+        workoutExercises: workoutExercises,
+        sets: sets,
+        committedCardio: committedCardio,
+        routineId: current.routineId,
+        now: now,
+      );
+      savedOffline = persistOutcome.savedOffline;
+      serverErrorQueued = persistOutcome.serverErrorQueued;
+      saveCommitted = persistOutcome.saveCommitted;
 
       // Invalidate the per-exercise progress chart family so any exercise
       // whose detail sheet is re-opened this session reflects the newly
@@ -1842,174 +1702,19 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // PR detection: read existing records from local cache (never network),
       // detect new PRs, celebrate immediately, and always enqueue writes.
       // Phase 14d: fully offline-first PR detection.
-      try {
-        final prService = ref.read(prDetectionServiceProvider);
-        final cache = ref.read(cacheServiceProvider);
-
-        // Build the same cache key that PRRepository uses.
-        final cacheKey =
-            'exercises:${(List<String>.from(exerciseIds)..sort()).join(',')}';
-
-        // Always read from local pr_cache — no network call.
-        var existingRecords = cache.read<Map<String, List<PersonalRecord>>>(
-          HiveService.prCache,
-          cacheKey,
-          (json) {
-            final map = json as Map<String, dynamic>;
-            return map.map(
-              (k, v) => MapEntry(
-                k,
-                (v as List)
-                    .map(
-                      (e) => PersonalRecord.fromJson(e as Map<String, dynamic>),
-                    )
-                    .toList(),
-              ),
-            );
-          },
-        );
-
-        // If cache misses, fall back to PRRepository (which has its own
-        // cache fallback). This covers the first-ever workout before any
-        // cache has been populated.
-        if (existingRecords == null) {
-          final prRepo = ref.read(prRepositoryProvider);
-          existingRecords = await prRepo.getRecordsForExercises(exerciseIds);
-        }
-
-        // Always use cached workout count — no network call.
-        workoutCount = _repo.getCachedWorkoutCount(_userId) ?? 1;
-
-        prResult = prService.detectPRs(
-          userId: _userId,
-          // Bug B fix: feed `committedExercises` (only completed sets, no
-          // empty-set exercises). `detectPRs` already filters via
-          // `completedWorkingSets()` and `continue`s on empty exercises, so
-          // this is a no-op contract-wise but keeps the persistence layer
-          // and the PR-detection layer reading the same shape.
-          exercises: committedExercises,
-          existingRecords: existingRecords,
-          totalFinishedWorkouts: workoutCount,
-        );
-
-        if (prResult!.hasNewRecords) {
-          // PR upsert path:
-          //   - parent saved OFFLINE → enqueue with `dependsOn=[workout.id]`
-          //     so the drain holds this upsert until the parent commits
-          //     server-side (BUG-002 — without the dependency, the FK on
-          //     `personal_records.set_id → sets.id` fires before the parent
-          //     ever inserts the rows).
-          //   - parent saved ONLINE → try a direct upsert. The sets are
-          //     already durable server-side, so the FK resolves immediately
-          //     and the user sees their PRs reflected without waiting for a
-          //     connectivity transition to drain the queue. Fall back to the
-          //     queue on any failure (network drop between save and PR
-          //     upsert, server rejection, etc.) so the data is never lost.
-          //
-          // Why direct-on-online is the right behavior: SyncService only
-          // drains on offline→online transitions, so an enqueued action on
-          // a steady-online device sits forever waiting for either a manual
-          // retry tap or a connectivity blip. That left users staring at a
-          // "Pending Sync (1)" badge for PRs they had clearly earned and
-          // could see no reason for.
-          if (savedOffline) {
-            await ref
-                .read(pendingSyncProvider.notifier)
-                .enqueue(
-                  PendingAction.upsertRecords(
-                    id: _uuid.v4(),
-                    recordsJson: prResult!.newRecords
-                        .map((r) => r.toJson())
-                        .toList(),
-                    userId: _userId,
-                    queuedAt: now,
-                    dependsOn: <String>[workout.id],
-                  ),
-                );
-          } else {
-            // Online: detached upsert. UI navigation must NOT block on what
-            // is purely a server-persistence concern — the user has already
-            // seen the PR detected on the client (cache write below + the
-            // celebration screen). On any failure (network drop, server
-            // rejection), fall through to the queue so the data is never
-            // lost.
-            //
-            // Why detached: awaiting here gates `finishWorkout()`'s return
-            // on a network roundtrip and on CI we saw the second-workout
-            // PR test push past its 60s budget when two upserts happened
-            // back-to-back. Persistence is not a UX concern here.
-            //
-            // Try/catch in an immediately-invoked async block (rather than
-            // `.catchError`) so we catch both synchronous throws from the
-            // call site and asynchronous failures from the returned Future.
-            final prRepo = ref.read(prRepositoryProvider);
-            final pendingNotifier = ref.read(pendingSyncProvider.notifier);
-            final newRecordsForUpsert = prResult!.newRecords;
-            unawaited(() async {
-              try {
-                await prRepo.upsertRecords(newRecordsForUpsert);
-              } catch (e, st) {
-                // Cluster: developer-log-invisible-logcat (PR 32g) — adb
-                // logcat visibility for the PR-upsert fallback path.
-                debugPrint(
-                  '[ActiveWorkoutNotifier] Direct PR upsert failed, falling '
-                  'back to queue: $e\n$st',
-                );
-                try {
-                  await pendingNotifier.enqueue(
-                    PendingAction.upsertRecords(
-                      id: _uuid.v4(),
-                      recordsJson: newRecordsForUpsert
-                          .map((r) => r.toJson())
-                          .toList(),
-                      userId: _userId,
-                      queuedAt: now,
-                      dependsOn: const <String>[],
-                    ),
-                  );
-                } catch (queueErr, queueSt) {
-                  // The queue itself failing is rare (Hive box write) but
-                  // we never want this background task to crash the
-                  // notifier. Log loud and move on. Cluster:
-                  // developer-log-invisible-logcat (PR 32g).
-                  debugPrint(
-                    '[ActiveWorkoutNotifier] Fallback enqueue also failed: '
-                    '$queueErr\n$queueSt',
-                  );
-                }
-              }
-            }());
-          }
-
-          // Optimistically update pr_cache so subsequent offline finishes
-          // see the new records immediately.
-          final merged = Map<String, List<PersonalRecord>>.from(
-            existingRecords,
-          );
-          for (final record in prResult!.newRecords) {
-            final list = merged[record.exerciseId] ??= [];
-            list.removeWhere((r) => r.recordType == record.recordType);
-            list.add(record);
-          }
-          cache.write(
-            HiveService.prCache,
-            cacheKey,
-            merged.map(
-              (k, v) => MapEntry(k, v.map((r) => r.toJson()).toList()),
-            ),
-          );
-        }
-      } catch (e, st) {
-        // PR detection failure should NOT fail the workout save.
-        // BUG-009: capture to Sentry so production rates are visible —
-        // this catch historically masked BUG-001 by silently dropping
-        // detection-side null casts. Workout still saves; user is not
-        // surfaced anything because PRs are non-essential.
-        // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
-        // visibility for swallowed PR-detection failures.
-        debugPrint('[ActiveWorkoutNotifier] PR detection failed: $e');
-        unawaited(SentryReport.captureException(e, stackTrace: st));
-      }
+      // Step extracted T3.1: offline-first detection + upsert/queue + cache
+      // merge. Self-contained try/catch (PR detection never fails the save);
+      // returns both the result and the workout count the analytics event
+      // reports below.
+      final prOutcome = await _detectAndPersistPRs(
+        committedExercises: committedExercises,
+        exerciseIds: exerciseIds,
+        savedOffline: savedOffline,
+        workoutId: workout.id,
+        now: now,
+      );
+      prResult = prOutcome.prResult;
+      workoutCount = prOutcome.workoutCount;
 
       // XP award: handled server-side inside `save_workout` → `record_set_xp`,
       // which writes `body_part_progress` and `xp_events` rows in the same
@@ -2038,46 +1743,16 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       // drain (in case any pre-26e queue entries survived an upgrade).
       ref.invalidate(weeklyPlanProvider);
 
-      // Analytics — mixed planned-vs-committed reads, on purpose:
-      //
-      // `totalSets` / `completedSets` / `incompleteSetsSkipped` read the
-      // PRE-filter `exercises` so `workoutFinished` retains its planned-
-      // vs-committed deltas (the delta IS the analytics signal —
-      // "how often do users plan more than they execute?"). Using the
-      // post-filter `sets` here would make `incompleteSetsSkipped`
-      // always 0 and erase the signal.
-      //
-      // `exerciseCount` reads the POST-filter `committedExercises.length`
-      // (PR #261 reviewer Blocker 1). The schema has no paired
-      // `completedExercises` field, so consumers couldn't recover the
-      // committed count from a planned-count read. This field answers
-      // "how many exercises did the user actually perform" — that's the
-      // committed shape. If a planned counterpart is ever needed, add a
-      // separate `plannedExerciseCount` field on the event rather than
-      // silently changing this field's meaning.
-      final plannedSets = exercises.expand((e) => e.sets).toList();
-      final totalSets = plannedSets.length;
-      final completedSetsCount = plannedSets.where((s) => s.isCompleted).length;
-      final incompleteSetsSkipped = totalSets - completedSetsCount;
-      final hadPr = prResult?.newRecords.isNotEmpty ?? false;
-      final source = _workoutSource(current.routineId);
-      _trackWorkoutEvent(
-        event: AnalyticsEvent.workoutFinished(
-          durationSeconds: durationSeconds,
-          exerciseCount: committedExercises.length,
-          totalSets: totalSets,
-          completedSets: completedSetsCount,
-          incompleteSetsSkipped: incompleteSetsSkipped,
-          hadPr: hadPr,
-          source: source,
-          workoutNumber: workoutCount,
-        ),
-        breadcrumbMessage: 'finished workout',
-        breadcrumbData: {
-          'workout_id': workout.id,
-          'workout_number': workoutCount,
-          'had_pr': hadPr,
-        },
+      // Step extracted T3.1: workoutFinished analytics + breadcrumb. Mixed
+      // planned-vs-committed reads are intentional (see helper doc).
+      _trackWorkoutFinishedEvent(
+        plannedExercises: exercises,
+        committedExercises: committedExercises,
+        durationSeconds: durationSeconds,
+        prResult: prResult,
+        routineId: current.routineId,
+        workoutId: workout.id,
+        workoutCount: workoutCount,
       );
 
       await _localStorage.clearActiveWorkout();
@@ -2124,6 +1799,445 @@ class ActiveWorkoutNotifier extends AsyncNotifier<ActiveWorkoutState?> {
       savedOffline: savedOffline,
       serverErrorQueued: serverErrorQueued,
       durationSeconds: finishDurationSeconds,
+    );
+  }
+
+  /// Persist the finished [workout] to the server, falling back to the offline
+  /// queue on transient failure.
+  ///
+  /// Runs inside [finishWorkout]'s `AsyncValue.guard` scope. The return record
+  /// surfaces the three control-flow signals the orchestrator needs:
+  /// - `savedOffline` — the network save failed and the workout was enqueued
+  ///   for later replay (drives the offline-queued snackbar + suppresses the
+  ///   celebration / progress refresh upstream).
+  /// - `serverErrorQueued` — the transient failure was specifically a 5xx, so
+  ///   the UI can pick the "server error — saved offline" copy variant.
+  /// - `saveCommitted` — the server write returned successfully; the post-guard
+  ///   cancel-check uses this to ignore a cancel that arrives after commit.
+  ///
+  /// **Terminal failures rethrow** (deterministic data/permission errors per
+  /// [SyncErrorClassifier.isTerminal]) so the outer guard lands in
+  /// `AsyncError` and the user keeps their unsaved local state — they are NOT
+  /// enqueued. Behavior, ordering, and analytics are unchanged from when this
+  /// lived inline (T3.1 extraction).
+  Future<({bool savedOffline, bool serverErrorQueued, bool saveCommitted})>
+  _persistWorkout({
+    required Workout workout,
+    required List<WorkoutExercise> workoutExercises,
+    required List<ExerciseSet> sets,
+    required List<CardioSession> committedCardio,
+    required String? routineId,
+    required DateTime now,
+  }) async {
+    var savedOffline = false;
+    var serverErrorQueued = false;
+    var saveCommitted = false;
+
+    try {
+      await _repo.saveWorkout(
+        workout: workout,
+        exercises: workoutExercises,
+        sets: sets,
+        // Phase 38b: completed cardio entries ride the same RPC
+        // transaction (p_cardio → cardio_sessions, migration 00078).
+        cardio: committedCardio,
+        // 26e: source routine for weekly_plans bucket find-or-create
+        // (00063). Null for free workouts started ad-hoc — the RPC
+        // treats them as spontaneous-append candidates.
+        routineId: routineId,
+      );
+      // C1: mark the commit so the post-guard cancel-check honors it.
+      // Anything below this line that throws will leave saveCommitted
+      // true and the cancel-after-commit semantic still applies — the
+      // server-side write has already happened.
+      saveCommitted = true;
+      // PR #202 review O1: workout is durable server-side → the undo
+      // map's contents are no longer relevant. Clear here (post-commit)
+      // so the next session starts with a fresh map regardless of
+      // whether finishWorkout proceeds normally or short-circuits via
+      // the post-guard cancel-check below. Mirrors the discardWorkout
+      // placement (server-commit → clear). The offline-queue branch
+      // does NOT clear: an offline save is not durable and the user
+      // may continue editing the same workout in a degraded state
+      // until a retry succeeds.
+      _originalSetIndices.clear();
+    } catch (e) {
+      // Classify at the catch site so terminal errors surface to the user
+      // (AW-EX-D-US1-03, AW-EX-E-US1-02). Pre-1B every save failure was
+      // uniformly enqueued as offline — a 4xx / RLS denial / FK violation
+      // produced a "Saved offline" snackbar with no error indication, and
+      // the queue then logged a structural failure no user could fix.
+      //
+      // Contract:
+      //   - terminal (deterministic data/permission failure — malformed
+      //     payload 22P02, constraint 235xx, RLS 42501, missing schema
+      //     object 42P01/42703, or PGRST* request error) → rethrow so the
+      //     outer AsyncValue.guard lands in AsyncError; the coordinator's
+      //     `asyncState.hasError` branch shows the localized "Failed to save
+      //     workout" snackbar and the user keeps their unsaved local state.
+      //     SyncErrorClassifier.isTerminal keys on the SQLSTATE/PGRST code,
+      //     NOT an HTTP int (PostgrestException.code is the SQLSTATE).
+      //   - transient (offline, timeout, 5xx, serialization/deadlock,
+      //     unknown) → enqueue.
+      //   - 5xx specifically sets `serverErrorQueued = true` so the UI can
+      //     pick a "server error — saved offline, will retry" copy variant
+      //     (Q1.3 in the impact analysis).
+      if (SyncErrorClassifier.isTerminal(e)) {
+        // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+        // visibility for terminal save errors on physical-device triage.
+        debugPrint(
+          '[ActiveWorkoutNotifier] Terminal save error, surfacing to UI: $e',
+        );
+        rethrow;
+      }
+      debugPrint(
+        '[ActiveWorkoutNotifier] Network save failed, queueing offline: $e',
+      );
+      savedOffline = true;
+      // 5xx is transient (queue) but distinct from connectivity failure;
+      // the queue still retries, but the UI tells the user it was a server
+      // problem so a "Pending sync (1)" badge is not misleading.
+      // [SyncErrorClassifier.httpCode] yields a numeric HTTP status ONLY
+      // for shapes that actually carry one — i.e. the [app.AuthException] /
+      // [supabase.AuthException] forms whose code is the gotrue HTTP
+      // `statusCode`. [PostgrestException]/[app.DatabaseException] carry the
+      // SQLSTATE/PGRST code (non-numeric), so this branch never trips for
+      // them — which is correct: a real Postgrest 5xx surfaces as a
+      // transport-layer Socket/Http exception, not a Postgrest error. This
+      // is a copy-variant selector only (no data-correctness impact).
+      final code = SyncErrorClassifier.httpCode(e);
+      if (code != null && code >= 500 && code < 600) {
+        serverErrorQueued = true;
+      }
+
+      // Build raw JSON maps matching the RPC shape.
+      // Include all required Workout fields so Workout.fromJson succeeds
+      // when retrying from the queue.
+      final workoutJson = <String, dynamic>{
+        'id': workout.id,
+        'user_id': workout.userId,
+        'name': workout.name,
+        'started_at': workout.startedAt.toIso8601String(),
+        'finished_at': workout.finishedAt?.toIso8601String(),
+        'duration_seconds': workout.durationSeconds,
+        'is_active': false,
+        'notes': workout.notes,
+        'created_at': workout.createdAt.toIso8601String(),
+        // 26e: ride the source routine through the offline payload so the
+        // drain in pending_sync_provider can replay the same find-or-create
+        // semantics the online path uses. The 00063 `save_workout` RPC
+        // does the bucket update in the same transaction as the workout
+        // insert; persisting `routine_id` here is what replaces the
+        // pre-26e `PendingMarkRoutineComplete` sibling enqueue.
+        'routine_id': routineId,
+      };
+      final exercisesJson = workoutExercises
+          .map(
+            (e) => <String, dynamic>{
+              'id': e.id,
+              'workout_id': e.workoutId,
+              'exercise_id': e.exerciseId,
+              'order': e.order,
+              'rest_seconds': e.restSeconds,
+            },
+          )
+          .toList();
+      // BUG-001 fix: use the shared `toRpcJson()` extension so the offline
+      // payload always matches the online one. Drift between these two
+      // serializers (offline omitting `created_at`) was the root cause of
+      // the "type 'Null' is not a subtype of type 'String' in type cast"
+      // crash on replay — `_$ExerciseSetFromJson` calls
+      // `DateTime.parse(json['created_at'] as String)` unconditionally.
+      final setsJson = sets.map((s) => s.toRpcJson()).toList();
+      // Phase 38b: shared `toRpcJson()` keeps the offline cardio payload
+      // byte-identical to the online one — same BUG-001 drift guard as
+      // setsJson above.
+      final cardioJson = committedCardio.map((c) => c.toRpcJson()).toList();
+
+      // Phase 32 PR 32h retired the user-create-exercise surface, so a
+      // queued workout can no longer depend on an offline exercise create
+      // (the `PendingCreateExercise` variant was deleted from the sealed
+      // union). All offline workouts reference exercises that already
+      // exist server-side (defaults), so the new save needs no parent
+      // `dependsOn`. Pre-existing `PendingUpsertRecords` children of THIS
+      // workout are wired with the workout's id further down — that
+      // ordering is unaffected.
+      await ref
+          .read(pendingSyncProvider.notifier)
+          .enqueue(
+            PendingAction.saveWorkout(
+              id: workout.id,
+              workoutJson: workoutJson,
+              exercisesJson: exercisesJson,
+              setsJson: setsJson,
+              cardioJson: cardioJson,
+              userId: workout.userId,
+              queuedAt: now,
+            ),
+          );
+
+      _repo.incrementCachedWorkoutCount(workout.userId);
+      _repo.evictHistoryCaches(workout.userId);
+
+      _trackWorkoutEvent(
+        event: const AnalyticsEvent.workoutSyncQueued(
+          actionType: 'save_workout',
+        ),
+        breadcrumbMessage: 'workout queued for offline sync',
+        breadcrumbData: {'workout_id': workout.id},
+      );
+    }
+
+    return (
+      savedOffline: savedOffline,
+      serverErrorQueued: serverErrorQueued,
+      saveCommitted: saveCommitted,
+    );
+  }
+
+  /// Detect new personal records for the just-finished workout, persist them
+  /// (direct upsert when online, dependency-gated queue when offline), and
+  /// optimistically merge them into `pr_cache`.
+  ///
+  /// Fully offline-first: existing records are read from the local
+  /// `pr_cache` (with a [PRRepository] fallback for the first-ever workout),
+  /// never the network. The workout count likewise comes from cache.
+  ///
+  /// PR detection is non-essential — any failure is logged + captured to
+  /// Sentry and swallowed so the workout save is never blocked. When that
+  /// happens before the count is read, `workoutCount` returns `0` (the same
+  /// value the hoisted analytics field used pre-extraction). Behavior and
+  /// ordering are unchanged from when this lived inline (T3.1 extraction).
+  Future<({PRDetectionResult? prResult, int workoutCount})>
+  _detectAndPersistPRs({
+    required List<ActiveWorkoutExercise> committedExercises,
+    required List<String> exerciseIds,
+    required bool savedOffline,
+    required String workoutId,
+    required DateTime now,
+  }) async {
+    PRDetectionResult? prResult;
+    // Stays 0 if detection throws before the cached-count read below — mirrors
+    // the pre-extraction hoisted default so the analytics event still reports
+    // a number.
+    int workoutCount = 0;
+    try {
+      final prService = ref.read(prDetectionServiceProvider);
+      final cache = ref.read(cacheServiceProvider);
+
+      // Build the same cache key that PRRepository uses.
+      final cacheKey =
+          'exercises:${(List<String>.from(exerciseIds)..sort()).join(',')}';
+
+      // Always read from local pr_cache — no network call.
+      var existingRecords = cache.read<Map<String, List<PersonalRecord>>>(
+        HiveService.prCache,
+        cacheKey,
+        (json) {
+          final map = json as Map<String, dynamic>;
+          return map.map(
+            (k, v) => MapEntry(
+              k,
+              (v as List)
+                  .map(
+                    (e) => PersonalRecord.fromJson(e as Map<String, dynamic>),
+                  )
+                  .toList(),
+            ),
+          );
+        },
+      );
+
+      // If cache misses, fall back to PRRepository (which has its own
+      // cache fallback). This covers the first-ever workout before any
+      // cache has been populated.
+      if (existingRecords == null) {
+        final prRepo = ref.read(prRepositoryProvider);
+        existingRecords = await prRepo.getRecordsForExercises(exerciseIds);
+      }
+
+      // Always use cached workout count — no network call.
+      workoutCount = _repo.getCachedWorkoutCount(_userId) ?? 1;
+
+      prResult = prService.detectPRs(
+        userId: _userId,
+        // Bug B fix: feed `committedExercises` (only completed sets, no
+        // empty-set exercises). `detectPRs` already filters via
+        // `completedWorkingSets()` and `continue`s on empty exercises, so
+        // this is a no-op contract-wise but keeps the persistence layer
+        // and the PR-detection layer reading the same shape.
+        exercises: committedExercises,
+        existingRecords: existingRecords,
+        totalFinishedWorkouts: workoutCount,
+      );
+
+      if (prResult.hasNewRecords) {
+        // PR upsert path:
+        //   - parent saved OFFLINE → enqueue with `dependsOn=[workout.id]`
+        //     so the drain holds this upsert until the parent commits
+        //     server-side (BUG-002 — without the dependency, the FK on
+        //     `personal_records.set_id → sets.id` fires before the parent
+        //     ever inserts the rows).
+        //   - parent saved ONLINE → try a direct upsert. The sets are
+        //     already durable server-side, so the FK resolves immediately
+        //     and the user sees their PRs reflected without waiting for a
+        //     connectivity transition to drain the queue. Fall back to the
+        //     queue on any failure (network drop between save and PR
+        //     upsert, server rejection, etc.) so the data is never lost.
+        //
+        // Why direct-on-online is the right behavior: SyncService only
+        // drains on offline→online transitions, so an enqueued action on
+        // a steady-online device sits forever waiting for either a manual
+        // retry tap or a connectivity blip. That left users staring at a
+        // "Pending Sync (1)" badge for PRs they had clearly earned and
+        // could see no reason for.
+        if (savedOffline) {
+          await ref
+              .read(pendingSyncProvider.notifier)
+              .enqueue(
+                PendingAction.upsertRecords(
+                  id: _uuid.v4(),
+                  recordsJson: prResult.newRecords
+                      .map((r) => r.toJson())
+                      .toList(),
+                  userId: _userId,
+                  queuedAt: now,
+                  dependsOn: <String>[workoutId],
+                ),
+              );
+        } else {
+          // Online: detached upsert. UI navigation must NOT block on what
+          // is purely a server-persistence concern — the user has already
+          // seen the PR detected on the client (cache write below + the
+          // celebration screen). On any failure (network drop, server
+          // rejection), fall through to the queue so the data is never
+          // lost.
+          //
+          // Why detached: awaiting here gates `finishWorkout()`'s return
+          // on a network roundtrip and on CI we saw the second-workout
+          // PR test push past its 60s budget when two upserts happened
+          // back-to-back. Persistence is not a UX concern here.
+          //
+          // Try/catch in an immediately-invoked async block (rather than
+          // `.catchError`) so we catch both synchronous throws from the
+          // call site and asynchronous failures from the returned Future.
+          final prRepo = ref.read(prRepositoryProvider);
+          final pendingNotifier = ref.read(pendingSyncProvider.notifier);
+          final newRecordsForUpsert = prResult.newRecords;
+          unawaited(() async {
+            try {
+              await prRepo.upsertRecords(newRecordsForUpsert);
+            } catch (e, st) {
+              // Cluster: developer-log-invisible-logcat (PR 32g) — adb
+              // logcat visibility for the PR-upsert fallback path.
+              debugPrint(
+                '[ActiveWorkoutNotifier] Direct PR upsert failed, falling '
+                'back to queue: $e\n$st',
+              );
+              try {
+                await pendingNotifier.enqueue(
+                  PendingAction.upsertRecords(
+                    id: _uuid.v4(),
+                    recordsJson: newRecordsForUpsert
+                        .map((r) => r.toJson())
+                        .toList(),
+                    userId: _userId,
+                    queuedAt: now,
+                    dependsOn: const <String>[],
+                  ),
+                );
+              } catch (queueErr, queueSt) {
+                // The queue itself failing is rare (Hive box write) but
+                // we never want this background task to crash the
+                // notifier. Log loud and move on. Cluster:
+                // developer-log-invisible-logcat (PR 32g).
+                debugPrint(
+                  '[ActiveWorkoutNotifier] Fallback enqueue also failed: '
+                  '$queueErr\n$queueSt',
+                );
+              }
+            }
+          }());
+        }
+
+        // Optimistically update pr_cache so subsequent offline finishes
+        // see the new records immediately.
+        final merged = Map<String, List<PersonalRecord>>.from(existingRecords);
+        for (final record in prResult.newRecords) {
+          final list = merged[record.exerciseId] ??= [];
+          list.removeWhere((r) => r.recordType == record.recordType);
+          list.add(record);
+        }
+        cache.write(
+          HiveService.prCache,
+          cacheKey,
+          merged.map((k, v) => MapEntry(k, v.map((r) => r.toJson()).toList())),
+        );
+      }
+    } catch (e, st) {
+      // PR detection failure should NOT fail the workout save.
+      // BUG-009: capture to Sentry so production rates are visible —
+      // this catch historically masked BUG-001 by silently dropping
+      // detection-side null casts. Workout still saves; user is not
+      // surfaced anything because PRs are non-essential.
+      // Cluster: developer-log-invisible-logcat (PR 32g) — adb logcat
+      // visibility for swallowed PR-detection failures.
+      debugPrint('[ActiveWorkoutNotifier] PR detection failed: $e');
+      unawaited(SentryReport.captureException(e, stackTrace: st));
+    }
+
+    return (prResult: prResult, workoutCount: workoutCount);
+  }
+
+  /// Fire the `workoutFinished` product-analytics event + Sentry breadcrumb.
+  ///
+  /// **Mixed planned-vs-committed reads, on purpose:**
+  /// `totalSets` / `completedSets` / `incompleteSetsSkipped` read the
+  /// PRE-filter [plannedExercises] so `workoutFinished` retains its
+  /// planned-vs-committed deltas (the delta IS the analytics signal — "how
+  /// often do users plan more than they execute?"). Using the committed shape
+  /// here would make `incompleteSetsSkipped` always 0 and erase the signal.
+  ///
+  /// `exerciseCount` reads the POST-filter [committedExercises] length
+  /// (PR #261 reviewer Blocker 1) — "how many exercises did the user actually
+  /// perform". If a planned counterpart is ever needed, add a separate
+  /// `plannedExerciseCount` field rather than changing this field's meaning.
+  ///
+  /// Fire-and-forget (delegates to [_trackWorkoutEvent]); behavior and the
+  /// reported field values are unchanged from when this lived inline (T3.1
+  /// extraction).
+  void _trackWorkoutFinishedEvent({
+    required List<ActiveWorkoutExercise> plannedExercises,
+    required List<ActiveWorkoutExercise> committedExercises,
+    required int durationSeconds,
+    required PRDetectionResult? prResult,
+    required String? routineId,
+    required String workoutId,
+    required int workoutCount,
+  }) {
+    final plannedSets = plannedExercises.expand((e) => e.sets).toList();
+    final totalSets = plannedSets.length;
+    final completedSetsCount = plannedSets.where((s) => s.isCompleted).length;
+    final incompleteSetsSkipped = totalSets - completedSetsCount;
+    final hadPr = prResult?.newRecords.isNotEmpty ?? false;
+    final source = _workoutSource(routineId);
+    _trackWorkoutEvent(
+      event: AnalyticsEvent.workoutFinished(
+        durationSeconds: durationSeconds,
+        exerciseCount: committedExercises.length,
+        totalSets: totalSets,
+        completedSets: completedSetsCount,
+        incompleteSetsSkipped: incompleteSetsSkipped,
+        hadPr: hadPr,
+        source: source,
+        workoutNumber: workoutCount,
+      ),
+      breadcrumbMessage: 'finished workout',
+      breadcrumbData: {
+        'workout_id': workoutId,
+        'workout_number': workoutCount,
+        'had_pr': hadPr,
+      },
     );
   }
 
