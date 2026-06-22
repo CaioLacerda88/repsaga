@@ -343,12 +343,17 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
   create_routine 298→200, week_plan 219→140) into `const` private sub-widgets. Pure
   behavior-preserving (reviewer render-equivalence diff verified; 3978 tests unchanged).
   setState-coupled subtrees deliberately left inline (separate audit item).
-- [ ] **T3.3** `docs/` canonical-RPC reference for `save_workout`/`record_session_xp_batch`
-  (spread verbatim across ~6 migrations).
-- [ ] **T3.4** Test hygiene: rewrite `celebration_orchestrator_test` (only wiring-not-behavior file)
-  to assert via storage reads; audit 6 animation `pump(Duration)` tests for the `forward()`-mask
-  trap; delete dead skips (`start_workout_offline_guard_test.dart:306`, superseded charter-d block);
-  add explicit `mode: 'serial'` to manage-data destructive block.
+- [x] **T3.3** ✅ #393 (2026-06-22) — `docs/canonical-rpc-definitions.md`: single source of truth
+  for `save_workout` (current def 00082, 7-migration lineage) + `record_session_xp_batch` (00081,
+  10-migration lineage) — signature, step-by-step behavior, invariants, lineage, parity discipline.
+  Pointer from §1.
+- [x] **T3.4** ✅ #393 (2026-06-22) — rewrote `celebration_orchestrator_test` (the only
+  wiring-not-behavior file) to assert via Hive storage reads; audited the 6 animation
+  `pump(Duration)` tests (all already assert rendered output — none at-risk); the "dead skip"
+  `start_workout_offline_guard` turned out to cover a LIVE contract (quick-workout offline guard,
+  only the widget tree moved) so it was **re-pointed** at the `_FreeWorkoutHero` surface, not
+  deleted; deleted the superseded charter-d spec; added `mode: 'serial'` to the manage-data
+  destructive block. **Tier 3 complete.**
 
 ### Phase 39 — Gamified Progression Safety + Daily Quest Ritual: 🔲 PRE-LAUNCH, NEEDS SPECS
 
