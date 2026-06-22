@@ -769,10 +769,14 @@ void main() {
           _makeSaveWorkoutAction(id: 'w-fail-analytics', retryCount: 0),
         );
 
-        // 409 Conflict is a terminal error — will be classified as terminal
-        // on first attempt, so workoutSyncFailed must be emitted.
+        // 23505 unique_violation is a terminal SQLSTATE — classified terminal
+        // on first attempt, so workoutSyncFailed must be emitted. (Prod
+        // PostgrestException.code is the SQLSTATE, never an HTTP int.)
         stubSaveWorkoutFailure(
-          const supabase.PostgrestException(message: 'Conflict', code: '409'),
+          const supabase.PostgrestException(
+            message: 'duplicate key value violates unique constraint',
+            code: '23505',
+          ),
         );
 
         connectivityController.add(true);
@@ -839,44 +843,58 @@ void main() {
     );
 
     // ------------------------------------------------------------------
-    // Test: Terminal PostgrestException marks item terminal immediately
-    // (no backoff applied — classification bypasses the backoff branch)
+    // Test: Terminal SQLSTATE marks item terminal on the FIRST failure
+    // (the fast-path: pinned to the retry-count ceiling so it is never
+    // re-drained, instead of wastefully retrying kMaxSyncRetries times).
     // ------------------------------------------------------------------
-    test(
-      'terminal PostgrestException marks item as terminal after first failure',
-      () async {
-        final container = createContainer(initialOnline: false);
+    test('terminal SQLSTATE pins item terminal after a single failure '
+        '(no kMaxSyncRetries replay)', () async {
+      final container = createContainer(initialOnline: false);
 
-        final notifier = container.read(pendingSyncProvider.notifier);
-        await notifier.enqueue(
-          _makeSaveWorkoutAction(id: 'w-terminal-pg', retryCount: 0),
-        );
+      final notifier = container.read(pendingSyncProvider.notifier);
+      await notifier.enqueue(
+        _makeSaveWorkoutAction(id: 'w-terminal-pg', retryCount: 0),
+      );
 
-        // 422 is terminal — should NOT backoff, should immediately reflect
-        // terminal state after drain completes.
-        stubSaveWorkoutFailure(
-          const supabase.PostgrestException(
-            message: 'Unprocessable',
-            code: '422',
-          ),
-        );
+      // 42501 RLS denial is a deterministic terminal SQLSTATE — an
+      // identical replay always fails, so the drain pins it to the ceiling
+      // on the first attempt rather than retrying it 6×.
+      stubSaveWorkoutFailure(
+        const supabase.PostgrestException(
+          message: 'new row violates row-level security policy',
+          code: '42501',
+        ),
+      );
 
-        connectivityController.add(true);
-        // No 1s backoff should be needed — terminal path skips the delay.
-        await _pumpAsync(300);
+      connectivityController.add(true);
+      // No 1s backoff should be needed — terminal path skips the delay.
+      await _pumpAsync(300);
 
-        // Item is still in queue (retryItem failed).
-        expect(queueService.getAll(), hasLength(1));
+      // Item is still in queue (retryItem failed) — retained for the
+      // pending-sync sheet's Dismiss CTA, not silently dropped.
+      final remaining = queueService.getAll();
+      expect(remaining, hasLength(1));
 
-        // SyncState does NOT count this as terminal yet (retryCount is only 1
-        // now, still below kMaxSyncRetries). The item needs kMaxSyncRetries
-        // failures to be counted as terminal in the post-drain sweep.
-        // The key behavior: drain completed quickly (no 1s sleep).
-        // This test ensures we don't accidentally apply backoff for terminal errors.
-        final syncState = container.read(syncServiceProvider);
-        expect(syncState.terminalFailureCount, 0);
-      },
-    );
+      // FIXED behavior: the action is pinned to the retry-count ceiling on
+      // the FIRST failure, so the post-drain sweep counts it terminal
+      // immediately — it will never be re-drained. Pre-fix the dead HTTP-
+      // code fast-path left retryCount at 1, requiring 6 wasted replays.
+      expect(
+        remaining.single.retryCount,
+        kMaxSyncRetries,
+        reason:
+            'deterministic terminal error → pinned to the ceiling on '
+            'first failure (not retried kMaxSyncRetries times)',
+      );
+      final syncState = container.read(syncServiceProvider);
+      expect(
+        syncState.terminalFailureCount,
+        1,
+        reason:
+            'terminal-on-first-attempt is counted in the post-drain '
+            'terminalFailureCount sweep',
+      );
+    });
 
     // ------------------------------------------------------------------
     // Test: dismissTerminalItems does not affect non-terminal items

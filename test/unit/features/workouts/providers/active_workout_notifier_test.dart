@@ -3956,11 +3956,11 @@ void main() {
       expect(afterCancel, isA<AsyncData<ActiveWorkoutState?>>());
       expect(afterCancel.value!.workout.id, initial.workout.id);
 
-      // 3. Save then FAILS terminally (HTTP 403 → terminal in
-      // SyncErrorClassifier) — saveCommitted stays false, so the
+      // 3. Save then FAILS terminally (SQLSTATE 42501 RLS denial → terminal
+      // in SyncErrorClassifier) — saveCommitted stays false, so the
       // cancel-after-guard branch is taken and state isn't clobbered.
       saveCompleter.completeError(
-        const app.DatabaseException('rls denied', code: '403'),
+        const app.DatabaseException('rls denied', code: '42501'),
       );
       await finishFuture;
       await Future<void>.delayed(Duration.zero);
@@ -4088,7 +4088,7 @@ void main() {
       //    the cancel-after-guard branch is taken and state isn't
       //    clobbered. Hive must NOT have been cleared either (C2 ordering).
       discardCompleter.completeError(
-        const app.DatabaseException('rls denied', code: '403'),
+        const app.DatabaseException('rls denied', code: '42501'),
       );
       await discardFuture;
       await Future<void>.delayed(Duration.zero);

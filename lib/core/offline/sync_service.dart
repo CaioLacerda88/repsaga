@@ -374,6 +374,22 @@ class SyncService extends Notifier<SyncState> {
 
           if (isTerminal || newRetryCount >= kMaxSyncRetries) {
             _trackSyncFailed(action, e);
+
+            // Terminal on first attempt: pin the action to the retry-count
+            // ceiling so it is skipped on every subsequent drain (line ~316
+            // `retryCount >= kMaxSyncRetries continue`) and counted in
+            // `terminalFailureCount`. `retryItem` already incremented to
+            // `newRetryCount` and stamped `errorCategory` (which drives the
+            // sheet's Dismiss CTA); without this clamp a deterministic
+            // structural error would be re-drained `kMaxSyncRetries` times
+            // (one wasted round-trip per trigger) before the ceiling caught
+            // it. We reuse the EXISTING ceiling gate rather than add a
+            // separate terminal flag — structural guarantee over runtime
+            // flag. Only escalate (never lower a count already at/above the
+            // ceiling). cluster: classifier-keyed-on-http-not-sqlstate.
+            if (isTerminal && newRetryCount < kMaxSyncRetries) {
+              await _escalateToTerminal(action);
+            }
           } else {
             // Transient error — backoff before next item.
             await Future<void>.delayed(_backoffDuration(newRetryCount));
@@ -473,6 +489,28 @@ class SyncService extends Notifier<SyncState> {
         errorCategory: SyncErrorCategory.none,
       ),
     };
+  }
+
+  /// Pin a deterministically-terminal action to the retry-count ceiling so
+  /// it is skipped by every subsequent drain and counted in
+  /// `terminalFailureCount`. Re-reads the live action first because
+  /// `retryItem` has already persisted `retryCount + 1`, `lastError`, and the
+  /// classified `errorCategory` — we preserve those (the sheet's Dismiss CTA
+  /// reads `errorCategory`) and only escalate `retryCount` to the ceiling.
+  /// Idempotent: a no-op if the action was dequeued or already at the ceiling.
+  /// cluster: classifier-keyed-on-http-not-sqlstate.
+  Future<void> _escalateToTerminal(PendingAction action) async {
+    final queue = ref.read(offlineQueueServiceProvider);
+    final live = queue.getAll().where((a) => a.id == action.id).firstOrNull;
+    if (live == null || live.retryCount >= kMaxSyncRetries) return;
+    final pinned = switch (live) {
+      PendingSaveWorkout() => live.copyWith(retryCount: kMaxSyncRetries),
+      PendingUpsertRecords() => live.copyWith(retryCount: kMaxSyncRetries),
+      PendingMarkRoutineComplete() => live.copyWith(
+        retryCount: kMaxSyncRetries,
+      ),
+    };
+    await queue.updateAction(pinned);
   }
 
   void _trackSyncSucceeded(PendingAction action) {

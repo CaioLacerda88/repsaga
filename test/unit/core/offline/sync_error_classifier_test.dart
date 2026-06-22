@@ -8,72 +8,152 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 void main() {
   group('SyncErrorClassifier', () {
+    // PRODUCTION ERROR SHAPES. PostgrestException.code (and the
+    // app.DatabaseException.code that ErrorMapper copies from it) is the
+    // Postgres SQLSTATE / a PGRST* code — NEVER a parseable HTTP int. The
+    // earlier suite injected mock HTTP codes ('400'/'409') that the runtime
+    // never emits, masking the dead terminal fast-path. These cases use the
+    // real codes. cluster: classifier-keyed-on-http-not-sqlstate.
     group('isTerminal', () {
-      test('returns true for 400 Bad Request', () {
+      // --- Terminal SQLSTATEs (deterministic — identical replay always fails)
+      test('returns true for 22P02 invalid_text_representation '
+          '(malformed UUID in payload)', () {
         const error = supabase.PostgrestException(
-          message: 'Bad Request',
-          code: '400',
+          message: 'invalid input syntax for type uuid',
+          code: '22P02',
         );
         expect(SyncErrorClassifier.isTerminal(error), isTrue);
       });
 
-      test('returns false for 401 Unauthorized (JWT auto-refresh)', () {
+      test('returns true for 23502 not_null_violation', () {
         const error = supabase.PostgrestException(
-          message: 'Unauthorized',
-          code: '401',
+          message: 'null value in column violates not-null constraint',
+          code: '23502',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 23503 foreign_key_violation', () {
+        const error = supabase.PostgrestException(
+          message: 'insert or update violates foreign key constraint',
+          code: '23503',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 23505 unique_violation', () {
+        const error = supabase.PostgrestException(
+          message: 'duplicate key value violates unique constraint',
+          code: '23505',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 23514 check_violation', () {
+        const error = supabase.PostgrestException(
+          message: 'new row violates check constraint',
+          code: '23514',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 42501 insufficient_privilege (RLS denial)', () {
+        const error = supabase.PostgrestException(
+          message: 'new row violates row-level security policy',
+          code: '42501',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 42P01 undefined_table', () {
+        const error = supabase.PostgrestException(
+          message: 'relation does not exist',
+          code: '42P01',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for 42703 undefined_column', () {
+        const error = supabase.PostgrestException(
+          message: 'column does not exist',
+          code: '42703',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for PGRST202 (RPC not found in schema cache)', () {
+        const error = supabase.PostgrestException(
+          message: 'Could not find the function in the schema cache',
+          code: 'PGRST202',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for PGRST204 (column not found)', () {
+        const error = supabase.PostgrestException(
+          message: 'Column not found',
+          code: 'PGRST204',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      // --- Transient SQLSTATEs (retry can succeed — must NOT be terminal)
+      test('returns false for 40001 serialization_failure (retryable)', () {
+        const error = supabase.PostgrestException(
+          message: 'could not serialize access due to concurrent update',
+          code: '40001',
         );
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
       });
 
-      test('returns true for 403 Forbidden', () {
+      test('returns false for 40P01 deadlock_detected (retryable)', () {
         const error = supabase.PostgrestException(
-          message: 'Forbidden',
-          code: '403',
-        );
-        expect(SyncErrorClassifier.isTerminal(error), isTrue);
-      });
-
-      test('returns true for 404 Not Found', () {
-        const error = supabase.PostgrestException(
-          message: 'Not Found',
-          code: '404',
-        );
-        expect(SyncErrorClassifier.isTerminal(error), isTrue);
-      });
-
-      test('returns true for 409 Conflict', () {
-        const error = supabase.PostgrestException(
-          message: 'Conflict',
-          code: '409',
-        );
-        expect(SyncErrorClassifier.isTerminal(error), isTrue);
-      });
-
-      test('returns true for 422 Unprocessable Entity', () {
-        const error = supabase.PostgrestException(
-          message: 'Unprocessable',
-          code: '422',
-        );
-        expect(SyncErrorClassifier.isTerminal(error), isTrue);
-      });
-
-      test('returns false for 500 Internal Server Error', () {
-        const error = supabase.PostgrestException(message: 'ISE', code: '500');
-        expect(SyncErrorClassifier.isTerminal(error), isFalse);
-      });
-
-      test('returns false for 502 Bad Gateway', () {
-        const error = supabase.PostgrestException(
-          message: 'Bad Gateway',
-          code: '502',
+          message: 'deadlock detected',
+          code: '40P01',
         );
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
       });
 
-      test('returns false for 503 Service Unavailable', () {
+      test('returns false for 55P03 lock_not_available (retryable)', () {
         const error = supabase.PostgrestException(
-          message: 'Unavailable',
-          code: '503',
+          message: 'could not obtain lock',
+          code: '55P03',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test('returns false for 57014 query_canceled (retryable)', () {
+        const error = supabase.PostgrestException(
+          message: 'canceling statement due to statement timeout',
+          code: '57014',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test('returns false for 53300 too_many_connections (retryable)', () {
+        const error = supabase.PostgrestException(
+          message: 'too many connections',
+          code: '53300',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test('returns false for 08006 connection_failure (retryable)', () {
+        const error = supabase.PostgrestException(
+          message: 'connection failure',
+          code: '08006',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test('returns false for P0002 no_data_found (RPC raise; retryable)', () {
+        // The save_workout finalize RPC raises P0002 when the workout row
+        // isn't visible yet — a timing/visibility issue that can clear, not a
+        // deterministic data-shape error. Conservative default keeps it
+        // transient.
+        const error = supabase.PostgrestException(
+          message: 'Workout not found or does not belong to user',
+          code: 'P0002',
         );
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
       });
@@ -92,7 +172,7 @@ void main() {
         );
       });
 
-      test('returns false for AuthException', () {
+      test('returns false for AuthException (token auto-refresh)', () {
         expect(
           SyncErrorClassifier.isTerminal(
             const supabase.AuthException('JWT expired'),
@@ -105,24 +185,53 @@ void main() {
         expect(SyncErrorClassifier.isTerminal(Exception('random')), isFalse);
       });
 
-      test('returns false for PostgrestException with non-numeric code', () {
+      test('returns false for PostgrestException with unrecognised code '
+          '(conservative default)', () {
         const error = supabase.PostgrestException(
-          message: 'Unknown',
-          code: 'PGRST',
+          message: 'some new code we have not classified',
+          code: '99999',
         );
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
       });
 
       // Wrapped app.* exception types — repository layer maps raw Supabase
-      // errors into these via BaseRepository.mapException. The classifier
-      // must recognise both shapes (PR1B catch-site sees the wrapped form).
-      test('returns true for wrapped app.DatabaseException with 400', () {
-        const error = app.DatabaseException('Bad Request', code: '400');
+      // errors into these via BaseRepository.mapException, copying the raw
+      // SQLSTATE/PGRST code onto DatabaseException.code. The classifier must
+      // recognise both shapes (PR1B catch-site sees the wrapped form).
+      test('returns true for wrapped app.DatabaseException with 22P02', () {
+        const error = app.DatabaseException('malformed uuid', code: '22P02');
         expect(SyncErrorClassifier.isTerminal(error), isTrue);
       });
 
-      test('returns false for wrapped app.DatabaseException with 500', () {
-        const error = app.DatabaseException('ISE', code: '500');
+      test('returns true for wrapped app.DatabaseException with 42501 '
+          '(RLS denial)', () {
+        const error = app.DatabaseException('RLS denied', code: '42501');
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns true for wrapped app.DatabaseException with '
+          "'deserialization' sentinel (ErrorMapper TypeError)", () {
+        // ErrorMapper maps a Dart TypeError during JSON decode to
+        // DatabaseException(code: 'deserialization') — a malformed payload
+        // won't reshape on retry, so it's terminal.
+        const error = app.DatabaseException(
+          'type error',
+          code: 'deserialization',
+        );
+        expect(SyncErrorClassifier.isTerminal(error), isTrue);
+      });
+
+      test('returns false for wrapped app.DatabaseException with 40001 '
+          '(serialization — retryable)', () {
+        const error = app.DatabaseException('serialization', code: '40001');
+        expect(SyncErrorClassifier.isTerminal(error), isFalse);
+      });
+
+      test("returns false for wrapped app.DatabaseException with 'unknown' "
+          'sentinel (ErrorMapper fallback — conservative)', () {
+        // ErrorMapper uses code 'unknown' when PostgrestException.code is
+        // null. Conservative default: keep retrying.
+        const error = app.DatabaseException('no code', code: 'unknown');
         expect(SyncErrorClassifier.isTerminal(error), isFalse);
       });
 
@@ -152,24 +261,45 @@ void main() {
       });
     });
 
-    // The httpCode helper is the single canonical extractor used by call
-    // sites that want the numeric HTTP code (e.g. the active-workout notifier
-    // discriminating 5xx queue copy). It must recognise exactly the same
-    // code-bearing shapes that isTerminal pattern-matches; if a new wrapped
-    // form is added to isTerminal, it must also be added here so the two
-    // paths don't drift.
+    // The httpCode helper `int.tryParse`s the `code` field of the
+    // code-bearing wrapped shapes (app.DatabaseException / app.AuthException)
+    // and raw PostgrestException. In production the only shape whose code is a
+    // real HTTP int is the AuthException family (ErrorMapper copies gotrue's
+    // `statusCode`); a PostgREST/Postgres code is a SQLSTATE/PGRST string and
+    // tryParse yields null for codes containing letters (e.g. `22P02`,
+    // `PGRST202`). NOTE: an all-digit SQLSTATE like `42501` happens to parse —
+    // but the 5xx copy consumer only acts on the 500-599 range, which no real
+    // SQLSTATE falls into, so this is harmless. (Raw supabase.AuthException is
+    // intentionally NOT handled here — only the app.* wrapped form is, since
+    // that's what the catch sites see post-mapException.)
     group('httpCode', () {
-      test('returns parsed code for PostgrestException with numeric code', () {
-        const error = supabase.PostgrestException(
-          message: 'Bad Request',
-          code: '400',
-        );
-        expect(SyncErrorClassifier.httpCode(error), 400);
+      test('returns the HTTP code for wrapped app.AuthException', () {
+        const error = app.AuthException('JWT expired', code: '401');
+        expect(SyncErrorClassifier.httpCode(error), 401);
       });
 
-      test('returns parsed code for wrapped app.DatabaseException', () {
-        const error = app.DatabaseException('ISE', code: '500');
-        expect(SyncErrorClassifier.httpCode(error), 500);
+      test('returns null for raw supabase.AuthException (not handled — the '
+          'catch sites see the wrapped form)', () {
+        const error = supabase.AuthException(
+          'Invalid login credentials',
+          statusCode: '400',
+        );
+        expect(SyncErrorClassifier.httpCode(error), isNull);
+      });
+
+      test('returns null for PostgrestException with an alphanumeric SQLSTATE '
+          '(not an HTTP int)', () {
+        const error = supabase.PostgrestException(
+          message: 'malformed uuid',
+          code: '22P02',
+        );
+        expect(SyncErrorClassifier.httpCode(error), isNull);
+      });
+
+      test('returns null for wrapped app.DatabaseException with an '
+          'alphanumeric SQLSTATE/PGRST code', () {
+        const error = app.DatabaseException('RPC missing', code: 'PGRST202');
+        expect(SyncErrorClassifier.httpCode(error), isNull);
       });
 
       test('returns null for app.NetworkException (no HTTP code shape)', () {

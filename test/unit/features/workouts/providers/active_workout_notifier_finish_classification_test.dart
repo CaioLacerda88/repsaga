@@ -166,11 +166,13 @@ void main() {
 
   group('finishWorkout — catch-site classification (PR1B)', () {
     // ------------------------------------------------------------------
-    // Terminal — 4xx / RLS / FK denial.
+    // Terminal — deterministic data/permission failure (malformed payload,
+    // constraint violation, RLS denial). PostgrestException.code is the
+    // SQLSTATE in production — these use the real codes, NOT HTTP ints.
     // Contract: rethrow inside guard, state lands in AsyncError, NO enqueue.
     // ------------------------------------------------------------------
-    test('terminal raw PostgrestException(400) → state.hasError, NO enqueue '
-        '(AW-EX-D-US1-03)', () async {
+    test('terminal raw PostgrestException(22P02 malformed payload) → '
+        'state.hasError, NO enqueue (AW-EX-D-US1-03)', () async {
       final bundle = _makeBundle(_makeState());
       addTearDown(bundle.container.dispose);
 
@@ -181,7 +183,10 @@ void main() {
           sets: any(named: 'sets'),
         ),
       ).thenThrow(
-        const supabase.PostgrestException(message: 'Bad Request', code: '400'),
+        const supabase.PostgrestException(
+          message: 'invalid input syntax for type uuid',
+          code: '22P02',
+        ),
       );
 
       await bundle.container.read(activeWorkoutProvider.future);
@@ -208,60 +213,67 @@ void main() {
       expect(bundle.capturedNotifier.enqueued, isEmpty);
     });
 
-    test(
-      'terminal wrapped DatabaseException(403) → state.hasError, NO enqueue',
-      () async {
-        // The production catch site sees the [BaseRepository.mapException]-
-        // wrapped form; pinning both raw and wrapped exception types keeps
-        // the classifier robust against future repository changes.
-        final bundle = _makeBundle(_makeState());
-        addTearDown(bundle.container.dispose);
+    test('terminal wrapped DatabaseException(42501 RLS denial) → '
+        'state.hasError, NO enqueue', () async {
+      // The production catch site sees the [BaseRepository.mapException]-
+      // wrapped form, which copies the raw SQLSTATE onto
+      // DatabaseException.code; pinning both raw and wrapped exception
+      // types keeps the classifier robust against future repository changes.
+      final bundle = _makeBundle(_makeState());
+      addTearDown(bundle.container.dispose);
 
-        when(
-          () => bundle.mockRepo.saveWorkout(
-            workout: any(named: 'workout'),
-            exercises: any(named: 'exercises'),
-            sets: any(named: 'sets'),
-          ),
-        ).thenThrow(const app.DatabaseException('RLS denied', code: '403'));
+      when(
+        () => bundle.mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenThrow(
+        const app.DatabaseException(
+          'new row violates row-level security policy',
+          code: '42501',
+        ),
+      );
 
-        await bundle.container.read(activeWorkoutProvider.future);
-        await bundle.container
-            .read(activeWorkoutProvider.notifier)
-            .finishWorkout();
+      await bundle.container.read(activeWorkoutProvider.future);
+      await bundle.container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout();
 
-        final state = bundle.container.read(activeWorkoutProvider);
-        expect(state, isA<AsyncError<ActiveWorkoutState?>>());
-        expect(bundle.capturedNotifier.enqueued, isEmpty);
-      },
-    );
+      final state = bundle.container.read(activeWorkoutProvider);
+      expect(state, isA<AsyncError<ActiveWorkoutState?>>());
+      expect(bundle.capturedNotifier.enqueued, isEmpty);
+    });
 
-    test(
-      'terminal DatabaseException(422) → state.hasError, NO enqueue',
-      () async {
-        final bundle = _makeBundle(_makeState());
-        addTearDown(bundle.container.dispose);
+    test('terminal DatabaseException(23503 FK violation) → '
+        'state.hasError, NO enqueue', () async {
+      final bundle = _makeBundle(_makeState());
+      addTearDown(bundle.container.dispose);
 
-        when(
-          () => bundle.mockRepo.saveWorkout(
-            workout: any(named: 'workout'),
-            exercises: any(named: 'exercises'),
-            sets: any(named: 'sets'),
-          ),
-        ).thenThrow(const app.DatabaseException('FK violation', code: '422'));
+      when(
+        () => bundle.mockRepo.saveWorkout(
+          workout: any(named: 'workout'),
+          exercises: any(named: 'exercises'),
+          sets: any(named: 'sets'),
+        ),
+      ).thenThrow(
+        const app.DatabaseException(
+          'insert or update violates foreign key constraint',
+          code: '23503',
+        ),
+      );
 
-        await bundle.container.read(activeWorkoutProvider.future);
-        await bundle.container
-            .read(activeWorkoutProvider.notifier)
-            .finishWorkout();
+      await bundle.container.read(activeWorkoutProvider.future);
+      await bundle.container
+          .read(activeWorkoutProvider.notifier)
+          .finishWorkout();
 
-        expect(
-          bundle.container.read(activeWorkoutProvider),
-          isA<AsyncError<ActiveWorkoutState?>>(),
-        );
-        expect(bundle.capturedNotifier.enqueued, isEmpty);
-      },
-    );
+      expect(
+        bundle.container.read(activeWorkoutProvider),
+        isA<AsyncError<ActiveWorkoutState?>>(),
+      );
+      expect(bundle.capturedNotifier.enqueued, isEmpty);
+    });
 
     // ------------------------------------------------------------------
     // Transient — offline / 5xx / timeout.
@@ -305,6 +317,12 @@ void main() {
 
     test('transient PostgrestException(500) → enqueued, '
         'serverErrorQueued=true (Q1.3 discriminator)', () async {
+      // Note: a real PostgREST/Postgres error carries a SQLSTATE, not an
+      // HTTP int — a genuine 5xx surfaces as a transport-layer
+      // Socket/Http/Timeout exception. This case pins the numeric-5xx
+      // `serverErrorQueued` copy branch itself: any code-bearing shape whose
+      // code parses to 5xx is transient (NOT terminal — 500 is not in the
+      // terminal SQLSTATE set) AND flips the server-error copy discriminator.
       final bundle = _makeBundle(_makeState());
       addTearDown(bundle.container.dispose);
 
