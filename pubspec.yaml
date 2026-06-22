@@ -18,12 +18,12 @@ dependencies:
   # "Cannot read properties of undefined (reading 'init')" before the router
   # navigates, so the app hangs on splash. The 2.15 upgrade (publishableKey
   # migration + passkeys handling) is a separate focused task.
-  supabase_flutter: 2.12.2
-  flutter_riverpod: ^3.3.1
+  supabase_flutter: 2.15.0
+  flutter_riverpod: ^3.3.2
   riverpod_annotation: ^4.0.0
-  go_router: ^17.0.0
+  go_router: ^17.3.0
   freezed_annotation: ^3.0.0
-  json_annotation: ^4.11.0
+  json_annotation: ^4.12.0
   hive: ^2.2.0
   hive_flutter: ^1.1.0
   cached_network_image: ^3.4.1
@@ -33,8 +33,8 @@ dependencies:
   google_fonts: ^6.2.0
   intl: ^0.20.0
   uuid: ^4.5.1
-  wakelock_plus: ^1.2.8
-  sentry_flutter: ^9.16.1
+  wakelock_plus: ^1.5.2
+  sentry_flutter: ^9.22.0
   clock: ^1.1.1
   connectivity_plus: ^6.1.0
   # Web-only DOM event subscriptions (window.online / window.offline) for the
@@ -57,7 +57,7 @@ dependencies:
   # `ShareImageRenderer` / `ShareService` can import them without depending
   # on undeclared transitive resolution surviving future package upgrades.
   cross_file: ^0.3.4
-  path_provider: ^2.1.4
+  path_provider: ^2.1.6
   package_info_plus: ^9.0.1 # Pinned: 10.x requires Dart SDK newer than 3.11.4
   # Used for `firstWhereOrNull` in `active_workout_screen.dart` (PR3 review W1)
   # — the previous `firstWhere(orElse: () => after.last)` silently returned the
@@ -79,7 +79,7 @@ dev_dependencies:
   fake_async: ^1.3.3
   # Exposed directly by wakelock_plus for testing — we reference
   # WakelockPlusPlatformInterface from test fakes.
-  wakelock_plus_platform_interface: ^1.4.0
+  wakelock_plus_platform_interface: ^1.5.1
   flutter_launcher_icons: ^0.14.1
   # Used by integration tests (test/integration/) to call Supabase Admin API
   # for test-user creation/deletion. Already a transitive dep of
