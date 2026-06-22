@@ -314,14 +314,23 @@ independent audit lanes (highest confidence). User chose: do this before 39/40, 
   to UI instead of silent-queue. New cluster `classifier-keyed-on-http-not-sqlstate`. **Tier 1 complete.**
 
 **Tier 2 — Pipeline gaps we were flying blind on (cheap, high-leverage):**
-- [ ] **T2.1** Code coverage measured then discarded — upload `lcov.info` + non-regressing floor.
-- [ ] **T2.2** No dependency-vuln scanning — add `osv-scanner`/dependabot.
-- [ ] **T2.3** No layering CI gate — grep-gate forbidding `.from('`/`.rpc('` outside `lib/**/data/`
-  (mirrors `check_hardcoded_colors`); converts the rule from convention to structural guarantee.
-- [ ] **T2.4** No migration-rollback story — document the forward-fix convention + a pre-push
-  `pg_dump` checklist in CLAUDE.md's migration step.
+T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
+- [x] **T2.1** Coverage floor — `scripts/check_coverage_floor.sh` parses the `lcov.info` the
+  `test` job already produces, fails below a committed floor (77%, current 78%). Self-contained.
+- [x] **T2.2** Dependency-vuln scan — `osv-scanner` CI job over `pubspec.lock` (pinned
+  `@v2.3.8`) + `.github/dependabot.yml` (pub + actions) + `.osv-scanner.toml` ignore-process.
+  First real scan clean.
+- [x] **T2.3** Layering gate — `scripts/check_no_supabase_outside_data.sh` (`layering-check`
+  job) forbids `.from(`/`.rpc(` (multiline + quote-agnostic, comment-stripped) outside
+  `lib/**/data/`. Converts the rule from convention to structural guarantee; would have caught
+  the T1.1 weekly_engagement leak. `health_check_provider` allow-listed.
+- [x] **T2.4** Migration-rollback doc — CLAUDE.md step 12: forward-fix convention + pre-push
+  `pg_dump`/PITR checklist for launch-critical migrations.
 - [ ] **T2.5** No perf-regression signal on the XP/vitality hot path (correctness tested, latency not).
+  *(harder — deferred from the #374 bundle; a latency-budget assertion on the existing
+  `rpg_save_workout_perf_test.dart` is the likely lightweight approach.)*
 - [ ] **T2.6** Visual-verification + a11y are process-only, not CI-enforced (visual-only bugs escape).
+  *(harder — golden-image diff is excluded for host-shaping reasons; needs design. Deferred.)*
 
 **Tier 3 — Maintainability tech debt (opportunistic):**
 - [ ] **T3.1** Decompose `finishWorkout()` (~617 lines, `active_workout_notifier.dart:1526-2143`)
