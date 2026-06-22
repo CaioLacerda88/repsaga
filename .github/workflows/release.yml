@@ -31,10 +31,24 @@ jobs:
       # signingConfig.  Both paths are gitignored (root .gitignore:
       # android/keystore/, android/key.properties, **/*.jks).
       - name: Inject release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          # Fail LOUD and EARLY here (not later at the signing step) if the
+          # keystore secret is missing — otherwise an empty secret would decode
+          # to a 0-byte .jks, key.properties would still be written, gradle would
+          # select the release signingConfig, and the failure would surface
+          # confusingly at the AAB/APK signing step instead.
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing — cannot sign a release build. See docs/release-checklist.md." >&2
+            exit 1
+          fi
           mkdir -p android/keystore
-          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
-            | base64 --decode > android/keystore/upload-keystore.jks
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/keystore/upload-keystore.jks
+          if [ ! -s android/keystore/upload-keystore.jks ]; then
+            echo "::error::Decoded keystore is empty — ANDROID_KEYSTORE_BASE64 is not valid base64 of a .jks." >&2
+            exit 1
+          fi
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=keystore/upload-keystore.jks\n' \
             "${{ secrets.ANDROID_STORE_PASSWORD }}" \
             "${{ secrets.ANDROID_KEY_PASSWORD }}" \

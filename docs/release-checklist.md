@@ -138,13 +138,15 @@ Download `debug-info.zip` from the GitHub release, then:
 # Unzip the symbols
 unzip debug-info.zip -d debug-info/
 
-# Use Flutter's symbolizer
+# Use Flutter's symbolizer. `--split-debug-info` writes the symbol files FLAT
+# in build/debug-info/ (no per-arch subdirectory), named by architecture:
+#   app.android-arm64.symbols / app.android-arm.symbols / app.android-x64.symbols
 flutter symbolize \
-  --debug-info debug-info/<arch>/app.android-arm64.symbols \
+  --debug-info debug-info/app.android-arm64.symbols \
   --input /path/to/crash-stack.txt
 ```
 
-Replace `<arch>` with the architecture from the crash report (`android-arm64`, `android-arm`, or `android-x86`).
+Pick the `.symbols` file matching the crashing architecture (`app.android-arm64.symbols` for arm64-v8a, `app.android-arm.symbols` for armeabi-v7a, `app.android-x64.symbols` for x86_64).
 
 ---
 
@@ -152,7 +154,7 @@ Replace `<arch>` with the architecture from the crash report (`android-arm64`, `
 
 The pipeline will fail loud rather than silently:
 
-- Missing `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEY_*` / `ANDROID_STORE_PASSWORD`: the keystore decode step fails and the build step errors (no signing config).
+- Missing `ANDROID_KEYSTORE_BASE64`: the **Inject release keystore** step fails immediately with a clear `::error::` (it guards on the empty secret + an empty decoded `.jks`) — no artifact is produced. Missing `ANDROID_KEY_*` / `ANDROID_STORE_PASSWORD` (but keystore present): `key.properties` is written with empty passwords, so the build fails at the **AAB/APK signing step** when Gradle can't unlock the keystore. Either way: fails loud, no signed artifact.
 - Missing `PROD_SUPABASE_URL` / `PROD_SUPABASE_ANON_KEY`: the `.env` will have empty values; `dotenv.env['SUPABASE_URL']!` will throw at app startup.
 - Missing `PLAY_SERVICE_ACCOUNT_JSON`: the Play upload step is skipped (not a failure); the GitHub release is still created.
 - Missing `SENTRY_DSN`: Sentry is skipped (`initSentryAndRun` no-ops on an empty DSN); the release still ships but crash reporting is inactive.
