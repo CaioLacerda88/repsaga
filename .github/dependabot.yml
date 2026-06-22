@@ -34,7 +34,8 @@ updates:
     # them every run and the grouped pub PR fails CI forever. Each is documented
     # in pubspec.yaml + PROJECT.md §2. Re-evaluate (remove the ignore) when the
     # underlying blocker clears (Flutter SDK bumps meta to 1.18; the passkeys_web
-    # boot issue is handled; package_info_plus drops its Dart-min bump).
+    # boot issue is handled). NOTE: package_info_plus 10 was a FALSE blocker (its
+    # "needs newer Dart SDK" comment was stale) — adopted via #399, ignore removed.
     ignore:
       # Web-boot crash via the passkeys_web transitive plugin (cluster
       # supabase-passkeys-web-boot-crash). Held at 2.12.x.
@@ -53,9 +54,6 @@ updates:
         versions: [">=6.14.0"]
       - dependency-name: "json_annotation"
         versions: [">=4.12.0"]
-      # 10.x bumps the Dart SDK min beyond 3.11.4 (pinned in pubspec.yaml).
-      - dependency-name: "package_info_plus"
-        versions: [">=10.0.0"]
     groups:
       pub-all:
         update-types:
