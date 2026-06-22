@@ -42,11 +42,15 @@ if [[ ! -f "$LCOV_FILE" ]]; then
 fi
 
 # Sum LH (lines hit) and LF (lines found) across all source files.
+# `printf "%d %d"` with `+0` coercion guarantees two space-separated integers
+# even when a field never appears (uninitialized awk vars → 0), so `read`
+# can never column-shift on a degenerate lcov.info (fail-closed via the
+# LINES_FOUND == 0 check below).
 read -r LINES_HIT LINES_FOUND < <(
   awk -F: '
     /^LH:/ { lh += $2 }
     /^LF:/ { lf += $2 }
-    END    { print lh, lf }
+    END    { printf "%d %d\n", lh+0, lf+0 }
   ' "$LCOV_FILE"
 )
 

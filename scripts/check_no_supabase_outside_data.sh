@@ -5,26 +5,31 @@
 # Rationale: direct `.from('table')` or `.rpc('fn')` calls belong exclusively
 # in repository classes (lib/**/data/). Leaking them into providers, widgets,
 # view-models, or domain models bypasses the repository abstraction, makes
-# offline/mocking impossible, and fragments the data-access audit trail.
+# offline/mocking impossible, and fragments the data-access audit trail. This
+# gate would have caught the Phase 38.9 T1.1 weekly_engagement leak.
 #
-# Pattern matched: `\.(from|rpc)\('`
-#   This matches `.from('workouts')`, `.rpc('save_workout')` etc. — the
-#   string-literal form where the argument is a quoted table/function name.
+# Pattern matched: `.from(` / `.rpc(` followed (across optional whitespace AND
+# newlines) by a quote — single OR double. This catches every real Supabase
+# call shape, including the codebase's DOMINANT multiline repository style:
+#     client.rpc(
+#       'save_workout',
+#       params: {...},
+#     )
+# and double-quoted forms `.from("workouts")` (flutter_lints does not enforce
+# prefer_single_quotes, so double quotes are lint-legal and must be caught).
 #
-#   It deliberately does NOT match:
-#     - `List.from(x)`  — `from(x)` receives a variable/expression, no quote
-#     - `Set.from(x)`   — same
-#     - `Map.from(x)`   — same
-#     - `.from(l10n)`   — same (ShareLocalizations.from, WeeklyEngagement.from…)
-#     - Comments containing `.from('…')` — grep -v'#' would be fragile;
-#       instead we let comment hits through and handle them in ALLOW_LIST below.
-#       In practice, the only comment hits are doc-string references to
-#       "raw .from('workouts') reads" in workout.dart / workout.freezed.dart
-#       which are in the data/ subtree anyway.
+# It deliberately does NOT match Dart collection / factory constructors, whose
+# argument is a variable/expression (no opening quote) — `List.from(xs)`,
+# `Set.from(xs)`, `Map.from(m)`, `WeeklyEngagement.from(data)`,
+# `ShareLocalizations.from(l10n)` — including their multiline-wrapped forms.
+#
+# Comment handling: line comments (`//`, `///`) and block comments (`/* */`,
+# including multiline) are stripped BEFORE matching, so doc-string references
+# like `/// a raw .from('workouts') read` never false-positive.
 #
 # Allow-list: full relative paths from repo root. One per line. Each entry
 # MUST carry a documented justification so the reason surfaces in code review
-# and git blame. To add a new exception: append the path here with a comment.
+# and git blame. To add a new exception: append the path with a comment.
 #
 # Usage: bash scripts/check_no_supabase_outside_data.sh
 # Exit:  0 on clean, 1 on any unapproved violation.
@@ -39,8 +44,13 @@ if [[ ! -d "$LIB_DIR" ]]; then
   exit 0
 fi
 
+if ! command -v perl >/dev/null 2>&1; then
+  echo "check_no_supabase_outside_data: perl is required but not found." >&2
+  exit 2
+fi
+
 # ---- Allow-list -------------------------------------------------------
-# Relative paths from REPO_ROOT. Add with // ALLOW: <reason> inline above.
+# Relative paths from REPO_ROOT. Add with a # ALLOW: <reason> comment above.
 
 # ALLOW: infra connectivity probe — NOT feature data access. This file fires
 # a single `select('id').limit(1)` against `public.users` purely to check
@@ -49,34 +59,28 @@ fi
 # auth tables are managed by Supabase Auth, not the app), and (b) the probe
 # must remain available in fully-offline mode before any user-data providers
 # have initialized. Routing through a repository would create a circular init
-# dependency (HealthCheck → UserRepository → Supabase → HealthCheck).
+# dependency (HealthCheck -> UserRepository -> Supabase -> HealthCheck).
 ALLOW_LIST=(
   "lib/core/offline/health_check_provider.dart"
 )
 
 # ---- Scan ---------------------------------------------------------------
-# Find all .dart files under lib/ that are NOT inside a data/ directory.
-# We use find + grep rather than a single ripgrep invocation so we can
-# filter by path before doing the pattern match.
+# Candidate files: all .dart under lib/ NOT inside a `data/` path segment.
+# `/data/` is matched as a full path segment (slashes both sides), so by
+# convention ANY `data/` directory IS the repository layer and is exempt
+# (`lib/features/<f>/data/`, `lib/core/data/`); substring names like
+# `data_export/` or `metadata/` are NOT excluded.
 #
-# Comment-filtering: we exclude lines whose code portion (after the grep -n
-# `lineno:` prefix) consists only of a Dart comment (`//` or `*` block lines).
-# This avoids false positives from doc-strings referencing the pattern, e.g.
-# `/// raw .from('workouts') reads`. The `grep -n` output format is
-# `<lineno>:<content>`, so we must skip the prefix before matching `^\s*(//|\*)`.
-# We do that by stripping the `<digits>:` prefix with sed before testing.
-
-COMMENT_PATTERN='^\s*(//|\*)'
+# Per file we strip comments then run a multiline, quote-agnostic match,
+# reporting the line of each violation.
 
 HITS=""
 
 while IFS= read -r file; do
   [[ -z "$file" ]] && continue
 
-  # Convert to relative path for allow-list comparison.
   rel="${file#"$REPO_ROOT/"}"
 
-  # Check allow-list.
   allowed=false
   for entry in "${ALLOW_LIST[@]}"; do
     if [[ "$rel" == "$entry" ]]; then
@@ -84,33 +88,28 @@ while IFS= read -r file; do
       break
     fi
   done
+  $allowed && continue
 
-  if $allowed; then
-    continue
-  fi
-
-  # Grep for the pattern, then exclude lines that are Dart comments.
-  # `grep -n` output is `lineno:content`; we strip the `<digits>:` prefix
-  # with `sed` before testing `^\s*(//|\*)` so the comment test applies to
-  # the actual code content, not the line-number prefix.
+  # Strip block + line comments, then find `.from(`/`.rpc(` followed (across
+  # whitespace/newlines) by a quote. Emit one line number per violation.
   matches="$(
-    grep -n -E "\.(from|rpc)\('" "$file" 2>/dev/null \
-      | while IFS= read -r hit; do
-          content="${hit#*:}"   # strip leading `lineno:`
-          if echo "$content" | grep -q -E "$COMMENT_PATTERN"; then
-            continue
-          fi
-          echo "$hit"
-        done \
-    || true
+    perl -0777 -ne '
+      my $s = $_;
+      $s =~ s{/\*.*?\*/}{ }gs;     # block comments (incl. multiline)
+      $s =~ s{//[^\n]*}{}g;        # line + doc comments
+      while ($s =~ /\.(?:from|rpc)\s*\(\s*["\x27]/g) {
+        my $pre = substr($s, 0, pos($s));
+        my $ln  = ($pre =~ tr/\n//) + 1;
+        print "  line $ln\n";
+      }
+    ' "$file" 2>/dev/null || true
   )"
 
   if [[ -n "$matches" ]]; then
-    HITS+="$file:"$'\n'"$matches"$'\n\n'
+    HITS+="$rel:"$'\n'"$matches"$'\n'
   fi
 done < <(
-  find "$LIB_DIR" -type f -name '*.dart' \
-    | grep -v '/data/'
+  find "$LIB_DIR" -type f -name '*.dart' | grep -v '/data/'
 )
 
 if [[ -n "$HITS" ]]; then
@@ -120,7 +119,7 @@ if [[ -n "$HITS" ]]; then
   echo "Move .from('…') / .rpc('…') calls into the appropriate repository" >&2
   echo "class under lib/**/data/. If this is a genuine infra probe (not feature" >&2
   echo "data access), add the file path to the ALLOW_LIST in this script with" >&2
-  echo "a documented // ALLOW: <reason> comment above the entry." >&2
+  echo "a documented # ALLOW: <reason> comment above the entry." >&2
   exit 1
 fi
 
