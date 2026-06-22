@@ -284,12 +284,18 @@ the RLS test gate (T1.3) must exist before Phase 40 adds the first cross-user RL
 `finishWorkout` decompose (T3.1) should land before Phase 39 modifies it. `⭑` = flagged by ≥2
 independent audit lanes (highest confidence). User chose: do this before 39/40, **Tier 1 first**.
 
-**Tier 0 — Launch blockers (owned by Launch Phase, surfaced now):**
-- [ ] **T0.1** Release pipeline ships UNSIGNED, debug-signed APKs with `.env.example` placeholder
-  secrets → artifact can't reach backend. Need signed AAB + keystore + real `.env` from CI
-  secrets + `--obfuscate --split-debug-info` + Play upload. `.github/workflows/release.yml`.
-- [ ] **T0.2** Sentry no-ops without a DSN and the release injects an empty DSN → crash reporting
-  is currently a no-op. Inject real DSN + prove a scrubbed test crash ingests. `sentry_init.dart:85`.
+**Tier 0 — Launch readiness:** 🟡 SCAFFOLDED #397 — needs user secrets to go live.
+- [x] **T0.1** ✅ #397 (2026-06-22) — `release.yml` rewritten: keystore injection + real prod
+  `.env` from secrets + signed **AAB** (Play internal track, gated) + signed split APKs + `--obfuscate
+  --split-debug-info` + debug-info.zip for symbolication. INERT until the user adds 8 GitHub secrets
+  + tags a `v*` release. `build.gradle.kts` signing was already complete. Full guide:
+  `docs/release-checklist.md`.
+- [x] **T0.2** ✅ #397 — `SENTRY_DSN` now injected into the release `.env` so `initSentryAndRun`
+  initializes in prod. **USER ACTION remaining:** add the secret + do the one-time manual
+  "trigger a test crash → confirm it ingests with PII scrubbed" verification (per the checklist).
+- **USER-OWNED to go live** (can't be automated): generate the upload keystore, set up Play Console
+  + App Signing + a service-account JSON, get the Sentry DSN + prod Supabase anon key, add all 8
+  secrets, tag a release. See `docs/release-checklist.md`.
 
 **Tier 1 — Correctness/safety (DOING FIRST):**
 - [x] **T1.1 ⭑** ✅ #367 (2026-06-21) — extracted the raw `.from('sets')` query out of

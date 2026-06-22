@@ -30,6 +30,32 @@ updates:
       time: "09:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5
+    # Ignore versions we've DELIBERATELY held — otherwise dependabot re-proposes
+    # them every run and the grouped pub PR fails CI forever. Each is documented
+    # in pubspec.yaml + PROJECT.md §2. Re-evaluate (remove the ignore) when the
+    # underlying blocker clears (Flutter SDK bumps meta to 1.18; the passkeys_web
+    # boot issue is handled; package_info_plus drops its Dart-min bump).
+    ignore:
+      # Web-boot crash via the passkeys_web transitive plugin (cluster
+      # supabase-passkeys-web-boot-crash). Held at 2.12.x.
+      - dependency-name: "supabase_flutter"
+        versions: [">=2.15.0"]
+      # 4.0.4 needs analyzer ^12 / meta ^1.18 — unsolvable vs flutter_test's
+      # meta 1.17.0 on SDK 3.41.6. Blocks the riverpod/json codegen quartet below
+      # (they transitively require the same analyzer/meta floor).
+      - dependency-name: "riverpod_generator"
+        versions: [">=4.0.4"]
+      - dependency-name: "riverpod_annotation"
+        versions: [">=4.0.3"]
+      - dependency-name: "flutter_riverpod"
+        versions: [">=3.3.2"]
+      - dependency-name: "json_serializable"
+        versions: [">=6.14.0"]
+      - dependency-name: "json_annotation"
+        versions: [">=4.12.0"]
+      # 10.x bumps the Dart SDK min beyond 3.11.4 (pinned in pubspec.yaml).
+      - dependency-name: "package_info_plus"
+        versions: [">=10.0.0"]
     groups:
       pub-all:
         update-types:
