@@ -217,6 +217,38 @@ void main() {
       );
       await expectMeetsLabels(tester);
     });
+
+    // The two deferred findings are encoded as explicitly-SKIPPED tests (not just
+    // header comments) so the omission is legible in the suite output and the
+    // assertion is one `skip:` removal away once the underlying fix lands.
+    // (`testWidgets.skip` is bool-only — the reason lives in the test name.)
+    testWidgets(
+      'meets text-contrast '
+      '[SKIP TODO(a11y): "kg" label textDim ~1.13 < AA — design-token pass, §2]',
+      (tester) async {
+        await pumpSurface(
+          tester,
+          SizedBox(width: 800, child: row()),
+          viewport: const Size(800, 600),
+        );
+        await expectMeetsContrast(tester);
+      },
+      skip: true,
+    );
+
+    testWidgets(
+      'meets tap-target '
+      '[SKIP TODO(a11y): +/- 40×48 + done-cell 32×32 < 48×48 — row layout, §2]',
+      (tester) async {
+        await pumpSurface(
+          tester,
+          SizedBox(width: 800, child: row()),
+          viewport: const Size(800, 600),
+        );
+        await expectMeetsTapTargets(tester);
+      },
+      skip: true,
+    );
   });
 
   group('A11y guidelines — SetRow predicted-PR (gold done-mark variant)', () {
@@ -310,6 +342,12 @@ class _ProfileStub extends AsyncNotifier<Profile?> implements ProfileNotifier {
   @override
   Future<Profile?> build() async => profile;
 
+  // HomeGreeting only reads build(); any other ProfileNotifier member is
+  // unstubbed. Fail LOUD with the member name if the surface starts calling
+  // one (instead of an opaque NoSuchMethodError from super).
   @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    '_ProfileStub: unstubbed ProfileNotifier member '
+    '${invocation.memberName} — add a stub if HomeGreeting now needs it.',
+  );
 }
