@@ -247,7 +247,7 @@ class _RuneSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: lit ? hue : Colors.white.withValues(alpha: 0.07),
+        color: lit ? hue : AppColors.textCream.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(2),
         boxShadow: lit
             ? [BoxShadow(color: hue.withValues(alpha: 0.5), blurRadius: 6)]
