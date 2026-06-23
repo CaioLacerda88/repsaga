@@ -10,7 +10,7 @@ import 'package:repsaga/features/workouts/domain/session_lift_summary.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_state.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/mission_debrief_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/mission_debrief_section.dart';
-import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/conditioning_charge_bar.dart';
+import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/conditioning_charge_strip.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/lift_row.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/widgets/xp_segmented_bar.dart';
 
@@ -57,9 +57,13 @@ MissionDebriefLocalizations _ptLocalizations() {
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
     xpEarnedLabel: 'XP GANHO',
-    conditioningChargedEyebrow: 'Condicionamento recarregado',
+    conditioningChargedEyebrow: 'Condicionamento',
     conditioningChargedDelta: (pct) => '+$pct%',
-    conditioningChargedCaption: 'A runa recarrega ao longo de ~7 dias.',
+    conditioningChargedMax: 'MÁX',
+    conditioningMore: (count) => '+$count mais recarregados',
+    conditioningAllAtPeak: '✓ Tudo no pico — condicionamento mantido',
+    conditioningAlreadyChargedToday:
+        'Já carregado hoje. Veja a carga na sua Saga.',
   );
 }
 
@@ -75,9 +79,13 @@ MissionDebriefLocalizations _enLocalizations() {
     rankUpArrow: (from, to) => 'Rank $from → $to',
     weightUnit: 'kg',
     xpEarnedLabel: 'XP EARNED',
-    conditioningChargedEyebrow: 'Conditioning charged',
+    conditioningChargedEyebrow: 'Conditioning',
     conditioningChargedDelta: (pct) => '+$pct%',
-    conditioningChargedCaption: 'The rune recharges over ~7 days.',
+    conditioningChargedMax: 'MAX',
+    conditioningMore: (count) => '+$count more recharged',
+    conditioningAllAtPeak: '✓ All at peak — conditioning held',
+    conditioningAlreadyChargedToday:
+        'Already charged today. See your charge on your Saga.',
   );
 }
 
@@ -958,27 +966,26 @@ void main() {
           ],
           bpXpDeltas: const {BodyPart.chest: 640},
           bpRankAfter: const {BodyPart.chest: 12},
-          conditioningCharge: const ConditioningCharge(
-            beforePct: 0.58,
-            afterPct: 0.72,
+          // chest: 58% → 72% charge → +14% gainer row.
+          conditioningCharge: ConditioningCharge.fromSnapshots(
+            trainedBodyParts: const [BodyPart.chest],
+            before: const {BodyPart.chest: (ewma: 58, peak: 100, refPeak: 100)},
+            after: const {BodyPart.chest: (ewma: 72, peak: 100, refPeak: 100)},
           ),
         );
 
         await _pumpDebrief(tester, state: state);
 
-        // The beat widget mounts with its eyebrow + delta (pt fixtures).
-        expect(find.byType(ConditioningChargeBar), findsOneWidget);
-        expect(
-          find.textContaining('CONDICIONAMENTO RECARREGADO'),
-          findsOneWidget,
-        );
-        // delta = 0.72 - 0.58 = 0.14 → +14%
+        // The beat widget mounts with its bare eyebrow + the per-bp row.
+        expect(find.byType(ConditioningChargeStrip), findsOneWidget);
+        expect(find.textContaining('CONDICIONAMENTO'), findsOneWidget);
+        // chest row delta = 0.72 - 0.58 = 0.14 → +14%
         expect(find.text('+14%'), findsOneWidget);
       },
     );
 
-    testWidgets('Conditioning charged beat hides when the charge delta is 0% '
-        '(day-zero / plateau / same-day re-save)', (tester) async {
+    testWidgets('Conditioning charged beat hides when no bp has charge data '
+        '(day-zero, refPeak <= 0)', (tester) async {
       final state = _buildState(
         topLifts: const [
           SessionLiftSummary(
@@ -993,17 +1000,49 @@ void main() {
         ],
         bpXpDeltas: const {BodyPart.chest: 640},
         bpRankAfter: const {BodyPart.chest: 12},
-        // after == before → delta 0% → shouldRender false.
-        conditioningCharge: const ConditioningCharge(
-          beforePct: 0.72,
-          afterPct: 0.72,
+        // refPeak 0 → no charge data → shouldRender false (true day-zero).
+        conditioningCharge: ConditioningCharge.fromSnapshots(
+          trainedBodyParts: const [BodyPart.chest],
+          before: const {BodyPart.chest: (ewma: 0, peak: 0, refPeak: 0)},
+          after: const {BodyPart.chest: (ewma: 0, peak: 0, refPeak: 0)},
         ),
       );
 
       await _pumpDebrief(tester, state: state);
 
-      expect(find.byType(ConditioningChargeBar), findsNothing);
-      expect(find.textContaining('CONDICIONAMENTO RECARREGADO'), findsNothing);
+      expect(find.byType(ConditioningChargeStrip), findsNothing);
+      expect(find.textContaining('CONDICIONAMENTO'), findsNothing);
+    });
+
+    testWidgets('Conditioning charged beat surfaces the guard state on a '
+        'same-day re-save (flat EWMA)', (tester) async {
+      final state = _buildState(
+        topLifts: const [
+          SessionLiftSummary(
+            exerciseId: 'supino',
+            exerciseName: 'Supino',
+            bodyPart: BodyPart.chest,
+            peakWeightKg: 80,
+            peakReps: 8,
+            xpContribution: 640,
+            isPR: false,
+          ),
+        ],
+        bpXpDeltas: const {BodyPart.chest: 640},
+        bpRankAfter: const {BodyPart.chest: 12},
+        // EWMA exactly flat (guard blocked) → renders the "already charged
+        // today" line instead of vanishing.
+        conditioningCharge: ConditioningCharge.fromSnapshots(
+          trainedBodyParts: const [BodyPart.chest],
+          before: const {BodyPart.chest: (ewma: 72, peak: 100, refPeak: 100)},
+          after: const {BodyPart.chest: (ewma: 72, peak: 100, refPeak: 100)},
+        ),
+      );
+
+      await _pumpDebrief(tester, state: state);
+
+      expect(find.byType(ConditioningChargeStrip), findsOneWidget);
+      expect(find.textContaining('Já carregado hoje'), findsOneWidget);
     });
 
     testWidgets('Conditioning charged beat is absent when charge is null', (
@@ -1028,7 +1067,7 @@ void main() {
 
       await _pumpDebrief(tester, state: state);
 
-      expect(find.byType(ConditioningChargeBar), findsNothing);
+      expect(find.byType(ConditioningChargeStrip), findsNothing);
     });
   });
 }

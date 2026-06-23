@@ -1,72 +1,118 @@
 import '../../rpg/models/body_part.dart';
 
-/// Aggregate before/after conditioning charge for the post-session
-/// "Conditioning charged" debrief beat (Phase Vitality PR 2).
+/// Per-body-part conditioning charge for the post-session "Conditioning
+/// charged" debrief beat (Phase Vitality-2).
 ///
 /// **What it is.** Vitality is a per-body-part EWMA of recent training
-/// volume — a "charge" / rune that REBUILDS toward a 7-day peak at save time
-/// (PR 1 made the recompute happen in `save_workout`), and decays only over
-/// days (never depletes in-session). Per-bp charge fraction is
-/// `clamp(ewma / peak, 0, 1)`; a bp the user has never charged
-/// (`peak == 0`) has an undefined fraction and is excluded from the roll-up.
+/// volume — a "charge" / rune that REBUILDS at save time and decays only
+/// over days (never depletes in-session). The charge FRACTION of a body
+/// part is `clamp(ewma / refPeak, 0, 1)`, where `refPeak` is the *decaying
+/// reference peak* (`vitality_ref_peak`, a 21-day half-life rolling max) —
+/// NOT the monotonic all-time `vitality_peak`. The rolling denominator is
+/// what makes a detrained user's comeback session read big instead of
+/// rounding to 0% against a frozen all-time max.
 ///
-/// The beat reports a single aggregate (Variant A, user-locked design):
-/// the MEAN of the per-bp charge fractions across the body parts TRAINED
-/// this session (the bps that earned XP). It carries the BEFORE snapshot
-/// (pre-finish) and the AFTER snapshot (post-`refreshAfterSave`) so the
-/// widget can render a two-tone "was → now" charge bar counting up
-/// rightward.
+/// **Why per-bp, not aggregate.** The old aggregate mean collapsed all
+/// trained parts into a single `+N%`, which (1) diluted real gains with
+/// already-maxed parts contributing `+0` and (2) hid the whole beat below a
+/// sub-1% aggregate delta. This model carries an ORDERED list of
+/// [BodyPartCharge] — one row per trained part with charge data — so the
+/// rune-strip widget can show each part's own gain in its own hue.
 ///
-/// **Decoupling Rule 1 (pure data).** No widgets, no `BuildContext`,
-/// no provider reads — the controller computes the two fractions from the
+/// **Decoupling Rule 1 (pure data).** No widgets, no `BuildContext`, no
+/// provider reads — the controller computes the per-bp charges from the
 /// pre/post snapshots and hands this object to the widget layer.
 class ConditioningCharge {
-  const ConditioningCharge({required this.beforePct, required this.afterPct});
+  const ConditioningCharge({
+    required this.parts,
+    required this.alreadyChargedToday,
+  });
 
-  /// Aggregate charge fraction BEFORE the session (mean of per-bp
-  /// `clamp(ewma/peak, 0, 1)` over the trained bps), in `[0, 1]`.
-  final double beforePct;
+  /// Per-body-part charge rows, ordered for display: gainers first by
+  /// delta descending, then held/MÁX rows (no positive gain). Only parts
+  /// that HAVE charge data (`refPeak > 0`) appear here.
+  final List<BodyPartCharge> parts;
 
-  /// Aggregate charge fraction AFTER the session (same roll-up against the
-  /// post-save snapshot), in `[0, 1]`.
-  final double afterPct;
+  /// True when EVERY trained body part with charge data shows an exactly
+  /// flat EWMA (`before.ewma == after.ewma`) — the server's once-per-day
+  /// vitality guard blocked the step (2nd+ same-day save, or a save after
+  /// the nightly cron already advanced today's charge). The widget renders
+  /// the "já carregado hoje" guard state instead of per-bp rows. Honest:
+  /// the charge WAS already banked today, never a loss.
+  final bool alreadyChargedToday;
 
-  /// Honest delta in percentage points, clamped at 0 — vitality only
-  /// rebuilds at save time, so a same-day re-save (guarded server-side)
-  /// or a numerically-flat recompute reads as a no-op, never a drop.
-  double get deltaPct => (afterPct - beforePct).clamp(0.0, 1.0);
+  /// A body part whose charge rounds to 100% after the session
+  /// (`afterPct >= 0.995`). Held at peak — the widget shows "MÁX", never a
+  /// dead `+0`.
+  bool get hasMaxedParts => parts.any((p) => p.isMax);
 
-  /// Integer delta for the "+N%" label.
-  int get deltaPercentInt => (deltaPct * 100).round();
+  /// True when there are charge rows but NONE of them gained (all held at
+  /// their prior level / at peak). Drives the "all at peak" copy line —
+  /// distinct from [alreadyChargedToday] (which is the server-guard state).
+  bool get allHeld =>
+      parts.isNotEmpty && parts.every((p) => p.deltaPercentInt == 0);
 
-  /// Whether the beat should render. Hides gracefully when there is no
-  /// honest forward movement to show (no trained bp with charge data, or a
-  /// delta that rounds to 0% — day-zero, a fully-charged plateau, or a
-  /// same-day re-save).
-  bool get shouldRender => deltaPercentInt > 0;
+  /// Whether the beat should render. Renders whenever ANY trained bp has
+  /// charge data (so an all-maxed session still shows "everything stayed
+  /// charged"), OR when the once-per-day guard blocked the step (so the
+  /// beat surfaces the honest "already charged today" state instead of
+  /// silently vanishing). Hides only on true day-zero / no-charge-data.
+  bool get shouldRender => parts.isNotEmpty || alreadyChargedToday;
 
-  /// Compute the aggregate before/after charge from raw pre/post vitality
-  /// snapshots, restricted to [trainedBodyParts].
+  /// Compute the per-bp charges from raw pre/post vitality snapshots,
+  /// restricted to [trainedBodyParts].
   ///
-  /// [before] / [after] map each body part to its `(ewma, peak)` pair. A bp
-  /// absent from a map, or present with `peak <= 0`, contributes no charge
-  /// fraction on that side (undefined ratio). The aggregate on each side is
-  /// the mean over the trained bps that HAVE a defined fraction on that
-  /// side; when a side has no defined fraction at all, it reads 0.0 (the
-  /// `shouldRender` gate then hides the beat unless the other side lifts it
-  /// above 0%).
+  /// [before] / [after] map each body part to its `(ewma, peak, refPeak)`
+  /// record. A bp absent from a map, or present with `refPeak <= 0` on the
+  /// AFTER side, has no defined charge fraction and is EXCLUDED from
+  /// [parts] (no charge data to show).
   ///
-  /// Returns a charge whose [shouldRender] is false when [trainedBodyParts]
-  /// is empty.
+  /// [alreadyChargedToday] is true when there is at least one trained bp
+  /// with charge data AND every such bp's EWMA is exactly unchanged
+  /// (`before.ewma == after.ewma`) — the server guard signal.
   static ConditioningCharge fromSnapshots({
     required Iterable<BodyPart> trainedBodyParts,
-    required Map<BodyPart, ({double ewma, double peak})> before,
-    required Map<BodyPart, ({double ewma, double peak})> after,
+    required Map<BodyPart, ({double ewma, double peak, double refPeak})> before,
+    required Map<BodyPart, ({double ewma, double peak, double refPeak})> after,
   }) {
     final trained = trainedBodyParts.toSet();
+    final charges = <BodyPartCharge>[];
+    var anyData = false;
+    var allFlat = true;
+
+    for (final bp in trained) {
+      final a = after[bp];
+      // No AFTER row, or no reference peak → undefined fraction, excluded.
+      if (a == null || a.refPeak <= 0) continue;
+      anyData = true;
+
+      final b = before[bp];
+      final beforePct = (b == null || b.refPeak <= 0)
+          ? 0.0
+          : (b.ewma / b.refPeak).clamp(0.0, 1.0);
+      final afterPct = (a.ewma / a.refPeak).clamp(0.0, 1.0);
+
+      // The guard signal is per-bp exact EWMA equality. A single bp that
+      // actually stepped means the session was NOT guard-blocked.
+      final bewma = b?.ewma;
+      if (bewma == null || bewma != a.ewma) allFlat = false;
+
+      charges.add(
+        BodyPartCharge(bodyPart: bp, beforePct: beforePct, afterPct: afterPct),
+      );
+    }
+
+    // Ordering: gainers first (delta desc), then held/MÁX rows. Stable on
+    // the body-part enum order as the tiebreak so the strip is deterministic.
+    charges.sort((x, y) {
+      final byDelta = y.deltaPercentInt.compareTo(x.deltaPercentInt);
+      if (byDelta != 0) return byDelta;
+      return x.bodyPart.index.compareTo(y.bodyPart.index);
+    });
+
     return ConditioningCharge(
-      beforePct: _meanCharge(trained, before),
-      afterPct: _meanCharge(trained, after),
+      parts: charges,
+      alreadyChargedToday: anyData && allFlat,
     );
   }
 
@@ -74,25 +120,69 @@ class ConditioningCharge {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ConditioningCharge &&
+          other.alreadyChargedToday == alreadyChargedToday &&
+          _listEquals(other.parts, parts);
+
+  @override
+  int get hashCode => Object.hash(alreadyChargedToday, Object.hashAll(parts));
+
+  static bool _listEquals(List<BodyPartCharge> a, List<BodyPartCharge> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/// One body part's before/after conditioning charge. Pure data —
+/// rendered by the rune-strip widget as a hue-segmented rune + label +
+/// state-aware delta (`▲ +N%` for a gainer, MÁX for a held-at-peak part).
+class BodyPartCharge {
+  const BodyPartCharge({
+    required this.bodyPart,
+    required this.beforePct,
+    required this.afterPct,
+  });
+
+  final BodyPart bodyPart;
+
+  /// Charge fraction BEFORE the session (`clamp(ewma/refPeak, 0, 1)`),
+  /// `[0, 1]`. The rune's prior fill level.
+  final double beforePct;
+
+  /// Charge fraction AFTER the session, `[0, 1]`. The rune fills to this
+  /// level in the part's hue.
+  final double afterPct;
+
+  /// Held at peak — the after charge rounds to 100% (`>= 0.995`). The widget
+  /// shows "MÁX" + a full rune instead of a delta, never a dead `+0`.
+  bool get isMax => afterPct >= 0.995;
+
+  /// Honest forward delta in percentage points, clamped at 0 (vitality only
+  /// rebuilds at save time — a numerically-flat or decayed snapshot reads as
+  /// a no-op, never a drop).
+  ///
+  /// **+1% floor for a real gain.** When there is a genuine positive EWMA
+  /// step that would otherwise round DOWN to `+0%`, the delta is floored to
+  /// 1 so a part that actually charged never displays "+0". A truly flat
+  /// part (no gain) stays at 0 (and renders as MÁX or a held row, never
+  /// "+0%").
+  int get deltaPercentInt {
+    final raw = afterPct - beforePct;
+    if (raw <= 0) return 0;
+    final rounded = (raw * 100).round();
+    return rounded == 0 ? 1 : rounded;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BodyPartCharge &&
+          other.bodyPart == bodyPart &&
           other.beforePct == beforePct &&
           other.afterPct == afterPct;
 
   @override
-  int get hashCode => Object.hash(beforePct, afterPct);
-
-  static double _meanCharge(
-    Set<BodyPart> trained,
-    Map<BodyPart, ({double ewma, double peak})> snapshot,
-  ) {
-    var sum = 0.0;
-    var n = 0;
-    for (final bp in trained) {
-      final row = snapshot[bp];
-      if (row == null || row.peak <= 0) continue;
-      sum += (row.ewma / row.peak).clamp(0.0, 1.0);
-      n += 1;
-    }
-    if (n == 0) return 0.0;
-    return sum / n;
-  }
+  int get hashCode => Object.hash(bodyPart, beforePct, afterPct);
 }

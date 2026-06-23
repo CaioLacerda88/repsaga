@@ -28,7 +28,10 @@ class MissionDebriefLocalizations {
     required this.xpEarnedLabel,
     required this.conditioningChargedEyebrow,
     required this.conditioningChargedDelta,
-    required this.conditioningChargedCaption,
+    required this.conditioningChargedMax,
+    required this.conditioningMore,
+    required this.conditioningAllAtPeak,
+    required this.conditioningAlreadyChargedToday,
   });
 
   /// Bridge from the generated [AppLocalizations] to the typed bundle.
@@ -46,7 +49,11 @@ class MissionDebriefLocalizations {
       xpEarnedLabel: l10n.postSessionXpEarnedLabel,
       conditioningChargedEyebrow: l10n.postSessionConditioningChargedEyebrow,
       conditioningChargedDelta: l10n.postSessionConditioningChargedDelta,
-      conditioningChargedCaption: l10n.postSessionConditioningChargedCaption,
+      conditioningChargedMax: l10n.postSessionConditioningChargedMax,
+      conditioningMore: l10n.postSessionConditioningMore,
+      conditioningAllAtPeak: l10n.postSessionConditioningAllAtPeak,
+      conditioningAlreadyChargedToday:
+          l10n.postSessionConditioningAlreadyChargedToday,
     );
   }
 
@@ -91,16 +98,27 @@ class MissionDebriefLocalizations {
   /// Pre-uppercased to match the tracked-label register.
   final String xpEarnedLabel;
 
-  /// "Conditioning charged" — eyebrow above the aggregate teal charge bar
-  /// (Phase Vitality PR 2). Title-cased; the widget uppercases for the
+  /// "Conditioning" — bare eyebrow above the per-bp rune strip (Phase
+  /// Vitality-2). Title-cased; the widget prefixes a ⚡ + uppercases for the
   /// tracked-label register.
   final String conditioningChargedEyebrow;
 
-  /// "+N%" delta label on the charge bar. Pass the integer percentage-point
-  /// increase (afterPct − beforePct).
+  /// "+N%" delta label on a gainer rune row. Pass the integer
+  /// percentage-point increase (afterPct − beforePct, floored to 1).
   final String Function(int pct) conditioningChargedDelta;
 
-  /// "The rune recharges over ~7 days." caption locking the rebuild-not-
-  /// deplete metaphor in copy.
-  final String conditioningChargedCaption;
+  /// "MÁX" / "MAX" — held-at-peak word shown in place of a delta on a maxed
+  /// rune row. Pre-uppercased.
+  final String conditioningChargedMax;
+
+  /// "+N more recharged" overflow footer below the capped 4-row strip.
+  final String Function(int count) conditioningMore;
+
+  /// "✓ All at peak — conditioning held" line shown above the MÁX rows when
+  /// every trained part is already at peak (no gainers).
+  final String conditioningAllAtPeak;
+
+  /// "Already charged today…" guard-state copy shown instead of rune rows
+  /// when the once-per-day vitality step was already taken.
+  final String conditioningAlreadyChargedToday;
 }

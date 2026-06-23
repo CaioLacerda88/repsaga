@@ -8,7 +8,7 @@ import '../../../utils/cardio_format.dart';
 import '../post_session_state.dart';
 import 'mission_debrief_localizations.dart';
 import 'widgets/cardio_entry_row.dart';
-import 'widgets/conditioning_charge_bar.dart';
+import 'widgets/conditioning_charge_strip.dart';
 import 'widgets/lift_row.dart';
 import 'widgets/xp_segmented_bar.dart';
 
@@ -285,25 +285,29 @@ class MissionDebriefSection extends StatelessWidget {
           // 10 dp gap below.
           if (sortedBpEntries.isNotEmpty) const SizedBox(height: 20),
 
-          // 4b) "Conditioning charged" beat (Phase Vitality PR 2). Static
-          // aggregate teal charge bar reporting the save-time vitality
-          // rebuild across the trained bps. Gated on a valid, non-zero
-          // delta — hides gracefully on day-zero / fully-charged plateau /
-          // same-day re-save (charge.shouldRender). Sits below the per-BP
-          // rank rows + segmented bar (which already answer which-BP) and
-          // above the next-target callout, separated by a hair divider so
-          // it reads as its own structural block.
+          // 4b) "Conditioning charged" beat (Phase Vitality-2). Per-body-part
+          // rune charge strip reporting the save-time vitality rebuild across
+          // the trained bps (each part in its own hue). Renders whenever any
+          // trained bp has charge data (an all-maxed session still shows
+          // "everything stayed charged") OR the once-per-day guard blocked
+          // the step (surfaces "já carregado hoje"); hides only on true
+          // day-zero / no-charge-data (charge.shouldRender). Sits below the
+          // per-BP rank rows + segmented bar and above the next-target
+          // callout, separated by a hair divider so it reads as its own
+          // structural block.
           if (state.conditioningCharge?.shouldRender ?? false) ...[
             const Divider(color: AppColors.hair, height: 1, thickness: 1),
             const SizedBox(height: 14),
-            ConditioningChargeBar(
-              beforeFraction: state.conditioningCharge!.beforePct,
-              afterFraction: state.conditioningCharge!.afterPct,
+            ConditioningChargeStrip(
+              charge: state.conditioningCharge!,
+              bodyPartLabels: state.bodyPartLabels,
               eyebrowLabel: localizations.conditioningChargedEyebrow,
-              deltaLabel: localizations.conditioningChargedDelta(
-                state.conditioningCharge!.deltaPercentInt,
-              ),
-              captionLabel: localizations.conditioningChargedCaption,
+              deltaLabel: localizations.conditioningChargedDelta,
+              maxLabel: localizations.conditioningChargedMax,
+              moreLabel: localizations.conditioningMore,
+              allAtPeakLabel: localizations.conditioningAllAtPeak,
+              alreadyChargedTodayLabel:
+                  localizations.conditioningAlreadyChargedToday,
             ),
             const SizedBox(height: 16),
           ],

@@ -3183,8 +3183,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get postSessionXpEarnedLabel => 'XP GANHO';
 
   @override
-  String get postSessionConditioningChargedEyebrow =>
-      'Condicionamento recarregado';
+  String get postSessionConditioningChargedEyebrow => 'Condicionamento';
 
   @override
   String postSessionConditioningChargedDelta(int pct) {
@@ -3192,8 +3191,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get postSessionConditioningChargedCaption =>
-      'A runa recarrega ao longo de ~7 dias.';
+  String get postSessionConditioningChargedMax => 'MÁX';
+
+  @override
+  String postSessionConditioningMore(int count) {
+    return '+$count mais recarregados';
+  }
+
+  @override
+  String get postSessionConditioningAllAtPeak =>
+      '✓ Tudo no pico — condicionamento mantido';
+
+  @override
+  String get postSessionConditioningAlreadyChargedToday =>
+      'Já carregado hoje. Seu condicionamento sobe uma vez por dia — os ganhos de hoje já estão registrados. Veja a carga atual na sua Saga.';
 
   @override
   String get avatarPickerSheetTitle => 'Escolha a origem do avatar';

@@ -866,7 +866,8 @@ void main() {
         expect(
           refPeak,
           greaterThan(ewma),
-          reason: 'ref_peak ($refPeak) must stay above the decayed ewma ($ewma)',
+          reason:
+              'ref_peak ($refPeak) must stay above the decayed ewma ($ewma)',
         );
       },
       timeout: const Timeout(Duration(minutes: 2)),
