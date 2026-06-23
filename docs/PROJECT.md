@@ -376,6 +376,13 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
       PR-list / Home-subtitles / SetRow completed digit+type-label. Out of the Login/Home/SetRow
       scope — needs a dedicated design-token contrast sweep with its own visual gate (cluster
       `design-token-sweep-on-new-tokens`).
+    - [ ] **Flaky widget test (test-hygiene follow-up):** `test/unit/features/workouts/ui/post_session/
+      cuts/cinematic_tap_hint_test.dart` intermittently fails in CI with a `hitTestWarningShouldBeFatal`
+      "widget off-screen / obscured" tap (passes locally 3/3; failed 1 of 2 CI runs during #404,
+      unrelated to that change). The tap lands imprecisely on an animating cinematic widget under CI
+      timing — fix with an `ensureVisible` / precise-offset tap or settle the animation first.
+      Pre-existing; cost a CI re-run. (Also note: rendered `meetsGuideline(textContrast)` is
+      host-dependent for small heavily-tracked text — pin those nominally, per the HomeGreeting fix.)
 
 **Tier 3 — Maintainability tech debt (opportunistic):**
 - [x] **T3.1** ✅ #384 (2026-06-22) — decomposed `finishWorkout()` (617 → 277 lines) into
