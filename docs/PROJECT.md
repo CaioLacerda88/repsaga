@@ -360,14 +360,22 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
     bugs that actually escape (the signup-email-obscured class). The bug-catching gate is the manual
     Playwright visual-verification at 320/360/412dp — so the realistic deliverable is to make that
     manual gate **non-skippable** (a required "visuals attached" PR step), NOT a flaky auto screenshot-diff.
-  - **a11y findings surfaced by the new gate (deferred — genuine WCAG gaps that currently ship):**
-    [ ] Sub-48dp tap targets on the core logging row — stepper +/- buttons (40dp wide by BUG-019
-    row-budget design) + SetRow done-cell checkbox / gold ◆ (32dp); raising to 48×48 is an
-    active-workout grid layout change → tech-lead. [ ] Low text contrast (`AppColors.textDim` on
-    dark) below WCAG AA: SetRow "kg" (1.13), HomeGreeting date eyebrow (2.78), Login wordmark
-    (2.48) / "Forgot password?" (1.21) / "OR" (2.95) / sign-up toggle (2.48) / Terms·Privacy (2.09)
-    → design-token contrast pass. (The new gate asserts the guidelines that pass today + `TODO(a11y)`
-    skips these specific ones, so it stays green AND catches future regressions.)
+  - **a11y findings surfaced by the new gate:**
+    [ ] ⛔ Sub-48dp tap targets (stepper +/- + SetRow done-cell) — **NOT fixable without a row
+    redesign (accepted limitation).** The `StepperHitTarget` 48dp-wide hit-area attempt was REVERTED:
+    the visual-verification gate proved a 48dp-WIDE +/- hit-rect steals the adjacent value-node tap at
+    360dp baseline (tapping the reps number fired "Increase reps"). The 40dp horizontal cap is the
+    deliberate BUG-019 row budget, so 48×48 steppers require redrawing the active-workout row — tracked
+    here for a future row-redesign phase. Tap-target a11y tests stay `skip: true` (accepted dense-row
+    limit). [x] ✅ Low text contrast on **Login / Home / SetRow** — FIXED: new AA token
+    `AppColors.textDimAA` (#CFC5E3) for the secondary-text tier + structural `kg` Opacity-compound
+    fix + login links→`hotViolet`. (PR: a11y-contrast-and-tap-targets.) Contrast a11y tests un-skipped.
+    - [ ] **Broader dim-text contrast sweep (deferred — its own phase):** the inline-alpha sweep
+      found **112 `onSurface/primary.withValues(alpha:)` sites across 40 files**; most are decorative
+      (leave), but dim TEXT on alpha ≥0.45 ships across Profile / Exercises / History / Onboarding /
+      PR-list / Home-subtitles / SetRow completed digit+type-label. Out of the Login/Home/SetRow
+      scope — needs a dedicated design-token contrast sweep with its own visual gate (cluster
+      `design-token-sweep-on-new-tokens`).
 
 **Tier 3 — Maintainability tech debt (opportunistic):**
 - [x] **T3.1** ✅ #384 (2026-06-22) — decomposed `finishWorkout()` (617 → 277 lines) into

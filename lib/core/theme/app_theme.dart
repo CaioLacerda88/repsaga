@@ -49,7 +49,29 @@ class AppColors {
   static const textCream = Color(0xFFEEE7FA);
 
   /// Secondary text — captions, metadata, disabled labels.
+  ///
+  /// **Decorative / non-text use ONLY** post-Phase-38.9. [textDim] sits at
+  /// ~2.78:1 on [abyss] at small sizes — below the WCAG-AA 4.5:1 floor for
+  /// body text. Keep it for non-text decoration (strength-bar tracks, faint
+  /// dividers, empty-state placeholder strokes) where the contrast guideline
+  /// does not apply. For any DIM TEXT, reach for [textDimAA] instead.
   static const textDim = Color(0xFF9C8DB8);
+
+  /// AA-compliant secondary text (Phase 38.9 T2.6).
+  ///
+  /// A brighter neutral lavender that clears the WCAG-AA 4.5:1 floor for
+  /// small body text while staying visibly DIM (not promoted to the
+  /// full-strength [textCream] register). Measured contrast on the app
+  /// surfaces: ~9.76:1 on [abyss], ~8.85:1 on [surface], ~8.07:1 on
+  /// [surface2] — comfortably AA (and AAA) for both 12sp body and the 10sp
+  /// eyebrow tier.
+  ///
+  /// **Text-only.** This is the secondary-TEXT token; it is NOT a body-part
+  /// identity hue (brand-vs-identity rule, `project_design_language_brand_
+  /// vs_identity`). Use it for `bodySmall` / `numericSmall` text, dim unit
+  /// labels, date eyebrows, and dim secondary labels on dark surfaces.
+  /// Decorative non-text dimming stays on [textDim].
+  static const textDimAA = Color(0xFFCFC5E3);
 
   /// Positive delta / success state. Distinct from [heroGold] so a green
   /// ✓ chip never competes visually with a reward flash.
@@ -271,7 +293,8 @@ class AppTextStyles {
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    color: AppColors.textDim,
+    // Phase 38.9 T2.6: AA-compliant dim text (was textDim ~2.78:1 < 4.5).
+    color: AppColors.textDimAA,
   );
 
   /// Barlow Condensed 600 uppercase with +0.12em tracking — chips, tabs,
@@ -364,7 +387,8 @@ class AppTextStyles {
   static TextStyle get numericSmall => numeric.copyWith(
     fontSize: 11,
     fontWeight: FontWeight.w600,
-    color: AppColors.textDim,
+    // Phase 38.9 T2.6: AA-compliant dim numerals (was textDim ~2.78:1 < 4.5).
+    color: AppColors.textDimAA,
     letterSpacing: 0.04 * 11,
     height: 1.4,
   );

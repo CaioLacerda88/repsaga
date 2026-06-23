@@ -401,10 +401,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const SizedBox(height: 6),
                         Text(
                           l10n.passwordRevealHint,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            fontSize: 12,
-                            color: AppColors.textDim,
-                          ),
+                          // Phase 38.9 T2.6: inherits bodySmall's AA textDimAA
+                          // (dropped the textDim override).
+                          style: AppTextStyles.bodySmall.copyWith(fontSize: 12),
                         ),
                       ],
                     ],
@@ -540,7 +539,6 @@ class _BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -559,9 +557,9 @@ class _BrandHeader extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           l10n.appName,
-          style: AppTextStyles.display.copyWith(
-            color: theme.colorScheme.primary,
-          ),
+          // Phase 38.9 T2.6: wordmark on the interactive violet (hotViolet,
+          // 6.27:1) instead of primaryViolet (2.48:1 < 3.0 large-text AA).
+          style: AppTextStyles.display.copyWith(color: AppColors.hotViolet),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
@@ -581,7 +579,8 @@ class _BrandHeader extends StatelessWidget {
                 ? AppTextStyles.display.copyWith(fontSize: 16)
                 : AppTextStyles.body.copyWith(
                     fontSize: 16,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    // Phase 38.9 T2.6: AA dim subtitle (was onSurface@0.7).
+                    color: AppColors.textDimAA,
                   ),
             textAlign: TextAlign.center,
           ),
@@ -641,7 +640,6 @@ class _ForgotPasswordLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Align(
       alignment: Alignment.centerRight,
@@ -655,9 +653,9 @@ class _ForgotPasswordLink extends StatelessWidget {
           ),
           child: Text(
             l10n.forgotPassword,
-            style: AppTextStyles.body.copyWith(
-              color: theme.colorScheme.primary.withValues(alpha: 0.8),
-            ),
+            // Phase 38.9 T2.6: interactive violet solid (was primary@0.8,
+            // 1.21:1 — the worst Login offender).
+            style: AppTextStyles.body.copyWith(color: AppColors.hotViolet),
           ),
         ),
       ),
@@ -684,9 +682,8 @@ class _OrDivider extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             l10n.or,
-            style: AppTextStyles.body.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
+            // Phase 38.9 T2.6: AA dim "OR" (was onSurface@0.5, 2.95:1).
+            style: AppTextStyles.body.copyWith(color: AppColors.textDimAA),
           ),
         ),
         Expanded(
@@ -751,6 +748,9 @@ class _ModeToggleButton extends StatelessWidget {
       identifier: isSignUp ? 'auth-toggle-login' : 'auth-toggle-signup',
       child: TextButton(
         onPressed: onPressed,
+        // Phase 38.9 T2.6: interactive violet (was the default TextButton
+        // primaryViolet foreground, 2.48:1 < 4.5).
+        style: TextButton.styleFrom(foregroundColor: AppColors.hotViolet),
         child: Text(isSignUp ? l10n.alreadyHaveAccount : l10n.dontHaveAccount),
       ),
     );
@@ -887,7 +887,9 @@ class _AgeGateLabel extends StatelessWidget {
     );
     final linkStyle = AppTextStyles.body.copyWith(
       fontSize: 14,
-      color: theme.colorScheme.primary,
+      // Phase 38.9 T2.6: interactive violet (was primaryViolet, < AA) for the
+      // inline Terms / Privacy links.
+      color: AppColors.hotViolet,
       fontWeight: FontWeight.w600,
     );
 
@@ -936,13 +938,14 @@ class _AgeGateLabel extends StatelessWidget {
 class _LegalFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
-    final linkColor = theme.colorScheme.primary.withValues(alpha: 0.85);
-    final baseStyle = AppTextStyles.bodySmall.copyWith(color: mutedColor);
+    // Phase 38.9 T2.6: AA dim prose (was onSurface@0.6, 2.09:1) + interactive
+    // violet links (was primary@0.85).
+    final baseStyle = AppTextStyles.bodySmall.copyWith(
+      color: AppColors.textDimAA,
+    );
     final linkStyle = AppTextStyles.bodySmall.copyWith(
-      color: linkColor,
+      color: AppColors.hotViolet,
       fontWeight: FontWeight.w600,
     );
 
