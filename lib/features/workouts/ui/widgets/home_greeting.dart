@@ -79,7 +79,8 @@ class HomeGreeting extends ConsumerWidget {
               style: AppTextStyles.label.copyWith(
                 fontSize: 10,
                 letterSpacing: 0.16 * 10,
-                // Phase 38.9 T2.6: AA dim eyebrow (was textDim ~2.78:1 < 4.5).
+                // Phase 38.9 T2.6: AA dim eyebrow (textDim ~6.62:1 nominal but
+                // renders ~2.78:1 at 10sp; textDimAA clears the floor rendered).
                 color: AppColors.textDimAA,
               ),
             ),

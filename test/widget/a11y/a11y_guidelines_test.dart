@@ -384,9 +384,10 @@ void main() {
       await expectMeetsLabels(tester);
     });
 
-    // Phase 38.9 T2.6 — the date eyebrow ("MONDAY · JUN 22") moved from the
-    // sub-AA textDim (2.78:1) to textDimAA, clearing the 4.5:1 floor. The full
-    // surface (eyebrow + name line) now passes the rendered contrast oracle.
+    // Phase 38.9 T2.6 — the date eyebrow ("MONDAY · JUN 22") moved from textDim
+    // (~6.62:1 nominal but renders ~2.78:1 at 10sp, sub-AA) to textDimAA,
+    // clearing the 4.5:1 floor rendered. The full surface (eyebrow + name line)
+    // now passes the rendered contrast oracle.
     testWidgets('meets text contrast (eyebrow textDimAA)', (tester) async {
       await pumpSurface(tester, const HomeGreeting(), overrides: overrides());
       await expectMeetsContrast(tester);

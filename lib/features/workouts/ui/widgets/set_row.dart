@@ -916,7 +916,8 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
     final shouldDim = widget.set.isCompleted && !widget.isAccented;
     final dim = shouldDim ? 0.6 : 1.0;
     // Phase 38.9 T2.6 — the "kg" unit reads at the AA dim token (textDimAA,
-    // ~8:1) as a SOLID color, NOT via a 0.55-alpha-on-surface literal. It is
+    // ~10:1 nominal) as a SOLID color, NOT via a 0.55-alpha-on-surface literal
+    // (the old 0.55×0.6 completed-row compounding rendered ~1.13:1). It is
     // also pulled OUT of the completed-row `Opacity(0.6)` below: the prior
     // 0.55 × 0.6 compounding crushed the label to 1.13:1 (the worst Login/
     // SetRow offender). Resolving the dim via a solid color keeps the unit AA

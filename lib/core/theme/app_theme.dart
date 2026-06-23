@@ -50,21 +50,26 @@ class AppColors {
 
   /// Secondary text — captions, metadata, disabled labels.
   ///
-  /// **Decorative / non-text use ONLY** post-Phase-38.9. [textDim] sits at
-  /// ~2.78:1 on [abyss] at small sizes — below the WCAG-AA 4.5:1 floor for
-  /// body text. Keep it for non-text decoration (strength-bar tracks, faint
-  /// dividers, empty-state placeholder strokes) where the contrast guideline
-  /// does not apply. For any DIM TEXT, reach for [textDimAA] instead.
+  /// **Migrating to decorative / non-text use** (Phase 38.9 T2.6 onward).
+  /// [textDim] is ~6.62:1 on [abyss] NOMINALLY (it passes AA on paper), but
+  /// the rendered contrast oracle measures it ~2.78:1 at the 10sp eyebrow tier
+  /// — small-glyph anti-aliasing blends it toward the background below the
+  /// WCAG-AA 4.5:1 floor. So the DIM-TEXT tier is migrating to [textDimAA];
+  /// Login / Home / SetRow are done (T2.6), the remaining dim-text surfaces are
+  /// tracked in the deferred design-token contrast sweep (PROJECT.md §2, cluster
+  /// `design-token-sweep-on-new-tokens`). Keep [textDim] for non-text decoration
+  /// (strength-bar tracks, faint dividers, empty-state strokes) where the
+  /// contrast guideline does not apply.
   static const textDim = Color(0xFF9C8DB8);
 
   /// AA-compliant secondary text (Phase 38.9 T2.6).
   ///
-  /// A brighter neutral lavender that clears the WCAG-AA 4.5:1 floor for
-  /// small body text while staying visibly DIM (not promoted to the
-  /// full-strength [textCream] register). Measured contrast on the app
-  /// surfaces: ~9.76:1 on [abyss], ~8.85:1 on [surface], ~8.07:1 on
-  /// [surface2] — comfortably AA (and AAA) for both 12sp body and the 10sp
-  /// eyebrow tier.
+  /// A brighter neutral lavender that clears the WCAG-AA 4.5:1 floor for small
+  /// body text EVEN under the rendered oracle (the planned #BBAFD4 nominal-9.76
+  /// under-read to 4.38 at 10sp; #CFC5E3 was chosen to absorb that gap) while
+  /// staying visibly DIM (not promoted to the full-strength [textCream]
+  /// register). Nominal contrast: ~12.21:1 on [abyss], ~11.07:1 on [surface],
+  /// ~10.09:1 on [surface2] — AAA on paper, clears AA rendered at 10sp.
   ///
   /// **Text-only.** This is the secondary-TEXT token; it is NOT a body-part
   /// identity hue (brand-vs-identity rule, `project_design_language_brand_
@@ -293,7 +298,8 @@ class AppTextStyles {
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    // Phase 38.9 T2.6: AA-compliant dim text (was textDim ~2.78:1 < 4.5).
+    // Phase 38.9 T2.6: AA dim-text tier (textDim is ~6.62:1 nominal but renders
+    // sub-AA at small sizes; textDimAA clears the 4.5:1 floor rendered).
     color: AppColors.textDimAA,
   );
 
@@ -387,7 +393,8 @@ class AppTextStyles {
   static TextStyle get numericSmall => numeric.copyWith(
     fontSize: 11,
     fontWeight: FontWeight.w600,
-    // Phase 38.9 T2.6: AA-compliant dim numerals (was textDim ~2.78:1 < 4.5).
+    // Phase 38.9 T2.6: AA dim-numeral tier (textDim ~6.62:1 nominal but renders
+    // sub-AA at small sizes; textDimAA clears the 4.5:1 floor rendered).
     color: AppColors.textDimAA,
     letterSpacing: 0.04 * 11,
     height: 1.4,

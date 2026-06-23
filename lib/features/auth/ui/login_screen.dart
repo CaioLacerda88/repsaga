@@ -402,8 +402,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Text(
                           l10n.passwordRevealHint,
                           // Phase 38.9 T2.6: inherits bodySmall's AA textDimAA
-                          // (dropped the textDim override).
-                          style: AppTextStyles.bodySmall.copyWith(fontSize: 12),
+                          // (dropped the textDim + redundant fontSize:12 override
+                          // — bodySmall is already 12sp).
+                          style: AppTextStyles.bodySmall,
                         ),
                       ],
                     ],
