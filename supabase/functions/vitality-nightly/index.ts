@@ -117,6 +117,33 @@ export const SAMPLE_PERIOD_DAYS = 7.0;
 export const ALPHA_UP = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / TAU_UP_DAYS);
 export const ALPHA_DOWN = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / TAU_DOWN_STRENGTH_DAYS);
 
+// --- Reference-peak decay (00083) -----------------------------------------
+//
+// `vitality_ref_peak` is the DECAYING denominator for the post-session
+// conditioning charge fraction (ewma / ref_peak) — distinct from
+// `vitality_peak` (the monotone career-best the Saga screen reads, never
+// decayed). The reference peak forgets stale peaks so a detrained comeback
+// reads meaningfully:
+//
+//   ref_peak = max(new_ewma, prior_ref_peak * REF_PEAK_DECAY)
+//
+// The step runs ~once per UTC day per body part (the per-bp
+// `last_vitality_date` guard), so this per-step multiplier IS a per-day
+// multiplier. REF_PEAK_DECAY = exp(-ln(2)/21) → a 21-day (3-week) half-life
+// for an un-refreshed reference peak. An actively-training user re-tops the
+// max() every day and never decays; a detrained user's reference halves every
+// 3 weeks so their comeback fraction climbs back toward a healthy read. 21d
+// mirrors the cardio τ_down (the fastest detrain clock) — the reference forgets
+// on roughly the same timescale the conditioning actually fades.
+//
+// PARITY: this MUST equal `c_ref_peak_decay` in `recompute_vitality_for_user`
+// (migration 00083). The RPC is the single writer for BOTH the save path and
+// this nightly job — but the constant is mirrored here so the formula is
+// auditable on the Edge side and `stepEwma` returns the same ref_peak the SQL
+// computes (the integration test pins both producers to one trajectory).
+export const REF_PEAK_HALF_LIFE_DAYS = 21.0;
+export const REF_PEAK_DECAY = Math.exp(-Math.LN2 / REF_PEAK_HALF_LIFE_DAYS);
+
 /** Active body-parts contributing to Vitality (Phase 38e — cardio now live).
  * Mirrors Dart `activeBodyParts` in `lib/features/rpg/models/body_part.dart`.
  * `cardio` is last so the strength rows keep their original order. */
@@ -148,11 +175,19 @@ export interface EwmaInput {
   /** Decay time constant (days). Defaults to the strength τ_down; cardio
    * callers pass `TAU_DOWN_CARDIO_DAYS` (Phase 38e two-speed decay). */
   tauDownDays?: number;
+  /** Prior decaying reference peak (00083). Defaults to `priorPeak` so a
+   * caller that doesn't track it yet gets the zero-discontinuity backfill
+   * value (ref_peak == all-time peak). */
+  priorRefPeak?: number;
 }
 
 export interface EwmaOutput {
   ewma: number;
   peak: number;
+  /** Decaying reference peak (00083) — the charge-fraction denominator.
+   * `max(newEwma, priorRefPeak * REF_PEAK_DECAY)`. Distinct from `peak`
+   * (monotone career-best). */
+  refPeak: number;
 }
 
 /**
@@ -161,6 +196,12 @@ export interface EwmaOutput {
  * permanent and never decays). The decay α is derived from the supplied
  * `tauDownDays` so cardio decays on its own faster clock — mirrors Dart
  * `VitalityCalculator.step(tauDownDays:)`.
+ *
+ * Also advances the DECAYING reference peak (00083):
+ * `refPeak = max(newEwma, priorRefPeak * REF_PEAK_DECAY)` — re-topped by the
+ * fresh ewma when training, else the prior reference decayed one daily step
+ * (21-day half-life) toward the recent ceiling. This MUST mirror
+ * `recompute_vitality_for_user`'s ref_peak expression byte-for-byte (parity).
  */
 export function stepEwma(input: EwmaInput): EwmaOutput {
   const {
@@ -168,12 +209,14 @@ export function stepEwma(input: EwmaInput): EwmaOutput {
     priorPeak,
     weeklyVolume,
     tauDownDays = TAU_DOWN_STRENGTH_DAYS,
+    priorRefPeak = priorPeak,
   } = input;
   const alphaDown = 1 - Math.exp(-SAMPLE_PERIOD_DAYS / tauDownDays);
   const alpha = weeklyVolume >= priorEwma ? ALPHA_UP : alphaDown;
   const newEwma = alpha * weeklyVolume + (1 - alpha) * priorEwma;
   const newPeak = newEwma > priorPeak ? newEwma : priorPeak;
-  return { ewma: newEwma, peak: newPeak };
+  const newRefPeak = Math.max(newEwma, priorRefPeak * REF_PEAK_DECAY);
+  return { ewma: newEwma, peak: newPeak, refPeak: newRefPeak };
 }
 
 // --- Per-user worker (extracted for unit testability) ---------------------

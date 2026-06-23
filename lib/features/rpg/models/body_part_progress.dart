@@ -29,6 +29,12 @@ abstract class BodyPartProgress with _$BodyPartProgress {
     required int rank,
     required double vitalityEwma,
     required double vitalityPeak,
+    // Decaying reference peak (00083) — the post-session conditioning charge
+    // fraction's denominator (`ewma / refPeak`). Distinct from `vitalityPeak`
+    // (monotone career-best, Saga screen): this forgets stale peaks over ~3
+    // weeks so a detrained comeback reads meaningfully. Parsed from
+    // `vitality_ref_peak` via the no-arg `select()`.
+    required double vitalityRefPeak,
     DateTime? lastEventAt,
     required DateTime updatedAt,
   }) = _BodyPartProgress;

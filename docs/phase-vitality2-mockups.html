@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase Vitality-2 — Per-Body-Part Conditioning Delta (mockups)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#0D0319; --surface:#1A0F2E; --surface2:#241640;
+    --hotViolet:#B36DFF; --heroGold:#FFB800;
+    --cream:#EEE7FA; --dim:#9C8DB8; --dimAA:#CFC5E3;
+    --hair:rgba(179,109,255,0.14);
+    /* body-part hues */
+    --chest:#F472B6; --back:#38BDF8; --legs:#62C46D;
+    --shoulders:#FFB84D; --arms:#FF6B6B; --core:#9C8DB8; --cardio:#22D3EE;
+    --num:'Rajdhani',sans-serif;
+    --label:'Barlow Semi Condensed',sans-serif;
+    --body:'Barlow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05010c;color:var(--cream);font-family:var(--body);
+    padding:32px 16px 80px;-webkit-font-smoothing:antialiased}
+  h1{font-family:var(--num);font-weight:700;letter-spacing:.02em;font-size:22px;margin-bottom:6px}
+  .sub{color:var(--dim);font-size:13px;max-width:760px;line-height:1.5;margin-bottom:28px}
+  .grid{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+  .col-note{font-family:var(--num);font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    font-size:11px;color:var(--hotViolet);margin:6px 0 10px}
+  .caption{color:var(--dim);font-size:12px;line-height:1.45;max-width:340px;margin-top:10px}
+  .caption b{color:var(--dimAA);font-weight:600}
+
+  /* phone frame */
+  .phone{width:360px;background:var(--abyss);border-radius:26px;padding:18px 16px 22px;
+    border:1px solid var(--hair);box-shadow:0 18px 48px rgba(0,0,0,.5)}
+  .phone.w320{width:320px}.phone.w412{width:412px}
+  .vp{font-family:var(--num);font-weight:600;font-size:11px;color:var(--dim);
+    letter-spacing:.1em;margin-bottom:8px;text-align:center}
+
+  /* mission-debrief context chrome (greyed, just for placement) */
+  .ctx{opacity:.4;pointer-events:none;margin-bottom:14px}
+  .ctx .xpbar{height:8px;border-radius:5px;display:flex;overflow:hidden;margin:8px 0 12px}
+  .ctx .xpbar i{height:100%}
+  .ctx .rankrow{display:flex;justify-content:space-between;font-family:var(--label);
+    font-size:13px;padding:5px 0;color:var(--cream)}
+  .ctx .rankrow .r{font-family:var(--num);color:var(--dimAA)}
+
+  /* ===== the conditioning block ===== */
+  .cond{border-top:1px solid var(--hair);padding-top:14px;margin-top:6px}
+  .eyebrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .eyebrow .lhs{display:flex;align-items:center;gap:7px;font-family:var(--num);font-weight:600;
+    letter-spacing:.2em;font-size:11px;color:var(--cardio);text-transform:uppercase}
+  .eyebrow .bolt{font-size:13px;filter:drop-shadow(0 0 5px rgba(34,211,238,.5))}
+  .eyebrow .count{font-family:var(--num);font-weight:600;font-size:11px;letter-spacing:.12em;
+    color:var(--dim);text-transform:uppercase}
+
+  .crow{display:flex;align-items:center;gap:12px;padding:8px 0}
+  /* rune: 4-segment vertical charge glyph */
+  .rune{width:16px;height:30px;display:flex;flex-direction:column-reverse;gap:2px;flex:0 0 16px}
+  .rune span{flex:1;border-radius:2px;background:rgba(255,255,255,.07);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+  .rune span.on{box-shadow:0 0 6px -1px var(--h)}
+  .clabel{font-family:var(--label);font-weight:600;font-size:14px;letter-spacing:.01em;flex:1}
+  .cdelta{font-family:var(--num);font-weight:700;font-size:15px;letter-spacing:.01em;
+    display:flex;align-items:center;gap:3px}
+  .cdelta .car{font-size:11px;transform:translateY(-1px)}
+  .held{font-family:var(--num);font-weight:600;font-size:11px;letter-spacing:.16em;
+    color:var(--dimAA);text-transform:uppercase}
+  .more{font-family:var(--label);font-size:12.5px;color:var(--dim);padding:9px 0 2px;
+    letter-spacing:.02em}
+  .peakfoot{font-family:var(--label);font-size:12.5px;color:var(--dimAA);padding:10px 0 2px;
+    display:flex;align-items:center;gap:6px;border-top:1px dashed var(--hair);margin-top:6px}
+  .peakfoot .dot{width:6px;height:6px;border-radius:50%}
+  .guard{font-family:var(--body);font-size:13px;color:var(--dimAA);line-height:1.5;
+    padding:6px 0 2px}
+  .guard b{color:var(--cardio);font-weight:600}
+  .allmax{font-family:var(--num);font-weight:600;font-size:12px;letter-spacing:.06em;
+    color:var(--cardio);text-transform:uppercase;padding-bottom:8px}
+
+  /* ===== cinematic B2 fuse (full-screen cut) ===== */
+  .cine{position:relative;width:300px;height:540px;background:var(--abyss);border-radius:28px;
+    overflow:hidden;border:1px solid var(--hair);box-shadow:0 18px 48px rgba(0,0,0,.55)}
+  .cine .flood{position:absolute;inset:0;opacity:.22}
+  .cine .slash{position:absolute;inset:-30% -50%;transform:rotate(-19deg);opacity:.34;
+    background:linear-gradient(90deg,transparent 0%,var(--sh) 44%,var(--sh) 56%,transparent 100%)}
+  .cine .center{position:absolute;left:0;right:0;top:42%;transform:translateY(-50%);
+    text-align:center;padding:0 24px}
+  .cine .ey{font-family:var(--num);font-weight:600;letter-spacing:.14em;font-size:13px;text-transform:uppercase}
+  .cine .ranktag{display:inline-block;font-family:var(--num);font-weight:700;font-size:10px;
+    letter-spacing:.18em;text-transform:uppercase;padding:2px 8px;border-radius:3px;margin-bottom:10px}
+  .cine .xpbig{font-family:var(--num);font-weight:700;font-size:56px;color:var(--cream);
+    line-height:.95;letter-spacing:.03em;margin-top:6px}
+  .cine .xplbl{font-family:var(--num);font-weight:600;font-size:11px;letter-spacing:.12em;
+    color:var(--dim);text-transform:uppercase;margin-top:5px}
+  .cine .btm{position:absolute;left:20px;right:20px;bottom:30px}
+  .cine .cl{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:13px}
+  .cine .cl .rune{height:24px;width:14px}
+  .cine .cl .txt{text-align:left}
+  .cine .cl .crg{font-family:var(--num);font-weight:700;font-size:15px;line-height:1;
+    display:flex;align-items:center;gap:3px}
+  .cine .cl .crg .b{font-size:11px}
+  .cine .cl .crglbl{font-family:var(--num);font-weight:600;font-size:8.5px;letter-spacing:.13em;
+    color:var(--dimAA);text-transform:uppercase;margin-top:3px}
+  .cine .bar{height:4px;background:rgba(255,255,255,.10);position:relative;overflow:hidden}
+  .cine .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:0}
+  .cine .rank{font-family:var(--num);font-weight:600;font-size:11px;letter-spacing:.07em;
+    color:var(--dim);text-align:center;margin-top:8px}
+  .cine .skip{position:absolute;top:16px;right:18px;font-family:var(--num);font-weight:600;
+    font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;opacity:.6}
+  .tparen{color:var(--dim);font-size:11px;font-style:italic}
+</style>
+</head>
+<body>
+  <h1>Phase Vitality-2 · Per-Body-Part Conditioning Delta</h1>
+  <p class="sub">Replaces the single ambiguous “Conditioning charged +11%” aggregate with a per-part
+    <b style="color:var(--dimAA)">rune charge strip</b>. Each row = a trained body part: hue charge glyph (level) +
+    label + state-aware delta (change). Numbers use the <b style="color:var(--dimAA)">rolling-90d denominator</b>
+    (a comeback session reads big). <b style="color:var(--dimAA)">Locked:</b> inline “MÁX” held rows · bare eyebrow ·
+    “MÁX” held word. (A cinematic charging beat is under review with ui-ux + PO — may add a frame.)</p>
+
+  <div class="grid">
+
+    <!-- 1. HAPPY PATH -->
+    <div>
+      <div class="col-note">1 · Happy path — gainers</div>
+      <div class="phone">
+        <div class="ctx">
+          <div class="xpbar"><i style="flex:.45;background:var(--core)"></i><i style="flex:.3;background:var(--arms)"></i><i style="flex:.25;background:var(--back)"></i></div>
+          <div class="rankrow"><span>Core</span><span class="r">Rank 11 → 12</span></div>
+          <div class="rankrow"><span>Costas</span><span class="r">Rank 8 → 9</span></div>
+        </div>
+        <div class="cond">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span><span></span></div><div class="clabel" style="color:var(--core)">Core</div><div class="cdelta" style="color:var(--core)"><span class="car">▲</span>+24%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+        </div>
+      </div>
+      <p class="caption">Delta-ordered (biggest gainer first). Rune fills to the part’s <b>after</b> charge level
+        in its hue; delta is tinted the same hue (no global green — green = legs). The satisfying default.</p>
+    </div>
+
+    <!-- 2A. MAXED — inline HELD (fork option A) -->
+    <div>
+      <div class="col-note">2 · Maxed parts — inline “MÁX” (locked)</div>
+      <div class="phone">
+        <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span class="on" style="background:var(--back)"></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--legs)"><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span></div><div class="clabel" style="color:var(--legs)">Pernas</div><div class="held">MÁX</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--cardio)"><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span></div><div class="clabel" style="color:var(--cardio)">Cardio</div><div class="held">MÁX</div></div>
+        </div>
+      </div>
+      <p class="caption"><b>Fork A (ui-ux):</b> maxed parts stay in the list — full rune + “Mantido / HELD”,
+        never a dead <b>+0</b>. Reads as “already strong, you kept it.” Sorts below gainers.</p>
+    </div>
+
+    <!-- 3. DETRAINED RETURN -->
+    <div>
+      <div class="col-note">3 · Detrained return (rolling denom)</div>
+      <div class="phone">
+        <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span class="on" style="background:var(--back)"></span><span class="on" style="background:var(--back)"></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+41%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span class="on" style="background:var(--arms)"></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+28%</div></div>
+        </div>
+      </div>
+      <p class="caption">The cohort the OLD metric made invisible. Against the <b>rolling-90d</b> denominator
+        (decayed during the break), a comeback session reads big & motivating — not the “+0%” it shows today.</p>
+    </div>
+
+    <!-- 4. ALL MAXED -->
+    <div>
+      <div class="col-note">4 · All-maxed session</div>
+      <div class="phone">
+        <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="allmax">✓ Tudo no pico — condicionamento mantido</div>
+          <div class="crow"><div class="rune" style="--h:var(--legs)"><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span></div><div class="clabel" style="color:var(--legs)">Pernas</div><div class="held">MÁX</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--cardio)"><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span><span class="on" style="background:var(--cardio)"></span></div><div class="clabel" style="color:var(--cardio)">Cardio</div><div class="held">MÁX</div></div>
+        </div>
+      </div>
+      <p class="caption">No <b>▲</b> anywhere — yet this is a legit positive debrief (“everything stayed charged”).
+        The OLD <b>delta&gt;0</b> gate wrongly hides this whole block; new gate = “has charge data”.</p>
+    </div>
+
+    <!-- 5. OVERFLOW -->
+    <div>
+      <div class="col-note">5 · 7-part session — overflow</div>
+      <div class="phone">
+        <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span><span></span></div><div class="clabel" style="color:var(--core)">Core</div><div class="cdelta" style="color:var(--core)"><span class="car">▲</span>+24%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+          <div class="crow"><div class="rune" style="--h:var(--chest)"><span class="on" style="background:var(--chest)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--chest)">Peito</div><div class="cdelta" style="color:var(--chest)"><span class="car">▲</span>+8%</div></div>
+          <div class="more">+3 mais recarregados · Ombros, Pernas, Cardio</div>
+        </div>
+      </div>
+      <p class="caption">Cap at 4 gain rows, ordered by delta, then a <b>“+N mais recarregados”</b> footer
+        (mirrors the “+N more exercises” lift-table pattern). Eyebrow carries the optional count → Fork C.</p>
+    </div>
+
+    <!-- 6. GUARD -->
+    <div>
+      <div class="col-note">6 · 2nd session today — guard</div>
+      <div class="phone">
+        <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+          <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+          <div class="guard">⚡ <b>Já carregado hoje.</b> Seu condicionamento sobe uma vez por dia —
+            os ganhos de hoje já estão registrados. Veja a carga atual na sua Saga.</div>
+        </div>
+      </div>
+      <p class="caption">Guard-blocked (2nd same-day save, or after the 3am cron). The RPC now returns a
+        step-count → client shows this instead of <b>vanishing</b>. Honest: the charge was already banked today.</p>
+    </div>
+
+  </div>
+
+  <!-- ===== CINEMATIC B2 FUSE ===== -->
+  <div class="col-note" style="margin-top:46px">Cinematic — charge rune fused onto the B2 hero beat (full-screen cut)</div>
+  <p class="sub" style="margin-bottom:22px">Not a new cut — the existing B2 per-body-part beat (eyebrow + XP slam + rank bar)
+    gains a <b style="color:var(--dimAA)">charge rune at the bar end-cap</b> that lights in the SAME hue + SAME beat as the
+    rank bar fills. One read, zero added cinematic length. The <b style="color:var(--dimAA)">summary rune strip</b> (above)
+    stays the full per-part ledger; the cinematic gives one hero a charged-rune flourish. <span class="tparen">Frames show the
+    end-of-beat state (~t=0.7, bar + rune filled).</span></p>
+
+  <div class="grid">
+
+    <!-- CINE 1 — charging hero -->
+    <div>
+      <div class="col-note">i · Charging hero</div>
+      <div class="cine" style="--sh:var(--back)">
+        <div class="flood" style="background:var(--back)"></div>
+        <div class="slash"></div>
+        <div class="skip">Pular ▸</div>
+        <div class="center">
+          <div class="ey" style="color:var(--back)">Costas</div>
+          <div class="xpbig">+340</div>
+          <div class="xplbl">XP ganho</div>
+        </div>
+        <div class="btm">
+          <div class="cl">
+            <div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span class="on" style="background:var(--back)"></span><span></span><span></span></div>
+            <div class="txt"><div class="crg" style="color:var(--back)"><span class="b">▲</span>+17%</div><div class="crglbl">Condicionamento recarregado</div></div>
+          </div>
+          <div class="bar"><i style="width:64%;background:var(--back)"></i></div>
+          <div class="rank">rank 9 · 64%</div>
+        </div>
+      </div>
+      <p class="caption">The rune lights <b>segment-by-segment in sync</b> with the rank bar fill (the existing
+        0.30→0.70 beat). Rank bar = “you progressed toward next rank”; rune = “and your conditioning rebuilt.”
+        Same hue, one gesture.</p>
+    </div>
+
+    <!-- CINE 2 — MÁX held hero -->
+    <div>
+      <div class="col-note">ii · MÁX hero (held)</div>
+      <div class="cine" style="--sh:var(--legs)">
+        <div class="flood" style="background:var(--legs)"></div>
+        <div class="slash"></div>
+        <div class="skip">Pular ▸</div>
+        <div class="center">
+          <div class="ey" style="color:var(--legs)">Pernas</div>
+          <div class="xpbig">+210</div>
+          <div class="xplbl">XP ganho</div>
+        </div>
+        <div class="btm">
+          <div class="cl">
+            <div class="rune" style="--h:var(--legs)"><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span><span class="on" style="background:var(--legs)"></span></div>
+            <div class="txt"><div class="crg" style="color:var(--legs)">MÁX</div><div class="crglbl">Condicionamento no pico</div></div>
+          </div>
+          <div class="bar"><i style="width:88%;background:var(--legs)"></i></div>
+          <div class="rank">rank 14 · 88%</div>
+        </div>
+      </div>
+      <p class="caption">Maxed part: rune is <b>pre-lit and holds</b> (a single pulse, no climb — never fake a charge
+        that didn’t happen). Mirrors the summary “MÁX”. Reads as “already at peak, you kept it,” not a dead +0.</p>
+    </div>
+
+    <!-- CINE 3 — elevated rank-up -->
+    <div>
+      <div class="col-note">iii · Elevated rank-up + charge</div>
+      <div class="cine" style="--sh:var(--core)">
+        <div class="flood" style="background:var(--core)"></div>
+        <div class="slash"></div>
+        <div class="skip">Pular ▸</div>
+        <div class="center">
+          <span class="ranktag" style="background:rgba(156,141,184,.20);color:var(--cream)">Rank 11 → 12</span>
+          <div class="ey" style="color:var(--core)">Core</div>
+          <div class="xpbig">+480</div>
+          <div class="xplbl">XP ganho · subiu de rank</div>
+        </div>
+        <div class="btm">
+          <div class="cl">
+            <div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span></div>
+            <div class="txt"><div class="crg" style="color:var(--core)"><span class="b">▲</span>+24%</div><div class="crglbl">Condicionamento recarregado</div></div>
+          </div>
+          <div class="bar"><i style="width:100%;background:var(--core)"></i></div>
+          <div class="rank">rank 12 · 4%</div>
+        </div>
+      </div>
+      <p class="caption">On the elevated rank-up beat, the rune completes as the bar crosses 100% into the rank slam —
+        the charge flourish rides the biggest moment. Cascade (3+ parts): rune on the <b>hero row only</b>.</p>
+    </div>
+
+  </div>
+
+  <p class="sub" style="margin-top:22px"><b style="color:var(--dimAA)">Safety guardrails baked in (Phase-39 / ToS-aligned):</b>
+    rune is <b style="color:var(--dimAA)">fill-only, never drains/reddens</b> · copy is past-tense descriptive
+    (“recarregado”, what just happened) — never “mantenha a carga / treine amanhã” · <b style="color:var(--dimAA)">no decay
+    countdown</b> anywhere · the “já carregado hoje” guard state reads as a rest-positive cue. The flourish celebrates
+    what you did, it never commands the next session.</p>
+
+  <!-- VIEWPORTS -->
+  <div class="col-note" style="margin-top:40px">Viewport check — happy path @ 320 / 360 / 412dp</div>
+  <div class="grid">
+    <div><div class="vp">320dp</div><div class="phone w320">
+      <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+        <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span><span></span></div><div class="clabel" style="color:var(--core)">Core</div><div class="cdelta" style="color:var(--core)"><span class="car">▲</span>+24%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+      </div></div></div>
+    <div><div class="vp">360dp</div><div class="phone">
+      <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+        <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span><span></span></div><div class="clabel" style="color:var(--core)">Core</div><div class="cdelta" style="color:var(--core)"><span class="car">▲</span>+24%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+      </div></div></div>
+    <div><div class="vp">412dp</div><div class="phone w412">
+      <div class="cond" style="border-top:none;padding-top:0;margin-top:0">
+        <div class="eyebrow"><div class="lhs"><span class="bolt">⚡</span>Conditioning</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--core)"><span class="on" style="background:var(--core)"></span><span class="on" style="background:var(--core)"></span><span></span><span></span></div><div class="clabel" style="color:var(--core)">Core</div><div class="cdelta" style="color:var(--core)"><span class="car">▲</span>+24%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--back)"><span class="on" style="background:var(--back)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--back)">Costas</div><div class="cdelta" style="color:var(--back)"><span class="car">▲</span>+17%</div></div>
+        <div class="crow"><div class="rune" style="--h:var(--arms)"><span class="on" style="background:var(--arms)"></span><span></span><span></span><span></span></div><div class="clabel" style="color:var(--arms)">Braços</div><div class="cdelta" style="color:var(--arms)"><span class="car">▲</span>+12%</div></div>
+      </div></div></div>
+  </div>
+
+  <p class="sub" style="margin-top:40px"><b style="color:var(--dimAA)">Locked:</b> inline “MÁX” held rows ·
+    bare eyebrow · “MÁX” held word · rolling-90d denominator · guard “already charged today” · render gate =
+    “has charge data” (all-maxed still shows). <b style="color:var(--dimAA)">Open:</b> whether a cinematic
+    charging beat joins the static strip — under review with ui-ux + PO.</p>
+</body>
+</html>

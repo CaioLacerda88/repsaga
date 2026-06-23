@@ -33,6 +33,7 @@ BodyPartProgress _row({
     rank: rank,
     vitalityEwma: vitalityEwma,
     vitalityPeak: vitalityPeak,
+    vitalityRefPeak: vitalityPeak,
     lastEventAt: null,
     updatedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
   );

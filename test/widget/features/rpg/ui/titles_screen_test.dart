@@ -75,6 +75,7 @@ BodyPartProgress _progress(BodyPart bp, int rank) => BodyPartProgress(
   rank: rank,
   vitalityEwma: 0,
   vitalityPeak: 0,
+  vitalityRefPeak: 0,
   lastEventAt: null,
   updatedAt: DateTime.utc(2026, 5, 2),
 );
