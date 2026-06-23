@@ -51,6 +51,57 @@ void main() {
       expect(AppColors.textDim, const Color(0xFF9C8DB8));
     });
 
+    test('textDimAA is #CFC5E3', () {
+      expect(AppColors.textDimAA, const Color(0xFFCFC5E3));
+    });
+
+    // Phase 38.9 T2.6 — textDimAA is the AA secondary-text token. Pin the
+    // pure (un-blended) WCAG contrast ratio on each app surface so a future
+    // tweak that drops it below the 4.5:1 floor reds CI here, not just in the
+    // blend-prone rendered a11y gate. abyss is the worst case (darkest bg).
+    test('textDimAA clears the WCAG-AA 4.5:1 floor on every app surface', () {
+      double luminance(Color c) => c.computeLuminance();
+      double ratio(Color fg, Color bg) {
+        final a = luminance(fg);
+        final b = luminance(bg);
+        final hi = a > b ? a : b;
+        final lo = a > b ? b : a;
+        return (hi + 0.05) / (lo + 0.05);
+      }
+
+      for (final bg in const [
+        AppColors.abyss,
+        AppColors.surface,
+        AppColors.surface2,
+      ]) {
+        expect(
+          ratio(AppColors.textDimAA, bg),
+          greaterThanOrEqualTo(4.5),
+          reason: 'textDimAA must be AA-compliant on $bg',
+        );
+      }
+    });
+
+    // The interactive violet (hotViolet) is the link/CTA-text color promoted
+    // by Phase 38.9 on Login. Pin its pure AA ratio so the design token stays
+    // genuinely 4.5:1+ on the base surface — the rendered a11y gate
+    // under-reports thin small-glyph violet text due to anti-aliasing blend,
+    // so this deterministic check is the authoritative AA pin for it.
+    test('hotViolet clears the WCAG-AA 4.5:1 floor on abyss (link text)', () {
+      double ratio(Color fg, Color bg) {
+        final a = fg.computeLuminance();
+        final b = bg.computeLuminance();
+        final hi = a > b ? a : b;
+        final lo = a > b ? b : a;
+        return (hi + 0.05) / (lo + 0.05);
+      }
+
+      expect(
+        ratio(AppColors.hotViolet, AppColors.abyss),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+
     test('success is #62C46D', () {
       expect(AppColors.success, const Color(0xFF62C46D));
     });
@@ -221,7 +272,7 @@ void main() {
       });
     });
 
-    group('bodySmall (Barlow 400 12dp textDim)', () {
+    group('bodySmall (Barlow 400 12dp textDimAA)', () {
       final style = AppTextStyles.bodySmall;
       test('family is Barlow', () {
         expect(style.fontFamily, startsWith('Barlow'));
@@ -235,8 +286,9 @@ void main() {
       test('height is 1.5', () {
         expect(style.height, closeTo(1.5, 0.001));
       });
-      test('color is textDim', () {
-        expect(style.color, AppColors.textDim);
+      // Phase 38.9 T2.6: dim body text migrated to the AA-compliant token.
+      test('color is textDimAA', () {
+        expect(style.color, AppColors.textDimAA);
       });
     });
 
@@ -313,12 +365,13 @@ void main() {
       });
     });
 
-    group('numericSmall (Rajdhani 600 11dp textDim — Phase 28a)', () {
+    group('numericSmall (Rajdhani 600 11dp textDimAA — Phase 28a / 38.9)', () {
       // Promotes the repeated 5-property override stack
-      //   `numeric.copyWith(fontSize: 11, w600, textDim,
+      //   `numeric.copyWith(fontSize: 11, w600, textDimAA,
       //    letterSpacing: 0.04 * 11)`
       // into a single token. Inherits `fontFeatures` (tabular figures)
       // from [numeric] so sub-bar numerals don't jitter as digits change.
+      // Phase 38.9 T2.6: dim color migrated textDim → textDimAA (AA floor).
       final style = AppTextStyles.numericSmall;
       test('family is Rajdhani', () {
         expect(style.fontFamily, startsWith('Rajdhani'));
@@ -335,8 +388,8 @@ void main() {
       test('height is 1.4', () {
         expect(style.height, closeTo(1.4, 0.001));
       });
-      test('color is textDim', () {
-        expect(style.color, AppColors.textDim);
+      test('color is textDimAA', () {
+        expect(style.color, AppColors.textDimAA);
       });
       test('inherits tabular figures from numeric', () {
         expect(

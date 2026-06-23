@@ -889,7 +889,6 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final currentWeight = widget.set.weight ?? 0;
 
     // Decide whether to animate THIS rebuild. The first ever build has no
@@ -916,7 +915,14 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
     // regardless.
     final shouldDim = widget.set.isCompleted && !widget.isAccented;
     final dim = shouldDim ? 0.6 : 1.0;
-    final unitColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    // Phase 38.9 T2.6 — the "kg" unit reads at the AA dim token (textDimAA,
+    // ~10:1 nominal) as a SOLID color, NOT via a 0.55-alpha-on-surface literal
+    // (the old 0.55×0.6 completed-row compounding rendered ~1.13:1). It is
+    // also pulled OUT of the completed-row `Opacity(0.6)` below: the prior
+    // 0.55 × 0.6 compounding crushed the label to 1.13:1 (the worst Login/
+    // SetRow offender). Resolving the dim via a solid color keeps the unit AA
+    // even on a completed (dimmed) row.
+    const unitColor = AppColors.textDimAA;
 
     // Resolve the value-color override.
     //   * Superseded + accented → cream-700 (textCream w700) — explicit
@@ -939,11 +945,14 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
       }
     }
 
-    return Opacity(
-      opacity: dim,
-      child: Row(
-        children: [
-          Expanded(
+    return Row(
+      children: [
+        // Only the stepper VALUE dims on a completed row. The "kg" unit is a
+        // sibling OUTSIDE this Opacity so its solid AA color is never crushed
+        // by the 0.6 widget-level alpha (Phase 38.9 T2.6 compounding fix).
+        Expanded(
+          child: Opacity(
+            opacity: dim,
             child: WeightStepper(
               value: currentWeight,
               unit: widget.weightUnit,
@@ -958,19 +967,19 @@ class _WeightStepperCellState extends ConsumerState<_WeightStepperCell> {
               onChanged: _onWeightTapped,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Text(
-              widget.weightUnit,
-              style: AppTextStyles.label.copyWith(
-                fontSize: 10,
-                letterSpacing: 0.6,
-                color: unitColor,
-              ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Text(
+            widget.weightUnit,
+            style: AppTextStyles.label.copyWith(
+              fontSize: 10,
+              letterSpacing: 0.6,
+              color: unitColor,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

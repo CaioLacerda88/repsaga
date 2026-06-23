@@ -95,3 +95,6 @@ tools/_find_matches.js
 
 # Generated test coverage output
 coverage/
+
+# One-off visual-verification screenshots (attached to PRs, not committed)
+test/e2e/visual-a11y/
