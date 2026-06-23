@@ -191,6 +191,21 @@ class PostSessionController extends ChangeNotifier {
       after: bpVitalityAfter,
     );
 
+    // SINGLE charge source: the cinematic B2 rune end-cap reads the SAME
+    // per-bp charge the summary rune strip renders — derived here from the
+    // one `conditioningCharge` model above, never recomputed (no drift).
+    // A bp absent from this map has no charge data; its B2 cut renders
+    // without the rune (the fuse is additive). Phase Vitality-2 S4.
+    final bpCharge =
+        <BodyPart, ({double afterPct, bool isMax, int deltaPercent})>{
+          for (final part in conditioningCharge.parts)
+            part.bodyPart: (
+              afterPct: part.afterPct,
+              isMax: part.isMax,
+              deltaPercent: part.deltaPercentInt,
+            ),
+        };
+
     final levelUpEvent = params.queueResult.queue
         .whereType<LevelUpEvent>()
         .firstOrNull;
@@ -203,6 +218,7 @@ class PostSessionController extends ChangeNotifier {
       bpRankAfter: bpRankAfter,
       bpProgressFractionAfter: bpProgressAfter,
       bpFirstAwakening: params.bpFirstAwakening,
+      bpCharge: bpCharge,
       prResult: params.prResult,
       exerciseNames: params.exerciseNames,
       newCharacterLevel: newCharacterLevel,

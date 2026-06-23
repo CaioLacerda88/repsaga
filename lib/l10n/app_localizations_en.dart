@@ -3194,6 +3194,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Already charged today. Your conditioning rises once a day — today\'s gains are already banked. See your current charge on your Saga.';
 
   @override
+  String get postSessionConditioningCinematicRecharged =>
+      'Conditioning recharged';
+
+  @override
+  String get postSessionConditioningCinematicAtPeak => 'Conditioning at peak';
+
+  @override
   String get avatarPickerSheetTitle => 'Choose avatar source';
 
   @override

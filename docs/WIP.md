@@ -93,9 +93,18 @@ the dilution + frozen-peak + guard wrinkles as part of the redesign.
       flag, "has charge data" gate). Rewrite `conditioning_charge_test`. Unit-tested.
 - [ ] **S3 — summary UI:** rune-strip widget (replaces `conditioning_charge_bar`) — per-bp rows, inline MÁX,
       bare eyebrow, +N more, all-maxed, guard state. l10n en+pt. Widget tests. Wire `mission_debrief_section`.
-- [ ] **S4 — cinematic:** B2 cut classes gain `chargeFraction*` (defaulted) + rune end-cap render on
-      b2_bp_tally/elevated (hero only on cascade) + controller sources from snapshot. Choreographer/cut tests +
-      golden regen.
+- [x] **S4 — cinematic:** B2 cut classes gained `chargeFractionAfter`/`isChargeMax`/`chargeDeltaPercent`
+      (nullable/defaulted — State 1-10 fixtures untouched). Shared `cuts/charge_rune.dart` primitive
+      (`ChargeRune` segment widget + `B2ChargeEndCap` + `litSegmentsForFraction`); summary strip refactored to
+      reuse it (no visual change — strip tests green). Rune end-cap renders on b2_bp_tally (single + sequential
+      dominant), b2_elevated, and the cascade HERO only (secondary cascade + sequential-secondary stay
+      rune-less). SINGLE charge source: controller derives `bpCharge` map from the one `conditioningCharge`
+      model (afterPct/isMax/deltaPercentInt) → choreographer → cuts; summary + cinematic read identical numbers
+      (no double-compute). l10n en+pt: `postSessionConditioningCinematicRecharged` /
+      `…CinematicAtPeak` (`+N%` + MÁX reuse S3 keys). No-charge-data → beat unchanged (additive fuse).
+      Tests: 6 cut-endcap widget tests (gainer/MÁX/no-data on tally+elevated+hue) + 2 cascade hero-only tests +
+      6 choreographer charge-threading pins. analyze clean (`--fatal-infos`); full suite 4032 pass / 5 skip / 0
+      fail; arb_completeness + summary-panel golden unaffected.
 - [ ] Reviewer → QA → visual verification (320/360/412dp, summary + B2 cut) → merge → `db push` migration.
 
-_Building — S1 next._
+_S4 complete — ready for reviewer → QA → visual verification._

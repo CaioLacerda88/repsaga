@@ -512,6 +512,21 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         firstAwakeningSuffix: cut.isFirstAwakening
             ? ' · ${l10n.postSessionFirstAwakeningSuffix}'
             : null,
+        chargeFractionAfter: cut.chargeFractionAfter,
+        isChargeMax: cut.isChargeMax,
+        chargeDeltaPercent: cut.chargeDeltaPercent,
+        chargeDeltaLabel: cut.chargeFractionAfter != null
+            ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
+            : null,
+        chargeMaxLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningChargedMax
+            : null,
+        chargeRechargedLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicRecharged
+            : null,
+        chargeAtPeakLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicAtPeak
+            : null,
       ),
       B2SequentialDominantCut() => B2BpTallyCut(
         animation: _controller.view,
@@ -523,6 +538,21 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         progressFractionAfter: cut.progressFractionAfter,
         rankAfter: 0,
         isFirstAwakening: false,
+        chargeFractionAfter: cut.chargeFractionAfter,
+        isChargeMax: cut.isChargeMax,
+        chargeDeltaPercent: cut.chargeDeltaPercent,
+        chargeDeltaLabel: cut.chargeFractionAfter != null
+            ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
+            : null,
+        chargeMaxLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningChargedMax
+            : null,
+        chargeRechargedLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicRecharged
+            : null,
+        chargeAtPeakLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicAtPeak
+            : null,
       ),
       B2SequentialSecondaryCut() => B2BpTallyCut(
         animation: _controller.view,
@@ -551,12 +581,23 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     final truncated = cut.truncatedCount > 0
         ? l10n.postSessionCascadeTruncationPill(cut.truncatedCount.toString())
         : '';
+    final hasCharge = cut.heroChargeFractionAfter != null;
     return B2CascadeCutWidget(
       animation: _controller.view,
       cut: cut,
       bodyPartLabels: state.bodyPartLabels,
       xpLabel: l10n.postSessionXpLabel,
       truncatedPillLabel: truncated,
+      chargeDeltaLabel: hasCharge
+          ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
+          : null,
+      chargeMaxLabel: hasCharge ? l10n.postSessionConditioningChargedMax : null,
+      chargeRechargedLabel: hasCharge
+          ? l10n.postSessionConditioningCinematicRecharged
+          : null,
+      chargeAtPeakLabel: hasCharge
+          ? l10n.postSessionConditioningCinematicAtPeak
+          : null,
     );
   }
 
@@ -566,12 +607,26 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     AppLocalizations l10n,
   ) {
     final bpLabel = state.bodyPartLabels[cut.bodyPart] ?? cut.bodyPart.dbValue;
+    final hasCharge = cut.chargeFractionAfter != null;
     return B2ElevatedCut(
       animation: _controller.view,
       bodyPart: cut.bodyPart,
       bodyPartLabel: bpLabel,
       newRank: cut.newRank,
       rankCopy: l10n.b2RankCopy(bpLabel.toUpperCase(), cut.newRank.toString()),
+      chargeFractionAfter: cut.chargeFractionAfter,
+      isChargeMax: cut.isChargeMax,
+      chargeDeltaPercent: cut.chargeDeltaPercent,
+      chargeDeltaLabel: hasCharge
+          ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
+          : null,
+      chargeMaxLabel: hasCharge ? l10n.postSessionConditioningChargedMax : null,
+      chargeRechargedLabel: hasCharge
+          ? l10n.postSessionConditioningCinematicRecharged
+          : null,
+      chargeAtPeakLabel: hasCharge
+          ? l10n.postSessionConditioningCinematicAtPeak
+          : null,
     );
   }
 

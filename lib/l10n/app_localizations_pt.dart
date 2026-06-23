@@ -3207,6 +3207,14 @@ class AppLocalizationsPt extends AppLocalizations {
       'Já carregado hoje. Seu condicionamento sobe uma vez por dia — os ganhos de hoje já estão registrados. Veja a carga atual na sua Saga.';
 
   @override
+  String get postSessionConditioningCinematicRecharged =>
+      'Condicionamento recarregado';
+
+  @override
+  String get postSessionConditioningCinematicAtPeak =>
+      'Condicionamento no pico';
+
+  @override
   String get avatarPickerSheetTitle => 'Escolha a origem do avatar';
 
   @override

@@ -4,6 +4,7 @@ import '../../../../../../core/theme/app_theme.dart';
 import '../../../../../rpg/domain/body_part_hues.dart';
 import '../../../../../rpg/models/body_part.dart';
 import '../../../../domain/conditioning_charge.dart';
+import '../../cuts/charge_rune.dart';
 
 /// "Conditioning charged" debrief beat — a per-body-part rune charge strip
 /// (Phase Vitality-2, user-locked mockup `docs/phase-vitality2-mockups.html`).
@@ -280,6 +281,9 @@ class _ChargeRow extends StatelessWidget {
 /// 4-segment vertical charge rune, filled bottom-up to the part's after
 /// charge level in its hue. Lit segments animate in via [progress]; unlit
 /// segments read as a dim track. Fill-only — never drains.
+///
+/// Delegates the segment rendering to the shared [ChargeRune] primitive so
+/// the summary strip and the cinematic B2 rune end-cap read identically.
 class _Rune extends StatelessWidget {
   const _Rune({
     required this.hue,
@@ -293,65 +297,24 @@ class _Rune extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Number of lit segments at the after level. round() so a part that is
-    // e.g. 60% charged lights segments proportionally (2–3 of 4); a maxed
-    // part (>= 99.5%) lights all four.
-    final litTarget =
-        (afterPct.clamp(0.0, 1.0) * ConditioningChargeStrip.runeSegments)
-            .round()
-            .clamp(0, ConditioningChargeStrip.runeSegments);
-
-    return SizedBox(
-      width: 16,
-      height: 30,
-      child: AnimatedBuilder(
-        animation: progress,
-        builder: (context, _) {
-          // Staggered fill: at t each successive segment lights as the fill
-          // crosses its threshold. Cheap, deterministic, and at t=1 every
-          // target segment is lit (test asserts the t=1 state).
-          final litNow = (litTarget * progress.value).ceil().clamp(
-            0,
-            litTarget,
-          );
-          return Column(
-            children: [
-              for (
-                var i = ConditioningChargeStrip.runeSegments - 1;
-                i >= 0;
-                i--
-              ) ...[
-                if (i < ConditioningChargeStrip.runeSegments - 1)
-                  const SizedBox(height: 2),
-                Expanded(
-                  child: _RuneSegment(lit: i < litNow, hue: hue),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
+    final litTarget = litSegmentsForFraction(
+      afterPct,
+      totalSegments: ConditioningChargeStrip.runeSegments,
     );
-  }
-}
 
-class _RuneSegment extends StatelessWidget {
-  const _RuneSegment({required this.lit, required this.hue});
-
-  final bool lit;
-  final Color hue;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: lit ? hue : Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(2),
-        boxShadow: lit
-            ? [BoxShadow(color: hue.withValues(alpha: 0.5), blurRadius: 6)]
-            : null,
-      ),
-      child: const SizedBox.expand(),
+    return AnimatedBuilder(
+      animation: progress,
+      builder: (context, _) {
+        // Staggered fill: at t each successive segment lights as the fill
+        // crosses its threshold. Cheap, deterministic, and at t=1 every
+        // target segment is lit (test asserts the t=1 state).
+        final litNow = (litTarget * progress.value).ceil().clamp(0, litTarget);
+        return ChargeRune(
+          hue: hue,
+          litSegments: litNow,
+          totalSegments: ConditioningChargeStrip.runeSegments,
+        );
+      },
     );
   }
 }

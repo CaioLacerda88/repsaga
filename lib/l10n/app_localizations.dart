@@ -5478,6 +5478,18 @@ abstract class AppLocalizations {
   /// **'Already charged today. Your conditioning rises once a day — today\'s gains are already banked. See your current charge on your Saga.'**
   String get postSessionConditioningAlreadyChargedToday;
 
+  /// Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part gained conditioning this session (paired with the ▲ +N% delta). Past-tense descriptive — what just happened. NO decay/loss-aversion language (Phase-39 / ToS safety guardrail).
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning recharged'**
+  String get postSessionConditioningCinematicRecharged;
+
+  /// Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held at peak (paired with the MÁX word, pre-lit/held rune, no climb). Reads as 'already at peak, you kept it', never a dead +0. Past-tense descriptive.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning at peak'**
+  String get postSessionConditioningCinematicAtPeak;
+
   /// Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows.
   ///
   /// In en, this message translates to:
