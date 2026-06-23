@@ -33,9 +33,16 @@ updates:
     # Ignore versions we've DELIBERATELY held — otherwise dependabot re-proposes
     # them every run and the grouped pub PR fails CI forever. Each is documented
     # in pubspec.yaml + PROJECT.md §2. Re-evaluate (remove the ignore) when the
-    # underlying blocker clears (Flutter SDK bumps meta to 1.18; the passkeys_web
-    # boot issue is handled). NOTE: package_info_plus 10 was a FALSE blocker (its
-    # "needs newer Dart SDK" comment was stale) — adopted via #399, ignore removed.
+    # blocker clears: the riverpod/json codegen quartet needs analyzer ^12 / meta
+    # ^1.18, but Flutter 3.41.6's flutter_test pins meta to EXACTLY 1.17.0 — so
+    # they only clear on a Flutter SDK bump that ships meta >=1.18 (NOT before).
+    # NOTE: package_info_plus 10 was a FALSE blocker (stale comment) — adopted #399.
+    #
+    # Dependabot's resolver does NOT see flutter_test's SDK-vendored exact pins,
+    # so its PRs float `meta` to 1.18.0 / `test` to 1.31.0 — an un-reproducible
+    # lock the toolchain rewrites back to 1.17.0/1.30.0 on every `flutter pub get`.
+    # When merging a dependabot dep PR, run `flutter pub get` to regenerate the
+    # lock to the toolchain truth before merge (else main carries a phantom lock).
     ignore:
       # Web-boot crash via the passkeys_web transitive plugin (cluster
       # supabase-passkeys-web-boot-crash). Held at 2.12.x.
