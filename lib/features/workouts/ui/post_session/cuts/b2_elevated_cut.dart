@@ -4,6 +4,7 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../domain/post_session_timing.dart';
+import 'charge_rune.dart';
 import 'cut_slash.dart';
 
 /// Beat 2 elevated rank-up cut (Variant D — mockup §3).
@@ -22,6 +23,16 @@ class B2ElevatedCut extends StatelessWidget {
     required this.bodyPartLabel,
     required this.newRank,
     required this.rankCopy,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
+    this.isChargeHeld = false,
+    this.chargeDeltaPercent,
+    this.chargeDeltaLabel,
+    this.chargeMaxLabel,
+    this.chargeHeldLabel,
+    this.chargeRechargedLabel,
+    this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -32,6 +43,50 @@ class B2ElevatedCut extends StatelessWidget {
   /// Already-resolved "PEITO · RANK 19" copy (pre-localized + interpolated
   /// at the screen layer per `feedback_widget_l10n_parameterization`).
   final String rankCopy;
+
+  /// Conditioning charge fraction after the session (`[0, 1]`), or `null`
+  /// when this bp has no charge data. Null → no rune end-cap; the elevated
+  /// beat renders exactly as before. The rune completes as the bar crosses
+  /// 100% into the rank slam (mockup cinematic frame iii). Phase Vitality-2.
+  final double? chargeFractionAfter;
+
+  /// True when held at peak — rune pre-lit/held + MÁX word.
+  final bool isChargeMax;
+
+  /// True when held below peak — rune at current level + "Held" / "Mantido"
+  /// word (never a dead `+0`).
+  final bool isChargeHeld;
+
+  /// Integer percentage-point charge delta for the `▲ +N%` line.
+  final int? chargeDeltaPercent;
+
+  /// Pre-localized `+N%` builder (Decoupling Rule 2).
+  final String Function(int pct)? chargeDeltaLabel;
+
+  /// Pre-localized "MÁX" held word.
+  final String? chargeMaxLabel;
+
+  /// Pre-localized "Held" / "Mantido" word (held-below-peak state).
+  final String? chargeHeldLabel;
+
+  /// Pre-localized "Conditioning recharged" subtitle (gainer).
+  final String? chargeRechargedLabel;
+
+  /// Pre-localized "Conditioning at peak" subtitle (MÁX).
+  final String? chargeAtPeakLabel;
+
+  /// Pre-localized "Conditioning held" subtitle (held state).
+  final String? chargeHeldSubtitle;
+
+  /// Whether the rune end-cap renders: charge data present AND copy supplied.
+  bool get _hasCharge =>
+      chargeFractionAfter != null &&
+      chargeDeltaLabel != null &&
+      chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
+      chargeRechargedLabel != null &&
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +196,11 @@ class B2ElevatedCut extends StatelessWidget {
                         },
                       ),
                     ),
-                    // Bottom rank copy — visible during phase C.
+                    // Bottom rank copy + conditioning rune end-cap — visible
+                    // during phase C. The rune completes as the bar crosses
+                    // 100% into the rank slam (mockup cinematic frame iii):
+                    // the bar already reached full in phase A, so the rune
+                    // mounts held-full and fades in with the rank copy.
                     Positioned(
                       left: 16,
                       right: 16,
@@ -155,14 +214,38 @@ class B2ElevatedCut extends StatelessWidget {
                               .clamp(0.0, 1.0);
                           return Opacity(
                             opacity: fade,
-                            child: Text(
-                              rankCopy,
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.label.copyWith(
-                                color: AppColors.textCream,
-                                fontSize: 13,
-                                letterSpacing: 0.14 * 13,
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_hasCharge) ...[
+                                  B2ChargeEndCap(
+                                    hue: hue,
+                                    afterPct: chargeFractionAfter!,
+                                    isMax: isChargeMax,
+                                    isHeld: isChargeHeld,
+                                    // Bar already crossed 100% in phase A; the
+                                    // rune rides the rank slam fully completed.
+                                    fill: 1.0,
+                                    deltaPercent: chargeDeltaPercent ?? 0,
+                                    deltaLabel: chargeDeltaLabel!,
+                                    maxLabel: chargeMaxLabel!,
+                                    heldLabel: chargeHeldLabel!,
+                                    rechargedLabel: chargeRechargedLabel!,
+                                    atPeakLabel: chargeAtPeakLabel!,
+                                    heldSubtitle: chargeHeldSubtitle!,
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                Text(
+                                  rankCopy,
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.label.copyWith(
+                                    color: AppColors.textCream,
+                                    fontSize: 13,
+                                    letterSpacing: 0.14 * 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },

@@ -82,6 +82,7 @@ class RpgProgressSnapshot {
       rank: 1,
       vitalityEwma: 0,
       vitalityPeak: 0,
+      vitalityRefPeak: 0,
       lastEventAt: null,
       updatedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );

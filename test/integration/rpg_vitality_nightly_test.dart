@@ -80,6 +80,13 @@ final double kAlphaDown = 1 - math.exp(-kSamplePeriodDays / kTauDownDays);
 final double kAlphaDownCardio =
     1 - math.exp(-kSamplePeriodDays / kTauDownCardioDays);
 
+/// Per-day reference-peak decay multiplier (00083). 21-day half-life:
+/// `exp(-ln(2)/21)`. Inlined (not imported) so this integration test is the
+/// contract pin — must mirror `c_ref_peak_decay` in the RPC and `REF_PEAK_DECAY`
+/// in vitality-nightly/index.ts. A drift in either fails the decay assertion.
+const double kRefPeakHalfLifeDays = 21.0;
+final double kRefPeakDecay = math.exp(-math.ln2 / kRefPeakHalfLifeDays);
+
 /// Edge Function URL on the local Supabase stack. `npx supabase start`
 /// auto-serves all functions under this prefix.
 const String kEdgeUrl = '$kSupabaseUrl/functions/v1/vitality-nightly';
@@ -786,6 +793,164 @@ void main() {
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // 6. Decaying reference peak (00083) — vitality_ref_peak is written, decays
+  //    on a detrain step below the monotone vitality_peak, and the nightly path
+  //    agrees with the save path (same inputs → same ref_peak from both
+  //    writers, the single-RPC parity contract).
+  // -------------------------------------------------------------------------
+
+  group('vitality reference-peak decay (00083)', () {
+    test(
+      'detrain step decays vitality_ref_peak by the per-day half-life, below vitality_peak',
+      () async {
+        final user = await freshUser();
+        final adminClient = serviceRoleClient();
+
+        // Seed a row mid-detrain: high career peak, ref_peak below it, no
+        // xp_events in window → pure decay step.
+        const priorEwma = 100.0;
+        const priorPeak = 900.0;
+        const priorRefPeak = 800.0;
+        await adminClient.from('body_part_progress').upsert({
+          'user_id': user.userId,
+          'body_part': 'legs',
+          'vitality_ewma': priorEwma,
+          'vitality_peak': priorPeak,
+          'vitality_ref_peak': priorRefPeak,
+          'total_xp': 0,
+          'rank': 1,
+        }, onConflict: 'user_id,body_part');
+
+        // Save-path step (only the touched bp). Zero legs xp_events → decay.
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': user.userId,
+            'p_body_parts': ['legs'],
+          },
+        );
+
+        final refPeak = await _readVitalityRefPeak(
+          adminClient,
+          user.userId,
+          'legs',
+        );
+        final ewma = await _readVitalityEwma(adminClient, user.userId, 'legs');
+        final peak = await _readVitalityPeak(adminClient, user.userId, 'legs');
+
+        // ref_peak = GREATEST(new_ewma, priorRefPeak * decay). new_ewma decays
+        // to ~84.65 (« 800), so the decayed prior wins.
+        final expectedRefPeak = priorRefPeak * kRefPeakDecay;
+        expect(
+          (refPeak - expectedRefPeak).abs() / expectedRefPeak,
+          lessThan(kRelTol),
+          reason:
+              'ref_peak must decay by the 21d half-life factor. '
+              'expected≈$expectedRefPeak got=$refPeak',
+        );
+        // The whole point: ref_peak forgets, so it drops below the monotone
+        // career peak (which must stay pinned at 900).
+        expect(
+          refPeak,
+          lessThan(priorPeak),
+          reason: 'decayed ref_peak ($refPeak) must be below vitality_peak',
+        );
+        expect(
+          (peak - priorPeak).abs(),
+          lessThan(0.01),
+          reason: 'vitality_peak (career best) must NOT decay. got=$peak',
+        );
+        // ref_peak is a ceiling, not a copy of ewma.
+        expect(
+          refPeak,
+          greaterThan(ewma),
+          reason:
+              'ref_peak ($refPeak) must stay above the decayed ewma ($ewma)',
+        );
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+
+    test(
+      'nightly and save paths produce the IDENTICAL ref_peak for identical inputs (parity)',
+      () async {
+        // Two users with byte-identical prior state and zero in-window volume.
+        // One is stepped via the save-path RPC call (touched-bp array); the
+        // other via the nightly Edge Function (NULL bps → all active parts).
+        // Both writers route through the same RPC ref_peak expression, so the
+        // resulting ref_peak must match to numeric precision.
+        final saveUser = await freshUser();
+        // freshUser() overwrites currentUser; capture the save user id before
+        // creating the nightly user so tearDown still cleans both (we delete
+        // the second in-test).
+        final saveUserId = saveUser.userId;
+        final adminClient = serviceRoleClient();
+
+        const priorEwma = 250.0;
+        const priorPeak = 600.0;
+        const priorRefPeak = 500.0;
+
+        Future<void> seedShoulders(String uid) =>
+            adminClient.from('body_part_progress').upsert({
+              'user_id': uid,
+              'body_part': 'shoulders',
+              'vitality_ewma': priorEwma,
+              'vitality_peak': priorPeak,
+              'vitality_ref_peak': priorRefPeak,
+              'total_xp': 0,
+              'rank': 1,
+            }, onConflict: 'user_id,body_part');
+
+        await seedShoulders(saveUserId);
+
+        // Save path: explicit touched-bp recompute.
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': saveUserId,
+            'p_body_parts': ['shoulders'],
+          },
+        );
+        final saveRefPeak = await _readVitalityRefPeak(
+          adminClient,
+          saveUserId,
+          'shoulders',
+        );
+
+        // Nightly path: a SECOND user, stepped by the Edge Function (NULL bps).
+        final nightlyUser = await createTestUser(
+          'rpg-vit-refpeak-parity-${DateTime.now().millisecondsSinceEpoch}@test.local',
+        );
+        try {
+          await seedShoulders(nightlyUser.userId);
+          final res = await _invokeNightly();
+          expect(res.statusCode, 200, reason: res.body);
+
+          final nightlyRefPeak = await _readVitalityRefPeak(
+            adminClient,
+            nightlyUser.userId,
+            'shoulders',
+          );
+
+          expect(
+            (saveRefPeak - nightlyRefPeak).abs(),
+            lessThan(0.001),
+            reason:
+                'save-path and nightly-path ref_peak must agree (single-RPC '
+                'parity). save=$saveRefPeak nightly=$nightlyRefPeak',
+          );
+          // And both decayed below the seeded ref_peak (a real step happened).
+          expect(saveRefPeak, lessThan(priorRefPeak));
+          expect(nightlyRefPeak, lessThan(priorRefPeak));
+        } finally {
+          await deleteTestUser(nightlyUser.userId);
+        }
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+  });
 }
 
 /// Nulls `body_part_progress.last_vitality_date` for every row of [userId] so
@@ -874,4 +1039,19 @@ Future<double> _readVitalityPeak(
       .maybeSingle();
   if (row == null) return 0.0;
   return ((row as Map<String, dynamic>)['vitality_peak'] as num).toDouble();
+}
+
+Future<double> _readVitalityRefPeak(
+  dynamic adminClient,
+  String userId,
+  String bodyPart,
+) async {
+  final row = await (adminClient as dynamic)
+      .from('body_part_progress')
+      .select('vitality_ref_peak')
+      .eq('user_id', userId)
+      .eq('body_part', bodyPart)
+      .maybeSingle();
+  if (row == null) return 0.0;
+  return ((row as Map<String, dynamic>)['vitality_ref_peak'] as num).toDouble();
 }

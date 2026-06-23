@@ -44,6 +44,10 @@ class B2SingleBpCut extends PostSessionCut {
     required this.progressFractionAfter,
     required this.rankAfter,
     required this.isFirstAwakening,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
+    this.isChargeHeld = false,
+    this.chargeDeltaPercent = 0,
   });
 
   final BodyPart bodyPart;
@@ -55,6 +59,32 @@ class B2SingleBpCut extends PostSessionCut {
   /// "trained" this session. Drives the "Peito · Desperto" eyebrow per
   /// mockup §5 State 1.
   final bool isFirstAwakening;
+
+  /// Conditioning charge fraction after the session (`[0, 1]`), or `null`
+  /// when this hero bp has no charge data (`refPeak == 0` / never charged).
+  /// Drives the cinematic rune end-cap (Phase Vitality-2). Null → the B2
+  /// beat renders exactly as before (no rune, no charge line) — the fuse is
+  /// additive. Sourced from the SINGLE `ConditioningCharge` model in the
+  /// controller (no second charge computation → summary + cinematic agree).
+  final double? chargeFractionAfter;
+
+  /// True when this hero bp's conditioning is held at peak
+  /// (`afterPct >= 0.995`). The rune mounts pre-lit/held (a single pulse,
+  /// no climb) + the "MÁX" word renders in place of a `+N%` delta. Mockup
+  /// cinematic frame ii.
+  final bool isChargeMax;
+
+  /// True when this hero bp's conditioning is held below peak (trained but
+  /// flat / decayed within the session). The rune holds at its current level
+  /// + the "Held" / "Mantido" word renders in place of a `+N%` delta — NEVER
+  /// the forbidden `▲ +0%`. Mutually exclusive with [isChargeMax].
+  final bool isChargeHeld;
+
+  /// Integer percentage-point conditioning delta gained this session — the
+  /// SAME `deltaPercentInt` the summary strip shows. Drives the `▲ +N%`
+  /// line. 0 (and ignored) when [isChargeMax] / [isChargeHeld] or no charge
+  /// data.
+  final int chargeDeltaPercent;
 }
 
 /// Beat 2 sequential dominant cut (Variant B — exactly 2 BPs, this is the
@@ -64,11 +94,28 @@ class B2SequentialDominantCut extends PostSessionCut {
     required this.bodyPart,
     required this.xpEarned,
     required this.progressFractionAfter,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
+    this.isChargeHeld = false,
+    this.chargeDeltaPercent = 0,
   });
 
   final BodyPart bodyPart;
   final int xpEarned;
   final double progressFractionAfter;
+
+  /// See [B2SingleBpCut.chargeFractionAfter]. The dominant (first) sequential
+  /// cut is the hero of a 2-BP session and carries the rune end-cap.
+  final double? chargeFractionAfter;
+
+  /// See [B2SingleBpCut.isChargeMax].
+  final bool isChargeMax;
+
+  /// See [B2SingleBpCut.isChargeHeld].
+  final bool isChargeHeld;
+
+  /// See [B2SingleBpCut.chargeDeltaPercent].
+  final int chargeDeltaPercent;
 }
 
 /// Beat 2 sequential secondary cut (Variant B — exactly 2 BPs, this is the
@@ -78,11 +125,22 @@ class B2SequentialSecondaryCut extends PostSessionCut {
     required this.bodyPart,
     required this.xpEarned,
     required this.progressFractionAfter,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
   });
 
   final BodyPart bodyPart;
   final int xpEarned;
   final double progressFractionAfter;
+
+  /// Present on the union for shape uniformity, but the choreographer leaves
+  /// it null: the secondary (non-hero) cut of a 2-BP session stays rank-only,
+  /// mirroring the cascade rule "rune on the hero row only" (mockup cinematic
+  /// caption iii).
+  final double? chargeFractionAfter;
+
+  /// See [chargeFractionAfter] — left at the default for the secondary cut.
+  final bool isChargeMax;
 }
 
 /// Beat 2 cascade cut (Variant C — 3+ BPs). Hero BP at top + cascade rows
@@ -94,11 +152,33 @@ class B2CascadeCut extends PostSessionCut {
     required this.heroProgressFractionAfter,
     required this.cascadeRows,
     required this.truncatedCount,
+    this.heroChargeFractionAfter,
+    this.heroChargeIsMax = false,
+    this.heroChargeIsHeld = false,
+    this.heroChargeDeltaPercent = 0,
   });
 
   final BodyPart heroBodyPart;
   final int heroXp;
   final double heroProgressFractionAfter;
+
+  /// Conditioning charge fraction of the hero bp after the session
+  /// (`[0, 1]`), or `null` when the hero has no charge data. The cascade
+  /// renders the rune end-cap on the HERO ROW ONLY; secondary rows stay
+  /// rank-only (mockup cinematic caption iii). Phase Vitality-2.
+  final double? heroChargeFractionAfter;
+
+  /// True when the hero bp's conditioning is held at peak. See
+  /// [B2SingleBpCut.isChargeMax].
+  final bool heroChargeIsMax;
+
+  /// True when the hero bp's conditioning is held below peak (trained but
+  /// flat / decayed). See [B2SingleBpCut.isChargeHeld].
+  final bool heroChargeIsHeld;
+
+  /// Integer percentage-point conditioning delta of the hero bp. See
+  /// [B2SingleBpCut.chargeDeltaPercent].
+  final int heroChargeDeltaPercent;
 
   /// Up to 4 rows in the cascade below the hero. Mockup §3 Variant C.
   final List<CascadeRow> cascadeRows;
@@ -112,6 +192,10 @@ class CascadeRow {
   const CascadeRow({required this.bodyPart, required this.xpEarned});
   final BodyPart bodyPart;
   final int xpEarned;
+
+  // Secondary cascade rows stay rank-only — they carry NO charge data. The
+  // cascade rune end-cap rides the HERO ONLY (mockup cinematic caption iii),
+  // and the hero is the `B2CascadeCut.hero*` field set, not a CascadeRow.
 }
 
 /// Beat 2 elevated cut (Variant D — rank-up fusion). Bar fills past 100%
@@ -121,11 +205,33 @@ class B2ElevatedRankUpCut extends PostSessionCut {
     required this.bodyPart,
     required this.newRank,
     required this.xpEarnedForBodyPart,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
+    this.isChargeHeld = false,
+    this.chargeDeltaPercent = 0,
   });
 
   final BodyPart bodyPart;
   final int newRank;
   final int xpEarnedForBodyPart;
+
+  /// Conditioning charge fraction after the session (`[0, 1]`), or `null`
+  /// when this bp has no charge data. On the elevated beat the rune
+  /// completes as the bar crosses 100% into the rank slam (mockup cinematic
+  /// frame iii). Phase Vitality-2.
+  final double? chargeFractionAfter;
+
+  /// True when this bp's conditioning is held at peak. See
+  /// [B2SingleBpCut.isChargeMax].
+  final bool isChargeMax;
+
+  /// True when this bp's conditioning is held below peak. See
+  /// [B2SingleBpCut.isChargeHeld].
+  final bool isChargeHeld;
+
+  /// Integer percentage-point conditioning delta. See
+  /// [B2SingleBpCut.chargeDeltaPercent].
+  final int chargeDeltaPercent;
 }
 
 /// Beat 3 PR cut (single OR multi). Hero PR + up to 3 pill rows + "+N mais".
@@ -213,6 +319,13 @@ class PostSessionChoreographer {
   ///     [bpXpDeltas].
   ///   * [bpProgressFractionAfter] — `{BodyPart: 0.0-1.0}` rank-progress
   ///     fraction after the save.
+  ///   * [bpCharge] — `{BodyPart: (afterPct, isMax)}` conditioning charge
+  ///     after the save, sourced from the SINGLE `ConditioningCharge` model
+  ///     (Phase Vitality-2). A BP absent from this map has no charge data;
+  ///     its B2 cut renders without the rune end-cap (the fuse is additive).
+  ///     The summary strip + the cinematic read the SAME numbers — no second
+  ///     charge computation, no drift. Defaults empty so legacy callers /
+  ///     fixtures keep compiling and render exactly as before.
   ///   * [bpFirstAwakening] — BPs that crossed "never trained" → "trained"
   ///     this session. Empty in the common path.
   ///   * [prResult] — `PRDetectionResult` from the finish flow. `null` or
@@ -235,6 +348,12 @@ class PostSessionChoreographer {
     required int? newCharacterLevel,
     required int priorFinishedWorkoutCount,
     required int totalXpEarned,
+    Map<
+          BodyPart,
+          ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+        >
+        bpCharge =
+        const {},
   }) {
     final cuts = <PostSessionCut>[];
 
@@ -269,6 +388,7 @@ class PostSessionChoreographer {
         bpRankAfter: bpRankAfter,
         bpProgressFractionAfter: bpProgressFractionAfter,
         bpFirstAwakening: bpFirstAwakening,
+        bpCharge: bpCharge,
         rankUpEvents: rankUpEvents,
         prResult: prResult,
       );
@@ -317,6 +437,11 @@ class PostSessionChoreographer {
     required Map<BodyPart, int> bpRankAfter,
     required Map<BodyPart, double> bpProgressFractionAfter,
     required Set<BodyPart> bpFirstAwakening,
+    required Map<
+      BodyPart,
+      ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+    >
+    bpCharge,
     required List<RankUpEvent> rankUpEvents,
     required PRDetectionResult? prResult,
   }) {
@@ -353,14 +478,24 @@ class PostSessionChoreographer {
 
       if (sortedBps.length >= 3) {
         cuts.add(
-          _buildCascadeCut(sortedBps, bpXpDeltas, bpProgressFractionAfter),
+          _buildCascadeCut(
+            sortedBps,
+            bpXpDeltas,
+            bpProgressFractionAfter,
+            bpCharge,
+          ),
         );
       }
+      final elevatedCharge = bpCharge[topRankUp.bodyPart];
       cuts.add(
         B2ElevatedRankUpCut(
           bodyPart: topRankUp.bodyPart,
           newRank: topRankUp.newRank,
           xpEarnedForBodyPart: bpXpDeltas[topRankUp.bodyPart] ?? 0,
+          chargeFractionAfter: elevatedCharge?.afterPct,
+          isChargeMax: elevatedCharge?.isMax ?? false,
+          isChargeHeld: elevatedCharge?.isHeld ?? false,
+          chargeDeltaPercent: elevatedCharge?.deltaPercent ?? 0,
         ),
       );
       return;
@@ -373,6 +508,7 @@ class PostSessionChoreographer {
     // fires." This holds because we render only the dominant BP.
     if (hasPr) {
       final dominant = sortedBps.first;
+      final dominantCharge = bpCharge[dominant];
       cuts.add(
         B2SingleBpCut(
           bodyPart: dominant,
@@ -380,6 +516,10 @@ class PostSessionChoreographer {
           progressFractionAfter: bpProgressFractionAfter[dominant] ?? 0.0,
           rankAfter: bpRankAfter[dominant] ?? 1,
           isFirstAwakening: bpFirstAwakening.contains(dominant),
+          chargeFractionAfter: dominantCharge?.afterPct,
+          isChargeMax: dominantCharge?.isMax ?? false,
+          isChargeHeld: dominantCharge?.isHeld ?? false,
+          chargeDeltaPercent: dominantCharge?.deltaPercent ?? 0,
         ),
       );
       return;
@@ -389,6 +529,7 @@ class PostSessionChoreographer {
     if (sortedBps.length == 1) {
       // Variant A
       final bp = sortedBps.first;
+      final charge = bpCharge[bp];
       cuts.add(
         B2SingleBpCut(
           bodyPart: bp,
@@ -396,17 +537,27 @@ class PostSessionChoreographer {
           progressFractionAfter: bpProgressFractionAfter[bp] ?? 0.0,
           rankAfter: bpRankAfter[bp] ?? 1,
           isFirstAwakening: bpFirstAwakening.contains(bp),
+          chargeFractionAfter: charge?.afterPct,
+          isChargeMax: charge?.isMax ?? false,
+          isChargeHeld: charge?.isHeld ?? false,
+          chargeDeltaPercent: charge?.deltaPercent ?? 0,
         ),
       );
     } else if (sortedBps.length == 2) {
-      // Variant B (sequential — dominant first, secondary second)
+      // Variant B (sequential — dominant first, secondary second). Only the
+      // dominant (hero) cut carries the rune; the secondary stays rank-only.
       final dominant = sortedBps[0];
       final secondary = sortedBps[1];
+      final dominantCharge = bpCharge[dominant];
       cuts.add(
         B2SequentialDominantCut(
           bodyPart: dominant,
           xpEarned: bpXpDeltas[dominant]!,
           progressFractionAfter: bpProgressFractionAfter[dominant] ?? 0.0,
+          chargeFractionAfter: dominantCharge?.afterPct,
+          isChargeMax: dominantCharge?.isMax ?? false,
+          isChargeHeld: dominantCharge?.isHeld ?? false,
+          chargeDeltaPercent: dominantCharge?.deltaPercent ?? 0,
         ),
       );
       cuts.add(
@@ -419,7 +570,12 @@ class PostSessionChoreographer {
     } else {
       // Variant C (cascade)
       cuts.add(
-        _buildCascadeCut(sortedBps, bpXpDeltas, bpProgressFractionAfter),
+        _buildCascadeCut(
+          sortedBps,
+          bpXpDeltas,
+          bpProgressFractionAfter,
+          bpCharge,
+        ),
       );
     }
   }
@@ -428,17 +584,29 @@ class PostSessionChoreographer {
     List<BodyPart> sortedBps,
     Map<BodyPart, int> bpXpDeltas,
     Map<BodyPart, double> bpProgressFractionAfter,
+    Map<
+      BodyPart,
+      ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+    >
+    bpCharge,
   ) {
     final hero = sortedBps.first;
     final remaining = sortedBps.skip(1).toList();
     final visible = remaining.take(maxCascadeRows).toList();
     final truncated = remaining.length - visible.length;
+    final heroCharge = bpCharge[hero];
 
     return B2CascadeCut(
       heroBodyPart: hero,
       heroXp: bpXpDeltas[hero]!,
       heroProgressFractionAfter: bpProgressFractionAfter[hero] ?? 0.0,
+      heroChargeFractionAfter: heroCharge?.afterPct,
+      heroChargeIsMax: heroCharge?.isMax ?? false,
+      heroChargeIsHeld: heroCharge?.isHeld ?? false,
+      heroChargeDeltaPercent: heroCharge?.deltaPercent ?? 0,
       cascadeRows: [
+        // Secondary cascade rows stay rank-only — no rune (mockup cinematic
+        // caption iii: "rune on the hero row only").
         for (final bp in visible)
           CascadeRow(bodyPart: bp, xpEarned: bpXpDeltas[bp]!),
       ],

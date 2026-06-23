@@ -417,6 +417,7 @@ BodyPartProgress _bpProgress({
     rank: rank,
     vitalityEwma: 0,
     vitalityPeak: 0,
+    vitalityRefPeak: 0,
     lastEventAt: null,
     updatedAt: DateTime(2026),
   );

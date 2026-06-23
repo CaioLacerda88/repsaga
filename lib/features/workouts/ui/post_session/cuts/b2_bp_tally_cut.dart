@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
+import 'charge_rune.dart';
 import 'cut_slash.dart';
 
 /// Beat 2 single-BP cut (Variant A — mockup §3) AND sequential cut
@@ -24,6 +25,16 @@ class B2BpTallyCut extends StatelessWidget {
     required this.rankAfter,
     required this.isFirstAwakening,
     this.firstAwakeningSuffix,
+    this.chargeFractionAfter,
+    this.isChargeMax = false,
+    this.isChargeHeld = false,
+    this.chargeDeltaPercent,
+    this.chargeDeltaLabel,
+    this.chargeMaxLabel,
+    this.chargeHeldLabel,
+    this.chargeRechargedLabel,
+    this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -42,6 +53,58 @@ class B2BpTallyCut extends StatelessWidget {
   /// Decoupled from this widget to keep the l10n decision at the screen
   /// layer.
   final String? firstAwakeningSuffix;
+
+  /// Conditioning charge fraction after the session (`[0, 1]`), or `null`
+  /// when this hero bp has no charge data. Null → the rune end-cap is NOT
+  /// rendered and the beat looks exactly as before (the fuse is additive).
+  /// Phase Vitality-2 S4.
+  final double? chargeFractionAfter;
+
+  /// True when the charge is held at peak (`afterPct >= 0.995`). The rune
+  /// mounts pre-lit/held + the "MÁX" word renders in place of the `+N%`
+  /// delta (mockup cinematic frame ii).
+  final bool isChargeMax;
+
+  /// True when the charge is held BELOW peak (trained but flat / decayed).
+  /// The rune holds at its current level + the "Held" / "Mantido" word
+  /// renders in place of the `+N%` delta — never a dead `+0`.
+  final bool isChargeHeld;
+
+  /// The integer delta (percentage points) gained this session — used for
+  /// the `▲ +N%` line. Sourced from the SINGLE charge model so it matches
+  /// the summary strip. Ignored when [isChargeMax].
+  final int? chargeDeltaPercent;
+
+  /// Pre-localized `+N%` builder for the charge delta. Resolved by the
+  /// screen layer (Decoupling Rule 2).
+  final String Function(int pct)? chargeDeltaLabel;
+
+  /// Pre-localized "MÁX" held word (already uppercased).
+  final String? chargeMaxLabel;
+
+  /// Pre-localized "Held" / "Mantido" word (held-below-peak state).
+  final String? chargeHeldLabel;
+
+  /// Pre-localized "Conditioning recharged" descriptive subtitle (gainer).
+  final String? chargeRechargedLabel;
+
+  /// Pre-localized "Conditioning at peak" descriptive subtitle (MÁX).
+  final String? chargeAtPeakLabel;
+
+  /// Pre-localized "Conditioning held" descriptive subtitle (held state).
+  final String? chargeHeldSubtitle;
+
+  /// Whether the rune end-cap should render: charge data present AND the
+  /// screen supplied the localized copy. When false the beat renders as
+  /// before — additive fuse, never breaks the existing beat.
+  bool get _hasCharge =>
+      chargeFractionAfter != null &&
+      chargeDeltaLabel != null &&
+      chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
+      chargeRechargedLabel != null &&
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +184,9 @@ class B2BpTallyCut extends StatelessWidget {
                       },
                     ),
                     // Bottom progress bar fills as animation crosses 0.30 → 0.70.
+                    // The conditioning rune end-cap (when present) lights its
+                    // segments in the SAME beat/hue — one read, zero added
+                    // cinematic length (Phase Vitality-2 S4).
                     Positioned(
                       left: 16,
                       right: 16,
@@ -135,6 +201,23 @@ class B2BpTallyCut extends StatelessWidget {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              if (_hasCharge) ...[
+                                B2ChargeEndCap(
+                                  hue: hue,
+                                  afterPct: chargeFractionAfter!,
+                                  isMax: isChargeMax,
+                                  isHeld: isChargeHeld,
+                                  fill: fill,
+                                  deltaPercent: chargeDeltaPercent ?? 0,
+                                  deltaLabel: chargeDeltaLabel!,
+                                  maxLabel: chargeMaxLabel!,
+                                  heldLabel: chargeHeldLabel!,
+                                  rechargedLabel: chargeRechargedLabel!,
+                                  atPeakLabel: chargeAtPeakLabel!,
+                                  heldSubtitle: chargeHeldSubtitle!,
+                                ),
+                                const SizedBox(height: 13),
+                              ],
                               ClipRRect(
                                 borderRadius: BorderRadius.zero,
                                 child: Stack(

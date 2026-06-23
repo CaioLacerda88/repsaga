@@ -28,6 +28,14 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/ui/utils/vitality_state_styles.dart';
 import 'package:repsaga/features/workouts/domain/post_session_choreographer.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/b2_cascade_cut.dart';
+import 'package:repsaga/features/workouts/ui/post_session/cuts/charge_rune.dart';
+
+int _litSegments(WidgetTester tester) {
+  return tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).where((d) {
+    final deco = d.decoration as BoxDecoration;
+    return deco.boxShadow != null && deco.boxShadow!.isNotEmpty;
+  }).length;
+}
 
 void main() {
   testWidgets(
@@ -117,4 +125,88 @@ void main() {
       }
     },
   );
+
+  testWidgets('cascade renders the charge rune end-cap on the HERO ONLY '
+      '(Phase Vitality-2 S4)', (tester) async {
+    const cut = B2CascadeCut(
+      heroBodyPart: BodyPart.core,
+      heroXp: 480,
+      heroProgressFractionAfter: 0.04,
+      heroChargeFractionAfter: 0.55, // round(0.55*4) = 2 lit
+      heroChargeIsMax: false,
+      heroChargeDeltaPercent: 24,
+      cascadeRows: [
+        CascadeRow(bodyPart: BodyPart.back, xpEarned: 220),
+        CascadeRow(bodyPart: BodyPart.arms, xpEarned: 150),
+      ],
+      truncatedCount: 0,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: B2CascadeCutWidget(
+            animation: AlwaysStoppedAnimation(1.0),
+            cut: cut,
+            bodyPartLabels: {
+              BodyPart.core: 'CORE',
+              BodyPart.back: 'COSTAS',
+              BodyPart.arms: 'BRAÇOS',
+            },
+            xpLabel: 'XP',
+            truncatedPillLabel: '',
+            chargeDeltaLabel: _delta,
+            chargeMaxLabel: 'MÁX',
+            chargeHeldLabel: 'MANTIDO',
+            chargeRechargedLabel: 'Condicionamento recarregado',
+            chargeAtPeakLabel: 'Condicionamento no pico',
+            chargeHeldSubtitle: 'Condicionamento mantido',
+          ),
+        ),
+      ),
+    );
+
+    // Exactly ONE rune end-cap (the hero) — secondary cascade rows stay
+    // rank-only (mockup cinematic caption iii).
+    expect(find.byType(B2ChargeEndCap), findsOneWidget);
+    expect(find.text('+24%'), findsOneWidget);
+    expect(find.text('CONDICIONAMENTO RECARREGADO'), findsOneWidget);
+    // Hero 55% → 2 of 4 lit; no secondary-row runes contribute.
+    expect(_litSegments(tester), 2);
+  });
+
+  testWidgets('cascade with no hero charge data renders no rune end-cap', (
+    tester,
+  ) async {
+    const cut = B2CascadeCut(
+      heroBodyPart: BodyPart.shoulders,
+      heroXp: 320,
+      heroProgressFractionAfter: 0.6,
+      cascadeRows: [CascadeRow(bodyPart: BodyPart.chest, xpEarned: 220)],
+      truncatedCount: 0,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: B2CascadeCutWidget(
+            animation: AlwaysStoppedAnimation(1.0),
+            cut: cut,
+            bodyPartLabels: {
+              BodyPart.shoulders: 'OMBROS',
+              BodyPart.chest: 'PEITO',
+            },
+            xpLabel: 'XP',
+            truncatedPillLabel: '',
+            // No charge copy → end-cap stays off (additive fuse).
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(B2ChargeEndCap), findsNothing);
+    expect(_litSegments(tester), 0);
+  });
 }
+
+String _delta(int pct) => '+$pct%';

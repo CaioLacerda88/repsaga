@@ -5,6 +5,7 @@ import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../domain/post_session_choreographer.dart';
 import '../../../domain/post_session_timing.dart';
+import 'charge_rune.dart';
 import 'cut_slash.dart';
 
 /// Beat 2 cascade cut widget (Variant C — mockup §3, 3+ BPs trained).
@@ -27,6 +28,12 @@ class B2CascadeCutWidget extends StatelessWidget {
     required this.bodyPartLabels,
     required this.xpLabel,
     required this.truncatedPillLabel,
+    this.chargeDeltaLabel,
+    this.chargeMaxLabel,
+    this.chargeHeldLabel,
+    this.chargeRechargedLabel,
+    this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -39,6 +46,26 @@ class B2CascadeCutWidget extends StatelessWidget {
   /// count before passing the string down.
   /// Empty string when [B2CascadeCut.truncatedCount] is 0.
   final String truncatedPillLabel;
+
+  /// Pre-localized conditioning-charge copy for the HERO rune end-cap
+  /// (cascade renders the rune on the hero only). All four are null when the
+  /// hero has no charge data → no rune. Phase Vitality-2 S4.
+  final String Function(int pct)? chargeDeltaLabel;
+  final String? chargeMaxLabel;
+  final String? chargeHeldLabel;
+  final String? chargeRechargedLabel;
+  final String? chargeAtPeakLabel;
+  final String? chargeHeldSubtitle;
+
+  /// Whether the hero rune end-cap renders.
+  bool get _hasHeroCharge =>
+      cut.heroChargeFractionAfter != null &&
+      chargeDeltaLabel != null &&
+      chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
+      chargeRechargedLabel != null &&
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +138,27 @@ class B2CascadeCutWidget extends StatelessWidget {
                                     fontSize: 11,
                                   ),
                                 ),
+                                // Hero rune end-cap (cascade: hero only). Lights
+                                // in the same 0.30→0.70 beat as the cascade
+                                // rows stagger in. Phase Vitality-2 S4.
+                                if (_hasHeroCharge) ...[
+                                  const SizedBox(height: 14),
+                                  B2ChargeEndCap(
+                                    hue: heroHue,
+                                    afterPct: cut.heroChargeFractionAfter!,
+                                    isMax: cut.heroChargeIsMax,
+                                    isHeld: cut.heroChargeIsHeld,
+                                    fill: ((animation.value - 0.30) / 0.40)
+                                        .clamp(0.0, 1.0),
+                                    deltaPercent: cut.heroChargeDeltaPercent,
+                                    deltaLabel: chargeDeltaLabel!,
+                                    maxLabel: chargeMaxLabel!,
+                                    heldLabel: chargeHeldLabel!,
+                                    rechargedLabel: chargeRechargedLabel!,
+                                    atPeakLabel: chargeAtPeakLabel!,
+                                    heldSubtitle: chargeHeldSubtitle!,
+                                  ),
+                                ],
                               ],
                             ),
                           );

@@ -3170,7 +3170,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get postSessionXpEarnedLabel => 'XP EARNED';
 
   @override
-  String get postSessionConditioningChargedEyebrow => 'Conditioning charged';
+  String get postSessionConditioningChargedEyebrow => 'Conditioning';
 
   @override
   String postSessionConditioningChargedDelta(int pct) {
@@ -3178,8 +3178,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get postSessionConditioningChargedCaption =>
-      'The rune recharges over ~7 days.';
+  String get postSessionConditioningChargedMax => 'MAX';
+
+  @override
+  String get postSessionConditioningChargedHeld => 'HELD';
+
+  @override
+  String postSessionConditioningMore(int count) {
+    return '+$count more recharged';
+  }
+
+  @override
+  String get postSessionConditioningAllAtPeak =>
+      '✓ All at peak — conditioning held';
+
+  @override
+  String get postSessionConditioningAlreadyChargedToday =>
+      'Already charged today. Your conditioning rises once a day — today\'s gains are already banked. See your current charge on your Saga.';
+
+  @override
+  String get postSessionConditioningCinematicRecharged =>
+      'Conditioning recharged';
+
+  @override
+  String get postSessionConditioningCinematicAtPeak => 'Conditioning at peak';
+
+  @override
+  String get postSessionConditioningCinematicHeld => 'Conditioning held';
 
   @override
   String get avatarPickerSheetTitle => 'Choose avatar source';

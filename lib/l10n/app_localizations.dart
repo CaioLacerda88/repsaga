@@ -5442,23 +5442,65 @@ abstract class AppLocalizations {
   /// **'XP EARNED'**
   String get postSessionXpEarnedLabel;
 
-  /// Phase Vitality — Mission Debrief eyebrow above the aggregate teal 'Conditioning charged' charge bar. Reports that the per-body-part vitality rune rebuilt UP toward its 7-day peak at save time. Teal (bodyPartCardio) register; widget uppercases for the tracked-label register. Pre-title-cased.
+  /// Phase Vitality-2 — bare eyebrow above the per-body-part conditioning rune strip (preceded by a ⚡ glyph). Teal (bodyPartCardio) register; widget uppercases for the tracked-label register. Pre-title-cased.
   ///
   /// In en, this message translates to:
-  /// **'Conditioning charged'**
+  /// **'Conditioning'**
   String get postSessionConditioningChargedEyebrow;
 
-  /// Phase Vitality — delta-only label on the 'Conditioning charged' charge bar (e.g. '+14%'). The honest aggregate increase in vitality across the body parts trained this session (afterPct − beforePct). Always positive (vitality only rebuilds at save time, never depletes); the bar hides when the delta is 0.
+  /// Phase Vitality-2 — per-body-part delta on a conditioning rune row (e.g. '+24%'). The honest charge increase for that part this session (afterPct − beforePct, floored to 1% for any real gain). Always positive (vitality only rebuilds at save time, never depletes).
   ///
   /// In en, this message translates to:
   /// **'+{pct}%'**
   String postSessionConditioningChargedDelta(int pct);
 
-  /// Phase Vitality — caption under the 'Conditioning charged' charge bar. Locks the rebuild-not-deplete metaphor in copy: vitality is a charge that rebuilds over a ~7-day window, never a depleting HP bar. textDim register.
+  /// Phase Vitality-2 — held-at-peak word shown in place of a delta on a maxed conditioning rune row (afterPct >= 99.5%). 'MÁX' in pt. Reads as 'already at peak, you kept it', never a dead +0. textDimAA tracked-label register; pre-uppercased.
   ///
   /// In en, this message translates to:
-  /// **'The rune recharges over ~7 days.'**
-  String get postSessionConditioningChargedCaption;
+  /// **'MAX'**
+  String get postSessionConditioningChargedMax;
+
+  /// Phase Vitality-2 — held-below-peak word shown in place of a delta on a trained-but-flat/decayed conditioning rune row (deltaPercentInt == 0 AND afterPct < 99.5%). 'Mantido' in pt. Distinct from MÁX (at peak); never a dead +0. Past-tense/neutral, no loss-aversion. textDimAA tracked-label register; pre-uppercased.
+  ///
+  /// In en, this message translates to:
+  /// **'HELD'**
+  String get postSessionConditioningChargedHeld;
+
+  /// Phase Vitality-2 — overflow footer below the capped (4-row) conditioning rune strip, e.g. '+3 more recharged'. Mirrors the '+N more exercises' lift-table pattern.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more recharged'**
+  String postSessionConditioningMore(int count);
+
+  /// Phase Vitality-2 — line shown above the MÁX rows when every trained part is already at peak (no ▲ gainers). A legit positive debrief ('everything stayed charged'). Teal register. Past-tense descriptive — no decay/loss-aversion language.
+  ///
+  /// In en, this message translates to:
+  /// **'✓ All at peak — conditioning held'**
+  String get postSessionConditioningAllAtPeak;
+
+  /// Phase Vitality-2 — guard state copy shown when the once-per-day vitality step was already taken (2nd+ same-day save / post-cron). Honest, rest-positive, past-tense descriptive: the charge was already banked today. NO decay countdown, NO 'train again / keep your charge' command (Phase-39 / ToS safety guardrail).
+  ///
+  /// In en, this message translates to:
+  /// **'Already charged today. Your conditioning rises once a day — today\'s gains are already banked. See your current charge on your Saga.'**
+  String get postSessionConditioningAlreadyChargedToday;
+
+  /// Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part gained conditioning this session (paired with the ▲ +N% delta). Past-tense descriptive — what just happened. NO decay/loss-aversion language (Phase-39 / ToS safety guardrail).
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning recharged'**
+  String get postSessionConditioningCinematicRecharged;
+
+  /// Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held at peak (paired with the MÁX word, pre-lit/held rune, no climb). Reads as 'already at peak, you kept it', never a dead +0. Past-tense descriptive.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning at peak'**
+  String get postSessionConditioningCinematicAtPeak;
+
+  /// Phase Vitality-2 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held below peak (trained but flat/decayed; paired with the HELD word, current-level rune, no climb). Past-tense/neutral — never a dead +0, no loss-aversion (Phase-39 / ToS safety guardrail).
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning held'**
+  String get postSessionConditioningCinematicHeld;
 
   /// Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows.
   ///

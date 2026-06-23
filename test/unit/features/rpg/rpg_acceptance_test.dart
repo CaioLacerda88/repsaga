@@ -68,6 +68,7 @@ BodyPartProgress _row(BodyPart bp, {required int rank, required double xp}) {
     rank: rank,
     vitalityEwma: 0,
     vitalityPeak: 0,
+    vitalityRefPeak: 0,
     lastEventAt: null,
     updatedAt: _now,
   );

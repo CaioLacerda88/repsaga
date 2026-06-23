@@ -78,16 +78,19 @@ class PostSessionParams {
   /// accurate multi-rank-jump arrows (`Rank 5 → 8`). Phase 31 Blocker 1.
   final Map<BodyPart, int> bpRankBefore;
 
-  /// Pre-finish per-body-part vitality `(ewma, peak)` snapshot. Captured by
-  /// [FinishWorkoutCoordinator] from `rpgProgressProvider` BEFORE awaiting
-  /// `notifier.finishWorkout()` (same `ref`-lifetime contract as
-  /// [bpRankBefore]). Threaded to [PostSessionState.conditioningCharge] as
-  /// the BEFORE side of the "Conditioning charged" debrief beat; the
-  /// controller derives the AFTER side from the post-save snapshot it reads
-  /// in `_buildInitial`. Body parts the user has never charged
-  /// (`peak == 0`) or never trained server-side are absent — the aggregate
-  /// roll-up excludes them. Phase Vitality PR 2.
-  final Map<BodyPart, ({double ewma, double peak})> bpVitalityBefore;
+  /// Pre-finish per-body-part vitality `(ewma, peak, refPeak)` snapshot.
+  /// Captured by [FinishWorkoutCoordinator] from `rpgProgressProvider`
+  /// BEFORE awaiting `notifier.finishWorkout()` (same `ref`-lifetime
+  /// contract as [bpRankBefore]). Threaded to
+  /// [PostSessionState.conditioningCharge] as the BEFORE side of the
+  /// "Conditioning charged" debrief beat; the controller derives the AFTER
+  /// side from the post-save snapshot it reads in `_buildInitial`. The
+  /// `refPeak` (`vitality_ref_peak`, decaying reference peak) is the charge-
+  /// fraction denominator. Body parts the user has never charged
+  /// (`refPeak == 0`) or never trained server-side are absent — the per-bp
+  /// roll-up excludes them. Phase Vitality-2.
+  final Map<BodyPart, ({double ewma, double peak, double refPeak})>
+  bpVitalityBefore;
   final Set<BodyPart> bpFirstAwakening;
   final int priorFinishedWorkoutCount;
   final int durationMinutes;
@@ -161,26 +164,51 @@ class PostSessionController extends ChangeNotifier {
     // `refreshAfterSave()` resolves these rows carry the rebuilt ewma).
     // Reads the REAL refreshed provider value, never a local guess
     // (cluster: optimistic-ui-vs-async-provider).
-    final bpVitalityAfter = <BodyPart, ({double ewma, double peak})>{};
+    final bpVitalityAfter =
+        <BodyPart, ({double ewma, double peak, double refPeak})>{};
     for (final bp in params.bpXpDeltas.keys) {
       final row = progress.byBodyPart[bp];
       bpRankAfter[bp] = row?.rank ?? 1;
       final totalXp = row?.totalXp ?? 0.0;
       bpProgressAfter[bp] = RankCurve.progressFraction(totalXp, row?.rank ?? 1);
       if (row != null) {
-        bpVitalityAfter[bp] = (ewma: row.vitalityEwma, peak: row.vitalityPeak);
+        bpVitalityAfter[bp] = (
+          ewma: row.vitalityEwma,
+          peak: row.vitalityPeak,
+          refPeak: row.vitalityRefPeak,
+        );
       }
     }
 
-    // Aggregate before/after conditioning charge (mean of per-bp
-    // clamp(ewma/peak) over the trained bps). Hides gracefully (shouldRender
-    // false) when no trained bp has charge data or the delta rounds to 0%
-    // (day-zero, fully-charged plateau, same-day re-save).
+    // Per-body-part conditioning charge (clamp(ewma/refPeak) per trained
+    // bp, ordered delta-desc). Renders whenever any trained bp has charge
+    // data (so an all-maxed session still shows) OR the once-per-day guard
+    // blocked the step (surfaces "já carregado hoje"); hides only on true
+    // day-zero / no-charge-data.
     final conditioningCharge = ConditioningCharge.fromSnapshots(
       trainedBodyParts: params.bpXpDeltas.keys,
       before: params.bpVitalityBefore,
       after: bpVitalityAfter,
     );
+
+    // SINGLE charge source: the cinematic B2 rune end-cap reads the SAME
+    // per-bp charge the summary rune strip renders — derived here from the
+    // one `conditioningCharge` model above, never recomputed (no drift).
+    // A bp absent from this map has no charge data; its B2 cut renders
+    // without the rune (the fuse is additive). Phase Vitality-2 S4.
+    final bpCharge =
+        <
+          BodyPart,
+          ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+        >{
+          for (final part in conditioningCharge.parts)
+            part.bodyPart: (
+              afterPct: part.afterPct,
+              isMax: part.isMax,
+              isHeld: part.isHeld,
+              deltaPercent: part.deltaPercentInt,
+            ),
+        };
 
     final levelUpEvent = params.queueResult.queue
         .whereType<LevelUpEvent>()
@@ -194,6 +222,7 @@ class PostSessionController extends ChangeNotifier {
       bpRankAfter: bpRankAfter,
       bpProgressFractionAfter: bpProgressAfter,
       bpFirstAwakening: params.bpFirstAwakening,
+      bpCharge: bpCharge,
       prResult: params.prResult,
       exerciseNames: params.exerciseNames,
       newCharacterLevel: newCharacterLevel,

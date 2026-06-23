@@ -485,6 +485,227 @@ void main() {
     });
   });
 
+  group('PostSessionChoreographer — conditioning charge threading', () {
+    test('single-BP hero carries charge fraction/max/delta from bpCharge', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.back: 340},
+        bpRankAfter: {BodyPart.back: 9},
+        bpProgressFractionAfter: {BodyPart.back: 0.64},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.back: (
+            afterPct: 0.64,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 340,
+      );
+      final hero = cuts[1] as B2SingleBpCut;
+      expect(hero.chargeFractionAfter, 0.64);
+      expect(hero.isChargeMax, isFalse);
+      expect(hero.chargeDeltaPercent, 17);
+    });
+
+    test('MÁX charge threads isChargeMax true', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.legs: 210},
+        bpRankAfter: {BodyPart.legs: 14},
+        bpProgressFractionAfter: {BodyPart.legs: 0.88},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.legs: (
+            afterPct: 1.0,
+            isMax: true,
+            isHeld: false,
+            deltaPercent: 0,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 210,
+      );
+      final hero = cuts[1] as B2SingleBpCut;
+      expect(hero.isChargeMax, isTrue);
+      expect(hero.chargeFractionAfter, 1.0);
+    });
+
+    test('held charge threads isChargeHeld true (not max, not gainer)', () {
+      // A trained-but-decayed-below-peak part: flat/floored delta, below peak.
+      // Pins that the choreographer propagates the THIRD classification
+      // (isHeld) through to the hero cut — without this, a regression that
+      // hardcoded isChargeHeld:false would render the forbidden ▲ +0% on the
+      // cinematic beat (the held endcap renderer is covered separately, but
+      // only this asserts the choreographer actually FORWARDS the held flag).
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.arms: 90},
+        bpRankAfter: {BodyPart.arms: 6},
+        bpProgressFractionAfter: {BodyPart.arms: 0.40},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.arms: (
+            afterPct: 0.6,
+            isMax: false,
+            isHeld: true,
+            deltaPercent: 0,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 90,
+      );
+      final hero = cuts[1] as B2SingleBpCut;
+      expect(hero.isChargeHeld, isTrue);
+      expect(hero.isChargeMax, isFalse);
+      expect(hero.chargeDeltaPercent, 0);
+      expect(hero.chargeFractionAfter, 0.6);
+    });
+
+    test('elevated rank-up hero carries charge from bpCharge', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.thresholdAnticipatory,
+        queueResult: const CelebrationQueueResult(
+          queue: [RankUpEvent(bodyPart: BodyPart.core, newRank: 12)],
+        ),
+        bpXpDeltas: {BodyPart.core: 480},
+        bpRankAfter: {BodyPart.core: 12},
+        bpProgressFractionAfter: {BodyPart.core: 0.04},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.core: (
+            afterPct: 0.55,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 24,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 480,
+      );
+      final elevated = cuts[1] as B2ElevatedRankUpCut;
+      expect(elevated.chargeFractionAfter, 0.55);
+      expect(elevated.chargeDeltaPercent, 24);
+    });
+
+    test('cascade hero carries charge; rune rides hero only', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {
+          BodyPart.core: 480,
+          BodyPart.back: 220,
+          BodyPart.arms: 150,
+        },
+        bpRankAfter: {BodyPart.core: 12, BodyPart.back: 9, BodyPart.arms: 8},
+        bpProgressFractionAfter: {
+          BodyPart.core: 0.04,
+          BodyPart.back: 0.3,
+          BodyPart.arms: 0.2,
+        },
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.core: (
+            afterPct: 0.55,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 24,
+          ),
+          BodyPart.back: (
+            afterPct: 0.4,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 850,
+      );
+      final cascade = cuts[1] as B2CascadeCut;
+      expect(cascade.heroBodyPart, BodyPart.core);
+      expect(cascade.heroChargeFractionAfter, 0.55);
+      expect(cascade.heroChargeDeltaPercent, 24);
+    });
+
+    test('sequential dominant carries charge; secondary stays rune-less', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.back: 340, BodyPart.arms: 120},
+        bpRankAfter: {BodyPart.back: 9, BodyPart.arms: 6},
+        bpProgressFractionAfter: {BodyPart.back: 0.64, BodyPart.arms: 0.3},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.back: (
+            afterPct: 0.64,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
+          BodyPart.arms: (
+            afterPct: 0.5,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 12,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 460,
+      );
+      final dominant = cuts[1] as B2SequentialDominantCut;
+      final secondary = cuts[2] as B2SequentialSecondaryCut;
+      expect(dominant.chargeFractionAfter, 0.64);
+      expect(dominant.chargeDeltaPercent, 17);
+      // Secondary stays rune-less even though arms HAS charge data — the
+      // cinematic rune rides the hero only.
+      expect(secondary.chargeFractionAfter, isNull);
+    });
+
+    test('no bpCharge entry → hero cut has null charge (unchanged beat)', () {
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.chest: 412},
+        bpRankAfter: {BodyPart.chest: 17},
+        bpProgressFractionAfter: {BodyPart.chest: 0.47},
+        bpFirstAwakening: const {},
+        // bpCharge omitted (defaults empty).
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 412,
+      );
+      final hero = cuts[1] as B2SingleBpCut;
+      expect(hero.chargeFractionAfter, isNull);
+      expect(hero.isChargeMax, isFalse);
+      expect(hero.chargeDeltaPercent, 0);
+    });
+  });
+
   group('PostSessionChoreographer — cascade truncation', () {
     test('4 BPs cascade with 3 rows, no truncation', () {
       final cuts = PostSessionChoreographer.build(

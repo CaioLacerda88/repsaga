@@ -249,7 +249,8 @@ class FinishWorkoutCoordinator {
       // was→now bar; reading it AFTER `await notifier.finishWorkout()` would
       // throw (active-workout State disposed) OR read the post-save rebuilt
       // value — collapsing the delta to ~0 and erasing the beat.
-      final bpVitalityBefore = <BodyPart, ({double ewma, double peak})>{};
+      final bpVitalityBefore =
+          <BodyPart, ({double ewma, double peak, double refPeak})>{};
       if (preFinishProgress != null) {
         preFinishProgress.byBodyPart.forEach((bp, row) {
           bpRankBefore[bp] = row.rank;
@@ -260,6 +261,7 @@ class FinishWorkoutCoordinator {
           bpVitalityBefore[bp] = (
             ewma: row.vitalityEwma,
             peak: row.vitalityPeak,
+            refPeak: row.vitalityRefPeak,
           );
         });
       }

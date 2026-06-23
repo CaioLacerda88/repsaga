@@ -37,6 +37,7 @@ BodyPartProgress _progress({
     rank: rank,
     vitalityEwma: vitalityEwma,
     vitalityPeak: vitalityPeak,
+    vitalityRefPeak: vitalityPeak,
     lastEventAt: null,
     updatedAt: DateTime.utc(2026, 1, 1),
   );
