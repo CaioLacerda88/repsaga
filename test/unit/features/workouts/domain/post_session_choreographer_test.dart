@@ -495,7 +495,12 @@ void main() {
         bpProgressFractionAfter: {BodyPart.back: 0.64},
         bpFirstAwakening: const {},
         bpCharge: const {
-          BodyPart.back: (afterPct: 0.64, isMax: false, deltaPercent: 17),
+          BodyPart.back: (
+            afterPct: 0.64,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
         },
         prResult: null,
         exerciseNames: const {},
@@ -518,7 +523,12 @@ void main() {
         bpProgressFractionAfter: {BodyPart.legs: 0.88},
         bpFirstAwakening: const {},
         bpCharge: const {
-          BodyPart.legs: (afterPct: 1.0, isMax: true, deltaPercent: 0),
+          BodyPart.legs: (
+            afterPct: 1.0,
+            isMax: true,
+            isHeld: false,
+            deltaPercent: 0,
+          ),
         },
         prResult: null,
         exerciseNames: const {},
@@ -542,7 +552,12 @@ void main() {
         bpProgressFractionAfter: {BodyPart.core: 0.04},
         bpFirstAwakening: const {},
         bpCharge: const {
-          BodyPart.core: (afterPct: 0.55, isMax: false, deltaPercent: 24),
+          BodyPart.core: (
+            afterPct: 0.55,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 24,
+          ),
         },
         prResult: null,
         exerciseNames: const {},
@@ -572,8 +587,18 @@ void main() {
         },
         bpFirstAwakening: const {},
         bpCharge: const {
-          BodyPart.core: (afterPct: 0.55, isMax: false, deltaPercent: 24),
-          BodyPart.back: (afterPct: 0.4, isMax: false, deltaPercent: 17),
+          BodyPart.core: (
+            afterPct: 0.55,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 24,
+          ),
+          BodyPart.back: (
+            afterPct: 0.4,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
         },
         prResult: null,
         exerciseNames: const {},
@@ -596,8 +621,18 @@ void main() {
         bpProgressFractionAfter: {BodyPart.back: 0.64, BodyPart.arms: 0.3},
         bpFirstAwakening: const {},
         bpCharge: const {
-          BodyPart.back: (afterPct: 0.64, isMax: false, deltaPercent: 17),
-          BodyPart.arms: (afterPct: 0.5, isMax: false, deltaPercent: 12),
+          BodyPart.back: (
+            afterPct: 0.64,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 17,
+          ),
+          BodyPart.arms: (
+            afterPct: 0.5,
+            isMax: false,
+            isHeld: false,
+            deltaPercent: 12,
+          ),
         },
         prResult: null,
         exerciseNames: const {},

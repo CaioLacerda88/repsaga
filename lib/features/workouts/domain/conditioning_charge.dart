@@ -159,6 +159,19 @@ class BodyPartCharge {
   /// shows "MÁX" + a full rune instead of a delta, never a dead `+0`.
   bool get isMax => afterPct >= 0.995;
 
+  /// Held below peak — the part was trained (it HAS charge data) but its
+  /// EWMA stayed flat or stepped DOWN within the session (`deltaPercentInt`
+  /// floored to 0) WHILE sitting below peak (`!isMax`). Happens when a part
+  /// is trained with below-its-average weekly volume so the rolling EWMA
+  /// dips. The widget shows the past-tense "Held" / "Mantido" word with the
+  /// rune at the part's CURRENT level — NEVER the forbidden dead `▲ +0%`.
+  ///
+  /// **Three-way classification.** Every charged row is exactly one of:
+  /// a gainer (`deltaPercentInt > 0`), [isMax] (at peak), or [isHeld]
+  /// (trained, flat/below-peak). These are mutually exclusive and exhaustive
+  /// over the rows in [ConditioningCharge.parts].
+  bool get isHeld => !isMax && deltaPercentInt == 0;
+
   /// Honest forward delta in percentage points, clamped at 0 (vitality only
   /// rebuilds at save time — a numerically-flat or decayed snapshot reads as
   /// a no-op, never a drop).

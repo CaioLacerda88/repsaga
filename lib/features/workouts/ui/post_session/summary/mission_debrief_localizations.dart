@@ -29,6 +29,7 @@ class MissionDebriefLocalizations {
     required this.conditioningChargedEyebrow,
     required this.conditioningChargedDelta,
     required this.conditioningChargedMax,
+    required this.conditioningChargedHeld,
     required this.conditioningMore,
     required this.conditioningAllAtPeak,
     required this.conditioningAlreadyChargedToday,
@@ -50,6 +51,7 @@ class MissionDebriefLocalizations {
       conditioningChargedEyebrow: l10n.postSessionConditioningChargedEyebrow,
       conditioningChargedDelta: l10n.postSessionConditioningChargedDelta,
       conditioningChargedMax: l10n.postSessionConditioningChargedMax,
+      conditioningChargedHeld: l10n.postSessionConditioningChargedHeld,
       conditioningMore: l10n.postSessionConditioningMore,
       conditioningAllAtPeak: l10n.postSessionConditioningAllAtPeak,
       conditioningAlreadyChargedToday:
@@ -110,6 +112,11 @@ class MissionDebriefLocalizations {
   /// "MÁX" / "MAX" — held-at-peak word shown in place of a delta on a maxed
   /// rune row. Pre-uppercased.
   final String conditioningChargedMax;
+
+  /// "MANTIDO" / "HELD" — held-below-peak word shown in place of a delta on a
+  /// trained-but-flat/decayed rune row (distinct from MÁX; never a dead +0).
+  /// Pre-uppercased.
+  final String conditioningChargedHeld;
 
   /// "+N more recharged" overflow footer below the capped 4-row strip.
   final String Function(int count) conditioningMore;

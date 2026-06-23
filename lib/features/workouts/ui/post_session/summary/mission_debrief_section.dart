@@ -304,6 +304,7 @@ class MissionDebriefSection extends StatelessWidget {
               eyebrowLabel: localizations.conditioningChargedEyebrow,
               deltaLabel: localizations.conditioningChargedDelta,
               maxLabel: localizations.conditioningChargedMax,
+              heldLabel: localizations.conditioningChargedHeld,
               moreLabel: localizations.conditioningMore,
               allAtPeakLabel: localizations.conditioningAllAtPeak,
               alreadyChargedTodayLabel:

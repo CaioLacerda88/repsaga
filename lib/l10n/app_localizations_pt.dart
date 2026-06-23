@@ -3194,6 +3194,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get postSessionConditioningChargedMax => 'MÁX';
 
   @override
+  String get postSessionConditioningChargedHeld => 'MANTIDO';
+
+  @override
   String postSessionConditioningMore(int count) {
     return '+$count mais recarregados';
   }
@@ -3213,6 +3216,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get postSessionConditioningCinematicAtPeak =>
       'Condicionamento no pico';
+
+  @override
+  String get postSessionConditioningCinematicHeld => 'Condicionamento mantido';
 
   @override
   String get avatarPickerSheetTitle => 'Escolha a origem do avatar';

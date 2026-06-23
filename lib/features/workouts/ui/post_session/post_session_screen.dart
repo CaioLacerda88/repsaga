@@ -514,6 +514,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
             : null,
         chargeFractionAfter: cut.chargeFractionAfter,
         isChargeMax: cut.isChargeMax,
+        isChargeHeld: cut.isChargeHeld,
         chargeDeltaPercent: cut.chargeDeltaPercent,
         chargeDeltaLabel: cut.chargeFractionAfter != null
             ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
@@ -521,11 +522,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         chargeMaxLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningChargedMax
             : null,
+        chargeHeldLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningChargedHeld
+            : null,
         chargeRechargedLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningCinematicRecharged
             : null,
         chargeAtPeakLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningCinematicAtPeak
+            : null,
+        chargeHeldSubtitle: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicHeld
             : null,
       ),
       B2SequentialDominantCut() => B2BpTallyCut(
@@ -540,6 +547,7 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         isFirstAwakening: false,
         chargeFractionAfter: cut.chargeFractionAfter,
         isChargeMax: cut.isChargeMax,
+        isChargeHeld: cut.isChargeHeld,
         chargeDeltaPercent: cut.chargeDeltaPercent,
         chargeDeltaLabel: cut.chargeFractionAfter != null
             ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
@@ -547,11 +555,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         chargeMaxLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningChargedMax
             : null,
+        chargeHeldLabel: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningChargedHeld
+            : null,
         chargeRechargedLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningCinematicRecharged
             : null,
         chargeAtPeakLabel: cut.chargeFractionAfter != null
             ? l10n.postSessionConditioningCinematicAtPeak
+            : null,
+        chargeHeldSubtitle: cut.chargeFractionAfter != null
+            ? l10n.postSessionConditioningCinematicHeld
             : null,
       ),
       B2SequentialSecondaryCut() => B2BpTallyCut(
@@ -592,11 +606,17 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
           ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
           : null,
       chargeMaxLabel: hasCharge ? l10n.postSessionConditioningChargedMax : null,
+      chargeHeldLabel: hasCharge
+          ? l10n.postSessionConditioningChargedHeld
+          : null,
       chargeRechargedLabel: hasCharge
           ? l10n.postSessionConditioningCinematicRecharged
           : null,
       chargeAtPeakLabel: hasCharge
           ? l10n.postSessionConditioningCinematicAtPeak
+          : null,
+      chargeHeldSubtitle: hasCharge
+          ? l10n.postSessionConditioningCinematicHeld
           : null,
     );
   }
@@ -616,16 +636,23 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       rankCopy: l10n.b2RankCopy(bpLabel.toUpperCase(), cut.newRank.toString()),
       chargeFractionAfter: cut.chargeFractionAfter,
       isChargeMax: cut.isChargeMax,
+      isChargeHeld: cut.isChargeHeld,
       chargeDeltaPercent: cut.chargeDeltaPercent,
       chargeDeltaLabel: hasCharge
           ? (pct) => l10n.postSessionConditioningChargedDelta(pct)
           : null,
       chargeMaxLabel: hasCharge ? l10n.postSessionConditioningChargedMax : null,
+      chargeHeldLabel: hasCharge
+          ? l10n.postSessionConditioningChargedHeld
+          : null,
       chargeRechargedLabel: hasCharge
           ? l10n.postSessionConditioningCinematicRecharged
           : null,
       chargeAtPeakLabel: hasCharge
           ? l10n.postSessionConditioningCinematicAtPeak
+          : null,
+      chargeHeldSubtitle: hasCharge
+          ? l10n.postSessionConditioningCinematicHeld
           : null,
     );
   }

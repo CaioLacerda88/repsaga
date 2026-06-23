@@ -31,6 +31,7 @@ Future<void> _pumpStrip(
               eyebrowLabel: 'Condicionamento',
               deltaLabel: (pct) => '+$pct%',
               maxLabel: 'MÁX',
+              heldLabel: 'MANTIDO',
               moreLabel: (count) => '+$count mais recarregados',
               allAtPeakLabel: '✓ Tudo no pico — condicionamento mantido',
               alreadyChargedTodayLabel:
@@ -110,6 +111,40 @@ void main() {
       expect(find.text('+0%'), findsNothing);
       // Legs maxed → 4 lit; back 77% → 3 lit → 7 lit total.
       expect(_litSegments(tester), 7);
+    });
+
+    testWidgets('mixed strip: a held-not-max part renders the held word, '
+        'never +0', (tester) async {
+      // A gainer (back, +17) breaks the all-flat guard AND the all-held
+      // branch, so the held part renders as a NORMAL row. The held part
+      // (arms) was trained but its EWMA decayed below its average (80 → 60),
+      // so delta floors to 0 while it sits below peak (0.6 < 0.995). Without
+      // the held treatment this row would render the forbidden ▲ +0%.
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.back, BodyPart.arms],
+        before: const {
+          BodyPart.back: (ewma: 60, peak: 100, refPeak: 100), // +17 gainer
+          BodyPart.arms: (ewma: 80, peak: 100, refPeak: 100), // decays → held
+        },
+        after: const {
+          BodyPart.back: (ewma: 77, peak: 100, refPeak: 100),
+          BodyPart.arms: (ewma: 60, peak: 100, refPeak: 100),
+        },
+      );
+      // Sanity: the model classifies arms as held (not gainer, not max).
+      final arms = charge.parts.firstWhere((p) => p.bodyPart == BodyPart.arms);
+      expect(arms.isHeld, isTrue);
+
+      await _pumpStrip(tester, charge);
+
+      // The forbidden dead +0 NEVER renders.
+      expect(find.text('+0%'), findsNothing);
+      // The held word renders in its place.
+      expect(find.text('MANTIDO'), findsOneWidget);
+      // The gainer still shows its delta — held treatment doesn't suppress it.
+      expect(find.text('+17%'), findsOneWidget);
+      // Not MÁX — held is distinct from at-peak.
+      expect(find.text('MÁX'), findsNothing);
     });
 
     testWidgets('all-maxed session renders the all-at-peak line + MÁX rows', (

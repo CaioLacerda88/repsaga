@@ -96,6 +96,85 @@ void main() {
     });
   });
 
+  group('ConditioningCharge — three-way classification', () {
+    test('a decayed below-peak part is isHeld (not gainer, not MÁX)', () {
+      // afterPct 0.6 < 0.995 → not MÁX. after (60) < before (80) → delta
+      // clamps to 0 → not a gainer. Trained with charge data → isHeld.
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.arms],
+        before: const {BodyPart.arms: (ewma: 80, peak: 100, refPeak: 100)},
+        after: const {BodyPart.arms: (ewma: 60, peak: 100, refPeak: 100)},
+      );
+      final arms = charge.parts.single;
+      expect(arms.afterPct, closeTo(0.6, 1e-9));
+      expect(arms.deltaPercentInt, 0);
+      expect(arms.isMax, isFalse);
+      expect(arms.isHeld, isTrue);
+    });
+
+    test('a flat below-peak part is isHeld', () {
+      // Exactly flat EWMA below peak → delta 0, not MÁX → held.
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.arms],
+        before: const {BodyPart.arms: (ewma: 50, peak: 100, refPeak: 100)},
+        after: const {BodyPart.arms: (ewma: 50, peak: 100, refPeak: 100)},
+      );
+      final arms = charge.parts.single;
+      expect(arms.isHeld, isTrue);
+      expect(arms.isMax, isFalse);
+      expect(arms.deltaPercentInt, 0);
+    });
+
+    test('a true-peak part is isMax, never isHeld', () {
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.legs],
+        before: const {BodyPart.legs: (ewma: 100, peak: 100, refPeak: 100)},
+        after: const {BodyPart.legs: (ewma: 100, peak: 100, refPeak: 100)},
+      );
+      final legs = charge.parts.single;
+      expect(legs.isMax, isTrue);
+      expect(legs.isHeld, isFalse);
+    });
+
+    test('a gainer is neither isMax nor isHeld', () {
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.back],
+        before: const {BodyPart.back: (ewma: 50, peak: 100, refPeak: 100)},
+        after: const {BodyPart.back: (ewma: 70, peak: 100, refPeak: 100)},
+      );
+      final back = charge.parts.single;
+      expect(back.deltaPercentInt, 20);
+      expect(back.isMax, isFalse);
+      expect(back.isHeld, isFalse);
+    });
+
+    test('every charged row is exactly one of gainer / MÁX / held', () {
+      // Mixed strip: a gainer (back), a peak part (legs), a held part (arms).
+      final charge = ConditioningCharge.fromSnapshots(
+        trainedBodyParts: const [BodyPart.back, BodyPart.legs, BodyPart.arms],
+        before: const {
+          BodyPart.back: (ewma: 50, peak: 100, refPeak: 100),
+          BodyPart.legs: (ewma: 100, peak: 100, refPeak: 100),
+          BodyPart.arms: (ewma: 80, peak: 100, refPeak: 100),
+        },
+        after: const {
+          BodyPart.back: (ewma: 70, peak: 100, refPeak: 100), // gainer +20
+          BodyPart.legs: (ewma: 100, peak: 100, refPeak: 100), // MÁX
+          BodyPart.arms: (ewma: 60, peak: 100, refPeak: 100), // held (decayed)
+        },
+      );
+      for (final p in charge.parts) {
+        final isGainer = p.deltaPercentInt > 0;
+        final classes = [isGainer, p.isMax, p.isHeld].where((c) => c).length;
+        expect(
+          classes,
+          1,
+          reason: '${p.bodyPart} must be exactly one class, got $classes',
+        );
+      }
+    });
+  });
+
   group('ConditioningCharge — +1% floor', () {
     test('a real positive gain that rounds to 0 is floored to +1%', () {
       // 100/10000 = 1.00% → 112/10000 = 1.12% → raw +0.12pp → rounds to 0,

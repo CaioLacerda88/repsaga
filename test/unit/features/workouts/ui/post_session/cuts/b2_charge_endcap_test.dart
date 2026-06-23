@@ -55,8 +55,10 @@ void main() {
               chargeDeltaPercent: 17,
               chargeDeltaLabel: (pct) => '+$pct%',
               chargeMaxLabel: 'MÁX',
+              chargeHeldLabel: 'MANTIDO',
               chargeRechargedLabel: 'Condicionamento recarregado',
               chargeAtPeakLabel: 'Condicionamento no pico',
+              chargeHeldSubtitle: 'Condicionamento mantido',
             ),
           ),
         ),
@@ -92,8 +94,10 @@ void main() {
               chargeDeltaPercent: 0,
               chargeDeltaLabel: (pct) => '+$pct%',
               chargeMaxLabel: 'MÁX',
+              chargeHeldLabel: 'MANTIDO',
               chargeRechargedLabel: 'Condicionamento recarregado',
               chargeAtPeakLabel: 'Condicionamento no pico',
+              chargeHeldSubtitle: 'Condicionamento mantido',
             ),
           ),
         ),
@@ -106,6 +110,85 @@ void main() {
       expect(find.text('CONDICIONAMENTO NO PICO'), findsOneWidget);
       // Held full — all 4 segments lit (pre-lit, no climb).
       expect(_litSegments(tester), 4);
+    });
+
+    testWidgets('held hero (below peak) shows held word + ≥1 lit segment, '
+        'never +0', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: B2BpTallyCut(
+              animation: const AlwaysStoppedAnimation(1.0),
+              bodyPart: BodyPart.arms,
+              bodyPartLabel: 'Braços',
+              xpEarned: 90,
+              xpLabel: 'XP',
+              progressFractionAfter: 0.40,
+              rankAfter: 6,
+              isFirstAwakening: false,
+              // Trained but decayed below peak: 60% charge, flat delta.
+              chargeFractionAfter: 0.6,
+              isChargeMax: false,
+              isChargeHeld: true,
+              chargeDeltaPercent: 0,
+              chargeDeltaLabel: (pct) => '+$pct%',
+              chargeMaxLabel: 'MÁX',
+              chargeHeldLabel: 'MANTIDO',
+              chargeRechargedLabel: 'Condicionamento recarregado',
+              chargeAtPeakLabel: 'Condicionamento no pico',
+              chargeHeldSubtitle: 'Condicionamento mantido',
+            ),
+          ),
+        ),
+      );
+
+      // The held word renders in place of any delta.
+      expect(find.text('MANTIDO'), findsOneWidget);
+      // NEVER the forbidden dead +0.
+      expect(find.text('+0%'), findsNothing);
+      // Not MÁX — held is distinct from at-peak.
+      expect(find.text('MÁX'), findsNothing);
+      // Held subtitle (uppercased by the widget).
+      expect(find.text('CONDICIONAMENTO MANTIDO'), findsOneWidget);
+      // 60% → round(0.6*4) = 2 of 4 lit; at minimum ≥1 (current-level rune).
+      expect(_litSegments(tester), greaterThanOrEqualTo(1));
+      expect(_litSegments(tester), 2);
+    });
+
+    testWidgets('low-but-real gainer (5% charge) lights ≥1 segment '
+        'beside the +N%', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: B2BpTallyCut(
+              animation: const AlwaysStoppedAnimation(1.0),
+              bodyPart: BodyPart.chest,
+              bodyPartLabel: 'Peito',
+              xpEarned: 120,
+              xpLabel: 'XP',
+              progressFractionAfter: 0.30,
+              rankAfter: 3,
+              isFirstAwakening: false,
+              // 5% charge would round to 0 lit pips without the ≥1-pip floor.
+              chargeFractionAfter: 0.05,
+              isChargeMax: false,
+              isChargeHeld: false,
+              chargeDeltaPercent: 3,
+              chargeDeltaLabel: (pct) => '+$pct%',
+              chargeMaxLabel: 'MÁX',
+              chargeHeldLabel: 'MANTIDO',
+              chargeRechargedLabel: 'Condicionamento recarregado',
+              chargeAtPeakLabel: 'Condicionamento no pico',
+              chargeHeldSubtitle: 'Condicionamento mantido',
+            ),
+          ),
+        ),
+      );
+
+      // The gainer shows its delta...
+      expect(find.text('+3%'), findsOneWidget);
+      // ...and the rune is NOT empty next to it — ≥1 pip floor (the nit).
+      expect(_litSegments(tester), 1);
     });
 
     testWidgets('no charge data → no rune end-cap, no charge line '
@@ -157,8 +240,10 @@ void main() {
               chargeDeltaPercent: 24,
               chargeDeltaLabel: (pct) => '+$pct%',
               chargeMaxLabel: 'MÁX',
+              chargeHeldLabel: 'MANTIDO',
               chargeRechargedLabel: 'Condicionamento recarregado',
               chargeAtPeakLabel: 'Condicionamento no pico',
+              chargeHeldSubtitle: 'Condicionamento mantido',
             ),
           ),
         ),
@@ -213,8 +298,10 @@ void main() {
             chargeDeltaPercent: 0,
             chargeDeltaLabel: (pct) => '+$pct%',
             chargeMaxLabel: 'MÁX',
+            chargeHeldLabel: 'MANTIDO',
             chargeRechargedLabel: 'Condicionamento recarregado',
             chargeAtPeakLabel: 'Condicionamento no pico',
+            chargeHeldSubtitle: 'Condicionamento mantido',
           ),
         ),
       ),

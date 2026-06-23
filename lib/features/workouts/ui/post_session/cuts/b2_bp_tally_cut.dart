@@ -27,11 +27,14 @@ class B2BpTallyCut extends StatelessWidget {
     this.firstAwakeningSuffix,
     this.chargeFractionAfter,
     this.isChargeMax = false,
+    this.isChargeHeld = false,
     this.chargeDeltaPercent,
     this.chargeDeltaLabel,
     this.chargeMaxLabel,
+    this.chargeHeldLabel,
     this.chargeRechargedLabel,
     this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -62,6 +65,11 @@ class B2BpTallyCut extends StatelessWidget {
   /// delta (mockup cinematic frame ii).
   final bool isChargeMax;
 
+  /// True when the charge is held BELOW peak (trained but flat / decayed).
+  /// The rune holds at its current level + the "Held" / "Mantido" word
+  /// renders in place of the `+N%` delta — never a dead `+0`.
+  final bool isChargeHeld;
+
   /// The integer delta (percentage points) gained this session — used for
   /// the `▲ +N%` line. Sourced from the SINGLE charge model so it matches
   /// the summary strip. Ignored when [isChargeMax].
@@ -74,11 +82,17 @@ class B2BpTallyCut extends StatelessWidget {
   /// Pre-localized "MÁX" held word (already uppercased).
   final String? chargeMaxLabel;
 
+  /// Pre-localized "Held" / "Mantido" word (held-below-peak state).
+  final String? chargeHeldLabel;
+
   /// Pre-localized "Conditioning recharged" descriptive subtitle (gainer).
   final String? chargeRechargedLabel;
 
   /// Pre-localized "Conditioning at peak" descriptive subtitle (MÁX).
   final String? chargeAtPeakLabel;
+
+  /// Pre-localized "Conditioning held" descriptive subtitle (held state).
+  final String? chargeHeldSubtitle;
 
   /// Whether the rune end-cap should render: charge data present AND the
   /// screen supplied the localized copy. When false the beat renders as
@@ -87,8 +101,10 @@ class B2BpTallyCut extends StatelessWidget {
       chargeFractionAfter != null &&
       chargeDeltaLabel != null &&
       chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
       chargeRechargedLabel != null &&
-      chargeAtPeakLabel != null;
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -190,12 +206,15 @@ class B2BpTallyCut extends StatelessWidget {
                                   hue: hue,
                                   afterPct: chargeFractionAfter!,
                                   isMax: isChargeMax,
+                                  isHeld: isChargeHeld,
                                   fill: fill,
                                   deltaPercent: chargeDeltaPercent ?? 0,
                                   deltaLabel: chargeDeltaLabel!,
                                   maxLabel: chargeMaxLabel!,
+                                  heldLabel: chargeHeldLabel!,
                                   rechargedLabel: chargeRechargedLabel!,
                                   atPeakLabel: chargeAtPeakLabel!,
+                                  heldSubtitle: chargeHeldSubtitle!,
                                 ),
                                 const SizedBox(height: 13),
                               ],

@@ -30,8 +30,10 @@ class B2CascadeCutWidget extends StatelessWidget {
     required this.truncatedPillLabel,
     this.chargeDeltaLabel,
     this.chargeMaxLabel,
+    this.chargeHeldLabel,
     this.chargeRechargedLabel,
     this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -50,16 +52,20 @@ class B2CascadeCutWidget extends StatelessWidget {
   /// hero has no charge data → no rune. Phase Vitality-2 S4.
   final String Function(int pct)? chargeDeltaLabel;
   final String? chargeMaxLabel;
+  final String? chargeHeldLabel;
   final String? chargeRechargedLabel;
   final String? chargeAtPeakLabel;
+  final String? chargeHeldSubtitle;
 
   /// Whether the hero rune end-cap renders.
   bool get _hasHeroCharge =>
       cut.heroChargeFractionAfter != null &&
       chargeDeltaLabel != null &&
       chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
       chargeRechargedLabel != null &&
-      chargeAtPeakLabel != null;
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -141,13 +147,16 @@ class B2CascadeCutWidget extends StatelessWidget {
                                     hue: heroHue,
                                     afterPct: cut.heroChargeFractionAfter!,
                                     isMax: cut.heroChargeIsMax,
+                                    isHeld: cut.heroChargeIsHeld,
                                     fill: ((animation.value - 0.30) / 0.40)
                                         .clamp(0.0, 1.0),
                                     deltaPercent: cut.heroChargeDeltaPercent,
                                     deltaLabel: chargeDeltaLabel!,
                                     maxLabel: chargeMaxLabel!,
+                                    heldLabel: chargeHeldLabel!,
                                     rechargedLabel: chargeRechargedLabel!,
                                     atPeakLabel: chargeAtPeakLabel!,
+                                    heldSubtitle: chargeHeldSubtitle!,
                                   ),
                                 ],
                               ],

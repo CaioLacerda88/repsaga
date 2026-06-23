@@ -197,11 +197,15 @@ class PostSessionController extends ChangeNotifier {
     // A bp absent from this map has no charge data; its B2 cut renders
     // without the rune (the fuse is additive). Phase Vitality-2 S4.
     final bpCharge =
-        <BodyPart, ({double afterPct, bool isMax, int deltaPercent})>{
+        <
+          BodyPart,
+          ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+        >{
           for (final part in conditioningCharge.parts)
             part.bodyPart: (
               afterPct: part.afterPct,
               isMax: part.isMax,
+              isHeld: part.isHeld,
               deltaPercent: part.deltaPercentInt,
             ),
         };

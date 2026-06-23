@@ -60,6 +60,7 @@ MissionDebriefLocalizations _ptLocalizations() {
     conditioningChargedEyebrow: 'Condicionamento',
     conditioningChargedDelta: (pct) => '+$pct%',
     conditioningChargedMax: 'MÁX',
+    conditioningChargedHeld: 'MANTIDO',
     conditioningMore: (count) => '+$count mais recarregados',
     conditioningAllAtPeak: '✓ Tudo no pico — condicionamento mantido',
     conditioningAlreadyChargedToday:
@@ -82,6 +83,7 @@ MissionDebriefLocalizations _enLocalizations() {
     conditioningChargedEyebrow: 'Conditioning',
     conditioningChargedDelta: (pct) => '+$pct%',
     conditioningChargedMax: 'MAX',
+    conditioningChargedHeld: 'HELD',
     conditioningMore: (count) => '+$count more recharged',
     conditioningAllAtPeak: '✓ All at peak — conditioning held',
     conditioningAlreadyChargedToday:

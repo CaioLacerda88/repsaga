@@ -7,13 +7,17 @@ import '../../../../../core/theme/app_theme.dart';
 /// Vitality-2 S4). Shared by `B2BpTallyCut`, `B2ElevatedCut`, and the cascade
 /// hero so the charge flourish looks identical wherever it fuses onto a beat.
 ///
-/// **Two states (mockup cinematic frames i / ii):**
-///  * gainer ([isMax] false) → the rune fills its segments as [fill] climbs
-///    (`0 → 1` over the host beat's bar-fill window); the line shows
-///    `▲ +N%` + the past-tense "Conditioning recharged" subtitle.
+/// **Three states (mockup cinematic frames i / ii + the held variant):**
+///  * gainer ([isMax] / [isHeld] both false) → the rune fills its segments as
+///    [fill] climbs (`0 → 1` over the host beat's bar-fill window); the line
+///    shows `▲ +N%` + the past-tense "Conditioning recharged" subtitle.
 ///  * MÁX ([isMax] true) → the rune is pre-lit/held (a single hold, no climb
 ///    — never fake a charge that didn't happen); the line shows the "MÁX"
 ///    word + the "Conditioning at peak" subtitle, never a dead `+0`.
+///  * held ([isHeld] true) → the part was trained but stayed flat / dipped
+///    below its peak. The rune holds at its CURRENT level (no climb, distinct
+///    from MÁX's full rune); the line shows the "Held" / "Mantido" word + the
+///    "Conditioning held" subtitle. NEVER the forbidden `▲ +0%`.
 ///
 /// **Fill-only safety contract.** The rune only lights up — it never drains
 /// or reddens. Copy is past-tense descriptive (no decay/loss-aversion).
@@ -31,6 +35,9 @@ class B2ChargeEndCap extends StatelessWidget {
     required this.maxLabel,
     required this.rechargedLabel,
     required this.atPeakLabel,
+    this.isHeld = false,
+    this.heldLabel,
+    this.heldSubtitle,
   });
 
   /// The hero body-part identity hue.
@@ -39,11 +46,16 @@ class B2ChargeEndCap extends StatelessWidget {
   /// Charge fraction after the session (`[0, 1]`).
   final double afterPct;
 
-  /// True → held-at-peak (pre-lit/held rune + MÁX). False → gainer.
+  /// True → held-at-peak (pre-lit/held rune + MÁX). False → gainer or held.
   final bool isMax;
 
+  /// True → trained-but-held below peak (current-level rune + "Held" word).
+  /// Mutually exclusive with [isMax]; both false → gainer. Sourced from the
+  /// SINGLE charge model's [BodyPartCharge.isHeld].
+  final bool isHeld;
+
   /// The host beat's bar-fill progress (`0 → 1`). Drives the rune climb on a
-  /// gainer; ignored on a MÁX cap (the rune is held full).
+  /// gainer; ignored on a MÁX / held cap (the rune is held at its level).
   final double fill;
 
   /// Integer percentage-point delta for the `▲ +N%` line (gainer only).
@@ -55,22 +67,39 @@ class B2ChargeEndCap extends StatelessWidget {
   /// Pre-localized "MÁX" held word.
   final String maxLabel;
 
+  /// Pre-localized "Held" / "Mantido" word (held state). Required when
+  /// [isHeld] is true; the screen always supplies it alongside the charge copy.
+  final String? heldLabel;
+
   /// Pre-localized "Conditioning recharged" gainer subtitle.
   final String rechargedLabel;
 
   /// Pre-localized "Conditioning at peak" MÁX subtitle.
   final String atPeakLabel;
 
+  /// Pre-localized "Conditioning held" subtitle (held state). Required when
+  /// [isHeld] is true.
+  final String? heldSubtitle;
+
   @override
   Widget build(BuildContext context) {
     final litTarget = litSegmentsForFraction(afterPct);
-    // MÁX → held full (no climb). Gainer → climb with the bar-fill window.
-    final litNow = isMax
+    // MÁX → held full (no climb). Held → current level (no climb). Gainer →
+    // climb with the bar-fill window.
+    final litNow = (isMax || isHeld)
         ? litTarget
         : (litTarget * fill).ceil().clamp(0, litTarget);
 
-    final trailing = isMax ? maxLabel : deltaLabel(deltaPercent);
-    final subtitle = isMax ? atPeakLabel : rechargedLabel;
+    final trailing = isMax
+        ? maxLabel
+        : isHeld
+        ? (heldLabel ?? maxLabel)
+        : deltaLabel(deltaPercent);
+    final subtitle = isMax
+        ? atPeakLabel
+        : isHeld
+        ? (heldSubtitle ?? atPeakLabel)
+        : rechargedLabel;
 
     return Semantics(
       container: true,
@@ -88,9 +117,11 @@ class B2ChargeEndCap extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isMax)
+              // MÁX / held → a plain word (no ▲ triangle, never a `+0`).
+              // Gainer → the `▲ +N%` delta row.
+              if (isMax || isHeld)
                 Text(
-                  maxLabel,
+                  trailing,
                   style: AppTextStyles.numeric.copyWith(
                     fontSize: 15,
                     color: hue,
@@ -232,12 +263,18 @@ class _RuneSegment extends StatelessWidget {
 /// `round()` so a part that is e.g. 60% charged lights segments
 /// proportionally (2–3 of 4); a maxed part (>= 99.5%) lights all four.
 /// Shared so the summary strip and the cinematic rune agree on the mapping.
+///
+/// **≥1-pip floor.** Any part with real charge (`afterPct > 0`) lights at
+/// least ONE segment — a low-but-real charge in `[0, 0.125)` would otherwise
+/// `round()` to zero lit pips next to a `▲ +N%` delta (an empty rune beside a
+/// positive number). A part with no charge (`afterPct == 0`) still reads as a
+/// fully dim track. Applies to BOTH surfaces (shared primitive).
 int litSegmentsForFraction(
   double afterPct, {
   int totalSegments = ChargeRune.defaultSegments,
 }) {
-  return (afterPct.clamp(0.0, 1.0) * totalSegments).round().clamp(
-    0,
-    totalSegments,
-  );
+  final pct = afterPct.clamp(0.0, 1.0);
+  final rounded = (pct * totalSegments).round().clamp(0, totalSegments);
+  if (pct > 0 && rounded == 0) return 1;
+  return rounded;
 }

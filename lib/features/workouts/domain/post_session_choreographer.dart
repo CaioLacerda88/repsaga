@@ -46,6 +46,7 @@ class B2SingleBpCut extends PostSessionCut {
     required this.isFirstAwakening,
     this.chargeFractionAfter,
     this.isChargeMax = false,
+    this.isChargeHeld = false,
     this.chargeDeltaPercent = 0,
   });
 
@@ -73,9 +74,16 @@ class B2SingleBpCut extends PostSessionCut {
   /// cinematic frame ii.
   final bool isChargeMax;
 
+  /// True when this hero bp's conditioning is held below peak (trained but
+  /// flat / decayed within the session). The rune holds at its current level
+  /// + the "Held" / "Mantido" word renders in place of a `+N%` delta — NEVER
+  /// the forbidden `▲ +0%`. Mutually exclusive with [isChargeMax].
+  final bool isChargeHeld;
+
   /// Integer percentage-point conditioning delta gained this session — the
   /// SAME `deltaPercentInt` the summary strip shows. Drives the `▲ +N%`
-  /// line. 0 (and ignored) when [isChargeMax] or no charge data.
+  /// line. 0 (and ignored) when [isChargeMax] / [isChargeHeld] or no charge
+  /// data.
   final int chargeDeltaPercent;
 }
 
@@ -88,6 +96,7 @@ class B2SequentialDominantCut extends PostSessionCut {
     required this.progressFractionAfter,
     this.chargeFractionAfter,
     this.isChargeMax = false,
+    this.isChargeHeld = false,
     this.chargeDeltaPercent = 0,
   });
 
@@ -101,6 +110,9 @@ class B2SequentialDominantCut extends PostSessionCut {
 
   /// See [B2SingleBpCut.isChargeMax].
   final bool isChargeMax;
+
+  /// See [B2SingleBpCut.isChargeHeld].
+  final bool isChargeHeld;
 
   /// See [B2SingleBpCut.chargeDeltaPercent].
   final int chargeDeltaPercent;
@@ -142,6 +154,7 @@ class B2CascadeCut extends PostSessionCut {
     required this.truncatedCount,
     this.heroChargeFractionAfter,
     this.heroChargeIsMax = false,
+    this.heroChargeIsHeld = false,
     this.heroChargeDeltaPercent = 0,
   });
 
@@ -158,6 +171,10 @@ class B2CascadeCut extends PostSessionCut {
   /// True when the hero bp's conditioning is held at peak. See
   /// [B2SingleBpCut.isChargeMax].
   final bool heroChargeIsMax;
+
+  /// True when the hero bp's conditioning is held below peak (trained but
+  /// flat / decayed). See [B2SingleBpCut.isChargeHeld].
+  final bool heroChargeIsHeld;
 
   /// Integer percentage-point conditioning delta of the hero bp. See
   /// [B2SingleBpCut.chargeDeltaPercent].
@@ -190,6 +207,7 @@ class B2ElevatedRankUpCut extends PostSessionCut {
     required this.xpEarnedForBodyPart,
     this.chargeFractionAfter,
     this.isChargeMax = false,
+    this.isChargeHeld = false,
     this.chargeDeltaPercent = 0,
   });
 
@@ -206,6 +224,10 @@ class B2ElevatedRankUpCut extends PostSessionCut {
   /// True when this bp's conditioning is held at peak. See
   /// [B2SingleBpCut.isChargeMax].
   final bool isChargeMax;
+
+  /// True when this bp's conditioning is held below peak. See
+  /// [B2SingleBpCut.isChargeHeld].
+  final bool isChargeHeld;
 
   /// Integer percentage-point conditioning delta. See
   /// [B2SingleBpCut.chargeDeltaPercent].
@@ -326,7 +348,11 @@ class PostSessionChoreographer {
     required int? newCharacterLevel,
     required int priorFinishedWorkoutCount,
     required int totalXpEarned,
-    Map<BodyPart, ({double afterPct, bool isMax, int deltaPercent})> bpCharge =
+    Map<
+          BodyPart,
+          ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+        >
+        bpCharge =
         const {},
   }) {
     final cuts = <PostSessionCut>[];
@@ -411,7 +437,10 @@ class PostSessionChoreographer {
     required Map<BodyPart, int> bpRankAfter,
     required Map<BodyPart, double> bpProgressFractionAfter,
     required Set<BodyPart> bpFirstAwakening,
-    required Map<BodyPart, ({double afterPct, bool isMax, int deltaPercent})>
+    required Map<
+      BodyPart,
+      ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+    >
     bpCharge,
     required List<RankUpEvent> rankUpEvents,
     required PRDetectionResult? prResult,
@@ -465,6 +494,7 @@ class PostSessionChoreographer {
           xpEarnedForBodyPart: bpXpDeltas[topRankUp.bodyPart] ?? 0,
           chargeFractionAfter: elevatedCharge?.afterPct,
           isChargeMax: elevatedCharge?.isMax ?? false,
+          isChargeHeld: elevatedCharge?.isHeld ?? false,
           chargeDeltaPercent: elevatedCharge?.deltaPercent ?? 0,
         ),
       );
@@ -488,6 +518,7 @@ class PostSessionChoreographer {
           isFirstAwakening: bpFirstAwakening.contains(dominant),
           chargeFractionAfter: dominantCharge?.afterPct,
           isChargeMax: dominantCharge?.isMax ?? false,
+          isChargeHeld: dominantCharge?.isHeld ?? false,
           chargeDeltaPercent: dominantCharge?.deltaPercent ?? 0,
         ),
       );
@@ -508,6 +539,7 @@ class PostSessionChoreographer {
           isFirstAwakening: bpFirstAwakening.contains(bp),
           chargeFractionAfter: charge?.afterPct,
           isChargeMax: charge?.isMax ?? false,
+          isChargeHeld: charge?.isHeld ?? false,
           chargeDeltaPercent: charge?.deltaPercent ?? 0,
         ),
       );
@@ -524,6 +556,7 @@ class PostSessionChoreographer {
           progressFractionAfter: bpProgressFractionAfter[dominant] ?? 0.0,
           chargeFractionAfter: dominantCharge?.afterPct,
           isChargeMax: dominantCharge?.isMax ?? false,
+          isChargeHeld: dominantCharge?.isHeld ?? false,
           chargeDeltaPercent: dominantCharge?.deltaPercent ?? 0,
         ),
       );
@@ -551,7 +584,11 @@ class PostSessionChoreographer {
     List<BodyPart> sortedBps,
     Map<BodyPart, int> bpXpDeltas,
     Map<BodyPart, double> bpProgressFractionAfter,
-    Map<BodyPart, ({double afterPct, bool isMax, int deltaPercent})> bpCharge,
+    Map<
+      BodyPart,
+      ({double afterPct, bool isMax, bool isHeld, int deltaPercent})
+    >
+    bpCharge,
   ) {
     final hero = sortedBps.first;
     final remaining = sortedBps.skip(1).toList();
@@ -565,6 +602,7 @@ class PostSessionChoreographer {
       heroProgressFractionAfter: bpProgressFractionAfter[hero] ?? 0.0,
       heroChargeFractionAfter: heroCharge?.afterPct,
       heroChargeIsMax: heroCharge?.isMax ?? false,
+      heroChargeIsHeld: heroCharge?.isHeld ?? false,
       heroChargeDeltaPercent: heroCharge?.deltaPercent ?? 0,
       cascadeRows: [
         // Secondary cascade rows stay rank-only — no rune (mockup cinematic

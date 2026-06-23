@@ -37,6 +37,7 @@ class ConditioningChargeStrip extends StatefulWidget {
     required this.eyebrowLabel,
     required this.deltaLabel,
     required this.maxLabel,
+    required this.heldLabel,
     required this.moreLabel,
     required this.allAtPeakLabel,
     required this.alreadyChargedTodayLabel,
@@ -57,8 +58,12 @@ class ConditioningChargeStrip extends StatefulWidget {
   /// Pre-localized "+N%" delta builder for a gainer row.
   final String Function(int pct) deltaLabel;
 
-  /// Pre-localized "MÁX" held word (already uppercased).
+  /// Pre-localized "MÁX" held-at-peak word (already uppercased).
   final String maxLabel;
+
+  /// Pre-localized "Mantido" / "Held" word for a trained-but-held-below-peak
+  /// row (distinct from MÁX — never a dead `+0`).
+  final String heldLabel;
 
   /// Pre-localized "+N more recharged" overflow footer builder.
   final String Function(int count) moreLabel;
@@ -175,6 +180,7 @@ class _ConditioningChargeStripState extends State<ConditioningChargeStrip>
           label: widget.bodyPartLabels[part.bodyPart] ?? part.bodyPart.dbValue,
           deltaLabel: widget.deltaLabel,
           maxLabel: widget.maxLabel,
+          heldLabel: widget.heldLabel,
           progress: _controller,
           animate: widget.animate,
         ),
@@ -194,13 +200,17 @@ class _ConditioningChargeStripState extends State<ConditioningChargeStrip>
   }
 }
 
-/// One per-body-part rune row: hue rune + hue label + (`▲ +N%` | "MÁX").
+/// One per-body-part rune row: hue rune + hue label +
+/// (`▲ +N%` | "MÁX" | "Mantido"). The three trailing treatments map to the
+/// three-way [BodyPartCharge] classification (gainer / [BodyPartCharge.isMax]
+/// / [BodyPartCharge.isHeld]) — a held row NEVER renders the forbidden `+0`.
 class _ChargeRow extends StatelessWidget {
   const _ChargeRow({
     required this.charge,
     required this.label,
     required this.deltaLabel,
     required this.maxLabel,
+    required this.heldLabel,
     required this.progress,
     required this.animate,
   });
@@ -209,6 +219,7 @@ class _ChargeRow extends StatelessWidget {
   final String label;
   final String Function(int pct) deltaLabel;
   final String maxLabel;
+  final String heldLabel;
   final Animation<double> progress;
   final bool animate;
 
@@ -216,7 +227,13 @@ class _ChargeRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final hue = BodyPartHues.hueFor(charge.bodyPart);
     final isMax = charge.isMax;
-    final trailingText = isMax ? maxLabel : deltaLabel(charge.deltaPercentInt);
+    final isHeld = charge.isHeld;
+    // MÁX → the peak word. Held → the "Mantido" word (current-level rune, no
+    // `+0`). Gainer → the `▲ +N%` delta.
+    final wordTrailing = isMax ? maxLabel : heldLabel;
+    final trailingText = (isMax || isHeld)
+        ? wordTrailing
+        : deltaLabel(charge.deltaPercentInt);
 
     return Semantics(
       container: true,
@@ -238,9 +255,9 @@ class _ChargeRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            if (isMax)
+            if (isMax || isHeld)
               Text(
-                maxLabel,
+                wordTrailing,
                 style: AppTextStyles.numericSmall.copyWith(
                   fontSize: 11,
                   letterSpacing: 0.16 * 11,

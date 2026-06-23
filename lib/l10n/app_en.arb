@@ -2475,6 +2475,8 @@
   },
   "postSessionConditioningChargedMax": "MAX",
   "@postSessionConditioningChargedMax": { "description": "Phase Vitality-2 — held-at-peak word shown in place of a delta on a maxed conditioning rune row (afterPct >= 99.5%). 'MÁX' in pt. Reads as 'already at peak, you kept it', never a dead +0. textDimAA tracked-label register; pre-uppercased." },
+  "postSessionConditioningChargedHeld": "HELD",
+  "@postSessionConditioningChargedHeld": { "description": "Phase Vitality-2 — held-below-peak word shown in place of a delta on a trained-but-flat/decayed conditioning rune row (deltaPercentInt == 0 AND afterPct < 99.5%). 'Mantido' in pt. Distinct from MÁX (at peak); never a dead +0. Past-tense/neutral, no loss-aversion. textDimAA tracked-label register; pre-uppercased." },
   "postSessionConditioningMore": "+{count} more recharged",
   "@postSessionConditioningMore": {
     "description": "Phase Vitality-2 — overflow footer below the capped (4-row) conditioning rune strip, e.g. '+3 more recharged'. Mirrors the '+N more exercises' lift-table pattern.",
@@ -2488,6 +2490,8 @@
   "@postSessionConditioningCinematicRecharged": { "description": "Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part gained conditioning this session (paired with the ▲ +N% delta). Past-tense descriptive — what just happened. NO decay/loss-aversion language (Phase-39 / ToS safety guardrail)." },
   "postSessionConditioningCinematicAtPeak": "Conditioning at peak",
   "@postSessionConditioningCinematicAtPeak": { "description": "Phase Vitality-2 S4 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held at peak (paired with the MÁX word, pre-lit/held rune, no climb). Reads as 'already at peak, you kept it', never a dead +0. Past-tense descriptive." },
+  "postSessionConditioningCinematicHeld": "Conditioning held",
+  "@postSessionConditioningCinematicHeld": { "description": "Phase Vitality-2 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held below peak (trained but flat/decayed; paired with the HELD word, current-level rune, no climb). Past-tense/neutral — never a dead +0, no loss-aversion (Phase-39 / ToS safety guardrail)." },
   "avatarPickerSheetTitle": "Choose avatar source",
   "@avatarPickerSheetTitle": { "description": "Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows." },
   "avatarPickerCamera": "Take a photo",

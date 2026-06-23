@@ -5460,6 +5460,12 @@ abstract class AppLocalizations {
   /// **'MAX'**
   String get postSessionConditioningChargedMax;
 
+  /// Phase Vitality-2 — held-below-peak word shown in place of a delta on a trained-but-flat/decayed conditioning rune row (deltaPercentInt == 0 AND afterPct < 99.5%). 'Mantido' in pt. Distinct from MÁX (at peak); never a dead +0. Past-tense/neutral, no loss-aversion. textDimAA tracked-label register; pre-uppercased.
+  ///
+  /// In en, this message translates to:
+  /// **'HELD'**
+  String get postSessionConditioningChargedHeld;
+
   /// Phase Vitality-2 — overflow footer below the capped (4-row) conditioning rune strip, e.g. '+3 more recharged'. Mirrors the '+N more exercises' lift-table pattern.
   ///
   /// In en, this message translates to:
@@ -5489,6 +5495,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conditioning at peak'**
   String get postSessionConditioningCinematicAtPeak;
+
+  /// Phase Vitality-2 — descriptive subtitle below the cinematic B2 hero rune end-cap when the part is held below peak (trained but flat/decayed; paired with the HELD word, current-level rune, no climb). Past-tense/neutral — never a dead +0, no loss-aversion (Phase-39 / ToS safety guardrail).
+  ///
+  /// In en, this message translates to:
+  /// **'Conditioning held'**
+  String get postSessionConditioningCinematicHeld;
 
   /// Phase 32 PR 32e — Bottom-sheet title shown when the user taps the IdentityCard avatar to upload a new picture. Sits above the camera / gallery / cancel rows.
   ///

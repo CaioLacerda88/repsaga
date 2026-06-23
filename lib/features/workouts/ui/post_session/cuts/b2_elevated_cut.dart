@@ -25,11 +25,14 @@ class B2ElevatedCut extends StatelessWidget {
     required this.rankCopy,
     this.chargeFractionAfter,
     this.isChargeMax = false,
+    this.isChargeHeld = false,
     this.chargeDeltaPercent,
     this.chargeDeltaLabel,
     this.chargeMaxLabel,
+    this.chargeHeldLabel,
     this.chargeRechargedLabel,
     this.chargeAtPeakLabel,
+    this.chargeHeldSubtitle,
   });
 
   final Animation<double> animation;
@@ -50,6 +53,10 @@ class B2ElevatedCut extends StatelessWidget {
   /// True when held at peak — rune pre-lit/held + MÁX word.
   final bool isChargeMax;
 
+  /// True when held below peak — rune at current level + "Held" / "Mantido"
+  /// word (never a dead `+0`).
+  final bool isChargeHeld;
+
   /// Integer percentage-point charge delta for the `▲ +N%` line.
   final int? chargeDeltaPercent;
 
@@ -59,19 +66,27 @@ class B2ElevatedCut extends StatelessWidget {
   /// Pre-localized "MÁX" held word.
   final String? chargeMaxLabel;
 
+  /// Pre-localized "Held" / "Mantido" word (held-below-peak state).
+  final String? chargeHeldLabel;
+
   /// Pre-localized "Conditioning recharged" subtitle (gainer).
   final String? chargeRechargedLabel;
 
   /// Pre-localized "Conditioning at peak" subtitle (MÁX).
   final String? chargeAtPeakLabel;
 
+  /// Pre-localized "Conditioning held" subtitle (held state).
+  final String? chargeHeldSubtitle;
+
   /// Whether the rune end-cap renders: charge data present AND copy supplied.
   bool get _hasCharge =>
       chargeFractionAfter != null &&
       chargeDeltaLabel != null &&
       chargeMaxLabel != null &&
+      chargeHeldLabel != null &&
       chargeRechargedLabel != null &&
-      chargeAtPeakLabel != null;
+      chargeAtPeakLabel != null &&
+      chargeHeldSubtitle != null;
 
   @override
   Widget build(BuildContext context) {
@@ -207,14 +222,17 @@ class B2ElevatedCut extends StatelessWidget {
                                     hue: hue,
                                     afterPct: chargeFractionAfter!,
                                     isMax: isChargeMax,
+                                    isHeld: isChargeHeld,
                                     // Bar already crossed 100% in phase A; the
                                     // rune rides the rank slam fully completed.
                                     fill: 1.0,
                                     deltaPercent: chargeDeltaPercent ?? 0,
                                     deltaLabel: chargeDeltaLabel!,
                                     maxLabel: chargeMaxLabel!,
+                                    heldLabel: chargeHeldLabel!,
                                     rechargedLabel: chargeRechargedLabel!,
                                     atPeakLabel: chargeAtPeakLabel!,
+                                    heldSubtitle: chargeHeldSubtitle!,
                                   ),
                                   const SizedBox(height: 12),
                                 ],
