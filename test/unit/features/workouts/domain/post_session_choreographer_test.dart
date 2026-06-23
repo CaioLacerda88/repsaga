@@ -541,6 +541,41 @@ void main() {
       expect(hero.chargeFractionAfter, 1.0);
     });
 
+    test('held charge threads isChargeHeld true (not max, not gainer)', () {
+      // A trained-but-decayed-below-peak part: flat/floored delta, below peak.
+      // Pins that the choreographer propagates the THIRD classification
+      // (isHeld) through to the hero cut — without this, a regression that
+      // hardcoded isChargeHeld:false would render the forbidden ▲ +0% on the
+      // cinematic beat (the held endcap renderer is covered separately, but
+      // only this asserts the choreographer actually FORWARDS the held flag).
+      final cuts = PostSessionChoreographer.build(
+        tier: RewardTier.baseline,
+        queueResult: const CelebrationQueueResult(queue: []),
+        bpXpDeltas: {BodyPart.arms: 90},
+        bpRankAfter: {BodyPart.arms: 6},
+        bpProgressFractionAfter: {BodyPart.arms: 0.40},
+        bpFirstAwakening: const {},
+        bpCharge: const {
+          BodyPart.arms: (
+            afterPct: 0.6,
+            isMax: false,
+            isHeld: true,
+            deltaPercent: 0,
+          ),
+        },
+        prResult: null,
+        exerciseNames: const {},
+        newCharacterLevel: null,
+        priorFinishedWorkoutCount: 46,
+        totalXpEarned: 90,
+      );
+      final hero = cuts[1] as B2SingleBpCut;
+      expect(hero.isChargeHeld, isTrue);
+      expect(hero.isChargeMax, isFalse);
+      expect(hero.chargeDeltaPercent, 0);
+      expect(hero.chargeFractionAfter, 0.6);
+    });
+
     test('elevated rank-up hero carries charge from bpCharge', () {
       final cuts = PostSessionChoreographer.build(
         tier: RewardTier.thresholdAnticipatory,
