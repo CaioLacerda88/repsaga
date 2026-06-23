@@ -89,10 +89,12 @@ the dilution + frozen-peak + guard wrinkles as part of the redesign.
       `vitality_ref_peak_test.sql` (10 assertions, was zero coverage) + extended integration test (decay +
       nightly/save parity) + model fromJson unit test. analyze clean; unit 512 pass; pgTAP 10/10; integration
       14/14; backfill 196/196 verified on LOCAL. NOT pushed to hosted (post-merge step).
-- [ ] **S2 — domain:** rewrite `ConditioningCharge` → per-bp (charge from ref_peak, MÁX detection, guard
-      flag, "has charge data" gate). Rewrite `conditioning_charge_test`. Unit-tested.
-- [ ] **S3 — summary UI:** rune-strip widget (replaces `conditioning_charge_bar`) — per-bp rows, inline MÁX,
-      bare eyebrow, +N more, all-maxed, guard state. l10n en+pt. Widget tests. Wire `mission_debrief_section`.
+- [x] **S2+S3 — domain + summary UI** (merged — model + widget change together): `ConditioningCharge` →
+      ordered `List<BodyPartCharge>` + `alreadyChargedToday`; charge = `clamp(ewma/refPeak)`; three-way
+      classification gainer / `isMax` (≥0.995) / `isHeld` (flat below-peak, +1% floor on real gains) — NO `+0`.
+      `conditioning_charge_strip` widget (replaces the bar): bare eyebrow, hue runes, inline MÁX + HELD/Mantido,
+      delta-desc, 4 rows + "+N more", all-at-peak banner, guard line. refPeak threaded through before/after
+      snapshots. l10n en+pt. Rewrote domain + widget + section tests.
 - [x] **S4 — cinematic:** B2 cut classes gained `chargeFractionAfter`/`isChargeMax`/`chargeDeltaPercent`
       (nullable/defaulted — State 1-10 fixtures untouched). Shared `cuts/charge_rune.dart` primitive
       (`ChargeRune` segment widget + `B2ChargeEndCap` + `litSegmentsForFraction`); summary strip refactored to
@@ -105,6 +107,14 @@ the dilution + frozen-peak + guard wrinkles as part of the redesign.
       Tests: 6 cut-endcap widget tests (gainer/MÁX/no-data on tally+elevated+hue) + 2 cascade hero-only tests +
       6 choreographer charge-threading pins. analyze clean (`--fatal-infos`); full suite 4032 pass / 5 skip / 0
       fail; arb_completeness + summary-panel golden unaffected.
-- [ ] Reviewer → QA → visual verification (320/360/412dp, summary + B2 cut) → merge → `db push` migration.
+- [x] **Reviewer** — APPROVED. Found 1 Blocker (held-not-max rendered `▲ +0%`) → fixed (commit eed17e62,
+      three-way classification + HELD/Mantido state + ≥1-pip floor) + nit; re-review cleared, parity/safety
+      verified.
+- [x] **QA** — E2E selector impact CLEAN (no spec referenced the removed surface); +1 coverage test (choreographer
+      held-propagation); l10n en+pt parity confirmed. 4041 pass.
+- [x] **Visual verification** — gallery shots at 320/360/412dp, all states match the mockup; 320dp guard copy
+      fits (no overflow); all-MÁX "Tudo no pico" banner confirmed. Footer names: user chose "keep simple" (no
+      name list). Throwaway gallery/driver/PNGs removed.
+- [ ] **Merge** (squash) → **`db push` 00083 to hosted** (launch-critical: released app reads `vitality_ref_peak`).
 
-_S4 complete — ready for reviewer → QA → visual verification._
+_Code complete · reviewer + QA + visuals PASS · ready for PR → merge → migration push._
