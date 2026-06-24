@@ -60,6 +60,22 @@ sim `tasks/rpg-xp-simulation.py` · `docs/xp-balance-baseline.md` · `test/fixtu
 
 _Decisions locked — ready for PR1 (sim re-calibration) on user's go._
 
+### PR1 IMPLEMENTATION CHECKLIST (sim only) — branch feature/phase-vitality3-strength-gate
+Per WIP "Phase Vitality-3" mechanic + LOCKED D1-D6. Touches ONLY `tasks/rpg-xp-simulation.py` + `docs/xp-balance-baseline.md`. NO Dart, NO SQL, NO fixture-regen-with-gate.
+
+- [x] Constants block: `STRENGTH_VITALITY_FLOOR=0.50`, `STRENGTH_BASE_RECENTER=1.00`, `VITALITY_REF_PEAK_HALFLIFE_DAYS=21`, daily α_up/α_down + REF_PEAK_DECAY_DAILY (live 00083 cadence).
+- [x] `compute_set_xp`: added `vmult=1.0` (12th/final factor, scalar OR per-bp dict) + `base_recenter=1.0` (scales base_xp). Both default NEUTRAL → fixture byte-identical.
+- [x] Vitality stepper `advance_vitality_week` — DAILY grid (trailing-7-day window + daily ref_peak decay), mirrors 00083. KEY FINDING: weekly single-step collapses ref_peak onto ewma → vpct pinned at 1.0 for all; daily grid is what makes the gate bite.
+- [x] `simulate_persona`: tracks `vit_ewma` + `vit_ref_peak` PER bp from weekly VOLUME LOAD (vol×share), NOT gated XP. Pre-session per-bp vmult passed in. `gate=False` reproduces pre-gate panel.
+- [x] 2 new personas: SANDBAGGER (in-panel, conv vpct 0.64, lands 19.7 < advanced 41.3) + DETRAINED_RETURNER (via `simulate_returner` harness: rank holds in layoff, vmult ≥0.90 by back-wk2).
+- [x] VPCT_NORMAL measured = **1.00** (consistent lifters at full charge → gate is a no-op for them).
+- [x] STRENGTH_BASE_RECENTER sweep winner = **1.00** (Σ|Δ|=0.00; any >1.02 breaks ±0.5 guard). FLOOR=0.50 chosen on returner week-1 feel (gentler comeback).
+- [x] **15/15**: 14/14 in-panel PASS + returner harness PASS. Sandbagger<advanced OK. (Smurf-vs-TrueBeg display line FAIL is PRE-EXISTING on main, unchanged by gate.)
+- [x] Existing fixture regenerates **BYTE-IDENTICAL** (confirmed via diff). 2479 Dart unit tests green.
+- [x] Updated `docs/xp-balance-baseline.md`: gate formula, daily-grid rationale, VPCT_NORMAL, recenter+FLOOR+why, 15-persona table, returner curve.
+
+**PR1 COMPLETE (sim only).** NEXT (PR2, separate): regen fixture WITH gate + Dart `xp_calculator` gate + `00084_*_strength_vitality_gate.sql` in one atomic 4-site PR.
+
 ### Future feel-good UX from this data (product-owner — separate track, mostly Phase 39/display)
 Per-bp `ewma` / `ref_peak` / `charge%` / all-time peak / τ rates / recency unlock: **Charge Ring** (readiness HUD), **"Your Body Remembers"** comeback beat (muscle-memory as an awakening moment), **Rest Validation** debrief ("chest is charged — rest is smart"; what Habitica/Duolingo structurally can't say), Conditioning Balance radar, rare "Peaked" badge, Weekly Conditioning Report, opt-in predictive "keep it charged" nudge (needs Phase-39 ToS sign-off). Phase-39 v1 standouts: Charge Ring + Comeback + Rest Validation (zero new data, no ToS revision, all thesis-pure). All must be descriptive, never "train-or-lose-it".
 

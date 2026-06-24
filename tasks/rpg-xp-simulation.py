@@ -146,9 +146,83 @@ ASCENDANT_BALANCE_THRESHOLD = 0.30
 ASCENDANT_MIN_RANK = 5
 
 # Vitality (asymmetric EWMA on weekly volume per body part)
-VITALITY_TAU_UP_WEEKS = 2.0          # rebuild fast
-VITALITY_TAU_DOWN_WEEKS = 6.0        # decay slow
+VITALITY_TAU_UP_WEEKS = 2.0          # rebuild fast  (live 00083: τ_up = 14d)
+VITALITY_TAU_DOWN_WEEKS = 6.0        # decay slow    (live 00083: τ_down = 42d strength)
 VITALITY_PEAK_PERMANENT = True
+
+# Live 00083 recompute cadence — the EWMA + ref_peak step ONCE PER UTC DAY, with
+# the EWMA sampled from a TRAILING 7-DAY volume window. The Phase-Vitality-3
+# panel reproduces this on a DAILY grid (see step_vitality_daily) — a weekly
+# single-step model is NOT faithful: it would decay ref_peak a full week while
+# the EWMA takes only one sample, collapsing ref_peak onto the EWMA so vpct never
+# leaves 1.0. The daily grid is what makes the gate actually throttle an
+# inconsistent lifter (vpct 0.4-0.7) while leaving a consistent one at 1.0.
+VITALITY_SAMPLE_DAYS = 7.0           # live c_sample_days
+VITALITY_TAU_UP_DAYS = 14.0          # live c_tau_up
+VITALITY_TAU_DOWN_DAYS_STRENGTH = 42.0   # live c_tau_down_str
+VITALITY_ALPHA_UP = 1.0 - math.exp(-VITALITY_SAMPLE_DAYS / VITALITY_TAU_UP_DAYS)
+VITALITY_ALPHA_DOWN = 1.0 - math.exp(-VITALITY_SAMPLE_DAYS / VITALITY_TAU_DOWN_DAYS_STRENGTH)
+REF_PEAK_DECAY_DAILY = math.exp(-math.log(2.0) / 21.0)   # live c_ref_peak_decay
+DAYS_PER_WEEK = 7
+
+# ----------------------------------------------------------------------------
+# Phase Vitality-3 — Strength Vitality XP-gate (PR 1, SIM ONLY)
+# ----------------------------------------------------------------------------
+# The gate throttles strength set XP by per-body-part conditioning, mirroring
+# the cardio gate (migration 00081) but using the DECAYING reference peak
+# (migration 00083) as the denominator — that decay is what lets a detrained
+# returner's vmult recover (a frozen all-time peak never could). THROTTLE-ONLY:
+# rank is never touched (decision D6, saga inviolate); only XP earn-rate scales.
+#
+#   vpct  = clamp(vit_ewma / vit_ref_peak, 0, 1)   (ref_peak ≤ 0 → vpct 1.0)
+#   vmult = FLOOR + (1 − FLOOR) × vpct
+#   set_xp_gated = (11-multiplier chain) × vmult    ← applied as the 12th factor
+#
+# vmult is computed ONCE per body part from PRE-session vitality (non-circular:
+# the live recompute runs AFTER the XP writes). CRITICAL STABILITY PROPERTY: the
+# EWMA that feeds vpct is driven by weekly VOLUME LOAD (Σ vol×share per bp), NOT
+# by the gated XP — the gate must never feed its own input or the loop
+# destabilizes. See simulate_persona().
+STRENGTH_VITALITY_FLOOR = 0.50       # D1 sweep {0.40, 0.50}. CHOSEN: 0.50 — the
+                                     # gentler comeback floor. Both floors hit the
+                                     # acceptance (returner ≥0.90 by back-wk2,
+                                     # sandbagger < advanced), so D1 is decided on
+                                     # "returner week-1 feel": 0.50 means a
+                                     # returning lifter's single throttled week
+                                     # back earns HALF, not 60%-off, honoring the
+                                     # muscle-memory thesis (return is an
+                                     # awakening, not a punishment) while keeping
+                                     # the un-farmable property — a one-off
+                                     # post-layoff burst still only earns 0.50×.
+                                     # See docs/xp-balance-baseline.md.
+
+# D2 — global re-center: adding vmult ≤ 1.0 slows every non-100% persona, so the
+# whole panel drifts down. Restore steady-state by scaling base_xp by a single
+# global multiplier (NOT per-rep-tier — preserves the Phase-29 curve shape).
+# Swept holding PANEL_TARGET_BANDS fixed to minimize Σ|Δ_consistent| while
+# keeping the 6 consistent personas in-band AND within ±0.5 rank of their
+# pre-gate avg_rank. CHOSEN: see docs/xp-balance-baseline.md.
+STRENGTH_BASE_RECENTER = 1.00        # CHOSEN by the wk8-12 VPCT_NORMAL sweep
+                                     # (= 1.0; VPCT_NORMAL measured 1.0 — a
+                                     # consistent lifter sits at FULL charge so
+                                     # the gate is a no-op for them and there is
+                                     # nothing to re-center). See baseline doc.
+
+# Reference-peak half-life — mirrors migration 00083 (21-day daily decay).
+# Applied on the DAILY grid (REF_PEAK_DECAY_DAILY above), NOT compounded weekly.
+VITALITY_REF_PEAK_HALFLIFE_DAYS = 21.0
+
+# DISCRETIZATION NOTE (the accepted Phase-29 panel-vs-live gap): the panel does
+# not model individual training DAYS — it batches a week's sets together for the
+# XP math. For the VITALITY clock only, it distributes each week's per-bp volume
+# load as a single lump on day 0 of the week and then advances the EWMA/ref_peak
+# 7 daily steps with a trailing-7-day volume window. This reproduces the live
+# recompute's day-by-day behavior (which is what makes the gate throttle an
+# inconsistent lifter) without claiming to replay real per-session timestamps.
+# The only fidelity loss is intra-week session spacing (the live window would see
+# e.g. a Mon/Wed/Fri spread rather than one Monday lump) — immaterial to the
+# converged vpct because the trailing window sums the same weekly total either
+# way; it only changes the within-week ripple, which the weekly XP batch ignores.
 
 # Bodyweight progression (legacy consistency archetypes)
 PROGRESSION_RATES = {
@@ -923,13 +997,24 @@ def compute_set_xp(
     near_failure=False,
     female=False,
     target_reps=None,
+    vmult=1.0,
+    base_recenter=1.0,
 ):
-    """Phase 29 v2 + 29.6 LOCKED per-set XP.
+    """Phase 29 v2 + 29.6 LOCKED per-set XP (+ Phase Vitality-3 gate, PR1).
 
-    11-multiplier chain (in this exact order):
+    11-multiplier chain (in this exact order), then the Vitality-3 gate as a
+    12th, FINAL factor:
         set_xp = base × intensity × strength × novelty × cap
                × difficulty_mult × tier_diff_mult × abs_strength_premium
                × overload_mult × frequency_mult × attribution_share
+               × vmult                                  (Phase Vitality-3)
+
+    `vmult` (default 1.0) is the per-body-part strength conditioning gate,
+    computed ONCE pre-session by the caller from PRE-session vitality. `base_recenter`
+    (default 1.0) is the global STRENGTH_BASE_RECENTER scale on base_xp that
+    restores steady-state once the gate is live. BOTH default NEUTRAL so the
+    legacy/fixture callers (which pass neither) produce byte-identical XP — the
+    Vitality-3 numbers only appear when simulate_persona passes the real values.
 
     Returns (awarded_per_bp dict, volume_load, components dict, best_by_band).
 
@@ -952,8 +1037,11 @@ def compute_set_xp(
     eff_weight = effective_weight(resolved_slug, weight, bodyweight_kg)
 
     # ---- Base XP ----
+    # base_recenter defaults to 1.0 (legacy/fixture path → byte-identical).
+    # simulate_persona passes STRENGTH_BASE_RECENTER to restore steady-state
+    # once the vmult gate is live (Phase Vitality-3 D2 global base scale).
     volume_load = max(VOLUME_LOAD_FLOOR, eff_weight * reps)
-    base_xp = volume_load ** VOLUME_EXPONENT
+    base_xp = (volume_load ** VOLUME_EXPONENT) * base_recenter
 
     # ---- Intensity (with Ref #4 near-failure bonus) ----
     # If target_reps provided + actual < threshold, infer near-failure.
@@ -998,10 +1086,16 @@ def compute_set_xp(
         f_mult = frequency_mult(bp_session_count.get(dom_part, 1))
 
     # ---- Per-body-part XP ----
+    # Phase Vitality-3: `vmult` is the 12th/final factor. It may be a scalar
+    # (legacy/fixture path → 1.0 = no-op) OR a per-body-part dict (the faithful
+    # gate — the live SQL applies the charge fraction keyed by attribution body
+    # part). A dict missing a bp falls back to 1.0 (un-conditioned prior).
+    vmult_is_map = isinstance(vmult, dict)
     awarded = {}
     for body_part, share in distribution.items():
         novelty = math.exp(-novelty_count[body_part] / NOVELTY_DENOMINATOR)
         cap_mult = OVER_CAP_MULTIPLIER if weekly_count[body_part] >= WEEKLY_CAP_SETS else 1.0
+        vm = vmult.get(body_part, 1.0) if vmult_is_map else vmult
         xp = (
             base_xp
             * intensity
@@ -1014,6 +1108,7 @@ def compute_set_xp(
             * o_mult
             * f_mult
             * share
+            * vm               # Phase Vitality-3 — 12th/final factor (default 1.0)
         )
         awarded[body_part] = xp
 
@@ -1036,6 +1131,10 @@ def compute_set_xp(
         'eff_weight': eff_weight,
         'dominant_part': dom_part,
         'near_failure': near_failure,
+        # Phase Vitality-3 — record the dominant-part vmult actually applied
+        # (vmult may be a per-bp map; the fixture/legacy path passes scalar 1.0).
+        'vmult': (vmult.get(dom_part, 1.0) if isinstance(vmult, dict) else vmult),
+        'base_recenter': base_recenter,     # Phase Vitality-3 (default 1.0)
     }
 
     return awarded, volume_load, components, best_by_band
@@ -1062,6 +1161,64 @@ def vitality_pct(body_part, ewma, peak):
     if p <= 0:
         return 0.0
     return min(1.0, ewma.get(body_part, 0.0) / p)
+
+
+# ----------------------------------------------------------------------------
+# Phase Vitality-3 — decaying reference peak + the strength conditioning gate
+# ----------------------------------------------------------------------------
+def advance_vitality_week(vol_history, ewma, ref_peak):
+    """Advance every active bp's vitality ONE WEEK on the live DAILY grid.
+
+    `vol_history[bp]` is a deque/list of the most-recent daily volume-load
+    lumps (one entry per day, newest last) — each scheduled week appends ONE
+    lump (the week's Σ vol×share for that bp) followed by 6 zero days, so the
+    trailing-7-day window the live recompute sees is reproduced. This function
+    consumes the next 7 days from each bp's history and steps:
+
+        for each of the 7 days:
+            win      = Σ (trailing-7-day daily volume)
+            α        = α_up if win ≥ ewma else α_down   (live c_alpha_up / down)
+            ewma     = α·win + (1−α)·ewma
+            ref_peak = GREATEST(ewma, ref_peak × REF_PEAK_DECAY_DAILY)
+
+    Stepping daily (NOT one weekly step) is what keeps ref_peak ABOVE a lapsed
+    ewma long enough for vpct to drop — a single weekly step would collapse
+    ref_peak onto the ewma and pin vpct at 1.0 for everyone. Mutates ewma +
+    ref_peak in place; consumes 7 days from each `vol_history[bp]`.
+    """
+    for bp in ACTIVE_RANKS:
+        hist = vol_history[bp]
+        e = ewma.get(bp, 0.0)
+        rp = ref_peak.get(bp, 0.0)
+        # The 7 fresh days for this week are at the tail; step through the full
+        # history tail day-by-day using a trailing-7 window.
+        n = len(hist)
+        for d in range(n - DAYS_PER_WEEK, n):
+            lo = max(0, d - (DAYS_PER_WEEK - 1))
+            win = sum(hist[lo:d + 1])
+            alpha = VITALITY_ALPHA_UP if win >= e else VITALITY_ALPHA_DOWN
+            e = alpha * win + (1.0 - alpha) * e
+            rp = max(e, rp * REF_PEAK_DECAY_DAILY)
+        ewma[bp] = e
+        ref_peak[bp] = rp
+
+
+def strength_vpct(body_part, ewma, ref_peak):
+    """PRE-session charge fraction = clamp(ewma / ref_peak, 0, 1).
+
+    ref_peak ≤ 0 (a never-trained or day-0 bp) → vpct 1.0 (the un-conditioned
+    prior: the gate is a no-op on a bp the user has never loaded, exactly like
+    the cardio gate's `peak ≤ 0 → vmult 1.0` first-save behavior).
+    """
+    p = ref_peak.get(body_part, 0.0)
+    if p <= 0:
+        return 1.0
+    return max(0.0, min(1.0, ewma.get(body_part, 0.0) / p))
+
+
+def strength_vitality_mult(vpct, floor=STRENGTH_VITALITY_FLOOR):
+    """vmult = FLOOR + (1 − FLOOR) × vpct (mirrors cardio 00081 / sim:526)."""
+    return floor + (1.0 - floor) * vpct
 
 
 # ============================================================================
@@ -1262,6 +1419,12 @@ class Persona:
     tapering: bool = False
     half_life_weeks: float = 4.0
     nf_rate: float = 0.10
+    # Phase Vitality-3 — weeks with NO training (zero volume → vitality decays,
+    # ref_peak decays, rank holds). Used by the detrained-returner persona.
+    layoff_weeks: tuple = ()
+    # Phase Vitality-3 — train only the first N sessions of each scheduled week
+    # (sandbagger: light + INCONSISTENT). None → full schedule every week.
+    sessions_per_week_cap: int = None
 
 
 DEFAULT_REPS_PANEL = {
@@ -1501,13 +1664,66 @@ PERSONAS = {
         },
         progression_pct=0.003, nf_rate=0.15,
     ),
+    # ------------------------------------------------------------------------
+    # Phase Vitality-3 — two NEW personas that exist to exercise the gate.
+    # ------------------------------------------------------------------------
+    "sandbagger": Persona(
+        # High rank (advanced-ish standing weights) but trains LIGHT (1 session/
+        # week) + INCONSISTENT (every OTHER week — the off weeks are layoffs).
+        # The oscillating volume keeps vit_ewma chronically below vit_ref_peak →
+        # vpct ~0.4-0.6 permanently → vmult throttles their earn-rate so they
+        # progress SLOWER than the consistent `advanced` persona. Proves a high
+        # rank can't be coasted on: past load doesn't keep paying out.
+        name="Sandbagger (high rank, light+inconsistent)", bodyweight_kg=90.0,
+        schedule_key=3,
+        # Sub-maximal loads (they hold back ~30% off what their rank implies)
+        # plus a high rep range — they go through the motions, never near
+        # failure. Trains the full 3-day split but only every OTHER week (the
+        # off weeks are layoffs) → volume oscillates → vit_ewma stays chronically
+        # below vit_ref_peak → vpct ~0.4-0.6 → vmult throttles hard.
+        starting_weights={
+            "bench": 90, "incline_bench": 70, "overhead_press": 55,
+            "row": 78, "pulldown": 75, "pullup": 10,
+            "squat": 120, "deadlift": 150, "leg_press": 155, "lunge": 48,
+            "curl": 20, "tricep_pushdown": 35, "lateral_raise": 10,
+            "plank": 1, "leg_raise": 1,
+        },
+        reps_scheme={
+            "bench": 12, "incline_bench": 12, "overhead_press": 12,
+            "row": 12, "pulldown": 12, "pullup": 8, "squat": 12, "deadlift": 10,
+            "leg_press": 15, "lunge": 12, "curl": 15, "tricep_pushdown": 15,
+            "lateral_raise": 15, "plank": 30, "leg_raise": 15,
+        },
+        progression_pct=0.0002, nf_rate=0.0,
+        layoff_weeks=(2, 4, 6, 8, 10, 12),
+    ),
+    "detrained_returner": Persona(
+        # Was high (advanced standing weights), takes an 8-week ZERO-volume
+        # layoff (wks 1-8 here represent the start of the lapse — see the
+        # returner harness which pre-seeds prior conditioning), then returns
+        # CONSISTENT ~4×/wk near prior loads. ref_peak decays through the layoff
+        # so on return vpct climbs fast (τ_up=2wk) → vmult recovers to ≥0.90
+        # within 2-4 weeks. Rank NEVER drops during the layoff (D6). The harness
+        # drives this persona via simulate_returner(), NOT the standard panel.
+        name="Detrained Returner (was high, 8wk layoff)", bodyweight_kg=88.0,
+        schedule_key=4,
+        starting_weights={
+            "bench": 125, "incline_bench": 95, "overhead_press": 75,
+            "row": 105, "pulldown": 100, "pullup": 28,
+            "squat": 165, "deadlift": 205, "leg_press": 215, "lunge": 68,
+            "curl": 26, "tricep_pushdown": 48, "lateral_raise": 14,
+            "plank": 1, "leg_raise": 1,
+        },
+        progression_pct=0.0005, nf_rate=0.15,
+    ),
 }
 
 # Display order for the panel (sorted by expected avg_rank ascending)
 PANEL_ORDER = [
     "female_beginner", "beginner", "machine_tourist", "older_lifter",
     "weak_consistent", "female_intermediate", "smurf", "strong_inconsistent",
-    "diego", "hypertrophy_bb", "strong_intermediate", "advanced", "elite",
+    "diego", "sandbagger", "hypertrophy_bb", "strong_intermediate",
+    "advanced", "elite",
 ]
 
 # Target band per persona (lo, hi) — 13/13 PASS criterion
@@ -1525,6 +1741,10 @@ PANEL_TARGET_BANDS = {
     "older_lifter":         (14, 24),
     "machine_tourist":      (11, 23),
     "hypertrophy_bb":       (22, 33),
+    # Phase Vitality-3 — sandbagger must land BELOW advanced (35-45). Band set
+    # after the gate + recenter sweep (see docs/xp-balance-baseline.md). The
+    # detrained_returner is NOT band-gated — it's validated by simulate_returner.
+    "sandbagger":           (18, 30),
 }
 
 
@@ -1533,12 +1753,31 @@ def _tapered_progression(base_rate, half_life_weeks, week):
     return base_rate * math.exp(-math.log(2.0) / half_life_weeks * (week - 1))
 
 
-def simulate_persona(persona_key, weeks=12, seed=42):
-    """Phase 29 v2 + 29.6 LOCKED persona simulator.
+def simulate_persona(persona_key, weeks=12, seed=42, gate=True):
+    """Phase 29 v2 + 29.6 LOCKED persona simulator (+ Phase Vitality-3 gate).
 
     Uses the full 11-multiplier chain via compute_set_xp() with all refinements
     enabled (current_ranks, best_by_band, bp_session_count, near_failure,
-    female flag).
+    female flag), THEN the Phase Vitality-3 strength conditioning gate as the
+    12th factor + the STRENGTH_BASE_RECENTER global base scale.
+
+    Vitality threading (the calibration linchpin):
+      * Per body part we track `vit_ewma` + `vit_ref_peak` across weeks.
+      * The EWMA is fed by weekly VOLUME LOAD (Σ vol×share per bp), NOT by gated
+        XP — this severs the feedback loop (the gate throttles the rank currency
+        but never its own input, so no runaway/collapse is possible). This is
+        the single most important stability property.
+      * The vmult applied to a week's sets is computed ONCE from the vitality
+        state at the START of the week (PRE-session — mirrors the live ordering
+        where recompute_vitality_for_user runs AFTER the XP writes). ref_peak ≤ 0
+        (a never-trained / day-0 bp) → vpct 1.0 → vmult 1.0 (gate is a no-op on
+        the first load of a bp).
+      * After the week, vitality steps forward from that week's volume load
+        (zero during a layoff → ewma + ref_peak decay; rank holds — D6).
+
+    `gate=False` reproduces the pre-Vitality-3 panel (no vmult, no base recenter)
+    — used to read each consistent persona's CURRENT avg_rank for the ±0.5
+    re-center guard.
     """
     rng = random.Random(seed)
     persona = PERSONAS[persona_key]
@@ -1554,40 +1793,91 @@ def simulate_persona(persona_key, weeks=12, seed=42):
     session_num = 0
     smurf_done = False
 
+    # Phase Vitality-3 — per-body-part conditioning state (strength bps only).
+    # vol_history[bp] is the daily volume-load timeline (newest last); each week
+    # appends one lump + 6 zeros so advance_vitality_week sees the live
+    # trailing-7-day window. (See advance_vitality_week + the DISCRETIZATION NOTE.)
+    vit_ewma = {bp: 0.0 for bp in ACTIVE_RANKS}
+    vit_ref_peak = {bp: 0.0 for bp in ACTIVE_RANKS}
+    vol_history = {bp: [] for bp in ACTIVE_RANKS}
+    base_recenter = STRENGTH_BASE_RECENTER if gate else 1.0
+
     for week in range(1, weeks + 1):
         weekly_count = defaultdict(float)
         weekly_xp = defaultdict(float)
         bp_session = defaultdict(int)
+        # Volume load accrued THIS week per bp (feeds the EWMA — NOT gated XP).
+        weekly_vol_per_bp = defaultdict(float)
         prog = (
             _tapered_progression(persona.progression_pct, persona.half_life_weeks, week)
             if persona.tapering
             else persona.progression_pct
         )
 
-        for day in schedule:
-            session_num += 1
-            for bp in SESSION_BODY_PARTS.get(day, set()):
-                bp_session[bp] += 1
-            novelty_count = defaultdict(float)
+        # PRE-session gate: vmult per strength bp from the START-of-week vitality.
+        if gate:
+            vmult_map = {
+                bp: strength_vitality_mult(strength_vpct(bp, vit_ewma, vit_ref_peak))
+                for bp in ACTIVE_RANKS
+            }
+        else:
+            vmult_map = 1.0
 
-            for exercise, n_sets in DAY_TEMPLATES_PANEL[day]:
-                r = reps_scheme.get(exercise, DEFAULT_REPS_PANEL.get(exercise, 5))
-                diff_m = difficulty_mult_for_alias(exercise)
-                real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+        is_layoff = week in persona.layoff_weeks
+        if not is_layoff:
+            cap = persona.sessions_per_week_cap
+            week_schedule = schedule if cap is None else schedule[:cap]
+            for day in week_schedule:
+                session_num += 1
+                for bp in SESSION_BODY_PARTS.get(day, set()):
+                    bp_session[bp] += 1
+                novelty_count = defaultdict(float)
 
-                # Smurf override on session 1
-                use_smurf = (
-                    not smurf_done and session_num == 1
-                    and persona.smurf_session
-                    and exercise in persona.smurf_session
-                )
-                if use_smurf:
-                    sw, sr = persona.smurf_session[exercise]
+                for exercise, n_sets in DAY_TEMPLATES_PANEL[day]:
+                    r = reps_scheme.get(exercise, DEFAULT_REPS_PANEL.get(exercise, 5))
+                    diff_m = difficulty_mult_for_alias(exercise)
+                    real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+                    distribution = _attribution_for(exercise)
+
+                    # Smurf override on session 1
+                    use_smurf = (
+                        not smurf_done and session_num == 1
+                        and persona.smurf_session
+                        and exercise in persona.smurf_session
+                    )
+                    if use_smurf:
+                        sw, sr = persona.smurf_session[exercise]
+                        for _ in range(n_sets):
+                            cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+                            nf = rng.random() < nf_rate
+                            awarded, vol, _comp, best_by_band = compute_set_xp(
+                                exercise, sw, sr, novelty_count, weekly_count, peak_loads,
+                                difficulty_mult=diff_m,
+                                bodyweight_kg=persona.bodyweight_kg,
+                                slug=real_slug,
+                                current_ranks=cr,
+                                best_by_band=best_by_band,
+                                bp_session_count=bp_session,
+                                near_failure=nf,
+                                female=persona.female,
+                                vmult=vmult_map,
+                                base_recenter=base_recenter,
+                            )
+                            for bp2, xp in awarded.items():
+                                xp_pool[bp2] += xp
+                                weekly_xp[bp2] += xp
+                            for bp2, share in distribution.items():
+                                if bp2 in vit_ewma:
+                                    weekly_vol_per_bp[bp2] += vol * share
+                        smurf_done = True
+                        continue
+
+                    w = weights.get(exercise, 1.0)
                     for _ in range(n_sets):
                         cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
                         nf = rng.random() < nf_rate
-                        awarded, _, _comp, best_by_band = compute_set_xp(
-                            exercise, sw, sr, novelty_count, weekly_count, peak_loads,
+                        awarded, vol, _comp, best_by_band = compute_set_xp(
+                            exercise, w, r, novelty_count, weekly_count, peak_loads,
                             difficulty_mult=diff_m,
                             bodyweight_kg=persona.bodyweight_kg,
                             slug=real_slug,
@@ -1596,35 +1886,30 @@ def simulate_persona(persona_key, weeks=12, seed=42):
                             bp_session_count=bp_session,
                             near_failure=nf,
                             female=persona.female,
+                            vmult=vmult_map,
+                            base_recenter=base_recenter,
                         )
                         for bp2, xp in awarded.items():
                             xp_pool[bp2] += xp
                             weekly_xp[bp2] += xp
-                    smurf_done = True
-                    continue
+                        for bp2, share in distribution.items():
+                            if bp2 in vit_ewma:
+                                weekly_vol_per_bp[bp2] += vol * share
 
-                w = weights.get(exercise, 1.0)
-                for _ in range(n_sets):
-                    cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
-                    nf = rng.random() < nf_rate
-                    awarded, _, _comp, best_by_band = compute_set_xp(
-                        exercise, w, r, novelty_count, weekly_count, peak_loads,
-                        difficulty_mult=diff_m,
-                        bodyweight_kg=persona.bodyweight_kg,
-                        slug=real_slug,
-                        current_ranks=cr,
-                        best_by_band=best_by_band,
-                        bp_session_count=bp_session,
-                        near_failure=nf,
-                        female=persona.female,
-                    )
-                    for bp2, xp in awarded.items():
-                        xp_pool[bp2] += xp
-                        weekly_xp[bp2] += xp
+            # Apply progression after a trained week
+            for ex in weights:
+                weights[ex] *= (1.0 + prog)
 
-        # Apply progression after the week
-        for ex in weights:
-            weights[ex] *= (1.0 + prog)
+        # Step vitality forward on the DAILY grid from THIS week's volume load
+        # (0 during a layoff). ewma rebuilds (α_up) or decays (α_down); ref_peak
+        # is re-topped by a rising ewma or decays daily toward the recent ceiling
+        # (the returner-recovery mechanism). Append this week's lump + 6 zero
+        # days so the live trailing-7-day window is reproduced.
+        if gate:
+            for bp in ACTIVE_RANKS:
+                vol_history[bp].append(weekly_vol_per_bp.get(bp, 0.0))
+                vol_history[bp].extend([0.0] * (DAYS_PER_WEEK - 1))
+            advance_vitality_week(vol_history, vit_ewma, vit_ref_peak)
 
         ranks = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
         snapshots.append({
@@ -1634,6 +1919,15 @@ def simulate_persona(persona_key, weeks=12, seed=42):
             "cumulative_xp": int(sum(xp_pool.values())),
             "weekly_xp": {p: int(v) for p, v in weekly_xp.items()},
             "prog_rate": prog,
+            "is_layoff": is_layoff,
+            # Pre-session vpct/vmult per active bp (the gate that was in force
+            # this week). avg_vpct/avg_vmult summarize across active bps.
+            "vpct": {bp: strength_vpct(bp, vit_ewma, vit_ref_peak) for bp in ACTIVE_RANKS},
+            "vmult": (
+                {bp: strength_vitality_mult(strength_vpct(bp, vit_ewma, vit_ref_peak))
+                 for bp in ACTIVE_RANKS}
+                if gate else {bp: 1.0 for bp in ACTIVE_RANKS}
+            ),
         })
 
     return snapshots
@@ -1644,29 +1938,232 @@ def avg_active_rank(snapshot):
 
 
 # ============================================================================
+# Phase Vitality-3 — calibration harness (VPCT_NORMAL, recenter sweep, returner)
+# ============================================================================
+
+# The 6 CONSISTENT personas — train a full split every week, no layoffs/caps.
+# Their converged vpct (wks 8-12) defines VPCT_NORMAL; the recenter sweep keeps
+# them within ±0.5 rank of their pre-gate avg_rank.
+CONSISTENT_PERSONAS = [
+    "beginner", "weak_consistent", "advanced", "elite",
+    "female_intermediate", "hypertrophy_bb",
+]
+
+
+def measure_vpct_normal(weeks=12, window=(8, 12)):
+    """VPCT_NORMAL = median over the 6 consistent personas of each persona's
+    mean per-active-bp vpct across the converged window (weeks 8-12).
+
+    Returns (vpct_normal, per_persona_vpct).
+    """
+    lo, hi = window
+    per = {}
+    for pk in CONSISTENT_PERSONAS:
+        snaps = simulate_persona(pk, weeks=weeks)
+        vals = []
+        for s in snaps:
+            if lo <= s["week"] <= hi:
+                vals.extend(s["vpct"][bp] for bp in ACTIVE_RANKS)
+        per[pk] = sum(vals) / len(vals)
+    ordered = sorted(per.values())
+    n = len(ordered)
+    median = (ordered[n // 2] if n % 2 else (ordered[n // 2 - 1] + ordered[n // 2]) / 2)
+    return median, per
+
+
+def consistent_pregate_avg_ranks(weeks=12):
+    """Each consistent persona's CURRENT (pre-gate) avg_rank — the ±0.5 anchor."""
+    return {pk: avg_active_rank(simulate_persona(pk, weeks=weeks, gate=False)[-1])
+            for pk in CONSISTENT_PERSONAS}
+
+
+def sweep_base_recenter(grid, weeks=12):
+    """Sweep STRENGTH_BASE_RECENTER over `grid`, holding PANEL_TARGET_BANDS +
+    FLOOR fixed. Pick the value minimizing Σ|Δ_consistent| (vs pre-gate avg_rank)
+    while keeping all 6 consistent personas (a) in-band and (b) within ±0.5 rank
+    of their pre-gate avg_rank. Returns the full sweep table + the winner.
+    """
+    global STRENGTH_BASE_RECENTER
+    pregate = consistent_pregate_avg_ranks(weeks=weeks)
+    original = STRENGTH_BASE_RECENTER
+    rows = []
+    try:
+        for cand in grid:
+            STRENGTH_BASE_RECENTER = cand
+            deltas = {}
+            in_band = True
+            within = True
+            for pk in CONSISTENT_PERSONAS:
+                ar = avg_active_rank(simulate_persona(pk, weeks=weeks)[-1])
+                lo, hi = PANEL_TARGET_BANDS[pk]
+                deltas[pk] = ar - pregate[pk]
+                if not (lo <= ar <= hi):
+                    in_band = False
+                if abs(ar - pregate[pk]) > 0.5:
+                    within = False
+            sigma = sum(abs(d) for d in deltas.values())
+            rows.append({
+                "recenter": cand, "sigma": sigma, "in_band": in_band,
+                "within": within, "deltas": deltas,
+            })
+    finally:
+        STRENGTH_BASE_RECENTER = original
+    valid = [r for r in rows if r["in_band"] and r["within"]]
+    winner = min(valid, key=lambda r: r["sigma"]) if valid else None
+    return rows, winner, pregate
+
+
+def simulate_returner(weeks_seed=8, weeks_layoff=8, weeks_back=6, seed=42,
+                      return_ramp=(2, 3)):
+    """Detrained-returner harness.
+
+    Phase 1 (weeks_seed): train consistent ~4×/wk → build rank + saturate
+                          vit_ewma ≈ vit_ref_peak (vpct → ~1.0).
+    Phase 2 (weeks_layoff): ZERO volume — rank HOLDS (D6), vit_ewma decays
+                          (τ_down=6wk), vit_ref_peak decays (21d half-life).
+    Phase 3 (weeks_back): return CONSISTENT near prior loads — vpct (and thus
+                          vmult) recovers; assert ≥0.90 within 2-4 weeks.
+
+    `return_ramp` caps sessions on the first len(ramp) back-weeks (a realistic
+    graded return — a returner eases in rather than slamming straight to full
+    volume). E.g. (2, 3) = 2 sessions back-wk1, 3 back-wk2, then full schedule.
+    This produces the gradual multi-week recovery curve (rather than a 1-week
+    step) WITHOUT changing the gate mechanic. A faithful daily-grid recovery from
+    a slam-back-to-full-volume return is ~1 week; the graded ramp is the honest
+    behavioral model and the one we document.
+
+    Returns a per-week list of dicts: week, phase, avg_rank, mean vmult/vpct
+    across active bps. The rank-never-drops invariant is checked at the layoff
+    boundary by the caller.
+    """
+    persona = PERSONAS["detrained_returner"]
+    rng = random.Random(seed)
+    nf_rate = persona.nf_rate
+    xp_pool = {p: 0.0 for p in BODY_PARTS}
+    weights = dict(persona.starting_weights)
+    peak_loads = dict(persona.starting_weights)
+    best_by_band = {}
+    schedule = WEEK_SCHEDULES_PANEL[persona.schedule_key]
+    reps_scheme = persona.reps_scheme or DEFAULT_REPS_PANEL
+    vit_ewma = {bp: 0.0 for bp in ACTIVE_RANKS}
+    vit_ref_peak = {bp: 0.0 for bp in ACTIVE_RANKS}
+    vol_history = {bp: [] for bp in ACTIVE_RANKS}
+    base_recenter = STRENGTH_BASE_RECENTER
+    history = []
+    total = weeks_seed + weeks_layoff + weeks_back
+
+    for week in range(1, total + 1):
+        if week <= weeks_seed:
+            phase = "seed"
+        elif week <= weeks_seed + weeks_layoff:
+            phase = "layoff"
+        else:
+            phase = "back"
+        is_layoff = (phase == "layoff")
+
+        weekly_count = defaultdict(float)
+        bp_session = defaultdict(int)
+        weekly_vol_per_bp = defaultdict(float)
+
+        vmult_map = {
+            bp: strength_vitality_mult(strength_vpct(bp, vit_ewma, vit_ref_peak))
+            for bp in ACTIVE_RANKS
+        }
+
+        if not is_layoff:
+            # Graded return: cap sessions on the first back-weeks (ease-in ramp).
+            week_schedule = schedule
+            if phase == "back":
+                back_idx = week - (weeks_seed + weeks_layoff)   # 1-based
+                if back_idx <= len(return_ramp):
+                    week_schedule = schedule[:return_ramp[back_idx - 1]]
+            for day in week_schedule:
+                for bp in SESSION_BODY_PARTS.get(day, set()):
+                    bp_session[bp] += 1
+                novelty_count = defaultdict(float)
+                for exercise, n_sets in DAY_TEMPLATES_PANEL[day]:
+                    r = reps_scheme.get(exercise, DEFAULT_REPS_PANEL.get(exercise, 5))
+                    diff_m = difficulty_mult_for_alias(exercise)
+                    real_slug = SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+                    distribution = _attribution_for(exercise)
+                    w = weights.get(exercise, 1.0)
+                    for _ in range(n_sets):
+                        cr = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+                        nf = rng.random() < nf_rate
+                        awarded, vol, _comp, best_by_band = compute_set_xp(
+                            exercise, w, r, novelty_count, weekly_count, peak_loads,
+                            difficulty_mult=diff_m,
+                            bodyweight_kg=persona.bodyweight_kg,
+                            slug=real_slug,
+                            current_ranks=cr,
+                            best_by_band=best_by_band,
+                            bp_session_count=bp_session,
+                            near_failure=nf,
+                            female=persona.female,
+                            vmult=vmult_map,
+                            base_recenter=base_recenter,
+                        )
+                        for bp2, xp in awarded.items():
+                            xp_pool[bp2] += xp
+                        for bp2, share in distribution.items():
+                            if bp2 in vit_ewma:
+                                weekly_vol_per_bp[bp2] += vol * share
+
+        for bp in ACTIVE_RANKS:
+            vol_history[bp].append(weekly_vol_per_bp.get(bp, 0.0))
+            vol_history[bp].extend([0.0] * (DAYS_PER_WEEK - 1))
+        advance_vitality_week(vol_history, vit_ewma, vit_ref_peak)
+
+        ranks = {p: rank_for_xp(xp_pool[p]) for p in BODY_PARTS}
+        post_vmult = [strength_vitality_mult(strength_vpct(bp, vit_ewma, vit_ref_peak))
+                      for bp in ACTIVE_RANKS]
+        post_vpct = [strength_vpct(bp, vit_ewma, vit_ref_peak) for bp in ACTIVE_RANKS]
+        history.append({
+            "week": week,
+            "phase": phase,
+            "avg_rank": sum(ranks[bp] for bp in ACTIVE_RANKS) / len(ACTIVE_RANKS),
+            "pre_vmult": sum(vmult_map[bp] for bp in ACTIVE_RANKS) / len(ACTIVE_RANKS),
+            "post_vmult": sum(post_vmult) / len(post_vmult),
+            "post_vpct": sum(post_vpct) / len(post_vpct),
+            "weeks_seed": weeks_seed,
+            "weeks_layoff": weeks_layoff,
+        })
+    return history
+
+
+# ============================================================================
 # Reporting
 # ============================================================================
 
 def print_persona_panel(weeks=12):
-    sep = "=" * 110
+    sep = "=" * 116
+    n = len(PANEL_ORDER)
     print()
     print(sep)
-    print(f"  RepSaga Phase 29 v2 + 29.6 LOCKED — 13-persona panel ({weeks}-week simulation)")
-    print(f"  E_BONUS={E_BONUS} E_FLOOR={E_FLOOR} E_CEIL={E_CEIL} | "
+    print(f"  RepSaga Phase 29 v2 + 29.6 + Vitality-3 — {n}-persona panel ({weeks}-week simulation)")
+    print(f"  FLOOR={STRENGTH_VITALITY_FLOOR} base_recenter={STRENGTH_BASE_RECENTER} | "
           f"V_exp={VOLUME_EXPONENT} cap={WEEKLY_CAP_SETS} over_cap={OVER_CAP_MULTIPLIER}")
     print(sep)
 
     results = {}
+    cnv_vpct = {}
     for pk in PANEL_ORDER:
-        results[pk] = simulate_persona(pk, weeks=weeks)[-1]
+        snaps = simulate_persona(pk, weeks=weeks)
+        results[pk] = snaps[-1]
+        # Converged mean per-active-bp vpct (wks 8-12) — shows the gate in force.
+        wins = [s for s in snaps if s["week"] >= max(1, weeks - 4)]
+        cnv_vpct[pk] = sum(
+            sum(s["vpct"][bp] for bp in ACTIVE_RANKS) / len(ACTIVE_RANKS)
+            for s in wins
+        ) / len(wins)
 
-    hdr = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5}  {:<7}  {:>4}  {:>8}"
-    row = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5.1f}  {:<7}  {:>4}  {:>8}"
+    hdr = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5}  {:>5}  {:<7}  {:>4}  {:>8}"
+    row = "  {:<42}  {:>3} {:>3} {:>3} {:>3} {:>3} {:>3}  {:>2}  {:>5.1f}  {:>5.2f}  {:<7}  {:>4}  {:>8}"
     print()
     print(hdr.format(
         "Persona", "Ch", "Bk", "Lg", "Sh", "Ar", "Co",
-        "Lv", "AvgRk", "Target", "Pass", "CumXP"))
-    print("  " + "-" * 108)
+        "Lv", "AvgRk", "vpct", "Target", "Pass", "CumXP"))
+    print("  " + "-" * 114)
 
     passes = 0
     for pk in PANEL_ORDER:
@@ -1682,7 +2179,7 @@ def print_persona_panel(weeks=12):
             p.name[:42],
             r["chest"], r["back"], r["legs"],
             r["shoulders"], r["arms"], r["core"],
-            s["character_level"], ar, f"{lo}-{hi}", ok,
+            s["character_level"], ar, cnv_vpct[pk], f"{lo}-{hi}", ok,
             f"{s['cumulative_xp']:,}"))
 
     print()
@@ -1693,10 +2190,40 @@ def print_persona_panel(weeks=12):
     fi = avg_active_rank(results["female_intermediate"])
     fb = avg_active_rank(results["female_beginner"])
     di = avg_active_rank(results["diego"])
+    sand = avg_active_rank(results["sandbagger"])
+    adv = avg_active_rank(results["advanced"])
     print(f"  Anti-cheese: Smurf {sa:.1f} vs TrueBeg {ba:.1f}: {'OK' if sa <= ba else 'FAIL'}")
     print(f"  Female ordering: FBeg {fb:.1f} < FInt {fi:.1f} < Diego {di:.1f}: "
           f"{'OK' if fb < fi < di else 'FAIL'}")
+    print(f"  Vitality-3: Sandbagger {sand:.1f} < Advanced {adv:.1f}: "
+          f"{'OK' if sand < adv else 'FAIL'}  "
+          f"(sandbagger throttled to vpct {cnv_vpct['sandbagger']:.2f})")
     return results, passes
+
+
+def print_returner_report(weeks_seed=8, weeks_layoff=8, weeks_back=6):
+    """Detrained-returner recovery report — the Vitality-3 comeback proof."""
+    h = simulate_returner(weeks_seed=weeks_seed, weeks_layoff=weeks_layoff,
+                          weeks_back=weeks_back)
+    print()
+    print("=" * 72)
+    print(f"  Vitality-3 — Detrained Returner ({weeks_seed}wk seed / "
+          f"{weeks_layoff}wk layoff / {weeks_back}wk back)")
+    print("=" * 72)
+    print(f"  {'wk':>3} {'phase':>7} {'avg_rank':>9} {'vmult(earned)':>14} {'post_vpct':>10}")
+    for x in h:
+        print(f"  {x['week']:>3} {x['phase']:>7} {x['avg_rank']:>9.2f} "
+              f"{x['pre_vmult']:>14.3f} {x['post_vpct']:>10.3f}")
+    layoff = [x for x in h if x["phase"] == "layoff"]
+    back = [x for x in h if x["phase"] == "back"]
+    rank_held = all(x["avg_rank"] >= layoff[0]["avg_rank"] for x in layoff)
+    reached = next((i for i, x in enumerate(back, 1) if x["pre_vmult"] >= 0.90), None)
+    print()
+    print(f"  Rank never drops during layoff: {'OK' if rank_held else 'FAIL'} "
+          f"({layoff[0]['avg_rank']:.1f} held across {len(layoff)} layoff weeks)")
+    print(f"  vmult >= 0.90 recovered by back-week: {reached} "
+          f"({'OK - within 2-4wk' if reached and reached <= 4 else 'FAIL'})")
+    return h
 
 
 def print_xp_curve_summary():
@@ -1725,10 +2252,34 @@ def main():
                              "of the 13-persona panel")
     parser.add_argument("--xp-curve", action="store_true",
                         help="Print piecewise rank XP curve summary")
+    parser.add_argument("--returner", action="store_true",
+                        help="Print the Vitality-3 detrained-returner recovery report")
+    parser.add_argument("--recenter-sweep", action="store_true",
+                        help="Sweep STRENGTH_BASE_RECENTER + report VPCT_NORMAL")
     args = parser.parse_args()
 
     if args.xp_curve:
         print_xp_curve_summary()
+        return
+
+    if args.returner:
+        print_returner_report()
+        return
+
+    if args.recenter_sweep:
+        vn, per = measure_vpct_normal(weeks=args.weeks)
+        print(f"\n  VPCT_NORMAL (median converged wk8-12, 6 consistent) = {vn:.4f}")
+        for k, v in per.items():
+            print(f"    {k:<22} {v:.4f}")
+        grid = [round(1.00 + 0.02 * i, 2) for i in range(21)]   # 1.00 .. 1.40
+        rows, winner, _pre = sweep_base_recenter(grid, weeks=args.weeks)
+        print(f"\n  {'recenter':>8} {'sigma_d':>9} {'in_band':>8} {'within0.5':>10}")
+        for r in rows:
+            mark = "  <-- WINNER" if winner and r["recenter"] == winner["recenter"] else ""
+            print(f"  {r['recenter']:>8.2f} {r['sigma']:>9.2f} "
+                  f"{str(r['in_band']):>8} {str(r['within']):>10}{mark}")
+        print(f"\n  WINNER STRENGTH_BASE_RECENTER = "
+              f"{winner['recenter'] if winner else None}")
         return
 
     if args.legacy:
