@@ -102,7 +102,7 @@ import argparse
 import math
 import random
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # ============================================================================
 # CONFIG — locked formula constants (Phase 29 v2 + 29.6)
@@ -1718,6 +1718,17 @@ PERSONAS = {
     ),
 }
 
+# Anti-cheese control: the smurf WITHOUT its fake-1RM session-1 — the SAME lifter
+# minus the cheat. Used only by the panel's anti-cheese invariant ("faking a 1RM
+# must never PAY"); deliberately NOT in PANEL_ORDER. The old "Smurf <= TrueBeginner"
+# check was mis-specified — the smurf logs genuinely HEAVIER working weights, so it
+# out-ranks the beginner LEGITIMATELY (real lifts → real XP) and the fake 1RM adds
+# nothing. The meaningful property is that the same lifter gains no rank by faking —
+# verified robust even for a beginner faking a 220x1. See docs/xp-balance-baseline.md.
+PERSONAS["smurf_honest"] = replace(
+    PERSONAS["smurf"], smurf_session=None, name="Smurf control (no fake 1RM)"
+)
+
 # Display order for the panel (sorted by expected avg_rank ascending)
 PANEL_ORDER = [
     "female_beginner", "beginner", "machine_tourist", "older_lifter",
@@ -2185,14 +2196,19 @@ def print_persona_panel(weeks=12):
     print()
     print(f"  Verdict: {passes}/{len(PANEL_ORDER)} PASS")
 
-    sa = avg_active_rank(results["smurf"])
-    ba = avg_active_rank(results["beginner"])
+    sa = avg_active_rank(results["smurf"])  # WITH the fake-1RM session-1
+    sh = avg_active_rank(simulate_persona("smurf_honest", weeks=weeks)[-1])  # same lifter, no fake
     fi = avg_active_rank(results["female_intermediate"])
     fb = avg_active_rank(results["female_beginner"])
     di = avg_active_rank(results["diego"])
     sand = avg_active_rank(results["sandbagger"])
     adv = avg_active_rank(results["advanced"])
-    print(f"  Anti-cheese: Smurf {sa:.1f} vs TrueBeg {ba:.1f}: {'OK' if sa <= ba else 'FAIL'}")
+    # Anti-cheese: faking a 1RM must never PAY. The cheat replaces real working sets
+    # and is capped → net XP loss, so with-fake must rank <= the same lifter honest.
+    # (Correct invariant; the old Smurf<=TrueBeginner compared a stronger lifter to a
+    # weaker one and so was a meaningless permanent FAIL.)
+    print(f"  Anti-cheese (faking never pays): smurf+fake {sa:.1f} <= honest {sh:.1f}: "
+          f"{'OK' if sa <= sh else 'FAIL'}")
     print(f"  Female ordering: FBeg {fb:.1f} < FInt {fi:.1f} < Diego {di:.1f}: "
           f"{'OK' if fb < fi < di else 'FAIL'}")
     print(f"  Vitality-3: Sandbagger {sand:.1f} < Advanced {adv:.1f}: "

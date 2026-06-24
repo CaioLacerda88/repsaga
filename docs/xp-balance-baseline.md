@@ -376,10 +376,20 @@ the gate. (15 = 13 panel + sandbagger in-panel + the returner via its harness.)
 
 Invariants: Sandbagger 19.7 < Advanced 41.3 (a high rank cannot be coasted on —
 chronic low charge throttles earn-rate). Female ordering FBeg < FInt < Diego
-holds. (The panel's `Smurf 18.0 vs TrueBeg 15.7` display line reads FAIL — this
-is a **pre-existing** Phase-29 baseline condition, unchanged by the gate: the
-smurf's fake-1RM session-1 is already strength-floored, and the avg_rank display
-quirk comes from its higher standing weights, not from any gate interaction.)
+holds.
+
+**Anti-cheese invariant corrected (Phase Vitality-3).** The old check
+`Smurf ≤ TrueBeginner` was **mis-specified** and read a permanent, meaningless
+FAIL: the `smurf` persona logs genuinely *heavier* working weights than the
+beginner (bench 60 vs 40, squat 70 vs 60, …), so it out-ranks the beginner
+**legitimately** (real lifts → real XP) — nothing to do with the fake 1RM. The
+real property we care about is *"faking a 1RM never pays."* The corrected
+invariant runs the **same lifter** with and without the fake session:
+`smurf+fake (18.0) ≤ smurf-honest (18.7) → OK`. The fake 140×1 single replaces
+real working sets and is capped so hard it's a **net XP loss** — verified robust
+even for a *beginner* faking an absurd 220×1 (15.50 < honest 15.67). The
+`smurf_honest` control persona (smurf minus `smurf_session`) backs this assertion
+and is excluded from `PANEL_ORDER`.
 
 ### Detrained-returner recovery curve (8wk seed / 8wk layoff / 6wk graded return)
 
