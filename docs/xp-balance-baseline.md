@@ -252,19 +252,190 @@ Phase 29 v2 specifically; the archetypes are the historical Phase 24d
 calibration baseline. If future tuning ever reopens, both sets should
 land inside their respective bands.
 
+## Phase Vitality-3 — Strength Vitality XP-gate (sim, PR 1)
+
+> **Status: sim source-of-truth landed; consumer adoption is PR 2.** PR 1 builds
+> per-body-part conditioning into the persona panel, adds the gate to
+> `compute_set_xp` (defaulting NEUTRAL so the existing fixture regenerates
+> byte-identical), adds 2 new personas, and re-centers. PR 2 will regenerate the
+> fixture WITH the gate + port the gate to Dart `xp_calculator` + the
+> `00084_*_strength_vitality_gate.sql` migration in one atomic 4-site PR.
+
+### The gate
+
+Strength set XP is throttled by per-body-part conditioning, mirroring the cardio
+gate (migration `00081`) but using the **decaying reference peak** (migration
+`00083`) as the denominator — the decay is what lets a detrained returner's
+multiplier recover (a frozen all-time peak never could). **Throttle-only** (D6):
+rank is never touched; only XP earn-rate scales.
+
+```
+vpct  = clamp(vit_ewma / vit_ref_peak, 0, 1)   (ref_peak <= 0 -> vpct 1.0)
+vmult = FLOOR + (1 - FLOOR) * vpct
+set_xp_gated = (11-multiplier chain) * vmult    <- applied as the 12th, final factor
+```
+
+`vmult` is computed ONCE per body part from PRE-session vitality (non-circular —
+the live recompute runs AFTER the XP writes). **Stability linchpin:** the EWMA
+that feeds `vpct` is driven by weekly VOLUME LOAD (Sigma vol*share per bp), NEVER
+by the gated XP — so the gate throttles the rank currency but never its own
+input. No runaway/collapse is possible.
+
+### Vitality clock — daily grid (the non-obvious fidelity requirement)
+
+The live `00083` recompute steps the EWMA + ref_peak **once per UTC day**, with
+the EWMA sampled from a **trailing 7-day** volume window and ref_peak decaying at
+a 21-day daily half-life. The panel reproduces this on a **daily grid**
+(`advance_vitality_week`): each scheduled week appends one volume lump + 6 zero
+days, then 7 daily steps run.
+
+This daily fidelity is **load-bearing, not cosmetic.** A naive weekly single-step
+model decays ref_peak a full week (×2^(-1/3) ≈ 0.79) while the EWMA takes only
+one α_down sample (retains ≈0.85), so ref_peak collapses onto the EWMA and `vpct`
+is pinned at 1.0 **for every persona** — the gate would never throttle anyone.
+On the daily grid the ref_peak stays above a lapsed EWMA long enough for `vpct`
+to fall, which is exactly what makes the gate bite an inconsistent lifter (vpct
+0.4–0.7) while leaving a consistent one at 1.0. The only fidelity loss vs a live
+replay is intra-week session spacing (a Mon/Wed/Fri spread vs one Monday lump) —
+immaterial to the converged `vpct` because the trailing window sums the same
+weekly total regardless.
+
+### VPCT_NORMAL and the re-center (the crux)
+
+`VPCT_NORMAL` = median converged (wks 8-12) `vpct` of the 6 consistent personas
+(`beginner`, `weak_consistent`, `advanced`, `elite`, `female_intermediate`,
+`hypertrophy_bb`).
+
+**Measured: VPCT_NORMAL = 1.00** — all 6 consistent personas sit at full charge.
+A lifter who trains every week keeps `vit_ewma >= vit_ref_peak`, so `vpct` clamps
+to 1.0 and `vmult = 1.0`. **The gate is a no-op for a consistent lifter.**
+
+Consequently the `STRENGTH_BASE_RECENTER` sweep (1.00 → 1.40, 0.02 grid, bands +
+FLOOR held fixed; objective: minimize Sigma|Delta_consistent| while keeping all 6
+in-band AND within ±0.5 rank of their pre-gate avg_rank) selects:
+
+**STRENGTH_BASE_RECENTER = 1.00** (unique winner; Sigma|Delta| = 0.00).
+
+Any value > 1.02 pushes the consistent personas out of the ±0.5 guard, because
+the gate never offsets them — there is nothing for a base inflation to cancel
+against. This is the clean result: the gate ONLY ever throttles the inconsistent
+(sandbagger) and detrained (returner) personas, and is invisible to everyone
+else, so no re-centering is required.
+
+| Constant | Value | Notes |
+|---|---|---|
+| `STRENGTH_VITALITY_FLOOR` | `0.50` | `vmult = FLOOR + (1-FLOOR)*vpct`. Chosen over 0.40 on returner week-1 feel (below) |
+| `STRENGTH_BASE_RECENTER` | `1.00` | global base_xp scale; sweep winner (VPCT_NORMAL = 1.0 -> no recenter needed) |
+| `VITALITY_TAU_UP_DAYS` | `14.0` | EWMA rebuild (live `c_tau_up`) |
+| `VITALITY_TAU_DOWN_DAYS_STRENGTH` | `42.0` | EWMA decay (live `c_tau_down_str`) |
+| `VITALITY_REF_PEAK_HALFLIFE_DAYS` | `21.0` | ref_peak daily decay (live `c_ref_peak_decay`) |
+
+### FLOOR choice (D1 — decided on returner week-1 feel)
+
+Both floors pass acceptance (returner recovers `vmult >= 0.90` by back-week 2;
+sandbagger lands below advanced). FLOOR is therefore decided on the **returner's
+first week back**:
+
+| FLOOR | returner back-wk1 earned vmult | back-wk2 | sandbagger conv vpct |
+|---|---|---|---|
+| 0.40 | 0.40× (60% off) | 0.90× | 0.64 |
+| **0.50 (chosen)** | **0.50× (half)** | **0.92×** | 0.64 |
+
+**0.50** honors the muscle-memory thesis (a comeback is an awakening, not a
+punishment): a returning lifter's single throttled week back earns half rather
+than 60%-off, while the un-farmable property is preserved — a one-off post-layoff
+burst still only earns 0.50×, and (per the WIP science gate) the returner's huge
+`tier_diff_mult` bonus means net week-1 earning still exceeds a consistent
+lifter's. The sandbagger's chronic vpct ≈ 0.64 is unchanged by the floor depth.
+
+### 15-persona panel (`STRENGTH_BASE_RECENTER = 1.00`, `FLOOR = 0.50`)
+
+The 13 existing personas are **byte-identical** to the Phase 29 v2 baseline
+(vpct 1.00 → vmult 1.00, recenter 1.00 → no change). The 2 new personas exercise
+the gate. (15 = 13 panel + sandbagger in-panel + the returner via its harness.)
+
+| Persona | AvgRk | conv vpct | Band | Pass |
+|---|---|---|---|---|
+| Female Beginner | 16.3 | 1.00 | 9-17 | PASS |
+| True Beginner | 15.7 | 1.00 | 14-18 | PASS |
+| Machine Tourist | 21.0 | 1.00 | 11-23 | PASS |
+| Older Lifter | 23.0 | 1.00 | 14-24 | PASS |
+| Weak+Consistent | 24.2 | 1.00 | 17-26 | PASS |
+| Female Intermediate | 21.2 | 1.00 | 17-27 | PASS |
+| Smurf | 18.0 | 1.00 | 13-20 | PASS |
+| Strong+Inconsistent | 27.5 | 1.00 | 24-32 | PASS |
+| Diego (returning) | 27.2 | 1.00 | 24-28 | PASS |
+| **Sandbagger** (new) | **19.7** | **0.64** | 18-30 | PASS |
+| Hypertrophy BB | 30.8 | 1.00 | 22-33 | PASS |
+| Strong Intermediate | 31.2 | 1.00 | 28-38 | PASS |
+| Advanced | 41.3 | 1.00 | 35-45 | PASS |
+| Elite Path C | 52.2 | 1.00 | 50-65 | PASS |
+| **Detrained Returner** (new) | harness | see curve | — | PASS (returner report) |
+
+**Verdict: 14/14 in-panel PASS + returner harness PASS = 15/15.**
+
+Invariants: Sandbagger 19.7 < Advanced 41.3 (a high rank cannot be coasted on —
+chronic low charge throttles earn-rate). Female ordering FBeg < FInt < Diego
+holds.
+
+**Anti-cheese invariant corrected (Phase Vitality-3).** The old check
+`Smurf ≤ TrueBeginner` was **mis-specified** and read a permanent, meaningless
+FAIL: the `smurf` persona logs genuinely *heavier* working weights than the
+beginner (bench 60 vs 40, squat 70 vs 60, …), so it out-ranks the beginner
+**legitimately** (real lifts → real XP) — nothing to do with the fake 1RM. The
+real property we care about is *"faking a 1RM never pays."* The corrected
+invariant runs the **same lifter** with and without the fake session:
+`smurf+fake (18.0) ≤ smurf-honest (18.7) → OK`. The fake 140×1 single replaces
+real working sets and is capped so hard it's a **net XP loss** — verified robust
+even for a *beginner* faking an absurd 220×1 (15.50 < honest 15.67). The
+`smurf_honest` control persona (smurf minus `smurf_session`) backs this assertion
+and is excluded from `PANEL_ORDER`.
+
+### Detrained-returner recovery curve (8wk seed / 8wk layoff / 6wk graded return)
+
+| back-week | earned vmult | post vpct |
+|---|---|---|
+| seed (wks 1-8) | 1.00 | 1.00 (saturated charge) |
+| layoff (wks 9-16) | n/a (zero volume) | 0.39 → 0.00 (decays) |
+| **back wk1** | **0.50** (floor — the comeback dip) | 0.83 |
+| **back wk2** | **0.92** (>= 0.90 — recovered) | 1.00 |
+| back wk3+ | 1.00 (full) | 1.00 |
+
+**Rank never drops during the 8-week layoff** (avg_rank 29.7 held across all 8
+layoff weeks — D6, saga inviolate). `vmult >= 0.90` is recovered by **back-week
+2** (within the 2-4 week target). The graded return (`return_ramp=(2,3)`: 2
+sessions back-wk1, 3 back-wk2, then full) is the honest behavioral model — a
+faithful daily-grid recovery from an instant slam-back-to-full-volume return is
+~1 week, so the ramp is what produces (and what we document as) the gradual
+multi-week curve. Robust across seeds {42,1,7,99} and layoff lengths {4,8,12}.
+
 ## How to reproduce
 
 ```bash
-# Full 13-persona panel
-python tasks/rpg-xp-simulation.py --persona-panel
+# Full persona panel (default; now 14 in-panel personas incl. sandbagger)
+python tasks/rpg-xp-simulation.py
 
-# Regenerate the 4-site oracle fixture
+# Vitality-3 — detrained-returner recovery report (rank-holds + recovery curve)
+python tasks/rpg-xp-simulation.py --returner
+
+# Vitality-3 — VPCT_NORMAL measurement + STRENGTH_BASE_RECENTER sweep
+python tasks/rpg-xp-simulation.py --recenter-sweep
+
+# Regenerate the 4-site oracle fixture (must stay byte-identical until PR 2)
 python test/fixtures/generate_rpg_fixtures.py
 ```
 
-The fixture regen prints `persona_panel PASS: 13/13` on a clean run. CI
-gates on Dart parity against the fixture at 1e-4 absolute via
+The panel prints `Verdict: 14/14 PASS` and `Sandbagger < Advanced: OK`; the
+returner report prints `Rank never drops during layoff: OK` and
+`vmult >= 0.90 recovered by back-week: 2`. CI gates on Dart parity against the
+fixture at 1e-4 absolute via
 `test/unit/features/rpg/domain/{xp_calculator_test,implied_tier_test,phase29_formula_parity_test}.dart`.
+
+**PR 1 parity guarantee:** with the gate's `vmult` and `base_recenter` arguments
+defaulting NEUTRAL (1.0), `test/fixtures/generate_rpg_fixtures.py` regenerates
+`rpg_xp_fixtures.json` **byte-identical** — the Vitality-3 numbers only appear
+when `simulate_persona` passes the real per-bp values. PR 2 regenerates the
+fixture WITH the gate as part of the atomic 4-site adoption.
 
 ## Future tuning
 

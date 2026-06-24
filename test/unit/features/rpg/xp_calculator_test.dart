@@ -329,6 +329,9 @@ void main() {
           'frequency_mult',
           'implied_tier',
           'near_failure',
+          // Phase Vitality-3 — the strength conditioning gate factor; present
+          // even when neutral (1.0) so the payload shape stays stable.
+          'vitality_mult',
           'set_xp',
         });
         expect(json['set_xp'], r.setXp);
@@ -341,6 +344,9 @@ void main() {
         expect(json['frequency_mult'], 1.0);
         expect(json['implied_tier'], 0.0);
         expect(json['near_failure'], false);
+        // Phase Vitality-3 neutral default — the gate is a no-op unless the
+        // caller passes a per-bp vitalityMult.
+        expect(json['vitality_mult'], 1.0);
       },
     );
 
@@ -1091,6 +1097,252 @@ void main() {
             'Phase 29 v2 parity failed for $failed/94 cases. '
             'First failure: $firstFailureMsg',
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase Vitality-3 — strength conditioning XP-gate
+  // ---------------------------------------------------------------------------
+  group('vitalityMult — strength conditioning gate pure core', () {
+    const eps = 1e-4;
+
+    test('floor constant is 0.50 (the gentler comeback floor, D1)', () {
+      expect(XpCalculator.strengthVitalityFloor, 0.50);
+    });
+
+    test('strength_vitality_mult fixture rows match within $eps', () {
+      final cases = fixtures['strength_vitality_mult'] as List<dynamic>;
+      expect(cases, hasLength(7), reason: 'expected 7 gate-core rows');
+      for (final raw in cases) {
+        final c = raw as Map<String, dynamic>;
+        final inputs = c['inputs'] as Map<String, dynamic>;
+        final vmult = XpCalculator.vitalityMult(
+          ewma: (inputs['vitality_ewma'] as num).toDouble(),
+          refPeak: (inputs['vitality_ref_peak'] as num).toDouble(),
+        );
+        expect(
+          vmult,
+          closeTo((c['vitality_mult'] as num).toDouble(), eps),
+          reason: 'vitality_mult mismatch for ${c['name']}',
+        );
+      }
+    });
+
+    test('refPeak <= 0 is a no-op (vmult 1.0) — un-conditioned prior', () {
+      expect(XpCalculator.vitalityMult(ewma: 0.0, refPeak: 0.0), 1.0);
+      expect(XpCalculator.vitalityMult(ewma: 500.0, refPeak: -1.0), 1.0);
+    });
+
+    test(
+      'fully lapsed (vpct 0) earns exactly the floor; full charge earns 1.0',
+      () {
+        expect(
+          XpCalculator.vitalityMult(ewma: 0.0, refPeak: 1000.0),
+          closeTo(0.50, eps),
+        );
+        expect(
+          XpCalculator.vitalityMult(ewma: 1000.0, refPeak: 1000.0),
+          closeTo(1.0, eps),
+        );
+        // ewma above refPeak clamps to vpct 1.0 → vmult 1.0 (defensive).
+        expect(
+          XpCalculator.vitalityMult(ewma: 1500.0, refPeak: 1000.0),
+          closeTo(1.0, eps),
+        );
+      },
+    );
+  });
+
+  group('computeSetXp — Phase Vitality-3 gated per-bp parity (set_xp_gated)', () {
+    const eps = 1e-4;
+
+    test('every set_xp_gated case scales EACH body part by ITS OWN vmult', () {
+      final cases = fixtures['set_xp_gated'] as List<dynamic>;
+      expect(cases, hasLength(3), reason: 'expected 3 multi-bp gated rows');
+
+      for (final raw in cases) {
+        final c = raw as Map<String, dynamic>;
+        final inputs = c['inputs'] as Map<String, dynamic>;
+        final name = c['name'] as String;
+
+        final exercise = inputs['exercise'] as String;
+        final weight = (inputs['weight_kg'] as num).toDouble();
+        final reps = inputs['reps'] as int;
+        final peak = (inputs['peak_load'] as num).toDouble();
+        final diff = (inputs['difficulty_mult'] as num).toDouble();
+        final bw = (inputs['bodyweight_kg'] as num).toDouble();
+        final female = inputs['gender_female'] as bool;
+        final dominantPart = inputs['dominant_part'] as String;
+        final ranks = (inputs['current_ranks'] as Map<String, dynamic>).map(
+          (k, v) => MapEntry(k, (v as num).toInt()),
+        );
+        final currentRank = ranks[dominantPart]?.toDouble() ?? 1.0;
+
+        final tier = impliedTier(
+          exercise: exercise,
+          weightKg: weight,
+          reps: reps,
+          bodyweightKg: bw,
+          gender: female ? LiftGender.female : LiftGender.male,
+        );
+
+        final attribution = (inputs['attribution'] as Map<String, dynamic>).map(
+          (k, v) => MapEntry(k, (v as num).toDouble()),
+        );
+        final ewmaByBp = inputs['vitality_ewma_by_bp'] as Map<String, dynamic>;
+        final refPeakByBp =
+            inputs['vitality_ref_peak_by_bp'] as Map<String, dynamic>;
+        final vmultByBp = inputs['vmult_by_bp'] as Map<String, dynamic>;
+        final awardedPerBp = (c['awarded_per_bp'] as Map<String, dynamic>).map(
+          (k, v) => MapEntry(k, (v as num).toDouble()),
+        );
+        final ungatedPerBp = (c['ungated_per_bp'] as Map<String, dynamic>).map(
+          (k, v) => MapEntry(k, (v as num).toDouble()),
+        );
+
+        for (final entry in attribution.entries) {
+          final bp = entry.key;
+          final share = entry.value;
+
+          // The per-bp conditioning → the per-bp gate factor. This is the
+          // caller's job in the live path: derive THIS body part's vmult and
+          // pass it for THIS body part's fan-out call.
+          final vmult = XpCalculator.vitalityMult(
+            ewma: (ewmaByBp[bp] as num).toDouble(),
+            refPeak: (refPeakByBp[bp] as num).toDouble(),
+          );
+          expect(
+            vmult,
+            closeTo((vmultByBp[bp] as num).toDouble(), eps),
+            reason: '$name/$bp: per-bp vmult mismatch',
+          );
+
+          final gated = XpCalculator.computeSetXp(
+            weightKg: weight,
+            reps: reps,
+            peakLoad: peak,
+            sessionVolumeForBodyPart: 0.0,
+            weeklyVolumeForBodyPart: 0.0,
+            difficultyMult: diff,
+            impliedTier: tier,
+            currentRank: currentRank,
+            vitalityMult: vmult,
+          );
+          final gatedAward = gated.setXp * share;
+          expect(
+            gatedAward,
+            closeTo(awardedPerBp[bp]!, eps),
+            reason: '$name/$bp: gated award mismatch (per-bp keying)',
+          );
+
+          // The ungated path (vitalityMult default 1.0) must reproduce the
+          // ungated oracle — proving the gate is the ONLY difference and that
+          // gated == ungated × this bp's vmult.
+          final ungated = XpCalculator.computeSetXp(
+            weightKg: weight,
+            reps: reps,
+            peakLoad: peak,
+            sessionVolumeForBodyPart: 0.0,
+            weeklyVolumeForBodyPart: 0.0,
+            difficultyMult: diff,
+            impliedTier: tier,
+            currentRank: currentRank,
+          );
+          final ungatedAward = ungated.setXp * share;
+          expect(
+            ungatedAward,
+            closeTo(ungatedPerBp[bp]!, eps),
+            reason: '$name/$bp: ungated award mismatch',
+          );
+          expect(
+            gatedAward,
+            closeTo(ungatedAward * vmult, eps),
+            reason: '$name/$bp: gated must equal ungated × per-bp vmult',
+          );
+        }
+      }
+    });
+
+    test('the dominant body part is NOT the gate key — a lapsed dominant bp '
+        'throttles only itself; charged minor bps earn ungated XP', () {
+      // squat: legs (DOMINANT, 0.80 share) lapsed → vmult 0.50; back/core
+      // (minor) fully charged → vmult 1.0. A regression that keyed the gate by
+      // the dominant body part (one shared scalar = legs' 0.50) would also halve
+      // back + core — this re-derives each award and proves it does NOT.
+      final cases = fixtures['set_xp_gated'] as List<dynamic>;
+      final squat = cases.cast<Map<String, dynamic>>().firstWhere(
+        (c) => c['name'] == 'squat_dominant_lapsed_minor_charged',
+      );
+      final inputs = squat['inputs'] as Map<String, dynamic>;
+
+      final weight = (inputs['weight_kg'] as num).toDouble();
+      final reps = inputs['reps'] as int;
+      final peak = (inputs['peak_load'] as num).toDouble();
+      final diff = (inputs['difficulty_mult'] as num).toDouble();
+      final bw = (inputs['bodyweight_kg'] as num).toDouble();
+      final dominantPart = inputs['dominant_part'] as String;
+      final ranks = (inputs['current_ranks'] as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k, (v as num).toInt()),
+      );
+      final currentRank = ranks[dominantPart]?.toDouble() ?? 1.0;
+      final tier = impliedTier(
+        exercise: inputs['exercise'] as String,
+        weightKg: weight,
+        reps: reps,
+        bodyweightKg: bw,
+        gender: (inputs['gender_female'] as bool)
+            ? LiftGender.female
+            : LiftGender.male,
+      );
+
+      final attribution = (inputs['attribution'] as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k, (v as num).toDouble()),
+      );
+      final ewmaByBp = inputs['vitality_ewma_by_bp'] as Map<String, dynamic>;
+      final refPeakByBp =
+          inputs['vitality_ref_peak_by_bp'] as Map<String, dynamic>;
+      final awardedPerBp = (squat['awarded_per_bp'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, (v as num).toDouble()));
+      final ungatedPerBp = (squat['ungated_per_bp'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, (v as num).toDouble()));
+
+      double gatedAwardFor(String bp) {
+        final vmult = XpCalculator.vitalityMult(
+          ewma: (ewmaByBp[bp] as num).toDouble(),
+          refPeak: (refPeakByBp[bp] as num).toDouble(),
+        );
+        final comps = XpCalculator.computeSetXp(
+          weightKg: weight,
+          reps: reps,
+          peakLoad: peak,
+          sessionVolumeForBodyPart: 0.0,
+          weeklyVolumeForBodyPart: 0.0,
+          difficultyMult: diff,
+          impliedTier: tier,
+          currentRank: currentRank,
+          vitalityMult: vmult,
+        );
+        return comps.setXp * attribution[bp]!;
+      }
+
+      // DOMINANT legs (lapsed) earns ungated × 0.50 — strictly throttled.
+      final legsGated = gatedAwardFor('legs');
+      expect(legsGated, closeTo(awardedPerBp['legs']!, eps));
+      expect(legsGated, closeTo(ungatedPerBp['legs']! * 0.50, eps));
+      expect(
+        legsGated,
+        lessThan(ungatedPerBp['legs']!),
+        reason: 'the lapsed dominant bp must earn strictly less than ungated',
+      );
+
+      // MINOR back + core (charged) earn the FULL ungated award — the dominant
+      // legs throttle did NOT bleed onto them (per-bp keying, not a scalar).
+      final backGated = gatedAwardFor('back');
+      final coreGated = gatedAwardFor('core');
+      expect(backGated, closeTo(awardedPerBp['back']!, eps));
+      expect(backGated, closeTo(ungatedPerBp['back']!, eps));
+      expect(coreGated, closeTo(awardedPerBp['core']!, eps));
+      expect(coreGated, closeTo(ungatedPerBp['core']!, eps));
     });
   });
 }

@@ -97,6 +97,15 @@ class XpCalculator {
   /// Volume floor — bodyweight beginners never produce zero base XP.
   static const double volumeLoadFloor = 1.0;
 
+  /// Phase Vitality-3 — floor of the strength conditioning XP-gate. A fully
+  /// lapsed body part (vpct = 0) still earns `FLOOR ×` its set XP so a returning
+  /// lifter isn't stuck near 0; full conditioning (vpct = 1) earns `1.0 ×`.
+  /// Mirrors the sim's `STRENGTH_VITALITY_FLOOR`
+  /// (`tasks/rpg-xp-simulation.py`) and the SQL `rpg_strength_vitality_mult`
+  /// (migration 00084). Deeper than the cardio floor (0.40) — the gentler
+  /// comeback floor chosen on returner week-1 feel (decision D1).
+  static const double strengthVitalityFloor = 0.50;
+
   // ---- Phase 29 v2 constants -----------------------------------------------
 
   /// Phase 29.6 Path C — see [implied_tier.kEBonus].
@@ -261,6 +270,37 @@ class XpCalculator {
     return kFrequencyMultTable[clamped - 1];
   }
 
+  // ---- Phase Vitality-3 — strength conditioning XP-gate ---------------------
+
+  /// Phase Vitality-3 — per-body-part strength conditioning multiplier.
+  ///
+  /// `vmult = FLOOR + (1 - FLOOR) × clamp(ewma / refPeak, 0, 1)` with
+  /// `FLOOR = [strengthVitalityFloor]` (0.50). [refPeak] ≤ 0 (a never-loaded /
+  /// day-0 body part) → 1.0 (the un-conditioned prior: the gate is a no-op on a
+  /// body part the user has never loaded). The denominator is the DECAYING
+  /// reference peak (`vitality_ref_peak`, migration 00083) — its decay is what
+  /// lets a detrained returner's multiplier recover (a frozen all-time peak
+  /// never could).
+  ///
+  /// Mirrors the sim's `strength_vpct` + `strength_vitality_mult` and the SQL
+  /// `rpg_strength_vitality_mult` (migration 00084). Computed ONCE per save
+  /// from PRE-session conditioning (non-circular: the live recompute runs
+  /// AFTER the XP writes), keyed by attribution body part.
+  static double vitalityMult({
+    required double ewma,
+    required double refPeak,
+    double floor = strengthVitalityFloor,
+  }) {
+    if (refPeak <= 0) return 1.0;
+    final raw = ewma / refPeak;
+    final vpct = raw < 0.0
+        ? 0.0
+        : raw > 1.0
+        ? 1.0
+        : raw;
+    return floor + (1.0 - floor) * vpct;
+  }
+
   // ---- end-to-end ----------------------------------------------------------
 
   /// Phase 29 v2 + 29.6 per-set XP. Returns the decomposed [SetXpComponents]
@@ -287,6 +327,14 @@ class XpCalculator {
     int sessionsThisWeekForBodyPart = 1,
     bool nearFailure = false,
     int? targetReps,
+    // Phase Vitality-3 — per-body-part strength conditioning gate (12th/final
+    // factor). Default 1.0 (un-gated) so non-vitality callers (the legacy
+    // fixture parity, offline backfill) produce byte-identical XP. The live SQL
+    // save path passes the per-bp value from [vitalityMult]; the body-part
+    // fan-out caller invokes computeSetXp once per attribution body part with
+    // THAT body part's multiplier (the gate is keyed by body part, not the
+    // dominant part).
+    double vitalityMult = 1.0,
   }) {
     final vl = volumeLoad(weightKg: weightKg, reps: reps);
     final base = baseXp(vl);
@@ -314,6 +362,7 @@ class XpCalculator {
       priorReps: priorBandReps,
     );
     final fMult = frequencyMult(sessionsThisWeekForBodyPart);
+    // Phase Vitality-3 — the conditioning gate is the 12th/final factor.
     final setXp =
         base *
         intensity *
@@ -324,7 +373,8 @@ class XpCalculator {
         tdMult *
         aspMult *
         oMult *
-        fMult;
+        fMult *
+        vitalityMult;
     return SetXpComponents(
       volumeLoad: vl,
       baseXp: base,
@@ -339,6 +389,7 @@ class XpCalculator {
       frequencyMult: fMult,
       impliedTier: impliedTier,
       nearFailureResolved: nfResolved,
+      vitalityMult: vitalityMult,
       setXp: setXp,
     );
   }
@@ -365,6 +416,7 @@ class SetXpComponents {
     required this.frequencyMult,
     required this.impliedTier,
     required this.nearFailureResolved,
+    this.vitalityMult = 1.0,
     required this.setXp,
   });
 
@@ -395,7 +447,13 @@ class SetXpComponents {
   /// near-failure (either explicit or inferred from target_reps).
   final bool nearFailureResolved;
 
+  /// Phase Vitality-3 — the per-body-part strength conditioning gate factor
+  /// applied to this set (`FLOOR + (1 - FLOOR) × vpct`). 1.0 when un-gated
+  /// (legacy callers / a fresh or fully-conditioned body part).
+  final double vitalityMult;
+
   /// The total XP for this set, **before** distribution to body parts.
+  /// Includes [vitalityMult] as the final factor.
   final double setXp;
 
   /// Serialized for `xp_events.payload`. Mirrors the field set the SQL
@@ -415,6 +473,7 @@ class SetXpComponents {
     'frequency_mult': frequencyMult,
     'implied_tier': impliedTier,
     'near_failure': nearFailureResolved,
+    'vitality_mult': vitalityMult,
     'set_xp': setXp,
   };
 }
