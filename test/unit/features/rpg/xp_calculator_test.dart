@@ -1264,18 +1264,85 @@ void main() {
     });
 
     test('the dominant body part is NOT the gate key — a lapsed dominant bp '
-        'with charged minor bps gates only the dominant', () {
-      // squat: legs (dominant, 0.80) lapsed → 0.50; back/core (minor) full → 1.0.
+        'throttles only itself; charged minor bps earn ungated XP', () {
+      // squat: legs (DOMINANT, 0.80 share) lapsed → vmult 0.50; back/core
+      // (minor) fully charged → vmult 1.0. A regression that keyed the gate by
+      // the dominant body part (one shared scalar = legs' 0.50) would also halve
+      // back + core — this re-derives each award and proves it does NOT.
       final cases = fixtures['set_xp_gated'] as List<dynamic>;
       final squat = cases.cast<Map<String, dynamic>>().firstWhere(
         (c) => c['name'] == 'squat_dominant_lapsed_minor_charged',
       );
-      final vmultByBp =
-          (squat['inputs'] as Map<String, dynamic>)['vmult_by_bp']
-              as Map<String, dynamic>;
-      expect((vmultByBp['legs'] as num).toDouble(), closeTo(0.50, eps));
-      expect((vmultByBp['core'] as num).toDouble(), closeTo(1.0, eps));
-      expect((vmultByBp['back'] as num).toDouble(), closeTo(1.0, eps));
+      final inputs = squat['inputs'] as Map<String, dynamic>;
+
+      final weight = (inputs['weight_kg'] as num).toDouble();
+      final reps = inputs['reps'] as int;
+      final peak = (inputs['peak_load'] as num).toDouble();
+      final diff = (inputs['difficulty_mult'] as num).toDouble();
+      final bw = (inputs['bodyweight_kg'] as num).toDouble();
+      final dominantPart = inputs['dominant_part'] as String;
+      final ranks = (inputs['current_ranks'] as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k, (v as num).toInt()),
+      );
+      final currentRank = ranks[dominantPart]?.toDouble() ?? 1.0;
+      final tier = impliedTier(
+        exercise: inputs['exercise'] as String,
+        weightKg: weight,
+        reps: reps,
+        bodyweightKg: bw,
+        gender: (inputs['gender_female'] as bool)
+            ? LiftGender.female
+            : LiftGender.male,
+      );
+
+      final attribution = (inputs['attribution'] as Map<String, dynamic>).map(
+        (k, v) => MapEntry(k, (v as num).toDouble()),
+      );
+      final ewmaByBp = inputs['vitality_ewma_by_bp'] as Map<String, dynamic>;
+      final refPeakByBp =
+          inputs['vitality_ref_peak_by_bp'] as Map<String, dynamic>;
+      final awardedPerBp = (squat['awarded_per_bp'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, (v as num).toDouble()));
+      final ungatedPerBp = (squat['ungated_per_bp'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, (v as num).toDouble()));
+
+      double gatedAwardFor(String bp) {
+        final vmult = XpCalculator.vitalityMult(
+          ewma: (ewmaByBp[bp] as num).toDouble(),
+          refPeak: (refPeakByBp[bp] as num).toDouble(),
+        );
+        final comps = XpCalculator.computeSetXp(
+          weightKg: weight,
+          reps: reps,
+          peakLoad: peak,
+          sessionVolumeForBodyPart: 0.0,
+          weeklyVolumeForBodyPart: 0.0,
+          difficultyMult: diff,
+          impliedTier: tier,
+          currentRank: currentRank,
+          vitalityMult: vmult,
+        );
+        return comps.setXp * attribution[bp]!;
+      }
+
+      // DOMINANT legs (lapsed) earns ungated × 0.50 — strictly throttled.
+      final legsGated = gatedAwardFor('legs');
+      expect(legsGated, closeTo(awardedPerBp['legs']!, eps));
+      expect(legsGated, closeTo(ungatedPerBp['legs']! * 0.50, eps));
+      expect(
+        legsGated,
+        lessThan(ungatedPerBp['legs']!),
+        reason: 'the lapsed dominant bp must earn strictly less than ungated',
+      );
+
+      // MINOR back + core (charged) earn the FULL ungated award — the dominant
+      // legs throttle did NOT bleed onto them (per-bp keying, not a scalar).
+      final backGated = gatedAwardFor('back');
+      final coreGated = gatedAwardFor('core');
+      expect(backGated, closeTo(awardedPerBp['back']!, eps));
+      expect(backGated, closeTo(ungatedPerBp['back']!, eps));
+      expect(coreGated, closeTo(awardedPerBp['core']!, eps));
+      expect(coreGated, closeTo(ungatedPerBp['core']!, eps));
     });
   });
 }
