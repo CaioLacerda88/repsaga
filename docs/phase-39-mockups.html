@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 39 — Feel-Good / Retention mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#0D0319; --surface:#1A0F2E; --surface2:#241640;
+    --hotViolet:#B36DFF; --primaryViolet:#6A2FA8; --heroGold:#FFB800;
+    --cream:#EEE7FA; --dim:#9C8DB8; --dimAA:#CFC5E3; --hair:rgba(179,109,255,0.14);
+    --chest:#F472B6; --back:#38BDF8; --legs:#62C46D; --shoulders:#FFB84D;
+    --arms:#FF6B6B; --core:#9C8DB8; --cardio:#22D3EE;
+    --num:'Rajdhani',sans-serif; --label:'Barlow Semi Condensed',sans-serif; --body:'Barlow',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05010c;color:var(--cream);font-family:var(--body);padding:32px 18px 90px;-webkit-font-smoothing:antialiased}
+  h1{font-family:var(--num);font-weight:700;font-size:23px;letter-spacing:.02em;margin-bottom:6px}
+  h2{font-family:var(--num);font-weight:600;letter-spacing:.16em;text-transform:uppercase;font-size:13px;color:var(--hotViolet);margin:42px 0 4px;border-top:1px solid var(--hair);padding-top:24px}
+  .sub{color:var(--dim);font-size:13px;max-width:780px;line-height:1.5;margin-bottom:8px}
+  .grid{display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start;margin-top:20px}
+  .col-note{font-family:var(--num);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--hotViolet);margin:0 0 10px}
+  .tag{display:inline-block;font-family:var(--num);font-weight:700;font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:2px 7px;border-radius:3px;margin-left:8px;vertical-align:middle}
+  .tag.rec{background:rgba(98,196,109,.18);color:var(--legs)}
+  .tag.ref{background:rgba(156,141,184,.18);color:var(--dim)}
+  .caption{color:var(--dim);font-size:12px;line-height:1.45;max-width:300px;margin-top:12px}
+  .caption b{color:var(--dimAA);font-weight:600}
+
+  /* ===== share card frame (9:16) ===== */
+  .card{width:300px;height:533px;border-radius:20px;overflow:hidden;position:relative;
+    box-shadow:0 18px 48px rgba(0,0,0,.55);border:1px solid var(--hair)}
+  .wm{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-family:var(--num);
+    font-weight:700;letter-spacing:.28em;font-size:10px;color:var(--dim);text-transform:uppercase;z-index:5}
+
+  /* charge ring primitive */
+  .ring{border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
+  .ring i{border-radius:50%;display:block}
+  .ring .dot{border-radius:50%;position:relative;z-index:1}
+
+  /* ===== A — Character Card ===== */
+  .cc{background:radial-gradient(120% 80% at 50% 0%, #241640 0%, #0D0319 70%)}
+  .cc .inner{position:absolute;inset:0;padding:30px 24px;display:flex;flex-direction:column;align-items:center}
+  .cc .halo{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;margin-top:6px;
+    background:radial-gradient(circle, #241640 55%, transparent 56%);
+    box-shadow:0 0 0 2px rgba(255,184,0,.55), 0 0 26px -2px rgba(255,184,0,.5)}
+  .cc .halo .av{width:74px;height:74px;border-radius:50%;background:linear-gradient(160deg,#3a2566,#1a0f2e);
+    display:grid;place-items:center;font-family:var(--num);font-weight:700;font-size:30px;color:var(--cream)}
+  .cc .cls{font-family:var(--num);font-weight:700;letter-spacing:.16em;font-size:19px;margin-top:14px;color:var(--cream)}
+  .cc .ttl{font-family:var(--num);font-weight:600;letter-spacing:.18em;font-size:10px;text-transform:uppercase;color:var(--heroGold);margin-top:3px}
+  .cc .hero{margin-top:26px;text-align:center}
+  .cc .hero .ey{font-family:var(--num);font-weight:600;letter-spacing:.18em;font-size:10px;text-transform:uppercase;color:var(--legs)}
+  .cc .hero .big{font-family:var(--num);font-weight:700;font-size:54px;line-height:1;color:var(--heroGold);letter-spacing:.01em;margin-top:4px}
+  .cc .hero .ex{font-family:var(--label);font-weight:600;font-size:15px;letter-spacing:.04em;color:var(--cream);text-transform:uppercase;margin-top:4px}
+  .cc .rings{display:flex;gap:13px;margin-top:auto;margin-bottom:8px;align-items:flex-end}
+  .cc .rcell{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .cc .rcell span{font-family:var(--num);font-weight:600;font-size:8px;letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
+  .cc .foot{font-family:var(--num);font-weight:600;font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin-bottom:26px}
+
+  /* ===== B — PR-first photo ===== */
+  .pf{background:linear-gradient(150deg,#2b2330 0%,#15101c 55%,#0c0712 100%)}
+  .pf .photo{position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(13,3,25,0) 38%,rgba(13,3,25,.55) 70%,rgba(13,3,25,.96) 100%),
+              repeating-linear-gradient(115deg,rgba(255,255,255,.018) 0 14px,transparent 14px 28px)}
+  .pf .phint{position:absolute;top:18px;left:0;right:0;text-align:center;font-family:var(--body);font-size:11px;color:rgba(238,231,250,.28);letter-spacing:.1em}
+  .pf .blk{position:absolute;left:22px;right:22px;bottom:46px}
+  .pf .ey{font-family:var(--num);font-weight:600;letter-spacing:.2em;font-size:10px;text-transform:uppercase;color:var(--dimAA)}
+  .pf .big{font-family:var(--num);font-weight:700;font-size:58px;line-height:.95;color:var(--cream);letter-spacing:.01em;margin-top:4px;text-shadow:0 2px 18px rgba(0,0,0,.6)}
+  .pf .ex{font-family:var(--label);font-weight:600;font-size:15px;letter-spacing:.04em;color:var(--heroGold);text-transform:uppercase;margin-top:2px}
+  .pf .rail{position:absolute;left:0;right:0;bottom:26px;display:flex;height:5px}
+  .pf .rail i{flex:1}
+
+  /* ===== C — current Achievement Frame (reference) ===== */
+  .af{background:linear-gradient(150deg,#2b2330,#15101c)}
+  .af .photo{position:absolute;left:0;right:0;top:13%;bottom:22%;
+    background:repeating-linear-gradient(115deg,rgba(255,255,255,.02) 0 14px,transparent 14px 28px)}
+  .af .collar{position:absolute;left:0;right:0;background:rgba(13,3,25,.92);z-index:2}
+  .af .collar.top{top:0;height:13%;clip-path:polygon(0 0,100% 0,100% 70%,0 100%);display:grid;place-items:center}
+  .af .collar.bot{bottom:0;height:22%;clip-path:polygon(0 30%,100% 0,100% 100%,0 100%);padding:22px 22px 0;text-align:center}
+  .af .collar.top .ek{font-family:var(--num);font-weight:600;letter-spacing:.2em;font-size:10px;color:var(--dim);text-transform:uppercase}
+  .af .sb{position:absolute;top:13%;bottom:22%;width:4px;z-index:3}
+  .af .sb.l{left:0}.af .sb.r{right:0;background:var(--hotViolet)!important}
+  .af .xp{font-family:var(--num);font-weight:700;font-size:38px;color:var(--cream);line-height:1}
+  .af .pr{font-family:var(--label);font-weight:600;font-size:12px;color:var(--heroGold);margin-top:2px}
+  .af .rk{font-family:var(--num);font-weight:600;font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-top:3px}
+
+  /* ===== Saga charge-ring row ===== */
+  .saga{width:330px;background:var(--abyss);border-radius:22px;padding:16px 8px;border:1px solid var(--hair)}
+  .srow{display:flex;align-items:center;gap:13px;padding:11px 12px;border-radius:10px}
+  .srow .lbl{font-family:var(--label);font-weight:600;font-size:15px;flex:1}
+  .srow .rk{font-family:var(--num);font-weight:600;font-size:11px;letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
+  .srow .bar{height:4px;background:var(--hair);border-radius:3px;margin-top:6px;overflow:hidden;flex:1}
+  .srow .bar i{display:block;height:100%}
+  .srow .mid{flex:1}
+  .pct{font-family:var(--num);font-weight:600;font-size:10px;color:var(--dim);width:34px;text-align:right}
+</style>
+</head>
+<body>
+  <h1>Phase 39 · Feel-Good / Retention — Round 1</h1>
+  <p class="sub">Two things to react to: the <b style="color:var(--dimAA)">share artifact</b> proposals (A/B vs the current card C),
+    and the <b style="color:var(--dimAA)">Charge Ring</b> on the Saga row. All descriptive / past-tense / fill-only. Mocked at
+    9:16 (Story format). Hues = body-part identity tokens.</p>
+
+  <h2>Share artifact — proposals</h2>
+  <p class="sub">The insight: the app's unmistakable asset — the six-hue conditioning identity — is <b style="color:var(--dimAA)">absent</b>
+    from today's card (C), which brags about XP (illegible to a non-player). A/B put a real flex first.</p>
+
+  <div class="grid">
+
+    <!-- A — Character Card -->
+    <div>
+      <div class="col-note">A · Character Card<span class="tag rec">specialists' rec</span></div>
+      <div class="card cc">
+        <div class="inner">
+          <div class="halo"><div class="av">C</div></div>
+          <div class="cls">BULWARK</div>
+          <div class="ttl">◆ Passada de Ferro</div>
+          <div class="hero">
+            <div class="ey">▲ Novo recorde</div>
+            <div class="big">130<span style="font-size:26px"> kg</span></div>
+            <div class="ex">Supino · 3 reps</div>
+          </div>
+          <div class="rings">
+            <div class="rcell"><div class="ring" style="--h:var(--chest)" data-pct="21"></div><span>Pei</span></div>
+            <div class="rcell"><div class="ring" style="--h:var(--back)" data-pct="64"></div><span>Cos</span></div>
+            <div class="rcell"><div class="ring" style="--h:var(--legs)" data-pct="100"></div><span>Per</span></div>
+            <div class="rcell"><div class="ring" style="--h:var(--shoulders)" data-pct="19"></div><span>Omb</span></div>
+            <div class="rcell"><div class="ring" style="--h:var(--arms)" data-pct="88"></div><span>Bra</span></div>
+            <div class="rcell"><div class="ring" style="--h:var(--core)" data-pct="47"></div><span>Core</span></div>
+          </div>
+          <div class="foot">Sessão #47 · +618 XP</div>
+        </div>
+        <div class="wm">RepSaga</div>
+      </div>
+      <p class="caption"><b>The character-sheet trophy.</b> Hero = the <b>PR</b> (universally legible), the six charge rings are the
+        RepSaga signature, XP demoted to a footer eyebrow. No photo needed — consistently composed, unmistakable. No-PR session →
+        hero swaps to the rank-up ("RANK 19 · Costas").</p>
+    </div>
+
+    <!-- B — PR-first photo -->
+    <div>
+      <div class="col-note">B · PR-first photo (opt-in)</div>
+      <div class="card pf">
+        <div class="photo"></div>
+        <div class="phint">[ user's gym photo — full bleed ]</div>
+        <div class="blk">
+          <div class="ey">▲ Novo recorde · Supino</div>
+          <div class="big">130 kg<span style="font-size:24px"> × 3</span></div>
+        </div>
+        <div class="rail">
+          <i style="background:var(--chest)"></i><i style="background:var(--back)"></i><i style="background:var(--legs)"></i>
+          <i style="background:var(--shoulders)"></i><i style="background:var(--arms)"></i><i style="background:var(--core)"></i><i style="background:var(--cardio)"></i>
+        </div>
+        <div class="wm" style="bottom:8px">RepSaga</div>
+      </div>
+      <p class="caption"><b>Photo is the hero, not boxed.</b> Full-bleed, one big PR line bottom-anchored, a slim seven-hue rune
+        rail = "this is a RepSaga card." Top collar gone, four-line stack gone. For users who want to show the lift/physique.</p>
+    </div>
+
+    <!-- C — current -->
+    <div>
+      <div class="col-note">C · Current Achievement Frame<span class="tag ref">shipped — for comparison</span></div>
+      <div class="card af">
+        <div class="photo"></div>
+        <div class="phint" style="top:7%;color:rgba(238,231,250,.25)">[ photo — boxed to middle 65% ]</div>
+        <div class="sb l" style="background:var(--chest)"></div><div class="sb r"></div>
+        <div class="collar top"><div class="ek">RepSaga · Sessão #47</div></div>
+        <div class="collar bot">
+          <div class="xp">+618 XP</div>
+          <div class="pr">95 kg × 5 · Supino</div>
+          <div class="rk">Costas · Rank 19 · Bulwark</div>
+        </div>
+      </div>
+      <p class="caption"><b>Why it falls flat:</b> XP (illegible) is the hero; the PR is a small line; two heavy collars eat ~35% of
+        the photo; the six-hue conditioning identity is <b>absent</b>. Reads like a fitness receipt, not a character export.</p>
+    </div>
+
+  </div>
+
+  <h2>Charge Ring — Saga readiness HUD</h2>
+  <p class="sub">Promote each Saga row's pulse dot into a small <b style="color:var(--dimAA)">radial charge gauge</b> (hue arc filled to
+    charge%). Glanceable "what shape am I in." <b style="color:var(--dimAA)">Visual parity</b> — every part is a hue gauge, NO red/green
+    alarm (that would imply "train the low ones" → prescriptive). Fills once on screen-entry, then static.</p>
+  <div class="grid">
+    <div>
+      <div class="col-note">Saga rows — with charge rings</div>
+      <div class="saga">
+        <div class="srow"><div class="ring big" style="--h:var(--chest)" data-pct="21" data-big></div><div class="mid"><div class="lbl" style="color:var(--chest)">Peito</div><div class="bar"><i style="width:30%;background:var(--chest)"></i></div></div><div class="rk">Rk 14</div><div class="pct">21%</div></div>
+        <div class="srow"><div class="ring big" style="--h:var(--back)" data-pct="64" data-big></div><div class="mid"><div class="lbl" style="color:var(--back)">Costas</div><div class="bar"><i style="width:55%;background:var(--back)"></i></div></div><div class="rk">Rk 19</div><div class="pct">64%</div></div>
+        <div class="srow"><div class="ring big" style="--h:var(--legs)" data-pct="100" data-big></div><div class="mid"><div class="lbl" style="color:var(--legs)">Pernas</div><div class="bar"><i style="width:80%;background:var(--legs)"></i></div></div><div class="rk">Rk 22</div><div class="pct">MÁX</div></div>
+        <div class="srow"><div class="ring big" style="--h:var(--shoulders)" data-pct="19" data-big></div><div class="mid"><div class="lbl" style="color:var(--shoulders)">Ombros</div><div class="bar"><i style="width:22%;background:var(--shoulders)"></i></div></div><div class="rk">Rk 12</div><div class="pct">19%</div></div>
+        <div class="srow"><div class="ring big" style="--h:var(--arms)" data-pct="88" data-big></div><div class="mid"><div class="lbl" style="color:var(--arms)">Braços</div><div class="bar"><i style="width:70%;background:var(--arms)"></i></div></div><div class="rk">Rk 17</div><div class="pct">88%</div></div>
+        <div class="srow"><div class="ring big" style="--h:var(--cardio)" data-pct="100" data-big></div><div class="mid"><div class="lbl" style="color:var(--cardio)">Cardio</div><div class="bar"><i style="width:90%;background:var(--cardio)"></i></div></div><div class="rk">Rk 9</div><div class="pct">MÁX</div></div>
+      </div>
+      <p class="caption">Six identity-hue gauges reading you in = an RPG character-sheet glance, not a settings list. The ring is the
+        <b>resting-state</b> expression of the same charge the post-session rune shows as a <b>moment-of-change</b>. The % is shown
+        here only to read the mock — in-app the ring IS the readout (no number).</p>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:34px"><b style="color:var(--dimAA)">React to:</b> which share direction (A / B / both) · the
+    Character-Card composition (hero = PR vs rank-up; rings 6 vs 7-incl-cardio) · the Charge Ring (ring vs the current dot; with/without %).
+    Then I'll iterate + add the <b style="color:var(--dimAA)">comeback beat</b>, <b style="color:var(--dimAA)">Rest Validation</b>, and
+    <b style="color:var(--dimAA)">history milestone markers</b> in round 2.</p>
+
+<script>
+  // render charge rings via conic-gradient
+  document.querySelectorAll('.ring').forEach(r=>{
+    const pct=+r.dataset.pct, big=r.hasAttribute('data-big');
+    const sz=big?26:20, hole=big?17:13, dot=big?7:6;
+    const hue=getComputedStyle(r).getPropertyValue('--h').trim();
+    r.style.width=sz+'px'; r.style.height=sz+'px';
+    r.style.background=`conic-gradient(${hue} 0% ${pct}%, rgba(179,109,255,.16) ${pct}% 100%)`;
+    if(pct>=100) r.style.boxShadow=`0 0 8px -1px ${hue}`;
+    r.innerHTML=`<i style="width:${hole}px;height:${hole}px;background:#0D0319;display:grid;place-items:center">`
+      +`<span class="dot" style="width:${dot}px;height:${dot}px;background:${hue}"></span></i>`;
+  });
+</script>
+</body>
+</html>

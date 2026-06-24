@@ -407,7 +407,62 @@ T2.1–T2.4 ✅ #374 (2026-06-22), bundled as the Tier-2 pipeline-gates PR:
   deleted; deleted the superseded charter-d spec; added `mode: 'serial'` to the manage-data
   destructive block. **Tier 3 complete.**
 
-### Phase 39 — Gamified Progression Safety + Daily Quest Ritual: 🔲 PRE-LAUNCH, NEEDS SPECS
+### Phase 39 — Feel-Good / Retention UX: 🟡 SPEC'D (design locked, ready to build)
+
+**Status:** design locked with product-owner + ui-ux-critic (2026-06-24); not yet
+pipelined. Surfaces the rich identity data we now hold (per-bp `vitality_ewma` /
+`ref_peak` / `charge%` / recency + ranks / XP / PRs / titles / character level) as
+**feel-good, retention-positive moments**. Strictly **descriptive / past-tense /
+fill-only** — the quest/overtraining-safety work is the separate **Phase 40**; nothing
+here is prescriptive ("train-or-lose-it"). Design docs: `docs/phase-39-mockups.html`
+(surfaces), `docs/phase-39-share-mockups.html` (share), `docs/bestiary-spec.md` +
+`docs/bestiary-catalog.md` (the share Bestiary system).
+
+**The share artifact (the headline reframe).** Today's photo overlay (Phase-30b D3
+Achievement Frame) brags about XP (illegible to non-players) and boxes the photo behind
+heavy collars. New direction: **photo = hero, full-bleed, minimal overlay + a thin 7-hue
+identity rail.** Two user-selectable modes (toggle in the share sheet; per-user default,
+Bestiary default):
+- **Bestiary** (default, playful, collectible) — each session renders as **a creature you
+  felled**, deterministic from the session: dominant body part → creature LINE (7 lines:
+  Golem/Drake/Behemoth/Atlas/Manticore/Hydra/Tempest), session XP → TIER (E–S), PR/rank-up
+  → named gold **BOSS**, 3+ parts → **CHIMERA** (generative fusion), milestones →
+  legendaries; + an achievement phrase ("A muralha avança"). Name + sigil in the dominant
+  part's hue; chimera = multi-hue gradient. Full content in `bestiary-catalog.md` (84 base
+  × 2 variants + chimera lexicon + epithets + legendaries; anti-repetition by session-hash
+  + a no-repeat guard). Voices: Solo Leveling / Monster Hunter / FF — original names (IP-safe).
+- **Stats** (serious / data-nerd) — no fantasy. **Clean Flex** (adaptive: always show class
+  + character level; engaged-muscle rank/level **deltas only when they changed**; hero = PR
+  › level-up › tonnage; XP/tonnage as a faint footer) **+** **Conditioning Dashboard** (the
+  six charge rings — the unmistakable RepSaga signature — + session numbers + rank delta).
+
+**v1 conditioning surfaces** (build on the locked rune/charge primitives):
+- **Charge Ring** — promote each Saga `BodyPartRankRow`'s pulse dot into a small radial
+  charge gauge (hue arc to `charge%`); fills once on screen-entry. The daily "what shape am
+  I in" glance. **Safety-critical:** visual parity (all hue gauges, NO red/green highlight-dim
+  — that would whisper "train the low ones" → prescriptive).
+- **"Your Body Remembers"** — comeback skin on the B2 cinematic beat: a dormant part recharges
+  big (the rolling-peak payoff), rune surges in one fill, "a fera adormecida desperta / a
+  memória estava lá." The anti-churn keystone (muscle-memory science as a beat).
+- **Rest Validation** — a debrief line when you arrived already-charged ("você chegou
+  recuperado"). Rest as a visible input, not a streak gap.
+- **History milestone markers** — PR gold accent / rank-up rune / class insignia on history cards.
+
+**App-wide quick wins (v1.1):** history week-header 7-hue sparkline; tonnage as a visceral
+"you moved a truck" numeral; Saga in-screen velocity ("fastest Chest week ever"); character-card
+daily shimmer; equipped-title persistent callout. **Deferred (v1.1 / Phase 40):** Conditioning
+Balance radar, Weekly Conditioning Report, the predictive nudge (prescriptive → Phase 40).
+
+**Build slices (server-free first):** (1) **Bestiary resolver** (pure-Dart, deterministic,
+unit-tested) + static `assets/bestiary/bestiary.json` + share-mode toggle + the photo-hero
+share reframe (Bestiary card + Clean Flex + Dashboard) — **no server, no migration**; (2)
+Charge Ring on Saga; (3) comeback + Rest Validation beats; (4) history markers. The in-app
+**collectible Bestiary log** (gaps-to-fill → variety pull) is the natural fast-follow.
+
+**Open (lock at build):** verb voice (default "abateu / felled"); Bestiary tier thresholds
+(calibrate to the real session-XP histogram); default share mode (Bestiary).
+
+### Phase 40 — Gamified Progression Safety + Daily Quest Ritual: 🔲 PRE-LAUNCH, NEEDS SPECS
 
 **Status:** exploration / spec-pending. Not yet pipelined. Pre-launch (gates the
 Launch Phase's retention story, but must NOT ship a mechanic that contradicts our own
@@ -456,7 +511,7 @@ topic 1 are **hard acceptance criteria, not nice-to-haves** — a quest that can
 rest fails the gate. Social/leaderboard (the other half of the competitive retention spine)
 is tracked separately — see the social-feasibility assessment when it lands.
 
-### Phase 40 — Minimal Social: Friend Rank Leaderboard: 🔲 PRE-LAUNCH, NEEDS SPECS
+### Phase 41 — Minimal Social: Friend Rank Leaderboard: 🔲 PRE-LAUNCH, NEEDS SPECS
 
 **Status:** spec-pending, product decisions LOCKED (2026-06-21). Pre-launch (the other half
 of the competitive retention spine alongside Phase 39 — see the June 2026 analysis: zero
