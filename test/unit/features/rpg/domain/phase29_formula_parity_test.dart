@@ -92,6 +92,36 @@ void main() {
     });
   });
 
+  // Phase Vitality-3 — strength conditioning gate oracle. Same discoverability
+  // invariant: a future regen that drops a gate section or shrinks a matrix
+  // fails fast here before the helper parity test passes vacuously.
+  //
+  //   strength_vitality_mult: 7  (vpct 0/0.4/0.64/0.9/1.0 + ref_peak≤0 + clamp)
+  //   set_xp_gated:           3  (multi-bp per-bp-vpct rows — pins per-bp keying)
+  group('Phase Vitality-3 fixture — section row counts', () {
+    test('strength conditioning gate sections present', () {
+      const requiredSections = {'strength_vitality_mult', 'set_xp_gated'};
+      for (final section in requiredSections) {
+        expect(
+          fixtures.containsKey(section),
+          isTrue,
+          reason:
+              'fixture missing Phase Vitality-3 section "$section" — '
+              'regenerate with '
+              '`python test/fixtures/generate_rpg_fixtures.py`',
+        );
+      }
+    });
+
+    test('strength_vitality_mult has exactly 7 rows', () {
+      expect((fixtures['strength_vitality_mult'] as List).length, 7);
+    });
+
+    test('set_xp_gated has exactly 3 multi-bp rows', () {
+      expect((fixtures['set_xp_gated'] as List).length, 3);
+    });
+  });
+
   // Phase 38c — cardio oracle sections. Same discoverability invariant: a
   // future regen that drops a cardio section or shrinks a matrix fails fast
   // here, before the cardio helper parity test passes vacuously over an empty

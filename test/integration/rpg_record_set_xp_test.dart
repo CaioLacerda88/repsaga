@@ -1440,6 +1440,205 @@ void main() {
       expect(event.effectiveLoad, closeTo(enteredWeight, 1e-9));
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Phase Vitality-3 — strength conditioning XP-gate (live record_set_xp)
+  // ---------------------------------------------------------------------------
+  group('record_set_xp Phase Vitality-3 strength gate', () {
+    test('a lapsed body part earns gated XP keyed PER body part — the gate is '
+        'NOT a shared scalar', () async {
+      // Seed CHEST with fully-lapsed strength conditioning: vitality_ewma 0
+      // against a real DECAYING ref_peak (1000) → vpct 0 → vmult = FLOOR (0.50).
+      // total_xp 0 / rank 1 keeps tier_diff_mult identical to a fresh user, so
+      // the ONLY difference vs the fresh-user bench parity test is the gate.
+      //
+      // Bench attributes chest 0.70 / shoulders 0.20 / arms 0.10. Only CHEST has
+      // a seeded (lapsed) progress row; shoulders + arms have NO row → ref_peak
+      // 0 → vmult 1.0. So the live SQL must gate ONLY the chest share by 0.50
+      // and leave shoulders + arms ungated. A regression that applied one shared
+      // scalar (e.g. the dominant chest vmult to every bp) would gate shoulders
+      // and arms too — this test fails loudly in that case.
+      const slug = 'barbell_bench_press';
+      const weight = 60.0;
+      const reps = 8;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      await seedBodyPartProgress(
+        adminClient: adminClient,
+        userId: user.userId,
+        bodyPart: 'chest',
+        totalXp: 0.0,
+        rank: 1,
+        peakEwma: 0.0, // ewma 0 → vpct 0 → fully lapsed
+        peakValue: 1000.0,
+        refPeakValue: 1000.0, // the gate's DECAYING denominator (00083)
+      );
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: weight,
+        reps: reps,
+        numSets: 1,
+      );
+      await saveWorkoutRpc(
+        userClient: userClient,
+        seed: seed,
+        userId: user.userId,
+        weightKg: weight,
+        reps: reps,
+        numSets: 1,
+      );
+
+      // Ungated Dart reference (vitalityMult defaults to 1.0) — same fresh-user
+      // implied_tier / rank the SQL derives.
+      final difficulty = await difficultyMultForSlug(adminClient, slug);
+      final ungatedComps = XpCalculator.computeSetXp(
+        weightKg: weight,
+        reps: reps,
+        peakLoad: 0,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: difficulty,
+        impliedTier: _seededImpliedTier(slug, weight, reps),
+        currentRank: _seededCurrentRank,
+      );
+      final ungatedXp = XpDistribution.distribute(
+        setXp: ungatedComps.setXp,
+        attribution: Attribution.fromMap({
+          'chest': 0.70,
+          'shoulders': 0.20,
+          'arms': 0.10,
+        }),
+      );
+
+      final pgChest = await _readBodyPartXp(userClient, 'chest');
+      final pgShoulders = await _readBodyPartXp(userClient, 'shoulders');
+      final pgArms = await _readBodyPartXp(userClient, 'arms');
+
+      // CHEST: lapsed → gated by exactly 0.50.
+      expect(
+        pgChest,
+        closeTo(ungatedXp[BodyPart.chest]! * 0.50, _kTol),
+        reason:
+            'lapsed chest must earn ungated × 0.50 — the strength vitality '
+            'gate (PG=$pgChest, ungated=${ungatedXp[BodyPart.chest]})',
+      );
+      expect(
+        pgChest,
+        lessThan(ungatedXp[BodyPart.chest]!),
+        reason: 'a lapsed body part must earn STRICTLY LESS than ungated',
+      );
+
+      // SHOULDERS + ARMS: no progress row → vmult 1.0 → ungated. This is the
+      // per-bp keying proof: the gate did NOT bleed the chest multiplier onto
+      // the other attributed parts.
+      expect(
+        pgShoulders,
+        closeTo(ungatedXp[BodyPart.shoulders]!, _kTol),
+        reason:
+            'shoulders has no conditioning row → vmult 1.0 → ungated XP; the '
+            'gate must NOT apply the chest multiplier here (per-bp keying)',
+      );
+      expect(
+        pgArms,
+        closeTo(ungatedXp[BodyPart.arms]!, _kTol),
+        reason:
+            'arms has no conditioning row → vmult 1.0 → ungated XP (per-bp '
+            'keying)',
+      );
+
+      // The xp_events payload records the dominant-part (chest) vitality_mult.
+      final events = await userClient
+          .from('xp_events')
+          .select('payload')
+          .eq('set_id', seed.setIds.first);
+      final payload =
+          ((events as List).first as Map<String, dynamic>)['payload']
+              as Map<String, dynamic>;
+      expect(
+        (payload['vitality_mult'] as num).toDouble(),
+        closeTo(0.50, _kTol),
+        reason:
+            'payload.vitality_mult must record the applied dominant-part gate '
+            '(chest lapsed → 0.50)',
+      );
+    });
+
+    test('a fully-conditioned body part is a no-op (vmult 1.0) — earns the '
+        'ungated XP', () async {
+      // Seed CHEST fully conditioned: ewma == ref_peak → vpct 1.0 → vmult 1.0.
+      // The save must earn the SAME as a fresh (un-gated) user.
+      const slug = 'barbell_bench_press';
+      const weight = 60.0;
+      const reps = 8;
+
+      final user = await freshUser();
+      final adminClient = serviceRoleClient();
+      final userClient = authenticatedClient(user);
+
+      await seedBodyPartProgress(
+        adminClient: adminClient,
+        userId: user.userId,
+        bodyPart: 'chest',
+        totalXp: 0.0,
+        rank: 1,
+        peakEwma: 1000.0,
+        peakValue: 1000.0,
+        refPeakValue: 1000.0, // ewma == ref_peak → vpct 1.0 → vmult 1.0
+      );
+
+      final seed = await seedWorkout(
+        adminClient: adminClient,
+        userId: user.userId,
+        exerciseSlug: slug,
+        weightKg: weight,
+        reps: reps,
+        numSets: 1,
+      );
+      await saveWorkoutRpc(
+        userClient: userClient,
+        seed: seed,
+        userId: user.userId,
+        weightKg: weight,
+        reps: reps,
+        numSets: 1,
+      );
+
+      final difficulty = await difficultyMultForSlug(adminClient, slug);
+      final ungatedComps = XpCalculator.computeSetXp(
+        weightKg: weight,
+        reps: reps,
+        peakLoad: 0,
+        sessionVolumeForBodyPart: 0,
+        weeklyVolumeForBodyPart: 0,
+        difficultyMult: difficulty,
+        impliedTier: _seededImpliedTier(slug, weight, reps),
+        currentRank: _seededCurrentRank,
+      );
+      final ungatedChest = XpDistribution.distribute(
+        setXp: ungatedComps.setXp,
+        attribution: Attribution.fromMap({
+          'chest': 0.70,
+          'shoulders': 0.20,
+          'arms': 0.10,
+        }),
+      )[BodyPart.chest]!;
+
+      final pgChest = await _readBodyPartXp(userClient, 'chest');
+      expect(
+        pgChest,
+        closeTo(ungatedChest, _kTol),
+        reason:
+            'a fully-conditioned chest (vpct 1.0) earns the ungated XP — the '
+            'gate is a no-op (PG=$pgChest, ungated=$ungatedChest)',
+      );
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

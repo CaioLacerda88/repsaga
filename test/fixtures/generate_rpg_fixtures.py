@@ -42,6 +42,7 @@ import json
 import math
 import os
 import sys
+from collections import defaultdict
 
 # Make `tasks/rpg-xp-simulation.py` importable (it has a hyphen in the
 # filename so we read it manually).
@@ -855,6 +856,168 @@ def fx_set_xp_v2() -> list[dict]:
     return cases[:94]
 
 
+def fx_strength_vitality_mult() -> list[dict]:
+    """Phase Vitality-3 — strength conditioning gate pure-core matrix.
+
+    Pins `vmult = FLOOR + (1 - FLOOR) × vpct` with FLOOR = 0.50 and
+    `vpct = clamp(ewma / ref_peak, 0, 1)` (ref_peak ≤ 0 → vpct 1.0), exactly as
+    the sim's `strength_vpct` + `strength_vitality_mult`
+    (`tasks/rpg-xp-simulation.py`) and the SQL `rpg_strength_vitality_mult`
+    (migration 00084). The Dart `XpCalculator.vitalityMult` parity test replays
+    each row.
+
+    Each row carries the (ewma, ref_peak) conditioning, the derived vpct, and
+    the gate vmult. Covers vpct ∈ {0, 0.4, 0.64, 0.9, 1.0} (the brief's locked
+    sweep — 0.64 is the sandbagger/returner-back-wk1 converged charge) plus the
+    ref_peak ≤ 0 no-op (fresh / never-loaded bp → vmult 1.0).
+    """
+    cases: list[dict] = []
+
+    def row(name, ewma, ref_peak):
+        # strength_vpct / strength_vitality_mult are bp-keyed in the sim; here we
+        # drive the pure math with a single synthetic 'chest' entry.
+        vpct = sim.strength_vpct('chest', {'chest': ewma}, {'chest': ref_peak})
+        vmult = sim.strength_vitality_mult(vpct)
+        cases.append({
+            'name': name,
+            'inputs': {'vitality_ewma': ewma, 'vitality_ref_peak': ref_peak},
+            'vpct': vpct,
+            'vitality_mult': vmult,
+        })
+
+    # vpct 0.0 — fully lapsed against a real ref_peak → vmult = FLOOR (0.50).
+    row('fully_lapsed', 0.0, 1000.0)
+    # vpct 0.4 — deep sandbagger charge → vmult = 0.50 + 0.50×0.4 = 0.70.
+    row('vpct_0_4', 400.0, 1000.0)
+    # vpct 0.64 — the locked sandbagger/returner-back-wk1 charge → vmult = 0.82.
+    row('vpct_0_64', 640.0, 1000.0)
+    # vpct 0.9 — near-recovered returner (back-wk3-4) → vmult = 0.95.
+    row('vpct_0_9', 900.0, 1000.0)
+    # vpct 1.0 — fully conditioned (consistent lifter) → vmult 1.0 (gate no-op).
+    row('fully_conditioned', 1000.0, 1000.0)
+    # ref_peak ≤ 0 — fresh / never-loaded bp → vpct 1.0 → vmult 1.0 (no-op).
+    row('fresh_no_history', 0.0, 0.0)
+    # ewma above ref_peak (defensive — clamps to vpct 1.0 → vmult 1.0).
+    row('ewma_above_ref_peak_clamps', 1200.0, 1000.0)
+    return cases
+
+
+def fx_set_xp_gated() -> list[dict]:
+    """Phase Vitality-3 — gated end-to-end set XP across a MULTI-BP exercise at
+    DIFFERENT per-bp vpct.
+
+    This is the row the cardio template CANNOT catch: cardio is a single scalar
+    vmult, but a strength set attributes across multiple body parts, so the gate
+    is a PER-BP map keyed by attribution body part. Each case feeds a real
+    `vmult_by_bp` dict into `sim.compute_set_xp` — the per-bp charge is distinct,
+    so the awarded XP for each body part is scaled by ITS OWN vmult, not a shared
+    scalar. A regression that keys the gate by the dominant bp (or applies one
+    scalar) fails here but passes every scalar-vmult fixture.
+
+    Built by calling `sim.compute_set_xp(..., vmult=vmult_by_bp)` directly so the
+    oracle is exact. The Dart parity test replays per-bp:
+    `computeSetXp(vitalityMult: vmult_by_bp[bp]) × share`.
+    """
+    cases: list[dict] = []
+
+    def row(name, exercise, weight, reps, bw, female, rank_avg, ewma_by_bp,
+            ref_peak_by_bp):
+        novelty_count = defaultdict(float)
+        weekly_count = defaultdict(float)
+        peak_loads = {}
+        if weight > 0:
+            peak_loads[exercise] = weight * 1.05  # strength_mult < 1.0
+        current_ranks = {bp: rank_avg for bp in sim.BODY_PARTS}
+
+        distribution = sim._attribution_for(exercise)
+        if not distribution:
+            distribution = {'chest': 1.0}
+
+        # Per-bp pre-session charge → per-bp vmult map (the faithful gate).
+        vpct_by_bp = {
+            bp: sim.strength_vpct(bp, ewma_by_bp, ref_peak_by_bp)
+            for bp in distribution
+        }
+        vmult_by_bp = {
+            bp: sim.strength_vitality_mult(vpct_by_bp[bp]) for bp in distribution
+        }
+
+        real_slug = sim.SIM_ALIAS_TO_DEFAULT_SLUG.get(exercise, exercise)
+        diff_m = sim.difficulty_mult_for_alias(exercise)
+        awarded, vol, components, _bbb = sim.compute_set_xp(
+            exercise, weight, reps, novelty_count, weekly_count, peak_loads,
+            difficulty_mult=diff_m, bodyweight_kg=bw, slug=real_slug,
+            current_ranks=current_ranks, female=female,
+            vmult=vmult_by_bp,
+        )
+
+        # Ungated reference (vmult default 1.0) so the test can prove the gate
+        # scaled EACH bp by its OWN vmult (gated_bp == ungated_bp × vmult_bp).
+        ungated, _v, _c, _b = sim.compute_set_xp(
+            exercise, weight, reps, defaultdict(float), defaultdict(float),
+            dict(peak_loads), difficulty_mult=diff_m, bodyweight_kg=bw,
+            slug=real_slug, current_ranks=current_ranks, female=female,
+        )
+
+        cases.append({
+            'name': name,
+            'inputs': {
+                'exercise': exercise,
+                'slug': real_slug,
+                'weight_kg': weight,
+                'reps': reps,
+                'peak_load': peak_loads.get(exercise, weight),
+                'difficulty_mult': diff_m,
+                'bodyweight_kg': bw,
+                'gender_female': female,
+                'current_ranks': dict(current_ranks),
+                'attribution': distribution,
+                'dominant_part': components['dominant_part'],
+                'effective_load': components['eff_weight'],
+                # The per-bp conditioning that drives the per-bp gate.
+                'vitality_ewma_by_bp': {bp: ewma_by_bp.get(bp, 0.0)
+                                        for bp in distribution},
+                'vitality_ref_peak_by_bp': {bp: ref_peak_by_bp.get(bp, 0.0)
+                                            for bp in distribution},
+                'vpct_by_bp': vpct_by_bp,
+                'vmult_by_bp': vmult_by_bp,
+            },
+            'components': {
+                'volume_load': components['volume_load'],
+                'base_xp': components['base_xp'],
+                'intensity_mult': components['intensity_mult'],
+                'strength_mult': components['strength_mult'],
+                'difficulty_mult': components['difficulty_mult'],
+                'tier_diff_mult': components['tier_diff_mult'],
+                'abs_strength_premium': components['abs_strength_premium'],
+                'lift_implied_tier': components['lift_implied_tier'],
+                'eff_weight': components['eff_weight'],
+            },
+            'awarded_per_bp': dict(awarded),
+            'ungated_per_bp': dict(ungated),
+            'set_xp_total': sum(awarded.values()),
+        })
+
+    # bench → {chest 0.70, shoulders 0.20, arms 0.10}: THREE distinct bps, each
+    # at a DIFFERENT charge (chest lapsed, shoulders mid, arms full) → three
+    # different vmults applied to the three shares. The keying is load-bearing.
+    row('bench_multibp_distinct_vpct', 'bench', 80, 5, 80.0, False, 12,
+        ewma_by_bp={'chest': 0.0, 'shoulders': 640.0, 'arms': 1000.0},
+        ref_peak_by_bp={'chest': 1000.0, 'shoulders': 1000.0, 'arms': 1000.0})
+    # deadlift → {back 0.40, legs 0.40, core 0.10, arms 0.10}: FOUR bps, full
+    # spread of charges incl. a fresh (ref_peak 0 → no-op) bp.
+    row('deadlift_multibp_with_fresh_bp', 'deadlift', 140, 3, 85.0, False, 20,
+        ewma_by_bp={'back': 900.0, 'legs': 400.0, 'core': 0.0, 'arms': 0.0},
+        ref_peak_by_bp={'back': 1000.0, 'legs': 1000.0, 'core': 1000.0,
+                        'arms': 0.0})
+    # squat → {legs 0.80, core 0.10, back 0.10}: dominant bp lapsed while the
+    # minor bps are charged — proves the gate is NOT keyed by the dominant bp.
+    row('squat_dominant_lapsed_minor_charged', 'squat', 100, 5, 80.0, False, 15,
+        ewma_by_bp={'legs': 0.0, 'core': 1000.0, 'back': 1000.0},
+        ref_peak_by_bp={'legs': 1000.0, 'core': 1000.0, 'back': 1000.0})
+    return cases
+
+
 # ---------------------------------------------------------------------------
 # Backfill replay reference output — neutral chain (legacy archetypes)
 # ---------------------------------------------------------------------------
@@ -1307,6 +1470,10 @@ def main() -> None:
         'set_xp_examples': fx_set_xp_examples(),
         # Phase 29 v2 oracle additions
         'set_xp_v2': fx_set_xp_v2(),
+        # Phase Vitality-3 — strength conditioning gate oracle (additive; the
+        # existing set_xp_v2 rows are byte-identical because they pass no vmult).
+        'strength_vitality_mult': fx_strength_vitality_mult(),
+        'set_xp_gated': fx_set_xp_gated(),
         'implied_tier': fx_implied_tier(),
         'abs_strength_premium': fx_abs_strength_premium(),
         'tier_diff_mult': fx_tier_diff_mult(),
@@ -1338,6 +1505,8 @@ def main() -> None:
     print(f'  cap_mult:                {len(fixtures["cap_mult"])} cases')
     print(f'  set_xp_examples (legacy): {len(fixtures["set_xp_examples"])} cases')
     print(f'  set_xp_v2 (Phase 29 v2): {len(fixtures["set_xp_v2"])} cases')
+    print(f'  strength_vitality_mult:  {len(fixtures["strength_vitality_mult"])} cases')
+    print(f'  set_xp_gated (vitality): {len(fixtures["set_xp_gated"])} cases')
     print(f'  implied_tier:            {len(fixtures["implied_tier"])} cases')
     print(f'  abs_strength_premium:    {len(fixtures["abs_strength_premium"])} cases')
     print(f'  tier_diff_mult:          {len(fixtures["tier_diff_mult"])} cases')

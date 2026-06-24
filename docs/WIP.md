@@ -76,6 +76,21 @@ Per WIP "Phase Vitality-3" mechanic + LOCKED D1-D6. Touches ONLY `tasks/rpg-xp-s
 
 **PR1 COMPLETE (sim only).** NEXT (PR2, separate): regen fixture WITH gate + Dart `xp_calculator` gate + `00084_*_strength_vitality_gate.sql` in one atomic 4-site PR.
 
+### PR2 IMPLEMENTATION CHECKLIST (atomic consumer adoption) — branch feature/phase-vitality3-strength-gate
+Per WIP mechanic + LOCKED D1-D6. ALL atomic in this PR (4-site parity green within PR).
+
+- [x] Read source-of-truth: sim gate (`compute_set_xp` vmult 12th factor, `strength_vpct`, `strength_vitality_mult` floor 0.50), cardio gate template (00081), strength RPCs (LATEST = 00081, not 00065), `vitality_ref_peak` (00083).
+- [x] **Fixture oracle** `generate_rpg_fixtures.py`: ADDED `strength_vitality_mult` (7 rows: vpct 0/0.4/0.64/0.9/1.0 + ref_peak≤0 + clamp) + `set_xp_gated` (3 MULTI-BP rows incl. squat dominant-lapsed/minor-charged — pins per-bp keying). Wired into main() + counts.
+- [x] Regen `rpg_xp_fixtures.json`; diff-confirmed `set_xp_v2` + ALL pre-existing sections BYTE-IDENTICAL vs HEAD (only 2 new keys added).
+- [x] **Dart** `xp_calculator.dart`: `vitalityMult({ewma, refPeak, floor=0.50})` + `strengthVitalityFloor=0.50`; `computeSetXp` `vitalityMult=1.0` final factor; `SetXpComponents.vitalityMult` (+toJson key). Default neutral → existing parity unchanged.
+- [x] Dart unit tests: `vitalityMult` core + gated multi-bp per-bp-keying path vs fixtures; section-count test (7/3); toJson shape test updated for new key. flutter test = +4050 ~5 ALL PASS.
+- [x] **SQL** `00084_phase39_strength_vitality_gate.sql`: `rpg_strength_vitality_mult` helper; `record_set_xp` + `record_session_xp_batch` VERBATIM 00081 + per-bp pre-session vmult (record_set_xp reads per-bp in loop; batch reads 6-bp map up-front) as FINAL factor on v_xp_for_bp. Verbatim-diff confirmed (only `* v_attr_share;`→`+ vmult` changed). Forward-only.
+- [x] `dart analyze --fatal-infos` clean; 9/9 CI shell gates GREEN.
+- [x] Applied 00084 to LOCAL supabase. SQL helper matches oracle (0.50/0.82/0.95/1.0). Integration: record_set_xp 15/15 + new strength-gate 2/2 (lapsed→×0.50 + per-bp keying proven live) + vitality/cardio/award/zero-weight 32/32. pgTAP vitality_ref_peak 10/10. NO hosted push.
+- [x] Full integration suite vs local (00084 applied): +81 tests, 0 failures — no NEW failures (exit 0). 4-site parity (sim↔fixture↔Dart↔SQL) green WITHIN this PR.
+
+**PR2 COMPLETE (atomic consumer adoption).** 4 sites wired: fixture oracle (additive, set_xp_v2 byte-identical) + Dart `xp_calculator` + `00084` (helper + both RPCs verbatim+gate). NEXT (post-merge): apply 00084 to hosted + smoke-test the hot-path RPC. PR3 (optional debrief beat) deferred per D5.
+
 ### Future feel-good UX from this data (product-owner — separate track, mostly Phase 39/display)
 Per-bp `ewma` / `ref_peak` / `charge%` / all-time peak / τ rates / recency unlock: **Charge Ring** (readiness HUD), **"Your Body Remembers"** comeback beat (muscle-memory as an awakening moment), **Rest Validation** debrief ("chest is charged — rest is smart"; what Habitica/Duolingo structurally can't say), Conditioning Balance radar, rare "Peaked" badge, Weekly Conditioning Report, opt-in predictive "keep it charged" nudge (needs Phase-39 ToS sign-off). Phase-39 v1 standouts: Charge Ring + Comeback + Rest Validation (zero new data, no ToS revision, all thesis-pure). All must be descriptive, never "train-or-lose-it".
 

@@ -2717,6 +2717,228 @@
       "set_xp": 15.182686303625283
     }
   ],
+  "set_xp_gated": [
+    {
+      "awarded_per_bp": {
+        "arms": 7.013845976217026,
+        "chest": 24.548460916759588,
+        "shoulders": 11.502707400995924
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 36.4112840605216,
+        "difficulty_mult": 1.09,
+        "eff_weight": 80,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 20.0,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.5463285872731887,
+        "volume_load": 400
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "chest": 0.7,
+          "shoulders": 0.2
+        },
+        "bodyweight_kg": 80.0,
+        "current_ranks": {
+          "arms": 12,
+          "back": 12,
+          "cardio": 12,
+          "chest": 12,
+          "core": 12,
+          "legs": 12,
+          "shoulders": 12
+        },
+        "difficulty_mult": 1.09,
+        "dominant_part": "chest",
+        "effective_load": 80,
+        "exercise": "bench",
+        "gender_female": false,
+        "peak_load": 84.0,
+        "reps": 5,
+        "slug": "barbell_bench_press",
+        "vitality_ewma_by_bp": {
+          "arms": 1000.0,
+          "chest": 0.0,
+          "shoulders": 640.0
+        },
+        "vitality_ref_peak_by_bp": {
+          "arms": 1000.0,
+          "chest": 1000.0,
+          "shoulders": 1000.0
+        },
+        "vmult_by_bp": {
+          "arms": 1.0,
+          "chest": 0.5,
+          "shoulders": 0.8200000000000001
+        },
+        "vpct_by_bp": {
+          "arms": 1.0,
+          "chest": 0.0,
+          "shoulders": 0.64
+        },
+        "weight_kg": 80
+      },
+      "name": "bench_multibp_distinct_vpct",
+      "set_xp_total": 43.06501429397254,
+      "ungated_per_bp": {
+        "arms": 7.013845976217026,
+        "chest": 49.096921833519175,
+        "shoulders": 14.027691952434052
+      }
+    },
+    {
+      "awarded_per_bp": {
+        "arms": 5.368046346775518,
+        "back": 20.39857611774697,
+        "core": 2.684023173387759,
+        "legs": 15.03052977097145
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 37.49294668053551,
+        "difficulty_mult": 1.21,
+        "eff_weight": 140,
+        "intensity_mult": 1.25,
+        "lift_implied_tier": 19.878892733564015,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 0.9939409833319744,
+        "volume_load": 420
+      },
+      "inputs": {
+        "attribution": {
+          "arms": 0.1,
+          "back": 0.4,
+          "core": 0.1,
+          "legs": 0.4
+        },
+        "bodyweight_kg": 85.0,
+        "current_ranks": {
+          "arms": 20,
+          "back": 20,
+          "cardio": 20,
+          "chest": 20,
+          "core": 20,
+          "legs": 20,
+          "shoulders": 20
+        },
+        "difficulty_mult": 1.21,
+        "dominant_part": "back",
+        "effective_load": 140,
+        "exercise": "deadlift",
+        "gender_female": false,
+        "peak_load": 147.0,
+        "reps": 3,
+        "slug": "deadlift",
+        "vitality_ewma_by_bp": {
+          "arms": 0.0,
+          "back": 900.0,
+          "core": 0.0,
+          "legs": 400.0
+        },
+        "vitality_ref_peak_by_bp": {
+          "arms": 0.0,
+          "back": 1000.0,
+          "core": 1000.0,
+          "legs": 1000.0
+        },
+        "vmult_by_bp": {
+          "arms": 1.0,
+          "back": 0.95,
+          "core": 0.5,
+          "legs": 0.7
+        },
+        "vpct_by_bp": {
+          "arms": 1.0,
+          "back": 0.9,
+          "core": 0.0,
+          "legs": 0.4
+        },
+        "weight_kg": 140
+      },
+      "name": "deadlift_multibp_with_fresh_bp",
+      "set_xp_total": 43.4811754088817,
+      "ungated_per_bp": {
+        "arms": 5.368046346775518,
+        "back": 21.472185387102073,
+        "core": 5.368046346775518,
+        "legs": 21.472185387102073
+      }
+    },
+    {
+      "awarded_per_bp": {
+        "back": 6.743377669634488,
+        "core": 6.743377669634488,
+        "legs": 26.973510678537952
+      },
+      "components": {
+        "abs_strength_premium": 1.0,
+        "base_xp": 41.62766037009365,
+        "difficulty_mult": 1.19,
+        "eff_weight": 100,
+        "intensity_mult": 1.2,
+        "lift_implied_tier": 18.125,
+        "strength_mult": 0.9523809523809523,
+        "tier_diff_mult": 1.1911228950827573,
+        "volume_load": 500
+      },
+      "inputs": {
+        "attribution": {
+          "back": 0.1,
+          "core": 0.1,
+          "legs": 0.8
+        },
+        "bodyweight_kg": 80.0,
+        "current_ranks": {
+          "arms": 15,
+          "back": 15,
+          "cardio": 15,
+          "chest": 15,
+          "core": 15,
+          "legs": 15,
+          "shoulders": 15
+        },
+        "difficulty_mult": 1.19,
+        "dominant_part": "legs",
+        "effective_load": 100,
+        "exercise": "squat",
+        "gender_female": false,
+        "peak_load": 105.0,
+        "reps": 5,
+        "slug": "barbell_squat",
+        "vitality_ewma_by_bp": {
+          "back": 1000.0,
+          "core": 1000.0,
+          "legs": 0.0
+        },
+        "vitality_ref_peak_by_bp": {
+          "back": 1000.0,
+          "core": 1000.0,
+          "legs": 1000.0
+        },
+        "vmult_by_bp": {
+          "back": 1.0,
+          "core": 1.0,
+          "legs": 0.5
+        },
+        "vpct_by_bp": {
+          "back": 1.0,
+          "core": 1.0,
+          "legs": 0.0
+        },
+        "weight_kg": 100
+      },
+      "name": "squat_dominant_lapsed_minor_charged",
+      "set_xp_total": 40.46026601780693,
+      "ungated_per_bp": {
+        "back": 6.743377669634488,
+        "core": 6.743377669634488,
+        "legs": 53.947021357075904
+      }
+    }
+  ],
   "set_xp_v2": [
     {
       "awarded_per_bp": {
@@ -8532,6 +8754,71 @@
       "peak_load": 0,
       "strength_mult": 1.0,
       "weight_kg": 50
+    }
+  ],
+  "strength_vitality_mult": [
+    {
+      "inputs": {
+        "vitality_ewma": 0.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "fully_lapsed",
+      "vitality_mult": 0.5,
+      "vpct": 0.0
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 400.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "vpct_0_4",
+      "vitality_mult": 0.7,
+      "vpct": 0.4
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 640.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "vpct_0_64",
+      "vitality_mult": 0.8200000000000001,
+      "vpct": 0.64
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 900.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "vpct_0_9",
+      "vitality_mult": 0.95,
+      "vpct": 0.9
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 1000.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "fully_conditioned",
+      "vitality_mult": 1.0,
+      "vpct": 1.0
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 0.0,
+        "vitality_ref_peak": 0.0
+      },
+      "name": "fresh_no_history",
+      "vitality_mult": 1.0,
+      "vpct": 1.0
+    },
+    {
+      "inputs": {
+        "vitality_ewma": 1200.0,
+        "vitality_ref_peak": 1000.0
+      },
+      "name": "ewma_above_ref_peak_clamps",
+      "vitality_mult": 1.0,
+      "vpct": 1.0
     }
   ],
   "tier_diff_mult": [

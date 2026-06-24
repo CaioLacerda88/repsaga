@@ -445,6 +445,11 @@ Future<void> seedBodyPartProgress({
   required int rank,
   double peakEwma = 0.0,
   double peakValue = 0.0,
+  // Phase Vitality-3 — the DECAYING reference peak (00083), the strength
+  // conditioning gate's denominator. Defaults to 0.0 (NOT NULL DEFAULT on the
+  // column) so existing cardio/strength callers are unchanged. Seed a positive
+  // value alongside peakEwma to exercise the strength gate (vpct = ewma/refPeak).
+  double refPeakValue = 0.0,
 }) async {
   final ts = DateTime.now().toUtc().toIso8601String();
   await adminClient.from('body_part_progress').upsert({
@@ -454,6 +459,7 @@ Future<void> seedBodyPartProgress({
     'rank': rank,
     'vitality_ewma': peakEwma,
     'vitality_peak': peakValue,
+    'vitality_ref_peak': refPeakValue,
     'last_event_at': ts,
     'updated_at': ts,
   });
