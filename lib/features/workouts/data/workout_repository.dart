@@ -489,9 +489,13 @@ class WorkoutRepository extends BaseRepository {
   /// Batch-fetch the most recent completed sets for given exercise IDs.
   /// Returns a map of exerciseId -> list of sets from the last workout.
   ///
-  /// Note: relies on Supabase returning rows ordered by the `finished_at DESC`
-  /// clause. The `seen` set deduplicates to keep only the first (most recent)
-  /// entry per exercise.
+  /// Note: the `.order(referencedTable: 'workouts', ...)` clause sorts the
+  /// EMBEDDED to-one `workouts` resource, NOT the top-level
+  /// `workout_exercises` parent rows — so PostgREST hands the parent rows back
+  /// in PK/insertion order, not by `finished_at`. We therefore sort the rows
+  /// by `workouts.finished_at` DESC client-side before the `seen` dedup picks
+  /// the first (most recent) entry per exercise. Without this sort the dedup
+  /// seeded an arbitrary old session (the live "0kg seed" bug).
   ///
   /// Uses read-through caching: returns cached data on network failure.
   Future<Map<String, List<ExerciseSet>>> getLastWorkoutSets(
@@ -529,10 +533,26 @@ class WorkoutRepository extends BaseRepository {
               ascending: false,
             );
 
+        // PostgREST orders the embedded resource, not parent rows — sort
+        // client-side before dedup so the `seen` set keeps the most-recent
+        // session per exercise (root cause of the 0kg seed bug).
+        final sortedRows =
+            List<Map<String, dynamic>>.from(
+              data.map((r) => Map<String, dynamic>.from(r as Map)),
+            )..sort((a, b) {
+              final bTime = _embeddedFinishedAt(b['workouts']);
+              final aTime = _embeddedFinishedAt(a['workouts']);
+              // Nulls sort last (descending by finished_at).
+              if (aTime == null && bTime == null) return 0;
+              if (aTime == null) return 1;
+              if (bTime == null) return -1;
+              return bTime.compareTo(aTime);
+            });
+
         final result = <String, List<ExerciseSet>>{};
         final seen = <String>{};
 
-        for (final row in data) {
+        for (final row in sortedRows) {
           final exerciseId = row['exercise_id'] as String;
           if (seen.contains(exerciseId)) continue;
           seen.add(exerciseId);
@@ -557,6 +577,23 @@ class WorkoutRepository extends BaseRepository {
       if (cached != null) return cached;
       rethrow;
     }
+  }
+
+  /// Reads `finished_at` from a PostgREST embedded `workouts` to-one resource,
+  /// tolerating both shapes the API can return: a bare `Map` or a
+  /// single-element `List` wrapping the map. Returns null when the timestamp
+  /// is absent or unparseable so the caller can sort such rows last.
+  static DateTime? _embeddedFinishedAt(Object? workouts) {
+    Map<String, dynamic>? embed;
+    if (workouts is Map) {
+      embed = Map<String, dynamic>.from(workouts);
+    } else if (workouts is List && workouts.isNotEmpty) {
+      final first = workouts.first;
+      if (first is Map) embed = Map<String, dynamic>.from(first);
+    }
+    final raw = embed?['finished_at'];
+    if (raw is! String) return null;
+    return DateTime.tryParse(raw);
   }
 
   /// Get the total count of finished workouts for a user.

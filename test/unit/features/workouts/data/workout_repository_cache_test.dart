@@ -422,5 +422,120 @@ void main() {
       expect(result.containsKey('ex-1'), isTrue);
       expect(result.containsKey('ex-2'), isTrue);
     });
+
+    test('picks the most-recent session when PostgREST returns parent rows '
+        'out of finished_at order (seed 0kg bug)', () async {
+      // The canonical bug: `.order(referencedTable: "workouts")` sorts the
+      // EMBEDDED to-one resource, not the top-level workout_exercises rows.
+      // So PostgREST hands back parent rows in PK/insertion order, and the
+      // FakeQueryBuilder mirrors that by returning `data` verbatim from
+      // `.order(...)`. Seed an OLD 0kg session FIRST and the real most-recent
+      // 60kg session LATER — exactly the live failure (2026-04-06 @ 0kg
+      // returned before 2026-06-24 @ 60kg). The repo must sort client-side
+      // before the `seen` dedup and pick the 60kg session.
+      final rows = [
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-04-06T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'old-set', reps: 10, weight: 0.0)],
+        },
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-06-24T10:00:00Z'},
+          'sets': [
+            TestSetFactory.create(id: 'recent-set', reps: 8, weight: 60.0),
+          ],
+        },
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-05-15T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'mid-set', reps: 9, weight: 40.0)],
+        },
+      ];
+
+      final client = FakeSupabaseClient(FakeQueryBuilder(data: rows));
+      final repo = WorkoutRepository(client, cache, mockExerciseRepo);
+
+      final result = await repo.getLastWorkoutSets(['ex-1']);
+
+      expect(result['ex-1'], hasLength(1));
+      expect(
+        result['ex-1']!.single.weight,
+        60.0,
+        reason:
+            'must seed the most-recent (2026-06-24 @ 60kg) session, '
+            'not the arbitrarily-first 0kg row',
+      );
+    });
+
+    test('per-exercise dedup keeps each exercise own most-recent session '
+        '(split-agnostic)', () async {
+      // Two exercises interleaved, each out of finished_at order. The dedup
+      // must independently pick the most-recent session PER exercise.
+      final rows = [
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-01-01T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'a', reps: 5, weight: 20.0)],
+        },
+        {
+          'exercise_id': 'ex-2',
+          'workouts': {'finished_at': '2026-06-20T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'b', reps: 6, weight: 80.0)],
+        },
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-06-22T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'c', reps: 7, weight: 90.0)],
+        },
+        {
+          'exercise_id': 'ex-2',
+          'workouts': {'finished_at': '2026-02-02T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'd', reps: 4, weight: 30.0)],
+        },
+      ];
+
+      final client = FakeSupabaseClient(FakeQueryBuilder(data: rows));
+      final repo = WorkoutRepository(client, cache, mockExerciseRepo);
+
+      final result = await repo.getLastWorkoutSets(['ex-1', 'ex-2']);
+
+      expect(
+        result['ex-1']!.single.weight,
+        90.0,
+        reason: 'ex-1 most recent is 2026-06-22 @ 90kg',
+      );
+      expect(
+        result['ex-2']!.single.weight,
+        80.0,
+        reason: 'ex-2 most recent is 2026-06-20 @ 80kg',
+      );
+    });
+
+    test('rows with null/missing finished_at sort last (defensive)', () async {
+      final rows = [
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': null},
+          'sets': [TestSetFactory.create(id: 'null-row', reps: 1, weight: 0.0)],
+        },
+        {
+          'exercise_id': 'ex-1',
+          'workouts': {'finished_at': '2026-06-24T10:00:00Z'},
+          'sets': [TestSetFactory.create(id: 'real', reps: 8, weight: 70.0)],
+        },
+      ];
+
+      final client = FakeSupabaseClient(FakeQueryBuilder(data: rows));
+      final repo = WorkoutRepository(client, cache, mockExerciseRepo);
+
+      final result = await repo.getLastWorkoutSets(['ex-1']);
+
+      expect(
+        result['ex-1']!.single.weight,
+        70.0,
+        reason: 'the dated session wins over the null-finished_at row',
+      );
+    });
   });
 }
