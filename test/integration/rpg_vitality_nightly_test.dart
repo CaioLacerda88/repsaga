@@ -11,12 +11,14 @@
 ///    `vitality_ewma`. A late-cycle deload (low weekly volume) must NOT
 ///    regress peak.
 ///
-/// 3. **Idempotency** — calling the recompute twice for the same UTC day is a
-///    no-op the second time. As of migration 00082 the dedup authority is
-///    `body_part_progress.last_vitality_date` (per-body-part, first-writer-
-///    wins), NOT the `vitality_runs (user_id, run_date)` PK — `vitality_runs`
-///    survives only as an advisory audit log. The contract pinned here is that
-///    a second same-day step does NOT advance `vitality_ewma`.
+/// 3. **Same-day re-step (Vitality-4)** — calling the recompute twice for the
+///    same UTC day RE-STEPS from the stored start-of-day base
+///    (`vitality_*_day_base`, migration 00085), it does NOT skip. Over an
+///    UNCHANGED 7-day window the re-step reproduces the first step exactly (α
+///    applied once from the same base → no double-count); after NEW in-window
+///    volume arrives the re-step moves the ewma UP (save-time immediacy — the
+///    part is not frozen by an earlier cron step). `vitality_runs (user_id,
+///    run_date)` survives only as an advisory audit log.
 ///
 /// 4. **Service-role auth gate** — anonymous and end-user JWTs are rejected
 ///    with 401. Only the project's service-role key is accepted.
@@ -498,13 +500,16 @@ void main() {
 
   group('vitality-nightly idempotency', () {
     test(
-      'second same-day recompute does NOT double-step vitality_ewma',
+      'second same-day recompute with the SAME window re-steps to the SAME ewma',
       () async {
-        // The 00082 contract: the per-body-part `last_vitality_date` guard
-        // makes a second same-UTC-day step a no-op. This pins the EWMA-stable
-        // behavior directly (NOT the old "one vitality_runs row" proxy) —
-        // exactly what a save-then-nightly collision on the same day must
-        // guarantee.
+        // Vitality-4 contract: the second same-UTC-day recompute RE-STEPS from
+        // the stored day-base rather than being skipped. With an UNCHANGED 7-day
+        // window the re-step reproduces the first step's value exactly (α applied
+        // once from the same base → idempotent). A regression that compounded α
+        // (re-applying from the already-stepped current value) would move ewma
+        // here and turn this RED. This is the "no double-count" half of the
+        // contract; the "not frozen / steps up on new volume" half is pinned by
+        // the cron-then-save regression test below.
         final user = await freshUser();
         final adminClient = serviceRoleClient();
 
@@ -516,7 +521,7 @@ void main() {
           attribution: {'chest': 500.0},
         );
 
-        // First invocation — steps chest.
+        // First invocation — steps chest, stamps the day-base.
         final r1 = await _invokeNightly();
         expect(r1.statusCode, 200);
         final body1 = jsonDecode(r1.body) as Map<String, dynamic>;
@@ -533,12 +538,12 @@ void main() {
           reason: 'First invocation must populate ewma',
         );
 
-        // Second invocation immediately — same UTC date, guard NOT cleared.
+        // Second invocation immediately — same UTC date, SAME window, no new
+        // xp_events. The re-step recomputes from the day-base over the identical
+        // window → identical result.
         final r2 = await _invokeNightly();
         expect(r2.statusCode, 200);
 
-        // EWMA must be identical (no double-application) — the per-bp guard
-        // short-circuited the second step.
         final ewmaAfterSecond = await _readVitalityEwma(
           adminClient,
           user.userId,
@@ -548,8 +553,9 @@ void main() {
           (ewmaAfterSecond - ewmaAfterFirst).abs(),
           lessThan(0.001),
           reason:
-              'Same-day re-step must not change ewma (per-bp last_vitality_date '
-              'guard). first=$ewmaAfterFirst second=$ewmaAfterSecond',
+              'Same-day re-step over an UNCHANGED window must reproduce the '
+              'first step exactly (re-step from day-base, no compounded α). '
+              'first=$ewmaAfterFirst second=$ewmaAfterSecond',
         );
       },
     );
@@ -650,8 +656,15 @@ void main() {
     );
 
     test(
-      'nightly skips a bp already stepped today by a save (first-writer-wins)',
+      'nightly re-steps a save-stepped bp from its day-base to the SAME value '
+      '(no double-count), and first-steps an untouched bp',
       () async {
+        // Vitality-4: a bp the save already stepped today is NOT skipped by the
+        // nightly — it is RE-STEPPED from the stored day-base. With no NEW
+        // chest volume between the save and the nightly (same 7-day window), the
+        // re-step reproduces the save's chest value exactly: α once, from the
+        // same base → no double-count. A bp the save did NOT touch ('back') is
+        // first-stepped by the nightly as usual.
         final user = await freshUser();
         final adminClient = serviceRoleClient();
 
@@ -677,8 +690,8 @@ void main() {
         );
         expect(chestAfterSave, greaterThan(0));
 
-        // Nightly runs (NULL bps → all active parts). It must SKIP chest
-        // (last_vitality_date already today) but still step back.
+        // Nightly runs (NULL bps → all active parts). It re-steps chest from
+        // chest's day-base (same window → same value) and first-steps back.
         final res = await _invokeNightly();
         expect(res.statusCode, 200, reason: res.body);
 
@@ -691,8 +704,9 @@ void main() {
           (chestAfterNightly - chestAfterSave).abs(),
           lessThan(0.001),
           reason:
-              'chest already stepped at save time → nightly must not '
-              'double-step it. save=$chestAfterSave nightly=$chestAfterNightly',
+              'chest re-stepped from its day-base over an unchanged window → '
+              'identical value (no double-count). '
+              'save=$chestAfterSave nightly=$chestAfterNightly',
         );
 
         final backAfterNightly = await _readVitalityEwma(
@@ -705,6 +719,79 @@ void main() {
           greaterThan(0),
           reason:
               'back was NOT stepped at save time → nightly must step it now',
+        );
+      },
+    );
+
+    test(
+      'cron-then-save: a save AFTER the nightly already stepped a bp re-steps '
+      'its vitality_ewma STRICTLY UP (save-time immediacy regression)',
+      () async {
+        // The canonical Vitality-4 regression: reproduce the real bug order.
+        // The nightly cron runs FIRST (03:00 UTC), steps the bp, and stamps the
+        // day-base — all BEFORE the user trains. Then the user trains and the
+        // save's volume lands in the 7-day window, and the save's same-day
+        // recompute must RE-STEP the bp UP from the day-base. Under the old
+        // guard this second step was skipped, the session's volume vanished, and
+        // the post-session beat read "MANTIDO" with no movement. Here the ewma
+        // MUST be strictly greater after the save than after the nightly.
+        final user = await freshUser();
+        final adminClient = serviceRoleClient();
+
+        // The state at cron time: only the PRE-session volume is in the window
+        // (e.g. a prior day's training). The nightly steps chest from it.
+        await _seedXpEvent(
+          adminClient: adminClient,
+          userId: user.userId,
+          occurredAt: DateTime.now().toUtc().subtract(const Duration(days: 1)),
+          attribution: {'chest': 300.0},
+        );
+
+        final res = await _invokeNightly();
+        expect(res.statusCode, 200, reason: res.body);
+
+        final chestAfterNightly = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        expect(
+          chestAfterNightly,
+          greaterThan(0),
+          reason: 'nightly must step chest from the pre-session volume',
+        );
+
+        // The user now trains: the session's chest volume enters the window.
+        await _seedXpEvent(
+          adminClient: adminClient,
+          userId: user.userId,
+          occurredAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
+          attribution: {'chest': 500.0},
+        );
+
+        // The save's in-txn recompute for the touched bp — the same call
+        // save_workout makes. It re-steps chest from the day-base the nightly
+        // stamped, now over the LARGER window (300 + 500).
+        await adminClient.rpc(
+          'recompute_vitality_for_user',
+          params: {
+            'p_user': user.userId,
+            'p_body_parts': ['chest'],
+          },
+        );
+
+        final chestAfterSave = await _readVitalityEwma(
+          adminClient,
+          user.userId,
+          'chest',
+        );
+        expect(
+          chestAfterSave,
+          greaterThan(chestAfterNightly),
+          reason:
+              'save AFTER the cron must move chest vitality (immediacy). The '
+              'session volume re-steps chest UP from the day-base. '
+              'nightly=$chestAfterNightly save=$chestAfterSave',
         );
       },
     );
