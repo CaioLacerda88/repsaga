@@ -2042,4 +2042,17 @@ export const SHARE_FLOW = {
   previewShareButton: '[flt-semantics-identifier="share-preview-share-button"]',
   /** Retake button — resets the controller + pops back to the share sheet. */
   previewRetake: '[flt-semantics-identifier="share-preview-retake"]',
+
+  // Phase 39 — Bestiary vs Stats content-mode toggle. Only mounted on the
+  // preview when a beast resolved (beastCard != null, i.e. the share CTA
+  // sessions). The selected segment is a Semantics(selected:) → AOM emits
+  // aria-current="true" (cluster: flutter_web_aom_selectable_attribute —
+  // NOT aria-selected/aria-checked).
+  /** Mode-toggle container — Semantics(identifier: 'share-mode-toggle'). */
+  modeToggle: '[flt-semantics-identifier="share-mode-toggle"]',
+  /** Bestiary segment of the mode toggle. */
+  modeToggleBestiary: '[flt-semantics-identifier="share-mode-toggle-bestiary"]',
+  /** Stats (Clean Flex) segment of the mode toggle. */
+  modeToggleCleanFlex:
+    '[flt-semantics-identifier="share-mode-toggle-clean-flex"]',
 } as const;

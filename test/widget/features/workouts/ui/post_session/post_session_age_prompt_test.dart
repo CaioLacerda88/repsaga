@@ -28,6 +28,7 @@ import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
 import 'package:repsaga/features/workouts/models/active_workout_state.dart';
+import 'package:repsaga/features/workouts/providers/last_beast_slug_provider.dart';
 import 'package:repsaga/features/workouts/models/cardio_session.dart';
 import 'package:repsaga/features/workouts/models/workout_exercise.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
@@ -48,6 +49,15 @@ class _StubProfileNotifier extends AsyncNotifier<Profile?>
   final Profile? _profile;
   @override
   Future<Profile?> build() async => _profile;
+}
+
+class _StubLastBeastSlug extends LastBeastSlugNotifier {
+  @override
+  String? build() => null;
+  @override
+  Future<void> record(String slug) async {
+    state = slug;
+  }
 }
 
 class _StubDismissal extends AgePromptDismissalNotifier {
@@ -133,6 +143,9 @@ Widget _harness({
       vitalityFreshPulseLocalStorageProvider.overrideWithValue(
         FakeFreshPulseStorage(),
       ),
+      // Phase 39 — the share seam reads the Hive-backed last-beast slug when
+      // hasShareCta is true; stub it so the harness stays Hive-free.
+      lastBeastSlugProvider.overrideWith(_StubLastBeastSlug.new),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -3092,6 +3092,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareOpenSettings => 'Open settings';
 
   @override
+  String get shareModeBestiary => 'Bestiary';
+
+  @override
+  String get shareModeCleanFlex => 'Stats';
+
+  @override
+  String get shareBestiaryEyebrow => '⚔ Today you felled';
+
+  @override
+  String get shareBossEyebrow => '⚜ Boss defeated';
+
+  @override
+  String get shareStatXp => 'XP';
+
+  @override
+  String get shareStatTonnage => 'TONS';
+
+  @override
+  String get shareStatSets => 'SETS';
+
+  @override
+  String get shareStatDuration => 'DUR';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · OPEN SAGA';
 
   @override

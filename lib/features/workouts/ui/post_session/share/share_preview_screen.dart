@@ -5,10 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../domain/beast_card.dart';
+import '../../../domain/share_mode.dart';
 import '../../../domain/share_payload.dart';
+import '../../../providers/last_beast_slug_provider.dart';
 import '../../../providers/share_controller.dart';
+import '../../../providers/share_mode_provider.dart';
 import 'share_card_renderer.dart';
 import 'share_localizations.dart';
+import 'share_mode_toggle.dart';
 
 /// Full-screen preview of the share card before the native share-sheet
 /// handoff (mockup §7 preview step).
@@ -43,6 +48,8 @@ class SharePreviewScreen extends ConsumerStatefulWidget {
     required this.strings,
     required this.l10n,
     required this.onClose,
+    this.beastCard,
+    this.bestiaryStrings,
   });
 
   /// The pre-composed payload from the post-session state.
@@ -53,6 +60,15 @@ class SharePreviewScreen extends ConsumerStatefulWidget {
 
   /// Pre-localized labels for the preview-screen affordances.
   final ShareLocalizations l10n;
+
+  /// Phase 39 — the resolved beast for the Bestiary card. `null` falls back
+  /// to the legacy Achievement-Frame / Discreet path (the mode toggle hides
+  /// when there's no beast to switch to).
+  final BeastCard? beastCard;
+
+  /// Phase 39 — pre-localized chrome strings for the chassis cards. Required
+  /// alongside [beastCard].
+  final BestiaryShareStrings? bestiaryStrings;
 
   /// Called when the user taps retake OR after a successful share. The
   /// route container pops the preview off the navigation stack. Kept as
@@ -110,6 +126,12 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
   /// `[-1.0, 1.0]` to keep the photo edges in frame.
   double _photoAlignmentY = 0.0;
 
+  /// Active Phase 39 content mode. Initialised from the Hive-backed default
+  /// preference at mount (spec §7 — Bestiary is the default). Local while
+  /// the preview is open; the toggle persists a new DEFAULT on change so the
+  /// next session opens in the chosen mode.
+  late ShareMode _mode;
+
   @override
   void initState() {
     super.initState();
@@ -119,6 +141,9 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
     if (state is ShareStatePreview && state.photo == null) {
       _variant = ShareCardVariant.discreet;
     }
+    // Seed the content mode from the persisted default (read once at mount;
+    // the box is opened before runApp so this is race-free).
+    _mode = ref.read(shareModeDefaultProvider);
   }
 
   @override
@@ -206,6 +231,9 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                     payload: widget.payload,
                     variant: _variant,
                     strings: _stringsWithHidesApplied(),
+                    mode: _mode,
+                    beastCard: widget.beastCard,
+                    bestiaryStrings: widget.bestiaryStrings,
                     photo: photo == null ? null : FileImage(File(photo.path)),
                     photoOffset: Offset(0, _photoAlignmentY * 80),
                     renderTarget: ShareCardRenderTarget.export,
@@ -283,6 +311,9 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                                       payload: widget.payload,
                                       variant: _variant,
                                       strings: _stringsWithHidesApplied(),
+                                      mode: _mode,
+                                      beastCard: widget.beastCard,
+                                      bestiaryStrings: widget.bestiaryStrings,
                                       photo: photo == null
                                           ? null
                                           : FileImage(File(photo.path)),
@@ -337,6 +368,29 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
                       ),
                     ),
                   ),
+
+                  // Phase 39 mode toggle — Bestiary vs Clean Flex. Only
+                  // shown when a beast was resolved (there's a second mode
+                  // to switch to). Switching also persists the chosen mode
+                  // as the user's new DEFAULT so the next session opens in
+                  // it (spec §7 "default settable per user").
+                  if (widget.beastCard != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                      child: ShareModeToggle(
+                        mode: _mode,
+                        bestiaryLabel: widget.l10n.modeBestiary,
+                        cleanFlexLabel: widget.l10n.modeCleanFlex,
+                        onChanged: isBusy
+                            ? null
+                            : (next) {
+                                setState(() => _mode = next);
+                                ref
+                                    .read(shareModeDefaultProvider.notifier)
+                                    .setDefault(next);
+                              },
+                      ),
+                    ),
 
                   // Bottom action row — Retake + Share. Disabled while
                   // busy (rendering / sharing) so taps don't pile up.
@@ -473,6 +527,15 @@ class _SharePreviewScreenState extends ConsumerState<SharePreviewScreen> {
     if (post is ShareStateError) {
       _surfaceError(post, controller, photo);
       return;
+    }
+
+    // Record the surfaced beast for the 1-deep no-repeat guard (spec §5).
+    // Written AFTER a (non-error) share so the guard reflects beasts the
+    // user actually shared, not every card merely composed. Idempotent.
+    final beast = widget.beastCard;
+    if (beast != null) {
+      await ref.read(lastBeastSlugProvider.notifier).record(beast.slug);
+      if (!mounted) return;
     }
 
     // Success / dismissed / unavailable handled inside the controller

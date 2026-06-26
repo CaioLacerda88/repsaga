@@ -108,6 +108,15 @@ flutter:
     # CrossBuildTitle).
     - assets/rpg/titles_character_level.json
     - assets/rpg/titles_cross_build.json
+    # Phase 39: Bestiary content (read-only static assets, resolved client-side
+    # from the post-session summary — no DB, no migration). Inline name{en,pt}
+    # is the bulk-content convention (NOT ARB); a unit parity test asserts every
+    # entry has non-empty en+pt. See docs/bestiary-spec.md §8 + docs/WIP.md.
+    - assets/bestiary/bestiary.json
+    - assets/bestiary/epithets.json
+    - assets/bestiary/chimeras.json
+    - assets/bestiary/legendaries.json
+    - assets/bestiary/achievement_phrases.json
     # Bundled Rajdhani (display) + Inter (body) TTFs. Both families are ALSO
     # declared under `flutter.fonts:` below so Flutter's native font loader
     # registers them synchronously at app start. `AppTextStyles` reads them

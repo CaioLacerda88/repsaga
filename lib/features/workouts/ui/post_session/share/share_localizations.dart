@@ -26,6 +26,8 @@ class ShareLocalizations {
     required this.permissionPermanentlyDenied,
     required this.renderError,
     required this.openSettings,
+    required this.modeBestiary,
+    required this.modeCleanFlex,
   });
 
   /// Bridge from the generated [AppLocalizations] to the typed bundle.
@@ -43,6 +45,8 @@ class ShareLocalizations {
       permissionPermanentlyDenied: l10n.sharePermissionPermanentlyDenied,
       renderError: l10n.shareRenderError,
       openSettings: l10n.shareOpenSettings,
+      modeBestiary: l10n.shareModeBestiary,
+      modeCleanFlex: l10n.shareModeCleanFlex,
     );
   }
 
@@ -86,4 +90,77 @@ class ShareLocalizations {
   /// Tapping it routes to `openAppSettings()` so the user can flip the
   /// camera-permission toggle and retry.
   final String openSettings;
+
+  /// Share-mode toggle segment label for the Bestiary (creature) card.
+  final String modeBestiary;
+
+  /// Share-mode toggle segment label for the Clean Flex (stats) card.
+  final String modeCleanFlex;
+}
+
+/// Pre-localized string bundle for the Phase 39 share-card overlay grammar
+/// (Bestiary + Clean Flex modes).
+///
+/// **Why a separate bundle from [ShareCardStrings]?** [ShareCardStrings]
+/// holds the legacy Achievement-Frame / Discreet copy; the Phase 39 chassis
+/// cards need their own grammar (Bestiary eyebrow, rank/XP/tonnage fragments,
+/// Clean-Flex stat keys). Keeping them in a dedicated bundle means the
+/// screen-layer composer fills exactly the slots the active mode renders,
+/// and the render widgets stay l10n-harness-free (Decoupling Rule 2 — the
+/// beast name + phrase are already-localized on the `BeastCard`; these are
+/// the surrounding chrome strings).
+class BestiaryShareStrings {
+  const BestiaryShareStrings({
+    required this.wordmark,
+    required this.bestiaryEyebrow,
+    required this.bossEyebrow,
+    required this.rankLabel,
+    required this.xpLabel,
+    required this.tonnageLabel,
+    required this.cleanFlexEyebrow,
+    required this.cleanFlexHeroValue,
+    required this.cleanFlexStatLabels,
+    this.cleanFlexHeroUnit,
+    this.cleanFlexHeroContext,
+    required this.cleanFlexStatValues,
+  });
+
+  /// Brand wordmark, e.g. "REPSAGA".
+  final String wordmark;
+
+  /// Bestiary eyebrow for a non-boss encounter, e.g. "⚔ Hoje você abateu".
+  final String bestiaryEyebrow;
+
+  /// Bestiary eyebrow for a boss / legendary, e.g. "⚜ Chefe derrotado".
+  final String bossEyebrow;
+
+  /// Rank token, e.g. "RANK C".
+  final String rankLabel;
+
+  /// XP fragment (rendered in heroGold), e.g. "+618 XP".
+  final String xpLabel;
+
+  /// Tonnage fragment, e.g. "8,4 t".
+  final String tonnageLabel;
+
+  /// Clean-Flex eyebrow, e.g. "Bulwark · Nível 9".
+  final String cleanFlexEyebrow;
+
+  /// Clean-Flex hero leading value, e.g. "130" (PR weight) or the tonnage
+  /// fallback.
+  final String cleanFlexHeroValue;
+
+  /// Clean-Flex hero unit suffix, e.g. " kg × 3". `null` for a standalone
+  /// numeral hero.
+  final String? cleanFlexHeroUnit;
+
+  /// Clean-Flex hero context line, e.g. "Supino · Peito 18 → 19". `null`
+  /// collapses the line.
+  final String? cleanFlexHeroContext;
+
+  /// The four-stat strip values in order: XP, tonnage, sets, duration.
+  final List<String> cleanFlexStatValues;
+
+  /// The four-stat strip keys in order: e.g. ["XP", "TON", "SÉRIES", "DUR"].
+  final List<String> cleanFlexStatLabels;
 }

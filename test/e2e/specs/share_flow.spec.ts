@@ -186,6 +186,63 @@ test.describe('Share flow', { tag: '@smoke' }, () => {
     await expect(page.locator(SHARE_FLOW.previewShareButton)).toBeVisible();
   });
 
+  test('should switch content mode when Bestiary/Stats toggle tapped', async ({
+    page,
+  }) => {
+    // Phase 39 — the Bestiary↔Stats content-mode toggle is a NEW in-app user
+    // flow on the preview screen. It mounts only when a beast resolved
+    // (beastCard != null), which the rank-up share-CTA session guarantees.
+    //
+    // We assert the toggle's SELECTION STATE flips — the user-perceptible
+    // outcome of switching modes — via aria-current (the segments are
+    // Semantics(selected:); cluster flutter_web_aom_selectable_attribute).
+    // The rendered card content blocks themselves are ValueKey-only (not
+    // Semantics identifiers) so they're not AOM-addressable; the toggle's
+    // current-segment is the deterministic, selector-reachable mode signal.
+    // Native share is never invoked.
+    await page.locator(POST_SESSION.shareCta).click();
+    await expect(page.locator(SHARE_FLOW.sheet)).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator(SHARE_FLOW.sheetDiscreet).click();
+    await expect(page.locator(SHARE_FLOW.previewScreen)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // The mode toggle is present (a beast resolved for this session).
+    await expect(page.locator(SHARE_FLOW.modeToggle)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Default mode is Bestiary → its segment is current, Stats is not.
+    await expect(page.locator(SHARE_FLOW.modeToggleBestiary)).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    await expect(
+      page.locator(SHARE_FLOW.modeToggleCleanFlex),
+    ).not.toHaveAttribute('aria-current', 'true');
+
+    // Tap Stats → selection flips. This is the user-visible mode switch.
+    await page.locator(SHARE_FLOW.modeToggleCleanFlex).click();
+    await expect(page.locator(SHARE_FLOW.modeToggleCleanFlex)).toHaveAttribute(
+      'aria-current',
+      'true',
+      { timeout: 5_000 },
+    );
+    await expect(
+      page.locator(SHARE_FLOW.modeToggleBestiary),
+    ).not.toHaveAttribute('aria-current', 'true');
+
+    // Tap Bestiary back → selection flips again (toggle is bidirectional).
+    await page.locator(SHARE_FLOW.modeToggleBestiary).click();
+    await expect(page.locator(SHARE_FLOW.modeToggleBestiary)).toHaveAttribute(
+      'aria-current',
+      'true',
+      { timeout: 5_000 },
+    );
+  });
+
   test('should return to share sheet when retake tapped', async ({ page }) => {
     await page.locator(POST_SESSION.shareCta).click();
     await expect(page.locator(SHARE_FLOW.sheet)).toBeVisible({

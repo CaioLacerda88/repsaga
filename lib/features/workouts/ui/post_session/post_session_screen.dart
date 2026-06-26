@@ -22,9 +22,13 @@ import '../../../rpg/providers/vitality_fresh_pulse_provider.dart';
 import '../../../rpg/ui/utils/vitality_state_styles.dart';
 import '../../../rpg/ui/widgets/class_localization.dart';
 import '../../../rpg/ui/widgets/title_localization.dart';
+import '../../domain/beast_card.dart';
+import '../../domain/bestiary_resolver.dart';
 import '../../domain/post_session_choreographer.dart';
 import '../../domain/post_session_timing.dart';
 import '../../domain/reward_tier.dart';
+import '../../providers/bestiary_catalog_provider.dart';
+import '../../providers/last_beast_slug_provider.dart';
 import '../../utils/cardio_format.dart';
 import 'post_session_controller.dart';
 import 'cuts/b1_xp_cut.dart';
@@ -70,10 +74,16 @@ class PostSessionScreen extends ConsumerStatefulWidget {
     super.key,
     required this.params,
     required this.onContinue,
+    this.workoutId = '',
   });
 
   final PostSessionParams params;
   final VoidCallback onContinue;
+
+  /// The finished workout's id — the bestiary resolver's determinism key
+  /// (Phase 39 `sessionId`). Defaults empty for legacy test fixtures that
+  /// don't exercise the share seam.
+  final String workoutId;
 
   @override
   ConsumerState<PostSessionScreen> createState() => _PostSessionScreenState();
@@ -843,6 +853,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
     SharePayload? sharePayload;
     ShareCardStrings? shareCardStrings;
     ShareLocalizations? shareLocalizations;
+    BeastCard? beastCard;
+    BestiaryShareStrings? bestiaryStrings;
     if (state.hasShareCta) {
       final classSlug =
           ref.read(characterClassProvider)?.slug ??
@@ -872,6 +884,29 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
         state: state,
         l10n: l10n,
       );
+
+      // Phase 39 — resolve the Bestiary card from the finished session.
+      // The catalog is loaded async; `.value` is null until the FutureProvider
+      // resolves. On the rare first-frame race it falls back to the legacy
+      // Achievement-Frame / Discreet path (beastCard == null) — the catalog
+      // is tiny + cached, so this is a sub-frame gap in practice.
+      final catalog = ref.watch(bestiaryCatalogProvider).value;
+      if (catalog != null) {
+        final locale = Localizations.localeOf(context).languageCode;
+        beastCard = BestiaryResolver(catalog).resolve(
+          state,
+          sessionId: widget.workoutId,
+          locale: locale,
+          // The 1-deep no-repeat guard's prior slug (persisted client-side).
+          lastBeastSlug: ref.read(lastBeastSlugProvider),
+        );
+        bestiaryStrings = _buildBestiaryStrings(
+          card: beastCard,
+          payload: sharePayload,
+          state: state,
+          l10n: l10n,
+        );
+      }
     }
 
     // Build the S2 Mission Debrief section (Phase 31 Pass 3). The
@@ -923,6 +958,8 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       sharePayload: sharePayload,
       shareCardStrings: shareCardStrings,
       shareLocalizations: shareLocalizations,
+      beastCard: beastCard,
+      bestiaryStrings: bestiaryStrings,
       hasShareCta: state.hasShareCta,
       titleEquipRow: titleRow,
       rankUpOverflow: overflowRow,
@@ -1042,6 +1079,80 @@ class _PostSessionScreenState extends ConsumerState<PostSessionScreen>
       discreetHeroSubLabel: 'XP',
       discreetPrLine: discreetPrLine,
       discreetPrDetail: discreetPrDetail,
+    );
+  }
+
+  /// Build the Phase 39 chassis chrome strings (Bestiary eyebrow + rank/XP/
+  /// tonnage fragments + Clean-Flex eyebrow/hero/stat strip) from the
+  /// finished session. The beast NAME + phrase are already localized on
+  /// [card]; these are the surrounding strings the screen layer formats so
+  /// the render widgets stay l10n-harness-free (Decoupling Rule 2).
+  BestiaryShareStrings _buildBestiaryStrings({
+    required BeastCard card,
+    required SharePayload payload,
+    required PostSessionState state,
+    required AppLocalizations l10n,
+  }) {
+    final tonnage = '${state.tonnageTons.toStringAsFixed(1)} t';
+    final xpText = '+${state.totalXpEarned} XP';
+    final rankToken = 'RANK ${card.tier.label}';
+
+    // Clean-Flex eyebrow: class + character level, mirroring the
+    // achievement-frame class resolve (slug → enum → localized).
+    final cls = CharacterClass.values.firstWhere(
+      (c) => c.slug == payload.characterClassSlug,
+      orElse: () => CharacterClass.initiate,
+    );
+    // Slice 2: character level not threaded. The mockup eyebrow is
+    // "Bulwark · Nível 9", but `characterLevel` needs ALL seven body-part
+    // ranks (rank_curve.dart) and `PostSessionState.bpRankAfter` carries only
+    // the parts that earned XP this session — a chest-only session can't
+    // reconstruct back/legs/etc. ranks, and `nextLevel` is non-null only on a
+    // level-up. Faking it from a partial map would be wrong, so Slice 1 ships
+    // the class name alone; threading the full rank map is a Slice 2 state-
+    // shape change. Initiate (day-zero placeholder) would read oddly as a
+    // brag, but the share CTA only renders on XP-earning sessions where a
+    // class has resolved.
+    final cleanFlexEyebrow = localizedClassName(cls, l10n);
+
+    // Clean-Flex hero: the PR lift when present (the brag), else session XP.
+    final pr = payload.pr;
+    final String heroValue;
+    final String? heroUnit;
+    final String? heroContext;
+    if (pr != null) {
+      heroValue = pr.weightKg.toStringAsFixed(0);
+      heroUnit = ' kg × ${pr.reps}';
+      heroContext = pr.exerciseName;
+    } else {
+      heroValue = '+${state.totalXpEarned}';
+      heroUnit = null;
+      heroContext = null;
+    }
+
+    return BestiaryShareStrings(
+      wordmark: l10n.shareWordmark,
+      bestiaryEyebrow: l10n.shareBestiaryEyebrow,
+      bossEyebrow: l10n.shareBossEyebrow,
+      rankLabel: rankToken,
+      xpLabel: xpText,
+      tonnageLabel: tonnage,
+      cleanFlexEyebrow: cleanFlexEyebrow,
+      cleanFlexHeroValue: heroValue,
+      cleanFlexHeroUnit: heroUnit,
+      cleanFlexHeroContext: heroContext,
+      cleanFlexStatValues: [
+        '+${state.totalXpEarned}',
+        tonnage,
+        '${state.setsCount}',
+        '${state.durationMinutes} min',
+      ],
+      cleanFlexStatLabels: [
+        l10n.shareStatXp,
+        l10n.shareStatTonnage,
+        l10n.shareStatSets,
+        l10n.shareStatDuration,
+      ],
     );
   }
 

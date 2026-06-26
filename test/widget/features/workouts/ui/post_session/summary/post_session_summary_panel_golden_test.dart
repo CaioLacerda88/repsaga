@@ -163,6 +163,8 @@ void main() {
     permissionPermanentlyDenied: 'Permissão bloqueada',
     renderError: 'Erro ao gerar imagem',
     openSettings: 'Abrir configurações',
+    modeBestiary: 'Bestiário',
+    modeCleanFlex: 'Stats',
   );
 
   final sharePayload = SharePayload.fromPostSessionState(

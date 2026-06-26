@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "Bestiary chimeras (Phase 39). Source: docs/bestiary-catalog.md §3. A session spreading XP across 3+ body parts fuses into a chimera. Slice 1 wires the CURATED named hybrids (curated 2-part overrides, 3/4-part fixed, full-body apex) — the generative fusion-lexicon path is also shipped for non-curated pairs. 'curated' maps an unordered top-2 line pair (key = sorted 'lineA+lineB') to 2 variants; 'lexicon' carries per-line noun + 2 adjectives for the generative fallback; 'byCount' carries the 3/4-part and full-body fixed names.",
+  "lexicon": [
+    { "line": "chest", "noun": { "en": "Golem", "pt": "Golem" }, "adjectives": [ { "en": "Stone-Fisted", "pt": "Punho-de-Pedra" }, { "en": "Bulwark", "pt": "Muralha" } ] },
+    { "line": "back", "noun": { "en": "Drake", "pt": "Dragão" }, "adjectives": [ { "en": "Winged", "pt": "Alado" }, { "en": "Sky-Borne", "pt": "Nascido-do-Céu" } ] },
+    { "line": "legs", "noun": { "en": "Behemoth", "pt": "Beemote" }, "adjectives": [ { "en": "Earthen", "pt": "Telúrico" }, { "en": "Trampling", "pt": "Esmagador" } ] },
+    { "line": "shoulders", "noun": { "en": "Atlas", "pt": "Atlas" }, "adjectives": [ { "en": "Sky-Bearing", "pt": "Sustenta-Céu" }, { "en": "Pillared", "pt": "Pilar" } ] },
+    { "line": "arms", "noun": { "en": "Manticore", "pt": "Mantícora" }, "adjectives": [ { "en": "Clawed", "pt": "Garrudo" }, { "en": "Razor", "pt": "Navalha" } ] },
+    { "line": "core", "noun": { "en": "Hydra", "pt": "Hidra" }, "adjectives": [ { "en": "Coiled", "pt": "Espiralado" }, { "en": "Many-Headed", "pt": "Multicéfalo" } ] },
+    { "line": "cardio", "noun": { "en": "Tempest", "pt": "Tempestade" }, "adjectives": [ { "en": "Storm-Borne", "pt": "Tempestuoso" }, { "en": "Howling", "pt": "Uivante" } ] }
+  ],
+  "curated": [
+    { "pair": "arms+chest", "variants": [ { "slug": "curated_bladed_bulwark", "name": { "en": "The Bladed Bulwark", "pt": "O Bastião-Lâmina" } }, { "slug": "curated_iron_render", "name": { "en": "The Iron Render", "pt": "O Dilacerador de Ferro" } } ] },
+    { "pair": "arms+back", "variants": [ { "slug": "curated_winged_ripper", "name": { "en": "The Winged Ripper", "pt": "O Estraçalhador Alado" } }, { "slug": "curated_talon_wyrm", "name": { "en": "The Talon Wyrm", "pt": "O Wyrm das Garras" } } ] },
+    { "pair": "back+chest", "variants": [ { "slug": "curated_twin_maw", "name": { "en": "The Twin-Maw", "pt": "A Bocarra Gêmea" } }, { "slug": "curated_drake_golem", "name": { "en": "The Drake-Golem", "pt": "O Golem-Dragão" } } ] },
+    { "pair": "core+legs", "variants": [ { "slug": "curated_earthcoil", "name": { "en": "The Earthcoil", "pt": "A Espiral Telúrica" } }, { "slug": "curated_standing_hydra", "name": { "en": "The Standing Hydra", "pt": "A Hidra Ereta" } } ] },
+    { "pair": "arms+shoulders", "variants": [ { "slug": "curated_rend_sentinel", "name": { "en": "The Rend Sentinel", "pt": "A Sentinela Dilacerante" } }, { "slug": "curated_pillar_claw", "name": { "en": "The Pillar-Claw", "pt": "A Garra-Pilar" } } ] },
+    { "pair": "back+shoulders", "variants": [ { "slug": "curated_sky_wyrm", "name": { "en": "The Sky-Wyrm", "pt": "O Wyrm Celeste" } }, { "slug": "curated_winged_atlas", "name": { "en": "The Winged Atlas", "pt": "O Atlas Alado" } } ] },
+    { "pair": "cardio+legs", "variants": [ { "slug": "curated_trampling_storm", "name": { "en": "The Trampling Storm", "pt": "A Tempestade Esmagadora" } }, { "slug": "curated_stampede", "name": { "en": "The Stampede", "pt": "O Tropel" } } ] }
+  ],
+  "byCount": [
+    { "parts": 3, "variants": [ { "slug": "chimera_three_fanged", "name": { "en": "The Three-Fanged Chimera", "pt": "A Quimera de Três Presas" } }, { "slug": "chimera_trident_beast", "name": { "en": "The Trident Beast", "pt": "A Fera Tridente" } } ] },
+    { "parts": 4, "variants": [ { "slug": "chimera_four_maw", "name": { "en": "The Four-Maw", "pt": "A Quádrupla Bocarra" } }, { "slug": "chimera_tetra_beast", "name": { "en": "The Tetra-Beast", "pt": "A Tetra-Fera" } } ] },
+    { "parts": 5, "variants": [ { "slug": "chimera_primordial", "name": { "en": "The Primordial Chimera", "pt": "A Quimera Primordial" } }, { "slug": "chimera_seven_fanged", "name": { "en": "The Seven-Fanged", "pt": "O Sete-Presas" } }, { "slug": "chimera_all_beast", "name": { "en": "The All-Beast", "pt": "A Besta-Total" } } ] }
+  ]
+}

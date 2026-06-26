@@ -228,6 +228,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final params = state.extra! as PostSessionParams;
           return PostSessionScreen(
             params: params,
+            // The finished workout's id — the bestiary determinism key
+            // (Phase 39). Threaded from the route path param so the resolver
+            // gets the REAL session id, not a synthesised one.
+            workoutId: state.pathParameters['workoutId'] ?? '',
             // Decoupling Rule 8 — the route container wires GoRouter.
             onContinue: () => context.go('/home'),
           );

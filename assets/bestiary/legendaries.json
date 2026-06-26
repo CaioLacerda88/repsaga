@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "description": "Bestiary legendaries (Phase 39). Source: docs/bestiary-catalog.md §4. Fixed named beasts unlocked by an objective milestone — highest kind priority. SLICE 1 ships SESSION-COUNT milestones only (sessionCount). Cumulative-tonnage + first-S-rank legendaries are Slice 2 (no client source threaded yet — see WIP boundary inventory GAPS). sessionCount = the sagaNumber (current finished-workout count) that triggers the legendary.",
+  "legendaries": [
+    { "slug": "legend_gatekeeper", "trigger": "sessionCount", "sessionCount": 50, "name": { "en": "The Gatekeeper", "pt": "O Guardião do Portão" } },
+    { "slug": "legend_first_wyrm", "trigger": "sessionCount", "sessionCount": 100, "name": { "en": "The First Wyrm", "pt": "O Primeiro Wyrm" } },
+    { "slug": "legend_eternal_saga", "trigger": "sessionCount", "sessionCount": 250, "name": { "en": "The Eternal Saga", "pt": "A Saga Eterna" } }
+  ]
+}

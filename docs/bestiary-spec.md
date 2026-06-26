@@ -20,7 +20,8 @@ feel-good Phase 39 — the quest/overtraining-safety track is the separate Phase
 | Input | Source | Drives |
 |---|---|---|
 | Dominant body part (most XP this session) | `bpXpDeltas` | creature **LINE** |
-| Session **XP** earned | `totalXpEarned` | **TIER** (E→S) |
+| Dominant line's **rank** (1–99) | `body_part_progress.rank` (post-session) | **TIER** (rank league, §3) |
+| Session **XP** earned | `totalXpEarned` | **specimen** within league (base/notable/fierce, §3) |
 | Tonnage (kg moved) | `tonnageTons` | flavor stat shown |
 | PR set? / rank-up? | `prResult` / rank deltas | **BOSS** upgrade |
 | # body parts trained significantly | `bpXpDeltas` | **CHIMERA** (combination) |
@@ -53,23 +54,59 @@ sigil glyph.
 
 ---
 
-## 3. Tier ladder (session XP → rank)
+## 3. Tier ladder (RANK-PRIMARY — beast tier = your dominant line's rank league)
 
-Solo-Leveling E→S ladder. **Thresholds are placeholders — calibrate to the real
-post-Vitality-3 session-XP distribution** (pull a histogram of `totalXpEarned` across
-recent sessions; set the bands at sensible percentiles so most sessions land C–B and S
-is genuinely rare).
+Solo-Leveling E→S ladder. **The base tier is your dominant line's RANK league**, not the
+session's raw XP:
 
-| Rank | Session XP (placeholder) | Feel |
+```
+beastTier  = rankLeague(dominantLineRank)        # the base creature's tier
+specimen   = sessionXP relative to your league   # base vs notable vs fierce variant
+kind       = objective triggers (§4/§5)          # PR/rank-up→boss, 3+parts→chimera, milestone→legendary
+```
+
+- The beast's **line** = the session's dominant body part; the tier reads **that body part's
+  rank** (1–99 from `body_part_progress.rank`). Your Chest line's beasts grow as your Chest
+  rank grows — the progression *rises* with you.
+- A rank-5 player's league is **C**; they **cannot** field an S beast by construction — no
+  separate "gate" needed. The apex is earned by reaching the apex rank.
+
+**Why rank-primary, not session-XP** (calibration finding, 2026-06-26): the LOCKED XP formula
+intentionally *decays* per-session XP as rank climbs (tier-diff normalization). A session-XP-driven
+tier therefore **inverts** over a career — veterans earn *smaller* beasts than in month one
+(elite: S→B, advanced: A→C across a sim year). Rank-primary makes the ladder rise instead.
+**Nothing in the XP/rank/level formula changes** — the bestiary only *reads* the locked rank.
+
+### Rank leagues (the locked bands)
+
+Calibrated against the **persona simulation** (`tasks/bestiary-tier-calibration.py`, 14 personas ×
+52 wk = 2634 simulated sessions; the hosted DB was rejected as a single dirty test user). Bands
+spread the 6 tiers across the reachable rank range so casual users live C–B–A for a long time and
+S is a committed-veteran apex.
+
+| Tier | Dominant-line rank league | Who lives here (sim) |
 |---|---|---|
-| E | < 150 | a quick skirmish |
-| D | 150–300 | a solid session |
-| C | 300–500 | a real hunt (the median target) |
-| B | 500–750 | a hard-won kill |
-| A | 750–1100 | a great beast |
-| S | 1100+ | an apex — rare, brag-worthy |
+| E | rank 1–4 | day-zero / a brand-new line |
+| D | rank 5–10 | first weeks |
+| C | rank 11–20 | the broad early-mid plateau |
+| B | rank 21–35 | a committed lifter's strong line |
+| A | rank 36–55 | advanced; dedicated mid-game |
+| S | rank 56+ | veteran apex (advanced/elite late-game) |
 
-A **humble session still gets a creature** (E-rank Will-o'-Wisp), rendered with grace,
+**Simulated journey** (rises with progression): beginner C→B/A · female-int C→A/S · advanced
+B/A→S · elite A/S→S. Casual real users climb slower than these dedicated personas, so most spend a
+long time in C–B; S is genuinely earned.
+
+### Specimen size (session XP *within* your league)
+
+Session XP no longer sets the tier — it sets the **specimen** within your rank league: a routine
+session → the base creature; a big-for-your-level session → a *notable/fierce* variant (descriptor +
+art emphasis, NOT a tier jump). Reference = the league's typical session XP from the sim
+(`tasks/bestiary-tier-calibration.py` rank-bucket medians). This keeps "a huge session feels bigger"
+without the inversion. (Precise thresholds finalized at build time from the per-rank reference; a
+coarse 3-band split — base / notable / fierce — is fine for Slice 1.)
+
+A **humble session still gets a creature** (the base creature of your league), rendered with grace,
 never as failure.
 
 ---
@@ -83,7 +120,7 @@ epithet + boss styling** (laurel/crown glyph, gold accent, "CHEFE / BOSS" tag).
 |---|---|
 | **PR set** | Named elite of the dominant line — `[Epithet], the [Creature]`. Epithet pool (gold): *Ironheart / the Unbroken / the Sovereign / Dawnbreaker / the Undying / Stormcrown* (en) · *Coração-de-Ferro / o Inquebrável / o Soberano / Quebra-Aurora / o Imortal* (pt). |
 | **Rank-up** | The next-tier creature of that line, framed "a greater foe rose." |
-| **S-rank session** | The line's **apex** (The Colossus, etc.) unconditionally. |
+| **S-league line** | When the dominant line is at S league (rank 56+), the line's **apex** (The Colossus, etc.) is the base creature; a PR/rank-up there promotes to the named apex boss. |
 | **Milestone** (50th/100th session, tonnage totals) | A fixed **legendary** with its own name + lore (a small curated set, e.g. *The First Wyrm / O Primeiro Wyrm* at session 100). |
 
 Priority if multiple fire: Legendary > PR-named > S-apex > rank-up.
@@ -142,8 +179,8 @@ wordmark. Bottom-anchored, over a subtle scrim for legibility:
 
 ```
 ⚔ HOJE VOCÊ ABATEU            ← eyebrow (Rajdhani, tracked, gold; "⚜ CHEFE" for bosses)
-O Golem de Ferro              ← beast name (Cinzel serif, hero, cream)
-◈ RANK C · +618 XP · 8,4 t    ← rank sigil + XP + tonnage (Rajdhani numerals)
+O Golem de Ferro              ← beast name (Rajdhani display, hero, cream; Cinzel rejected per §17.0c — Rajdhani display is the sanctioned hero register)
+◈ RANK C · +618 XP · 8,4 t    ← rank-sigil diamond chip (rotated square, tier letter) + XP + tonnage (Rajdhani numerals)
 A muralha avança.             ← achievement phrase (italic, dimAA)
 ▬▬▬▬▬▬▬ (7-hue rail)          RepSaga
 ```
@@ -179,7 +216,12 @@ checklist of what you *must* do.)
 
 - **Catalog scope for v1:** 42 base + ~6 epithets + ~10 chimeras + 12 phrases + ~3
   legendaries ≈ a tight, shippable set. Expand later.
-- **Tier thresholds:** calibrate to the real session-XP histogram before locking §3.
+- ~~**Tier thresholds:** calibrate to the real session-XP histogram before locking §3.~~
+  **RESOLVED 2026-06-26** — hosted DB rejected (single dirty test user); calibrated against the
+  **persona simulation** (`tasks/bestiary-tier-calibration.py`, parity-locked to the canonical
+  XP oracle). Finding: session-XP-driven tiers INVERT as rank climbs (formula decays per-session
+  XP), so the model is now **RANK-PRIMARY** — tier = dominant line's rank league (user-locked),
+  session XP picks the specimen within the league. NO formula change. See §3.
 - **Where the beast appears:** share overlay only (v1) — or also a small post-session
   "beast felled" beat + the collectible log (more scope)?
 - **Verb framing:** "felled / abateu" (slayer) vs "hunted / caçou" (hunter) vs
