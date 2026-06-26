@@ -574,4 +574,244 @@ void main() {
       expect(pt.name.endsWith(pt.epithet!), isTrue);
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Generative chimera (non-curated top-2 pair) — QA coverage hole.
+  //
+  // ~14 of 21 BP pairs route through the generative fusion-lexicon path: a
+  // 3-part session whose top-2 XP pair has NO curated override (every existing
+  // chimera test used chest+back+legs, where back+chest IS curated, so the
+  // generative branch never rendered). chest+legs is NOT in chimeras.json's
+  // `curated` list — top-2 = (chest, legs) routes generative. We assert the
+  // user-visible NAME shape (word order + spacing) and slug for both locales.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  group('generative chimera (non-curated pair)', () {
+    // chest (300) dominant, legs (200) secondary, arms (100) third.
+    // top-2 = chest+legs (sorted) — absent from `curated` → generative path.
+    // Lexicon: chest noun = "Golem"/"Golem"; legs adjectives =
+    //   en ["Earthen","Trampling"], pt ["Telúrico","Esmagador"].
+    // en shape: "The <legs-adj.en> Golem"  ·  pt shape: "O Golem <legs-adj.pt>"
+    // slug: "chimera_gen_chest_legs".
+    PostSessionState genState() => buildState(
+      bpXpDeltas: const {
+        BodyPart.chest: 300,
+        BodyPart.legs: 200,
+        BodyPart.arms: 100,
+      },
+      bpRankAfter: const {
+        BodyPart.chest: 15,
+        BodyPart.legs: 15,
+        BodyPart.arms: 15,
+      },
+    );
+
+    // The legs adjectives are the ONLY hash-variable token in the name; the
+    // dominant noun + connective words are fixed. Asserting membership pins
+    // the lexicon source while the prefix/suffix pins word order + spacing.
+    const legsAdjsEn = ['Earthen', 'Trampling'];
+    const legsAdjsPt = ['Telúrico', 'Esmagador'];
+
+    test('routes to the generative path with the gen slug', () {
+      final card = resolver.resolve(
+        genState(),
+        sessionId: 'gen-1',
+        locale: 'en',
+      );
+      expect(card.kind, BeastKind.chimera);
+      // Slug encodes the dominant+secondary dbValues, dominant first.
+      expect(card.slug, 'chimera_gen_chest_legs');
+      // NOT a curated/byCount named chimera (those have different slug shapes).
+      expect(card.slug, startsWith('chimera_gen_'));
+    });
+
+    test('en name has the "The <2nd-adj> <dominant-noun>" shape', () {
+      final card = resolver.resolve(
+        genState(),
+        sessionId: 'gen-1',
+        locale: 'en',
+      );
+      // Word order: leading article, then the secondary line's adjective, then
+      // the dominant line's noun. Exactly one space between each token (no
+      // missing space, no doubled space).
+      expect(card.name, startsWith('The '));
+      expect(card.name, endsWith(' Golem'));
+      final adj = card.name.substring(
+        'The '.length,
+        card.name.length - ' Golem'.length,
+      );
+      expect(legsAdjsEn, contains(adj));
+      // Reconstruct the full string to prove spacing is exactly single-spaced.
+      expect(card.name, 'The $adj Golem');
+    });
+
+    test('pt name has the "O <dominant-noun> <2nd-adj>" shape', () {
+      final card = resolver.resolve(
+        genState(),
+        sessionId: 'gen-1',
+        locale: 'pt',
+      );
+      // pt inverts: article, dominant noun, then the secondary adjective.
+      expect(card.name, startsWith('O Golem '));
+      final adj = card.name.substring('O Golem '.length);
+      expect(legsAdjsPt, contains(adj));
+      expect(card.name, 'O Golem $adj');
+    });
+
+    test('multi-hue rail carries every trained part, dominant-first', () {
+      final card = resolver.resolve(
+        genState(),
+        sessionId: 'gen-1',
+        locale: 'en',
+      );
+      expect(card.trainedParts, [BodyPart.chest, BodyPart.legs, BodyPart.arms]);
+      expect(card.hues, card.trainedParts.map(BodyPartHues.hueFor).toList());
+    });
+
+    test('same session id yields the same generative name (deterministic)', () {
+      final a = resolver.resolve(
+        genState(),
+        sessionId: 'gen-det',
+        locale: 'en',
+      );
+      final b = resolver.resolve(
+        genState(),
+        sessionId: 'gen-det',
+        locale: 'en',
+      );
+      expect(a.name, b.name);
+      expect(a.slug, b.slug);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Curated 4-part and 5-part chimeras — QA coverage hole.
+  //
+  // The partCount→branch routing (5+ → full-body, 4 → fixed-4, 3 →
+  // curated-or-generative) wasn't directly pinned: every prior chimera test
+  // used exactly 3 parts. A 4-part session must resolve to a byCount[4] slug;
+  // a 5-part session to a byCount[5] slug — NOT the 3-part fixed names.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  group('chimera part-count routing', () {
+    // chimeras.json byCount slugs (the expected pool per count):
+    const fourPartSlugs = ['chimera_four_maw', 'chimera_tetra_beast'];
+    const fivePartSlugs = [
+      'chimera_primordial',
+      'chimera_seven_fanged',
+      'chimera_all_beast',
+    ];
+    const threePartSlugs = ['chimera_three_fanged', 'chimera_trident_beast'];
+
+    test('4 trained parts -> a curated four-part chimera', () {
+      final state = buildState(
+        bpXpDeltas: const {
+          BodyPart.chest: 200,
+          BodyPart.back: 150,
+          BodyPart.legs: 120,
+          BodyPart.shoulders: 100,
+        },
+        bpRankAfter: const {
+          BodyPart.chest: 15,
+          BodyPart.back: 15,
+          BodyPart.legs: 15,
+          BodyPart.shoulders: 15,
+        },
+      );
+      final card = resolver.resolve(state, sessionId: 'four', locale: 'en');
+      expect(card.kind, BeastKind.chimera);
+      expect(card.trainedParts.length, 4);
+      // Lands in the four-part pool — not the three-part fixed names.
+      expect(fourPartSlugs, contains(card.slug));
+      expect(threePartSlugs, isNot(contains(card.slug)));
+    });
+
+    test('5 trained parts -> a full-body apex chimera', () {
+      final state = buildState(
+        bpXpDeltas: const {
+          BodyPart.chest: 200,
+          BodyPart.back: 150,
+          BodyPart.legs: 120,
+          BodyPart.shoulders: 100,
+          BodyPart.arms: 80,
+        },
+        bpRankAfter: const {
+          BodyPart.chest: 15,
+          BodyPart.back: 15,
+          BodyPart.legs: 15,
+          BodyPart.shoulders: 15,
+          BodyPart.arms: 15,
+        },
+      );
+      final card = resolver.resolve(state, sessionId: 'five', locale: 'en');
+      expect(card.kind, BeastKind.chimera);
+      expect(card.trainedParts.length, 5);
+      expect(fivePartSlugs, contains(card.slug));
+      expect(fourPartSlugs, isNot(contains(card.slug)));
+    });
+
+    test('6 trained parts also routes to the 5+ full-body pool', () {
+      // The 5+ branch is "5 OR MORE" — a 6-part session must not fall through
+      // to a missing byCount[6] (which would NPE the chimerasByCount lookup).
+      final state = buildState(
+        bpXpDeltas: const {
+          BodyPart.chest: 200,
+          BodyPart.back: 150,
+          BodyPart.legs: 120,
+          BodyPart.shoulders: 100,
+          BodyPart.arms: 80,
+          BodyPart.core: 60,
+        },
+        bpRankAfter: const {
+          BodyPart.chest: 15,
+          BodyPart.back: 15,
+          BodyPart.legs: 15,
+          BodyPart.shoulders: 15,
+          BodyPart.arms: 15,
+          BodyPart.core: 15,
+        },
+      );
+      final card = resolver.resolve(state, sessionId: 'six', locale: 'en');
+      expect(card.kind, BeastKind.chimera);
+      expect(card.trainedParts.length, 6);
+      expect(fivePartSlugs, contains(card.slug));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Empty bpXpDeltas (no dominant line) fallback — QA coverage hole.
+  //
+  // Pathological state: no body part earned XP. `_dominantLine` returns null →
+  // the resolver falls back to BodyPart.chest, rank floors to 0 → tier E. This
+  // must NOT throw (a null line would NPE the hue / name lookups) and must
+  // produce a valid base card.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  group('empty bpXpDeltas fallback', () {
+    test('null dominant -> valid chest/E/base card without throwing', () {
+      final state = buildState(bpXpDeltas: const {}, bpRankAfter: const {});
+      late final BeastCard card;
+      expect(
+        () => card = resolver.resolve(state, sessionId: 'empty', locale: 'en'),
+        returnsNormally,
+      );
+      expect(card.line, BodyPart.chest);
+      expect(card.tier, BeastTier.e);
+      expect(card.kind, BeastKind.base);
+      // A real creature was picked (non-empty name + slug) and the rail has the
+      // single fallback line's hue — nothing rendered blank.
+      expect(card.name, isNotEmpty);
+      expect(card.slug, isNotEmpty);
+      expect(card.trainedParts, [BodyPart.chest]);
+      expect(card.hues, [BodyPartHues.hueFor(BodyPart.chest)]);
+    });
+
+    test('empty deltas pt locale also resolves a valid card', () {
+      final state = buildState(bpXpDeltas: const {}, bpRankAfter: const {});
+      final card = resolver.resolve(state, sessionId: 'empty', locale: 'pt');
+      expect(card.line, BodyPart.chest);
+      expect(card.tier, BeastTier.e);
+      expect(card.name, isNotEmpty);
+    });
+  });
 }
