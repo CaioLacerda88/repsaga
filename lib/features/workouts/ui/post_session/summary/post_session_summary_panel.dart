@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../rpg/models/body_part.dart';
 import '../../../../rpg/ui/utils/vitality_state_styles.dart';
+import '../../../domain/beast_card.dart';
 import '../../../domain/share_payload.dart';
 import '../share/share_card_renderer.dart';
 import '../share/share_localizations.dart';
@@ -51,6 +52,8 @@ class PostSessionSummaryPanel extends StatelessWidget {
     this.sharePayload,
     this.shareCardStrings,
     this.shareLocalizations,
+    this.beastCard,
+    this.bestiaryStrings,
     this.hasShareCta = false,
     this.titleEquipRow,
     this.rankUpOverflow,
@@ -108,6 +111,15 @@ class PostSessionSummaryPanel extends StatelessWidget {
   /// Pre-localized share-sheet + preview-screen labels. Required when
   /// [hasShareCta] is true.
   final ShareLocalizations? shareLocalizations;
+
+  /// Phase 39 — the resolved Bestiary card. Optional even when the CTA is
+  /// shown (null until the bestiary catalog FutureProvider resolves; the
+  /// preview falls back to the legacy card path in that sub-frame window).
+  final BeastCard? beastCard;
+
+  /// Phase 39 — pre-localized chrome strings for the chassis cards. Paired
+  /// with [beastCard].
+  final BestiaryShareStrings? bestiaryStrings;
 
   /// Called when the user taps CONTINUAR. Route-agnostic per Decoupling
   /// Rule 8 — the route container wires this to GoRouter.
@@ -259,6 +271,8 @@ class PostSessionSummaryPanel extends StatelessWidget {
                     payload: sharePayload!,
                     strings: shareCardStrings!,
                     l10n: shareLocalizations!,
+                    beastCard: beastCard,
+                    bestiaryStrings: bestiaryStrings,
                   ),
                   const SizedBox(height: 10),
                 ],

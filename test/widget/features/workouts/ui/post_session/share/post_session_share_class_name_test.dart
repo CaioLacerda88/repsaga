@@ -38,6 +38,7 @@ import 'package:repsaga/features/rpg/providers/class_provider.dart';
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
+import 'package:repsaga/features/workouts/providers/last_beast_slug_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_screen.dart';
 import 'package:repsaga/features/workouts/ui/post_session/summary/share_cta_button.dart';
@@ -92,6 +93,9 @@ Widget _harness({
       vitalityFreshPulseLocalStorageProvider.overrideWithValue(
         FakeFreshPulseStorage(),
       ),
+      // Phase 39 — the share seam reads the Hive-backed last-beast slug;
+      // stub it so the harness stays Hive-free.
+      lastBeastSlugProvider.overrideWith(_StubLastBeastSlug.new),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -287,6 +291,15 @@ void main() {
 /// Fake [RpgProgressNotifier] resolving a pre-canned snapshot immediately.
 /// The controller reads this once during init; the class itself is supplied
 /// via the [characterClassProvider] override in [_harness].
+class _StubLastBeastSlug extends LastBeastSlugNotifier {
+  @override
+  String? build() => null;
+  @override
+  Future<void> record(String slug) async {
+    state = slug;
+  }
+}
+
 class _FakeRpgProgress extends RpgProgressNotifier {
   _FakeRpgProgress(this._snapshot);
   final RpgProgressSnapshot _snapshot;

@@ -221,4 +221,193 @@ class ShareCardTypography {
       color: AppColors.textDim,
     );
   }
+
+  // ─── Shared chassis (Phase 39) ─────────────────────────────────────
+  //
+  // The full-bleed photo-hero + scrim + 7-hue rail + wordmark frame both
+  // the Bestiary and Clean Flex modes render their content block into
+  // (spec §7). The chassis owns only the wordmark; each mode owns its
+  // own eyebrow / hero. Sizes mirror the D3 export/preview ratios so the
+  // shipped PNG and the on-screen preview stay in lockstep.
+
+  /// Chassis wordmark (Rajdhani 700, +0.24em tracking, textDim). Reuses
+  /// the D3 wordmark register so the brand mark reads identically across
+  /// every share surface. 18px export / 10sp preview.
+  static TextStyle chassisWordmark(ShareCardRenderTarget target) =>
+      achievementFrameWordmark(target);
+
+  /// Boss crown glyph (`♛`) floating over the photo — heroGold (spec §4 /
+  /// mockup `.crown`, 30px at 300dp → 30sp preview / 54px export). Sized via
+  /// the numeric register; the glyph itself is a Unicode symbol so the family
+  /// only sets metrics, not letterforms.
+  static TextStyle bossCrown(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 30.0 : 54.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      height: 1.0,
+      // ignore: reward_accent — boss crown is the canonical rare-encounter reward; heroGold scarcity contract met (isBoss-gated call site).
+      color: AppColors.heroGold,
+    );
+  }
+
+  /// Boss "⚜ CHEFE / BOSS" badge label (Barlow Condensed 600, +0.16em
+  /// tracking, gold) — spec §4 / mockup `.badge`. 9px at 300dp → 9sp preview
+  /// / 16px export. The gold-tint pill background lives on the badge widget.
+  static TextStyle bossBadge(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 9.0 : 16.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.16 * size,
+      // ignore: reward_accent — boss badge is the canonical rare-encounter reward; heroGold scarcity contract met (isBoss-gated call site).
+      color: AppColors.heroGold,
+    );
+  }
+
+  // ─── Bestiary mode (Phase 39 spec §7) ──────────────────────────────
+
+  /// Bestiary eyebrow ("⚔ HOJE VOCÊ ABATEU" / "⚜ CHEFE DERROTADO" for
+  /// bosses) — Barlow Condensed 600, +0.26em tracking, hue (gold on
+  /// bosses). 20px export / 11sp preview.
+  static TextStyle bestiaryEyebrow(
+    ShareCardRenderTarget target, {
+    required Color color,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 20.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.26 * size,
+      color: color,
+    );
+  }
+
+  /// Bestiary beast name (Rajdhani 700 display register — the serif hero
+  /// in the mockup; RepSaga bundles no serif family, so the closest
+  /// sanctioned display register is used). 62px export / 31sp preview.
+  /// [color] carries the line hue (cream on bosses, where the gold lives
+  /// in the eyebrow + glyph).
+  static TextStyle bestiaryName(
+    ShareCardRenderTarget target, {
+    required Color color,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 31.0 : 62.0;
+    return AppTextStyles.display.copyWith(
+      fontSize: size,
+      letterSpacing: 0,
+      height: 1.04,
+      color: color,
+    );
+  }
+
+  /// Bestiary rank/XP/tonnage stat line (Rajdhani 700, +0.04em tracking,
+  /// textDimAA). 24px export / 13sp preview.
+  static TextStyle bestiaryStat(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 13.0 : 24.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0.04 * size,
+      color: AppColors.textDimAA,
+    );
+  }
+
+  /// Bestiary rank-sigil chip letter (the tier letter inside the rotated
+  /// diamond, spec §4 / mockup `.sig b`). Rajdhani numeral register (the
+  /// mockup uses Cinzel 800 — rejected per §17.0c + the w800 weight is
+  /// CI-forbidden; the sanctioned hero numeral register is the closest fit).
+  /// 11px at 300dp → 11sp preview / 20px export. [color] = the accent hue.
+  static TextStyle bestiaryRankSigil(
+    ShareCardRenderTarget target, {
+    required Color color,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 20.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      height: 1.0,
+      color: color,
+    );
+  }
+
+  /// Bestiary XP value emphasis — the "+618 XP" fragment rendered in
+  /// heroGold within the stat line (spec §7 mockup: XP in gold). Same
+  /// size as [bestiaryStat].
+  static TextStyle bestiaryStatXp(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 13.0 : 24.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0.04 * size,
+      // ignore: reward_accent — session XP is the canonical reward register on the bestiary card; heroGold scarcity contract met (single stat fragment).
+      color: AppColors.heroGold,
+    );
+  }
+
+  /// Bestiary achievement phrase (Barlow 400 italic, textDimAA). 28px
+  /// export / 15sp preview. The mockup uses Cinzel italic; the closest
+  /// sanctioned italic prose register is Barlow.
+  static TextStyle bestiaryPhrase(
+    ShareCardRenderTarget target, {
+    required Color color,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 15.0 : 28.0;
+    return AppTextStyles.body.copyWith(
+      fontSize: size,
+      fontStyle: FontStyle.italic,
+      height: 1.3,
+      color: color,
+    );
+  }
+
+  // ─── Clean Flex mode (Phase 39 spec §7 Stats) ──────────────────────
+
+  /// Clean Flex eyebrow ("BULWARK · NÍVEL 9") — Barlow Condensed 600,
+  /// +0.22em tracking, hotViolet. 20px export / 11sp preview.
+  static TextStyle cleanFlexEyebrow(
+    ShareCardRenderTarget target, {
+    required Color color,
+  }) {
+    final size = target == ShareCardRenderTarget.preview ? 11.0 : 20.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.22 * size,
+      color: color,
+    );
+  }
+
+  /// Clean Flex hero (the PR lift, e.g. "130 kg × 3") — Rajdhani 700,
+  /// -0.02em tracking, textCream. 84px export / 47sp preview.
+  static TextStyle cleanFlexHero(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 47.0 : 84.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: -0.02 * size,
+      height: 0.95,
+    );
+  }
+
+  /// Clean Flex hero unit suffix (" kg × 3") — same family, demoted size.
+  /// 40px export / 22sp preview.
+  static TextStyle cleanFlexHeroUnit(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 22.0 : 40.0;
+    return AppTextStyles.numeric.copyWith(
+      fontSize: size,
+      letterSpacing: 0,
+      height: 0.95,
+    );
+  }
+
+  /// Clean Flex four-stat strip value (Rajdhani 700, textCream). 34px
+  /// export / 19sp preview.
+  static TextStyle cleanFlexStatValue(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 19.0 : 34.0;
+    return AppTextStyles.numeric.copyWith(fontSize: size, height: 1.0);
+  }
+
+  /// Clean Flex four-stat strip key (Barlow Condensed 600, +0.13em
+  /// tracking, textDim). 15px export / 8.5sp preview.
+  static TextStyle cleanFlexStatKey(ShareCardRenderTarget target) {
+    final size = target == ShareCardRenderTarget.preview ? 8.5 : 15.0;
+    return AppTextStyles.label.copyWith(
+      fontSize: size,
+      letterSpacing: 0.13 * size,
+      color: AppColors.textDim,
+    );
+  }
 }

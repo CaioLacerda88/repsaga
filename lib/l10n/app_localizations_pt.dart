@@ -3105,6 +3105,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shareOpenSettings => 'Abrir configurações';
 
   @override
+  String get shareModeBestiary => 'Bestiário';
+
+  @override
+  String get shareModeCleanFlex => 'Stats';
+
+  @override
+  String get shareBestiaryEyebrow => '⚔ Hoje você abateu';
+
+  @override
+  String get shareBossEyebrow => '⚜ Chefe derrotado';
+
+  @override
+  String get shareStatXp => 'XP';
+
+  @override
+  String get shareStatTonnage => 'TON';
+
+  @override
+  String get shareStatSets => 'SÉRIES';
+
+  @override
+  String get shareStatDuration => 'DUR';
+
+  @override
   String get summaryRankUpOverflowHeader => '+1 RANK · ABRIR SAGA';
 
   @override

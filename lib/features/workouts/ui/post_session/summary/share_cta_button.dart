@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../domain/beast_card.dart';
 import '../../../domain/share_payload.dart';
 import '../../../providers/share_controller.dart';
 import '../share/share_card_renderer.dart';
@@ -40,6 +41,8 @@ class ShareCtaButton extends ConsumerStatefulWidget {
     required this.payload,
     required this.strings,
     required this.l10n,
+    this.beastCard,
+    this.bestiaryStrings,
   });
 
   /// CTA label, e.g. "Compartilhar saga" (no glyph baked in — the camera
@@ -54,6 +57,13 @@ class ShareCtaButton extends ConsumerStatefulWidget {
 
   /// Pre-localized labels for the sheet + preview-screen affordances.
   final ShareLocalizations l10n;
+
+  /// Phase 39 — the resolved Bestiary card (null falls back to the legacy
+  /// card path on the preview).
+  final BeastCard? beastCard;
+
+  /// Phase 39 — pre-localized chrome strings for the chassis cards.
+  final BestiaryShareStrings? bestiaryStrings;
 
   @override
   ConsumerState<ShareCtaButton> createState() => _ShareCtaButtonState();
@@ -110,6 +120,8 @@ class _ShareCtaButtonState extends ConsumerState<ShareCtaButton> {
           payload: widget.payload,
           strings: widget.strings,
           l10n: widget.l10n,
+          beastCard: widget.beastCard,
+          bestiaryStrings: widget.bestiaryStrings,
           onClose: () => Navigator.of(ctx).maybePop(),
         ),
       ),

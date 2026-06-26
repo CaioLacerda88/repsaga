@@ -4,13 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:repsaga/features/auth/providers/auth_providers.dart';
+import 'package:repsaga/features/rpg/domain/body_part_hues.dart';
 import 'package:repsaga/features/rpg/domain/celebration_queue.dart';
 import 'package:repsaga/features/rpg/models/body_part.dart';
 import 'package:repsaga/features/workouts/data/share_image_renderer.dart';
 import 'package:repsaga/features/workouts/data/share_service.dart';
+import 'package:repsaga/features/workouts/domain/beast_card.dart';
 import 'package:repsaga/features/workouts/domain/reward_tier.dart';
 import 'package:repsaga/features/workouts/domain/share_payload.dart';
+import 'package:repsaga/features/workouts/domain/share_mode.dart';
+import 'package:repsaga/features/workouts/providers/last_beast_slug_provider.dart';
 import 'package:repsaga/features/workouts/providers/share_controller.dart';
+import 'package:repsaga/features/workouts/providers/share_mode_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_card_renderer.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_localizations.dart';
 import 'package:repsaga/features/workouts/ui/post_session/share/share_preview_screen.dart';
@@ -69,6 +74,8 @@ void main() {
     permissionPermanentlyDenied: 'Permissão bloqueada',
     renderError: 'Erro ao gerar imagem',
     openSettings: 'Abrir configurações',
+    modeBestiary: 'Bestiário',
+    modeCleanFlex: 'Stats',
   );
 
   // Pump every test at a realistic Android phone viewport (412dp wide ×
@@ -89,6 +96,44 @@ void main() {
     binding.platformDispatcher.views.first.resetPhysicalSize();
     binding.platformDispatcher.views.first.resetDevicePixelRatio();
   });
+
+  // Phase 39 Bestiary-mode fixtures. A resolved beast + its pre-localized
+  // chrome strings; the screen mounts the Bestiary card into both the visible
+  // preview tree and the offscreen export tree.
+  const bestiaryStrings = BestiaryShareStrings(
+    wordmark: 'REPSAGA',
+    bestiaryEyebrow: '⚔ Hoje você abateu',
+    bossEyebrow: '⚜ Chefe derrotado',
+    rankLabel: 'RANK C',
+    xpLabel: '+618 XP',
+    tonnageLabel: '8,4 t',
+    cleanFlexEyebrow: 'Bulwark',
+    cleanFlexHeroValue: '618',
+    cleanFlexStatValues: ['618', '8,4 t', '12', '47 min'],
+    cleanFlexStatLabels: ['XP', 'TON', 'SÉRIES', 'DUR'],
+  );
+
+  BeastCard buildBeast({
+    BodyPart line = BodyPart.chest,
+    BeastTier tier = BeastTier.c,
+    BeastKind kind = BeastKind.base,
+    String name = 'Iron Golem',
+    String slug = 'chest_iron_golem_1',
+  }) {
+    return BeastCard(
+      line: line,
+      tier: tier,
+      kind: kind,
+      specimen: BeastSpecimen.base,
+      name: name,
+      slug: slug,
+      hues: [BodyPartHues.hueFor(line)],
+      trainedParts: [line],
+      achievementPhrase: 'The bulwark advances.',
+      sigil: kind == BeastKind.boss ? '⚜' : '◈',
+      sourceSessionId: 'workout-1',
+    );
+  }
 
   SharePayload buildPayload() {
     return SharePayload.fromPostSessionState(
@@ -128,6 +173,7 @@ void main() {
     final spy = _CloseSpy();
     final container = ProviderContainer(
       overrides: [
+        ..._phase39Overrides,
         shareServiceProvider.overrideWithValue(stubService()),
         shareImageRendererProvider.overrideWithValue(
           renderer ?? _RecordingRenderer(),
@@ -167,6 +213,193 @@ void main() {
     await tester.pump();
     return (container: container, closeSpy: spy.call);
   }
+
+  /// Pumps the screen in Phase 39 BESTIARY mode — a resolved [beast] +
+  /// [bestiaryStrings] supplied so the renderer takes the chassis path. Returns
+  /// the container so the test can drive controller state transitions (the
+  /// Preview→Rendering swap the export-tree coverage hole targets).
+  Future<ProviderContainer> pumpBestiaryScreen(
+    WidgetTester tester, {
+    required BeastCard beast,
+    required XFile? previewPhoto,
+  }) async {
+    final container = ProviderContainer(
+      overrides: [
+        ..._phase39Overrides,
+        shareServiceProvider.overrideWithValue(stubService()),
+        shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
+        currentUserIdProvider.overrideWithValue('user-share-preview-test'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(shareControllerProvider.notifier);
+    if (previewPhoto != null) {
+      notifier.state = ShareState.preview(photo: previewPhoto);
+    } else {
+      notifier.useDiscreet();
+    }
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: SharePreviewScreen(
+            payload: buildPayload(),
+            strings: strings,
+            l10n: l10n,
+            beastCard: beast,
+            bestiaryStrings: bestiaryStrings,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    return container;
+  }
+
+  /// The offscreen export tree is the one [ShareImageRenderer] captures to PNG.
+  /// `find.byKey` matches BOTH the visible + export instances of a keyed
+  /// widget, so to assert a key resolves *inside the export subtree* we scope
+  /// the finder to descend from the export-target [ShareCardRenderer].
+  Finder inExportTree(Key key) {
+    final exportRendererFinder = find.byWidgetPredicate(
+      (w) =>
+          w is ShareCardRenderer &&
+          w.renderTarget == ShareCardRenderTarget.export,
+    );
+    return find.descendant(of: exportRendererFinder, matching: find.byKey(key));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 39 — Bestiary card survives the Preview → Rendering state swap inside
+  // the OFFSCREEN export tree (QA coverage hole 1a).
+  //
+  // The shared PNG is captured from the `left: -10000` export RepaintBoundary,
+  // NOT the visible preview tree (PR 30c device bug 3). During Rendering /
+  // Sharing the screen synthesizes a fake ShareState.preview so that export
+  // tree stays mounted. If the BESTIARY card stopped resolving inside that
+  // export subtree across the swap, a bestiary share would silently capture a
+  // blank / legacy image. These tests pin the bestiary card's presence in the
+  // export tree BOTH at rest and mid-render.
+  // ---------------------------------------------------------------------------
+
+  group('bestiary export tree survives Preview→Rendering swap', () {
+    testWidgets(
+      'bestiary card resolves inside the offscreen export tree at rest',
+      (tester) async {
+        await pumpBestiaryScreen(
+          tester,
+          beast: buildBeast(),
+          previewPhoto: _StubXFile('/tmp/photo.jpg'),
+        );
+
+        // Both renderers are bestiary-mode (default mode).
+        expect(visibleRenderer(tester).mode, ShareMode.bestiary);
+        expect(exportRenderer(tester).mode, ShareMode.bestiary);
+        // The beast name resolves inside the EXPORT subtree (not just the
+        // visible preview) — so the captured PNG carries the creature.
+        expect(
+          inExportTree(const ValueKey('share-card-bestiary-name')),
+          findsOneWidget,
+        );
+        expect(
+          inExportTree(const ValueKey('share-card-bestiary-stat')),
+          findsOneWidget,
+        );
+        // Visible user-perceptible content: the beast name text is on screen.
+        expect(find.text('Iron Golem'), findsWidgets);
+      },
+    );
+
+    testWidgets('bestiary card STILL resolves in the export tree mid-render '
+        '(ShareStateRendering) — capture cannot grab a blank/legacy image', (
+      tester,
+    ) async {
+      final container = await pumpBestiaryScreen(
+        tester,
+        beast: buildBeast(),
+        previewPhoto: _StubXFile('/tmp/photo.jpg'),
+      );
+
+      // Sanity: bestiary card mounted in the export tree before the swap.
+      expect(
+        inExportTree(const ValueKey('share-card-bestiary-name')),
+        findsOneWidget,
+      );
+
+      // Drive the controller into the rendering state — the exact frame
+      // RenderRepaintBoundary.toImage runs on. The screen synthesizes a
+      // fake ShareState.preview to keep the export tree mounted.
+      container.read(shareControllerProvider.notifier).state =
+          const ShareState.rendering();
+      await tester.pump();
+
+      // Post-swap invariant: the BESTIARY card is STILL mounted in the
+      // export subtree — not a blank scaffold, not the legacy Achievement
+      // Frame. A blank capture would surface as a broken share image.
+      expect(exportRenderer(tester).mode, ShareMode.bestiary);
+      expect(
+        inExportTree(const ValueKey('share-card-bestiary-name')),
+        findsOneWidget,
+        reason:
+            'bestiary card must stay mounted in the export tree across the '
+            'Preview→Rendering swap so toImage captures the creature',
+      );
+      // The legacy Achievement-Frame path must NOT have taken over.
+      expect(
+        inExportTree(const ValueKey('share-card-bestiary-stat')),
+        findsOneWidget,
+      );
+      // The busy barrier is up — user-perceptible "working" affordance.
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('BOSS ⚜ CHEFE badge mounts in the export tree mid-render', (
+      tester,
+    ) async {
+      final container = await pumpBestiaryScreen(
+        tester,
+        beast: buildBeast(
+          kind: BeastKind.boss,
+          name: 'Ironheart, the Manticore',
+          slug: 'chest_boss_1',
+        ),
+        previewPhoto: _StubXFile('/tmp/photo.jpg'),
+      );
+
+      // Boss drama (badge + frame) present in the export tree at rest.
+      expect(
+        inExportTree(const ValueKey('share-card-chassis-boss-badge')),
+        findsOneWidget,
+      );
+      expect(
+        inExportTree(const ValueKey('share-card-chassis-boss-frame')),
+        findsOneWidget,
+      );
+
+      // Swap to rendering — the capture frame.
+      container.read(shareControllerProvider.notifier).state =
+          const ShareState.rendering();
+      await tester.pump();
+
+      // The ⚜ CHEFE badge STILL mounts in the export subtree mid-render so
+      // a boss share captures the gold badge, not a stripped card.
+      final badgeText = tester.widget<Text>(
+        find.descendant(
+          of: inExportTree(const ValueKey('share-card-chassis-boss-badge')),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(badgeText.data, '⚜ Chefe derrotado');
+      // The boss eyebrow (gold) also resolves in the export tree.
+      expect(
+        inExportTree(const ValueKey('share-card-bestiary-eyebrow')),
+        findsOneWidget,
+      );
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Variant selection — Phase 31: D3 Achievement Frame is the single
@@ -209,6 +442,7 @@ void main() {
     var closed = 0;
     final container = ProviderContainer(
       overrides: [
+        ..._phase39Overrides,
         shareServiceProvider.overrideWithValue(stubService()),
         shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
       ],
@@ -281,6 +515,7 @@ void main() {
     var closed = 0;
     final container = ProviderContainer(
       overrides: [
+        ..._phase39Overrides,
         shareServiceProvider.overrideWithValue(stubService()),
         shareImageRendererProvider.overrideWithValue(_ThrowingRenderer()),
       ],
@@ -328,6 +563,7 @@ void main() {
     var closed = 0;
     final container = ProviderContainer(
       overrides: [
+        ..._phase39Overrides,
         // Service returns "unavailable" => share_failed
         shareServiceProvider.overrideWithValue(
           ShareService(
@@ -386,6 +622,7 @@ void main() {
       var openSettingsCalls = 0;
       final container = ProviderContainer(
         overrides: [
+          ..._phase39Overrides,
           shareServiceProvider.overrideWithValue(
             ShareService(
               imagePicker: (_) async => null,
@@ -473,6 +710,7 @@ void main() {
       var openSettingsCalls = 0;
       final container = ProviderContainer(
         overrides: [
+          ..._phase39Overrides,
           shareServiceProvider.overrideWithValue(
             ShareService(
               imagePicker: (_) async => null,
@@ -679,6 +917,7 @@ void main() {
     final renderer = _RecordingRenderer();
     final container = ProviderContainer(
       overrides: [
+        ..._phase39Overrides,
         shareServiceProvider.overrideWithValue(stubService()),
         shareImageRendererProvider.overrideWithValue(renderer),
       ],
@@ -799,6 +1038,7 @@ void main() {
       var closeCalls = 0;
       final container = ProviderContainer(
         overrides: [
+          ..._phase39Overrides,
           shareServiceProvider.overrideWithValue(stubService()),
           shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
         ],
@@ -846,6 +1086,7 @@ void main() {
       var closeCalls = 0;
       final container = ProviderContainer(
         overrides: [
+          ..._phase39Overrides,
           shareServiceProvider.overrideWithValue(stubService()),
           shareImageRendererProvider.overrideWithValue(_RecordingRenderer()),
         ],
@@ -1007,6 +1248,35 @@ class _CloseSpy {
   void call() => _count += 1;
   // ignore: unused_element
   int get count => _count;
+}
+
+/// Phase 39 overrides applied to every preview-screen test container — the
+/// preview reads the Hive-backed mode default in initState + records the
+/// last beast on share. Stubbing both keeps the harness Hive-free.
+final _phase39Overrides = [
+  shareModeDefaultProvider.overrideWith(_StubShareMode.new),
+  lastBeastSlugProvider.overrideWith(_StubLastBeastSlug.new),
+];
+
+/// Hive-free stub for the share-mode default — defaults to bestiary without
+/// touching the `userPrefs` box (the test harness doesn't init Hive).
+class _StubShareMode extends ShareModeDefaultNotifier {
+  @override
+  ShareMode build() => ShareMode.bestiary;
+  @override
+  Future<void> setDefault(ShareMode mode) async {
+    state = mode;
+  }
+}
+
+/// Hive-free stub for the last-beast-slug accessor.
+class _StubLastBeastSlug extends LastBeastSlugNotifier {
+  @override
+  String? build() => null;
+  @override
+  Future<void> record(String slug) async {
+    state = slug;
+  }
 }
 
 class _RecordingRenderer implements ShareImageRenderer {

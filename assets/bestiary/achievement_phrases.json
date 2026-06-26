@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "description": "Bestiary achievement phrases (Phase 39). Source: docs/bestiary-spec.md §6. One short flavor line; the highest-priority applicable trait wins. 'priority' is the selection order (lower = higher priority), matching §6 top-to-bottom. SLICE 1 resolver triggers: pr, sRank, chimera, and the 7 dominant-line fallbacks. 'comeback' (needs dormancy signal — not threaded) and 'highVolume' (needs top-decile-sets signal — not threaded) ship as content but are not yet selectable; they become live in Slice 2. trait is the selection key. line-fallback phrases carry a 'line' key (BodyPart.dbValue).",
+  "phrases": [
+    { "trait": "pr", "priority": 0, "name": { "en": "A new legend is forged.", "pt": "Uma nova lenda é forjada." } },
+    { "trait": "comeback", "priority": 1, "name": { "en": "The dormant beast stirs.", "pt": "A fera adormecida desperta." } },
+    { "trait": "sRank", "priority": 2, "name": { "en": "Few have felled its equal.", "pt": "Poucos abateram algo assim." } },
+    { "trait": "chimera", "priority": 3, "name": { "en": "You faced many at once.", "pt": "Você enfrentou muitos de uma vez." } },
+    { "trait": "highVolume", "priority": 4, "name": { "en": "Relentless — the horde fell.", "pt": "Implacável — a horda tombou." } },
+    { "trait": "line", "line": "arms", "priority": 5, "name": { "en": "Your sword arm sharpens.", "pt": "Seu braço de espada se afia." } },
+    { "trait": "line", "line": "legs", "priority": 6, "name": { "en": "Your foundation deepens.", "pt": "Sua base se aprofunda." } },
+    { "trait": "line", "line": "back", "priority": 7, "name": { "en": "Iron wings unfold.", "pt": "Asas de ferro se abrem." } },
+    { "trait": "line", "line": "chest", "priority": 8, "name": { "en": "The bulwark advances.", "pt": "A muralha avança." } },
+    { "trait": "line", "line": "shoulders", "priority": 9, "name": { "en": "You carry the sky.", "pt": "Você carrega o céu." } },
+    { "trait": "line", "line": "core", "priority": 10, "name": { "en": "The coil tightens.", "pt": "A espiral se aperta." } },
+    { "trait": "line", "line": "cardio", "priority": 11, "name": { "en": "Swift as the storm.", "pt": "Veloz como a tempestade." } }
+  ]
+}

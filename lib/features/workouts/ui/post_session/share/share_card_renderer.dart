@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../domain/beast_card.dart';
+import '../../../domain/share_mode.dart';
 import '../../../domain/share_payload.dart';
 import 'share_card_typography.dart';
+import 'share_localizations.dart';
 import 'variants/share_card_achievement_frame.dart';
+import 'variants/share_card_bestiary.dart';
+import 'variants/share_card_clean_flex.dart';
 import 'variants/share_card_discreet.dart';
 
 export 'share_card_typography.dart' show ShareCardRenderTarget;
@@ -117,6 +122,9 @@ class ShareCardRenderer extends StatelessWidget {
     required this.payload,
     required this.variant,
     required this.strings,
+    this.mode = ShareMode.bestiary,
+    this.beastCard,
+    this.bestiaryStrings,
     this.photo,
     this.photoOffset = Offset.zero,
     this.renderTarget = ShareCardRenderTarget.export,
@@ -130,10 +138,32 @@ class ShareCardRenderer extends StatelessWidget {
 
   /// Which variant to render. `achievementFrame` is the default photo
   /// path; `discreet` auto-selects on camera-denied / no-photo paths.
+  ///
+  /// **Orthogonal to [mode].** [variant] is the photo axis (photo vs
+  /// discreet — drives whether a user photo sits behind the overlay).
+  /// [mode] is the content axis (Bestiary creature vs Clean Flex stats).
+  /// The Phase 39 chassis cards read [variant] only to decide whether to
+  /// pass the photo through to the chassis (discreet → no photo).
   final ShareCardVariant variant;
 
-  /// Pre-localized text bundle. See [ShareCardStrings].
+  /// Pre-localized text bundle for the legacy Achievement-Frame / Discreet
+  /// path. See [ShareCardStrings].
   final ShareCardStrings strings;
+
+  /// Phase 39 content mode (Bestiary creature vs Clean Flex stats). Only
+  /// consulted when [beastCard] is non-null — otherwise the renderer falls
+  /// back to the legacy Achievement-Frame / Discreet path (back-compat for
+  /// the pre-Phase-39 golden tests). Defaults to [ShareMode.bestiary].
+  final ShareMode mode;
+
+  /// The resolved beast for the Bestiary card (and the carrier of the line
+  /// hues the Clean Flex rail reads). `null` selects the legacy path. When
+  /// non-null, [bestiaryStrings] MUST also be supplied.
+  final BeastCard? beastCard;
+
+  /// Pre-localized chrome strings for the Phase 39 chassis cards. Required
+  /// alongside [beastCard]; `null` only on the legacy path.
+  final BestiaryShareStrings? bestiaryStrings;
 
   /// Optional photo underlay for the Achievement Frame. Ignored when
   /// [variant] is [ShareCardVariant.discreet] (that variant owns its own
@@ -192,6 +222,57 @@ class ShareCardRenderer extends StatelessWidget {
   }
 
   Widget _buildBody() {
+    // Phase 39 path — when a resolved beast is supplied, render the chassis
+    // cards driven by [mode]. The photo/discreet axis ([variant]) still
+    // applies: discreet passes a null photo to the chassis (no-photo card).
+    final beast = beastCard;
+    final bestiary = bestiaryStrings;
+    if (beast != null && bestiary != null) {
+      final chassisPhoto = variant == ShareCardVariant.discreet ? null : photo;
+      switch (mode) {
+        case ShareMode.bestiary:
+          final isBoss =
+              beast.kind == BeastKind.boss || beast.kind == BeastKind.legendary;
+          // Slice 1 ships a BINARY boss/standard eyebrow. The mockup's third
+          // option — the comeback eyebrow ("✦ A fera adormecida desperta",
+          // col 5) — is Slice 2: it needs a dormancy signal (dominant part
+          // dormant N+ days) that isn't threaded onto PostSessionState yet.
+          // The two-way branch is intentional, not an oversight.
+          return ShareCardBestiary(
+            card: beast,
+            eyebrow: isBoss ? bestiary.bossEyebrow : bestiary.bestiaryEyebrow,
+            rankLabel: bestiary.rankLabel,
+            xpLabel: bestiary.xpLabel,
+            tonnageLabel: bestiary.tonnageLabel,
+            wordmark: bestiary.wordmark,
+            // The top-left "⚜ CHEFE" badge (spec §4); same localized copy as
+            // the boss eyebrow. `null` on a standard card → no badge.
+            bossBadgeLabel: isBoss ? bestiary.bossEyebrow : null,
+            photo: chassisPhoto,
+            renderTarget: renderTarget,
+          );
+        case ShareMode.cleanFlex:
+          return ShareCardCleanFlex(
+            eyebrow: bestiary.cleanFlexEyebrow,
+            heroValue: bestiary.cleanFlexHeroValue,
+            heroUnit: bestiary.cleanFlexHeroUnit,
+            heroContext: bestiary.cleanFlexHeroContext,
+            stats: [
+              for (var i = 0; i < bestiary.cleanFlexStatValues.length; i++)
+                CleanFlexStat(
+                  value: bestiary.cleanFlexStatValues[i],
+                  label: i < bestiary.cleanFlexStatLabels.length
+                      ? bestiary.cleanFlexStatLabels[i]
+                      : '',
+                ),
+            ],
+            wordmark: bestiary.wordmark,
+            photo: chassisPhoto,
+            renderTarget: renderTarget,
+          );
+      }
+    }
+
     switch (variant) {
       case ShareCardVariant.discreet:
         return ShareCardDiscreet(

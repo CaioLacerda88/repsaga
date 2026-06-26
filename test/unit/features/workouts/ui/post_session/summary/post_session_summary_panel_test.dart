@@ -45,6 +45,8 @@ void main() {
     permissionPermanentlyDenied: 'Permissão bloqueada',
     renderError: 'Erro ao gerar imagem',
     openSettings: 'Abrir configurações',
+    modeBestiary: 'Bestiário',
+    modeCleanFlex: 'Stats',
   );
 
   SharePayload buildSharePayload({bool hasRankUp = true}) {

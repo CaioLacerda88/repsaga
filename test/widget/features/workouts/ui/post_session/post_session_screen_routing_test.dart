@@ -37,6 +37,7 @@ import 'package:repsaga/features/rpg/models/title.dart' as rpg;
 import 'package:repsaga/features/rpg/providers/earned_titles_provider.dart';
 import 'package:repsaga/features/rpg/providers/rpg_progress_provider.dart';
 import 'package:repsaga/features/rpg/providers/vitality_fresh_pulse_provider.dart';
+import 'package:repsaga/features/workouts/providers/last_beast_slug_provider.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_skip_button.dart';
 import 'package:repsaga/features/workouts/ui/post_session/cuts/cinematic_tap_hint.dart';
 import 'package:repsaga/features/workouts/ui/post_session/post_session_controller.dart';
@@ -114,6 +115,9 @@ Widget _harness({
       vitalityFreshPulseLocalStorageProvider.overrideWithValue(
         FakeFreshPulseStorage(),
       ),
+      // Phase 39 — the share seam reads the Hive-backed last-beast slug;
+      // stub it so the harness stays Hive-free.
+      lastBeastSlugProvider.overrideWith(_StubLastBeastSlug.new),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -323,6 +327,9 @@ void main() {
               vitalityFreshPulseLocalStorageProvider.overrideWithValue(
                 FakeFreshPulseStorage(),
               ),
+              // Phase 39 — the share seam reads the Hive-backed last-beast
+              // slug; stub it so the harness stays Hive-free.
+              lastBeastSlugProvider.overrideWith(_StubLastBeastSlug.new),
             ],
             child: MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -425,6 +432,15 @@ void main() {
 /// immediately. The post-session controller only reads this once via
 /// `.value ?? RpgProgressSnapshot.empty` — no refresh-after-save path is
 /// exercised here.
+class _StubLastBeastSlug extends LastBeastSlugNotifier {
+  @override
+  String? build() => null;
+  @override
+  Future<void> record(String slug) async {
+    state = slug;
+  }
+}
+
 class _FakeRpgProgress extends RpgProgressNotifier {
   _FakeRpgProgress(this._snapshot);
   final RpgProgressSnapshot _snapshot;

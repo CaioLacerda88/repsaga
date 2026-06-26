@@ -5316,6 +5316,54 @@ abstract class AppLocalizations {
   /// **'Open settings'**
   String get shareOpenSettings;
 
+  /// Phase 39 — Share-mode toggle segment: the generated-creature (Bestiary) card. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'Bestiary'**
+  String get shareModeBestiary;
+
+  /// Phase 39 — Share-mode toggle segment: the clean stats (Clean Flex) card. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'Stats'**
+  String get shareModeCleanFlex;
+
+  /// Phase 39 — Bestiary card eyebrow over the beast name (non-boss). Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'⚔ Today you felled'**
+  String get shareBestiaryEyebrow;
+
+  /// Phase 39 — Bestiary card eyebrow for a boss / legendary encounter. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'⚜ Boss defeated'**
+  String get shareBossEyebrow;
+
+  /// Phase 39 — Clean Flex four-stat strip key for session XP. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'XP'**
+  String get shareStatXp;
+
+  /// Phase 39 — Clean Flex four-stat strip key for tonnage moved. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'TONS'**
+  String get shareStatTonnage;
+
+  /// Phase 39 — Clean Flex four-stat strip key for completed sets. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'SETS'**
+  String get shareStatSets;
+
+  /// Phase 39 — Clean Flex four-stat strip key for session duration. Spec §7.
+  ///
+  /// In en, this message translates to:
+  /// **'DUR'**
+  String get shareStatDuration;
+
   /// Phase 30 PR 30a — Summary panel rank-up overflow card header. Mockup §5 State 6.
   ///
   /// In en, this message translates to:

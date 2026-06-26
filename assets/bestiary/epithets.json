@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "description": "Bestiary boss epithets (Phase 39). Source: docs/bestiary-catalog.md §2. A boss = the dominant line's tier creature promoted one tier, prefixed (en) / suffixed (pt) with a gold epithet chosen by session hash. en format: '[Epithet], the [Creature]'. pt format: '[Creature], [Epítome]'. The stored name{en,pt} is the epithet fragment exactly as the pool lists it; the resolver composes the full boss name. slug is the deterministic-pick key.",
+  "epithets": [
+    { "slug": "ironheart", "name": { "en": "Ironheart", "pt": "Coração-de-Ferro" } },
+    { "slug": "unbroken", "name": { "en": "the Unbroken", "pt": "o Inquebrável" } },
+    { "slug": "sovereign", "name": { "en": "the Sovereign", "pt": "o Soberano" } },
+    { "slug": "dawnbreaker", "name": { "en": "Dawnbreaker", "pt": "Quebra-Aurora" } },
+    { "slug": "undying", "name": { "en": "the Undying", "pt": "o Imortal" } },
+    { "slug": "stormcrown", "name": { "en": "Stormcrown", "pt": "Coroa-Tempestade" } },
+    { "slug": "relentless", "name": { "en": "the Relentless", "pt": "o Implacável" } },
+    { "slug": "first", "name": { "en": "the First", "pt": "o Primeiro" } }
+  ]
+}
