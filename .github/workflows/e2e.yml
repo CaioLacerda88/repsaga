@@ -51,7 +51,7 @@ jobs:
       # so the cache is invalidated when @playwright/test is upgraded.
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('test/e2e/package-lock.json') }}
@@ -59,7 +59,7 @@ jobs:
       # Cache Flutter pub packages. Key is the pubspec.lock so a lockfile change
       # triggers a fresh download; otherwise we get a full cache hit.
       - name: Cache Flutter pub packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.pub-cache
@@ -71,7 +71,7 @@ jobs:
       # source files so any code change busts it automatically.
       - name: Cache Flutter web build
         id: web-build-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: build/web
           key: web-build-${{ runner.os }}-${{ hashFiles('lib/**', 'pubspec.lock', 'web/**') }}
