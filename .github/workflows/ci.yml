@@ -99,7 +99,7 @@ jobs:
           cache-key: flutter-${{ runner.os }}-3.41.6
 
       - name: Cache Flutter pub packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.pub-cache
@@ -178,7 +178,7 @@ jobs:
           cache-key: flutter-${{ runner.os }}-3.41.6
 
       - name: Cache Flutter pub packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.pub-cache
@@ -225,7 +225,7 @@ jobs:
           cache-key: flutter-${{ runner.os }}-3.41.6
 
       - name: Cache Flutter pub packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.pub-cache
@@ -286,7 +286,7 @@ jobs:
           cache-key: flutter-${{ runner.os }}-3.41.6
 
       - name: Cache Flutter pub packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.pub-cache
@@ -383,7 +383,7 @@ jobs:
           deno-version: "1.46.3"
 
       - name: Cache Deno deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           # Hash all .ts files under supabase/functions/ (handlers + tests)
           # so a change to ANY imported module busts the cache and forces
