@@ -36,7 +36,7 @@ dependencies:
   wakelock_plus: ^1.6.1
   sentry_flutter: ^9.16.1
   clock: ^1.1.1
-  connectivity_plus: ^7.1.1
+  connectivity_plus: ^7.2.0
   # Web-only DOM event subscriptions (window.online / window.offline) for the
   # OfflineBanner. Imported via a conditional import in
   # `lib/core/connectivity/web_online_events_web.dart`; native builds resolve
@@ -51,7 +51,7 @@ dependencies:
   # Batches (2026-06): share_plus 10→12→13, permission_handler 11→12,
   # package_info_plus 9→10 — all resolve cleanly on SDK 3.11.4 + pass the web-boot gate.
   image_picker: ^1.1.2
-  share_plus: ^13.1.0
+  share_plus: ^13.2.0
   permission_handler: ^12.0.3
   # `cross_file` is a transitive dep of `share_plus` (XFile type) and
   # `path_provider` is transitive via `hive_flutter`. Listed explicitly so
@@ -59,7 +59,7 @@ dependencies:
   # on undeclared transitive resolution surviving future package upgrades.
   cross_file: ^0.3.4
   path_provider: ^2.1.4
-  package_info_plus: ^10.1.0
+  package_info_plus: ^10.2.0
   # Used for `firstWhereOrNull` in `active_workout_screen.dart` (PR3 review W1)
   # — the previous `firstWhere(orElse: () => after.last)` silently returned the
   # wrong element when no diff entry was found, which would corrupt undo state
